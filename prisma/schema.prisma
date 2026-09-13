@@ -262,6 +262,9 @@ model Note {
   deletedAt      DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+  /// Generated column (see migration SQL): to_tsvector('english', title || contentText).
+  /// Prisma has no native tsvector type, so this is queried via $queryRaw, never the client API.
+  searchVector   Unsupported("tsvector")?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   author       User         @relation("NoteAuthor", fields: [authorId], references: [id])
@@ -269,6 +272,7 @@ model Note {
   event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+  @@index([searchVector], type: Gin)
 }
 
 // --- Calendar and scheduling ---

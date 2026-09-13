@@ -1,8 +1,9 @@
 "use client";
 
-import { Menu } from "lucide-react";
-import { useState } from "react";
+import { Menu, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 
+import { CommandPalette } from "@/components/command-palette/command-palette";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { navItems } from "@/components/shell/nav-config";
@@ -13,16 +14,30 @@ import type { OrgSummary, ShellUser } from "@/components/shell/types";
 
 export function AppShell({
   orgSlug,
+  orgId,
   orgs,
   user,
   children,
 }: {
   orgSlug: string;
+  orgId: string;
   orgs: OrgSummary[];
   user: ShellUser;
   children: React.ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((value) => !value);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[16rem_1fr]">
@@ -66,6 +81,17 @@ export function AppShell({
             </SheetContent>
           </Sheet>
 
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-muted-foreground gap-2"
+            onClick={() => setCommandOpen(true)}
+          >
+            <Search className="size-4" />
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="bg-muted hidden rounded px-1.5 py-0.5 text-xs sm:inline">⌘K</kbd>
+          </Button>
+
           <div className="flex-1" />
           <UserMenu user={user} />
         </header>
@@ -74,6 +100,13 @@ export function AppShell({
           {children}
         </main>
       </div>
+
+      <CommandPalette
+        orgId={orgId}
+        orgSlug={orgSlug}
+        open={commandOpen}
+        onOpenChange={setCommandOpen}
+      />
     </div>
   );
 }

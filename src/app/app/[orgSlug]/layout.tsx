@@ -35,6 +35,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   return (
     <AppShell
       orgSlug={org.slug}
+      orgId={org.id}
       orgs={orgs}
       user={{ name: ctx.user.name, email: ctx.user.email, image: null }}
     >
