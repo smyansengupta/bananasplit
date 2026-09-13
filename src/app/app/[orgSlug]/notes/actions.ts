@@ -53,20 +53,28 @@ async function assertEventBelongsToOrg(organizationId: string, eventId: string |
   return event ? null : "That event doesn't exist in this organization.";
 }
 
-export const createNote = withOrgContext(async (ctx): Promise<ActionResult> => {
-  const note = await prisma.note.create({
-    data: {
-      organizationId: ctx.organizationId,
-      title: "Untitled note",
-      contentJson: EMPTY_DOC,
-      contentText: "",
-      visibility: NoteVisibility.PRIVATE,
-      authorId: ctx.user.id,
-      updatedById: ctx.user.id,
-    },
-  });
-  return { noteId: note.id };
-});
+export const createNote = withOrgContext(
+  async (ctx, prefill?: { title?: string; eventId?: string }): Promise<ActionResult> => {
+    if (prefill?.eventId) {
+      const eventError = await assertEventBelongsToOrg(ctx.organizationId, prefill.eventId);
+      if (eventError) return { error: eventError };
+    }
+
+    const note = await prisma.note.create({
+      data: {
+        organizationId: ctx.organizationId,
+        title: prefill?.title?.trim() || "Untitled note",
+        contentJson: EMPTY_DOC,
+        contentText: "",
+        visibility: NoteVisibility.PRIVATE,
+        authorId: ctx.user.id,
+        updatedById: ctx.user.id,
+        eventId: prefill?.eventId ?? null,
+      },
+    });
+    return { noteId: note.id };
+  },
+);
 
 export const updateNote = withOrgContext(
   async (ctx, noteId: string, input: unknown, expectedVersion: number): Promise<ActionResult> => {

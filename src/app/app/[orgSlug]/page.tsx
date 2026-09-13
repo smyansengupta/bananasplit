@@ -20,7 +20,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     handleAuthErrorInPage(error);
   }
 
-  const [openTaskCount, overdueTaskCount] = await Promise.all([
+  const [openTaskCount, overdueTaskCount, upcomingEventCount] = await Promise.all([
     prisma.task.count({
       where: { organizationId: org.id, deletedAt: null, status: { not: "COMPLETED" } },
     }),
@@ -31,6 +31,9 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         status: { not: "COMPLETED" },
         dueDate: { lt: new Date() },
       },
+    }),
+    prisma.event.count({
+      where: { organizationId: org.id, deletedAt: null, startsAt: { gte: new Date() } },
     }),
   ]);
 
@@ -56,12 +59,16 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
             </CardHeader>
           </Card>
         </Link>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Upcoming events</CardTitle>
-            <CardDescription>Coming in Phase 4.</CardDescription>
-          </CardHeader>
-        </Card>
+        <Link href={`/app/${orgSlug}/calendar`}>
+          <Card className="hover:bg-accent/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Upcoming events</CardTitle>
+              <CardDescription>
+                {upcomingEventCount} upcoming event{upcomingEventCount === 1 ? "" : "s"}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Money owed to you</CardTitle>

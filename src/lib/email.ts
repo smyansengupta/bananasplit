@@ -27,3 +27,27 @@ export async function sendInvitationEmail(params: {
     `,
   });
 }
+
+export async function sendEventInviteEmail(params: {
+  to: string;
+  eventTitle: string;
+  startsAt: Date;
+  organizerName: string;
+}): Promise<void> {
+  if (!resend) {
+    console.warn(
+      `[email] RESEND_API_KEY not set — skipping event invite email to ${params.to} for "${params.eventTitle}".`,
+    );
+    return;
+  }
+  await resend.emails.send({
+    from: FROM,
+    to: params.to,
+    subject: `${params.organizerName} invited you to "${params.eventTitle}"`,
+    html: `
+      <p>${params.organizerName} invited you to <strong>${params.eventTitle}</strong>.</p>
+      <p>${params.startsAt.toUTCString()}</p>
+      <p>Sign in to CBC Portal to RSVP.</p>
+    `,
+  });
+}

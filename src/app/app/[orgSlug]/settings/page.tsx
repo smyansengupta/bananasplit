@@ -1,4 +1,4 @@
-import { Mail, Tag, Users } from "lucide-react";
+import { CalendarClock, Mail, Tag, Users } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -53,6 +53,17 @@ export default async function SettingsPage({ params }: PageProps<"/app/[orgSlug]
             </Card>
           </Link>
         )}
+        <Link href={`/app/${orgSlug}/settings/calendar`}>
+          <Card className="hover:bg-accent/50 transition-colors">
+            <CardHeader>
+              <CalendarClock className="text-muted-foreground mb-2 size-5" aria-hidden="true" />
+              <CardTitle className="text-sm font-medium">Calendar feed</CardTitle>
+              <CardDescription>
+                Get your personal .ics subscription URL for other calendar apps.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         {canManageMembers && (
           <Link href={`/app/${orgSlug}/settings/labels`}>
             <Card className="hover:bg-accent/50 transition-colors">
