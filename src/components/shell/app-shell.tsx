@@ -9,7 +9,7 @@ import { navItems } from "@/components/shell/nav-config";
 import { UserMenu } from "@/components/shell/user-menu";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import type { MockOrg, MockUser } from "@/lib/shell-mock-data";
+import type { OrgSummary, ShellUser } from "@/components/shell/types";
 
 export function AppShell({
   orgSlug,
@@ -18,8 +18,8 @@ export function AppShell({
   children,
 }: {
   orgSlug: string;
-  orgs: MockOrg[];
-  user: MockUser;
+  orgs: OrgSummary[];
+  user: ShellUser;
   children: React.ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);

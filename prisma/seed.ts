@@ -1,6 +1,7 @@
 import { faker } from "@faker-js/faker";
 import { generateNKeysBetween } from "fractional-indexing";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { hashPassword } from "../src/lib/auth/password";
 import {
   ConferenceProvider,
   NoteVisibility,
@@ -38,12 +39,21 @@ async function main() {
     { email: "grace@example.edu", name: "Grace Kim", timezone: "America/Denver" },
   ] as const;
 
+  // Every seeded user can also sign in with this password locally — there's
+  // no real Google account behind these fixture emails.
+  const SEED_PASSWORD_HASH = await hashPassword("password123");
+
   const users: Record<string, Awaited<ReturnType<typeof prisma.user.upsert>>> = {};
   for (const u of userSeeds) {
     users[u.email] = await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, timezone: u.timezone },
-      create: { email: u.email, name: u.name, timezone: u.timezone },
+      update: { name: u.name, timezone: u.timezone, passwordHash: SEED_PASSWORD_HASH },
+      create: {
+        email: u.email,
+        name: u.name,
+        timezone: u.timezone,
+        passwordHash: SEED_PASSWORD_HASH,
+      },
     });
   }
   const [alice, bob, carol, dave, eve, frank, grace] = userSeeds.map((u) => users[u.email]);

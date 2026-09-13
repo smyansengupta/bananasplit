@@ -4,15 +4,12 @@ import { Role } from "@/generated/prisma/client";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { requireFinanceAccess, requireOrgMembership, requireRole } from "@/lib/auth/guards";
 
-// guards.ts imports requireUser (not getSession) from this module, so that's
-// the binding to replace — mocking getSession wouldn't reach requireUser's
-// own internal call to it, since that call is resolved within session.ts's
-// own closure, not through the (mockable) cross-module import.
+// guards.ts only uses requireUser (not getSession) from this module, so that's
+// the binding to replace. Replace the whole module rather than spreading over
+// importOriginal(): the real session.ts pulls in next-auth (via config.ts),
+// which fails to resolve under Vitest's module graph.
 const { requireUserMock } = vi.hoisted(() => ({ requireUserMock: vi.fn() }));
-vi.mock("@/lib/auth/session", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/auth/session")>();
-  return { ...actual, requireUser: requireUserMock };
-});
+vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 
 const { findUniqueMock } = vi.hoisted(() => ({ findUniqueMock: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({

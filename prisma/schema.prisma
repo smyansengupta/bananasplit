@@ -20,6 +20,8 @@ model User {
   email         String    @unique
   emailVerified DateTime?
   image         String?
+  /// bcrypt hash. Null for accounts that only ever signed in with Google.
+  passwordHash  String?
   timezone      String    @default("UTC")
   createdAt     DateTime  @default(now())
 

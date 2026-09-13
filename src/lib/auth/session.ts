@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { auth } from "@/lib/auth/config";
+
 export interface SessionUser {
   id: string;
   email: string;
@@ -10,13 +12,18 @@ export interface Session {
   user: SessionUser;
 }
 
-/**
- * Resolves the current session. Returns null until Phase 1.1 wires up Auth.js
- * (this becomes a thin call to `auth()`) — every caller already handles the
- * null case correctly via requireUser().
- */
 export async function getSession(): Promise<Session | null> {
-  return null;
+  const session = await auth();
+  if (!session?.user?.id || !session.user.email) {
+    return null;
+  }
+  return {
+    user: {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.name ?? null,
+    },
+  };
 }
 
 export async function requireUser(): Promise<SessionUser> {

@@ -4,11 +4,11 @@ import { Role } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/auth/errors";
 import { withOrgContext } from "@/lib/auth/with-org-context";
 
+// Replace the whole module rather than spreading over importOriginal(): the
+// real session.ts pulls in next-auth (via config.ts), which fails to resolve
+// under Vitest's module graph.
 const { requireUserMock } = vi.hoisted(() => ({ requireUserMock: vi.fn() }));
-vi.mock("@/lib/auth/session", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/auth/session")>();
-  return { ...actual, requireUser: requireUserMock };
-});
+vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 
 const { findUniqueMock } = vi.hoisted(() => ({ findUniqueMock: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({

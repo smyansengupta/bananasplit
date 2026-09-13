@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { MockOrg } from "@/lib/shell-mock-data";
+import type { OrgSummary } from "@/components/shell/types";
+import { switchActiveOrg } from "@/app/app/actions";
 
-export function OrgSwitcher({ orgs, activeSlug }: { orgs: MockOrg[]; activeSlug: string }) {
-  const router = useRouter();
+export function OrgSwitcher({ orgs, activeSlug }: { orgs: OrgSummary[]; activeSlug: string }) {
+  const [, startTransition] = useTransition();
   const active = orgs.find((o) => o.slug === activeSlug) ?? orgs[0];
 
   return (
@@ -31,7 +32,10 @@ export function OrgSwitcher({ orgs, activeSlug }: { orgs: MockOrg[]; activeSlug:
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         {orgs.map((org) => (
-          <DropdownMenuItem key={org.slug} onSelect={() => router.push(`/app/${org.slug}`)}>
+          <DropdownMenuItem
+            key={org.slug}
+            onSelect={() => startTransition(() => switchActiveOrg(org.slug))}
+          >
             <span className="flex-1 truncate">{org.name}</span>
             {org.slug === active.slug && <Check className="size-4" aria-hidden="true" />}
           </DropdownMenuItem>
