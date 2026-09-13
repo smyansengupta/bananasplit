@@ -1,4 +1,4 @@
-import { Mail, Users } from "lucide-react";
+import { Mail, Tag, Users } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -49,6 +49,17 @@ export default async function SettingsPage({ params }: PageProps<"/app/[orgSlug]
                 <CardDescription>
                   Invite new members by email and manage pending invites.
                 </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
+        {canManageMembers && (
+          <Link href={`/app/${orgSlug}/settings/labels`}>
+            <Card className="hover:bg-accent/50 transition-colors">
+              <CardHeader>
+                <Tag className="text-muted-foreground mb-2 size-5" aria-hidden="true" />
+                <CardTitle className="text-sm font-medium">Labels</CardTitle>
+                <CardDescription>Manage the shared label palette used on tasks.</CardDescription>
               </CardHeader>
             </Card>
           </Link>

@@ -1,7 +1,38 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
+import { requireOrgMembership } from "@/lib/auth/guards";
+import { prisma } from "@/lib/prisma";
 
 export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
+
+  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
+  if (!org) {
+    notFound();
+  }
+
+  try {
+    await requireOrgMembership(org.id);
+  } catch (error) {
+    handleAuthErrorInPage(error);
+  }
+
+  const [openTaskCount, overdueTaskCount] = await Promise.all([
+    prisma.task.count({
+      where: { organizationId: org.id, deletedAt: null, status: { not: "COMPLETED" } },
+    }),
+    prisma.task.count({
+      where: {
+        organizationId: org.id,
+        deletedAt: null,
+        status: { not: "COMPLETED" },
+        dueDate: { lt: new Date() },
+      },
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -12,12 +43,19 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Tasks</CardTitle>
-            <CardDescription>Coming in Phase 2.</CardDescription>
-          </CardHeader>
-        </Card>
+        <Link href={`/app/${orgSlug}/tasks`}>
+          <Card className="hover:bg-accent/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Tasks</CardTitle>
+              <CardDescription>
+                {openTaskCount} open
+                {overdueTaskCount > 0 && (
+                  <span className="text-destructive"> · {overdueTaskCount} overdue</span>
+                )}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Upcoming events</CardTitle>
