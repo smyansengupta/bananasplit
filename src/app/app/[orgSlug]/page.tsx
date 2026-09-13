@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireOrgMembership } from "@/lib/auth/guards";
+import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
+import { getMoneyOwedToUser } from "@/app/app/[orgSlug]/finance/queries";
+import { formatCents } from "@/lib/finance/money";
 import { prisma } from "@/lib/prisma";
 
 export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
@@ -14,28 +16,31 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     notFound();
   }
 
+  let ctx: OrgContext;
   try {
-    await requireOrgMembership(org.id);
+    ctx = await requireOrgMembership(org.id);
   } catch (error) {
     handleAuthErrorInPage(error);
   }
 
-  const [openTaskCount, overdueTaskCount, upcomingEventCount] = await Promise.all([
-    prisma.task.count({
-      where: { organizationId: org.id, deletedAt: null, status: { not: "COMPLETED" } },
-    }),
-    prisma.task.count({
-      where: {
-        organizationId: org.id,
-        deletedAt: null,
-        status: { not: "COMPLETED" },
-        dueDate: { lt: new Date() },
-      },
-    }),
-    prisma.event.count({
-      where: { organizationId: org.id, deletedAt: null, startsAt: { gte: new Date() } },
-    }),
-  ]);
+  const [openTaskCount, overdueTaskCount, upcomingEventCount, moneyOwedToYouCents] =
+    await Promise.all([
+      prisma.task.count({
+        where: { organizationId: org.id, deletedAt: null, status: { not: "COMPLETED" } },
+      }),
+      prisma.task.count({
+        where: {
+          organizationId: org.id,
+          deletedAt: null,
+          status: { not: "COMPLETED" },
+          dueDate: { lt: new Date() },
+        },
+      }),
+      prisma.event.count({
+        where: { organizationId: org.id, deletedAt: null, startsAt: { gte: new Date() } },
+      }),
+      getMoneyOwedToUser(org.id, ctx.user.id),
+    ]);
 
   return (
     <div className="space-y-6">
@@ -69,12 +74,14 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
             </CardHeader>
           </Card>
         </Link>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Money owed to you</CardTitle>
-            <CardDescription>Coming in Phase 5.</CardDescription>
-          </CardHeader>
-        </Card>
+        <Link href={`/app/${orgSlug}/finance/my-reimbursements`}>
+          <Card className="hover:bg-accent/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Money owed to you</CardTitle>
+              <CardDescription>{formatCents(moneyOwedToYouCents)}</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
       </div>
     </div>
   );
