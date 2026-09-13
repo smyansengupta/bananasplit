@@ -1,0 +1,574 @@
+// CBC Portal — data model
+// See the project spec, section 2, for the design rationale behind each table.
+// Money is always integer cents. Tenant-scoped tables always carry organizationId.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Auth.js (NextAuth v5) standard tables ---
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  timezone      String    @default("UTC")
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+
+  memberships            Membership[]
+  sentInvitations        Invitation[]       @relation("InvitationInvitedBy")
+  createdTasks           Task[]             @relation("TaskCreatedBy")
+  taskAssignments        TaskAssignee[]
+  authoredNotes          Note[]             @relation("NoteAuthor")
+  updatedNotes           Note[]             @relation("NoteUpdatedBy")
+  createdEvents          Event[]            @relation("EventCreatedBy")
+  eventAttendances       EventAttendee[]
+  createdPolls           AvailabilityPoll[] @relation("PollCreatedBy")
+  pollResponses          PollResponse[]
+  submittedTransactions  Transaction[]      @relation("TransactionSubmittedBy")
+  approvedTransactions   Transaction[]      @relation("TransactionApprovedBy")
+  reconciledTransactions Transaction[]      @relation("TransactionReconciledBy")
+  uploadedReceipts       Receipt[]
+  ownedSponsorships      Sponsorship[]      @relation("SponsorshipOwner")
+  financeAuditLogs       FinanceAuditLog[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// --- Organizations, membership, invitations ---
+
+enum Role {
+  OWNER
+  ADMIN
+  TREASURER
+  MEMBER
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  memberships       Membership[]
+  invitations       Invitation[]
+  projects          Project[]
+  tasks             Task[]
+  labels            Label[]
+  notes             Note[]
+  events            Event[]
+  availabilityPolls AvailabilityPoll[]
+  budgetPeriods     BudgetPeriod[]
+  budgetCategories  BudgetCategory[]
+  transactions      Transaction[]
+  sponsors          Sponsor[]
+  sponsorships      Sponsorship[]
+  financeAuditLogs  FinanceAuditLog[]
+}
+
+model Membership {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role
+  joinedAt       DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           Role
+  /// SHA-256 hash of the invite token; the plaintext token only ever exists in the emailed link.
+  token          String    @unique
+  expiresAt      DateTime
+  invitedById    String
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitationInvitedBy", fields: [invitedById], references: [id])
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+// --- Tasks ---
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Project {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tasks        Task[]
+
+  @@index([organizationId])
+}
+
+model Task {
+  id             String       @id @default(cuid())
+  organizationId String
+  projectId      String?
+  title          String
+  description    String?
+  status         TaskStatus   @default(NOT_STARTED)
+  priority       TaskPriority @default(MEDIUM)
+  dueDate        DateTime?
+  /// Fractional-indexing rank string for kanban ordering within a status column.
+  rank           String
+  parentTaskId   String?
+  createdById    String
+  completedAt    DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?       @relation(fields: [projectId], references: [id])
+  createdBy    User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  parentTask   Task?          @relation("TaskSubtasks", fields: [parentTaskId], references: [id])
+  subtasks     Task[]         @relation("TaskSubtasks")
+  assignees    TaskAssignee[]
+  labels       TaskLabel[]
+  transactions Transaction[]
+
+  @@index([organizationId])
+  @@index([dueDate])
+  @@index([parentTaskId])
+}
+
+model TaskAssignee {
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+}
+
+model Label {
+  id             String @id @default(cuid())
+  organizationId String
+  name           String
+  color          String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tasks        TaskLabel[]
+
+  @@index([organizationId])
+}
+
+model TaskLabel {
+  taskId  String
+  labelId String
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+}
+
+// --- Notes ---
+
+enum NoteVisibility {
+  PRIVATE
+  ORGANIZATION
+}
+
+model Note {
+  id             String         @id @default(cuid())
+  organizationId String
+  title          String
+  contentJson    Json
+  contentText    String
+  visibility     NoteVisibility @default(PRIVATE)
+  authorId       String
+  eventId        String?
+  version        Int            @default(1)
+  updatedById    String
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User         @relation("NoteAuthor", fields: [authorId], references: [id])
+  updatedBy    User         @relation("NoteUpdatedBy", fields: [updatedById], references: [id])
+  event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+}
+
+// --- Calendar and scheduling ---
+
+enum ConferenceProvider {
+  NONE
+  MEET
+  ZOOM
+  TEAMS
+  OTHER
+}
+
+model Event {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  title              String
+  description        String?
+  startsAt           DateTime
+  endsAt             DateTime
+  location           String?
+  conferenceProvider ConferenceProvider @default(NONE)
+  conferenceUrl      String?
+  createdById        String
+  deletedAt          DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy         User              @relation("EventCreatedBy", fields: [createdById], references: [id])
+  attendees         EventAttendee[]
+  notes             Note[]
+  finalizedFromPoll AvailabilityPoll? @relation("PollFinalizedEvent")
+  transactions      Transaction[]
+
+  @@index([organizationId])
+  @@index([startsAt])
+}
+
+enum RSVPStatus {
+  PENDING
+  YES
+  NO
+  MAYBE
+}
+
+model EventAttendee {
+  eventId String
+  userId  String
+  rsvp    RSVPStatus @default(PENDING)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+}
+
+model AvailabilityPoll {
+  id               String    @id @default(cuid())
+  organizationId   String
+  title            String
+  description      String?
+  timezone         String
+  durationMinutes  Int
+  closesAt         DateTime?
+  createdById      String
+  finalizedEventId String?   @unique
+  createdAt        DateTime  @default(now())
+
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User           @relation("PollCreatedBy", fields: [createdById], references: [id])
+  finalizedEvent Event?         @relation("PollFinalizedEvent", fields: [finalizedEventId], references: [id])
+  slots          PollSlot[]
+  responses      PollResponse[]
+
+  @@index([organizationId])
+}
+
+model PollSlot {
+  id       String   @id @default(cuid())
+  pollId   String
+  startsAt DateTime
+  endsAt   DateTime
+
+  poll      AvailabilityPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  responses PollResponse[]
+
+  @@index([pollId])
+}
+
+enum PollAvailability {
+  YES
+  NO
+  IF_NEEDED
+}
+
+model PollResponse {
+  id           String           @id @default(cuid())
+  pollId       String
+  slotId       String
+  userId       String?
+  guestName    String?
+  availability PollAvailability
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  poll AvailabilityPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  slot PollSlot         @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  user User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, userId])
+  @@index([pollId])
+}
+
+// --- Finance ---
+// Amounts are always integer cents. There is no stored balance column anywhere;
+// balance is always derived from Transaction (spec section 5.7).
+
+model BudgetPeriod {
+  id             String   @id @default(cuid())
+  organizationId String
+  label          String
+  startsOn       DateTime @db.Date
+  endsOn         DateTime @db.Date
+  isActive       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  categories   BudgetCategory[]
+  transactions Transaction[]
+  sponsorships Sponsorship[]
+
+  @@unique([organizationId], where: { isActive: true })
+  @@index([organizationId])
+}
+
+model BudgetCategory {
+  id             String @id @default(cuid())
+  organizationId String
+  budgetPeriodId String
+  name           String
+  allocatedCents Int
+  sortOrder      Int    @default(0)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  budgetPeriod BudgetPeriod  @relation(fields: [budgetPeriodId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([organizationId])
+}
+
+enum TransactionDirection {
+  IN
+  OUT
+}
+
+enum TransactionKind {
+  EXPENSE
+  SPONSORSHIP
+  ALLOCATION
+  OTHER_INCOME
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REIMBURSED
+  REJECTED
+  NOT_APPLICABLE
+}
+
+model Transaction {
+  id             String               @id @default(cuid())
+  organizationId String
+  budgetPeriodId String
+  categoryId     String?
+  direction      TransactionDirection
+  kind           TransactionKind
+  amountCents    Int
+  currency       String               @default("USD")
+  description    String
+  counterparty   String?
+  occurredAt     DateTime
+  paymentMethod  String?
+  status         TransactionStatus    @default(NOT_APPLICABLE)
+
+  submittedById       String
+  approvedById        String?
+  approvedAt          DateTime?
+  reimbursedAt        DateTime?
+  reimbursementMethod String?
+  rejectionReason     String?
+
+  reconciledAt   DateTime?
+  reconciledById String?
+  statementRef   String?
+
+  eventId String?
+  taskId  String?
+
+  voidedAt   DateTime?
+  voidReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  budgetPeriod BudgetPeriod      @relation(fields: [budgetPeriodId], references: [id])
+  category     BudgetCategory?   @relation(fields: [categoryId], references: [id])
+  submittedBy  User              @relation("TransactionSubmittedBy", fields: [submittedById], references: [id])
+  approvedBy   User?             @relation("TransactionApprovedBy", fields: [approvedById], references: [id])
+  reconciledBy User?             @relation("TransactionReconciledBy", fields: [reconciledById], references: [id])
+  event        Event?            @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  task         Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  receipts     Receipt[]
+  sponsorship  Sponsorship?
+  auditLogs    FinanceAuditLog[]
+
+  @@index([organizationId])
+}
+
+model Receipt {
+  id            String   @id @default(cuid())
+  transactionId String
+  blobKey       String
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  uploadedById  String
+  uploadedAt    DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  uploadedBy  User        @relation(fields: [uploadedById], references: [id])
+
+  @@index([transactionId])
+}
+
+model Sponsor {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  contactName    String?
+  contactEmail   String?
+  notes          String?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sponsorships Sponsorship[]
+
+  @@index([organizationId])
+}
+
+enum SponsorshipStatus {
+  PROSPECT
+  COMMITTED
+  INVOICED
+  RECEIVED
+  DECLINED
+  WRITTEN_OFF
+}
+
+model Sponsorship {
+  id             String            @id @default(cuid())
+  organizationId String
+  sponsorId      String
+  budgetPeriodId String
+  amountCents    Int
+  tier           String?
+  deliverables   String?
+  expectedOn     DateTime?
+  status         SponsorshipStatus @default(PROSPECT)
+  transactionId  String?           @unique
+  ownerId        String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sponsor      Sponsor           @relation(fields: [sponsorId], references: [id])
+  budgetPeriod BudgetPeriod      @relation(fields: [budgetPeriodId], references: [id])
+  transaction  Transaction?      @relation(fields: [transactionId], references: [id])
+  owner        User              @relation("SponsorshipOwner", fields: [ownerId], references: [id])
+  auditLogs    FinanceAuditLog[]
+
+  @@index([organizationId])
+}
+
+/// Append-only. UPDATE/DELETE are revoked at the DB role level once a production
+/// database role exists (spec task 5.9) — this table is written, never modified.
+model FinanceAuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorId        String
+  transactionId  String?
+  sponsorshipId  String?
+  action         String
+  diffJson       Json
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User         @relation(fields: [actorId], references: [id])
+  transaction  Transaction? @relation(fields: [transactionId], references: [id])
+  sponsorship  Sponsorship? @relation(fields: [sponsorshipId], references: [id])
+
+  @@index([organizationId])
+}
