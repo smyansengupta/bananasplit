@@ -26,6 +26,11 @@ model User {
   /// Unguessable, regenerable token for the read-only .ics calendar feed URL.
   /// Nullable: generated lazily the first time the user asks for their feed URL.
   icsToken      String?   @unique
+  /// Map of NotificationType -> boolean, e.g. { "TASK_DUE_SOON": false }.
+  /// A type absent from the map is treated as enabled (opt-out, not opt-in),
+  /// so adding a new notification type never silently requires a migration
+  /// to keep existing users subscribed.
+  emailPreferences Json    @default("{}")
   createdAt     DateTime  @default(now())
 
   accounts Account[]
@@ -47,6 +52,7 @@ model User {
   uploadedReceipts       Receipt[]
   ownedSponsorships      Sponsorship[]      @relation("SponsorshipOwner")
   financeAuditLogs       FinanceAuditLog[]
+  notifications          Notification[]
 }
 
 model Account {
@@ -117,6 +123,33 @@ model Organization {
   sponsors          Sponsor[]
   sponsorships      Sponsorship[]
   financeAuditLogs  FinanceAuditLog[]
+  notifications     Notification[]
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_DUE_SOON
+  EVENT_INVITE
+  INVITE_ACCEPTED
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  type           NotificationType
+  title          String
+  body           String?
+  /// Relative in-app link, e.g. /app/{orgSlug}/tasks
+  linkUrl        String?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([organizationId])
 }
 
 model Membership {
@@ -210,6 +243,9 @@ model Task {
   @@index([organizationId])
   @@index([dueDate])
   @@index([parentTaskId])
+  // Covers the kanban/table queries: org-scoped, non-deleted, top-level,
+  // filtered and ordered by status.
+  @@index([organizationId, deletedAt, parentTaskId, status])
 }
 
 model TaskAssignee {
@@ -274,7 +310,7 @@ model Note {
   updatedBy    User         @relation("NoteUpdatedBy", fields: [updatedById], references: [id])
   event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId])
+  @@index([organizationId, deletedAt])
   @@index([searchVector], type: Gin)
 }
 
@@ -497,6 +533,10 @@ model Transaction {
   auditLogs    FinanceAuditLog[]
 
   @@index([organizationId])
+  // Covers the dashboard's per-period, non-voided aggregates and the
+  // transaction table's period/date-range filters.
+  @@index([organizationId, budgetPeriodId, voidedAt])
+  @@index([organizationId, occurredAt])
 }
 
 model Receipt {

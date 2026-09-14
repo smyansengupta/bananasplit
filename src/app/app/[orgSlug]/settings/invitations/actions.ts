@@ -8,6 +8,10 @@ import { withOrgContext } from "@/lib/auth/with-org-context";
 import { sendInvitationEmail } from "@/lib/email";
 import { generateInvitationToken, INVITATION_EXPIRY_DAYS } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const INVITE_RATE_LIMIT = 20;
+const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 const inviteSchema = z.object({
   email: z.email("Enter a valid email address"),
@@ -23,6 +27,15 @@ function assertCanManageMembers(role: Role) {
 export const inviteMember = withOrgContext(
   async (ctx, input: { email: string; role: Role }): Promise<{ error?: string }> => {
     assertCanManageMembers(ctx.role);
+
+    const rateLimit = checkRateLimit(
+      `invite:${ctx.organizationId}`,
+      INVITE_RATE_LIMIT,
+      INVITE_RATE_WINDOW_MS,
+    );
+    if (!rateLimit.allowed) {
+      return { error: "Too many invites sent recently. Try again in a few minutes." };
+    }
 
     const parsed = inviteSchema.safeParse(input);
     if (!parsed.success) {

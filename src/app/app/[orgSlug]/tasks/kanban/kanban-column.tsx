@@ -40,6 +40,7 @@ export function KanbanColumn({
       </div>
       <div
         ref={setNodeRef}
+        data-testid={`kanban-column-${id}`}
         className={cn(
           "min-h-24 flex-1 space-y-2 rounded-lg border border-dashed p-2 transition-colors",
           isOver && "border-ring bg-accent/40",

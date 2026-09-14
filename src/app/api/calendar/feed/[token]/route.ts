@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 
 import { buildIcsCalendar } from "@/lib/ics";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+// Generous: real calendar apps poll this every 15-60 min, but nothing
+// legitimate needs more than one request a minute.
+const FEED_RATE_LIMIT = 60;
+const FEED_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * Public, token-authenticated read-only feed — no session required. The
@@ -10,6 +16,11 @@ import { prisma } from "@/lib/prisma";
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+
+  const rateLimit = checkRateLimit(`ics-feed:${token}`, FEED_RATE_LIMIT, FEED_RATE_WINDOW_MS);
+  if (!rateLimit.allowed) {
+    return new NextResponse("Too many requests", { status: 429 });
+  }
 
   const user = await prisma.user.findUnique({ where: { icsToken: token } });
   if (!user) {

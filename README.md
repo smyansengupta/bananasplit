@@ -62,8 +62,24 @@ Email/password is a deliberate addition beyond the original spec, which scoped v
 | `pnpm typecheck`    | `tsc --noEmit`                   |
 | `pnpm format`       | Format with Prettier             |
 | `pnpm format:check` | Check formatting without writing |
+| `pnpm test`         | Unit/integration tests (Vitest)  |
+| `pnpm test:e2e`     | End-to-end browser tests (Playwright) |
+
+## Documentation
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — conventions for making a change.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the multi-tenant model and
+  how authorization is enforced.
+- [`docs/EBOARD-HANDBOOK.md`](docs/EBOARD-HANDBOOK.md) — for the club's
+  e-board, not developers: treasurer handoff, ongoing habits, continuity.
+- [`RUNBOOK.md`](RUNBOOK.md) — deploying for the first time and restoring
+  from backup.
 
 ## Project status
 
-Following the phased build-out in the project spec. Phases 0 and 1 (foundation, auth &
-organizations) are done. Currently: Phase 2 — Task management.
+Following the phased build-out in the project spec. Phases 0–6 (foundation
+through hardening: notifications, an authorization audit, accessibility
+fixes, performance work, E2E tests, and deployment/docs prep) are done.
+Per the spec's own sequencing, Phase 7 (stretch: Google Calendar sync,
+real-time collaborative editing) is intentionally not started — v1 is meant
+to run with a real e-board for a month first.

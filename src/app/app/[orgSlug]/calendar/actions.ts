@@ -2,10 +2,33 @@
 
 import { z } from "zod";
 
-import { ConferenceProvider, RSVPStatus } from "@/generated/prisma/client";
+import { ConferenceProvider, NotificationType, RSVPStatus } from "@/generated/prisma/client";
 import { withOrgContext } from "@/lib/auth/with-org-context";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
-import { sendEventInviteEmail } from "@/lib/email";
+
+async function notifyEventInvitees(
+  organizationId: string,
+  eventTitle: string,
+  attendeeIds: string[],
+) {
+  if (attendeeIds.length === 0) return;
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  await Promise.all(
+    attendeeIds.map((userId) =>
+      notifyUser({
+        organizationId,
+        userId,
+        type: NotificationType.EVENT_INVITE,
+        title: `You were invited to "${eventTitle}"`,
+        linkUrl: org ? `/app/${org.slug}/calendar` : undefined,
+      }),
+    ),
+  );
+}
 
 const CONFERENCE_PROVIDER_VALUES = Object.values(ConferenceProvider) as [
   ConferenceProvider,
@@ -122,17 +145,10 @@ export const createEvent = withOrgContext(async (ctx, input: unknown): Promise<A
     include: { attendees: { include: { user: true } } },
   });
 
-  const invitees = event.attendees.filter((a) => a.userId !== ctx.user.id);
-  await Promise.all(
-    invitees.map((a) =>
-      sendEventInviteEmail({
-        to: a.user.email,
-        eventTitle: event.title,
-        startsAt: event.startsAt,
-        organizerName: ctx.user.name ?? ctx.user.email,
-      }),
-    ),
-  );
+  const inviteeIds = event.attendees
+    .map((a) => a.userId)
+    .filter((userId) => userId !== ctx.user.id);
+  await notifyEventInvitees(ctx.organizationId, event.title, inviteeIds);
 
   return { eventId: event.id };
 });
@@ -198,22 +214,7 @@ export const updateEvent = withOrgContext(
       const newAttendeeIds = data.attendeeIds.filter(
         (id) => !previousAttendeeIds.has(id) && id !== ctx.user.id,
       );
-      if (newAttendeeIds.length) {
-        const users = await prisma.user.findMany({
-          where: { id: { in: newAttendeeIds } },
-          select: { email: true },
-        });
-        await Promise.all(
-          users.map((u) =>
-            sendEventInviteEmail({
-              to: u.email,
-              eventTitle: data.title ?? existing.title,
-              startsAt,
-              organizerName: ctx.user.name ?? ctx.user.email,
-            }),
-          ),
-        );
-      }
+      await notifyEventInvitees(ctx.organizationId, data.title ?? existing.title, newAttendeeIds);
     }
 
     return { eventId };

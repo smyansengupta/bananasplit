@@ -39,6 +39,11 @@ import { cn } from "@/lib/utils";
 import { bulkAssign, bulkDelete, bulkUpdateStatus } from "../actions";
 import type { TaskWithRelations } from "../queries";
 
+// Plain client-side pagination rather than virtualization: this table has no
+// windowing library, and a page-at-a-time render keeps the DOM small without
+// one. Revisit if a real org's task count outgrows this (spec 6.4).
+const PAGE_SIZE = 100;
+
 type SortKey = "title" | "dueDate" | "priority" | "status";
 const PRIORITY_RANK: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 const COLUMN_KEYS = ["project", "assignees", "labels", "priority", "dueDate"] as const;
@@ -70,6 +75,7 @@ export function TaskTable({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>({
     project: true,
     assignees: true,
@@ -98,6 +104,11 @@ export function TaskTable({
     });
   }, [tasks, sortKey, sortDir]);
 
+  const pagedTasks = useMemo(
+    () => sortedTasks.slice(0, visibleCount),
+    [sortedTasks, visibleCount],
+  );
+
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -118,7 +129,7 @@ export function TaskTable({
 
   function toggleAll() {
     setSelected((prev) =>
-      prev.size === sortedTasks.length ? new Set() : new Set(sortedTasks.map((t) => t.id)),
+      prev.size === pagedTasks.length ? new Set() : new Set(pagedTasks.map((t) => t.id)),
     );
   }
 
@@ -206,7 +217,7 @@ export function TaskTable({
             <TableRow>
               <TableHead className="w-10">
                 <Checkbox
-                  checked={selected.size > 0 && selected.size === sortedTasks.length}
+                  checked={selected.size > 0 && selected.size === pagedTasks.length}
                   onCheckedChange={toggleAll}
                   aria-label="Select all tasks"
                 />
@@ -249,7 +260,7 @@ export function TaskTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedTasks.map((task) => (
+            {pagedTasks.map((task) => (
               <TaskTableRows
                 key={task.id}
                 task={task}
@@ -275,6 +286,21 @@ export function TaskTable({
           </TableBody>
         </Table>
       </div>
+
+      {sortedTasks.length > pagedTasks.length && (
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground text-sm">
+            Showing {pagedTasks.length} of {sortedTasks.length} tasks
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+          >
+            Show more
+          </Button>
+        </div>
+      )}
 
       <TaskDetailDialog
         orgId={orgId}

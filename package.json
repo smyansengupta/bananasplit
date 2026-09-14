@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
@@ -30,6 +31,7 @@
     "@fullcalendar/timegrid": "6.1.21",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "7.10.0",
+    "@sentry/nextjs": "^10.74.0",
     "@tanstack/react-query": "^5.102.8",
     "@tiptap/core": "^3.31.3",
     "@tiptap/extension-bubble-menu": "^3.31.3",
@@ -73,6 +75,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/typography": "^0.5.20",
     "@testing-library/jest-dom": "^7.0.1",

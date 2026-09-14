@@ -1,8 +1,13 @@
 {
+  "buildCommand": "prisma migrate deploy && next build",
   "crons": [
     {
       "path": "/api/cron/finance-digest",
       "schedule": "0 13 * * 1"
+    },
+    {
+      "path": "/api/cron/due-date-digest",
+      "schedule": "0 13 * * *"
     }
   ]
 }

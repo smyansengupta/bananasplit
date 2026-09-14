@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import type { Invitation } from "@/generated/prisma/client";
+import { NotificationType, type Invitation } from "@/generated/prisma/client";
 import type { SessionUser } from "@/lib/auth/session";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
 export const INVITATION_EXPIRY_DAYS = 7;
@@ -71,5 +72,14 @@ export async function acceptInvitation(
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: invitation.organizationId },
   });
+
+  await notifyUser({
+    organizationId: org.id,
+    userId: invitation.invitedById,
+    type: NotificationType.INVITE_ACCEPTED,
+    title: `${user.name ?? user.email} accepted your invite to ${org.name}`,
+    linkUrl: `/app/${org.slug}/settings/members`,
+  });
+
   return { ok: true, orgId: org.id, orgSlug: org.slug };
 }

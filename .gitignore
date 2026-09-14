@@ -45,3 +45,8 @@ next-env.d.ts
 
 # local-dev-only receipt storage fallback (see src/lib/finance/receipt-storage.ts)
 /.data
+
+# playwright (e2e)
+/test-results
+/playwright-report
+/playwright/.cache

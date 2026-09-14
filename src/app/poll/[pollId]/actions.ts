@@ -1,10 +1,20 @@
 "use server";
 
+import { headers } from "next/headers";
 import { z } from "zod";
 
 import { PollAvailability } from "@/generated/prisma/client";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const RESPONSE_RATE_LIMIT = 30;
+const RESPONSE_RATE_WINDOW_MS = 60 * 1000;
+
+async function clientIp(): Promise<string> {
+  const headerList = await headers();
+  return headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+}
 
 const AVAILABILITY_VALUES = Object.values(PollAvailability) as [
   PollAvailability,
@@ -30,6 +40,15 @@ interface ActionResult {
  * — there's no durable identity to upsert against for a guest).
  */
 export async function submitPollResponse(input: unknown): Promise<ActionResult> {
+  const rateLimit = checkRateLimit(
+    `poll-response:${await clientIp()}`,
+    RESPONSE_RATE_LIMIT,
+    RESPONSE_RATE_WINDOW_MS,
+  );
+  if (!rateLimit.allowed) {
+    return { error: "Too many responses submitted recently. Wait a moment and try again." };
+  }
+
   const parsed = submitSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };

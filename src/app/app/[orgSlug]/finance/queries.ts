@@ -173,21 +173,29 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
       prisma.sponsorship.findMany({ where: { organizationId, budgetPeriodId: period.id } }),
       prisma.transaction.findMany({
         where: { organizationId, budgetPeriodId: period.id, voidedAt: null },
-        select: { direction: true, amountCents: true, occurredAt: true, reconciledAt: true },
+        select: {
+          direction: true,
+          amountCents: true,
+          occurredAt: true,
+          reconciledAt: true,
+          categoryId: true,
+        },
       }),
     ]);
 
-  const categorySpent = await Promise.all(
-    categories.map(async (c) => ({
-      id: c.id,
-      name: c.name,
-      allocatedCents: c.allocatedCents,
-      spentCents: await sumTransactions(organizationId, period.id, {
-        categoryId: c.id,
-        direction: TransactionDirection.OUT,
-      }),
-    })),
-  );
+  // Single pass over the already-fetched period transactions instead of one
+  // aggregate query per category (was O(categories) round-trips).
+  const spentByCategory = new Map<string, number>();
+  for (const t of allTransactions) {
+    if (t.direction !== TransactionDirection.OUT || !t.categoryId) continue;
+    spentByCategory.set(t.categoryId, (spentByCategory.get(t.categoryId) ?? 0) + t.amountCents);
+  }
+  const categorySpent = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    allocatedCents: c.allocatedCents,
+    spentCents: spentByCategory.get(c.id) ?? 0,
+  }));
 
   const burnMap = new Map<string, { inCents: number; outCents: number }>();
   for (const t of allTransactions) {

@@ -15,8 +15,6 @@ const { prismaMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-vi.mock("@/lib/email", () => ({ sendEventInviteEmail: vi.fn() }));
-
 const { Role, ConferenceProvider, RSVPStatus } = await import("@/generated/prisma/enums");
 const { createEvent, rsvpToEvent } = await import("./actions");
 

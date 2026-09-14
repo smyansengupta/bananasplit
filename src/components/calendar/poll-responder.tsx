@@ -33,6 +33,12 @@ const CELL_COLOR: Record<PollAvailability, string> = {
   NO: "bg-transparent",
 };
 
+const AVAILABILITY_LABEL: Record<PollAvailability, string> = {
+  YES: "available",
+  IF_NEEDED: "available if needed",
+  NO: "unavailable",
+};
+
 export function PollResponder({
   poll,
   currentUserId,
@@ -124,6 +130,18 @@ export function PollResponder({
     void flush(myResponses);
   }
 
+  // Cell buttons paint via pointerdown/pointerenter/pointerup for mouse and
+  // touch drag. Keyboard activation (Enter/Space) fires a synthetic click
+  // with event.detail === 0 (pointer-driven clicks have detail >= 1) — that's
+  // the only path with no pointer events already handling it, so this is the
+  // keyboard alternative to the drag-paint gesture.
+  function handleCellKeyboardActivate(slotId: string, event: React.MouseEvent) {
+    if (event.detail !== 0 || !canRespond) return;
+    const next = { ...myResponses, [slotId]: brush };
+    setMyResponses(next);
+    void flush(next);
+  }
+
   async function handleFinalize(slotId: string) {
     if (!orgId) return;
     const result = await finalizePoll(orgId, poll.id, slotId);
@@ -192,6 +210,7 @@ export function PollResponder({
                 key={option.value}
                 type="button"
                 onClick={() => setBrush(option.value)}
+                aria-pressed={brush === option.value}
                 className={cn(
                   "flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium",
                   brush === option.value ? "border-foreground" : "border-transparent opacity-60",
@@ -206,8 +225,15 @@ export function PollResponder({
         </div>
       )}
 
+      <p id="poll-grid-instructions" className="sr-only">
+        Availability grid. Tab to a time slot and press Enter or Space to mark it with the
+        currently selected availability.
+      </p>
       <div className="overflow-x-auto">
-        <table className="border-separate border-spacing-0.5">
+        <table
+          className="border-separate border-spacing-0.5"
+          aria-describedby="poll-grid-instructions"
+        >
           <thead>
             <tr>
               <th className="w-16" />
@@ -238,6 +264,10 @@ export function PollResponder({
                         disabled={!canRespond}
                         onPointerDown={() => handlePointerDown(slot.id)}
                         onPointerEnter={() => handlePointerEnter(slot.id)}
+                        onClick={(e) => handleCellKeyboardActivate(slot.id, e)}
+                        aria-label={`${formatDayHeader(day)} at ${time}: ${
+                          mine ? `marked ${AVAILABILITY_LABEL[mine]}` : "no response yet"
+                        }${count > 0 ? `, ${count} response${count === 1 ? "" : "s"} so far` : ""}`}
                         className={cn(
                           "relative size-7 rounded-sm border disabled:cursor-not-allowed",
                           count === 0 && "bg-muted/40",

@@ -4,6 +4,7 @@ import { Menu, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { CommandPalette } from "@/components/command-palette/command-palette";
+import { NotificationBell } from "@/components/shell/notification-bell";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { navItems } from "@/components/shell/nav-config";
@@ -93,6 +94,7 @@ export function AppShell({
           </Button>
 
           <div className="flex-1" />
+          <NotificationBell />
           <UserMenu user={user} />
         </header>
 

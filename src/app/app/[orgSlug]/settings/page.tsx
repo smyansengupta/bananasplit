@@ -1,4 +1,4 @@
-import { CalendarClock, Mail, Tag, Users } from "lucide-react";
+import { Bell, CalendarClock, Mail, Tag, Users } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -53,6 +53,15 @@ export default async function SettingsPage({ params }: PageProps<"/app/[orgSlug]
             </Card>
           </Link>
         )}
+        <Link href={`/app/${orgSlug}/settings/notifications`}>
+          <Card className="hover:bg-accent/50 transition-colors">
+            <CardHeader>
+              <Bell className="text-muted-foreground mb-2 size-5" aria-hidden="true" />
+              <CardTitle className="text-sm font-medium">Notifications</CardTitle>
+              <CardDescription>Choose which notifications also send you an email.</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         <Link href={`/app/${orgSlug}/settings/calendar`}>
           <Card className="hover:bg-accent/50 transition-colors">
             <CardHeader>

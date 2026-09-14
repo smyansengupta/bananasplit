@@ -3,9 +3,29 @@
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { z } from "zod";
 
-import { TaskPriority, TaskStatus } from "@/generated/prisma/client";
+import { NotificationType, TaskPriority, TaskStatus } from "@/generated/prisma/client";
 import { withOrgContext } from "@/lib/auth/with-org-context";
+import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+
+async function notifyNewAssignees(organizationId: string, taskTitle: string, userIds: string[]) {
+  if (userIds.length === 0) return;
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  await Promise.all(
+    userIds.map((userId) =>
+      notifyUser({
+        organizationId,
+        userId,
+        type: NotificationType.TASK_ASSIGNED,
+        title: `You were assigned to "${taskTitle}"`,
+        linkUrl: org ? `/app/${org.slug}/tasks` : undefined,
+      }),
+    ),
+  );
+}
 
 const TASK_STATUS_VALUES = Object.values(TaskStatus) as [TaskStatus, ...TaskStatus[]];
 const TASK_PRIORITY_VALUES = Object.values(TaskPriority) as [TaskPriority, ...TaskPriority[]];
@@ -145,6 +165,10 @@ export const createTask = withOrgContext(async (ctx, input: unknown): Promise<Ac
     },
   });
 
+  if (data.assigneeIds?.length) {
+    await notifyNewAssignees(ctx.organizationId, task.title, data.assigneeIds);
+  }
+
   return { taskId: task.id };
 });
 
@@ -152,6 +176,7 @@ export const updateTask = withOrgContext(
   async (ctx, taskId: string, input: unknown): Promise<ActionResult> => {
     const existing = await prisma.task.findFirst({
       where: { id: taskId, organizationId: ctx.organizationId, deletedAt: null },
+      include: { assignees: { select: { userId: true } } },
     });
     if (!existing) {
       return { error: "Task not found." };
@@ -220,6 +245,12 @@ export const updateTask = withOrgContext(
       }
     });
 
+    if (data.assigneeIds) {
+      const previousAssigneeIds = new Set(existing.assignees.map((a) => a.userId));
+      const newAssigneeIds = data.assigneeIds.filter((id) => !previousAssigneeIds.has(id));
+      await notifyNewAssignees(ctx.organizationId, data.title ?? existing.title, newAssigneeIds);
+    }
+
     return { taskId };
   },
 );
@@ -278,12 +309,21 @@ export const reorderTask = withOrgContext(
       return { error: "Task not found." };
     }
 
+    // beforeId/afterId are client-supplied — verify they're this org's tasks
+    // before trusting their rank for anything. Every tenant-scoped lookup
+    // filters on organizationId, no exceptions.
     const [before, after] = await Promise.all([
       input.beforeId
-        ? prisma.task.findUnique({ where: { id: input.beforeId }, select: { rank: true } })
+        ? prisma.task.findFirst({
+            where: { id: input.beforeId, organizationId: ctx.organizationId },
+            select: { rank: true },
+          })
         : null,
       input.afterId
-        ? prisma.task.findUnique({ where: { id: input.afterId }, select: { rank: true } })
+        ? prisma.task.findFirst({
+            where: { id: input.afterId, organizationId: ctx.organizationId },
+            select: { rank: true },
+          })
         : null,
     ]);
 
@@ -354,6 +394,22 @@ export const bulkAssign = withOrgContext(
         }),
       ),
     );
+
+    const org = await prisma.organization.findUnique({
+      where: { id: ctx.organizationId },
+      select: { slug: true },
+    });
+    await notifyUser({
+      organizationId: ctx.organizationId,
+      userId,
+      type: NotificationType.TASK_ASSIGNED,
+      title:
+        taskIds.length === 1
+          ? "You were assigned to a task"
+          : `You were assigned to ${taskIds.length} tasks`,
+      linkUrl: org ? `/app/${org.slug}/tasks` : undefined,
+    });
+
     return {};
   },
 );
