@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Role } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
+import { assignableRoles, canActOnMember } from "@/lib/auth/member-roles";
 import {
   Select,
   SelectContent,
@@ -15,8 +16,6 @@ import {
 
 import { changeMemberRole, removeMember } from "./actions";
 
-const ROLE_OPTIONS = [Role.OWNER, Role.ADMIN, Role.TREASURER, Role.MEMBER];
-
 function roleLabel(role: Role) {
   return role.charAt(0) + role.slice(1).toLowerCase();
 }
@@ -26,16 +25,24 @@ export function MemberRowActions({
   userId,
   currentRole,
   memberName,
+  viewerRole,
 }: {
   orgId: string;
   userId: string;
   currentRole: Role;
   memberName: string;
+  /** The signed-in manager's role: ADMINs never see OWNER as an option. */
+  viewerRole: Role;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+  if (!canActOnMember(viewerRole, currentRole)) {
+    return <p className="text-muted-foreground text-xs">Only an owner can change an owner.</p>;
+  }
+  const roleOptions = assignableRoles(viewerRole);
 
   function handleRoleChange(value: string) {
     setError(null);
@@ -70,7 +77,7 @@ export function MemberRowActions({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ROLE_OPTIONS.map((role) => (
+            {roleOptions.map((role) => (
               <SelectItem key={role} value={role}>
                 {roleLabel(role)}
               </SelectItem>
