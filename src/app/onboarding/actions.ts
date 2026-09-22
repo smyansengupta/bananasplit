@@ -5,8 +5,10 @@ import { z } from "zod";
 
 import { Role } from "@/generated/prisma/client";
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
+import { getUserIdentity } from "@/lib/auth/email-verification";
+import { ORG_CREATION_DENIAL_MESSAGES, orgCreationDenial } from "@/lib/auth/org-creation";
 import { requireUser } from "@/lib/auth/session";
-import { acceptInvitation } from "@/lib/invitations";
+import { ACCEPT_ERROR_MESSAGES, acceptInvitation } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
 import { isReservedSlug } from "@/lib/slug";
 import { sqlStateOf } from "@/server/db/errors";
@@ -31,6 +33,15 @@ export async function createOrganizationAction(
   formData: FormData,
 ): Promise<CreateOrgState> {
   const user = await requireUser();
+
+  // 0A Fix 4(c) and Fix 16, checked on the server whatever the page showed:
+  // an unverified account never becomes an OWNER, and in production only
+  // the platform admins (PLATFORM_ADMIN_EMAILS) may create an org.
+  const denial = orgCreationDenial(await getUserIdentity(user.id));
+  if (denial) {
+    return { error: ORG_CREATION_DENIAL_MESSAGES[denial] };
+  }
+
   const parsed = createOrgSchema.safeParse({
     name: formData.get("name"),
     slug: formData.get("slug"),
@@ -76,12 +87,6 @@ export async function checkSlugAvailability(slug: string): Promise<boolean> {
   return !existing;
 }
 
-const ACCEPT_ERROR_MESSAGES = {
-  already_used: "This invite has already been used.",
-  expired: "This invite has expired.",
-  email_mismatch: "This invite was sent to a different email address.",
-} as const;
-
 export async function joinPendingInvitationAction(
   invitationId: string,
 ): Promise<{ error?: string }> {
@@ -91,6 +96,8 @@ export async function joinPendingInvitationAction(
     return { error: "This invite no longer exists." };
   }
 
+  // acceptInvitation requires the invited address to be this account's
+  // verified email (0A Fix 4(c)).
   const result = await acceptInvitation(invitation, user);
   if (!result.ok) {
     return { error: ACCEPT_ERROR_MESSAGES[result.reason] };

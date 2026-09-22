@@ -4,13 +4,11 @@ import { redirect } from "next/navigation";
 
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
 import { requireUser } from "@/lib/auth/session";
-import { acceptInvitation, findInvitationByRawToken } from "@/lib/invitations";
-
-const ACCEPT_ERROR_MESSAGES = {
-  already_used: "This invite has already been used.",
-  expired: "This invite has expired.",
-  email_mismatch: "This invite was sent to a different email address.",
-} as const;
+import {
+  ACCEPT_ERROR_MESSAGES,
+  acceptInvitation,
+  findInvitationByRawToken,
+} from "@/lib/invitations";
 
 export async function acceptInvitationAction(
   rawToken: string,
