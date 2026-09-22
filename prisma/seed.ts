@@ -3,7 +3,15 @@ import { generateNKeysBetween } from "fractional-indexing";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "../src/lib/auth/password";
 import {
+  applyCbcTemplate,
+  CBC_ORG,
+  CBC_PEOPLE,
+  seedCbcDemoData,
+  type CbcPersonKey,
+} from "../src/server/bootstrap/cbc-template";
+import {
   ConferenceProvider,
+  OrgChartSource,
   NoteVisibility,
   PollAvailability,
   PrismaClient,
@@ -23,12 +31,16 @@ import {
  *
  * - Two fixture orgs (Robotics Club, Debate Society) with tasks, notes,
  *   events, a poll and finance data, as before.
+ * - The Claude Builders Club (claude-builders-club): the 8 board members,
+ *   the published org chart, sessions, synthetic contacts with attendance,
+ *   signups and ballots, tasks, Sunday updates and a budget, all through
+ *   src/server/bootstrap/cbc-template.ts.
  *
  * Every seeded user signs in with the password `password123`.
  *
  * Runs as the migration owner (MIGRATE_DATABASE_URL, else DATABASE_URL),
  * which owns the tables, so RLS does not apply; the same-org and
- * member-of-org triggers still do. Re-runnable: the orgs are deleted
+ * member-of-org triggers still do. Re-runnable: the three orgs are deleted
  * and recreated, users are upserted by email.
  */
 if (process.env.VERCEL_ENV === "production") {
@@ -109,7 +121,7 @@ async function main() {
   const [alice, bob, carol, dave, eve, frank, grace] = userSeeds.map((u) => users[u.email]);
 
   // --- Organizations (wipe and recreate — cascades remove all org-scoped data) ---
-  const ORG_SLUGS = ["robotics-club", "debate-society"];
+  const ORG_SLUGS = ["robotics-club", "debate-society", CBC_ORG.slug];
   await prisma.organization.deleteMany({ where: { slug: { in: ORG_SLUGS } } });
 
   const orgA = await prisma.organization.create({
@@ -711,11 +723,53 @@ async function main() {
     });
   }
 
+  // --- Claude Builders Club ---
+  const cbcUsers = {} as Record<CbcPersonKey, string>;
+  for (const person of CBC_PEOPLE) {
+    const user = await upsertUser({
+      email: person.email,
+      name: person.name,
+      major: person.major,
+      gradYear: person.gradYear,
+    });
+    cbcUsers[person.key] = user.id;
+  }
+  const cbc = await prisma.organization.create({
+    data: { name: CBC_ORG.name, slug: CBC_ORG.slug, timezone: CBC_ORG.timezone },
+  });
+  await prisma.membership.createMany({
+    data: CBC_PEOPLE.map((p) => ({
+      userId: cbcUsers[p.key],
+      organizationId: cbc.id,
+      role: p.role,
+      joinedAt: daysFromNow(-40),
+    })),
+  });
+  // CBC existed before per-org senders, so its mail stays on the platform
+  // sender (Phase 1 backfill); the seeded org also publishes its public feed.
+  await prisma.orgSettings.update({
+    where: { organizationId: cbc.id },
+    data: { platformMailFallback: true, publicEventsEnabled: true },
+  });
+  const template = await applyCbcTemplate(prisma, {
+    organizationId: cbc.id,
+    actorId: cbcUsers.jackson,
+    members: cbcUsers,
+    source: OrgChartSource.SEED,
+  });
+  const demo = await seedCbcDemoData(prisma, {
+    organizationId: cbc.id,
+    members: cbcUsers,
+    intakeProjectId: template.intakeProjectId,
+    labelIds: template.labelIds,
+  });
+
   console.log("Seed complete:", {
-    users: userSeeds.length,
+    users: userSeeds.length + CBC_PEOPLE.length,
     organizations: ORG_SLUGS,
     orgATasks: 17,
     orgBTasks: 8,
+    claudeBuildersClub: demo,
   });
 }
 
