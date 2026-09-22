@@ -12,7 +12,7 @@ import type { OrgMemberOption } from "@/components/tasks/assignee-picker";
 import { Button } from "@/components/ui/button";
 
 import { updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
-import type { EventWithRelations } from "@/app/app/[orgSlug]/calendar/queries";
+import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 
 import { EventFormDialog } from "./event-form-dialog";
 
@@ -24,7 +24,8 @@ export function EventCalendar({
 }: {
   orgId: string;
   orgSlug: string;
-  events: EventWithRelations[];
+  /** `editable`: the viewer is the creator or OWNER/ADMIN (server-computed). */
+  events: (CalendarEventSummary & { editable: boolean })[];
   members: OrgMemberOption[];
 }) {
   const router = useRouter();
@@ -53,7 +54,9 @@ export function EventCalendar({
           right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth",
         }}
         height="auto"
-        editable
+        // Off by default; each event opts in when the viewer may edit it. The
+        // server re-checks on every update (updateEvent).
+        editable={false}
         selectable
         events={events.map((e) => ({
           id: e.id,
@@ -61,6 +64,7 @@ export function EventCalendar({
           start: e.startsAt.toISOString(),
           end: e.endsAt.toISOString(),
           allDay: e.allDay,
+          editable: e.editable,
         }))}
         dateClick={(info) => openNewEvent(info.date)}
         eventClick={(info) => router.push(`/app/${orgSlug}/calendar/${info.event.id}`)}

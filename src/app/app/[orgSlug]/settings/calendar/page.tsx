@@ -1,7 +1,7 @@
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { absoluteAppUrl } from "@/lib/app-url";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { requireOrgMembership } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
@@ -29,10 +29,8 @@ export default async function CalendarSettingsPage({
   // again: the page shows when it was created, and regenerating returns a
   // new URL once.
   const activeSince = await getIcsFeedActiveSince();
-  const headerList = await headers();
-  const host = headerList.get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  const feedBaseUrl = `${protocol}://${host}/api/calendar/feed/`;
+  // Built from the configured app URL, never from the request's Host header.
+  const feedBaseUrl = absoluteAppUrl("/api/calendar/feed/");
 
   return (
     <div className="space-y-6">

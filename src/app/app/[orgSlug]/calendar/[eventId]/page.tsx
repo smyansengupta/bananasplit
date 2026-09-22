@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
 
-import { Role } from "@/generated/prisma/client";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { EventDetailView } from "@/components/calendar/event-detail-view";
 
-import { getEventById, getOrgMembersForPicker } from "../queries";
+import { canEditEvent, getEventById, getOrgMembersForPicker } from "../queries";
 
 export default async function EventDetailPage({
   params,
@@ -25,13 +24,12 @@ export default async function EventDetailPage({
     handleAuthErrorInPage(error);
   }
 
-  const event = await getEventById(org.id, eventId);
+  const event = await getEventById(org.id, eventId, ctx.user.id);
   if (!event) {
     notFound();
   }
 
-  const canEdit =
-    event.createdById === ctx.user.id || ctx.role === Role.OWNER || ctx.role === Role.ADMIN;
+  const canEdit = canEditEvent(event, { userId: ctx.user.id, role: ctx.role });
   const memberships = await getOrgMembersForPicker(org.id);
   const members = memberships.map((m) => ({
     userId: m.userId,

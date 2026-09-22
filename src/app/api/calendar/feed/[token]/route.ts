@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { feedEventsWhere } from "@/lib/calendar-feed";
 import { buildIcsCalendar } from "@/lib/ics";
 import { hashIcsToken } from "@/lib/ics-token";
 import { prisma } from "@/lib/prisma";
@@ -19,7 +20,9 @@ const FEED_RATE_WINDOW_MS = 60 * 60 * 1000;
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const rateLimit = checkRateLimit(`ics-feed:${token}`, FEED_RATE_LIMIT, FEED_RATE_WINDOW_MS);
+  // Keyed on the hash: the plaintext token never sits in the limiter's memory.
+  const tokenHash = hashIcsToken(token);
+  const rateLimit = checkRateLimit(`ics-feed:${tokenHash}`, FEED_RATE_LIMIT, FEED_RATE_WINDOW_MS);
   if (!rateLimit.allowed) {
     return new NextResponse("Too many requests", { status: 429 });
   }
@@ -27,7 +30,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   // Token resolution runs as app_auth (UserCredential is readable by no
   // tenant role). Only the hash is stored.
   const credential = await authDb.userCredential.findUnique({
-    where: { icsTokenHash: hashIcsToken(token) },
+    where: { icsTokenHash: tokenHash },
     select: { user: { select: { id: true, name: true } } },
   });
   const user = credential?.user;
@@ -36,7 +39,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   }
 
   const events = await prisma.event.findMany({
-    where: { deletedAt: null, attendees: { some: { userId: user.id } } },
+    where: feedEventsWhere(user.id),
     orderBy: { startsAt: "asc" },
   });
 

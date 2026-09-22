@@ -6,10 +6,16 @@ export interface PollSlotLite {
   endsAt: Date;
 }
 
+/**
+ * One answer, keyed by an opaque respondent key (src/lib/polls/poll-view.ts):
+ * the grid never sees user ids, and two guests with the same name stay two
+ * respondents.
+ */
 export interface PollResponseLite {
   slotId: string;
-  userId: string | null;
-  guestName: string | null;
+  respondentKey: string;
+  label?: string;
+  isGuest?: boolean;
   availability: PollAvailability;
 }
 
@@ -47,7 +53,7 @@ export function buildPollGrid(slots: PollSlotLite[]): PollGrid {
 }
 
 function respondentKey(r: PollResponseLite): string {
-  return r.userId ?? `guest:${r.guestName}`;
+  return r.respondentKey;
 }
 
 /** Every distinct person who has answered at least one slot, for the results table. */
@@ -58,7 +64,7 @@ export function distinctRespondents(
   for (const r of responses) {
     const key = respondentKey(r);
     if (!seen.has(key)) {
-      seen.set(key, { key, name: r.guestName ?? r.userId ?? "Unknown", isGuest: !r.userId });
+      seen.set(key, { key, name: r.label ?? "Respondent", isGuest: Boolean(r.isGuest) });
     }
   }
   return [...seen.values()];

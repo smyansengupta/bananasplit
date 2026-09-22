@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { finalizePoll } from "@/app/app/[orgSlug]/calendar/polls/actions";
-import type { PollWithRelations } from "@/app/app/[orgSlug]/calendar/queries";
 import { submitPollResponse } from "@/app/poll/[pollId]/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PollAvailability } from "@/generated/prisma/enums";
+import type { PollView } from "@/lib/polls/poll-view";
 import { cn } from "@/lib/utils";
 
 import {
@@ -41,31 +41,30 @@ const AVAILABILITY_LABEL: Record<PollAvailability, string> = {
 
 export function PollResponder({
   poll,
-  currentUserId,
+  respondAs,
   orgId,
   orgSlug,
   canFinalize,
 }: {
-  poll: PollWithRelations;
-  currentUserId: string | null;
+  /** The stripped DTO (src/lib/polls/poll-view.ts): no ids, emails or keys. */
+  poll: PollView;
+  /** Members of the poll's org answer as themselves; everyone else as a guest. */
+  respondAs: "member" | "guest";
   orgId?: string;
   orgSlug?: string;
   canFinalize: boolean;
 }) {
   const router = useRouter();
-  const [guestName, setGuestName] = useState("");
+  const isGuest = respondAs === "guest";
+  const [guestName, setGuestName] = useState(poll.myGuestName ?? "");
   const [brush, setBrush] = useState<PollAvailability>(PollAvailability.YES);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const draggingRef = useRef(false);
 
-  const [myResponses, setMyResponses] = useState<Record<string, PollAvailability>>(() => {
-    const initial: Record<string, PollAvailability> = {};
-    for (const r of poll.responses) {
-      if (currentUserId && r.userId === currentUserId) initial[r.slotId] = r.availability;
-    }
-    return initial;
-  });
+  const [myResponses, setMyResponses] = useState<Record<string, PollAvailability>>(() => ({
+    ...poll.myResponses,
+  }));
 
   const grid = useMemo(() => buildPollGrid(poll.slots), [poll.slots]);
 
@@ -86,9 +85,9 @@ export function PollResponder({
     [poll.slots, poll.responses, poll.durationMinutes],
   );
 
-  const isFinalized = Boolean(poll.finalizedEvent);
+  const isFinalized = poll.isFinalized;
   const isClosed = isFinalized || (poll.closesAt ? poll.closesAt < new Date() : false);
-  const canRespond = !isClosed && (currentUserId || guestName.trim());
+  const canRespond = !isClosed && (!isGuest || Boolean(guestName.trim()));
 
   function paintCell(slotId: string) {
     setMyResponses((prev) => ({ ...prev, [slotId]: brush }));
@@ -99,7 +98,7 @@ export function PollResponder({
     setError(null);
     const result = await submitPollResponse({
       pollId: poll.id,
-      guestName: currentUserId ? null : guestName.trim(),
+      guestName: isGuest ? guestName.trim() : null,
       entries: Object.entries(next).map(([slotId, availability]) => ({ slotId, availability })),
     });
     setIsSaving(false);
@@ -151,7 +150,7 @@ export function PollResponder({
     }
     if (result.excludedGuestCount) {
       setError(
-        `${result.excludedGuestCount} guest response(s) were excluded from attendees — guests don't have accounts to invite.`,
+        `${result.excludedGuestCount} respondent(s) weren't added as attendees: only members of this organization can be invited.`,
       );
     }
     if (orgSlug && result.eventId) {
@@ -173,10 +172,10 @@ export function PollResponder({
           {isFinalized && " · Finalized"}
           {!isFinalized && isClosed && " · Closed"}
         </p>
-        {isFinalized && poll.finalizedEvent && orgSlug && (
+        {isFinalized && poll.finalizedEventId && orgSlug && (
           <p className="mt-1 text-sm">
             <Link
-              href={`/app/${orgSlug}/calendar/${poll.finalizedEvent.id}`}
+              href={`/app/${orgSlug}/calendar/${poll.finalizedEventId}`}
               className="text-primary hover:underline"
             >
               View the scheduled event →
@@ -189,7 +188,7 @@ export function PollResponder({
 
       {!isClosed && (
         <div className="space-y-3">
-          {!currentUserId && (
+          {isGuest && (
             <div className="max-w-xs space-y-1.5">
               <label htmlFor="guest-name" className="text-sm font-medium">
                 Your name
@@ -254,7 +253,7 @@ export function PollResponder({
                   const count = responseCountBySlot.get(slot.id)?.length ?? 0;
                   const mine = myResponses[slot.id];
                   const who = (responseCountBySlot.get(slot.id) ?? [])
-                    .map((r) => r.guestName ?? "Member")
+                    .map((r) => r.label)
                     .join(", ");
                   return (
                     <td key={day} className="p-0">

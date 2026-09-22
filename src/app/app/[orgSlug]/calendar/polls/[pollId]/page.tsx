@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { Role } from "@/generated/prisma/client";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
+import { buildPollView } from "@/lib/polls/poll-view";
 import { prisma } from "@/lib/prisma";
 import { PollResponder } from "@/components/calendar/poll-responder";
 
-import { getPollById } from "../../queries";
+import { getPollSource } from "../../queries";
 import { SharePollLink } from "./share-poll-link";
 
 export default async function PollDetailPage({
@@ -26,7 +27,7 @@ export default async function PollDetailPage({
     handleAuthErrorInPage(error);
   }
 
-  const poll = await getPollById(pollId);
+  const poll = await getPollSource(pollId);
   if (!poll || poll.organizationId !== org.id) {
     notFound();
   }
@@ -38,8 +39,8 @@ export default async function PollDetailPage({
     <div className="mx-auto max-w-2xl space-y-4">
       <SharePollLink pollId={poll.id} />
       <PollResponder
-        poll={poll}
-        currentUserId={ctx.user.id}
+        poll={buildPollView(poll, { kind: "member", userId: ctx.user.id })}
+        respondAs="member"
         orgId={org.id}
         orgSlug={orgSlug}
         canFinalize={canFinalize}

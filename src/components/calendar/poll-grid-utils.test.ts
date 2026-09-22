@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPollGrid, rankSlotsByAvailability, type PollResponseLite } from "./poll-grid-utils";
+import {
+  buildPollGrid,
+  distinctRespondents,
+  rankSlotsByAvailability,
+  type PollResponseLite,
+} from "./poll-grid-utils";
 
 function slot(id: string, startIso: string, minutes: number) {
   const startsAt = new Date(startIso);
@@ -32,9 +37,9 @@ describe("rankSlotsByAvailability — spec 4.4 (best slots for the requested dur
 
   it("only ranks windows whose underlying slots are contiguous", () => {
     const responses: PollResponseLite[] = [
-      { slotId: "s1", userId: "u1", guestName: null, availability: "YES" },
-      { slotId: "s2", userId: "u1", guestName: null, availability: "YES" },
-      { slotId: "s3", userId: "u1", guestName: null, availability: "YES" },
+      { slotId: "s1", respondentKey: "u1", availability: "YES" },
+      { slotId: "s2", respondentKey: "u1", availability: "YES" },
+      { slotId: "s3", respondentKey: "u1", availability: "YES" },
     ];
 
     // 60-minute meeting needs two consecutive 30-minute slots.
@@ -46,10 +51,10 @@ describe("rankSlotsByAvailability — spec 4.4 (best slots for the requested dur
 
   it("scores a window by respondents available across every slot in it", () => {
     const responses: PollResponseLite[] = [
-      { slotId: "s1", userId: "u1", guestName: null, availability: "YES" },
-      { slotId: "s2", userId: "u1", guestName: null, availability: "YES" },
-      { slotId: "s1", userId: "u2", guestName: null, availability: "YES" },
-      { slotId: "s2", userId: "u2", guestName: null, availability: "NO" },
+      { slotId: "s1", respondentKey: "u1", availability: "YES" },
+      { slotId: "s2", respondentKey: "u1", availability: "YES" },
+      { slotId: "s1", respondentKey: "u2", availability: "YES" },
+      { slotId: "s2", respondentKey: "u2", availability: "NO" },
     ];
 
     const ranked = rankSlotsByAvailability(slots, responses, 60);
@@ -60,12 +65,26 @@ describe("rankSlotsByAvailability — spec 4.4 (best slots for the requested dur
 
   it("counts IF_NEEDED as available", () => {
     const responses: PollResponseLite[] = [
-      { slotId: "s1", userId: "u1", guestName: null, availability: "IF_NEEDED" },
-      { slotId: "s2", userId: "u1", guestName: null, availability: "IF_NEEDED" },
+      { slotId: "s1", respondentKey: "u1", availability: "IF_NEEDED" },
+      { slotId: "s2", respondentKey: "u1", availability: "IF_NEEDED" },
     ];
 
     const ranked = rankSlotsByAvailability(slots, responses, 60);
 
     expect(ranked[0].score).toBe(1);
+  });
+});
+
+describe("distinctRespondents — keyed by respondent, not by name (0A Fix 6)", () => {
+  it("keeps two guests with the same name apart", () => {
+    const responses: PollResponseLite[] = [
+      { slotId: "s1", respondentKey: "r1", label: "Alex", isGuest: true, availability: "YES" },
+      { slotId: "s1", respondentKey: "r2", label: "Alex (2)", isGuest: true, availability: "NO" },
+      { slotId: "s2", respondentKey: "r1", label: "Alex", isGuest: true, availability: "YES" },
+    ];
+    expect(distinctRespondents(responses)).toEqual([
+      { key: "r1", name: "Alex", isGuest: true },
+      { key: "r2", name: "Alex (2)", isGuest: true },
+    ]);
   });
 });
