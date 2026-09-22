@@ -41,3 +41,46 @@ jobs:
 
       - name: Unit tests
         run: pnpm test
+
+  rls:
+    name: RLS and security layer (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      # Matches the Neon project's major version (pinned in the 0A checklist).
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # prisma/rls/run.mjs connects here to create a throwaway database owned
+      # by a NON-superuser role (rls_owner, like neondb_owner), migrates it as
+      # that owner, grants the runtime roles LOGIN (prisma/rls/local-roles.sql,
+      # CI-only password) and runs the regression, attack and phase suites.
+      # On this fresh cluster rls_owner creates the runtime roles itself, so
+      # the cases that need it (T27b2, T32) run instead of skipping.
+      RLS_ADMIN_URL: "postgresql://postgres:postgres@localhost:5432/postgres"
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/postgres"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: RLS tests and attacks
+        run: pnpm test:rls
