@@ -386,19 +386,43 @@ export const bulkUpdateStatus = withOrgContext(
   },
 );
 
+const bulkAssignSchema = z.object({
+  taskIds: z.array(z.string().min(1)).min(1, "Select at least one task.").max(500),
+  userId: z.string().min(1),
+});
+
 export const bulkAssign = withOrgContext(
-  async (ctx, taskIds: string[], userId: string): Promise<ActionResult> => {
+  async (ctx, rawTaskIds: string[], rawUserId: string): Promise<ActionResult> => {
+    const parsed = bulkAssignSchema.safeParse({ taskIds: rawTaskIds, userId: rawUserId });
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+    const userId = parsed.data.userId;
+    const taskIds = [...new Set(parsed.data.taskIds)];
+
     const isMember = await prisma.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId: ctx.organizationId } },
     });
     if (!isMember) return { error: "That user isn't a member of this organization." };
+
+    // 0A Fix 1: every client-supplied task id must be a live task of THIS
+    // org before any upsert. Without this, an upsert on another org's
+    // (taskId, userId) pair that already exists would silently "succeed",
+    // and a new one would surface a raw FK error. One count covers the set.
+    const ownTaskCount = await prisma.task.count({
+      where: { id: { in: taskIds }, organizationId: ctx.organizationId, deletedAt: null },
+    });
+    if (ownTaskCount !== taskIds.length) {
+      return { error: "One or more tasks don't exist in this organization." };
+    }
 
     await prisma.$transaction(
       taskIds.map((taskId) =>
         prisma.taskAssignee.upsert({
           where: { taskId_userId: { taskId, userId } },
           update: {},
-          // The composite FK (organizationId, taskId) rejects another org's task.
+          // Checked above; the composite FK (organizationId, taskId) also
+          // rejects another org's task in the database.
           create: { organizationId: ctx.organizationId, taskId, userId },
         }),
       ),

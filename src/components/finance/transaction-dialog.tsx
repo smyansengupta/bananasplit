@@ -231,7 +231,9 @@ function TransactionForm({
           <Select
             value={budgetPeriodId}
             onValueChange={setBudgetPeriodId}
-            disabled={!canEditFields}
+            // A saved transaction never moves between periods (the server
+            // ignores budgetPeriodId on update), so the picker is fixed then.
+            disabled={!canEditFields || Boolean(transaction)}
           >
             <SelectTrigger className="w-full">
               <SelectValue />

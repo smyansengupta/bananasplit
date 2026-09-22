@@ -44,15 +44,48 @@ const transactionInputSchema = z.object({
   taskId: z.string().nullable().optional(),
 });
 
+/**
+ * The category must be this org's AND in the transaction's period. The
+ * period is never taken from an update payload (0A Fix 2): on update it is
+ * always the existing row's budgetPeriodId.
+ */
 async function assertCategoryBelongsToPeriod(
+  organizationId: string,
   categoryId: string | null | undefined,
   budgetPeriodId: string,
 ) {
   if (!categoryId) return null;
   const category = await prisma.budgetCategory.findFirst({
-    where: { id: categoryId, budgetPeriodId },
+    where: { id: categoryId, budgetPeriodId, organizationId },
+    select: { id: true },
   });
   return category ? null : "That category doesn't belong to the selected budget period.";
+}
+
+/**
+ * eventId and taskId are client-supplied links: each must be a row of this
+ * org (0A Fix 2). A foreign id gets the same message as a missing one. The
+ * database's same_org_refs trigger enforces the same rule (T14a-b).
+ */
+async function assertLinksBelongToOrg(
+  organizationId: string,
+  links: { eventId?: string | null; taskId?: string | null },
+) {
+  if (links.eventId) {
+    const event = await prisma.event.findFirst({
+      where: { id: links.eventId, organizationId },
+      select: { id: true },
+    });
+    if (!event) return "That event doesn't exist in this organization.";
+  }
+  if (links.taskId) {
+    const task = await prisma.task.findFirst({
+      where: { id: links.taskId, organizationId },
+      select: { id: true },
+    });
+    if (!task) return "That task doesn't exist in this organization.";
+  }
+  return null;
 }
 
 export const createTransaction = withOrgContext(
@@ -78,8 +111,15 @@ export const createTransaction = withOrgContext(
     });
     if (!period) return { error: "Budget period not found." };
 
-    const categoryError = await assertCategoryBelongsToPeriod(data.categoryId, data.budgetPeriodId);
+    const categoryError = await assertCategoryBelongsToPeriod(
+      ctx.organizationId,
+      data.categoryId,
+      period.id,
+    );
     if (categoryError) return { error: categoryError };
+
+    const linkError = await assertLinksBelongToOrg(ctx.organizationId, data);
+    if (linkError) return { error: linkError };
 
     const transaction = await prisma.$transaction(async (tx) => {
       const created = await tx.transaction.create({
@@ -114,7 +154,11 @@ export const createTransaction = withOrgContext(
   },
 );
 
-const updateInputSchema = transactionInputSchema.partial();
+// budgetPeriodId is not updatable (a transaction never moves between
+// periods), so it is not accepted from the client at all: it used to be
+// read only for the category check and never written, which let a foreign
+// period vouch for a foreign category (0A Fix 2). Unknown keys are stripped.
+const updateInputSchema = transactionInputSchema.omit({ budgetPeriodId: true }).partial();
 
 export const updateTransaction = withOrgContext(
   async (ctx, transactionId: string, input: unknown): Promise<ActionResult> => {
@@ -140,11 +184,15 @@ export const updateTransaction = withOrgContext(
 
     if (data.categoryId !== undefined) {
       const categoryError = await assertCategoryBelongsToPeriod(
+        ctx.organizationId,
         data.categoryId,
-        data.budgetPeriodId ?? existing.budgetPeriodId,
+        existing.budgetPeriodId,
       );
       if (categoryError) return { error: categoryError };
     }
+
+    const linkError = await assertLinksBelongToOrg(ctx.organizationId, data);
+    if (linkError) return { error: linkError };
 
     await prisma.$transaction(async (tx) => {
       const updated = await tx.transaction.update({
