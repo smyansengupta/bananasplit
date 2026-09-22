@@ -230,7 +230,11 @@ export const updateTask = withOrgContext(
         await tx.taskAssignee.deleteMany({ where: { taskId } });
         if (data.assigneeIds.length) {
           await tx.taskAssignee.createMany({
-            data: data.assigneeIds.map((userId) => ({ taskId, userId })),
+            data: data.assigneeIds.map((userId) => ({
+              organizationId: ctx.organizationId,
+              taskId,
+              userId,
+            })),
           });
         }
       }
@@ -239,7 +243,11 @@ export const updateTask = withOrgContext(
         await tx.taskLabel.deleteMany({ where: { taskId } });
         if (data.labelIds.length) {
           await tx.taskLabel.createMany({
-            data: data.labelIds.map((labelId) => ({ taskId, labelId })),
+            data: data.labelIds.map((labelId) => ({
+              organizationId: ctx.organizationId,
+              taskId,
+              labelId,
+            })),
           });
         }
       }
@@ -390,7 +398,8 @@ export const bulkAssign = withOrgContext(
         prisma.taskAssignee.upsert({
           where: { taskId_userId: { taskId, userId } },
           update: {},
-          create: { taskId, userId },
+          // The composite FK (organizationId, taskId) rejects another org's task.
+          create: { organizationId: ctx.organizationId, taskId, userId },
         }),
       ),
     );

@@ -68,6 +68,7 @@ export const uploadReceipt = withOrgContext(
 
     const receipt = await prisma.receipt.create({
       data: {
+        organizationId: ctx.organizationId,
         transactionId,
         blobKey,
         filename: file.name || "receipt",

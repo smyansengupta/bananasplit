@@ -57,7 +57,13 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
 
   const poll = await prisma.availabilityPoll.findUnique({
     where: { id: data.pollId },
-    select: { id: true, finalizedEventId: true, closesAt: true, slots: { select: { id: true } } },
+    select: {
+      id: true,
+      organizationId: true,
+      finalizedEventId: true,
+      closesAt: true,
+      slots: { select: { id: true } },
+    },
   });
   if (!poll) return { error: "Poll not found." };
   if (poll.finalizedEventId) return { error: "This poll has already been finalized." };
@@ -77,6 +83,7 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
           where: { slotId_userId: { slotId: e.slotId, userId: session.user.id } },
           update: { availability: e.availability },
           create: {
+            organizationId: poll.organizationId,
             pollId: data.pollId,
             slotId: e.slotId,
             userId: session.user.id,
@@ -99,6 +106,7 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
     }),
     prisma.pollResponse.createMany({
       data: data.entries.map((e) => ({
+        organizationId: poll.organizationId,
         pollId: data.pollId,
         slotId: e.slotId,
         guestName,

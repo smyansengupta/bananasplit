@@ -204,7 +204,11 @@ export const updateEvent = withOrgContext(
         await tx.eventAttendee.deleteMany({ where: { eventId } });
         if (data.attendeeIds.length) {
           await tx.eventAttendee.createMany({
-            data: data.attendeeIds.map((userId) => ({ userId, eventId })),
+            data: data.attendeeIds.map((userId) => ({
+              organizationId: ctx.organizationId,
+              userId,
+              eventId,
+            })),
           });
         }
       }

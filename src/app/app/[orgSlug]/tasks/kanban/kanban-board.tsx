@@ -28,6 +28,7 @@ import { KanbanColumn } from "./kanban-column";
 const COLUMNS: { status: TaskStatus; title: string }[] = [
   { status: TaskStatus.NOT_STARTED, title: "Not started" },
   { status: TaskStatus.IN_PROGRESS, title: "In progress" },
+  { status: TaskStatus.BLOCKED, title: "Blocked" },
   { status: TaskStatus.COMPLETED, title: "Completed" },
 ];
 const STATUS_ORDER = COLUMNS.map((c) => c.status);
@@ -81,6 +82,7 @@ export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, pr
     const grouped: Record<TaskStatus, TaskWithRelations[]> = {
       NOT_STARTED: [],
       IN_PROGRESS: [],
+      BLOCKED: [],
       COMPLETED: [],
     };
     for (const task of tasks) {

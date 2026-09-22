@@ -15,26 +15,34 @@ datasource db {
 // --- Auth.js (NextAuth v5) standard tables ---
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  /// bcrypt hash. Null for accounts that only ever signed in with Google.
-  passwordHash  String?
-  timezone      String    @default("UTC")
-  /// Unguessable, regenerable token for the read-only .ics calendar feed URL.
-  /// Nullable: generated lazily the first time the user asks for their feed URL.
-  icsToken      String?   @unique
+  id               String    @id @default(cuid())
+  name             String?
+  email            String    @unique
+  emailVerified    DateTime?
+  /// OAuth profile image; the fallback when no uploaded avatar exists.
+  image            String?
+  /// IANA zone chosen by the user, or NULL to follow the org's timezone.
+  timezone         String?
+  // Profile (Phase 2). app_user may UPDATE only its own row and only the
+  // columns in the column-level grant (never email or emailVerified).
+  pronouns         String?
+  major            String?
+  gradYear         Int?
+  bio              String?
+  /// Up to 8 {kind: linkedin|github|website|instagram|tiktok|x|other, url}.
+  links            Json      @default("[]")
+  /// {key, s64, s128, s256, updatedAt}: WebP avatar variants (public store).
+  avatar           Json?
   /// Map of NotificationType -> boolean, e.g. { "TASK_DUE_SOON": false }.
   /// A type absent from the map is treated as enabled (opt-out, not opt-in),
   /// so adding a new notification type never silently requires a migration
   /// to keep existing users subscribed.
-  emailPreferences Json    @default("{}")
-  createdAt     DateTime  @default(now())
+  emailPreferences Json      @default("{}")
+  createdAt        DateTime  @default(now())
 
-  accounts Account[]
-  sessions Session[]
+  accounts   Account[]
+  sessions   Session[]
+  credential UserCredential?
 
   memberships            Membership[]
   sentInvitations        Invitation[]       @relation("InvitationInvitedBy")
@@ -53,6 +61,24 @@ model User {
   ownedSponsorships      Sponsorship[]      @relation("SponsorshipOwner")
   financeAuditLogs       FinanceAuditLog[]
   notifications          Notification[]
+  orgAuditLogs           OrgAuditLog[]
+  memberHistory          OrgMemberHistory[]
+  connectedIntegrations  OrgIntegration[]   @relation("IntegrationConnectedBy")
+  requestedExports       OrgExport[]        @relation("OrgExportRequestedBy")
+  hostedEvents           Event[]            @relation("EventHost")
+  createdChartVersions   OrgChartVersion[]  @relation("OrgChartVersionCreatedBy")
+  publishedChartVersions OrgChartVersion[]  @relation("OrgChartVersionPublishedBy")
+  chartPositions         OrgChartPosition[] @relation("OrgChartPositionUser")
+  contacts               Contact[]          @relation("ContactUser")
+  ownedTasks             Task[]             @relation("TaskOwner")
+  triageProjects         Project[]          @relation("ProjectTriageUser")
+  assignmentsMade        TaskAssignee[]     @relation("TaskAssignedBy")
+  taskComments           TaskComment[]      @relation("TaskCommentAuthor")
+  taskMentions           TaskMention[]      @relation("TaskMentionedUser")
+  taskMentionsMade       TaskMention[]      @relation("TaskMentionedBy")
+  taskActivity           TaskActivity[]     @relation("TaskActivityActor")
+  weeklyUpdates          WeeklyUpdate[]     @relation("WeeklyUpdateUser")
+  notificationsActed     Notification[]     @relation("NotificationActor")
 }
 
 model Account {
@@ -73,6 +99,23 @@ model Account {
 
   @@unique([provider, providerAccountId])
   @@index([userId])
+}
+
+/// Secrets split out of "User" (0A) so the tenant roles can hold table-level
+/// SELECT on "User" without seeing them. Only app_auth has table grants here;
+/// request code reaches its own ICS token hash only through
+/// app.set_ics_token_hash() and app.ics_token_created_at().
+model UserCredential {
+  userId            String    @id
+  /// bcrypt hash. Null for accounts that only ever signed in with Google.
+  passwordHash      String?
+  /// sha256(token), hex. The plaintext feed token exists only in the URL
+  /// shown once when it is (re)generated.
+  icsTokenHash      String?   @unique
+  icsTokenCreatedAt DateTime?
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Session {
@@ -104,10 +147,25 @@ enum Role {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
+  id                      String    @id @default(cuid())
+  name                    String
+  slug                    String    @unique
+  /// IANA zone for Sunday weeks, reminders, digests, report buckets and
+  /// app.term_of(). Set by the OWNER in Settings > General.
+  timezone                String    @default("UTC")
+  /// {key, s64, s256, s512}: Blob keys of the WebP logo variants (public store).
+  logo                    Json?
+  /// Soft delete. slug, deletedAt and deleteScheduledFor are OWNER-only
+  /// (app.organization_guard).
+  deletedAt               DateTime?
+  deleteScheduledFor      DateTime?
+  /// The published org chart (Phase 3). Written only by publish/rollback;
+  /// app.assert_org_active_chart keeps it inside the org.
+  activeOrgChartVersionId String?   @unique
+  createdAt               DateTime  @default(now())
+
+  activeOrgChartVersion OrgChartVersion?  @relation("ActiveOrgChartVersion", fields: [activeOrgChartVersionId], references: [id], onDelete: SetNull)
+  orgChartVersions      OrgChartVersion[] @relation("OrgChartVersions")
 
   memberships       Membership[]
   invitations       Invitation[]
@@ -124,6 +182,21 @@ model Organization {
   sponsorships      Sponsorship[]
   financeAuditLogs  FinanceAuditLog[]
   notifications     Notification[]
+  jobs              Job[]
+  orgAuditLogs      OrgAuditLog[]
+  memberHistory     OrgMemberHistory[]
+  secrets           OrgSecret[]
+  settings          OrgSettings?
+  integrations      OrgIntegration[]
+  slugHistory       OrgSlugHistory[]
+  exports           OrgExport[]
+  databases         DatabaseDefinition[]
+  contacts          Contact[]
+  signups           Signup[]
+  ballotDefinitions BallotDefinition[]   @relation("OrgBallotDefinitions")
+  ballots           Ballot[]
+  weeklyUpdates     WeeklyUpdate[]
+  theme             OrgTheme?
 }
 
 enum NotificationType {
@@ -131,6 +204,19 @@ enum NotificationType {
   TASK_DUE_SOON
   EVENT_INVITE
   INVITE_ACCEPTED
+  // Phase 1
+  INTEGRATION_ERROR
+  SECURITY_ALERT
+  // Phase 6
+  TASK_MENTIONED
+  TASK_COMMENTED
+  TASK_DUE_REMINDER
+  TASK_DIGEST
+  TASK_FLAGGED
+  WEEKLY_UPDATE_REMINDER
+  // Phase 7 (optional notices to attendees)
+  EVENT_UPDATED
+  EVENT_CANCELLED
 }
 
 model Notification {
@@ -143,13 +229,25 @@ model Notification {
   /// Relative in-app link, e.g. /app/{orgSlug}/tasks
   linkUrl        String?
   readAt         DateTime?
+  /// Set by the notify-email job with a compare-and-set (UPDATE ... WHERE
+  /// emailSentAt IS NULL), so a notification is emailed at most once.
+  emailSentAt    DateTime?
   createdAt      DateTime         @default(now())
+  // Phase 6
+  taskId         String?
+  actorId        String?
+  /// Idempotency key per recipient (e.g. mention:{taskId}:{sourceKey}).
+  dedupeKey      String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  actor        User?        @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, dedupeKey])
   @@index([userId, readAt])
   @@index([organizationId])
+  @@index([organizationId, userId, createdAt])
 }
 
 model Membership {
@@ -157,6 +255,9 @@ model Membership {
   userId         String
   organizationId String
   role           Role
+  /// Per-org title, e.g. "VP Ops & Programs" (max 80, zod). Set by ADMIN+;
+  /// separate from the permission role and from the org-chart position.
+  title          String?
   joinedAt       DateTime @default(now())
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -190,6 +291,8 @@ model Invitation {
 enum TaskStatus {
   NOT_STARTED
   IN_PROGRESS
+  /// Phase 6: a 4th kanban column; Task.blockedReason is required.
+  BLOCKED
   COMPLETED
 }
 
@@ -200,62 +303,112 @@ enum TaskPriority {
 }
 
 model Project {
-  id             String    @id @default(cuid())
-  organizationId String
-  name           String
-  description    String?
-  archivedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  id                String    @id @default(cuid())
+  organizationId    String
+  name              String
+  description       String?
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  // Intake queue (Phase 6), e.g. Design Requests: anyone files tasks; only
+  // the triage user or OWNER/ADMIN sets priority or owner.
+  isIntake          Boolean   @default(false)
+  triageUserId      String?
+  /// Default due date for new intake tasks (days from creation).
+  defaultDueInDays  Int?
+  /// Org-chart position key whose holder triages (6b), e.g. "vp-growth".
+  triagePositionKey String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  triageUser   User?        @relation("ProjectTriageUser", fields: [triageUserId], references: [id], onDelete: SetNull)
   tasks        Task[]
 
   @@index([organizationId])
 }
 
 model Task {
-  id             String       @id @default(cuid())
-  organizationId String
-  projectId      String?
-  title          String
-  description    String?
-  status         TaskStatus   @default(NOT_STARTED)
-  priority       TaskPriority @default(MEDIUM)
-  dueDate        DateTime?
+  id                String              @id @default(cuid())
+  organizationId    String
+  projectId         String?
+  title             String
+  description       String?
+  status            TaskStatus          @default(NOT_STARTED)
+  priority          TaskPriority        @default(MEDIUM)
+  dueDate           DateTime?
   /// Fractional-indexing rank string for kanban ordering within a status column.
-  rank           String
-  parentTaskId   String?
-  createdById    String
-  completedAt    DateTime?
-  deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  rank              String
+  parentTaskId      String?
+  createdById       String
+  completedAt       DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  // Owner model (Phase 6): one accountable owner; TaskAssignee rows are
+  // collaborators ("also involved").
+  ownerId           String?
+  /// Required when status is BLOCKED (zod).
+  blockedReason     String?
+  blockedAt         DateTime?
+  /// Optimistic concurrency ("updateMany where version").
+  version           Int                 @default(1)
+  // Snapshot of how the owner was assigned (hand-down classification, 6b).
+  ownerRelation     AssignmentRelation?
+  ownerFlagged      Boolean             @default(false)
+  ownerAssignedById String?
 
-  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project?       @relation(fields: [projectId], references: [id])
-  createdBy    User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  parentTask   Task?          @relation("TaskSubtasks", fields: [parentTaskId], references: [id])
-  subtasks     Task[]         @relation("TaskSubtasks")
-  assignees    TaskAssignee[]
-  labels       TaskLabel[]
-  transactions Transaction[]
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project       Project?       @relation(fields: [projectId], references: [id])
+  createdBy     User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  owner         User?          @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  parentTask    Task?          @relation("TaskSubtasks", fields: [parentTaskId], references: [id])
+  subtasks      Task[]         @relation("TaskSubtasks")
+  assignees     TaskAssignee[]
+  labels        TaskLabel[]
+  transactions  Transaction[]
+  comments      TaskComment[]
+  mentions      TaskMention[]
+  activity      TaskActivity[]
+  notifications Notification[]
 
+  @@unique([organizationId, id])
   @@index([organizationId])
-  @@index([dueDate])
   @@index([parentTaskId])
   // Covers the kanban/table queries: org-scoped, non-deleted, top-level,
   // filtered and ordered by status.
   @@index([organizationId, deletedAt, parentTaskId, status])
+  @@index([organizationId, ownerId, deletedAt, status])
+  @@index([organizationId, dueDate])
+  @@index([organizationId, completedAt])
 }
 
-model TaskAssignee {
-  taskId String
-  userId String
+/// How an assignee (or owner) relates to the assigner in the published org
+/// chart. Until 6b ships every assignment is SELF or OUTSIDE_CHART.
+enum AssignmentRelation {
+  SELF
+  DOWN_LINE
+  PEER
+  ABOVE
+  OUTSIDE_CHART
+}
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// Collaborators on a task ("also involved"). organizationId is denormalized
+/// from Task (Phase 6) and kept equal by the composite FK.
+model TaskAssignee {
+  organizationId     String
+  taskId             String
+  userId             String
+  assignedById       String?
+  assignedAt         DateTime            @default(now())
+  relation           AssignmentRelation?
+  /// An above-level assignment (6b); acknowledged by the assignee or an admin.
+  flagged            Boolean             @default(false)
+  flagAcknowledgedAt DateTime?
+
+  task       Task  @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: Cascade)
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("TaskAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@id([taskId, userId])
+  @@index([organizationId, userId])
 }
 
 model Label {
@@ -267,17 +420,99 @@ model Label {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tasks        TaskLabel[]
 
+  @@unique([organizationId, id])
   @@index([organizationId])
 }
 
 model TaskLabel {
-  taskId  String
-  labelId String
+  organizationId String
+  taskId         String
+  labelId        String
 
-  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  task  Task  @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: Cascade)
+  label Label @relation(fields: [organizationId, labelId], references: [organizationId, id], onDelete: Cascade)
 
   @@id([taskId, labelId])
+  @@index([organizationId, labelId])
+}
+
+/// Comment thread on a task (markdown, max 10000). The author or
+/// OWNER/ADMIN edits or soft-deletes.
+model TaskComment {
+  id             String    @id @default(cuid())
+  organizationId String
+  taskId         String
+  authorId       String
+  body           String
+  createdAt      DateTime  @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+
+  task   Task @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: Cascade)
+  author User @relation("TaskCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([organizationId, taskId, createdAt])
+}
+
+/// @[Name](user:id) tokens found in a task description ('desc') or a
+/// comment (sourceKey = the comment id). Diffed on save so only newly
+/// mentioned users are notified.
+model TaskMention {
+  id              String   @id @default(cuid())
+  organizationId  String
+  taskId          String
+  sourceKey       String
+  mentionedUserId String
+  mentionedById   String?
+  createdAt       DateTime @default(now())
+
+  task          Task  @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: Cascade)
+  mentionedUser User  @relation("TaskMentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+  mentionedBy   User? @relation("TaskMentionedBy", fields: [mentionedById], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, sourceKey, mentionedUserId])
+  @@index([organizationId, mentionedUserId, createdAt])
+}
+
+/// Append-only task history (no UPDATE or DELETE for app_user).
+model TaskActivity {
+  id             String   @id @default(cuid())
+  organizationId String
+  taskId         String
+  actorId        String?
+  /// CREATED | ASSIGNED | UNASSIGNED | STATUS_CHANGED | DUE_CHANGED |
+  /// COMMENTED | FLAGGED | BLOCKED
+  type           String
+  diffJson       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  task  Task  @relation(fields: [organizationId, taskId], references: [organizationId, id], onDelete: Cascade)
+  actor User? @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, taskId, createdAt])
+}
+
+/// A lead's Sunday update: done / next / blocked for the org-local week
+/// (Monday to Sunday in Organization.timezone).
+model WeeklyUpdate {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  /// The Monday that starts the org-local week.
+  weekStart      DateTime  @db.Date
+  done           Json      @default("[]")
+  next           Json      @default("[]")
+  blocked        Json      @default("[]")
+  note           String?
+  postedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("WeeklyUpdateUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, weekStart])
+  @@index([organizationId, weekStart])
 }
 
 // --- Notes ---
@@ -288,19 +523,19 @@ enum NoteVisibility {
 }
 
 model Note {
-  id             String         @id @default(cuid())
+  id             String                   @id @default(cuid())
   organizationId String
   title          String
   contentJson    Json
   contentText    String
-  visibility     NoteVisibility @default(PRIVATE)
+  visibility     NoteVisibility           @default(PRIVATE)
   authorId       String
   eventId        String?
-  version        Int            @default(1)
+  version        Int                      @default(1)
   updatedById    String
   deletedAt      DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
   /// Generated column (see migration SQL): to_tsvector('english', title || contentText).
   /// Prisma has no native tsvector type, so this is queried via $queryRaw, never the client API.
   searchVector   Unsupported("tsvector")?
@@ -310,7 +545,8 @@ model Note {
   updatedBy    User         @relation("NoteUpdatedBy", fields: [updatedById], references: [id])
   event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, deletedAt])
+  // Phase 9: the notes list filters on deletedAt and orders by updatedAt.
+  @@index([organizationId, deletedAt, updatedAt])
   @@index([searchVector], type: Gin)
 }
 
@@ -339,16 +575,96 @@ model Event {
   deletedAt          DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
+  // Sessions (Phase 4a): a Session in Databases and a calendar event are the
+  // same record. Members may only create/edit their own INTERNAL events.
+  kind               EventKind          @default(OTHER)
+  visibility         EventVisibility    @default(INTERNAL)
+  hostUserId         String?
+  /// Free-text host when the host is not a member (guest speaker).
+  hostName           String?
+  /// http(s) only (zod).
+  rsvpUrl            String?
+  /// fall-YYYY / spring-YYYY; defaults to app.term_of(startsAt, org tz).
+  term               String?
+  /// The website's stamp-card position (1-12).
+  stampSlot          Int?
+  /// Set on every suite-side edit; the website sync may overwrite title,
+  /// start and room only while this is NULL (Phase 4b precedence rule).
+  suiteEditedAt      DateTime?
+  /// Duplicate merged into another Event (soft-deleted with this set).
+  mergedIntoId       String?
+  /// Maintained by app.refresh_contact_rollups (non-suppressed check-ins).
+  attendanceCount    Int                @default(0)
+  // Website sync (Phase 4b)
+  /// The website's sessions.id. Exact-link key for the sync.
+  sourceSessionId    String?
+  /// Created by an importer with several candidate matches: listed in the
+  /// admin 'Possible duplicates' queue.
+  needsReview        Boolean            @default(false)
+  // Google Calendar mirror (Phase 7). The suite is the source of truth; the
+  // gcal job writes these with a compare-and-set on syncVersion.
+  googleCalendarId   String?
+  googleEventId      String?
+  googleEtag         String?
+  googleHtmlLink     String?
+  googleSyncState    CalendarSyncState  @default(NOT_APPLICABLE)
+  googleSyncAttempts Int                @default(0)
+  googleSyncedAt     DateTime?
+  /// Sanitized: no tokens, no email addresses.
+  googleSyncError    String?
+  /// Incremented by the event service on every save; also the ICS SEQUENCE.
+  syncVersion        Int                @default(0)
+  // Public feed (Phase 7)
+  capacityFull       Boolean            @default(false)
+  featured           Boolean            @default(false)
+  publicNote         String?
 
-  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy         User              @relation("EventCreatedBy", fields: [createdById], references: [id])
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy         User               @relation("EventCreatedBy", fields: [createdById], references: [id])
+  host              User?              @relation("EventHost", fields: [hostUserId], references: [id], onDelete: SetNull)
+  mergedInto        Event?             @relation("EventMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom        Event[]            @relation("EventMergedInto")
   attendees         EventAttendee[]
   notes             Note[]
-  finalizedFromPoll AvailabilityPoll? @relation("PollFinalizedEvent")
+  finalizedFromPoll AvailabilityPoll?  @relation("PollFinalizedEvent")
   transactions      Transaction[]
+  linkLogs          EventLinkLog[]
+  attendance        Attendance[]
+  ballotDefinitions BallotDefinition[]
 
+  @@unique([organizationId, id])
+  @@unique([organizationId, sourceSessionId])
+  @@unique([organizationId, googleCalendarId, googleEventId])
   @@index([organizationId])
-  @@index([startsAt])
+  @@index([organizationId, deletedAt, kind, startsAt])
+  @@index([organizationId, visibility, deletedAt, startsAt])
+  @@index([organizationId, term, startsAt])
+  @@index([googleSyncState])
+}
+
+/// State of an Event's Google Calendar mirror (Phase 7).
+enum CalendarSyncState {
+  /// No Google connection, or an INTERNAL event with no internal calendar.
+  NOT_APPLICABLE
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum EventKind {
+  WORKSHOP
+  SOCIAL
+  HACKATHON
+  INFO_SESSION
+  BOARD_MEETING
+  OTHER
+}
+
+enum EventVisibility {
+  /// On the public feed and the website.
+  PUBLIC
+  /// Board/members only.
+  INTERNAL
 }
 
 enum RSVPStatus {
@@ -358,15 +674,20 @@ enum RSVPStatus {
   MAYBE
 }
 
+/// organizationId is denormalized from Event (Phase 7) and kept equal by the
+/// composite FK.
 model EventAttendee {
-  eventId String
-  userId  String
-  rsvp    RSVPStatus @default(PENDING)
+  organizationId String
+  eventId        String
+  userId         String
+  rsvp           RSVPStatus @default(PENDING)
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([eventId, userId])
+  @@index([userId])
+  @@index([organizationId, userId])
 }
 
 model AvailabilityPoll {
@@ -387,18 +708,22 @@ model AvailabilityPoll {
   slots          PollSlot[]
   responses      PollResponse[]
 
+  @@unique([organizationId, id])
   @@index([organizationId])
 }
 
+/// organizationId is denormalized from AvailabilityPoll (Phase 7).
 model PollSlot {
-  id       String   @id @default(cuid())
-  pollId   String
-  startsAt DateTime
-  endsAt   DateTime
+  id             String   @id @default(cuid())
+  organizationId String
+  pollId         String
+  startsAt       DateTime
+  endsAt         DateTime
 
-  poll      AvailabilityPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  poll      AvailabilityPoll @relation(fields: [organizationId, pollId], references: [organizationId, id], onDelete: Cascade)
   responses PollResponse[]
 
+  @@unique([organizationId, id])
   @@index([pollId])
 }
 
@@ -408,22 +733,33 @@ enum PollAvailability {
   IF_NEEDED
 }
 
+/// organizationId is denormalized (Phase 7); both composite FKs keep it
+/// equal to the poll's and the slot's. The slot belonging to the same poll
+/// is checked by the RLS WITH CHECK.
 model PollResponse {
-  id           String           @id @default(cuid())
-  pollId       String
-  slotId       String
-  userId       String?
-  guestName    String?
-  availability PollAvailability
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  organizationId String
+  pollId         String
+  slotId         String
+  userId         String?
+  guestName      String?
+  availability   PollAvailability
+  /// sha256 of the guest's httpOnly poll_guest_<pollId> cookie (0A Fix 6).
+  /// Scopes a guest's delete-then-recreate to their own rows; legacy guest
+  /// rows keep NULL and become read-only.
+  guestKeyHash   String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  poll AvailabilityPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  slot PollSlot         @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  poll AvailabilityPoll @relation(fields: [organizationId, pollId], references: [organizationId, id], onDelete: Cascade)
+  slot PollSlot         @relation(fields: [organizationId, slotId], references: [organizationId, id], onDelete: Cascade)
   user User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([slotId, userId])
+  @@unique([slotId, guestKeyHash])
   @@index([pollId])
+  @@index([pollId, guestKeyHash])
+  @@index([organizationId, pollId])
 }
 
 // --- Finance ---
@@ -461,6 +797,7 @@ model BudgetCategory {
   transactions Transaction[]
 
   @@index([organizationId])
+  @@index([budgetPeriodId])
 }
 
 enum TransactionDirection {
@@ -532,27 +869,33 @@ model Transaction {
   sponsorship  Sponsorship?
   auditLogs    FinanceAuditLog[]
 
+  // Target of Receipt's composite FK (Phase 1R).
+  @@unique([organizationId, id])
   @@index([organizationId])
   // Covers the dashboard's per-period, non-voided aggregates and the
   // transaction table's period/date-range filters.
   @@index([organizationId, budgetPeriodId, voidedAt])
   @@index([organizationId, occurredAt])
+  @@index([categoryId])
 }
 
 model Receipt {
-  id            String   @id @default(cuid())
-  transactionId String
-  blobKey       String
-  filename      String
-  mimeType      String
-  sizeBytes     Int
-  uploadedById  String
-  uploadedAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  /// Denormalized from Transaction (Phase 1R); the composite FK keeps it equal.
+  organizationId String
+  transactionId  String
+  blobKey        String
+  filename       String
+  mimeType       String
+  sizeBytes      Int
+  uploadedById   String
+  uploadedAt     DateTime @default(now())
 
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [organizationId, transactionId], references: [organizationId, id], onDelete: Cascade)
   uploadedBy  User        @relation(fields: [uploadedById], references: [id])
 
   @@index([transactionId])
+  @@index([organizationId])
 }
 
 model Sponsor {
@@ -621,4 +964,770 @@ model FinanceAuditLog {
   sponsorship  Sponsorship? @relation(fields: [sponsorshipId], references: [id])
 
   @@index([organizationId])
+  @@index([transactionId])
+}
+
+// --- Platform: outbox, audit, rate limits, membership history (Phase 0B) ---
+// Every table below has RLS enabled in the migration that creates it. See
+// docs/ARCHITECTURE.md for the role model and prisma/rls/ for the tests.
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  DEAD
+  CANCELLED
+}
+
+/// Postgres outbox. Rows are created only through app.enqueue_job() and
+/// moved only through app.claim_jobs() / app.finish_job() / app.cancel_job();
+/// no runtime role has INSERT or UPDATE on the table.
+model Job {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  /// NULL for platform jobs (e.g. verify-email).
+  organizationId String?
+  kind           String
+  /// Ids only, validated by a per-kind zod schema. Never secrets or PII.
+  payload        Json      @default("{}")
+  dedupeKey      String
+  runAt          DateTime  @default(now())
+  status         JobStatus @default(PENDING)
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(8)
+  lockedUntil    DateTime?
+  lockToken      String?
+  rerunRequested Boolean   @default(false)
+  /// Sanitized before it is written; truncated to 500 characters in SQL.
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Dedupe is per org. The migration hand-adds NULLS NOT DISTINCT to this
+  // index (Prisma can neither express nor diff it; T17g asserts it), so
+  // platform jobs with a NULL organizationId coalesce too.
+  @@unique([organizationId, dedupeKey], map: "Job_organizationId_dedupeKey_active_key", where: raw("(status = ANY (ARRAY['PENDING'::\"JobStatus\", 'RUNNING'::\"JobStatus\"]))"))
+  @@index([status, runAt])
+  @@index([organizationId, kind, status])
+}
+
+/// Append-only. Rows arrive only through app.write_org_audit(), which fixes
+/// the id, actor, org and createdAt. Readable by OWNER/ADMIN.
+model OrgAuditLog {
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  organizationId String
+  actorId        String?
+  action         String
+  targetType     String?
+  targetId       String?
+  /// Redacted diff; never secrets.
+  diffJson       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
+
+/// Fixed-window rate limiter state. No grants: reached only through
+/// app.rate_limit_hit().
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+}
+
+/// Every user who has ever belonged to an org. Lets "User" RLS show former
+/// members' names on rows they authored (Prisma throws on a required
+/// relation that RLS hides). Written only by the Membership trigger.
+model OrgMemberHistory {
+  organizationId String
+  userId         String
+  firstJoinedAt  DateTime  @default(now())
+  lastJoinedAt   DateTime  @default(now())
+  leftAt         DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([userId])
+}
+
+/// Envelope-encrypted integration secrets (AES-256-GCM). No table grants and
+/// no policies for any runtime role: reached only through app.secret_read /
+/// app.secret_write / app.secret_delete (app_service, matching org GUC).
+/// Uniqueness is per org, so another org's integration id can be neither
+/// overwritten nor probed.
+model OrgSecret {
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  organizationId String
+  integrationId  String
+  /// API_KEY | REFRESH_TOKEN | DB_PASSWORD | HOOK_URL
+  kind           String
+  ciphertext     Bytes
+  iv             Bytes
+  authTag        Bytes
+  wrappedDek     Bytes
+  dekIv          Bytes
+  dekTag         Bytes
+  kekVersion     Int
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration  OrgIntegration @relation(fields: [organizationId, integrationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, integrationId, kind])
+}
+
+// --- Settings and multi-tenant integrations (Phase 1) ---
+
+enum BallotVisibility {
+  OWNER_ONLY
+  OWNER_AND_ADMINS
+  NOBODY
+}
+
+/// Who may see a database's rows (DatabaseDefinition.memberVisibility, 4a)
+/// and contact emails (OrgSettings.contactEmailVisibility, 4b). Enforced by
+/// RLS through app.can_view_rows(). HIDDEN hides the database from the
+/// members' list; OWNER/ADMIN still see its rows so they can manage them.
+enum MemberVisibility {
+  MEMBERS
+  ADMINS
+  OWNER
+  HIDDEN
+}
+
+/// Per-org configuration, one row per org. Created for every org by the
+/// app.organization_defaults trigger (so every creation path, legacy
+/// onboarding included, gets one). Members read it; only OWNER/ADMIN update
+/// it; app_user never inserts or deletes it.
+model OrgSettings {
+  organizationId                String           @id
+  // Privacy (Phase 1; enforced by RLS from 4b)
+  ballotIndividualVisibility    BallotVisibility @default(OWNER_ONLY)
+  ballotResultsVisibleToMembers Boolean          @default(true)
+  /// k for k-suppression in app.ballot_tally for tiers without row access.
+  ballotMinCellSize             Int              @default(3)
+  showMemberEmailsToMembers     Boolean          @default(false)
+  /// Opt-in for /api/public/[orgSlug]/events (Phase 7).
+  publicEventsEnabled           Boolean          @default(false)
+  /// While true and the org has no verified sender, org mail goes through the
+  /// platform sender. Backfilled true for orgs that existed at the Phase 1
+  /// migration (CBC); false for orgs created later.
+  platformMailFallback          Boolean          @default(false)
+  // Phase 4b
+  contactEmailVisibility        MemberVisibility @default(ADMINS)
+  // Phase 5 (reports)
+  stampMilestones               Int[]            @default([3, 5, 8])
+  lapsedAfterSessions           Int              @default(3)
+  reportsRefreshSeconds         Int              @default(300)
+  /// Bumped in the same write tx as any sync batch or admin data edit; part
+  /// of every report cache key.
+  reportsDataVersion            Int              @default(0)
+  // Phase 6 (tasks)
+  taskRequireOwner              Boolean          @default(false)
+  taskRequireDueDate            Boolean          @default(false)
+  reminderLeadDaysDefault       Int              @default(1)
+  bootstrapTemplate             String?
+  bootstrappedAt                DateTime?
+  updatedById                   String?
+  updatedAt                     DateTime         @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+enum IntegrationProvider {
+  CLAUDE
+  GOOGLE_CALENDAR
+  EMAIL_RESEND
+  SUPABASE_SOURCE
+  NETLIFY_BUILD_HOOK
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  ERROR
+  NEEDS_REAUTH
+  DISCONNECTED
+}
+
+/// Display metadata for an org's integration. The secret itself is an
+/// OrgSecret. OWNER/ADMIN read and write; only an OWNER removes.
+model OrgIntegration {
+  id                String              @id @default(cuid())
+  organizationId    String
+  provider          IntegrationProvider
+  status            IntegrationStatus   @default(DISCONNECTED)
+  /// Non-secret values only, e.g. Resend fromAddress/domainVerifiedAt, the
+  /// Google publicCalendarId, the Supabase projectRef/poolerRegion.
+  config            Json                @default("{}")
+  secretLast4       String?
+  /// HMAC-SHA256 under SECRETS_FINGERPRINT_KEY.
+  secretFingerprint String?
+  lastVerifiedAt    DateTime?
+  /// Sanitized at write: no tokens, no email addresses.
+  lastError         String?
+  connectedById     String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @default(now()) @updatedAt
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectedBy  User?                 @relation("IntegrationConnectedBy", fields: [connectedById], references: [id], onDelete: SetNull)
+  secrets      OrgSecret[]
+  syncStates   DataSourceSyncState[]
+
+  @@unique([organizationId, provider])
+  @@unique([organizationId, id])
+}
+
+enum SlugRetireReason {
+  RENAMED
+  DELETED
+}
+
+/// Every slug an org has given up, reserved permanently (rows are never
+/// deleted). With a non-null organizationId the old slug redirects (307).
+/// No table grants: written by the app.organization_slug_history trigger and
+/// app.log_org_deletion, read through app.slug_available and
+/// app.resolve_org_slug.
+model OrgSlugHistory {
+  slug           String           @id
+  organizationId String?
+  reason         SlugRetireReason
+  retiredAt      DateTime         @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+}
+
+/// Single-use org-creation codes (ORG_CREATION_MODE=invite), issued by a
+/// platform admin. No table grants: app.issue_org_creation_code,
+/// app.list_org_creation_codes and app.redeem_org_creation_code only.
+model OrgCreationCode {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  /// sha256 of the code; the plaintext is shown once at issue.
+  codeHash       String    @unique
+  createdByEmail String
+  note           String?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  usedByUserId   String?
+  usedOrgId      String?
+  createdAt      DateTime  @default(now())
+}
+
+enum OrgExportStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+  EXPIRED
+}
+
+/// OWNER-requested export of all org data (job org-export). Only the OWNER
+/// reads and requests; the job updates it on the service path.
+model OrgExport {
+  id               String          @id @default(cuid())
+  organizationId   String
+  requestedById    String?
+  status           OrgExportStatus @default(PENDING)
+  /// exports/{orgId}/{exportId}.zip in the private Blob store.
+  blobKey          String?
+  error            String?
+  /// Resume point for a lost lease (table and keyset position).
+  cursor           Json?
+  downloadCount    Int             @default(0)
+  lastDownloadedAt DateTime?
+  createdAt        DateTime        @default(now())
+  completedAt      DateTime?
+  expiresAt        DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User?        @relation("OrgExportRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
+
+/// Permanent record of purged orgs (no FK: the org is gone). No table
+/// grants: written by app.log_org_deletion in the purge job.
+model OrgDeletionLog {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  organizationId String
+  slug           String
+  name           String
+  deletedById    String?
+  requestedAt    DateTime
+  purgedAt       DateTime?
+}
+
+// --- Org chart (Phase 3) ---
+// Copy-on-version snapshots: each version holds a full set of positions.
+// History is append-only for app_user (no DELETE policy); discarding a draft
+// sets status DISCARDED, and rollback copies a version forward.
+
+enum OrgChartVersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  DISCARDED
+}
+
+enum OrgChartSource {
+  UPLOAD
+  MANUAL
+  ROLLBACK
+  SEED
+}
+
+enum OrgChartParseStatus {
+  PENDING
+  EXTRACTING
+  PARSING
+  READY
+  FAILED
+}
+
+enum PositionMatchState {
+  UNMATCHED
+  SUGGESTED
+  CONFIRMED
+}
+
+model OrgChartVersion {
+  id               String                @id @default(cuid())
+  organizationId   String
+  /// 1, 2, 3... per org.
+  number           Int
+  status           OrgChartVersionStatus @default(DRAFT)
+  source           OrgChartSource
+  basedOnVersionId String?
+  // Source file (UPLOAD), in the private Blob store under org-chart/{orgId}/.
+  sourceFilename   String?
+  sourceMimeType   String?
+  sourceSizeBytes  Int?
+  sourceSha256     String?
+  sourceBlobKey    String?
+  // Parse (claude-parse job). parseAttemptId is the compare-and-set token.
+  parseStatus      OrgChartParseStatus?
+  parseAttemptId   String?
+  /// Sanitized; never document text.
+  parseError       String?
+  parseModel       String?
+  parseUsage       Json?
+  /// Admin-only; never sent to members.
+  rawParse         Json?
+  openItems        Json                  @default("[]")
+  warnings         Json                  @default("[]")
+  /// Optimistic concurrency for the draft editor.
+  editVersion      Int                   @default(1)
+  createdById      String
+  publishedById    String?
+  publishedAt      DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @default(now()) @updatedAt
+
+  organization Organization       @relation("OrgChartVersions", fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User               @relation("OrgChartVersionCreatedBy", fields: [createdById], references: [id])
+  publishedBy  User?              @relation("OrgChartVersionPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  positions    OrgChartPosition[]
+  activeFor    Organization?      @relation("ActiveOrgChartVersion")
+
+  @@unique([organizationId, number])
+  @@unique([organizationId, id])
+  @@index([organizationId, status, createdAt])
+}
+
+model OrgChartPosition {
+  id               String             @id @default(cuid())
+  organizationId   String
+  versionId        String
+  /// Stable slug of the title within a version, e.g. "vp-ops-programs".
+  key              String
+  title            String
+  // Person
+  personName       String?
+  /// Linked member. Reverts to NULL (a placeholder) when the member leaves.
+  userId           String?
+  matchState       PositionMatchState @default(UNMATCHED)
+  matchScore       Float?
+  suggestedUserIds String[]           @default([])
+  // Structure. reportsTo must be in the same version (checked in code and at
+  // publish); advisors sit beside their manager, outside the hierarchy.
+  reportsToId      String?
+  isOpen           Boolean            @default(false)
+  isAdvisor        Boolean            @default(false)
+  // Content
+  responsibilities String[]           @default([])
+  decidesAlone     String[]           @default([])
+  sourceQuote      String[]           @default([])
+  /// Fractional-indexing sibling order.
+  rank             String
+  createdAt        DateTime           @default(now())
+
+  version   OrgChartVersion    @relation(fields: [organizationId, versionId], references: [organizationId, id], onDelete: Cascade)
+  user      User?              @relation("OrgChartPositionUser", fields: [userId], references: [id], onDelete: SetNull)
+  reportsTo OrgChartPosition?  @relation("PositionReportsTo", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports   OrgChartPosition[] @relation("PositionReportsTo")
+
+  @@unique([versionId, key])
+  @@index([organizationId, versionId])
+  @@index([organizationId, userId])
+}
+
+// --- Databases (Phase 4a) ---
+
+enum DatabaseKind {
+  ATTENDANCE
+  BALLOTS
+  SIGNUPS
+  SESSIONS
+  PEOPLE
+  CUSTOM
+}
+
+/// One browsable database per row. The built-ins (sessions, attendance,
+/// signups, ballots, people) are created for every org by
+/// app.ensure_org_defaults. An empty columns array means "use the built-in
+/// column set from code"; custom column configs are validated by zod.
+/// memberVisibility is enforced by RLS on the PII tables (app.can_view_rows).
+model DatabaseDefinition {
+  id               String           @id @default(cuid())
+  organizationId   String
+  /// URL key, e.g. "attendance" in /app/{slug}/databases/attendance.
+  key              String
+  name             String
+  /// lucide icon name.
+  icon             String?
+  kind             DatabaseKind
+  columns          Json             @default("[]")
+  memberVisibility MemberVisibility @default(MEMBERS)
+  allowEdits       Boolean          @default(true)
+  sortOrder        Int              @default(0)
+  /// Archive instead of delete (app_user has no DELETE).
+  archivedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([organizationId, kind])
+}
+
+// --- Website data: contacts, attendance, signups, ballots (Phase 4b) ---
+// Pulled from the website's Supabase by the source-sync job, or entered by
+// admins / CSV. SELECT is gated by RLS with the viewer tier passed
+// explicitly (app.can_view_rows / app.can_view_ballot_rows); writes are
+// OWNER/ADMIN only; synced rows (SUPABASE_SYNC) can be suppressed but never
+// deleted. Rollup columns are maintained by app.refresh_contact_rollups.
+
+enum AttendanceMethod {
+  QR
+  FORM
+  MANUAL
+}
+
+enum RecordSource {
+  SUITE
+  SUPABASE_SYNC
+  CSV
+}
+
+enum SignupSource {
+  WEB
+  TYPEFORM
+  OFFICER
+  CSV
+  MANUAL
+}
+
+enum SignupStatus {
+  PENDING
+  ADDED
+  UNSUBSCRIBED
+}
+
+/// How an importer linked an external session/event to an Event.
+model EventLinkLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  eventId        String
+  /// SUPABASE | GOOGLE
+  source         String
+  externalId     String
+  /// EXACT | MATCHED | MERGED
+  method         String
+  score          Float?
+  actorId        String?
+  createdAt      DateTime @default(now())
+
+  event Event @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+/// A person known to the org's website data (attendee, signup, voter). Not
+/// necessarily a member; userId links one when a ContactEmail matches a
+/// current member's verified email.
+model Contact {
+  id               String    @id @default(cuid())
+  organizationId   String
+  displayName      String?
+  /// e.g. m***@husky.neu.edu, computed at write. Full addresses live in
+  /// ContactEmail, which is row-gated separately.
+  emailMasked      String?
+  emailDomain      String?
+  userId           String?
+  unsubscribedAt   DateTime?
+  firstSeenAt      DateTime?
+  // All-time rollups (app.refresh_contact_rollups; lapsedSince by
+  // app.refresh_lapsed).
+  sessionsAttended Int       @default(0)
+  firstCheckInAt   DateTime?
+  lastCheckInAt    DateTime?
+  lapsedSince      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?              @relation("ContactUser", fields: [userId], references: [id], onDelete: SetNull)
+  emails       ContactEmail[]
+  attendance   Attendance[]
+  termStats    ContactTermStats[]
+  signups      Signup[]
+  ballots      Ballot[]           @relation("BallotVoter")
+
+  @@unique([organizationId, id])
+  @@index([organizationId, userId])
+  @@index([organizationId, lastCheckInAt])
+}
+
+/// Normalized addresses of a contact: one primary plus aliases (e.g.
+/// husky.neu.edu vs northeastern.edu). Replaces the planned ContactAlias.
+model ContactEmail {
+  id              String   @id @default(cuid())
+  organizationId  String
+  contactId       String
+  emailNormalized String
+  isPrimary       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  contact Contact @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, emailNormalized])
+  @@index([organizationId, contactId])
+}
+
+/// One check-in. Deleting a Contact that still has attendance is refused
+/// (NoAction), so a synced row can never disappear through a cascade.
+model Attendance {
+  id             String           @id @default(cuid())
+  organizationId String
+  eventId        String
+  contactId      String
+  /// Copied from Event.term, or app.term_of(checkedInAt, org tz).
+  term           String
+  checkedInAt    DateTime
+  method         AttendanceMethod
+  nameAsEntered  String?
+  nameOverride   String?
+  source         RecordSource     @default(SUITE)
+  externalId     String?
+  /// Suppressed rows are kept (the sync respects them) but excluded from
+  /// rollups and reports.
+  suppressedAt   DateTime?
+  createdById    String?
+  // Rollups
+  /// Which stamp this check-in earned in its term (1-based); NULL when suppressed.
+  stampNumber    Int?
+  termStampTotal Int              @default(0)
+  isFirstVisit   Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+
+  event   Event   @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
+  contact Contact @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: NoAction)
+
+  @@unique([organizationId, eventId, contactId])
+  @@unique([organizationId, source, externalId])
+  @@index([organizationId, checkedInAt])
+  @@index([organizationId, contactId, checkedInAt])
+  @@index([organizationId, eventId, checkedInAt])
+  @@index([organizationId, term, termStampTotal])
+}
+
+/// Per-contact, per-term rollup (the People database).
+model ContactTermStats {
+  organizationId   String
+  contactId        String
+  term             String
+  sessionsAttended Int       @default(0)
+  stampCount       Int       @default(0)
+  firstCheckInAt   DateTime?
+  lastCheckInAt    DateTime?
+
+  contact Contact @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: Cascade)
+
+  @@id([organizationId, contactId, term])
+  @@index([organizationId, term, stampCount])
+}
+
+model Signup {
+  id                    String       @id @default(cuid())
+  organizationId        String
+  contactId             String
+  term                  String?
+  /// The spec's "source" column.
+  channel               SignupSource
+  classYear             String?
+  signedUpAt            DateTime
+  sourceUpdatedAt       DateTime?
+  submissions           Int          @default(1)
+  addedToListAt         DateTime?
+  /// {colleges, meet_days, interests}
+  answers               Json         @default("{}")
+  externalId            String?
+  suppressedAt          DateTime?
+  recordSource          RecordSource @default(SUITE)
+  // Rollups
+  status                SignupStatus @default(PENDING)
+  firstAttendedAt       DateTime?
+  daysToFirstAttendance Int?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [organizationId, contactId], references: [organizationId, id], onDelete: NoAction)
+
+  @@unique([organizationId, contactId, term])
+  @@unique([organizationId, recordSource, externalId])
+  @@index([organizationId, signedUpAt])
+  @@index([organizationId, status, signedUpAt])
+}
+
+/// A poll/election definition (the website's poll JSON): labels, window,
+/// question types. Expected shape of definition: {questions: [{key, label,
+/// type: slots|single|multi|yesno|text, options: [{key, label}]}]}.
+model BallotDefinition {
+  id             String    @id @default(cuid())
+  organizationId String
+  slug           String
+  title          String
+  opensAt        DateTime?
+  closesAt       DateTime?
+  definition     Json
+  linkedEventId  String?
+  isTest         Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation("OrgBallotDefinitions", fields: [organizationId], references: [id], onDelete: Cascade)
+  linkedEvent  Event?       @relation(fields: [linkedEventId], references: [id], onDelete: SetNull)
+  ballots      Ballot[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, id])
+}
+
+/// One cast ballot. answers is the raw {questionKey: value} object;
+/// app.explode_ballot writes its BallotChoice rows.
+model Ballot {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  ballotDefinitionId String?
+  pollSlug           String
+  answers            Json
+  castAt             DateTime
+  /// NULL for anonymous sources (CBC website ballots), shown as Anonymous.
+  voterContactId     String?
+  source             RecordSource
+  externalId         String?
+  /// Set for test ballots and ballots outside the definition window.
+  excludedReason     String?
+  createdAt          DateTime     @default(now())
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ballotDefinition BallotDefinition? @relation(fields: [ballotDefinitionId], references: [id], onDelete: SetNull)
+  voter            Contact?          @relation("BallotVoter", fields: [voterContactId], references: [id], onDelete: SetNull)
+  choices          BallotChoice[]
+
+  @@unique([organizationId, source, externalId])
+  @@unique([organizationId, id])
+  @@index([organizationId, pollSlug, castAt])
+}
+
+/// Long format of a ballot: one row per question and chosen option, with
+/// rank for ranked (slots) questions. Written only by app.explode_ballot
+/// (admin tx) or the sync (service path).
+model BallotChoice {
+  id                 String  @id @default(cuid())
+  organizationId     String
+  ballotId           String
+  ballotDefinitionId String?
+  questionKey        String
+  choiceKey          String?
+  choiceText         String?
+  isFreeText         Boolean @default(false)
+  rank               Int?
+
+  ballot Ballot @relation(fields: [organizationId, ballotId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, ballotDefinitionId, questionKey, choiceKey])
+  @@index([organizationId, ballotId])
+}
+
+/// Per-stream sync watermark for a data-source integration. Written only on
+/// the service path (the sync job); readable by OWNER/ADMIN.
+model DataSourceSyncState {
+  id             String    @id @default(cuid())
+  organizationId String
+  integrationId  String
+  /// checkins | signups | sessions | ballots | unsubscribes
+  stream         String
+  watermark      Json      @default("{}")
+  lastSyncedAt   DateTime?
+  /// Sanitized.
+  lastError      String?
+  rowsUpserted   Int       @default(0)
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  integration OrgIntegration @relation(fields: [organizationId, integrationId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([integrationId, stream])
+}
+
+// --- Themes (Phase 8) ---
+
+enum ThemeMode {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+/// Per-org theme: five colour roles per mode, the derived token map and the
+/// stored WCAG contrast warnings. Every colour is strict hex
+/// (/^#[0-9a-f]{6}$/i), validated on write and again at render. Members read;
+/// OWNER/ADMIN write. Deleting the row resets the org to the default preset.
+model OrgTheme {
+  organizationId   String    @id
+  /// default | cbc-light | cbc-dark | ... | custom
+  preset           String    @default("default")
+  mode             ThemeMode @default(SYSTEM)
+  /// Forces `mode` for every member (next-themes forcedTheme).
+  lockMode         Boolean   @default(false)
+  /// {primary, accent, background, surface, text}
+  light            Json
+  /// Same shape; NULL = derived from light.
+  dark             Json?
+  /// {light: {--token: value}, dark: {...}}, from src/lib/theme/derive.ts.
+  tokens           Json      @default("{}")
+  contrastWarnings Json      @default("[]")
+  updatedById      String?
+  updatedAt        DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }

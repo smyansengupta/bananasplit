@@ -4,7 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 
 import { verifyPassword } from "@/lib/auth/password";
-import { prisma } from "@/lib/prisma";
+import { authDb } from "@/server/db/clients";
 
 declare module "next-auth" {
   interface Session {
@@ -15,7 +15,9 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  // The identity plane runs as app_auth: grants on User, Account, Session,
+  // VerificationToken and UserCredential only, and no tenant access.
+  adapter: PrismaAdapter(authDb),
   // Credentials sign-in only persists sessions with the JWT strategy — the
   // adapter still manages User/Account rows for Google, only session storage
   // moves from a Session table row to a signed cookie.
@@ -38,18 +40,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = typeof credentials?.email === "string" ? credentials.email : null;
+        const rawEmail = typeof credentials?.email === "string" ? credentials.email : null;
         const password = typeof credentials?.password === "string" ? credentials.password : null;
-        if (!email || !password) {
+        if (!rawEmail || !password) {
+          return null;
+        }
+        // Emails are stored as lower(btrim()) (migration 0a_normalize_emails).
+        const email = rawEmail.trim().toLowerCase();
+
+        // The password hash lives in UserCredential, which only app_auth can read.
+        const user = await authDb.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            image: true,
+            credential: { select: { passwordHash: true } },
+          },
+        });
+        const passwordHash = user?.credential?.passwordHash;
+        if (!user || !passwordHash) {
           return null;
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user?.passwordHash) {
-          return null;
-        }
-
-        const valid = await verifyPassword(password, user.passwordHash);
+        const valid = await verifyPassword(password, passwordHash);
         if (!valid) {
           return null;
         }

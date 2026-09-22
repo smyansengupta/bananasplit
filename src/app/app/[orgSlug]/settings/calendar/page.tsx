@@ -6,7 +6,7 @@ import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { requireOrgMembership } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 
-import { getOrCreateIcsToken } from "./actions";
+import { getIcsFeedActiveSince } from "./actions";
 import { FeedUrlCard } from "./feed-url-card";
 
 export default async function CalendarSettingsPage({
@@ -25,11 +25,14 @@ export default async function CalendarSettingsPage({
     handleAuthErrorInPage(error);
   }
 
-  const token = await getOrCreateIcsToken();
+  // Only a hash of the token is stored, so an existing link cannot be shown
+  // again: the page shows when it was created, and regenerating returns a
+  // new URL once.
+  const activeSince = await getIcsFeedActiveSince();
   const headerList = await headers();
   const host = headerList.get("host") ?? "localhost:3000";
   const protocol = host.startsWith("localhost") ? "http" : "https";
-  const feedUrl = `${protocol}://${host}/api/calendar/feed/${token}`;
+  const feedBaseUrl = `${protocol}://${host}/api/calendar/feed/`;
 
   return (
     <div className="space-y-6">
@@ -44,7 +47,7 @@ export default async function CalendarSettingsPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <FeedUrlCard initialUrl={feedUrl} />
+          <FeedUrlCard feedBaseUrl={feedBaseUrl} activeSince={activeSince?.toISOString() ?? null} />
         </CardContent>
       </Card>
     </div>

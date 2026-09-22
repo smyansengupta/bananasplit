@@ -12,6 +12,7 @@ import {
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   NOT_STARTED: "Not started",
   IN_PROGRESS: "In progress",
+  BLOCKED: "Blocked",
   COMPLETED: "Completed",
 };
 

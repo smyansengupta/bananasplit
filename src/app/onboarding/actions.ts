@@ -8,6 +8,8 @@ import { setActiveOrgCookie } from "@/lib/active-org-cookie";
 import { requireUser } from "@/lib/auth/session";
 import { acceptInvitation } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
+import { isReservedSlug } from "@/lib/slug";
+import { sqlStateOf } from "@/server/db/errors";
 
 const createOrgSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(80),
@@ -37,18 +39,31 @@ export async function createOrganizationAction(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
+  if (isReservedSlug(parsed.data.slug)) {
+    return { error: "That URL is reserved. Pick another." };
+  }
   const existing = await prisma.organization.findUnique({ where: { slug: parsed.data.slug } });
   if (existing) {
     return { error: "That URL is already taken." };
   }
 
-  const org = await prisma.organization.create({
-    data: {
-      name: parsed.data.name,
-      slug: parsed.data.slug,
-      memberships: { create: { userId: user.id, role: Role.OWNER } },
-    },
-  });
+  let org;
+  try {
+    org = await prisma.organization.create({
+      data: {
+        name: parsed.data.name,
+        slug: parsed.data.slug,
+        memberships: { create: { userId: user.id, role: Role.OWNER } },
+      },
+    });
+  } catch (error) {
+    // The database also reserves every slug an org has given up (renamed or
+    // deleted orgs), which this legacy path cannot read: 23505 either way.
+    if (sqlStateOf(error) === "23505") {
+      return { error: "That URL is already taken." };
+    }
+    throw error;
+  }
 
   await setActiveOrgCookie(org.id);
   redirect(`/app/${org.slug}`);
@@ -56,6 +71,7 @@ export async function createOrganizationAction(
 
 export async function checkSlugAvailability(slug: string): Promise<boolean> {
   await requireUser();
+  if (isReservedSlug(slug)) return false;
   const existing = await prisma.organization.findUnique({ where: { slug } });
   return !existing;
 }

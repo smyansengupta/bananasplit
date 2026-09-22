@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { buildIcsCalendar } from "@/lib/ics";
+import { hashIcsToken } from "@/lib/ics-token";
 import { prisma } from "@/lib/prisma";
+import { authDb } from "@/server/db/clients";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 // Generous: real calendar apps poll this every 15-60 min, but nothing
@@ -22,7 +24,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     return new NextResponse("Too many requests", { status: 429 });
   }
 
-  const user = await prisma.user.findUnique({ where: { icsToken: token } });
+  // Token resolution runs as app_auth (UserCredential is readable by no
+  // tenant role). Only the hash is stored.
+  const credential = await authDb.userCredential.findUnique({
+    where: { icsTokenHash: hashIcsToken(token) },
+    select: { user: { select: { id: true, name: true } } },
+  });
+  const user = credential?.user;
   if (!user) {
     return new NextResponse("Not found", { status: 404 });
   }
