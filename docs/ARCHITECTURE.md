@@ -1,14 +1,74 @@
 # Architecture
 
+## Data layer: roles, RLS and the transaction wrappers
+
+The runtime never connects as the table owner. Four runtime roles, all
+`NOBYPASSRLS` non-owners (created `NOLOGIN` by migration
+`20260922000400_0b_rls_roles_policies_triggers`; production pre-creates them
+with `LOGIN PASSWORD`, see RUNBOOK):
+
+| Role | Client (`src/server/db`) | Used by |
+|---|---|---|
+| `app_user` | `appDb` | request code, only through the wrappers below |
+| `app_service` | `serviceDb` | jobs, crons, the secrets accessor, the enumerated no-context paths |
+| `app_auth` | `authDb` | the Auth.js adapter, credentials sign-in, sign-up, ICS token lookup, the rate limiter |
+| `app_legacy` | `legacyDb` (= `@/lib/prisma`) | TEMPORARY: modules not yet moved to `withOrgAction`; dropped when none remain |
+
+URLs come from `src/server/db/urls.ts`: explicit `DATABASE_URL_APP` /
+`_SERVICE` / `_AUTH` / `_LEGACY`, or derived from `DATABASE_URL` plus the four
+role passwords (Neon previews). There is no fallback to the owner URL.
+
+**Transaction-bound context.** Every unit of work is one interactive
+transaction whose first statement is `SELECT app.set_context(user, org)`: it
+sets `app.user_id` / `app.org_id` transaction-locally, stamps them with the
+current transaction (`app.ctx_tx`) so a context leaked onto a pooled
+connection is dead in the next transaction, and returns the caller's `Role`.
+Policies compare `organizationId` with `app.member_org_id()` (the org only if
+the user is a member of it), so the database enforces membership, not just
+org equality. The wrappers in `src/server/db/context.ts`:
+
+- `withOrgAction(handler)` for Server Actions, `(organizationId, ...args)`;
+- `withOrgTx(orgId, fn)` for page reads (retries once if the transaction
+  cannot start);
+- `withUserTx(userId, fn)` for the user's own cross-org rows;
+- `withSystemOrgTx(orgId, { userId? }, fn)` for the fail-closed service path;
+- `getOrgContextBySlug(slug)`, React `cache()`-deduped, for the org layout.
+
+`ctx = { user, organizationId, role, db, afterCommit }`. No network I/O inside
+a transaction: use `ctx.afterCommit(fn)` or enqueue a job
+(`app.enqueue_job`, same transaction). A `redirect()`/`notFound()` from the
+handler commits and is rethrown after commit; any other throw rolls back.
+Database errors that escape map to generic `AppError`s (`src/server/db/errors.ts`).
+
+**Rules for every new table** (checked by `pnpm test:rls`): `ENABLE ROW LEVEL
+SECURITY`, per-command policies for `app_user` and `app_service` (the service
+ones require `app.org_id() IS NOT NULL`), and explicit GRANTs, all in the
+migration that creates the table; add it to the reviewed grant matrix in
+`prisma/rls/phases.mjs`; `app.security_manifest()` must stay empty. Child
+tables carry `organizationId` with a composite FK to the parent's
+`(organizationId, id)`.
+
+**Known limitation.** RLS contains logic bugs, not SQL injection: SQL that
+runs as a runtime role can call `set_config()` itself and forge the context
+(test T29). The injection control is the ban on `$queryRawUnsafe`,
+`$executeRawUnsafe` and `Prisma.raw` in request code.
+
+**Tests.** `pnpm test:rls` creates a throwaway database owned by a
+non-superuser role (like `neondb_owner`), applies every migration,
+`prisma/rls/local-roles.sql` and `prisma/rls/fixtures.sql`, and runs the
+regression suite (`tests.mjs`), the executed attack suite (`attacks.mjs`) and
+the Phase 1-9 suite with the catalog checks (`phases.mjs`).
+
 ## Tenancy model
 
 CBC Portal is multi-tenant at the **organization** level: one deployment can
 host many clubs, and every piece of data (tasks, notes, events, transactions,
 labels, projects...) belongs to exactly one `Organization` via an
 `organizationId` foreign key. There is no schema-per-tenant or
-database-per-tenant split — it's a single shared Postgres database with
-row-level tenant scoping enforced entirely in application code (Postgres
-Row-Level Security is not used; every query is trusted to filter correctly).
+database-per-tenant split — it's a single shared Postgres database. Tenant
+scoping is enforced **in the database** with Postgres Row-Level Security under
+non-owner runtime roles (see "Data layer" below); the app-level guards stay as
+the friendlier first check.
 
 A user's relationship to an org is a `Membership` row carrying a `Role`
 (`OWNER`, `ADMIN`, `TREASURER`, `MEMBER`). A user can belong to multiple
