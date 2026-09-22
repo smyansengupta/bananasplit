@@ -56,6 +56,32 @@ needs, plus what to do when something breaks.
    no "first user becomes owner" bootstrap by design — every org is created
    through the normal onboarding flow, which makes its creator the owner).
 
+## Security switches (Phase 0A)
+
+- **Org creation lock.** In production (`VERCEL_ENV=production`, or
+  `NODE_ENV=production` off Vercel) only a verified address listed in
+  `PLATFORM_ADMIN_EMAILS` (comma-separated) can create an organization.
+  Everyone else joins by invitation. Previews and local dev are unrestricted.
+  The President creates the CBC org once through `/onboarding`.
+- **Email verification.** Password sign-ups must verify their address before
+  they can create or join an org, so the platform sender (`RESEND_API_KEY`,
+  `EMAIL_FROM` on a verified domain) must work on day one. Without a key,
+  outside production, the verification link is printed to the server log.
+  Google sign-ins count as verified when Google says the address is.
+- **Google account linking.** A Google sign-in links to an existing account
+  with the same verified address; an unverified password account squatting on
+  that address is deleted first (or loses its password if it already joined
+  an org). Google sign-ins whose address Google has not verified are refused.
+- **Content Security Policy.** `/app`, `/poll`, `/invite` and the auth pages
+  get a per-request nonce policy (`src/proxy.ts`); every other route gets a
+  static policy (`next.config.ts`). Production starts in report-only mode.
+  After a week of preview use, read the `[csp]` lines that
+  `/api/csp-report` logs; when there are none that matter, set
+  `CSP_MODE=enforce` in the Production scope and redeploy (the static policy
+  is fixed at build time).
+- **Receipts** are capped at 4 MB per file (Vercel's request body limit);
+  the browser shrinks larger photos before uploading.
+
 ## Restoring from backup
 
 Neon takes continuous WAL-based backups and supports **point-in-time

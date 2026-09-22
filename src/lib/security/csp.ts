@@ -89,7 +89,8 @@ function sharedDirectives(env: NodeJS.ProcessEnv): string[] {
     "default-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' blob: data: ${IMAGE_HOSTS.join(" ")}`,
-    "font-src 'self'",
+    // FullCalendar ships its icon font inline as a data: URI in its CSS.
+    "font-src 'self' data:",
     `connect-src 'self'${sentry ? ` ${sentry}` : ""}`,
     `form-action 'self' ${FORM_TARGETS.join(" ")}`,
     "frame-ancestors 'none'",

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { makeUser, signIn, signOut, signUp, uniqueSuffix } from "./helpers";
+import { makeUser, signIn, signOut, signUpVerified, uniqueSuffix } from "./helpers";
 
 // Spec 6.5, flow (b): member submits an expense with a receipt -> treasurer
 // (here, the org owner, who also carries finance access) approves -> marks
@@ -12,7 +12,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   const orgName = `E2E Finance ${uniqueSuffix()}`;
   const expenseDescription = `E2E pizza run ${uniqueSuffix()}`;
 
-  await signUp(page, owner);
+  await signUpVerified(page, owner);
   await page.getByLabel("Organization name").fill(orgName);
   await page.getByRole("button", { name: "Create organization" }).click();
   await expect(page).toHaveURL(/\/app\/[^/]+$/);
@@ -33,7 +33,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await expect(page.getByText("Invite sent.")).toBeVisible();
 
   await signOut(page);
-  await signUp(page, member);
+  await signUpVerified(page, member);
   await page.getByRole("button", { name: "Join" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}$`));
 
@@ -51,7 +51,10 @@ test("expense reimbursement lifecycle", async ({ page }) => {
 
   await page.getByText(expenseDescription).click();
   await page.getByRole("tab", { name: /Receipts/ }).click();
-  const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  // A 2 MB image: over the old 1 MB Server Action limit that broke every
+  // phone photo, under the 4 MB route-handler cap (0A Fix 15).
+  const pngBytes = Buffer.alloc(2 * 1024 * 1024);
+  pngBytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   await page.getByRole("button", { name: "Upload receipt" }).click();
   await page
     .locator("input[type='file']")

@@ -44,7 +44,7 @@ describe("nonce policy (0A Fix 13)", () => {
     expect(policy.get("object-src")).toBe("'none'");
     expect(policy.get("base-uri")).toBe("'self'");
     expect(policy.get("form-action")).toBe("'self' https://accounts.google.com");
-    expect(policy.get("font-src")).toBe("'self'");
+    expect(policy.get("font-src")).toBe("'self' data:");
     expect(policy.get("img-src")).toContain("https://*.public.blob.vercel-storage.com");
     expect(policy.has("upgrade-insecure-requests")).toBe(true);
     expect(policy.get("report-uri")).toBe("/api/csp-report");

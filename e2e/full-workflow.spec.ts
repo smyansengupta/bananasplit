@@ -1,18 +1,34 @@
 import { expect, test } from "@playwright/test";
 
-import { dayButtonName, makeUser, signIn, signOut, signUp, uniqueSuffix } from "./helpers";
+import {
+  dayButtonName,
+  makeUser,
+  signIn,
+  signOut,
+  signUp,
+  uniqueSuffix,
+  verifyEmail,
+} from "./helpers";
 
-// Spec 6.5, flow (a): sign in -> create org -> invite member -> create/drag
-// task -> write/share note -> create poll -> respond -> finalize into event
-// -> download .ics. Exercises the whole app through the real UI against a
-// real dev server and Postgres — nothing here is mocked.
+// Spec 6.5, flow (a): sign up -> verify email -> create org -> invite member
+// -> member signs up, verifies and joins -> create/drag task -> write/share
+// note -> create poll -> respond -> finalize into event -> download .ics.
+// Exercises the whole app through the real UI against a real dev server and
+// Postgres — nothing here is mocked except the inbox (see verifyEmail).
 test("full workspace workflow", async ({ page }) => {
   const owner = makeUser("Owner");
   const member = makeUser("Member");
   const orgName = `E2E Robotics ${uniqueSuffix()}`;
 
+  // --- sign-up leaves the account unverified: no org until the email is ---
   await signUp(page, owner);
   await expect(page).toHaveURL(/\/onboarding/);
+  await expect(page.getByText("Check your email")).toBeVisible();
+  await expect(page.getByLabel("Organization name")).toHaveCount(0);
+
+  await verifyEmail(page, owner.email);
+  await expect(page).toHaveURL(/\/onboarding/);
+  await expect(page.getByText("Check your email")).toHaveCount(0);
 
   await page.getByLabel("Organization name").fill(orgName);
   await page.getByRole("button", { name: "Create organization" }).click();
@@ -25,9 +41,13 @@ test("full workspace workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Send invite" }).click();
   await expect(page.getByText("Invite sent.")).toBeVisible();
 
+  // The invitee's pending invite is only offered once their address is
+  // verified (0A Fix 4(c)).
   await signOut(page);
   await signUp(page, member);
   await expect(page).toHaveURL(/\/onboarding/);
+  await expect(page.getByRole("button", { name: "Join" })).toHaveCount(0);
+  await verifyEmail(page, member.email);
   await page.getByRole("button", { name: "Join" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}$`));
 

@@ -140,7 +140,23 @@ meant to be shared outside the org: the guest poll response page
 per-user `.ics` calendar feed (`/api/calendar/feed/[token]`). Each is gated
 by an unguessable token instead of a membership check, and each is
 rate-limited (`src/lib/rate-limit.ts`) since they're public and don't cost an
-email to hit repeatedly. The rate limiter itself is in-memory/per-process —
+email to hit repeatedly. Since Phase 0A:
+
+- the poll page renders from a stripped DTO (`src/lib/polls/poll-view.ts`:
+  opaque respondent keys, no ids or emails); only members of the poll's org
+  answer as themselves, everyone else answers as a guest keyed by an httpOnly
+  `poll_guest_<pollId>` cookie whose sha256 scopes their edits; finalizing
+  attaches only current members;
+- an invite is accepted only by the account whose stored, verified email is
+  the invited address (`src/lib/invitations.ts`);
+- the feed stores only a hash of its token and includes only events of orgs
+  the user still belongs to (`src/lib/calendar-feed.ts`).
+
+Route handlers that accept a browser POST (for example the receipt upload,
+`/api/orgs/[orgId]/receipts`) do their own session, membership and
+same-origin checks: unlike Server Actions they get no built-in CSRF check.
+Security headers and the Content Security Policy are described in
+`src/lib/security/csp.ts`. The rate limiter itself is in-memory/per-process —
 correct for this single-instance dev setup and a traditional always-on host,
 **not** correct across multiple serverless instances (each would track its
 own count); a production deploy on multi-instance infra needs a shared store
