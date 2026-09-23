@@ -6,7 +6,13 @@
 // C0 and C1 control characters except tab (\u0009), newline (\u000A) and
 // carriage return (\u000D), plus the Unicode bidi overrides and zero-width
 // characters that can hide text in a rendered chart.
-const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩﻿]/g;
+const char = (code: number) => String.fromCharCode(code);
+const span = (from: number, to: number) => `${char(from)}-${char(to)}`;
+const CONTROL = new RegExp(
+  `[${span(0x00, 0x08)}${char(0x0b)}${char(0x0c)}${span(0x0e, 0x1f)}${span(0x7f, 0x9f)}` +
+    `${span(0x200b, 0x200f)}${span(0x202a, 0x202e)}${span(0x2066, 0x2069)}${char(0xfeff)}]`,
+  "g",
+);
 
 /** NFC, control characters stripped, CRLF normalized. Keeps line breaks. */
 export function cleanText(input: string): string {

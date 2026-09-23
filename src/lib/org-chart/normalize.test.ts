@@ -145,7 +145,7 @@ describe("normalizeOrgChart rules", () => {
       [
         P({
           id: "a",
-          title: `  Head\u0000 of‮  Tech ${long}`,
+          title: `  Head\u0000 of${String.fromCharCode(0x202e)}  Tech ${long}`,
           responsibilities: ["- Ships the site", "• ships the  site", "", "1. Runs QA", long, ...Array(40).fill("y")],
         }),
       ],
