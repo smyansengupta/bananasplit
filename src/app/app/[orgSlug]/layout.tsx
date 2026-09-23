@@ -4,6 +4,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
+import { getShellUser } from "@/server/profiles/queries";
 
 export default async function OrgLayout({ params, children }: LayoutProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
@@ -31,14 +32,11 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
     orderBy: { organization: { name: "asc" } },
   });
   const orgs = memberships.map((m) => ({ slug: m.organization.slug, name: m.organization.name }));
+  // Name and picture from the database, not the session token (Profiles).
+  const shellUser = await getShellUser(ctx.user.id, ctx.user.email);
 
   return (
-    <AppShell
-      orgSlug={org.slug}
-      orgId={org.id}
-      orgs={orgs}
-      user={{ name: ctx.user.name, email: ctx.user.email, image: null }}
-    >
+    <AppShell orgSlug={org.slug} orgId={org.id} orgs={orgs} user={shellUser}>
       {children}
     </AppShell>
   );
