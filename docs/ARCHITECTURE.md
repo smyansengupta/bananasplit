@@ -51,13 +51,119 @@ tables carry `organizationId` with a composite FK to the parent's
 **Known limitation.** RLS contains logic bugs, not SQL injection: SQL that
 runs as a runtime role can call `set_config()` itself and forge the context
 (test T29). The injection control is the ban on `$queryRawUnsafe`,
-`$executeRawUnsafe` and `Prisma.raw` in request code.
+`$executeRawUnsafe` and `Prisma.raw` (and on `set_config` in any SQL string),
+enforced by ESLint (see "Lint" below).
 
 **Tests.** `pnpm test:rls` creates a throwaway database owned by a
 non-superuser role (like `neondb_owner`), applies every migration,
 `prisma/rls/local-roles.sql` and `prisma/rls/fixtures.sql`, and runs the
 regression suite (`tests.mjs`), the executed attack suite (`attacks.mjs`) and
 the Phase 1-9 suite with the catalog checks (`phases.mjs`).
+
+## Platform services
+
+Shared services every feature uses. Each module's header comment is the
+detailed contract; this is the map.
+
+| Need | Use | Never |
+|---|---|---|
+| Background work, email, anything network-bound after a write | `enqueueJob(ctx.db, {orgId, kind, key, payload, runAt?, once?})` (`src/server/jobs/`) | network I/O inside a transaction |
+| Cache invalidation | `invalidate([tags.x(orgId)])` (`src/server/cache/`) | `updateTag`/`revalidateTag` directly; tag string literals |
+| Integration secrets | `setSecret`, `getSecret`, `removeSecret`, `testIntegration` (`src/server/secrets/`) | the `app.secret_*` functions directly; secrets in a DTO or log |
+| Files | `putBlob`, `getBlob`, `deleteBlobs`, `deleteOrgBlobs` (`src/server/storage/`); `readUpload` in upload routes | Server Actions for uploads; client file names in keys |
+| Images | `storeImage(kind, scopeId, preset, bytes)` (`src/server/images/`) | serving an upload without re-encoding it |
+| Email | `notifyUser`/`notifyUsers`/`notifyOrgOwners` (`src/server/notifications.ts`); `getOrgMailer`/`getPlatformMailer` inside job handlers | awaiting Resend in a Server Action |
+| Permissions | `can(ctx, perm)`, `requirePermission(ctx, perm)` (`src/lib/auth/permissions.ts`) | inline `role === OWNER` checks |
+| Rate limits | `checkRateLimit(rateLimitKey(scope, ...parts), limit, windowSec)` (`src/lib/rate-limit.ts`) | in-memory counters |
+| Events (calendar and Sessions) | `createEvent`/`updateEvent`/`deleteEvent`, `publicEventsWhere()` (`src/server/events/service.ts`) | writing `Event` directly |
+| Members, avatars | `getOrgMembersForPicker`, `userPublicSelect` (`src/server/members.ts`); `<UserAvatar>` | selecting `User.email` for pickers |
+| Org chart | `getPublishedOrgChart`, `getReportingSubtree` (`src/server/org-chart/queries.ts`) | |
+| CSV | `toCsv`/`csvCell` (`src/lib/csv.ts`) | hand-rolled escaping |
+| Database view links | `dbViewHref(slug, dbKey, params)`, `parseDbViewParams` (`src/lib/databases/href.ts`) | hand-built query strings |
+
+**The outbox (jobs).** `enqueueJob` calls `app.enqueue_job` with the
+caller's own client, so the job exists only if the caller's transaction
+commits. The dedupe key is `${kind}:${key}` and is per org: a second enqueue
+of a PENDING key merges into it, of a RUNNING key re-runs it once more after
+it finishes; `once: true` refuses a key that already finished (daily
+digests). Every kind is a row in `src/server/jobs/registry.ts` (payload
+schema, maxRuntime, lease, tier, after() eligibility, handler); a kind
+without a handler is accepted and waits PENDING until its phase adds one.
+The runner (`drain.ts`) claims in one short statement, runs the handler with
+no transaction open and an AbortSignal at maxRuntime, then finishes with a
+compare-and-set on the lock token; a throw retries with backoff
+(`PermanentJobError` goes straight to DEAD) and every stored error is
+sanitized. Handlers are idempotent (Notification.emailSentAt, Resend
+idempotency keys, row versions). Drains run: in the enqueuing request's
+`after()` for fast kinds; from `/api/cron/jobs` (Vercel Cron, the GitHub
+pinger, or a kick for heavy kinds, fail-closed on `CRON_SECRET`); and locally
+with `pnpm jobs:drain [--watch]`. On a preview the drain refuses unless the
+database carries `app.fixture_only = 'on'`; with `EMAIL_DELIVERY=off` email
+kinds are held.
+
+**Email.** Every send from app code is a job: `notify-email` (the email copy
+of a Notification; checks the recipient's preference, claims `emailSentAt`
+before sending and releases it on failure), `invite-email` (mints the accept
+link at send time, because only the token's hash is stored),
+`reimbursement-email`, `verify-email` (platform, from `app_auth`) and the
+generic `email` kind (templated org mail such as the treasurer digest).
+Routing: the org's own verified Resend sender, else the platform sender "on
+behalf of" the org while `OrgSettings.platformMailFallback` is on, else
+in-app only. Templates escape every value and link absolutely to
+`NEXT_PUBLIC_APP_URL`. Without a Resend key (and on previews) mail goes to the
+console and `.data/mail/`. `@/lib/email` remains as thin wrappers that send
+immediately through the platform sender; new code should not use it.
+
+**Secrets.** AES-256-GCM envelope encryption: a fresh data key per secret,
+wrapped by the current KEK (`SECRETS_KEK_V{n}`, `SECRETS_KEK_CURRENT`), with
+additional authenticated data binding the ciphertext to its org, integration,
+provider and kind. The ciphertext lives in `OrgSecret`, reachable only
+through `app.secret_read/write/delete` on the service role. Set, replace and
+test need ADMIN+, remove needs OWNER; every change writes `OrgAuditLog` in the
+same transaction and alerts every OWNER. Decryption and network tests run
+outside transactions. `pnpm secrets:rotate-kek` rewraps data keys after a KEK
+rotation. Sentry events and (in production) console output pass through the
+scrubber in `src/lib/observability/scrub.ts`.
+
+**Storage.** Every file belongs to a kind in `src/server/storage/kinds.ts`
+(store, org or user scope, upload cap); keys are `{kind}/{orgId}/...` or
+`avatars/{userId}/...`. Vercel Blob when the store's token is set, otherwise
+`.data/blob/{store}/` with public files served by the dev-only
+`/api/dev/blob/[...key]`. Blob I/O never runs inside a transaction: write the
+blob, then the row (delete the blob if the row fails); change the row, then
+delete the old blob after commit. Upload route handlers use `readUpload`
+(4 MB cap, 413 from Content-Length before reading) and declare
+`maxDuration = 60`. Images are re-encoded by sharp (JPEG, PNG or WebP in,
+at most 40 MP, EXIF stripped, WebP variants out).
+
+**Health.** `/api/health` answers 503 unless every runtime URL logs in as
+its role (no superuser, no BYPASSRLS, owns nothing) with the `UTC`/`15s`/`15s`
+session defaults, `app.security_manifest()` is empty, and (on previews) the
+database is fixture-only and the mail sink, Blob stores and KEK are the
+preview ones, or (in production) email, cron and secrets are configured.
+With the `CRON_SECRET` bearer it lists every check.
+
+**Email verification.** Credentials sign-up enqueues `verify-email`; the
+link opens `/verify-email/[token]`, which consumes the token only when the
+user presses "Confirm email" (mail scanners prefetch links). The daily
+`purge-unverified` job deletes password accounts never confirmed within 72
+hours that have no Google account and no membership, and the Auth.js
+`signIn` callback purges such an account for an address Google reports
+verified, before Auth.js looks the address up (`src/lib/auth/purge-squatter.ts`).
+
+**Lint** (`eslint.config.mjs`). ESLint bans:
+- `$queryRawUnsafe`, `$executeRawUnsafe` and `Prisma.raw`;
+- `set_config`, `SET SESSION`, `SET app.*` and `RESET app.*` in any SQL string;
+- `process.env.DATABASE_URL*` outside `urls.ts` and owner scripts;
+- cache-tag string literals outside `tags.ts`, and the `next/cache`
+  invalidation APIs outside `invalidate.ts`;
+- importing `serviceDb`, `authDb`, `legacyDb` or `getClient` outside
+  `CLIENT_ALLOWLIST` (the identity plane, the rate limiter, the ICS feed, the
+  cron routes and job runner, the health check, scripts and the data layer;
+  adding a path is a security review item);
+- `@/lib/prisma` in new code (`src/server/**` and the new sections);
+- `redirect`/`notFound` in `src/server` services (except `context.ts`), and
+  request-context imports in cached loaders.
 
 ## Tenancy model
 
@@ -140,9 +246,12 @@ meant to be shared outside the org: the guest poll response page
 per-user `.ics` calendar feed (`/api/calendar/feed/[token]`). Each is gated
 by an unguessable token instead of a membership check, and each is
 rate-limited (`src/lib/rate-limit.ts`) since they're public and don't cost an
-email to hit repeatedly. The rate limiter itself is in-memory/per-process —
-correct for this single-instance dev setup and a traditional always-on host,
-**not** correct across multiple serverless instances (each would track its
-own count); a production deploy on multi-instance infra needs a shared store
-(Upstash Redis is the standard pairing) behind the same
-`checkRateLimit(key, limit, windowMs)` interface.
+email to hit repeatedly. The limiter is Postgres-backed (a fixed window in
+`RateLimitBucket`, reached only through `app.rate_limit_hit` on the service
+or auth role), so every serverless instance shares one count and a
+rolled-back action still counts. Keys hash their identifying parts
+(`rateLimitKey(scope, ...parts)`), so the table holds no emails, IPs or
+tokens. Sign-in (per IP and per email), sign-up (per IP and per email),
+invites (per org), poll responses (per IP), receipt uploads (per user) and the
+ICS feed (per token) are limited; the client IP comes from `x-real-ip`,
+never the client-controlled first `x-forwarded-for` hop.

@@ -47,11 +47,44 @@ needs, plus what to do when something breaks.
    `SENTRY_ORG` / `SENTRY_PROJECT` too, so the build step uploads source maps
    (readable stack traces instead of minified ones). Leaving these unset is
    safe — the SDK just doesn't report anything.
-7. **Uptime check** — point any external monitor (UptimeRobot, Better Stack,
-   Pingdom, a cron-triggered curl, etc.) at `GET /api/health`. It runs
-   `SELECT 1` against the DB and returns `503` on failure, `200` on success —
-   no auth required, reveals nothing beyond up/down.
-8. **Seed the first org** — per spec §11 human step 15, create the real
+7. **Health check (gate every deploy on it)** — `GET /api/health` returns
+   `200 {"status":"ok"}` only when all four runtime URLs log in as their
+   roles (not superuser, no BYPASSRLS, owning nothing) with the `UTC` /
+   `15s` / `15s` session defaults, `app.security_manifest()` is empty, and the
+   environment checks pass (production: `RESEND_API_KEY` plus `EMAIL_FROM` on
+   the app's domain, or `EMAIL_DELIVERY=off`; `CRON_SECRET`; the secrets
+   keyring and `SECRETS_FINGERPRINT_KEY`; an https `NEXT_PUBLIC_APP_URL`.
+   Previews: the `app.fixture_only` marker, no live mail, the preview Blob
+   stores and KEK). Anything else is `503`. To see which check failed:
+   `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/health`.
+   Point the uptime monitor at the plain URL; it reveals nothing beyond
+   up/down.
+8. **Background jobs** — mail, reminders, syncs and maintenance run from the
+   job outbox (`/api/cron/jobs`, fail-closed on `CRON_SECRET`). `vercel.json`
+   has a daily backstop cron (Hobby allows only daily crons). Then either:
+   - **Pro**: change the `/api/cron/jobs` schedule in `vercel.json` to
+     `*/5 * * * *`; or
+   - **Hobby**: set the repository secrets `JOBS_DRAIN_URL`
+     (`https://<production host>/api/cron/jobs`) and `CRON_SECRET`; the
+     `Jobs pinger` workflow then drains every 15 minutes.
+   Fast jobs (email) also drain right after the request that enqueued them,
+   so mail does not wait for the cron. Previews drain nothing unless their
+   database is marked fixture-only. Locally: `pnpm jobs:drain` (or
+   `--watch`); mail lands in `.data/mail/` unless `RESEND_API_KEY` is set.
+   Stuck or failed jobs are visible to org admins in the `Job` table
+   (`status` `DEAD`, sanitized `lastError`); fix the cause, then re-enqueue.
+9. **Secrets keyring** — generate `SECRETS_KEK_V1` and
+   `SECRETS_FINGERPRINT_KEY` (base64 of 32 random bytes each:
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`)
+   and keep a copy offline: losing the KEK makes every stored integration key
+   unreadable (admins would have to re-enter them). Previews get their own
+   keyring (`SECRETS_KEK_ENV=preview`, and `PREVIEW_KEK_FINGERPRINT` in the
+   Preview scope, which `/api/health` compares). **Rotation**: add
+   `SECRETS_KEK_V2`, set `SECRETS_KEK_CURRENT=2`, deploy, run
+   `MIGRATE_DATABASE_URL=<owner url> pnpm secrets:rotate-kek` (use
+   `--dry-run` first), and remove `SECRETS_KEK_V1` once a dry run reports 0
+   left.
+10. **Seed the first org** — per spec §11 human step 15, create the real
    club's organization and assign `OWNER` directly in the database (there's
    no "first user becomes owner" bootstrap by design — every org is created
    through the normal onboarding flow, which makes its creator the owner).
