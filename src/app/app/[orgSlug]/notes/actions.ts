@@ -2,10 +2,18 @@
 
 import { z } from "zod";
 
-import { NoteVisibility, Role } from "@/generated/prisma/client";
-import { withOrgContext } from "@/lib/auth/with-org-context";
-import type { OrgContext } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { NoteVisibility } from "@/generated/prisma/client";
+import { can } from "@/lib/auth/permissions";
+import { withOrgAction, type OrgContext } from "@/server/db/context";
+
+/**
+ * Note actions (0C). Each runs in one withOrgAction transaction as app_user,
+ * so RLS repeats the rules checked here: PRIVATE notes are visible only to
+ * their author, and only the author or an OWNER/ADMIN may edit or delete a
+ * note (policy 6.8, immutable authorId). Error semantics: every action
+ * returns its { error } before its single write, so nothing commits on an
+ * error path.
+ */
 
 const NOTE_VISIBILITY_VALUES = Object.values(NoteVisibility) as [
   NoteVisibility,
@@ -37,51 +45,52 @@ interface ActionResult {
 
 /** Anyone can edit their own note; OWNER/ADMIN can edit any note they can see. */
 function canEditNote(ctx: OrgContext, note: { authorId: string }) {
-  return note.authorId === ctx.user.id || ctx.role === Role.OWNER || ctx.role === Role.ADMIN;
+  return note.authorId === ctx.userId || can(ctx, "notes.manageAll");
 }
 
 function isVisibleToUser(userId: string, note: { visibility: NoteVisibility; authorId: string }) {
   return note.visibility === NoteVisibility.ORGANIZATION || note.authorId === userId;
 }
 
-async function assertEventBelongsToOrg(organizationId: string, eventId: string | null) {
+async function assertEventBelongsToOrg(ctx: OrgContext, eventId: string | null) {
   if (!eventId) return null;
-  const event = await prisma.event.findFirst({
-    where: { id: eventId, organizationId, deletedAt: null },
+  const event = await ctx.db.event.findFirst({
+    where: { id: eventId, organizationId: ctx.organizationId, deletedAt: null },
     select: { id: true },
   });
   return event ? null : "That event doesn't exist in this organization.";
 }
 
-export const createNote = withOrgContext(
+export const createNote = withOrgAction(
   async (ctx, prefill?: { title?: string; eventId?: string }): Promise<ActionResult> => {
     if (prefill?.eventId) {
-      const eventError = await assertEventBelongsToOrg(ctx.organizationId, prefill.eventId);
+      const eventError = await assertEventBelongsToOrg(ctx, prefill.eventId);
       if (eventError) return { error: eventError };
     }
 
-    const note = await prisma.note.create({
+    const note = await ctx.db.note.create({
       data: {
         organizationId: ctx.organizationId,
         title: prefill?.title?.trim() || "Untitled note",
         contentJson: EMPTY_DOC,
         contentText: "",
         visibility: NoteVisibility.PRIVATE,
-        authorId: ctx.user.id,
-        updatedById: ctx.user.id,
+        authorId: ctx.userId,
+        updatedById: ctx.userId,
         eventId: prefill?.eventId ?? null,
       },
+      select: { id: true },
     });
     return { noteId: note.id };
   },
 );
 
-export const updateNote = withOrgContext(
+export const updateNote = withOrgAction(
   async (ctx, noteId: string, input: unknown, expectedVersion: number): Promise<ActionResult> => {
-    const existing = await prisma.note.findFirst({
+    const existing = await ctx.db.note.findFirst({
       where: { id: noteId, organizationId: ctx.organizationId, deletedAt: null },
     });
-    if (!existing || !isVisibleToUser(ctx.user.id, existing)) {
+    if (!existing || !isVisibleToUser(ctx.userId, existing)) {
       return { error: "Note not found." };
     }
     if (!canEditNote(ctx, existing)) {
@@ -101,10 +110,10 @@ export const updateNote = withOrgContext(
       return { error: "Invalid note content." };
     }
 
-    const eventError = await assertEventBelongsToOrg(ctx.organizationId, data.eventId);
+    const eventError = await assertEventBelongsToOrg(ctx, data.eventId);
     if (eventError) return { error: eventError };
 
-    const result = await prisma.note.updateMany({
+    const result = await ctx.db.note.updateMany({
       where: { id: noteId, organizationId: ctx.organizationId, version: expectedVersion },
       data: {
         title: data.title,
@@ -112,7 +121,7 @@ export const updateNote = withOrgContext(
         contentText: data.contentText,
         visibility: data.visibility,
         eventId: data.eventId,
-        updatedById: ctx.user.id,
+        updatedById: ctx.userId,
         version: { increment: 1 },
       },
     });
@@ -125,32 +134,38 @@ export const updateNote = withOrgContext(
   },
 );
 
-export const deleteNote = withOrgContext(async (ctx, noteId: string): Promise<ActionResult> => {
-  const existing = await prisma.note.findFirst({
+export const deleteNote = withOrgAction(async (ctx, noteId: string): Promise<ActionResult> => {
+  const existing = await ctx.db.note.findFirst({
     where: { id: noteId, organizationId: ctx.organizationId, deletedAt: null },
   });
-  if (!existing || !isVisibleToUser(ctx.user.id, existing)) {
+  if (!existing || !isVisibleToUser(ctx.userId, existing)) {
     return { error: "Note not found." };
   }
   if (!canEditNote(ctx, existing)) {
     return { error: "You don't have permission to delete this note." };
   }
 
-  await prisma.note.update({ where: { id: noteId }, data: { deletedAt: new Date() } });
+  await ctx.db.note.updateMany({
+    where: { id: noteId, organizationId: ctx.organizationId },
+    data: { deletedAt: new Date() },
+  });
   return {};
 });
 
-export const restoreNote = withOrgContext(async (ctx, noteId: string): Promise<ActionResult> => {
-  const existing = await prisma.note.findFirst({
+export const restoreNote = withOrgAction(async (ctx, noteId: string): Promise<ActionResult> => {
+  const existing = await ctx.db.note.findFirst({
     where: { id: noteId, organizationId: ctx.organizationId },
   });
-  if (!existing || !isVisibleToUser(ctx.user.id, existing)) {
+  if (!existing || !isVisibleToUser(ctx.userId, existing)) {
     return { error: "Note not found." };
   }
   if (!canEditNote(ctx, existing)) {
     return { error: "You don't have permission to restore this note." };
   }
 
-  await prisma.note.update({ where: { id: noteId }, data: { deletedAt: null } });
+  await ctx.db.note.updateMany({
+    where: { id: noteId, organizationId: ctx.organizationId },
+    data: { deletedAt: null },
+  });
   return {};
 });

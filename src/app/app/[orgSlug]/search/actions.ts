@@ -1,13 +1,16 @@
 "use server";
 
-import { withOrgContext } from "@/lib/auth/with-org-context";
+import { withOrgAction } from "@/server/db/context";
 
 import { searchNotes, searchTasks } from "../notes/queries";
 
-export const searchWorkspace = withOrgContext(async (ctx, query: string) => {
-  const [notes, tasks] = await Promise.all([
-    searchNotes(ctx.organizationId, ctx.user.id, query),
-    searchTasks(ctx.organizationId, query),
-  ]);
+/**
+ * The command palette's workspace search: notes (full text, PRIVATE notes
+ * only for their author) and tasks by title, in the caller's org. Read-only;
+ * one transaction as app_user, so RLS bounds both queries to the org.
+ */
+export const searchWorkspace = withOrgAction(async (ctx, query: string) => {
+  const notes = await searchNotes(ctx.db, ctx.organizationId, ctx.userId, query);
+  const tasks = await searchTasks(ctx.db, ctx.organizationId, query);
   return { notes, tasks };
 });
