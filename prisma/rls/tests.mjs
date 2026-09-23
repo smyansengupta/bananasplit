@@ -1703,7 +1703,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T27c",
-    "SECURITY DEFINER functions are exactly the reviewed list (0B Section 4, Phases 1-8, A3 maintenance)",
+    "SECURITY DEFINER functions are exactly the reviewed list (0B Section 4, Phases 1-8, A3 maintenance, B2 feed off)",
     "owner",
     null,
     async (q) =>
@@ -1723,6 +1723,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "can_view_rows",
         "cancel_job",
         "claim_jobs",
+        "clear_ics_token_hash",
         "enqueue_job",
         "event_defaults",
         "explode_ballot",
@@ -1870,6 +1871,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // A3 platform maintenance: the daily `maintenance` job (service only)
       prune_rate_limit_buckets: "s",
       prune_jobs: "s",
+      // B2 profiles: the calendar card's "Turn off feed" (own row only)
+      clear_ics_token_hash: "u",
     };
     await tcase(
       "T27f",
