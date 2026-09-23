@@ -16,6 +16,7 @@ const google = { provider: "google" };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authDbMock.$queryRaw.mockResolvedValue([{ n: 0 }]);
 });
 
 describe("Google sign-in gate (0A Fix 4(d))", () => {
@@ -52,6 +53,17 @@ describe("Google sign-in gate (0A Fix 4(d))", () => {
       },
       data: { passwordHash: null },
     });
+  });
+
+  it("fails closed when the purge cannot run (email linking would reach the squatter)", async () => {
+    authDbMock.$queryRaw.mockRejectedValue(new Error("db down"));
+    await expect(
+      googleSignInGate({
+        account: google,
+        profile: { email: "victim@example.edu", email_verified: true },
+      }),
+    ).rejects.toThrow("db down");
+    expect(authDbMock.userCredential.updateMany).not.toHaveBeenCalled();
   });
 
   it("does not touch credentials sign-ins", async () => {

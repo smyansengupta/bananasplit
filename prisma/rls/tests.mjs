@@ -1703,7 +1703,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T27c",
-    "SECURITY DEFINER functions are exactly the reviewed list (0B Section 4 plus Phases 1-8)",
+    "SECURITY DEFINER functions are exactly the reviewed list (0B Section 4, Phases 1-8, A3 maintenance)",
     "owner",
     null,
     async (q) =>
@@ -1742,6 +1742,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "organization_slug_guard",
         "pending_invitations_for_me",
         "poll_org_id",
+        "prune_jobs",
+        "prune_rate_limit_buckets",
         "purge_unverified_users",
         "rate_limit_hit",
         "redeem_org_creation_code",
@@ -1865,6 +1867,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       explode_ballot: "us",
       refresh_contact_rollups: "us",
       refresh_lapsed: "us",
+      // A3 platform maintenance: the daily `maintenance` job (service only)
+      prune_rate_limit_buckets: "s",
+      prune_jobs: "s",
     };
     await tcase(
       "T27f",

@@ -2,16 +2,10 @@ import { NextResponse } from "next/server";
 
 import { requireFinanceAccess } from "@/lib/auth/guards";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
+import { csvContentDisposition, toCsv } from "@/lib/csv";
 import { prisma } from "@/lib/prisma";
 
 import { getTransactions, type TransactionFilters } from "../../queries";
-
-function csvEscape(value: string): string {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
 
 export async function GET(request: Request, { params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
@@ -67,14 +61,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ orgS
     t.voidedAt ? "yes" : "no",
   ]);
 
-  const csv = [header, ...rows]
-    .map((row) => row.map((c) => csvEscape(String(c))).join(","))
-    .join("\r\n");
+  // Formula-safe (src/lib/csv.ts): descriptions, categories and names are
+  // user input and must never be evaluated by a spreadsheet.
+  const csv = toCsv(rows, { header, bom: true });
 
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="transactions.csv"`,
+      "Content-Disposition": csvContentDisposition("transactions.csv"),
+      "Cache-Control": "private, no-store",
     },
   });
 }

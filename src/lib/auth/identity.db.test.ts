@@ -1,6 +1,8 @@
 // Side-effecting import first: the runtime role URLs come from .env.
 import "dotenv/config";
 
+import { createHash, randomBytes } from "node:crypto";
+
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 /**
@@ -15,7 +17,8 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: vi.fn() }));
 import { authDb, disconnectAll, legacyDb } from "@/server/db/clients";
 import { withSystemOrgTx } from "@/server/db/context";
 
-import { consumeEmailVerification, issueEmailVerification } from "./email-verification";
+import { consumeVerificationToken } from "@/server/email/verification";
+
 import { googleSignInGate } from "./google-linking";
 
 let cbcId: string | null = null;
@@ -110,15 +113,23 @@ describe.skipIf(!cbcId)("identity fixes against the local database", () => {
 
   it("an emailed token verifies the address once", async () => {
     const person = await makeUser("verify", { verified: false, password: true });
-    const token = await issueEmailVerification(person.email);
+    // What the verify-email job stores: only sha256(token), keyed by the email.
+    const token = randomBytes(32).toString("base64url");
+    await authDb.verificationToken.create({
+      data: {
+        identifier: person.email,
+        token: createHash("sha256").update(token).digest("hex"),
+        expires: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
 
-    expect(await consumeEmailVerification(token)).toEqual({ ok: true, email: person.email });
+    expect(await consumeVerificationToken(token)).toEqual({ ok: true, email: person.email });
     const after = await authDb.user.findUniqueOrThrow({
       where: { id: person.id },
       select: { emailVerified: true },
     });
     expect(after.emailVerified).toBeInstanceOf(Date);
-    expect(await consumeEmailVerification(token)).toEqual({ ok: false, reason: "invalid" });
+    expect(await consumeVerificationToken(token)).toEqual({ ok: false, reason: "invalid" });
     expect(await authDb.verificationToken.count({ where: { identifier: person.email } })).toBe(0);
   });
 });

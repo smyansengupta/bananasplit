@@ -1,6 +1,7 @@
 import type { Adapter, AdapterUser } from "next-auth/adapters";
 
 import { normalizeEmail, sameEmail } from "@/lib/auth/normalize-email";
+import { squatterStore, verifiedGoogleEmail } from "@/lib/auth/purge-squatter";
 import { authDb } from "@/server/db/clients";
 
 /**
@@ -26,6 +27,10 @@ import { authDb } from "@/server/db/clients";
  *    out. That is safe only because both sides have verified the address.
  * 5. After sign-in, the user's emailVerified is set from the verified Google
  *    profile (Auth.js creates OAuth users with emailVerified NULL).
+ *
+ * The gate fails closed: if the purge or the password strip throws, the
+ * sign-in is refused. With email linking on, letting it through would link
+ * the Google identity to the squatter's account.
  */
 
 export const googleProviderOptions = {
@@ -34,15 +39,8 @@ export const googleProviderOptions = {
 } as const;
 
 interface GoogleProfile {
-  email?: unknown;
-  email_verified?: unknown;
-}
-
-function verifiedGoogleEmail(profile: GoogleProfile | null | undefined): string | null {
-  if (!profile || profile.email_verified !== true || typeof profile.email !== "string") {
-    return null;
-  }
-  return normalizeEmail(profile.email);
+  email?: string | null;
+  email_verified?: boolean | string | null;
 }
 
 /**
@@ -55,10 +53,13 @@ export async function googleSignInGate(params: {
 }): Promise<boolean> {
   if (params.account?.provider !== "google") return true;
 
-  const email = verifiedGoogleEmail(params.profile);
+  const email = verifiedGoogleEmail(params);
   if (!email) return false;
 
-  await authDb.$queryRaw`SELECT app.purge_unverified_users(${email}) AS purged`;
+  const purged = await squatterStore.purge(email);
+  if (purged > 0) {
+    console.info("[auth] removed an unverified password account before a verified Google sign-in");
+  }
   await authDb.userCredential.updateMany({
     where: { passwordHash: { not: null }, user: { email, emailVerified: null } },
     data: { passwordHash: null },
@@ -73,7 +74,7 @@ export async function markGoogleEmailVerified(params: {
   profile?: GoogleProfile | null;
 }): Promise<void> {
   if (params.account?.provider !== "google" || !params.user?.id) return;
-  const email = verifiedGoogleEmail(params.profile);
+  const email = verifiedGoogleEmail(params);
   if (!email || !sameEmail(email, params.user.email)) return;
   await authDb.user.updateMany({
     where: { id: params.user.id, email, emailVerified: null },

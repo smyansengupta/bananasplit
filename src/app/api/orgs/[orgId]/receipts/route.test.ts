@@ -17,7 +17,10 @@ vi.mock("@/lib/finance/receipt-storage", () => ({
   putReceipt: putMock,
   deleteReceipt: deleteMock,
 }));
-vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: () => ({ allowed: true }) }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: async () => ({ allowed: true }),
+  rateLimitKey: (...parts: string[]) => parts.join(":"),
+}));
 
 const { POST, maxDuration } = await import("./route");
 

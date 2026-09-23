@@ -4,9 +4,17 @@ import { AuthError } from "next-auth";
 import { z } from "zod";
 
 import { signIn } from "@/lib/auth/config";
-import { issueEmailVerification, sendVerificationEmail } from "@/lib/auth/email-verification";
 import { hashPassword } from "@/lib/auth/password";
+import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import { authDb } from "@/server/db/clients";
+import { enqueueVerificationEmail } from "@/server/email/verification";
+
+/** Sign-up limits: per client IP and per normalized email (Postgres-backed). */
+const SIGN_UP_LIMITS = {
+  perIp: { limit: 5, windowSec: 60 * 60 },
+  perEmail: { limit: 3, windowSec: 60 * 60 },
+} as const;
 
 const signUpSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80),
@@ -41,6 +49,26 @@ export async function signUpAction(
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
+  const ip = await getClientIp();
+  const [byIp, byEmail] = await Promise.all([
+    checkRateLimit(
+      rateLimitKey("signup-ip", ip),
+      SIGN_UP_LIMITS.perIp.limit,
+      SIGN_UP_LIMITS.perIp.windowSec,
+      { via: "auth" },
+    ),
+    checkRateLimit(
+      rateLimitKey("signup-email", parsed.data.email),
+      SIGN_UP_LIMITS.perEmail.limit,
+      SIGN_UP_LIMITS.perEmail.windowSec,
+      { via: "auth" },
+    ),
+  ]);
+  const limited = !byIp.allowed ? byIp : !byEmail.allowed ? byEmail : null;
+  if (limited) {
+    return { error: `Too many sign-up attempts. Try again ${retryAfterText(limited)}.` };
+  }
+
   // Identity writes run as app_auth; the hash goes to UserCredential, which
   // no tenant role can read.
   const existing = await authDb.user.findUnique({
@@ -52,20 +80,24 @@ export async function signUpAction(
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
-  await authDb.user.create({
+  const user = await authDb.user.create({
     data: {
       email: parsed.data.email,
       name: parsed.data.name,
       credential: { create: { passwordHash } },
     },
+    select: { id: true },
   });
 
+  // The confirmation link goes out through the outbox (a verify-email
+  // platform job, sent right after this request). An account that is never
+  // confirmed, and never joins an org, is removed after 72 hours.
+  // If queueing fails the account exists either way; onboarding offers
+  // "Resend link".
   try {
-    const token = await issueEmailVerification(parsed.data.email);
-    await sendVerificationEmail(parsed.data.email, token);
+    await enqueueVerificationEmail(user.id);
   } catch (error) {
-    // The account exists either way; onboarding offers "Resend link".
-    console.error("[sign-up] could not send the verification email", error);
+    console.error("[sign-up] could not queue the verification email", error instanceof Error ? error.message : error);
   }
 
   try {

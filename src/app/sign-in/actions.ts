@@ -1,6 +1,6 @@
 "use server";
 
-import { AuthError } from "next-auth";
+import { AuthError, CredentialsSignin } from "next-auth";
 
 import { signIn } from "@/lib/auth/config";
 
@@ -21,6 +21,9 @@ export async function passwordSignInAction(
   try {
     await signIn("credentials", { email, password, redirectTo: "/app" });
   } catch (error) {
+    if (error instanceof CredentialsSignin && error.code === "rate_limited") {
+      return { error: "Too many sign-in attempts. Wait a few minutes and try again." };
+    }
     if (error instanceof AuthError) {
       return { error: "Incorrect email or password." };
     }

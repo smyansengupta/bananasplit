@@ -1,8 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
 
 import type { Page } from "@playwright/test";
-import "dotenv/config";
-import pg from "pg";
 
 export function uniqueSuffix(): string {
   return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -23,7 +23,19 @@ export function makeUser(label: string): TestUser {
   };
 }
 
+/**
+ * A fresh client address for each sign-up. Sign-up is limited per client IP
+ * (5 an hour, src/app/sign-up/actions.ts) and a full run signs up more
+ * people than that from one machine. Off Vercel the app takes the client IP
+ * from x-real-ip (src/lib/request-ip.ts); 198.18.0.0/15 is the benchmarking
+ * range, never a real client.
+ */
+function testClientIp(): string {
+  return `198.18.${randomInt(0, 256)}.${randomInt(1, 255)}`;
+}
+
 export async function signUp(page: Page, user: TestUser): Promise<void> {
+  await page.context().setExtraHTTPHeaders({ "x-real-ip": testClientIp() });
   await page.goto("/sign-up");
   await page.getByLabel("Name").fill(user.name);
   await page.getByLabel("Email").fill(user.email);
@@ -32,32 +44,60 @@ export async function signUp(page: Page, user: TestUser): Promise<void> {
   await page.getByRole("button", { name: "Create account" }).click();
 }
 
+/** Where the dev mail sink writes messages (src/server/email/transport.ts). */
+const MAIL_DIR = path.join(process.cwd(), ".data", "mail");
+
 /**
- * Verifies a signed-up user's email the way the emailed link does (0A Fix
- * 4(b)): a token whose sha256 sits in VerificationToken, opened at
- * /verify-email/<token> and confirmed with the button. The test mints the
- * token itself because there is no inbox to read; the page and the
- * consumption code are the real ones. Writes through the identity role
- * (DATABASE_URL_AUTH), falling back to DATABASE_URL.
+ * The token from the newest verification email sent to `email`, read from
+ * the dev mail sink. The verify-email job sends it right after sign-up (or
+ * after "Send a new link"), so this waits for it to appear. Requires the
+ * sink: RESEND_API_KEY empty and EMAIL_DELIVERY unset or "sink".
+ */
+export async function readVerificationToken(email: string, timeoutMs = 30_000): Promise<string> {
+  const address = email.trim().toLowerCase();
+  // Sink files are named by ISO timestamp; only look at the last 10 minutes.
+  const oldest = new Date(Date.now() - 10 * 60 * 1000).toISOString().replace(/[:.]/g, "-");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    let names: string[] = [];
+    try {
+      names = (await readdir(MAIL_DIR))
+        .filter((name) => name.endsWith(".json") && name >= oldest)
+        .sort()
+        .reverse();
+    } catch {
+      names = [];
+    }
+    for (const name of names) {
+      let message: { to?: string; text?: string };
+      try {
+        message = JSON.parse(await readFile(path.join(MAIL_DIR, name), "utf8"));
+      } catch {
+        continue; // still being written
+      }
+      if (message.to?.trim().toLowerCase() !== address) continue;
+      const match = /\/verify-email\/([A-Za-z0-9_-]{20,200})/.exec(message.text ?? "");
+      if (match) return match[1]!;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(
+    `No verification email for ${email} in ${MAIL_DIR}. The e2e run needs the dev mail sink (RESEND_API_KEY empty).`,
+  );
+}
+
+/**
+ * Verifies a signed-up user's email the way a person does (0A Fix 4(b)):
+ * reads the link the verify-email job sent (from the dev mail sink), opens
+ * /verify-email/<token>, presses the button, then continues into the app
+ * (signed-in callers land on /app, which routes onward).
  */
 export async function verifyEmail(page: Page, email: string): Promise<void> {
-  const token = randomBytes(32).toString("base64url");
-  const client = new pg.Client({
-    connectionString: process.env.DATABASE_URL_AUTH || process.env.DATABASE_URL,
-  });
-  await client.connect();
-  try {
-    // TIMESTAMP(3) columns hold UTC wall time (as Prisma writes them).
-    await client.query(
-      `INSERT INTO "VerificationToken" ("identifier", "token", "expires")
-       VALUES ($1, $2, (now() AT TIME ZONE 'UTC') + interval '1 hour')`,
-      [email.trim().toLowerCase(), createHash("sha256").update(token).digest("hex")],
-    );
-  } finally {
-    await client.end();
-  }
+  const token = await readVerificationToken(email);
   await page.goto(`/verify-email/${token}`);
-  await page.getByRole("button", { name: "Confirm my email" }).click();
+  await page.getByRole("button", { name: "Confirm email" }).click();
+  await page.getByText("Email confirmed").waitFor();
+  await page.getByRole("link", { name: /^(Continue|Sign in)$/ }).click();
 }
 
 /** Sign up, then verify the address: the state every org-level flow needs. */

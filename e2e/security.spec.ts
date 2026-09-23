@@ -119,6 +119,7 @@ test("public poll: guests keep separate answers, non-members answer as guests, o
   // A signed-in user from another org answers as a guest, never as themselves.
   const outsider = await newGuest(browser, baseURL);
   await signUp(outsider.page, makeUser("Outsider"));
+  await outsider.page.waitForURL(/\/onboarding/);
   await outsider.page.goto(`/poll/${pollId}`);
   await expect(outsider.page.getByText(/not a member of the organization/)).toBeVisible();
   await outsider.page.getByLabel("Your name").fill("Outsider");

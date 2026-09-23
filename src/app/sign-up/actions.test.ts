@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authDbMock, signInMock, issueMock, sendMock } = vi.hoisted(() => ({
+const { authDbMock, signInMock, enqueueMock, rateLimitMock } = vi.hoisted(() => ({
   authDbMock: { user: { findUnique: vi.fn(), create: vi.fn() } },
   signInMock: vi.fn(),
-  issueMock: vi.fn(),
-  sendMock: vi.fn(),
+  enqueueMock: vi.fn(),
+  rateLimitMock: vi.fn(),
 }));
 vi.mock("next-auth", () => ({ AuthError: class AuthError extends Error {} }));
 vi.mock("@/lib/auth/config", () => ({ signIn: signInMock }));
 vi.mock("@/server/db/clients", () => ({ authDb: authDbMock }));
-vi.mock("@/lib/auth/email-verification", () => ({
-  issueEmailVerification: issueMock,
-  sendVerificationEmail: sendMock,
+vi.mock("@/server/email/verification", () => ({ enqueueVerificationEmail: enqueueMock }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: rateLimitMock,
+  rateLimitKey: (...parts: string[]) => parts.join(":"),
+  retryAfterText: () => "in a few minutes",
 }));
+vi.mock("@/lib/request-ip", () => ({ getClientIp: async () => "203.0.113.7" }));
 vi.mock("@/lib/auth/password", () => ({ hashPassword: async () => "bcrypt-hash" }));
 
 const { signUpAction } = await import("./actions");
@@ -30,7 +33,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   authDbMock.user.findUnique.mockResolvedValue(null);
   authDbMock.user.create.mockResolvedValue({ id: "u_new" });
-  issueMock.mockResolvedValue("plain-token");
+  enqueueMock.mockResolvedValue(undefined);
+  rateLimitMock.mockResolvedValue({ allowed: true });
   signInMock.mockResolvedValue(undefined);
 });
 
@@ -43,8 +47,8 @@ describe("signUpAction (0A Fix 4(a,b))", () => {
     };
     expect(created.data.email).toBe("new.person@example.edu");
     expect(created.data).not.toHaveProperty("emailVerified");
-    expect(issueMock).toHaveBeenCalledWith("new.person@example.edu");
-    expect(sendMock).toHaveBeenCalledWith("new.person@example.edu", "plain-token");
+    // The link goes out through the outbox (a verify-email job for the new user).
+    expect(enqueueMock).toHaveBeenCalledWith("u_new");
     expect(signInMock).toHaveBeenCalledWith(
       "credentials",
       expect.objectContaining({ email: "new.person@example.edu", redirectTo: "/onboarding" }),
@@ -59,8 +63,8 @@ describe("signUpAction (0A Fix 4(a,b))", () => {
     expect(state).toEqual({ checkEmail: "a@example.edu" });
   });
 
-  it("still creates the account when the email cannot be sent (resend is offered)", async () => {
-    sendMock.mockRejectedValue(new Error("mail down"));
+  it("still creates the account when the email cannot be queued (resend is offered)", async () => {
+    enqueueMock.mockRejectedValue(new Error("db hiccup"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const state = await signUpAction({}, form("a@example.edu"));
@@ -80,6 +84,16 @@ describe("signUpAction (0A Fix 4(a,b))", () => {
       select: { id: true },
     });
     expect(state.error).toMatch(/already exists/i);
+    expect(authDbMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the sign-up rate limit is hit, before touching the database", async () => {
+    rateLimitMock.mockResolvedValue({ allowed: false, retryAfterMs: 60_000 });
+
+    const state = await signUpAction({}, form("a@example.edu"));
+
+    expect(state.error).toMatch(/too many sign-up attempts/i);
+    expect(authDbMock.user.findUnique).not.toHaveBeenCalled();
     expect(authDbMock.user.create).not.toHaveBeenCalled();
   });
 });

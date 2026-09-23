@@ -12,7 +12,7 @@ import {
 } from "@/lib/finance/file-sniff";
 import { deleteReceipt, putReceipt } from "@/lib/finance/receipt-storage";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 /**
  * POST /api/orgs/{orgId}/receipts (0A Fix 15): multipart form with `file`
@@ -29,7 +29,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 export const maxDuration = 60;
 
 const UPLOAD_RATE_LIMIT = 20;
-const UPLOAD_RATE_WINDOW_MS = 60 * 60 * 1000;
+const UPLOAD_RATE_WINDOW_SEC = 60 * 60;
 /** Room for the multipart boundaries and the other fields. */
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
 
@@ -109,10 +109,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     return json(403, { error: "You don't have permission to attach receipts to this transaction." });
   }
 
-  const rateLimit = checkRateLimit(
-    `receipt-upload:${session.user.id}`,
+  const rateLimit = await checkRateLimit(
+    rateLimitKey("receipt-upload", session.user.id),
     UPLOAD_RATE_LIMIT,
-    UPLOAD_RATE_WINDOW_MS,
+    UPLOAD_RATE_WINDOW_SEC,
   );
   if (!rateLimit.allowed) {
     return json(429, { error: "Too many receipt uploads recently. Try again in a few minutes." });

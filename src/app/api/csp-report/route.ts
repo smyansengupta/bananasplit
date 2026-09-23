@@ -1,4 +1,5 @@
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { clientIpFrom } from "@/lib/request-ip";
 
 /**
  * Receives Content-Security-Policy violation reports (0A Fix 13), both the
@@ -10,7 +11,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
  */
 
 const REPORT_LIMIT = 60;
-const REPORT_WINDOW_MS = 60 * 1000;
+const REPORT_WINDOW_SEC = 60;
 const MAX_BODY_BYTES = 16 * 1024;
 
 interface Violation {
@@ -61,8 +62,9 @@ function extract(body: unknown): Violation[] {
 }
 
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (!checkRateLimit(`csp-report:${ip}`, REPORT_LIMIT, REPORT_WINDOW_MS).allowed) {
+  const ip = clientIpFrom(request.headers);
+  const limited = await checkRateLimit(rateLimitKey("csp-report", ip), REPORT_LIMIT, REPORT_WINDOW_SEC);
+  if (!limited.allowed) {
     return new Response(null, { status: 429 });
   }
   const text = await request.text();

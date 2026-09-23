@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { POST } from "./route";
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: async () => ({ allowed: true }),
+  rateLimitKey: (...parts: string[]) => parts.join(":"),
+}));
+
+const { POST } = await import("./route");
 
 function report(body: unknown, type = "application/csp-report") {
   return POST(

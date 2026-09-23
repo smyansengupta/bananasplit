@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { prismaMock, getUserIdentityMock, requireUserMock, redirectMock } = vi.hoisted(() => ({
+const { prismaMock, getUserIdentityMock, requireUserMock, redirectMock, rateLimitMock } = vi.hoisted(() => ({
   requireUserMock: vi.fn(),
+  rateLimitMock: vi.fn(),
   getUserIdentityMock: vi.fn(),
   redirectMock: vi.fn((url: string) => {
     throw Object.assign(new Error(`NEXT_REDIRECT ${url}`), { url });
@@ -17,6 +18,11 @@ vi.mock("@/lib/auth/email-verification", () => ({ getUserIdentity: getUserIdenti
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/active-org-cookie", () => ({ setActiveOrgCookie: vi.fn() }));
 vi.mock("@/lib/notifications", () => ({ notifyUser: vi.fn() }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: rateLimitMock,
+  rateLimitKey: (...parts: string[]) => parts.join(":"),
+  retryAfterText: () => "in a few hours",
+}));
 
 const { createOrganizationAction } = await import("./actions");
 
@@ -33,6 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
   requireUserMock.mockResolvedValue(user);
+  rateLimitMock.mockResolvedValue({ allowed: true });
   prismaMock.organization.findUnique.mockResolvedValue(null);
   prismaMock.organization.create.mockResolvedValue({ id: "org_new", slug: "new-club" });
 });
@@ -82,5 +89,16 @@ describe("createOrganizationAction (0A Fix 4(c), Fix 16)", () => {
       /NEXT_REDIRECT/,
     );
     expect(prismaMock.organization.create).toHaveBeenCalledOnce();
+  });
+
+  it("refuses once the per-user creation limit is hit (A3 limiter, after the 0A checks)", async () => {
+    getUserIdentityMock.mockResolvedValue({ ...user, emailVerified: new Date() });
+    rateLimitMock.mockResolvedValue({ allowed: false, retryAfterMs: 3_600_000 });
+
+    const result = await createOrganizationAction({}, form("New Club", "new-club"));
+
+    expect(result.error).toMatch(/several organizations recently/i);
+    expect(rateLimitMock).toHaveBeenCalledWith("org-create:user_1", 3, 24 * 60 * 60);
+    expect(prismaMock.organization.create).not.toHaveBeenCalled();
   });
 });

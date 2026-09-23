@@ -6,6 +6,10 @@ const { prismaMock, authDbMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/server/db/clients", () => ({ authDb: authDbMock }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: async () => ({ allowed: true }),
+  rateLimitKey: (...parts: string[]) => parts.join(":"),
+}));
 
 const { GET } = await import("./route");
 const { hashIcsToken } = await import("@/lib/ics-token");

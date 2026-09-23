@@ -3,21 +3,21 @@ import { NextResponse } from "next/server";
 import { notifyUser } from "@/lib/notifications";
 import { NotificationType } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { assertCronAuth } from "@/server/cron/auth";
 
 /**
  * Daily digest: notifies each assignee of tasks due in the next 24 hours
  * (spec 6.1). Meant to be invoked by Vercel Cron — see vercel.json — which
  * only fires once this project is deployed; it never runs on its own in
- * local dev.
+ * local dev. Fails closed without CRON_SECRET (assertCronAuth). The email
+ * copies go through the outbox (notifyUser enqueues notify-email jobs).
+ * Phase 6 replaces this cron with per-task reminder jobs.
  */
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = request.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-  }
+  const denied = assertCronAuth(request);
+  if (denied) return denied;
 
   const now = new Date();
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);

@@ -38,7 +38,10 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("@/lib/auth/session", () => ({ getSession: getSessionMock }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
-vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: () => ({ allowed: true }) }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: async () => ({ allowed: true }),
+  rateLimitKey: (...parts: string[]) => parts.join(":"),
+}));
 
 const { submitPollResponse } = await import("./actions");
 const { hashGuestKey } = await import("@/lib/polls/guest-key");
