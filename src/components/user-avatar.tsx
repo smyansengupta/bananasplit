@@ -20,6 +20,7 @@ const SIZES = {
   md: { px: 32, className: "size-8 text-sm" },
   lg: { px: 40, className: "size-10 text-sm" },
   xl: { px: 64, className: "size-16 text-lg" },
+  "2xl": { px: 96, className: "size-24 text-2xl" },
 } as const;
 
 export type UserAvatarSize = keyof typeof SIZES;
