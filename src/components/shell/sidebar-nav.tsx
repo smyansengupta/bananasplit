@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import type { NavItem } from "@/components/shell/nav-config";
+import { isNavItemActive, type NavItem } from "@/components/shell/nav-config";
 
 export function SidebarNav({
   items,
@@ -21,14 +21,14 @@ export function SidebarNav({
     <nav aria-label="Main" className="flex flex-col gap-1">
       {items.map((item) => {
         const href = item.href(orgSlug);
-        const isActive = pathname === href;
+        const isActive = isNavItemActive(item, orgSlug, pathname);
         const Icon = item.icon;
         return (
           <Link
             key={item.label}
             href={href}
             onClick={onNavigate}
-            aria-current={isActive ? "page" : undefined}
+            aria-current={pathname === href ? "page" : isActive ? "true" : undefined}
             className={cn(
               "focus-visible:ring-ring flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
               isActive
