@@ -110,6 +110,31 @@ export function currentTx(): TxContext | undefined {
   return als.getStore()?.ctx;
 }
 
+/** Thrown by assertNoTx: network I/O was attempted inside a transaction. */
+export class NetworkInTransactionError extends Error {
+  constructor(label: string) {
+    super(`${label}: network I/O must not run inside a database transaction`);
+    this.name = "NetworkInTransactionError";
+  }
+}
+
+/**
+ * Guard for every network client (email, Blob, Google, Claude, Supabase,
+ * Netlify): throws when called inside a transaction wrapper, so a slow call
+ * can never hold a pooled connection or send for a write that rolls back.
+ */
+export function assertNoTx(label: string): void {
+  if (als.getStore()) throw new NetworkInTransactionError(label);
+}
+
+/**
+ * Runs `fn` with no transaction context in scope, even when called from
+ * inside a wrapper (the job runner uses it so handlers always start clean).
+ */
+export function runOutsideTx<T>(fn: () => T): T {
+  return als.exit(fn);
+}
+
 /**
  * Runs `fn` after the current transaction commits, or immediately (awaited)
  * when there is no transaction in scope. For cache invalidation and other
