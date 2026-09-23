@@ -14,7 +14,9 @@ const INVITE_RATE_LIMIT = 20;
 const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 const inviteSchema = z.object({
-  email: z.email("Enter a valid email address"),
+  // Stored as lower(btrim()) so acceptance and the pending-invite lookup
+  // match the invitee's account whatever case they type (0A Fix 4(a)).
+  email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address")),
   role: z.enum([Role.ADMIN, Role.TREASURER, Role.MEMBER]),
 });
 

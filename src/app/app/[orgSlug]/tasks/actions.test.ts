@@ -12,12 +12,17 @@ const { prismaMock } = vi.hoisted(() => ({
     label: { count: vi.fn() },
     project: { findFirst: vi.fn() },
     task: { findFirst: vi.fn(), create: vi.fn(), count: vi.fn(), update: vi.fn() },
+    taskAssignee: { upsert: vi.fn() },
+    organization: { findUnique: vi.fn() },
+    $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+const { notifyUserMock } = vi.hoisted(() => ({ notifyUserMock: vi.fn() }));
+vi.mock("@/lib/notifications", () => ({ notifyUser: notifyUserMock }));
 
 const { Role } = await import("@/generated/prisma/enums");
-const { createTask, reorderTask } = await import("./actions");
+const { bulkAssign, createTask, reorderTask } = await import("./actions");
 
 const testUser = { id: "user_1", email: "member@example.edu", name: "Test User" };
 
@@ -82,5 +87,64 @@ describe("reorderTask — beforeId/afterId must belong to this org (spec 6.2 aud
 
     expect(prismaMock.task.findFirst).toHaveBeenCalled();
     expect(prismaMock.task.update).toHaveBeenCalledOnce();
+  });
+});
+
+describe("bulkAssign — every task id must belong to this org (0A Fix 1)", () => {
+  beforeEach(() => {
+    prismaMock.membership.findUnique.mockResolvedValue({ role: Role.MEMBER });
+    prismaMock.organization.findUnique.mockResolvedValue({ slug: "org-one" });
+  });
+
+  it("rejects a batch that contains another org's task and writes nothing", async () => {
+    // Two ids requested, only one is a live task of org_1.
+    prismaMock.task.count.mockResolvedValue(1);
+
+    const result = await bulkAssign("org_1", ["own_task", "foreign_task"], "user_2");
+
+    expect(result.error).toMatch(/don't exist in this organization/i);
+    expect(prismaMock.task.count).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["own_task", "foreign_task"] },
+        organizationId: "org_1",
+        deletedAt: null,
+      },
+    });
+    expect(prismaMock.taskAssignee.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(notifyUserMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an assignee who is not a member of this org", async () => {
+    prismaMock.membership.findUnique
+      .mockResolvedValueOnce({ role: Role.MEMBER }) // the caller (withOrgContext)
+      .mockResolvedValueOnce(null); // the target user
+
+    const result = await bulkAssign("org_1", ["own_task"], "outsider");
+
+    expect(result.error).toMatch(/isn't a member/i);
+    expect(prismaMock.taskAssignee.upsert).not.toHaveBeenCalled();
+  });
+
+  it("dedupes ids and assigns when every task is this org's", async () => {
+    prismaMock.task.count.mockResolvedValue(2);
+    prismaMock.taskAssignee.upsert.mockResolvedValue({});
+
+    const result = await bulkAssign("org_1", ["t1", "t2", "t1"], "user_2");
+
+    expect(result.error).toBeUndefined();
+    expect(prismaMock.taskAssignee.upsert).toHaveBeenCalledTimes(2);
+    expect(prismaMock.taskAssignee.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: { organizationId: "org_1", taskId: "t1", userId: "user_2" },
+      }),
+    );
+    expect(notifyUserMock).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an empty selection", async () => {
+    const result = await bulkAssign("org_1", [], "user_2");
+    expect(result.error).toBeTruthy();
+    expect(prismaMock.task.count).not.toHaveBeenCalled();
   });
 });

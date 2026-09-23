@@ -8,6 +8,8 @@ const { prismaMock } = vi.hoisted(() => ({
     membership: { findUnique: vi.fn() },
     budgetPeriod: { findFirst: vi.fn() },
     budgetCategory: { findFirst: vi.fn() },
+    event: { findFirst: vi.fn() },
+    task: { findFirst: vi.fn() },
     transaction: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     financeAuditLog: { create: vi.fn() },
     user: { findUnique: vi.fn() },
@@ -18,7 +20,9 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/email", () => ({ sendReimbursementStatusEmail: vi.fn() }));
 
 const { Role } = await import("@/generated/prisma/enums");
-const { createTransaction, voidTransaction } = await import("./transactions-actions");
+const { createTransaction, updateTransaction, voidTransaction } = await import(
+  "./transactions-actions"
+);
 
 const member = { id: "member_1", email: "member@example.edu", name: "Member" };
 
@@ -131,5 +135,131 @@ describe("voidTransaction — spec 5.3", () => {
         data: expect.objectContaining({ voidReason: "Duplicate entry" }),
       }),
     );
+  });
+});
+
+/**
+ * Scoped lookups: each mock returns a row only when the query carries this
+ * org's id, like the real database would for a foreign id. A lookup without
+ * organizationId fails the test outright.
+ */
+function orgScopedFindFirst(ownIds: Set<string>) {
+  return async ({ where }: { where: { id: string; organizationId?: string } }) => {
+    if (!where.organizationId) {
+      throw new Error("cross-org lookup: query is missing an organizationId filter");
+    }
+    return where.organizationId === "org_1" && ownIds.has(where.id) ? { id: where.id } : null;
+  };
+}
+
+describe("transaction links and categories stay inside the org (0A Fix 2)", () => {
+  beforeEach(() => {
+    prismaMock.budgetPeriod.findFirst.mockResolvedValue({ id: "period_1" });
+    prismaMock.transaction.create.mockResolvedValue({ id: "txn_new" });
+    prismaMock.event.findFirst.mockImplementation(orgScopedFindFirst(new Set(["event_1"])));
+    prismaMock.task.findFirst.mockImplementation(orgScopedFindFirst(new Set(["task_1"])));
+    prismaMock.budgetCategory.findFirst.mockImplementation(
+      async ({ where }: { where: { id: string; organizationId?: string; budgetPeriodId: string } }) => {
+        if (!where.organizationId) throw new Error("category lookup is missing organizationId");
+        return where.id === "cat_1" && where.budgetPeriodId === "period_1" ? { id: "cat_1" } : null;
+      },
+    );
+  });
+
+  describe("createTransaction", () => {
+    beforeEach(() => {
+      prismaMock.membership.findUnique.mockResolvedValue({ role: Role.MEMBER });
+    });
+
+    it("rejects an eventId from another org", async () => {
+      const result = await createTransaction("org_1", { ...validExpenseInput, eventId: "event_x" });
+      expect(result.error).toMatch(/event doesn't exist/i);
+      expect(prismaMock.transaction.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a taskId from another org", async () => {
+      const result = await createTransaction("org_1", { ...validExpenseInput, taskId: "task_x" });
+      expect(result.error).toMatch(/task doesn't exist/i);
+      expect(prismaMock.transaction.create).not.toHaveBeenCalled();
+    });
+
+    it("accepts this org's event and task", async () => {
+      const result = await createTransaction("org_1", {
+        ...validExpenseInput,
+        eventId: "event_1",
+        taskId: "task_1",
+        categoryId: "cat_1",
+      });
+      expect(result.error).toBeUndefined();
+      expect(prismaMock.transaction.create).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("updateTransaction", () => {
+    const ownDraft = {
+      id: "txn_1",
+      organizationId: "org_1",
+      budgetPeriodId: "period_1",
+      submittedById: "treasurer_1",
+      status: "NOT_APPLICABLE",
+      reconciledAt: null,
+    };
+
+    beforeEach(() => {
+      requireUserMock.mockResolvedValue({ id: "treasurer_1", email: "t@example.edu", name: "T" });
+      prismaMock.membership.findUnique.mockResolvedValue({ role: Role.TREASURER });
+      prismaMock.transaction.findFirst.mockResolvedValue(ownDraft);
+      prismaMock.transaction.update.mockResolvedValue(ownDraft);
+    });
+
+    it("ignores a client budgetPeriodId: a foreign period cannot vouch for a foreign category", async () => {
+      // The exploit: a foreign period plus a category of that foreign period.
+      // The category must be checked against the row's own period instead.
+      const result = await updateTransaction("org_1", "txn_1", {
+        budgetPeriodId: "foreign_period",
+        categoryId: "foreign_cat",
+      });
+
+      expect(result.error).toMatch(/category doesn't belong/i);
+      expect(prismaMock.budgetCategory.findFirst).toHaveBeenCalledWith({
+        where: { id: "foreign_cat", budgetPeriodId: "period_1", organizationId: "org_1" },
+        select: { id: true },
+      });
+      expect(prismaMock.transaction.update).not.toHaveBeenCalled();
+    });
+
+    it("never writes budgetPeriodId", async () => {
+      const result = await updateTransaction("org_1", "txn_1", {
+        budgetPeriodId: "other_period",
+        description: "Renamed",
+      });
+      expect(result.error).toBeUndefined();
+      const call = prismaMock.transaction.update.mock.calls[0]?.[0] as {
+        data: Record<string, unknown>;
+      };
+      expect(call.data).not.toHaveProperty("budgetPeriodId");
+    });
+
+    it("rejects an eventId from another org", async () => {
+      const result = await updateTransaction("org_1", "txn_1", { eventId: "event_x" });
+      expect(result.error).toMatch(/event doesn't exist/i);
+      expect(prismaMock.transaction.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a taskId from another org", async () => {
+      const result = await updateTransaction("org_1", "txn_1", { taskId: "task_x" });
+      expect(result.error).toMatch(/task doesn't exist/i);
+      expect(prismaMock.transaction.update).not.toHaveBeenCalled();
+    });
+
+    it("accepts this org's category, event and task", async () => {
+      const result = await updateTransaction("org_1", "txn_1", {
+        categoryId: "cat_1",
+        eventId: "event_1",
+        taskId: "task_1",
+      });
+      expect(result.error).toBeUndefined();
+      expect(prismaMock.transaction.update).toHaveBeenCalledOnce();
+    });
   });
 });

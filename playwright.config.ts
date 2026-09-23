@@ -21,7 +21,12 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      // PLAYWRIGHT_CHANNEL=chrome (or msedge) runs against an installed
+      // browser instead of Playwright's downloaded Chromium.
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
+      },
     },
   ],
   webServer: {

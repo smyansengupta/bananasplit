@@ -42,4 +42,18 @@ export const ALLOWED_RECEIPT_MIME_TYPES = new Set([
   "application/pdf",
 ]);
 
-export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
+/**
+ * 4 MB (0A Fix 15): receipts upload through a route handler, and Vercel caps
+ * a request body at about 4.5 MB. The client downscales larger photos first
+ * (src/lib/finance/prepare-receipt.ts).
+ */
+export const MAX_RECEIPT_BYTES = 4 * 1024 * 1024;
+
+/** File extension for each accepted type, used in the storage key. */
+export const RECEIPT_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+};

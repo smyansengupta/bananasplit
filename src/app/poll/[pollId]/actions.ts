@@ -1,10 +1,18 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { z } from "zod";
 
 import { PollAvailability } from "@/generated/prisma/client";
 import { getSession } from "@/lib/auth/session";
+import {
+  generateGuestKey,
+  GUEST_KEY_MAX_AGE_SECONDS,
+  guestCookieName,
+  guestCookiePath,
+  hashGuestKey,
+  isWellFormedGuestKey,
+} from "@/lib/polls/guest-key";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -22,7 +30,7 @@ const AVAILABILITY_VALUES = Object.values(PollAvailability) as [
 ];
 
 const submitSchema = z.object({
-  pollId: z.string(),
+  pollId: z.string().min(1),
   guestName: z.string().trim().max(100).nullable().optional(),
   entries: z
     .array(z.object({ slotId: z.string(), availability: z.enum(AVAILABILITY_VALUES) }))
@@ -34,10 +42,15 @@ interface ActionResult {
 }
 
 /**
- * No org-context guard: this is reachable by guests via the poll's shareable
- * link, per spec 4.4. Members are identified by session; guests must supply
- * a name, which stands in for an account (see the delete-then-recreate below
- * — there's no durable identity to upsert against for a guest).
+ * No org-context guard: guests reach this through the poll's shareable link
+ * (spec 4.4). Who may answer as whom (0A Fix 6):
+ *   - a signed-in MEMBER of the poll's org answers as themselves;
+ *   - everyone else, including a signed-in user of another org, answers as
+ *     a guest, and only finalizePoll's membership intersection decides who
+ *     becomes an attendee;
+ *   - a guest is identified by the httpOnly poll_guest_<pollId> cookie, and
+ *     their delete-then-recreate is scoped to its hash, so no visitor can
+ *     overwrite another guest's answers by typing the same name.
  */
 export async function submitPollResponse(input: unknown): Promise<ActionResult> {
   const rateLimit = checkRateLimit(
@@ -75,8 +88,16 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
   }
 
   const session = await getSession();
+  const membership = session
+    ? await prisma.membership.findUnique({
+        where: {
+          userId_organizationId: { userId: session.user.id, organizationId: poll.organizationId },
+        },
+        select: { userId: true },
+      })
+    : null;
 
-  if (session) {
+  if (session && membership) {
     await prisma.$transaction(
       data.entries.map((e) =>
         prisma.pollResponse.upsert({
@@ -84,7 +105,7 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
           update: { availability: e.availability },
           create: {
             organizationId: poll.organizationId,
-            pollId: data.pollId,
+            pollId: poll.id,
             slotId: e.slotId,
             userId: session.user.id,
             availability: e.availability,
@@ -100,16 +121,34 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
     return { error: "Enter your name to respond." };
   }
 
+  const cookieStore = await cookies();
+  const cookieName = guestCookieName(poll.id);
+  let guestKey = cookieStore.get(cookieName)?.value;
+  if (!isWellFormedGuestKey(guestKey)) {
+    guestKey = generateGuestKey();
+    cookieStore.set(cookieName, guestKey, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: guestCookiePath(poll.id),
+      maxAge: GUEST_KEY_MAX_AGE_SECONDS,
+    });
+  }
+  const guestKeyHash = hashGuestKey(guestKey);
+
   await prisma.$transaction([
+    // Only this guest's own rows: legacy rows (NULL hash) and other guests'
+    // rows never match, whatever name was typed.
     prisma.pollResponse.deleteMany({
-      where: { pollId: data.pollId, userId: null, guestName },
+      where: { pollId: poll.id, userId: null, guestKeyHash },
     }),
     prisma.pollResponse.createMany({
       data: data.entries.map((e) => ({
         organizationId: poll.organizationId,
-        pollId: data.pollId,
+        pollId: poll.id,
         slotId: e.slotId,
         guestName,
+        guestKeyHash,
         availability: e.availability,
       })),
     }),

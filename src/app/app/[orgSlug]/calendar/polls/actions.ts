@@ -115,10 +115,28 @@ export const finalizePoll = withOrgContext(
         r.slotId === slotId &&
         (r.availability === PollAvailability.YES || r.availability === PollAvailability.IF_NEEDED),
     );
-    const memberAttendeeIds = [
-      ...new Set(respondents.filter((r) => r.userId).map((r) => r.userId!)),
+    // 0A Fix 6: only CURRENT members of this org become attendees. Anyone can
+    // answer through the public link, and a signed-in user from another org
+    // (or a member who has since left) must never be attached to this org's
+    // event. Guests and non-members are counted and reported instead.
+    const respondentUserIds = [
+      ...new Set(respondents.flatMap((r) => (r.userId ? [r.userId] : []))),
     ];
-    const excludedGuestCount = respondents.filter((r) => !r.userId).length;
+    const members = respondentUserIds.length
+      ? await prisma.membership.findMany({
+          where: { organizationId: ctx.organizationId, userId: { in: respondentUserIds } },
+          select: { userId: true },
+        })
+      : [];
+    const memberIds = new Set(members.map((m) => m.userId));
+    const memberAttendeeIds = respondentUserIds.filter((id) => memberIds.has(id));
+    const excludedGuests = new Set(
+      respondents
+        .filter((r) => !r.userId)
+        .map((r) => r.guestKeyHash ?? r.id),
+    );
+    const excludedGuestCount =
+      excludedGuests.size + (respondentUserIds.length - memberAttendeeIds.length);
 
     const endsAt = new Date(slot.startsAt.getTime() + poll.durationMinutes * 60_000);
 

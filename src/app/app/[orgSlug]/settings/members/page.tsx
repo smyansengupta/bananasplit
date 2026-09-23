@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
+import { canManageMembers } from "@/lib/auth/member-roles";
 import { prisma } from "@/lib/prisma";
 
 import { MemberRowActions } from "./member-row-actions";
@@ -33,7 +34,7 @@ export default async function MembersPage({
     handleAuthErrorInPage(error);
   }
 
-  const canManage = ctx.role === Role.OWNER || ctx.role === Role.ADMIN;
+  const canManage = canManageMembers(ctx.role);
 
   const memberships = await prisma.membership.findMany({
     where: { organizationId: org.id },
@@ -85,6 +86,7 @@ export default async function MembersPage({
                           userId={membership.userId}
                           currentRole={membership.role}
                           memberName={displayName}
+                          viewerRole={ctx.role}
                         />
                       )}
                     </TableCell>

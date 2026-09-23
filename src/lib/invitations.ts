@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import { NotificationType, type Invitation } from "@/generated/prisma/client";
+import { getUserIdentity } from "@/lib/auth/email-verification";
+import { normalizeEmail, sameEmail } from "@/lib/auth/normalize-email";
 import type { SessionUser } from "@/lib/auth/session";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -23,9 +25,14 @@ export function findInvitationByRawToken(rawToken: string) {
   });
 }
 
+/**
+ * Pending invitations for an address. Callers pass only a VERIFIED address:
+ * listing another person's invitations to someone who merely typed their
+ * email at sign-up would tell a squatter which orgs invited them.
+ */
 export function findPendingInvitationsForEmail(email: string) {
   return prisma.invitation.findMany({
-    where: { email, acceptedAt: null, expiresAt: { gt: new Date() } },
+    where: { email: normalizeEmail(email), acceptedAt: null, expiresAt: { gt: new Date() } },
     include: { organization: true },
     orderBy: { createdAt: "desc" },
   });
@@ -33,13 +40,33 @@ export function findPendingInvitationsForEmail(email: string) {
 
 export type AcceptInvitationResult =
   | { ok: true; orgId: string; orgSlug: string }
-  | { ok: false; reason: "already_used" | "expired" | "email_mismatch"; invitedEmail?: string };
+  | {
+      ok: false;
+      reason: "already_used" | "expired" | "email_mismatch" | "unverified";
+      invitedEmail?: string;
+    };
+
+export const ACCEPT_ERROR_MESSAGES: Record<
+  Exclude<AcceptInvitationResult, { ok: true }>["reason"],
+  string
+> = {
+  already_used: "This invite has already been used.",
+  expired: "This invite has expired.",
+  email_mismatch: "This invite was sent to a different email address.",
+  unverified: "Verify your email address before accepting this invite.",
+};
 
 /**
  * Shared accept logic for both entry points: the emailed /invite/[token]
- * link, and the onboarding page's "Join" button for an already-verified
- * signed-in email. Membership + marking the invite accepted happen in one
- * transaction so a retry can never double-join or silently skip either.
+ * link, and the onboarding page's "Join" button. Membership + marking the
+ * invite accepted happen in one transaction so a retry can never
+ * double-join or silently skip either.
+ *
+ * 0A Fix 4 (invite takeover): the invite is accepted only by the account
+ * whose STORED email equals the invited address (both normalized) AND has
+ * been verified. Before this, anyone could sign up with a password under
+ * the invited address and take the seat, since sign-up never checked the
+ * address was theirs.
  */
 export async function acceptInvitation(
   invitation: Invitation,
@@ -51,8 +78,12 @@ export async function acceptInvitation(
   if (invitation.expiresAt < new Date()) {
     return { ok: false, reason: "expired" };
   }
-  if (invitation.email.toLowerCase() !== user.email.toLowerCase()) {
+  const identity = await getUserIdentity(user.id);
+  if (!identity || !sameEmail(invitation.email, identity.email)) {
     return { ok: false, reason: "email_mismatch", invitedEmail: invitation.email };
+  }
+  if (!identity.emailVerified) {
+    return { ok: false, reason: "unverified" };
   }
 
   await prisma.$transaction([

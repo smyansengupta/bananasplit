@@ -7,6 +7,8 @@ import { withOrgContext } from "@/lib/auth/with-org-context";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
+import { canEditEvent } from "./queries";
+
 async function notifyEventInvitees(
   organizationId: string,
   eventTitle: string,
@@ -162,6 +164,11 @@ export const updateEvent = withOrgContext(
     if (!existing) {
       return { error: "Event not found." };
     }
+    // 0A Fix 8: only the creator or OWNER/ADMIN edits an event (a member
+    // could previously move or rewrite anyone's event).
+    if (!canEditEvent(existing, { userId: ctx.user.id, role: ctx.role })) {
+      return { error: "Only the event's creator or an admin can edit it." };
+    }
 
     const parsed = eventInputSchema.partial().safeParse(input);
     if (!parsed.success) {
@@ -231,6 +238,9 @@ export const deleteEvent = withOrgContext(async (ctx, eventId: string): Promise<
   });
   if (!existing) {
     return { error: "Event not found." };
+  }
+  if (!canEditEvent(existing, { userId: ctx.user.id, role: ctx.role })) {
+    return { error: "Only the event's creator or an admin can delete it." };
   }
 
   await prisma.event.update({ where: { id: eventId }, data: { deletedAt: new Date() } });

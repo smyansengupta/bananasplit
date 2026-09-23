@@ -3,8 +3,9 @@
 import { AuthError } from "next-auth";
 import { z } from "zod";
 
-import { hashPassword } from "@/lib/auth/password";
 import { signIn } from "@/lib/auth/config";
+import { issueEmailVerification, sendVerificationEmail } from "@/lib/auth/email-verification";
+import { hashPassword } from "@/lib/auth/password";
 import { authDb } from "@/server/db/clients";
 
 const signUpSchema = z.object({
@@ -16,8 +17,17 @@ const signUpSchema = z.object({
 
 export interface SignUpState {
   error?: string;
+  /** The account exists and a verification link was sent to this address. */
+  checkEmail?: string;
 }
 
+/**
+ * Credentials sign-up (0A Fix 4(b)). The account is created unverified and a
+ * verification link goes to the address; the user is signed in right away
+ * and lands on onboarding, which shows the 'check your email' state. An
+ * unverified account can sign in but cannot create or join an organization
+ * (Fix 4(c)), and an abandoned one is purged after 72 hours.
+ */
 export async function signUpAction(
   _prevState: SignUpState,
   formData: FormData,
@@ -51,16 +61,24 @@ export async function signUpAction(
   });
 
   try {
+    const token = await issueEmailVerification(parsed.data.email);
+    await sendVerificationEmail(parsed.data.email, token);
+  } catch (error) {
+    // The account exists either way; onboarding offers "Resend link".
+    console.error("[sign-up] could not send the verification email", error);
+  }
+
+  try {
     await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
-      redirectTo: "/app",
+      redirectTo: "/onboarding",
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      return { error: "Account created — sign in from the sign-in page." };
+      return { checkEmail: parsed.data.email };
     }
     throw error;
   }
-  return {};
+  return { checkEmail: parsed.data.email };
 }

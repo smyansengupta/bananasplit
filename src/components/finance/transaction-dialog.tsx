@@ -19,7 +19,6 @@ import {
 import {
   deleteReceiptAction,
   getSignedReceiptUrl,
-  uploadReceipt,
 } from "@/app/app/[orgSlug]/finance/receipts-actions";
 import type { TransactionWithRelations } from "@/app/app/[orgSlug]/finance/queries";
 import { TransactionKindSelect } from "@/components/finance/transaction-kind-select";
@@ -46,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { TransactionDirection, TransactionKind } from "@/generated/prisma/enums";
 import { formatCents, parseDollarsToCents } from "@/lib/finance/money";
+import { MAX_UPLOAD_BYTES, prepareReceiptForUpload } from "@/lib/finance/prepare-receipt";
 import { toDateInputValue } from "@/components/tasks/utils";
 
 interface Props {
@@ -231,7 +231,9 @@ function TransactionForm({
           <Select
             value={budgetPeriodId}
             onValueChange={setBudgetPeriodId}
-            disabled={!canEditFields}
+            // A saved transaction never moves between periods (the server
+            // ignores budgetPeriodId on update), so the picker is fixed then.
+            disabled={!canEditFields || Boolean(transaction)}
           >
             <SelectTrigger className="w-full">
               <SelectValue />
@@ -580,11 +582,32 @@ function ReceiptsPanel({
   function handleUpload(file: File) {
     setError(null);
     startTransition(async () => {
+      // Photos over 4 MB are downscaled in the browser first (0A Fix 15).
+      let prepared: File;
+      try {
+        prepared = await prepareReceiptForUpload(file);
+      } catch {
+        prepared = file;
+      }
+      if (prepared.size > MAX_UPLOAD_BYTES) {
+        setError("Receipts are capped at 4 MB. Try a smaller photo or a compressed PDF.");
+        return;
+      }
       const formData = new FormData();
-      formData.set("file", file);
-      const result = await uploadReceipt(orgId, transaction.id, formData);
-      if (result.error) {
-        setError(result.error);
+      formData.set("transactionId", transaction.id);
+      formData.set("file", prepared);
+      try {
+        const response = await fetch(`/api/orgs/${orgId}/receipts`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as { error?: string } | null;
+          setError(body?.error ?? "The upload failed. Try again.");
+          return;
+        }
+      } catch {
+        setError("The upload failed. Check your connection and try again.");
         return;
       }
       onChanged();

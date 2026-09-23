@@ -62,10 +62,10 @@ export default async function PollsListPage({
                 <span>
                   <span className="font-medium">{poll.title}</span>
                   <span className="text-muted-foreground ml-2">
-                    {poll.responses.length} response(s)
+                    {poll._count.responses} response(s)
                   </span>
                 </span>
-                {poll.finalizedEvent && (
+                {poll.finalizedEventId && (
                   <span className="text-muted-foreground text-xs">Finalized</span>
                 )}
               </Link>

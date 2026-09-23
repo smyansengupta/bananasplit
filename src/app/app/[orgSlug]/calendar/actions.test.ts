@@ -9,14 +9,23 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     membership: { findUnique: vi.fn(), count: vi.fn() },
-    event: { create: vi.fn(), findFirst: vi.fn() },
-    eventAttendee: { findUnique: vi.fn(), update: vi.fn() },
+    event: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    eventAttendee: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
+    organization: { findUnique: vi.fn() },
+    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ event: prismaMock.event, eventAttendee: prismaMock.eventAttendee }),
+    ),
   },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
 const { Role, ConferenceProvider, RSVPStatus } = await import("@/generated/prisma/enums");
-const { createEvent, rsvpToEvent } = await import("./actions");
+const { createEvent, deleteEvent, rsvpToEvent, updateEvent } = await import("./actions");
 
 const testUser = { id: "user_1", email: "member@example.edu", name: "Test User" };
 
@@ -116,5 +125,66 @@ describe("rsvpToEvent — non-attendees cannot RSVP (spec 4.2)", () => {
 
     expect(result.error).toBeUndefined();
     expect(prismaMock.eventAttendee.update).toHaveBeenCalledOnce();
+  });
+});
+
+describe("updateEvent / deleteEvent — creator or OWNER/ADMIN only (0A Fix 8)", () => {
+  const someoneElsesEvent = {
+    id: "event_1",
+    organizationId: "org_1",
+    createdById: "someone_else",
+    conferenceProvider: ConferenceProvider.NONE,
+    conferenceUrl: null,
+    startsAt: new Date(validInput.startsAt),
+    endsAt: new Date(validInput.endsAt),
+    title: "Board meeting",
+    attendees: [],
+  };
+
+  beforeEach(() => {
+    prismaMock.event.findFirst.mockResolvedValue(someoneElsesEvent);
+    prismaMock.event.update.mockResolvedValue({});
+  });
+
+  it("a MEMBER cannot move someone else's event", async () => {
+    const result = await updateEvent("org_1", "event_1", {
+      startsAt: "2026-01-06T18:00:00.000Z",
+      endsAt: "2026-01-06T19:00:00.000Z",
+    });
+    expect(result.error).toMatch(/creator or an admin/i);
+    expect(prismaMock.event.update).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("a MEMBER cannot delete someone else's event", async () => {
+    const result = await deleteEvent("org_1", "event_1");
+    expect(result.error).toMatch(/creator or an admin/i);
+    expect(prismaMock.event.update).not.toHaveBeenCalled();
+  });
+
+  it("a TREASURER is not an admin for events", async () => {
+    prismaMock.membership.findUnique.mockResolvedValue({ role: Role.TREASURER });
+    const result = await deleteEvent("org_1", "event_1");
+    expect(result.error).toMatch(/creator or an admin/i);
+  });
+
+  it("the creator can edit and delete their own event", async () => {
+    prismaMock.event.findFirst.mockResolvedValue({ ...someoneElsesEvent, createdById: testUser.id });
+    expect((await updateEvent("org_1", "event_1", { title: "Renamed" })).error).toBeUndefined();
+    expect((await deleteEvent("org_1", "event_1")).error).toBeUndefined();
+    expect(prismaMock.event.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("an ADMIN can edit and delete anyone's event", async () => {
+    prismaMock.membership.findUnique.mockResolvedValue({ role: Role.ADMIN });
+    expect((await updateEvent("org_1", "event_1", { title: "Renamed" })).error).toBeUndefined();
+    expect((await deleteEvent("org_1", "event_1")).error).toBeUndefined();
+  });
+
+  it("looks the event up inside this org only", async () => {
+    await deleteEvent("org_1", "event_1");
+    expect(prismaMock.event.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ organizationId: "org_1" }) }),
+    );
   });
 });

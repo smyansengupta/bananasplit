@@ -4,6 +4,7 @@ import { Role } from "@/generated/prisma/client";
 import { getSession } from "@/lib/auth/session";
 import { getReceiptBytes } from "@/lib/finance/receipt-storage";
 import { verifyReceiptToken } from "@/lib/finance/receipt-signed-url";
+import { contentDisposition } from "@/lib/http/content-disposition";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -53,7 +54,10 @@ export async function GET(
   return new NextResponse(new Uint8Array(bytes), {
     headers: {
       "Content-Type": receipt.mimeType,
-      "Content-Disposition": `inline; filename="${receipt.filename}"`,
+      // The stored name is whatever the uploader's device called the file:
+      // escaped per RFC 5987, never interpolated raw (0A Fix 12).
+      "Content-Disposition": contentDisposition("inline", receipt.filename),
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, no-store",
     },
   });

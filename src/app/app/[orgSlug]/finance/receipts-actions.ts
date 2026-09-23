@@ -2,18 +2,13 @@
 
 import { Role } from "@/generated/prisma/client";
 import { withOrgContext } from "@/lib/auth/with-org-context";
-import {
-  ALLOWED_RECEIPT_MIME_TYPES,
-  MAX_RECEIPT_BYTES,
-  sniffMimeType,
-} from "@/lib/finance/file-sniff";
-import { deleteReceipt, putReceipt } from "@/lib/finance/receipt-storage";
+import { deleteReceipt } from "@/lib/finance/receipt-storage";
 import { signReceiptToken } from "@/lib/finance/receipt-signed-url";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rate-limit";
 
-const UPLOAD_RATE_LIMIT = 20;
-const UPLOAD_RATE_WINDOW_MS = 60 * 60 * 1000;
+// Uploads go through POST /api/orgs/{orgId}/receipts (0A Fix 15): a route
+// handler, because Server Actions accept 1 MB bodies and receipts are
+// phone photos.
 
 interface ActionResult {
   error?: string;
@@ -31,57 +26,6 @@ function canAccessTransaction(
   );
 }
 
-export const uploadReceipt = withOrgContext(
-  async (ctx, transactionId: string, formData: FormData): Promise<ActionResult> => {
-    const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, organizationId: ctx.organizationId },
-    });
-    if (!transaction) return { error: "Transaction not found." };
-    if (!canAccessTransaction(ctx, transaction)) {
-      return { error: "You don't have permission to attach receipts to this transaction." };
-    }
-
-    const rateLimit = checkRateLimit(
-      `receipt-upload:${ctx.user.id}`,
-      UPLOAD_RATE_LIMIT,
-      UPLOAD_RATE_WINDOW_MS,
-    );
-    if (!rateLimit.allowed) {
-      return { error: "Too many receipt uploads recently. Try again in a few minutes." };
-    }
-
-    const file = formData.get("file");
-    if (!(file instanceof File)) return { error: "No file provided." };
-    if (file.size > MAX_RECEIPT_BYTES) return { error: "Receipts are capped at 10 MB." };
-
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const sniffed = sniffMimeType(bytes);
-    if (!sniffed || !ALLOWED_RECEIPT_MIME_TYPES.has(sniffed)) {
-      return { error: "Only image and PDF receipts are supported." };
-    }
-
-    const { blobKey } = await putReceipt(
-      `receipts/${ctx.organizationId}/${transactionId}/${Date.now()}-${file.name}`,
-      bytes,
-      sniffed,
-    );
-
-    const receipt = await prisma.receipt.create({
-      data: {
-        organizationId: ctx.organizationId,
-        transactionId,
-        blobKey,
-        filename: file.name || "receipt",
-        mimeType: sniffed,
-        sizeBytes: bytes.length,
-        uploadedById: ctx.user.id,
-      },
-    });
-
-    return { receiptId: receipt.id };
-  },
-);
-
 export const deleteReceiptAction = withOrgContext(
   async (ctx, receiptId: string): Promise<ActionResult> => {
     const receipt = await prisma.receipt.findFirst({
@@ -93,6 +37,8 @@ export const deleteReceiptAction = withOrgContext(
       return { error: "You don't have permission to remove this receipt." };
     }
 
+    // Row first, blob second: a failed blob delete leaves an orphan file,
+    // never a row pointing at nothing.
     await prisma.receipt.delete({ where: { id: receiptId } });
     await deleteReceipt(receipt.blobKey);
     return {};
