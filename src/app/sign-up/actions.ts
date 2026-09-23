@@ -5,7 +5,15 @@ import { z } from "zod";
 
 import { hashPassword } from "@/lib/auth/password";
 import { signIn } from "@/lib/auth/config";
+import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import { authDb } from "@/server/db/clients";
+
+/** Sign-up limits: per client IP and per normalized email (Postgres-backed). */
+const SIGN_UP_LIMITS = {
+  perIp: { limit: 5, windowSec: 60 * 60 },
+  perEmail: { limit: 3, windowSec: 60 * 60 },
+} as const;
 
 const signUpSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80),
@@ -29,6 +37,26 @@ export async function signUpAction(
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const ip = await getClientIp();
+  const [byIp, byEmail] = await Promise.all([
+    checkRateLimit(
+      rateLimitKey("signup-ip", ip),
+      SIGN_UP_LIMITS.perIp.limit,
+      SIGN_UP_LIMITS.perIp.windowSec,
+      { via: "auth" },
+    ),
+    checkRateLimit(
+      rateLimitKey("signup-email", parsed.data.email),
+      SIGN_UP_LIMITS.perEmail.limit,
+      SIGN_UP_LIMITS.perEmail.windowSec,
+      { via: "auth" },
+    ),
+  ]);
+  const limited = !byIp.allowed ? byIp : !byEmail.allowed ? byEmail : null;
+  if (limited) {
+    return { error: `Too many sign-up attempts. Try again ${retryAfterText(limited)}.` };
   }
 
   // Identity writes run as app_auth; the hash goes to UserCredential, which

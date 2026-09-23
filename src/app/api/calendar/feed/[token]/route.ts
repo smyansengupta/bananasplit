@@ -4,12 +4,12 @@ import { buildIcsCalendar } from "@/lib/ics";
 import { hashIcsToken } from "@/lib/ics-token";
 import { prisma } from "@/lib/prisma";
 import { authDb } from "@/server/db/clients";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 // Generous: real calendar apps poll this every 15-60 min, but nothing
 // legitimate needs more than one request a minute.
 const FEED_RATE_LIMIT = 60;
-const FEED_RATE_WINDOW_MS = 60 * 60 * 1000;
+const FEED_RATE_WINDOW_SEC = 60 * 60;
 
 /**
  * Public, token-authenticated read-only feed — no session required. The
@@ -19,7 +19,12 @@ const FEED_RATE_WINDOW_MS = 60 * 60 * 1000;
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const rateLimit = checkRateLimit(`ics-feed:${token}`, FEED_RATE_LIMIT, FEED_RATE_WINDOW_MS);
+  // Keyed on a hash of the token: the bucket table never holds the credential.
+  const rateLimit = await checkRateLimit(
+    rateLimitKey("ics-feed", token),
+    FEED_RATE_LIMIT,
+    FEED_RATE_WINDOW_SEC,
+  );
   if (!rateLimit.allowed) {
     return new NextResponse("Too many requests", { status: 429 });
   }

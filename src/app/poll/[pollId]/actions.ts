@@ -1,20 +1,15 @@
 "use server";
 
-import { headers } from "next/headers";
 import { z } from "zod";
 
 import { PollAvailability } from "@/generated/prisma/client";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 
 const RESPONSE_RATE_LIMIT = 30;
-const RESPONSE_RATE_WINDOW_MS = 60 * 1000;
-
-async function clientIp(): Promise<string> {
-  const headerList = await headers();
-  return headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-}
+const RESPONSE_RATE_WINDOW_SEC = 60;
 
 const AVAILABILITY_VALUES = Object.values(PollAvailability) as [
   PollAvailability,
@@ -40,10 +35,10 @@ interface ActionResult {
  * — there's no durable identity to upsert against for a guest).
  */
 export async function submitPollResponse(input: unknown): Promise<ActionResult> {
-  const rateLimit = checkRateLimit(
-    `poll-response:${await clientIp()}`,
+  const rateLimit = await checkRateLimit(
+    rateLimitKey("poll-response", await getClientIp()),
     RESPONSE_RATE_LIMIT,
-    RESPONSE_RATE_WINDOW_MS,
+    RESPONSE_RATE_WINDOW_SEC,
   );
   if (!rateLimit.allowed) {
     return { error: "Too many responses submitted recently. Wait a moment and try again." };

@@ -8,13 +8,14 @@ import { withOrgContext } from "@/lib/auth/with-org-context";
 import { sendInvitationEmail } from "@/lib/email";
 import { generateInvitationToken, INVITATION_EXPIRY_DAYS } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 
 const INVITE_RATE_LIMIT = 20;
-const INVITE_RATE_WINDOW_MS = 60 * 60 * 1000;
+const INVITE_RATE_WINDOW_SEC = 60 * 60;
 
 const inviteSchema = z.object({
-  email: z.email("Enter a valid email address"),
+  // Stored as lower(btrim()), like every email (0a_normalize_emails).
+  email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email address")),
   role: z.enum([Role.ADMIN, Role.TREASURER, Role.MEMBER]),
 });
 
@@ -28,13 +29,14 @@ export const inviteMember = withOrgContext(
   async (ctx, input: { email: string; role: Role }): Promise<{ error?: string }> => {
     assertCanManageMembers(ctx.role);
 
-    const rateLimit = checkRateLimit(
-      `invite:${ctx.organizationId}`,
+    // Per org, shared across instances (Postgres-backed limiter).
+    const rateLimit = await checkRateLimit(
+      rateLimitKey("invite", ctx.organizationId),
       INVITE_RATE_LIMIT,
-      INVITE_RATE_WINDOW_MS,
+      INVITE_RATE_WINDOW_SEC,
     );
     if (!rateLimit.allowed) {
-      return { error: "Too many invites sent recently. Try again in a few minutes." };
+      return { error: `Too many invites sent recently. Try again ${retryAfterText(rateLimit)}.` };
     }
 
     const parsed = inviteSchema.safeParse(input);

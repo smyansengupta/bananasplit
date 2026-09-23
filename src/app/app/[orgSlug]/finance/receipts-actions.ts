@@ -10,10 +10,10 @@ import {
 import { deleteReceipt, putReceipt } from "@/lib/finance/receipt-storage";
 import { signReceiptToken } from "@/lib/finance/receipt-signed-url";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 const UPLOAD_RATE_LIMIT = 20;
-const UPLOAD_RATE_WINDOW_MS = 60 * 60 * 1000;
+const UPLOAD_RATE_WINDOW_SEC = 60 * 60;
 
 interface ActionResult {
   error?: string;
@@ -41,10 +41,10 @@ export const uploadReceipt = withOrgContext(
       return { error: "You don't have permission to attach receipts to this transaction." };
     }
 
-    const rateLimit = checkRateLimit(
-      `receipt-upload:${ctx.user.id}`,
+    const rateLimit = await checkRateLimit(
+      rateLimitKey("receipt-upload", ctx.user.id),
       UPLOAD_RATE_LIMIT,
-      UPLOAD_RATE_WINDOW_MS,
+      UPLOAD_RATE_WINDOW_SEC,
     );
     if (!rateLimit.allowed) {
       return { error: "Too many receipt uploads recently. Try again in a few minutes." };

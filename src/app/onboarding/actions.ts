@@ -8,6 +8,7 @@ import { setActiveOrgCookie } from "@/lib/active-org-cookie";
 import { requireUser } from "@/lib/auth/session";
 import { acceptInvitation } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { isReservedSlug } from "@/lib/slug";
 import { sqlStateOf } from "@/server/db/errors";
 
@@ -21,6 +22,13 @@ const createOrgSchema = z.object({
     .max(60)
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only"),
 });
+
+/**
+ * Org creation per user (Postgres-backed): every org can store third-party
+ * keys under the platform KEK, so creation is limited. Only attempts that
+ * pass validation count, so a taken slug does not use up the allowance.
+ */
+const ORG_CREATION_LIMIT = { limit: 3, windowSec: 24 * 60 * 60 } as const;
 
 export interface CreateOrgState {
   error?: string;
@@ -45,6 +53,17 @@ export async function createOrganizationAction(
   const existing = await prisma.organization.findUnique({ where: { slug: parsed.data.slug } });
   if (existing) {
     return { error: "That URL is already taken." };
+  }
+
+  const limited = await checkRateLimit(
+    rateLimitKey("org-create", user.id),
+    ORG_CREATION_LIMIT.limit,
+    ORG_CREATION_LIMIT.windowSec,
+  );
+  if (!limited.allowed) {
+    return {
+      error: `You've created several organizations recently. Try again ${retryAfterText(limited)}.`,
+    };
   }
 
   let org;
