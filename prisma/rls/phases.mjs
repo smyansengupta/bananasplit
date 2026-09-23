@@ -119,7 +119,7 @@ const NEW_TENANT_TABLES = [
   "Receipt",
 ];
 
-runSuite("rls-phases", async ({ tcase }) => {
+runSuite("rls-phases", async ({ tcase, clients }) => {
   // ======================= Catalog =======================
   await tcase(
     "P-CAT1",
@@ -1698,5 +1698,212 @@ runSuite("rls-phases", async ({ tcase }) => {
     B("u_memberB"),
     (q) => count(q, `SELECT count(*) n FROM "OrgTheme"`),
     { value: 0 },
+  );
+
+  // ======================= A3: platform services =======================
+  // The maintenance definer functions (migration a3_platform_maintenance),
+  // and the service-path patterns the job handlers rely on.
+  await tcase(
+    "P-A3-01",
+    "prune functions are executable by app_service only",
+    "owner",
+    null,
+    async () => {
+      const out = {};
+      for (const role of ["app_user", "app_auth", "app_legacy"]) {
+        const c = clients[role];
+        await c.query("BEGIN");
+        try {
+          const q = (sql, params) => c.query(sql, params);
+          out[role] = [
+            await tryv(q, `SELECT app.prune_rate_limit_buckets(3456000)`),
+            await tryv(q, `SELECT app.prune_jobs(30)`),
+          ];
+        } finally {
+          await c.query("ROLLBACK");
+        }
+      }
+      return out;
+    },
+    {
+      value: {
+        app_user: ["error:42501", "error:42501"],
+        app_auth: ["error:42501", "error:42501"],
+        app_legacy: ["error:42501", "error:42501"],
+      },
+    },
+  );
+
+  // Committed setup for the prune cases (the functions run in their own
+  // transaction under test and roll back; the rows are removed afterwards).
+  await clients.owner.query(`
+    INSERT INTO "RateLimitBucket" ("key", "windowStart", "count") VALUES
+      ('a3:old', (now() AT TIME ZONE 'UTC') - interval '50 days', 3),
+      ('a3:recent', (now() AT TIME ZONE 'UTC') - interval '10 days', 3),
+      ('a3:now', date_trunc('minute', now() AT TIME ZONE 'UTC'), 1)`);
+  await clients.owner.query(`
+    INSERT INTO "Job" ("organizationId", "kind", "dedupeKey", "status", "completedAt", "createdAt", "runAt") VALUES
+      ('org_A', 'maintenance', 'a3:done-old', 'DONE', (now() AT TIME ZONE 'UTC') - interval '40 days', (now() AT TIME ZONE 'UTC') - interval '41 days', (now() AT TIME ZONE 'UTC') - interval '41 days'),
+      ('org_A', 'maintenance', 'a3:dead-old', 'DEAD', (now() AT TIME ZONE 'UTC') - interval '40 days', (now() AT TIME ZONE 'UTC') - interval '41 days', (now() AT TIME ZONE 'UTC') - interval '41 days'),
+      ('org_A', 'maintenance', 'a3:done-new', 'DONE', (now() AT TIME ZONE 'UTC') - interval '1 day', (now() AT TIME ZONE 'UTC') - interval '2 days', (now() AT TIME ZONE 'UTC') - interval '2 days'),
+      ('org_A', 'maintenance', 'a3:pending-old', 'PENDING', NULL, (now() AT TIME ZONE 'UTC') - interval '41 days', (now() AT TIME ZONE 'UTC') + interval '1 day')`);
+  const expectedOldBuckets = Number(
+    (
+      await clients.owner.query(
+        `SELECT count(*) n FROM "RateLimitBucket" WHERE "windowStart" < (now() AT TIME ZONE 'UTC') - interval '40 days'`,
+      )
+    ).rows[0].n,
+  );
+  const expectedOldJobs = Number(
+    (
+      await clients.owner.query(
+        `SELECT count(*) n FROM "Job" WHERE "status" IN ('DONE','DEAD','CANCELLED') AND "completedAt" < (now() AT TIME ZONE 'UTC') - interval '30 days'`,
+      )
+    ).rows[0].n,
+  );
+  try {
+    await tcase(
+      "P-A3-02",
+      "prune_rate_limit_buckets deletes only buckets past the retention, and refuses a short retention",
+      "app_service",
+      null,
+      async (q) => ({
+        too_short: await tryv(q, `SELECT app.prune_rate_limit_buckets(3600)`),
+        deleted: Number((await q(`SELECT app.prune_rate_limit_buckets(3456000) AS n`)).rows[0].n),
+      }),
+      { value: { too_short: "error:22023", deleted: expectedOldBuckets } },
+    );
+    await tcase(
+      "P-A3-03",
+      "prune_jobs deletes finished jobs past the retention and never touches PENDING or recent ones",
+      "app_service",
+      { org: "org_A" },
+      async (q) => {
+        const tooShort = await tryv(q, `SELECT app.prune_jobs(1)`);
+        const deleted = Number((await q(`SELECT app.prune_jobs(30) AS n`)).rows[0].n);
+        const left = (
+          await q(`SELECT "dedupeKey" FROM "Job" WHERE "dedupeKey" LIKE 'a3:%' ORDER BY 1`)
+        ).rows.map((r) => r.dedupeKey);
+        return { tooShort, deleted, left };
+      },
+      {
+        value: {
+          tooShort: "error:22023",
+          deleted: expectedOldJobs,
+          left: ["a3:done-new", "a3:pending-old"],
+        },
+      },
+    );
+  } finally {
+    await clients.owner.query(`DELETE FROM "RateLimitBucket" WHERE "key" LIKE 'a3:%'`);
+    await clients.owner.query(`DELETE FROM "Job" WHERE "dedupeKey" LIKE 'a3:%'`);
+  }
+
+  await tcase(
+    "P-A3-04",
+    "notify-email on the service path: insert for a member, enqueue in the same tx, emailSentAt compare-and-set once",
+    "app_service",
+    { org: "org_A" },
+    async (q) => {
+      const s = {};
+      s.insert = await tryq(
+        q,
+        `INSERT INTO "Notification" ("id","organizationId","userId","type","title") VALUES ('n_a3','org_A','u_memberA','SECURITY_ALERT','Key replaced')`,
+      );
+      s.non_member = await tryq(
+        q,
+        `INSERT INTO "Notification" ("id","organizationId","userId","type","title") VALUES ('n_a3b','org_A','u_memberB','SECURITY_ALERT','x')`,
+      );
+      s.job = (
+        await q(
+          `SELECT app.enqueue_job('org_A','notify-email','notify-email:n_a3','{"notificationId":"n_a3"}'::jsonb) IS NOT NULL AS ok`,
+        )
+      ).rows[0].ok;
+      s.first_claim = await rc(
+        q,
+        `UPDATE "Notification" SET "emailSentAt" = now() WHERE "id" = 'n_a3' AND "emailSentAt" IS NULL`,
+      );
+      s.second_claim = await rc(
+        q,
+        `UPDATE "Notification" SET "emailSentAt" = now() WHERE "id" = 'n_a3' AND "emailSentAt" IS NULL`,
+      );
+      await q(`SELECT app.set_context('', 'org_B')`);
+      s.other_org_sees = await count(q, `SELECT count(*) n FROM "Notification" WHERE "id" = 'n_a3'`);
+      return s;
+    },
+    {
+      value: {
+        insert: 1,
+        non_member: "42501",
+        job: true,
+        first_claim: 1,
+        second_claim: 0,
+        other_org_sees: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-A3-05",
+    "invite-email on the service path: the token hash is rotated in the job's own org only",
+    "app_service",
+    { org: "org_A" },
+    async (q) => {
+      const own = await rc(q, `UPDATE "Invitation" SET "token" = 'rotated_A' WHERE "id" = 'inv_A'`);
+      await q(`SELECT app.set_context('', 'org_B')`);
+      const foreign = await rc(q, `UPDATE "Invitation" SET "token" = 'rotated_B' WHERE "id" = 'inv_A'`);
+      await q(`SELECT app.set_context('', '')`);
+      const none = await rc(q, `UPDATE "Invitation" SET "token" = 'rotated_0' WHERE "id" = 'inv_A'`);
+      return { own, foreign, none };
+    },
+    { value: { own: 1, foreign: 0, none: 0 } },
+  );
+  await tcase(
+    "P-A3-06",
+    "app_legacy may enqueue the three legacy email kinds for its org's rows, never the generic email kind",
+    "app_legacy",
+    null,
+    async (q) => ({
+      invite: await tryv(
+        q,
+        `SELECT app.enqueue_job('org_A','invite-email','invite-email:inv_A','{"invitationId":"inv_A"}'::jsonb) IS NOT NULL`,
+      ),
+      reimbursement: await tryv(
+        q,
+        `SELECT app.enqueue_job('org_A','reimbursement-email','reimbursement-email:tx_A_sub:APPROVED','{"transactionId":"tx_A_sub","status":"APPROVED"}'::jsonb) IS NOT NULL`,
+      ),
+      wrong_org_row: await tryv(
+        q,
+        `SELECT app.enqueue_job('org_B','invite-email','invite-email:inv_A','{"invitationId":"inv_A"}'::jsonb)`,
+      ),
+      generic_email: await tryv(
+        q,
+        `SELECT app.enqueue_job('org_A','email','email:treasurer-digest:u_treasA:2026-09-22','{"template":"treasurer-digest","toUserId":"u_treasA"}'::jsonb)`,
+      ),
+    }),
+    {
+      value: {
+        invite: true,
+        reimbursement: true,
+        wrong_org_row: "error:42501",
+        generic_email: "error:42501",
+      },
+    },
+  );
+  await tcase(
+    "P-A3-07",
+    "a site-rebuild enqueued for later is not claimable before its runAt; a due gcal job is",
+    "app_service",
+    { org: "org_A" },
+    async (q) => {
+      await q(
+        `SELECT app.enqueue_job('org_A','site-rebuild','site-rebuild:org_A','{}'::jsonb, ((now() AT TIME ZONE 'UTC') + interval '60 seconds')::timestamp)`,
+      );
+      await q(`SELECT app.enqueue_job('org_A','gcal','gcal:e_A','{"eventId":"e_A"}'::jsonb)`);
+      const claimed = (
+        await q(`SELECT "kind" FROM app.claim_jobs('{"site-rebuild":90,"gcal":90}'::jsonb, 10) ORDER BY 1`)
+      ).rows.map((r) => r.kind);
+      return claimed;
+    },
+    { value: ["gcal"] },
   );
 });

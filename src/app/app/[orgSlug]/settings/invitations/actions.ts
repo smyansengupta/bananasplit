@@ -5,10 +5,10 @@ import { z } from "zod";
 import { Role } from "@/generated/prisma/client";
 import { ForbiddenError } from "@/lib/auth/errors";
 import { withOrgContext } from "@/lib/auth/with-org-context";
-import { sendInvitationEmail } from "@/lib/email";
 import { generateInvitationToken, INVITATION_EXPIRY_DAYS } from "@/lib/invitations";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
+import { enqueueJob } from "@/server/jobs/enqueue";
 
 const INVITE_RATE_LIMIT = 20;
 const INVITE_RATE_WINDOW_SEC = 60 * 60;
@@ -44,8 +44,6 @@ export const inviteMember = withOrgContext(
       return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
     }
 
-    const org = await prisma.organization.findUniqueOrThrow({ where: { id: ctx.organizationId } });
-
     const existingMember = await prisma.membership.findFirst({
       where: { organizationId: ctx.organizationId, user: { email: parsed.data.email } },
     });
@@ -65,27 +63,31 @@ export const inviteMember = withOrgContext(
       return { error: "There's already a pending invite for this email." };
     }
 
-    const { token, tokenHash } = generateInvitationToken();
+    // The stored hash is a placeholder until the invite-email job mints the
+    // emailed link (only a hash is ever stored, so the link can only be
+    // created where it is sent).
+    const { tokenHash } = generateInvitationToken();
     const expiresAt = new Date(Date.now() + INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-    await prisma.invitation.create({
-      data: {
-        organizationId: ctx.organizationId,
-        email: parsed.data.email,
-        role: parsed.data.role,
-        token: tokenHash,
-        expiresAt,
-        invitedById: ctx.user.id,
-      },
-    });
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    await sendInvitationEmail({
-      to: parsed.data.email,
-      orgName: org.name,
-      inviterName: ctx.user.name ?? ctx.user.email,
-      role: parsed.data.role,
-      acceptUrl: `${appUrl}/invite/${token}`,
+    await prisma.$transaction(async (tx) => {
+      const invitation = await tx.invitation.create({
+        data: {
+          organizationId: ctx.organizationId,
+          email: parsed.data.email,
+          role: parsed.data.role,
+          token: tokenHash,
+          expiresAt,
+          invitedById: ctx.user.id,
+        },
+        select: { id: true },
+      });
+      // Outbox: the email is sent after commit, never for a rolled-back invite.
+      await enqueueJob(tx, {
+        orgId: ctx.organizationId,
+        kind: "invite-email",
+        key: invitation.id,
+        payload: { invitationId: invitation.id },
+      });
     });
 
     return {};

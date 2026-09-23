@@ -1,0 +1,43 @@
+name: Jobs pinger
+
+# Drives the background-job drain (/api/cron/jobs) every 15 minutes. Vercel
+# Hobby only allows daily crons (vercel.json keeps a daily one as a
+# backstop); on Vercel Pro, change the vercel.json schedule to "*/5 * * * *"
+# and disable this workflow.
+#
+# Needs two repository secrets. Until both are set the job skips, so a fork
+# or a fresh clone never pings anything:
+#   JOBS_DRAIN_URL  https://<production host>/api/cron/jobs
+#   CRON_SECRET     the same value as the Vercel CRON_SECRET
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: jobs-pinger
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Drain due jobs
+        env:
+          JOBS_DRAIN_URL: ${{ secrets.JOBS_DRAIN_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$JOBS_DRAIN_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "JOBS_DRAIN_URL or CRON_SECRET is not set; skipping."
+            exit 0
+          fi
+          status=$(curl --silent --show-error --max-time 320 \
+            --output /dev/null --write-out "%{http_code}" \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "$JOBS_DRAIN_URL")
+          echo "drain answered ${status}"
+          test "$status" = "200"

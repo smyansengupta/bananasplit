@@ -5,13 +5,13 @@ import { z } from "zod";
 import { Role, TransactionDirection, TransactionKind } from "@/generated/prisma/client";
 import { requireFinanceAccess } from "@/lib/auth/guards";
 import { withOrgContext } from "@/lib/auth/with-org-context";
-import { sendReimbursementStatusEmail } from "@/lib/email";
 import { writeFinanceAuditLog } from "@/lib/finance/audit";
 import {
   nextExpenseStatus,
   type ExpenseTransition,
 } from "@/lib/finance/reimbursement-state-machine";
 import { prisma } from "@/lib/prisma";
+import { enqueueJob } from "@/server/jobs/enqueue";
 
 interface ActionResult {
   error?: string;
@@ -267,22 +267,25 @@ async function applyExpenseTransition(
       before: { status: existing.status },
       after: { status: row.status },
     });
+    // The submitter's status email goes through the outbox, in this same
+    // transaction: nothing is sent if the transition rolls back, and the
+    // action never waits on the mail provider.
+    if (
+      row.status === "APPROVED" ||
+      row.status === "REJECTED" ||
+      row.status === "REIMBURSED"
+    ) {
+      await enqueueJob(tx, {
+        orgId: ctx.organizationId,
+        kind: "reimbursement-email",
+        key: `${transactionId}:${row.status}`,
+        payload: { transactionId, status: row.status },
+      });
+    }
     return row;
   });
 
-  if (["APPROVE", "REJECT", "REIMBURSE"].includes(transition)) {
-    const submitter = await prisma.user.findUnique({ where: { id: existing.submittedById } });
-    if (submitter) {
-      await sendReimbursementStatusEmail({
-        to: submitter.email,
-        description: existing.description,
-        status: updated.status,
-        rejectionReason: updated.rejectionReason,
-      });
-    }
-  }
-
-  return { transactionId };
+  return { transactionId: updated.id };
 }
 
 export const submitExpense = withOrgContext(async (ctx, transactionId: string) =>
