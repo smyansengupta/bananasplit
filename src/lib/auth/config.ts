@@ -4,6 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 
 import { verifyPassword } from "@/lib/auth/password";
+import { purgeSquatterBeforeGoogleSignIn } from "@/lib/auth/purge-squatter";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { clientIpFrom } from "@/lib/request-ip";
 import { authDb } from "@/server/db/clients";
@@ -111,6 +112,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    // Runs before Auth.js looks the address up (@auth/core handleAuthorized
+    // precedes handleLoginOrRegister): a verified Google sign-in first removes
+    // an unverified credentials-only squatter of the address.
+    async signIn({ account, profile }) {
+      await purgeSquatterBeforeGoogleSignIn({ account, profile });
+      return true;
+    },
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;

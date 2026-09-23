@@ -45,4 +45,8 @@ export {
   type OutgoingEmail,
   type SendResult,
 } from "./transport";
-export { consumeVerificationToken, enqueueVerificationEmail } from "./verification";
+export {
+  consumeVerificationToken,
+  enqueueVerificationEmail,
+  peekVerificationToken,
+} from "./verification";

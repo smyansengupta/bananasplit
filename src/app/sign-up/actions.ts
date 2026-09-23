@@ -8,6 +8,7 @@ import { signIn } from "@/lib/auth/config";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { authDb } from "@/server/db/clients";
+import { enqueueVerificationEmail } from "@/server/email/verification";
 
 /** Sign-up limits: per client IP and per normalized email (Postgres-backed). */
 const SIGN_UP_LIMITS = {
@@ -70,13 +71,23 @@ export async function signUpAction(
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
-  await authDb.user.create({
+  const user = await authDb.user.create({
     data: {
       email: parsed.data.email,
       name: parsed.data.name,
       credential: { create: { passwordHash } },
     },
+    select: { id: true },
   });
+
+  // The confirmation link goes out through the outbox (a verify-email
+  // platform job, sent right after this request). An account that is never
+  // confirmed, and never joins an org, is removed after 72 hours.
+  try {
+    await enqueueVerificationEmail(user.id);
+  } catch (error) {
+    console.error("[sign-up] could not queue the verification email", error instanceof Error ? error.message : error);
+  }
 
   try {
     await signIn("credentials", {

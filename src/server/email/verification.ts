@@ -26,9 +26,30 @@ export async function enqueueVerificationEmail(userId: string): Promise<void> {
 
 export type VerifyResult = { ok: true; email: string } | { ok: false; reason: "invalid" | "expired" };
 
+const TOKEN_SHAPE = /^[A-Za-z0-9_-]{20,200}$/;
+
+function hashToken(rawToken: string): string {
+  return createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
+ * Whether a link's token is usable, without consuming it. The page shows a
+ * "Confirm" button and consumes only on POST, so a mail scanner that
+ * prefetches the link cannot use it up.
+ */
+export async function peekVerificationToken(rawToken: string): Promise<"valid" | "expired" | "invalid"> {
+  if (!TOKEN_SHAPE.test(rawToken)) return "invalid";
+  const row = await authDb.verificationToken.findFirst({
+    where: { token: hashToken(rawToken) },
+    select: { expires: true },
+  });
+  if (!row) return "invalid";
+  return row.expires <= new Date() ? "expired" : "valid";
+}
+
 export async function consumeVerificationToken(rawToken: string): Promise<VerifyResult> {
-  if (!/^[A-Za-z0-9_-]{20,200}$/.test(rawToken)) return { ok: false, reason: "invalid" };
-  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  if (!TOKEN_SHAPE.test(rawToken)) return { ok: false, reason: "invalid" };
+  const tokenHash = hashToken(rawToken);
 
   return authDb.$transaction(async (tx) => {
     const row = await tx.verificationToken.findFirst({ where: { token: tokenHash } });
