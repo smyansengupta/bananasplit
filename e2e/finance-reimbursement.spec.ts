@@ -27,7 +27,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await page.getByRole("button", { name: "Create and activate" }).click();
   await expect(page.getByText("E2E fiscal year")).toBeVisible();
 
-  await page.goto(`/app/${orgSlug}/settings/invitations`);
+  await page.goto(`/app/${orgSlug}/settings/members`);
   await page.getByLabel("Email").fill(member.email);
   await page.getByRole("button", { name: "Send invite" }).click();
   await expect(page.getByText("Invite sent.")).toBeVisible();
@@ -39,7 +39,9 @@ test("expense reimbursement lifecycle", async ({ page }) => {
 
   // Baseline: nothing owed yet.
   await page.goto(`/app/${orgSlug}`);
-  await expect(page.getByText("Money owed to you", { exact: true }).locator("..").first()).toContainText("$0.00");
+  await expect(
+    page.getByText("Money owed to you", { exact: true }).locator("..").first(),
+  ).toContainText("$0.00");
 
   // --- member submits an expense with a receipt ---
   await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
@@ -67,7 +69,9 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await page.getByRole("button", { name: "Close" }).first().click();
 
   await page.goto(`/app/${orgSlug}`);
-  await expect(page.getByText("Money owed to you", { exact: true }).locator("..").first()).toContainText("$42.50");
+  await expect(
+    page.getByText("Money owed to you", { exact: true }).locator("..").first(),
+  ).toContainText("$42.50");
 
   // --- owner (finance access) approves, then marks reimbursed ---
   // /finance redirects non-finance roles to my-reimbursements, so the
@@ -75,7 +79,9 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await signOut(page);
   await signIn(page, owner);
   await page.goto(`/app/${orgSlug}/finance`);
-  await expect(page.getByText("Balance", { exact: true }).locator("..").first()).toContainText("-$42.50");
+  await expect(page.getByText("Balance", { exact: true }).locator("..").first()).toContainText(
+    "-$42.50",
+  );
 
   await page.goto(`/app/${orgSlug}/finance/transactions`);
   await page.getByText(expenseDescription).click();
@@ -90,11 +96,15 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   // Reimbursement doesn't touch the ledger balance — the expense already
   // counted against it the moment it was created.
   await page.goto(`/app/${orgSlug}/finance`);
-  await expect(page.getByText("Balance", { exact: true }).locator("..").first()).toContainText("-$42.50");
+  await expect(page.getByText("Balance", { exact: true }).locator("..").first()).toContainText(
+    "-$42.50",
+  );
 
   // --- the submitter's "owed to you" clears back to zero ---
   await signOut(page);
   await signIn(page, member);
   await page.goto(`/app/${orgSlug}`);
-  await expect(page.getByText("Money owed to you", { exact: true }).locator("..").first()).toContainText("$0.00");
+  await expect(
+    page.getByText("Money owed to you", { exact: true }).locator("..").first(),
+  ).toContainText("$0.00");
 });

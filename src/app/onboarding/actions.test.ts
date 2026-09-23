@@ -1,104 +1,111 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { prismaMock, getUserIdentityMock, requireUserMock, redirectMock, rateLimitMock } = vi.hoisted(() => ({
+/**
+ * The onboarding actions are thin: every rule lives in
+ * src/server/settings (org-creation.test.ts, invitations.test.ts). These
+ * tests pin the wiring: the signed-in user is always the one acting, errors
+ * come back as state, success sets the active org and redirects.
+ */
+
+const {
+  requireUserMock,
+  redirectMock,
+  createOrganizationMock,
+  pendingMock,
+  acceptMock,
+  cookieMock,
+} = vi.hoisted(() => ({
   requireUserMock: vi.fn(),
-  rateLimitMock: vi.fn(),
-  getUserIdentityMock: vi.fn(),
   redirectMock: vi.fn((url: string) => {
     throw Object.assign(new Error(`NEXT_REDIRECT ${url}`), { url });
   }),
-  prismaMock: {
-    organization: { findUnique: vi.fn(), create: vi.fn() },
-    invitation: { findUnique: vi.fn() },
-  },
+  createOrganizationMock: vi.fn(),
+  pendingMock: vi.fn(),
+  acceptMock: vi.fn(),
+  cookieMock: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
-vi.mock("@/lib/auth/email-verification", () => ({ getUserIdentity: getUserIdentityMock }));
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
-vi.mock("@/lib/active-org-cookie", () => ({ setActiveOrgCookie: vi.fn() }));
-vi.mock("@/lib/notifications", () => ({ notifyUser: vi.fn() }));
-vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: rateLimitMock,
-  rateLimitKey: (...parts: string[]) => parts.join(":"),
-  retryAfterText: () => "in a few hours",
+vi.mock("@/lib/active-org-cookie", () => ({ setActiveOrgCookie: cookieMock }));
+vi.mock("@/server/settings/org-creation", () => ({
+  createOrganization: createOrganizationMock,
+  isSlugAvailable: vi.fn(async () => true),
+}));
+vi.mock("@/server/settings/invitations", () => ({
+  findPendingInvitationsForMe: pendingMock,
+  acceptInvitation: acceptMock,
 }));
 
-const { createOrganizationAction } = await import("./actions");
-
-function form(name: string, slug: string) {
-  const data = new FormData();
-  data.set("name", name);
-  data.set("slug", slug);
-  return data;
-}
+const { createOrganizationAction, joinPendingInvitationAction } = await import("./actions");
 
 const user = { id: "user_1", email: "jackson@example.edu", name: "Jackson" };
 
+function form(fields: Record<string, string>) {
+  const data = new FormData();
+  for (const [k, v] of Object.entries(fields)) data.set(k, v);
+  return data;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.unstubAllEnvs();
   requireUserMock.mockResolvedValue(user);
-  rateLimitMock.mockResolvedValue({ allowed: true });
-  prismaMock.organization.findUnique.mockResolvedValue(null);
-  prismaMock.organization.create.mockResolvedValue({ id: "org_new", slug: "new-club" });
 });
 
-afterEach(() => {
-  vi.unstubAllEnvs();
+describe("createOrganizationAction", () => {
+  it("passes the form to the service as the signed-in user and returns its error", async () => {
+    createOrganizationMock.mockResolvedValue({ ok: false, error: "That URL is already taken." });
+    const result = await createOrganizationAction(
+      {},
+      form({ name: "New Club", slug: "new-club", code: "" }),
+    );
+    expect(result.error).toBe("That URL is already taken.");
+    expect(createOrganizationMock).toHaveBeenCalledWith(user, {
+      name: "New Club",
+      slug: "new-club",
+      timezone: "UTC",
+      code: undefined,
+    });
+    expect(cookieMock).not.toHaveBeenCalled();
+  });
+
+  it("sets the active org and redirects on success", async () => {
+    createOrganizationMock.mockResolvedValue({ ok: true, orgId: "org_new", slug: "new-club" });
+    await expect(
+      createOrganizationAction(
+        {},
+        form({ name: "New Club", slug: "new-club", timezone: "America/New_York" }),
+      ),
+    ).rejects.toThrow(/NEXT_REDIRECT \/app\/new-club/);
+    expect(cookieMock).toHaveBeenCalledWith("org_new");
+  });
 });
 
-describe("createOrganizationAction (0A Fix 4(c), Fix 16)", () => {
-  it("refuses an unverified account", async () => {
-    getUserIdentityMock.mockResolvedValue({ ...user, emailVerified: null });
-
-    const result = await createOrganizationAction({}, form("New Club", "new-club"));
-
-    expect(result.error).toMatch(/verify your email/i);
-    expect(prismaMock.organization.create).not.toHaveBeenCalled();
+describe("joinPendingInvitationAction", () => {
+  it("only joins an invitation addressed to the caller's verified email", async () => {
+    pendingMock.mockResolvedValue([]);
+    expect(await joinPendingInvitationAction("inv_other")).toEqual({
+      error: "This invite no longer exists.",
+    });
+    expect(acceptMock).not.toHaveBeenCalled();
   });
 
-  it("in production, refuses a verified user who is not a platform admin", async () => {
-    vi.stubEnv("VERCEL_ENV", "production");
-    vi.stubEnv("PLATFORM_ADMIN_EMAILS", "president@example.edu");
-    getUserIdentityMock.mockResolvedValue({ ...user, emailVerified: new Date() });
-
-    const result = await createOrganizationAction({}, form("New Club", "new-club"));
-
-    expect(result.error).toMatch(/platform admins/i);
-    expect(prismaMock.organization.create).not.toHaveBeenCalled();
-  });
-
-  it("in production, lets a platform admin create the org", async () => {
-    vi.stubEnv("VERCEL_ENV", "production");
-    vi.stubEnv("PLATFORM_ADMIN_EMAILS", "Jackson@example.edu");
-    getUserIdentityMock.mockResolvedValue({ ...user, emailVerified: new Date() });
-
-    await expect(createOrganizationAction({}, form("New Club", "new-club"))).rejects.toThrow(
-      /NEXT_REDIRECT \/app\/new-club/,
+  it("accepts and redirects", async () => {
+    pendingMock.mockResolvedValue([
+      {
+        id: "inv_1",
+        organizationId: "org_1",
+        role: "MEMBER",
+        expiresAt: new Date(Date.now() + 1e6),
+        orgName: "Org",
+      },
+    ]);
+    acceptMock.mockResolvedValue({ ok: true, orgId: "org_1", orgSlug: "org-one" });
+    await expect(joinPendingInvitationAction("inv_1")).rejects.toThrow(
+      /NEXT_REDIRECT \/app\/org-one/,
     );
-    expect(prismaMock.organization.create).toHaveBeenCalledOnce();
-  });
-
-  it("on previews, any verified user may create an org", async () => {
-    vi.stubEnv("VERCEL_ENV", "preview");
-    vi.stubEnv("PLATFORM_ADMIN_EMAILS", "");
-    getUserIdentityMock.mockResolvedValue({ ...user, emailVerified: new Date() });
-
-    await expect(createOrganizationAction({}, form("New Club", "new-club"))).rejects.toThrow(
-      /NEXT_REDIRECT/,
+    expect(acceptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "inv_1", organizationId: "org_1" }),
+      user,
     );
-    expect(prismaMock.organization.create).toHaveBeenCalledOnce();
-  });
-
-  it("refuses once the per-user creation limit is hit (A3 limiter, after the 0A checks)", async () => {
-    getUserIdentityMock.mockResolvedValue({ ...user, emailVerified: new Date() });
-    rateLimitMock.mockResolvedValue({ allowed: false, retryAfterMs: 3_600_000 });
-
-    const result = await createOrganizationAction({}, form("New Club", "new-club"));
-
-    expect(result.error).toMatch(/several organizations recently/i);
-    expect(rateLimitMock).toHaveBeenCalledWith("org-create:user_1", 3, 24 * 60 * 60);
-    expect(prismaMock.organization.create).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,7 @@ import { signIn } from "@/lib/auth/config";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { sameEmail } from "@/lib/auth/normalize-email";
 import { getSession } from "@/lib/auth/session";
-import { findInvitationByRawToken } from "@/lib/invitations";
+import { findInvitationByRawToken } from "@/server/settings/invitations";
 
 import { JoinButton } from "./join-button";
 
@@ -53,7 +53,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   if (!session) {
     return (
       <InviteCard
-        title={`Join ${invitation.organization.name}`}
+        title={`Join ${invitation.orgName}`}
         description={`Sign in as ${invitation.email} to accept this invite.`}
       >
         <form
@@ -98,7 +98,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   if (!identity.emailVerified) {
     return (
       <InviteCard
-        title={`Join ${invitation.organization.name}`}
+        title={`Join ${invitation.orgName}`}
         description="Verify your email address to accept this invite."
       >
         <VerifyEmailNotice email={identity.email} action="accept this invite" />
@@ -108,10 +108,10 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
 
   return (
     <InviteCard
-      title={`Join ${invitation.organization.name}`}
+      title={`Join ${invitation.orgName}`}
       description={`You're invited as ${invitation.role.toLowerCase()}.`}
     >
-      <JoinButton token={token} orgName={invitation.organization.name} />
+      <JoinButton token={token} orgName={invitation.orgName} />
     </InviteCard>
   );
 }

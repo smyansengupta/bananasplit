@@ -22,7 +22,7 @@ import { feedEventsWhere } from "@/lib/calendar-feed";
 import { authDb, disconnectAll, legacyDb } from "@/server/db/clients";
 import { withOrgAction, withSystemOrgTx } from "@/server/db/context";
 
-import { changeMemberRole, removeMember } from "./actions";
+import { changeMemberRole, leaveOrg, removeMember, transferOwnership } from "./actions";
 
 interface SeedUser {
   id: string;
@@ -76,6 +76,10 @@ try {
 describe.skipIf(!seeded)("member management against the local database", () => {
   const s = seeded as Seeded;
   let temp: SeedUser;
+  let openTaskId = "";
+  let doneTaskId = "";
+  let draftVersionId = "";
+  let draftPositionId = "";
 
   beforeAll(async () => {
     const email = `a2-remove-${Date.now()}@example.edu`;
@@ -111,12 +115,78 @@ describe.skipIf(!seeded)("member management against the local database", () => {
     });
   });
 
+  // Tasks the member owns and a draft chart that suggests them (the
+  // Task.ownerId and draft OrgChartPosition.suggestedUserIds cleanup).
+  beforeAll(async () => {
+    await withSystemOrgTx(s.cbcId, async ({ db }) => {
+      openTaskId = (
+        await db.task.create({
+          data: {
+            organizationId: s.cbcId,
+            title: "Temp open task",
+            rank: "a0",
+            createdById: s.jackson.id,
+            ownerId: temp.id,
+          },
+          select: { id: true },
+        })
+      ).id;
+      doneTaskId = (
+        await db.task.create({
+          data: {
+            organizationId: s.cbcId,
+            title: "Temp done task",
+            rank: "a1",
+            createdById: s.jackson.id,
+            ownerId: temp.id,
+            status: "COMPLETED",
+            completedAt: new Date(),
+          },
+          select: { id: true },
+        })
+      ).id;
+      const last = await db.orgChartVersion.findFirst({
+        where: { organizationId: s.cbcId },
+        orderBy: { number: "desc" },
+        select: { number: true },
+      });
+      draftVersionId = (
+        await db.orgChartVersion.create({
+          data: {
+            organizationId: s.cbcId,
+            number: (last?.number ?? 0) + 1,
+            status: "DRAFT",
+            source: "MANUAL",
+            createdById: s.jackson.id,
+          },
+          select: { id: true },
+        })
+      ).id;
+      draftPositionId = (
+        await db.orgChartPosition.create({
+          data: {
+            organizationId: s.cbcId,
+            versionId: draftVersionId,
+            key: "temp-draft",
+            title: "Temp draft position",
+            rank: "a0",
+            matchState: "SUGGESTED",
+            suggestedUserIds: [temp.id, s.oliver.id],
+          },
+          select: { id: true },
+        })
+      ).id;
+    });
+  });
+
   beforeEach(() => {
     requireUserMock.mockResolvedValue(s.oliver);
   });
 
   afterAll(async () => {
     await withSystemOrgTx(s.cbcId, async ({ db }) => {
+      await db.task.deleteMany({ where: { id: { in: [openTaskId, doneTaskId] } } });
+      if (draftVersionId) await db.orgChartVersion.deleteMany({ where: { id: draftVersionId } });
       await db.orgChartPosition.update({
         where: { id: s.position.id },
         data: {
@@ -127,7 +197,6 @@ describe.skipIf(!seeded)("member management against the local database", () => {
       });
     });
     await authDb.user.deleteMany({ where: { id: temp.id } });
-    await disconnectAll();
   });
 
   async function roleOf(userId: string) {
@@ -196,6 +265,23 @@ describe.skipIf(!seeded)("member management against the local database", () => {
     expect(attendee).toBe(0);
     expect(notifications).toBe(0);
     expect(position).toEqual({ userId: null, matchState: "UNMATCHED" });
+    // Open tasks become unowned; completed ones keep their owner as history.
+    const tasks = await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.task.findMany({
+        where: { id: { in: [openTaskId, doneTaskId] } },
+        select: { id: true, ownerId: true },
+      }),
+    );
+    expect(tasks.find((t) => t.id === openTaskId)?.ownerId).toBeNull();
+    expect(tasks.find((t) => t.id === doneTaskId)?.ownerId).toBe(temp.id);
+    // Draft match suggestions drop the member and keep everyone else.
+    const draft = await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.orgChartPosition.findUniqueOrThrow({
+        where: { id: draftPositionId },
+        select: { suggestedUserIds: true },
+      }),
+    );
+    expect(draft.suggestedUserIds).toEqual([s.oliver.id]);
     // A removed member is absent from their ICS feed (0A Fix 7).
     expect(await legacyDb.event.count({ where: feedEventsWhere(temp.id) })).toBe(0);
   });
@@ -236,4 +322,84 @@ describe.skipIf(!seeded)("member management against the local database", () => {
       await authDb.user.deleteMany({ where: { id: other.id } });
     }
   });
+});
+
+describe.skipIf(!seeded)("ownership transfer and leaving, against the local database", () => {
+  const s = seeded as Seeded;
+  let heir: SeedUser;
+
+  async function roleOf(userId: string) {
+    const m = await legacyDb.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId: s.cbcId } },
+      select: { role: true },
+    });
+    return m?.role ?? null;
+  }
+
+  beforeAll(async () => {
+    heir = await authDb.user.create({
+      data: {
+        email: `b1-heir-${Date.now()}@example.edu`,
+        name: "Temp Heir",
+        emailVerified: new Date(),
+      },
+      select: { id: true, email: true, name: true },
+    });
+    await withSystemOrgTx(s.cbcId, { userId: heir.id }, async ({ db }) => {
+      await db.membership.create({
+        data: { organizationId: s.cbcId, userId: heir.id, role: "MEMBER" },
+      });
+    });
+  });
+
+  afterAll(async () => {
+    // Whatever happened, Jackson ends as OWNER and the heir is gone.
+    await withSystemOrgTx(s.cbcId, { userId: s.jackson.id }, async ({ db }) => {
+      await db.$executeRaw`UPDATE "Membership" SET "role" = 'OWNER' WHERE "organizationId" = ${s.cbcId} AND "userId" = ${s.jackson.id}`;
+    }).catch(() => undefined);
+    await authDb.user.deleteMany({ where: { id: heir.id } });
+  });
+
+  it("the only OWNER cannot leave", async () => {
+    requireUserMock.mockResolvedValue(s.jackson);
+    const result = await leaveOrg(s.cbcId);
+    expect(result.error).toMatch(/only owner/i);
+    expect(await roleOf(s.jackson.id)).toBe("OWNER");
+  });
+
+  it("an ADMIN cannot transfer ownership", async () => {
+    requireUserMock.mockResolvedValue(s.oliver);
+    await expect(transferOwnership(s.cbcId, heir.id)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await roleOf(heir.id)).toBe("MEMBER");
+  });
+
+  it("an OWNER transfers ownership: both rows change in one transaction under membership_guard", async () => {
+    requireUserMock.mockResolvedValue(s.jackson);
+    expect(await transferOwnership(s.cbcId, heir.id)).toEqual({});
+    expect(await roleOf(heir.id)).toBe("OWNER");
+    expect(await roleOf(s.jackson.id)).toBe("ADMIN");
+
+    // And back again, by the new owner.
+    requireUserMock.mockResolvedValue(heir);
+    expect(await transferOwnership(s.cbcId, s.jackson.id)).toEqual({});
+    expect(await roleOf(s.jackson.id)).toBe("OWNER");
+    expect(await roleOf(heir.id)).toBe("ADMIN");
+  });
+
+  it("a member leaves: their own row goes (redirect to /app), with the audit row written first", async () => {
+    requireUserMock.mockResolvedValue(heir);
+    await expect(leaveOrg(s.cbcId)).rejects.toThrow(/NEXT_REDIRECT/);
+    expect(await roleOf(heir.id)).toBeNull();
+    const audit = await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.orgAuditLog.findFirst({
+        where: { organizationId: s.cbcId, action: "member.left", targetId: heir.id },
+        select: { actorId: true },
+      }),
+    );
+    expect(audit?.actorId).toBe(heir.id);
+  });
+});
+
+afterAll(async () => {
+  await disconnectAll();
 });
