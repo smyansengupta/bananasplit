@@ -162,6 +162,7 @@ export const JOB_KINDS = {
     leaseSeconds: 90,
     tier: "fast",
     afterEligible: true,
+    handler: () => import("@/server/google-calendar/sync").then((m) => m.gcalJob),
     description: "Mirror one Event to Google Calendar (the event service enqueues it).",
   }),
   "site-rebuild": kind({
@@ -171,6 +172,7 @@ export const JOB_KINDS = {
     leaseSeconds: 90,
     tier: "fast",
     afterEligible: false,
+    handler: () => import("@/server/public-events/rebuild").then((m) => m.siteRebuildJob),
     description: "POST the org's Netlify build hook after PUBLIC event changes (runAt now+60s).",
   }),
   "google-import": kind({
@@ -180,6 +182,7 @@ export const JOB_KINDS = {
     leaseSeconds: 330,
     tier: "heavy",
     afterEligible: false,
+    handler: () => import("@/server/google-calendar/import").then((m) => m.googleImportJob),
     description: "One-time import of existing Google Calendar events on connect.",
   }),
   "google-revoke": kind({
@@ -189,6 +192,7 @@ export const JOB_KINDS = {
     leaseSeconds: 60,
     tier: "fast",
     afterEligible: true,
+    handler: () => import("@/server/google-calendar/revoke").then((m) => m.googleRevokeJob),
     description: "Revoke the Google refresh token after Disconnect.",
   }),
 
