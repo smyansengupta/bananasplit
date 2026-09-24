@@ -82,7 +82,7 @@ export function CellView({ cell }: { cell: Cell }) {
       ) : (
         <Link
           href={cell.href}
-          className="text-primary underline-offset-4 hover:underline"
+          className="text-primary line-clamp-2 underline-offset-4 hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           {cell.label}

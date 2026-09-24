@@ -120,8 +120,11 @@ export async function loadStampStrip(
       })
     ).map((a) => a.eventId),
   );
+  // The website's slot numbers when they are consistent, otherwise positions.
+  const slots = events.map((e) => e.stampSlot);
+  const useSlots = slots.every((s) => s !== null) && new Set(slots).size === slots.length;
   return events.map((e, i) => ({
-    slot: e.stampSlot ?? i + 1,
+    slot: useSlots ? (e.stampSlot as number) : i + 1,
     title: e.title,
     startsAt: e.startsAt,
     stamped: attended.has(e.id),

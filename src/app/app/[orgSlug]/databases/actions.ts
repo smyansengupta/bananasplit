@@ -16,6 +16,7 @@ import {
   deleteSignup,
   importBallotDefinition,
   linkContactToMember,
+  reevaluatePoll,
   renameContact,
   setAttendanceNameOverride,
   setAttendanceSuppressed,
@@ -307,28 +308,56 @@ export async function searchContactsAction(organizationId: string, q: string) {
 
 // ---- Ballots ----------------------------------------------------------------------------
 
-const importDefinitionTx = withOrgAction(async (ctx, input: Parameters<typeof importBallotDefinition>[1]) => {
-  const out = await importBallotDefinition(ctx, input);
-  return { id: out.id, slug: out.slug, created: out.created, ...out.result };
-});
+const importDefinitionTx = withOrgAction((ctx, input: Parameters<typeof importBallotDefinition>[1]) =>
+  importBallotDefinition(ctx, input),
+);
+
+/** Re-evaluates a poll's ballots on the service path (after the admin's own write committed). */
+async function reevaluateAsService(organizationId: string, slug: string) {
+  const user = await requireUser();
+  return withSystemOrgTx(organizationId, { userId: user.id }, ({ db }) => reevaluatePoll(db, organizationId, slug));
+}
 
 export async function importDefinitionAction(
   organizationId: string,
   input: Parameters<typeof importBallotDefinition>[1],
 ) {
-  return run(() => importDefinitionTx(organizationId, input));
+  return run(async () => {
+    const out = await importDefinitionTx(organizationId, input);
+    const result = await reevaluateAsService(organizationId, out.slug);
+    return { ...out, ...result };
+  });
 }
 
 const updateDefinitionTx = withOrgAction((ctx, id: string, patch: Parameters<typeof updateBallotDefinition>[2]) =>
   updateBallotDefinition(ctx, id, patch),
 );
 
-export async function updateDefinitionAction(
-  organizationId: string,
-  id: string,
-  patch: Parameters<typeof updateBallotDefinition>[2],
-) {
-  return run(() => updateDefinitionTx(organizationId, id, patch));
+export interface DefinitionForm {
+  title?: string;
+  /** yyyy-MM-ddTHH:mm in the org timezone, or "" for no bound. */
+  opensAt?: string;
+  closesAt?: string;
+  linkedEventId?: string | null;
+  isTest?: boolean;
+}
+
+export async function updateDefinitionAction(organizationId: string, id: string, form: DefinitionForm) {
+  return run(async () => {
+    const org = await withOrgTx(organizationId, ({ db }) =>
+      db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } }),
+    );
+    const when = (v: string | undefined) =>
+      v === undefined ? undefined : v ? fromLocal(localDateTime.parse(v), org.timezone) : null;
+    const out = await updateDefinitionTx(organizationId, id, {
+      title: form.title,
+      opensAt: when(form.opensAt),
+      closesAt: when(form.closesAt),
+      linkedEventId: form.linkedEventId,
+      isTest: form.isTest,
+    });
+    return reevaluateAsService(organizationId, out.slug);
+  });
 }
 
 const suppressBallotTx = withOrgAction((ctx, id: string, suppressed: boolean) =>

@@ -64,13 +64,19 @@ export async function reevaluateBallots(
   return { ballots: ballots.length, excluded, exploded };
 }
 
-/** Creates or replaces the definition for a slug, then re-evaluates that slug's ballots. */
+/**
+ * Creates or replaces the definition for a slug. With `reevaluate` (the
+ * service path, or an owner who can see every ballot) it then re-evaluates
+ * that slug's ballots; otherwise the caller runs reevaluateBallots on the
+ * service path after its own transaction commits.
+ */
 export async function upsertBallotDefinition(
   db: TxClient,
   organizationId: string,
   imported: ImportedDefinition,
   extra: { linkedEventId?: string | null; isTest?: boolean } = {},
-): Promise<{ id: string; created: boolean; result: ReevaluateResult }> {
+  options: { reevaluate?: boolean } = { reevaluate: true },
+): Promise<{ id: string; created: boolean; result: ReevaluateResult | null }> {
   const existing = await db.ballotDefinition.findFirst({
     where: { organizationId, slug: imported.slug },
     select: { id: true },
@@ -91,6 +97,8 @@ export async function upsertBallotDefinition(
           select: { id: true },
         })
       ).id;
-  const result = await reevaluateBallots(db, organizationId, [imported.slug], { explode: "all" });
+  const result = options.reevaluate
+    ? await reevaluateBallots(db, organizationId, [imported.slug], { explode: "all" })
+    : null;
   return { id, created: !existing, result };
 }

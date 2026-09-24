@@ -122,8 +122,14 @@ function FilterChip({
   return (
     <Badge variant={filter.isDefault ? "outline" : "secondary"} className="h-6 gap-1 pr-1">
       <span className="font-medium">{column?.label ?? filter.col}</span>
-      <span className="text-muted-foreground">{SHORT_OPS[filter.op] ?? filter.op}</span>
-      <span>{valueLabel(column, filter.op, filter.value)}</span>
+      {filter.op === "isnull" ? (
+        <span className="text-muted-foreground">{filter.value === "false" ? "is set" : "is empty"}</span>
+      ) : (
+        <>
+          <span className="text-muted-foreground">{SHORT_OPS[filter.op] ?? filter.op}</span>
+          <span>{valueLabel(column, filter.op, filter.value)}</span>
+        </>
+      )}
       {filter.isDefault && <span className="text-muted-foreground">(default)</span>}
       <button
         type="button"
@@ -524,7 +530,11 @@ export function DataTable(props: DataTableProps) {
                   {visible.map((c) => (
                     <TableCell
                       key={c.key}
-                      className={cn("max-w-72 align-top", c.align === "right" && "text-right")}
+                      className={cn(
+                        "max-w-72 align-top whitespace-normal",
+                        c.align === "right" && "text-right",
+                        (c.type === "datetime" || c.type === "date") && "whitespace-nowrap",
+                      )}
                     >
                       <CellView cell={r.cells[c.key] ?? null} />
                     </TableCell>

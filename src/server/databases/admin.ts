@@ -392,19 +392,34 @@ export async function importBallotDefinition(ctx: OrgContext, input: z.input<typ
     const event = await ctx.db.event.count({ where: { id: data.linkedEventId, organizationId: ctx.organizationId, deletedAt: null } });
     if (event === 0) throw new DatabaseEditError("That session no longer exists.");
   }
-  const out = await upsertBallotDefinition(ctx.db, ctx.organizationId, imported, {
-    linkedEventId: data.linkedEventId ?? undefined,
-    isTest: data.isTest,
-  });
+  const out = await upsertBallotDefinition(
+    ctx.db,
+    ctx.organizationId,
+    imported,
+    { linkedEventId: data.linkedEventId ?? undefined, isTest: data.isTest },
+    { reevaluate: false },
+  );
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
     action: out.created ? "ballot_definition.created" : "ballot_definition.updated",
     targetType: "BallotDefinition",
     targetId: out.id,
-    diff: { slug: imported.slug, questions: imported.definition.questions.length, ...out.result },
+    diff: { slug: imported.slug, questions: imported.definition.questions.length },
   });
   await markDataChanged(ctx.db, ctx.organizationId);
-  return { ...out, slug: imported.slug };
+  return { id: out.id, created: out.created, slug: imported.slug };
+}
+
+/**
+ * Re-links and re-classifies the ballots of `slug` after a definition change.
+ * Service path (withSystemOrgTx): the acting admin's tier may not see
+ * individual ballots, but every ballot of the poll must be re-evaluated.
+ * Idempotent; call it after the definition's own transaction commits.
+ */
+export async function reevaluatePoll(db: TxClient, organizationId: string, slug: string) {
+  const result = await reevaluateBallots(db, organizationId, [slug], { explode: "all" });
+  await markDataChanged(db, organizationId);
+  return result;
 }
 
 export const definitionPatchSchema = z.object({
@@ -424,16 +439,15 @@ export async function updateBallotDefinition(ctx: OrgContext, id: string, patch:
     throw new DatabaseEditError("The poll must close after it opens.");
   }
   await ctx.db.ballotDefinition.update({ where: { id: def.id }, data });
-  const result = await reevaluateBallots(ctx.db, ctx.organizationId, [def.slug]);
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
     action: "ballot_definition.updated",
     targetType: "BallotDefinition",
     targetId: def.id,
-    diff: { ...data, ...result },
+    diff: { ...data },
   });
   await markDataChanged(ctx.db, ctx.organizationId);
-  return result;
+  return { slug: def.slug };
 }
 
 /** Suppress (exclude) or restore one ballot. */
