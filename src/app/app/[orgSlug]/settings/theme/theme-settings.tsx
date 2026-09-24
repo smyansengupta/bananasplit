@@ -451,17 +451,14 @@ function SectionHeading({
   );
 }
 
-function Swatches({ roles, label }: { roles: ThemeRoles; label: string }) {
+/** The palette as colour chips. Decorative: the preset's name and description label the radio. */
+function Swatches({ roles }: { roles: ThemeRoles }) {
   return (
-    <div
-      className="flex h-6 overflow-hidden rounded-md border"
-      role="img"
-      aria-label={`${label}: ${ROLE_KEYS.map((key) => `${ROLE_LABELS[key]} ${roles[key]}`).join(", ")}`}
-    >
+    <span className="flex h-6 overflow-hidden rounded-md border" aria-hidden="true">
       {ROLE_KEYS.map((key) => (
         <span key={key} className="flex-1" style={{ backgroundColor: roles[key] }} />
       ))}
-    </div>
+    </span>
   );
 }
 
@@ -503,8 +500,8 @@ function PresetCard({
       )}
       <span className="text-muted-foreground text-xs">{description}</span>
       <span className="grid gap-1.5">
-        <Swatches roles={light} label="Light" />
-        <Swatches roles={dark} label="Dark" />
+        <Swatches roles={light} />
+        <Swatches roles={dark} />
       </span>
     </label>
   );
