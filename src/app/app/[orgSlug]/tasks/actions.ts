@@ -1,460 +1,201 @@
 "use server";
 
-import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
-import { z } from "zod";
+import { refresh } from "next/cache";
 
-import { NotificationType, TaskPriority, TaskStatus } from "@/generated/prisma/client";
-import { withOrgContext } from "@/lib/auth/with-org-context";
-import { notifyUser } from "@/lib/notifications";
-import { prisma } from "@/lib/prisma";
-
-async function notifyNewAssignees(organizationId: string, taskTitle: string, userIds: string[]) {
-  if (userIds.length === 0) return;
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { slug: true },
-  });
-  await Promise.all(
-    userIds.map((userId) =>
-      notifyUser({
-        organizationId,
-        userId,
-        type: NotificationType.TASK_ASSIGNED,
-        title: `You were assigned to "${taskTitle}"`,
-        linkUrl: org ? `/app/${org.slug}/tasks` : undefined,
-      }),
-    ),
-  );
-}
-
-const TASK_STATUS_VALUES = Object.values(TaskStatus) as [TaskStatus, ...TaskStatus[]];
-const TASK_PRIORITY_VALUES = Object.values(TaskPriority) as [TaskPriority, ...TaskPriority[]];
-
-const taskInputSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(200),
-  description: z.string().max(20000).nullable().optional(),
-  status: z.enum(TASK_STATUS_VALUES).optional(),
-  priority: z.enum(TASK_PRIORITY_VALUES).optional(),
-  dueDate: z.string().nullable().optional(),
-  projectId: z.string().nullable().optional(),
-  parentTaskId: z.string().nullable().optional(),
-  assigneeIds: z.array(z.string()).max(50).optional(),
-  labelIds: z.array(z.string()).max(50).optional(),
-});
-
-export type TaskInput = z.infer<typeof taskInputSchema>;
-
-interface ActionResult {
-  error?: string;
-  taskId?: string;
-}
-
-async function assertAssigneesAreMembers(
-  organizationId: string,
-  assigneeIds: string[] | undefined,
-) {
-  if (!assigneeIds?.length) return null;
-  const count = await prisma.membership.count({
-    where: { organizationId, userId: { in: assigneeIds } },
-  });
-  if (count !== new Set(assigneeIds).size) {
-    return "One or more assignees aren't members of this organization.";
-  }
-  return null;
-}
-
-async function assertLabelsBelongToOrg(organizationId: string, labelIds: string[] | undefined) {
-  if (!labelIds?.length) return null;
-  const count = await prisma.label.count({ where: { organizationId, id: { in: labelIds } } });
-  if (count !== new Set(labelIds).size) {
-    return "One or more labels don't belong to this organization.";
-  }
-  return null;
-}
-
-async function assertProjectBelongsToOrg(
-  organizationId: string,
-  projectId: string | null | undefined,
-) {
-  if (!projectId) return null;
-  const project = await prisma.project.findFirst({ where: { id: projectId, organizationId } });
-  return project ? null : "That project doesn't exist in this organization.";
-}
+import type { TaskPriority, TaskStatus } from "@/generated/prisma/client";
+import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
+import { withOrgAction } from "@/server/db/context";
+import { AppError } from "@/server/db/errors";
+import {
+  COMMENTS_PAGE_SIZE,
+  getActivity,
+  getComments,
+  getTaskDetail,
+  type TaskActivityItem,
+  type TaskCommentItem,
+  type TaskListItem,
+} from "@/server/tasks/queries";
+import * as svc from "@/server/tasks/service";
+import { postWeeklyUpdate as postWeekly } from "@/server/tasks/weekly";
 
 /**
- * One level of nesting only. The intended parent must itself be top-level,
- * and (for updates converting an existing task) the task becoming a child
- * must not already have children — either direction would create two levels.
+ * Task Server Actions. Each is a thin shell over src/server/tasks/service.ts
+ * inside withOrgAction (app_user, RLS, one transaction; a thrown refusal
+ * rolls everything back). Refusals come back as { error }; an above-level
+ * assignment comes back as { confirm } with nothing saved. After a write the
+ * action calls refresh() so the page re-renders with fresh server data.
  */
-async function assertValidParent(
-  organizationId: string,
-  parentTaskId: string | null | undefined,
-  taskIdBeingSaved?: string,
-) {
-  if (!parentTaskId) return null;
 
-  const parent = await prisma.task.findFirst({
-    where: { id: parentTaskId, organizationId, deletedAt: null },
-    select: { parentTaskId: true },
-  });
-  if (!parent) return "That parent task doesn't exist.";
-  if (parent.parentTaskId) return "Cannot nest a subtask under another subtask.";
+export type { TaskActionResult, ReorderInput, SelfAssignAction } from "@/server/tasks/service";
 
-  if (taskIdBeingSaved) {
-    const childCount = await prisma.task.count({
-      where: { parentTaskId: taskIdBeingSaved, deletedAt: null },
-    });
-    if (childCount > 0) {
-      return "This task has subtasks of its own and can't become a subtask.";
-    }
-  }
+function refusal(error: unknown): string | null {
+  if (error instanceof svc.TaskError) return error.message;
+  if (error instanceof ForbiddenError) return error.message || "You don't have permission to do that.";
+  if (error instanceof NotFoundError) return "Not found.";
+  if (error instanceof AppError) return error.message;
   return null;
 }
 
-async function nextRankForStatus(organizationId: string, status: TaskStatus) {
-  const last = await prisma.task.findFirst({
-    where: { organizationId, status, parentTaskId: null, deletedAt: null },
-    orderBy: { rank: "desc" },
-    select: { rank: true },
-  });
-  return generateKeyBetween(last?.rank ?? null, null);
+async function run<T extends { error?: string; confirm?: unknown }>(
+  fn: () => Promise<T>,
+  options: { refresh?: boolean } = {},
+): Promise<T | { error: string }> {
+  try {
+    const result = await fn();
+    if (options.refresh !== false && !result.error && !result.confirm) refresh();
+    return result;
+  } catch (error) {
+    const message = refusal(error);
+    if (message) return { error: message };
+    throw error;
+  }
 }
 
-export const createTask = withOrgContext(async (ctx, input: unknown): Promise<ActionResult> => {
-  const parsed = taskInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
-  const data = parsed.data;
+const withEnv = <Args extends unknown[], R>(fn: (env: svc.TaskEnv, ...args: Args) => Promise<R>) =>
+  withOrgAction(async (ctx, ...args: Args) => fn(await svc.loadTaskEnv(ctx), ...args));
 
-  const assigneeError = await assertAssigneesAreMembers(ctx.organizationId, data.assigneeIds);
-  if (assigneeError) return { error: assigneeError };
+const createTaskTx = withEnv(svc.createTask);
+const updateTaskTx = withEnv(svc.updateTask);
+const setStatusTx = withEnv(svc.setTaskStatus);
+const setPriorityTx = withEnv(svc.setTaskPriority);
+const selfAssignTx = withEnv(svc.selfAssign);
+const acknowledgeTx = withEnv(svc.acknowledgeFlag);
+const deleteTx = withEnv(svc.deleteTask);
+const restoreTx = withEnv(svc.restoreTask);
+const reorderTx = withEnv(svc.reorderTask);
+const bulkStatusTx = withEnv(svc.bulkUpdateStatus);
+const bulkAssignTx = withEnv(svc.bulkAssign);
+const bulkDeleteTx = withEnv(svc.bulkDelete);
+const addCommentTx = withEnv(svc.addComment);
+const editCommentTx = withEnv(svc.editComment);
+const deleteCommentTx = withEnv(svc.deleteComment);
+const postWeeklyTx = withEnv(postWeekly);
 
-  const labelError = await assertLabelsBelongToOrg(ctx.organizationId, data.labelIds);
-  if (labelError) return { error: labelError };
-
-  const projectError = await assertProjectBelongsToOrg(ctx.organizationId, data.projectId);
-  if (projectError) return { error: projectError };
-
-  const parentError = await assertValidParent(ctx.organizationId, data.parentTaskId);
-  if (parentError) return { error: parentError };
-
-  const status = data.status ?? TaskStatus.NOT_STARTED;
-  const rank = data.parentTaskId
-    ? generateNKeysBetween(null, null, 1)[0]
-    : await nextRankForStatus(ctx.organizationId, status);
-
-  const task = await prisma.task.create({
-    data: {
-      organizationId: ctx.organizationId,
-      title: data.title,
-      description: data.description ?? null,
-      status,
-      priority: data.priority ?? TaskPriority.MEDIUM,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      projectId: data.projectId ?? null,
-      parentTaskId: data.parentTaskId ?? null,
-      rank,
-      createdById: ctx.user.id,
-      assignees: data.assigneeIds?.length
-        ? { create: data.assigneeIds.map((userId) => ({ userId })) }
-        : undefined,
-      labels: data.labelIds?.length
-        ? { create: data.labelIds.map((labelId) => ({ labelId })) }
-        : undefined,
-    },
-  });
-
-  if (data.assigneeIds?.length) {
-    await notifyNewAssignees(ctx.organizationId, task.title, data.assigneeIds);
-  }
-
-  return { taskId: task.id };
-});
-
-export const updateTask = withOrgContext(
-  async (ctx, taskId: string, input: unknown): Promise<ActionResult> => {
-    const existing = await prisma.task.findFirst({
-      where: { id: taskId, organizationId: ctx.organizationId, deletedAt: null },
-      include: { assignees: { select: { userId: true } } },
-    });
-    if (!existing) {
-      return { error: "Task not found." };
-    }
-
-    const parsed = taskInputSchema.partial().safeParse(input);
-    if (!parsed.success) {
-      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-    }
-    const data = parsed.data;
-
-    const assigneeError = await assertAssigneesAreMembers(ctx.organizationId, data.assigneeIds);
-    if (assigneeError) return { error: assigneeError };
-
-    const labelError = await assertLabelsBelongToOrg(ctx.organizationId, data.labelIds);
-    if (labelError) return { error: labelError };
-
-    const projectError = await assertProjectBelongsToOrg(ctx.organizationId, data.projectId);
-    if (projectError) return { error: projectError };
-
-    if (data.parentTaskId !== undefined && data.parentTaskId !== existing.parentTaskId) {
-      const parentError = await assertValidParent(ctx.organizationId, data.parentTaskId, taskId);
-      if (parentError) return { error: parentError };
-    }
-
-    const wasCompleted = existing.status === TaskStatus.COMPLETED;
-    const willBeCompleted = (data.status ?? existing.status) === TaskStatus.COMPLETED;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.task.update({
-        where: { id: taskId },
-        data: {
-          title: data.title,
-          description: data.description,
-          status: data.status,
-          priority: data.priority,
-          dueDate:
-            data.dueDate === undefined ? undefined : data.dueDate ? new Date(data.dueDate) : null,
-          projectId: data.projectId,
-          parentTaskId: data.parentTaskId,
-          completedAt:
-            !wasCompleted && willBeCompleted
-              ? new Date()
-              : wasCompleted && !willBeCompleted
-                ? null
-                : undefined,
-        },
-      });
-
-      if (data.assigneeIds) {
-        await tx.taskAssignee.deleteMany({ where: { taskId } });
-        if (data.assigneeIds.length) {
-          await tx.taskAssignee.createMany({
-            data: data.assigneeIds.map((userId) => ({
-              organizationId: ctx.organizationId,
-              taskId,
-              userId,
-            })),
-          });
-        }
-      }
-
-      if (data.labelIds) {
-        await tx.taskLabel.deleteMany({ where: { taskId } });
-        if (data.labelIds.length) {
-          await tx.taskLabel.createMany({
-            data: data.labelIds.map((labelId) => ({
-              organizationId: ctx.organizationId,
-              taskId,
-              labelId,
-            })),
-          });
-        }
-      }
-    });
-
-    if (data.assigneeIds) {
-      const previousAssigneeIds = new Set(existing.assignees.map((a) => a.userId));
-      const newAssigneeIds = data.assigneeIds.filter((id) => !previousAssigneeIds.has(id));
-      await notifyNewAssignees(ctx.organizationId, data.title ?? existing.title, newAssigneeIds);
-    }
-
-    return { taskId };
-  },
-);
-
-export const deleteTask = withOrgContext(async (ctx, taskId: string): Promise<ActionResult> => {
-  const existing = await prisma.task.findFirst({
-    where: { id: taskId, organizationId: ctx.organizationId, deletedAt: null },
-  });
-  if (!existing) {
-    return { error: "Task not found." };
-  }
-
-  const now = new Date();
-  await prisma.task.updateMany({
-    where: { organizationId: ctx.organizationId, OR: [{ id: taskId }, { parentTaskId: taskId }] },
-    data: { deletedAt: now },
-  });
-
-  return {};
-});
-
-export const restoreTask = withOrgContext(async (ctx, taskId: string): Promise<ActionResult> => {
-  const existing = await prisma.task.findFirst({
-    where: { id: taskId, organizationId: ctx.organizationId },
-  });
-  if (!existing) {
-    return { error: "Task not found." };
-  }
-
-  await prisma.task.updateMany({
-    where: { organizationId: ctx.organizationId, OR: [{ id: taskId }, { parentTaskId: taskId }] },
-    data: { deletedAt: null },
-  });
-
-  return {};
-});
-
-export interface ReorderInput {
-  taskId: string;
-  status: TaskStatus;
-  beforeId: string | null;
-  afterId: string | null;
+export async function createTask(orgId: string, input: unknown) {
+  return run(() => createTaskTx(orgId, input));
 }
 
-export const reorderTask = withOrgContext(
-  async (ctx, input: ReorderInput): Promise<ActionResult> => {
-    const task = await prisma.task.findFirst({
-      where: {
-        id: input.taskId,
-        organizationId: ctx.organizationId,
-        deletedAt: null,
-        parentTaskId: null,
-      },
-    });
-    if (!task) {
-      return { error: "Task not found." };
-    }
+export async function updateTask(orgId: string, taskId: string, input: unknown) {
+  return run(() => updateTaskTx(orgId, taskId, input));
+}
 
-    // beforeId/afterId are client-supplied — verify they're this org's tasks
-    // before trusting their rank for anything. Every tenant-scoped lookup
-    // filters on organizationId, no exceptions.
-    const [before, after] = await Promise.all([
-      input.beforeId
-        ? prisma.task.findFirst({
-            where: { id: input.beforeId, organizationId: ctx.organizationId },
-            select: { rank: true },
-          })
-        : null,
-      input.afterId
-        ? prisma.task.findFirst({
-            where: { id: input.afterId, organizationId: ctx.organizationId },
-            select: { rank: true },
-          })
-        : null,
-    ]);
-
-    let rank: string;
-    try {
-      rank = generateKeyBetween(before?.rank ?? null, after?.rank ?? null);
-    } catch {
-      // Ranks collided (rare, after many reorders in the same spot) — rebalance
-      // the whole column and place the task at the end.
-      rank = await rebalanceColumn(ctx.organizationId, input.status, input.taskId);
-    }
-
-    await prisma.task.update({
-      where: { id: input.taskId },
-      data: { status: input.status, rank },
-    });
-
-    return {};
-  },
-);
-
-async function rebalanceColumn(
-  organizationId: string,
+export async function setTaskStatus(
+  orgId: string,
+  taskId: string,
   status: TaskStatus,
-  movedTaskId: string,
-): Promise<string> {
-  const tasks = await prisma.task.findMany({
-    where: {
-      organizationId,
-      status,
-      parentTaskId: null,
-      deletedAt: null,
-      id: { not: movedTaskId },
-    },
-    orderBy: { rank: "asc" },
-    select: { id: true },
-  });
-  const keys = generateNKeysBetween(null, null, tasks.length + 1);
-  await prisma.$transaction(
-    tasks.map((t, i) => prisma.task.update({ where: { id: t.id }, data: { rank: keys[i] } })),
-  );
-  return keys[keys.length - 1];
+  blockedReason?: string | null,
+) {
+  return run(() => setStatusTx(orgId, taskId, status, blockedReason));
 }
 
-export const bulkUpdateStatus = withOrgContext(
-  async (ctx, taskIds: string[], status: TaskStatus): Promise<ActionResult> => {
-    await prisma.task.updateMany({
-      where: { id: { in: taskIds }, organizationId: ctx.organizationId, deletedAt: null },
-      data: { status, completedAt: status === TaskStatus.COMPLETED ? new Date() : null },
-    });
-    return {};
-  },
-);
+export async function setTaskPriority(orgId: string, taskId: string, priority: TaskPriority) {
+  return run(() => setPriorityTx(orgId, taskId, priority));
+}
 
-const bulkAssignSchema = z.object({
-  taskIds: z.array(z.string().min(1)).min(1, "Select at least one task.").max(500),
-  userId: z.string().min(1),
-});
+export async function selfAssignTask(orgId: string, taskId: string, action: svc.SelfAssignAction) {
+  return run(() => selfAssignTx(orgId, taskId, action));
+}
 
-export const bulkAssign = withOrgContext(
-  async (ctx, rawTaskIds: string[], rawUserId: string): Promise<ActionResult> => {
-    const parsed = bulkAssignSchema.safeParse({ taskIds: rawTaskIds, userId: rawUserId });
-    if (!parsed.success) {
-      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-    }
-    const userId = parsed.data.userId;
-    const taskIds = [...new Set(parsed.data.taskIds)];
+export async function acknowledgeTaskFlag(orgId: string, taskId: string, userId: string) {
+  return run(() => acknowledgeTx(orgId, taskId, userId));
+}
 
-    const isMember = await prisma.membership.findUnique({
-      where: { userId_organizationId: { userId, organizationId: ctx.organizationId } },
-    });
-    if (!isMember) return { error: "That user isn't a member of this organization." };
+export async function deleteTask(orgId: string, taskId: string) {
+  return run(() => deleteTx(orgId, taskId));
+}
 
-    // 0A Fix 1: every client-supplied task id must be a live task of THIS
-    // org before any upsert. Without this, an upsert on another org's
-    // (taskId, userId) pair that already exists would silently "succeed",
-    // and a new one would surface a raw FK error. One count covers the set.
-    const ownTaskCount = await prisma.task.count({
-      where: { id: { in: taskIds }, organizationId: ctx.organizationId, deletedAt: null },
-    });
-    if (ownTaskCount !== taskIds.length) {
-      return { error: "One or more tasks don't exist in this organization." };
-    }
+export async function restoreTask(orgId: string, taskId: string) {
+  return run(() => restoreTx(orgId, taskId));
+}
 
-    await prisma.$transaction(
-      taskIds.map((taskId) =>
-        prisma.taskAssignee.upsert({
-          where: { taskId_userId: { taskId, userId } },
-          update: {},
-          // Checked above; the composite FK (organizationId, taskId) also
-          // rejects another org's task in the database.
-          create: { organizationId: ctx.organizationId, taskId, userId },
-        }),
-      ),
-    );
+export async function reorderTask(orgId: string, input: svc.ReorderInput) {
+  return run(() => reorderTx(orgId, input));
+}
 
-    const org = await prisma.organization.findUnique({
-      where: { id: ctx.organizationId },
-      select: { slug: true },
-    });
-    await notifyUser({
-      organizationId: ctx.organizationId,
-      userId,
-      type: NotificationType.TASK_ASSIGNED,
-      title:
-        taskIds.length === 1
-          ? "You were assigned to a task"
-          : `You were assigned to ${taskIds.length} tasks`,
-      linkUrl: org ? `/app/${org.slug}/tasks` : undefined,
-    });
+export async function bulkUpdateStatus(
+  orgId: string,
+  taskIds: string[],
+  status: TaskStatus,
+  blockedReason?: string | null,
+) {
+  return run(() => bulkStatusTx(orgId, taskIds, status, blockedReason));
+}
 
-    return {};
-  },
-);
+export async function bulkAssign(
+  orgId: string,
+  taskIds: string[],
+  userId: string,
+  options: { role?: "owner" | "collaborator"; confirmFlagged?: boolean } = {},
+) {
+  return run(() => bulkAssignTx(orgId, { taskIds, userId, ...options }));
+}
 
-export const bulkDelete = withOrgContext(async (ctx, taskIds: string[]): Promise<ActionResult> => {
-  const now = new Date();
-  await prisma.task.updateMany({
-    where: {
-      organizationId: ctx.organizationId,
-      OR: [{ id: { in: taskIds } }, { parentTaskId: { in: taskIds } }],
-    },
-    data: { deletedAt: now },
+export async function bulkDelete(orgId: string, taskIds: string[]) {
+  return run(() => bulkDeleteTx(orgId, taskIds));
+}
+
+export async function addTaskComment(orgId: string, taskId: string, body: string) {
+  return run(() => addCommentTx(orgId, taskId, body));
+}
+
+export async function editTaskComment(orgId: string, commentId: string, body: string) {
+  return run(() => editCommentTx(orgId, commentId, body));
+}
+
+export async function deleteTaskComment(orgId: string, commentId: string) {
+  return run(() => deleteCommentTx(orgId, commentId));
+}
+
+export async function postWeeklyUpdate(orgId: string, input: { weekStart: string; note?: string | null }) {
+  return run(() => postWeeklyTx(orgId, input));
+}
+
+const loadCommentsTx = withOrgAction(async (ctx, taskId: string, before: string | null) => {
+  const page = await getComments(ctx.db, ctx.organizationId, taskId, {
+    before,
+    take: COMMENTS_PAGE_SIZE,
   });
-  return {};
+  return page;
 });
+
+/** A page of comments for the dialog (lazy-loaded; oldest first). */
+export async function loadTaskComments(
+  orgId: string,
+  taskId: string,
+  before: string | null = null,
+): Promise<{ comments: TaskCommentItem[]; hasMore: boolean; error?: string }> {
+  try {
+    return await loadCommentsTx(orgId, taskId, before);
+  } catch (error) {
+    const message = refusal(error);
+    if (message) return { comments: [], hasMore: false, error: message };
+    throw error;
+  }
+}
+
+const loadActivityTx = withOrgAction(async (ctx, taskId: string) =>
+  getActivity(ctx.db, ctx.organizationId, taskId),
+);
+
+export async function loadTaskActivity(orgId: string, taskId: string): Promise<TaskActivityItem[]> {
+  try {
+    return await loadActivityTx(orgId, taskId);
+  } catch (error) {
+    if (refusal(error)) return [];
+    throw error;
+  }
+}
+
+const loadTaskTx = withOrgAction(async (ctx, taskId: string) =>
+  getTaskDetail(ctx.db, ctx.organizationId, taskId),
+);
+
+/** One task in the list shape (the dialog opens subtasks with it). */
+export async function loadTaskDetail(orgId: string, taskId: string): Promise<TaskListItem | null> {
+  try {
+    return await loadTaskTx(orgId, taskId);
+  } catch (error) {
+    if (refusal(error)) return null;
+    throw error;
+  }
+}

@@ -108,11 +108,6 @@ const LEGACY_ALLOWLIST = [
   "src/app/onboarding/actions.ts",
   "src/app/onboarding/page.tsx",
   "src/lib/invitations.ts",
-  // B6 Tasks.
-  "src/app/app/[[]orgSlug]/tasks/actions.ts",
-  "src/app/app/[[]orgSlug]/tasks/page.tsx",
-  "src/app/app/[[]orgSlug]/tasks/projects-actions.ts",
-  "src/app/app/[[]orgSlug]/tasks/queries.ts",
   // B7 Calendar: calendar pages and actions, polls, the per-event .ics.
   "src/app/app/[[]orgSlug]/calendar/actions.ts",
   "src/app/app/[[]orgSlug]/calendar/page.tsx",
@@ -135,8 +130,6 @@ const LEGACY_ALLOWLIST = [
 const LEGACY_CLIENT_ALLOWLIST = [
   // B7 Calendar: the ICS feed.
   "src/app/api/calendar/feed/[[]token]/route.ts",
-  // B6 Tasks: the due-date digest, replaced by reminder jobs in Phase 6.
-  "src/app/api/cron/due-date-digest/route.ts",
 ];
 
 /** Directories written after the 0B cutover: no legacy client, ever. */
@@ -149,6 +142,8 @@ const NEW_CODE = [
   "src/app/poll/**",
   "src/components/calendar/**",
   "src/lib/calendar/**",
+  "src/app/app/[[]orgSlug]/tasks/**",
+  "src/components/tasks/**",
   "src/app/app/[[]orgSlug]/profile/**",
   "src/app/app/[[]orgSlug]/people/**",
   "src/app/app/[[]orgSlug]/settings/{general,integrations,privacy,theme,danger}/**",

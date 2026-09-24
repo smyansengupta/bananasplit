@@ -7,9 +7,11 @@ import { TaskCard, type TaskCardData } from "@/components/tasks/task-card";
 
 export function SortableTaskCard({
   task,
+  todayKey,
   onOpen,
 }: {
   task: TaskCardData;
+  todayKey: string;
   onOpen: (taskId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -35,7 +37,7 @@ export function SortableTaskCard({
       {...attributes}
       {...listeners}
     >
-      <TaskCard task={task} />
+      <TaskCard task={task} todayKey={todayKey} />
     </div>
   );
 }

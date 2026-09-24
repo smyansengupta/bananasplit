@@ -141,6 +141,7 @@ export const JOB_KINDS = {
     tier: "fast",
     afterEligible: true,
     sendsEmail: true,
+    handler: () => import("@/server/tasks/jobs").then((m) => m.taskReminderJob),
     description: "Due-date reminder; key task-reminder:{taskId}:{dueDate}:{userId}. Runs once due.",
   }),
   "task-digest": kind({
@@ -151,7 +152,20 @@ export const JOB_KINDS = {
     tier: "fast",
     afterEligible: false,
     sendsEmail: true,
+    handler: () => import("@/server/tasks/jobs").then((m) => m.taskDigestJob),
     description: "Daily task digest per user (once=true), enqueued by /api/cron/task-digest.",
+  }),
+  "weekly-update-reminder": kind({
+    payload: z.object({ userId: id, weekStart: isoDate }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: false,
+    sendsEmail: true,
+    handler: () => import("@/server/tasks/jobs").then((m) => m.weeklyUpdateReminderJob),
+    description:
+      "Sunday 18:00 local reminder to a lead who hasn't posted the week's update (once=true), enqueued by /api/cron/task-digest.",
   }),
 
   // ---- Calendar (Phase 7; handlers owned by B7) ----

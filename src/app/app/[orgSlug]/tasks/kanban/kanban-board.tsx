@@ -13,16 +13,18 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import type { OrgMemberOption } from "@/components/tasks/assignee-picker";
-import type { LabelOption } from "@/components/tasks/label-picker";
+import { useBlockedReason } from "@/components/tasks/prompts";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import { useTasks } from "@/components/tasks/tasks-context";
+import type { TaskItem } from "@/components/tasks/types";
 import { TaskStatus } from "@/generated/prisma/enums";
+import { STATUS_ORDER, statusTransitionData } from "@/lib/tasks/status";
 
 import { reorderTask } from "../actions";
-import type { TaskWithRelations } from "../queries";
 import { KanbanColumn } from "./kanban-column";
 
 const COLUMNS: { status: TaskStatus; title: string }[] = [
@@ -31,20 +33,27 @@ const COLUMNS: { status: TaskStatus; title: string }[] = [
   { status: TaskStatus.BLOCKED, title: "Blocked" },
   { status: TaskStatus.COMPLETED, title: "Completed" },
 ];
-const STATUS_ORDER = COLUMNS.map((c) => c.status);
 const COLUMN_IDS = new Set<string>(STATUS_ORDER);
 
-interface Props {
-  orgId: string;
-  initialTasks: TaskWithRelations[];
+/**
+ * The kanban board (react-query holds the optimistic order). Dragging into
+ * Blocked asks what it's blocked on; a refused or failed move rolls back.
+ * Completed shows the last 14 days, with a link to show older ones.
+ */
+export function KanbanBoard({
+  initialTasks,
+  queryKey,
+  olderCompleted,
+  showAllHref,
+}: {
+  initialTasks: TaskItem[];
   queryKey: readonly unknown[];
-  members: OrgMemberOption[];
-  labels: LabelOption[];
-  projects: { id: string; name: string }[];
-}
-
-export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, projects }: Props) {
+  olderCompleted: number;
+  showAllHref: string | null;
+}) {
+  const { org, announce } = useTasks();
   const queryClient = useQueryClient();
+  const [blockedPrompt, askReason] = useBlockedReason();
   const { data: tasks = initialTasks } = useQuery({
     queryKey,
     queryFn: () => Promise.resolve(initialTasks),
@@ -52,26 +61,18 @@ export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, pr
     staleTime: Infinity,
   });
 
-  // initialData only seeds the cache once. Every later Server Component
-  // refresh (after a create/edit/delete elsewhere in this dialog) hands us a
-  // new initialTasks prop, which this syncs into the query cache — otherwise
-  // the board would keep showing pre-refresh data after non-drag edits.
+  // initialData only seeds the cache once; every later server render (after
+  // refresh() in an action) hands us new initialTasks, synced in here.
   useEffect(() => {
     queryClient.setQueryData(queryKey, initialTasks);
   }, [initialTasks, queryClient, queryKey]);
 
-  const [activeTask, setActiveTask] = useState<TaskWithRelations | null>(null);
-  // Store only the id, not a task snapshot — deriving the task from the live
-  // `tasks` array on every render means edits (e.g. toggling a subtask) show
-  // up immediately instead of needing the dialog to be closed and reopened.
-  const [detailState, setDetailState] = useState<{
-    open: boolean;
-    taskId: string | null;
-    defaultStatus?: TaskStatus;
-  }>({ open: false, taskId: null });
-  const detailTask = detailState.taskId
-    ? (tasks.find((t) => t.id === detailState.taskId) ?? null)
-    : null;
+  const [activeTask, setActiveTask] = useState<TaskItem | null>(null);
+  const [detail, setDetail] = useState<{ open: boolean; taskId: string | null; defaultStatus?: TaskStatus }>({
+    open: false,
+    taskId: null,
+  });
+  const detailTask = detail.taskId ? (tasks.find((t) => t.id === detail.taskId) ?? null) : null;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -79,24 +80,21 @@ export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, pr
   );
 
   const columns = useMemo(() => {
-    const grouped: Record<TaskStatus, TaskWithRelations[]> = {
+    const grouped: Record<TaskStatus, TaskItem[]> = {
       NOT_STARTED: [],
       IN_PROGRESS: [],
       BLOCKED: [],
       COMPLETED: [],
     };
-    for (const task of tasks) {
-      grouped[task.status].push(task);
-    }
+    for (const task of tasks) grouped[task.status].push(task);
     return grouped;
   }, [tasks]);
 
   function handleDragStart(event: DragStartEvent) {
-    const task = tasks.find((t) => t.id === event.active.id);
-    setActiveTask(task ?? null);
+    setActiveTask(tasks.find((t) => t.id === event.active.id) ?? null);
   }
 
-  function handleDragEnd(event: DragEndEvent) {
+  async function handleDragEnd(event: DragEndEvent) {
     setActiveTask(null);
     const { active, over } = event;
     if (!over) return;
@@ -123,13 +121,14 @@ export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, pr
       const idx = targetColumnTasks.findIndex((t) => t.id === overTaskId);
       if (idx !== -1) insertIndex = idx;
     }
-
     const beforeTask = insertIndex > 0 ? targetColumnTasks[insertIndex - 1] : null;
-    const afterTask =
-      insertIndex < targetColumnTasks.length ? targetColumnTasks[insertIndex] : null;
+    const afterTask = insertIndex < targetColumnTasks.length ? targetColumnTasks[insertIndex] : null;
+    if (dragged.status === targetStatus && beforeTask?.id === dragged.id) return;
 
-    if (dragged.status === targetStatus && beforeTask?.id === dragged.id) {
-      return; // dropped back in the same spot
+    let blockedReason: string | null = null;
+    if (targetStatus === TaskStatus.BLOCKED && dragged.status !== TaskStatus.BLOCKED) {
+      blockedReason = await askReason(dragged.title);
+      if (!blockedReason) return;
     }
 
     const input = {
@@ -137,13 +136,16 @@ export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, pr
       status: targetStatus,
       beforeId: beforeTask?.id ?? null,
       afterId: afterTask?.id ?? null,
+      blockedReason,
     };
 
-    const previous = queryClient.getQueryData<TaskWithRelations[]>(queryKey);
-    queryClient.setQueryData<TaskWithRelations[]>(queryKey, (old = []) => {
+    const previous = queryClient.getQueryData<TaskItem[]>(queryKey);
+    queryClient.setQueryData<TaskItem[]>(queryKey, (old = []) => {
       const withoutActive = old.filter((t) => t.id !== activeId);
-      const moved = { ...dragged, status: targetStatus };
-
+      const moved: TaskItem =
+        dragged.status === targetStatus
+          ? dragged
+          : { ...dragged, ...statusTransitionData(dragged, targetStatus, { blockedReason }) };
       let insertAt: number;
       if (input.beforeId) {
         const idx = withoutActive.findIndex((t) => t.id === input.beforeId);
@@ -156,26 +158,31 @@ export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, pr
         insertAt = withoutActive.findIndex((t) => STATUS_ORDER.indexOf(t.status) > targetOrder);
         if (insertAt === -1) insertAt = withoutActive.length;
       }
-
       const next = withoutActive.slice();
       next.splice(insertAt, 0, moved);
       return next;
     });
 
-    reorderTask(orgId, input).then((result) => {
-      if (result?.error && previous) {
-        queryClient.setQueryData(queryKey, previous);
-      }
-    });
+    const rollback = (message: string) => {
+      if (previous) queryClient.setQueryData(queryKey, previous);
+      announce(message);
+    };
+    try {
+      const result = await reorderTask(org.id, input);
+      if (result.error) rollback(result.error);
+    } catch {
+      rollback("That move didn't save. Try again.");
+    }
   }
 
   return (
     <>
+      {blockedPrompt}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
+        onDragEnd={(e) => void handleDragEnd(e)}
         onDragCancel={() => setActiveTask(null)}
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -185,25 +192,27 @@ export function KanbanBoard({ orgId, initialTasks, queryKey, members, labels, pr
               id={col.status}
               title={col.title}
               tasks={columns[col.status]}
-              onOpenTask={(taskId) => setDetailState({ open: true, taskId })}
-              onAddTask={() =>
-                setDetailState({ open: true, taskId: null, defaultStatus: col.status })
+              todayKey={org.todayKey}
+              onOpenTask={(taskId) => setDetail({ open: true, taskId })}
+              onAddTask={() => setDetail({ open: true, taskId: null, defaultStatus: col.status })}
+              footer={
+                col.status === TaskStatus.COMPLETED && showAllHref && olderCompleted > 0 ? (
+                  <Link href={showAllHref} className="text-muted-foreground hover:text-foreground block px-1 text-xs">
+                    Show {olderCompleted} older completed
+                  </Link>
+                ) : null
               }
             />
           ))}
         </div>
-        <DragOverlay>{activeTask && <TaskCard task={activeTask} />}</DragOverlay>
+        <DragOverlay>{activeTask && <TaskCard task={activeTask} todayKey={org.todayKey} />}</DragOverlay>
       </DndContext>
 
       <TaskDetailDialog
-        orgId={orgId}
-        open={detailState.open}
-        onOpenChange={(open) => setDetailState((s) => ({ ...s, open }))}
+        open={detail.open}
+        onOpenChange={(open) => setDetail((s) => ({ ...s, open }))}
         task={detailTask}
-        defaultStatus={detailState.defaultStatus}
-        members={members}
-        labels={labels}
-        projects={projects}
+        defaults={{ status: detail.defaultStatus }}
       />
     </>
   );

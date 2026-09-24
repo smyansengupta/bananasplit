@@ -46,8 +46,15 @@ export const notificationPreferencesSchema = z
     types: z.partialRecord(z.enum(NotificationType), z.boolean()),
     digest: z.object({ enabled: z.boolean(), hourLocal: digestHourSchema }).strict(),
     reminderLeadDays: reminderLeadDaysSchema,
+    // Reminders for tasks the user only collaborates on (Tasks): opt-in.
+    collaboratorReminders: z.boolean(),
   })
   .strict();
+
+/** Types that stay off until the user turns them on (Tasks). */
+export const DEFAULT_OFF_TYPES: ReadonlySet<NotificationType> = new Set([
+  NotificationType.TASK_COMMENTED,
+]);
 
 export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
 export type TypePreferences = NotificationPreferences["types"];
@@ -58,6 +65,7 @@ export function defaultNotificationPreferences(): NotificationPreferences {
     types: {},
     digest: { enabled: false, hourLocal: DIGEST_HOUR_DEFAULT },
     reminderLeadDays: REMINDER_LEAD_DAYS_DEFAULT,
+    collaboratorReminders: false,
   };
 }
 
@@ -84,15 +92,19 @@ const v2Input = z.object({
     })
     .catch({ enabled: false, hourLocal: DIGEST_HOUR_DEFAULT }),
   reminderLeadDays: reminderLeadDaysSchema.catch(REMINDER_LEAD_DAYS_DEFAULT),
+  collaboratorReminders: z.boolean().catch(false),
 });
 
 /** The pre-v2 flat map ({ TASK_DUE_SOON: false }), upgraded. */
-const v1Input = objectMap.transform(
-  (flat): NotificationPreferences => ({
+const v1Input = objectMap.transform((flat): NotificationPreferences => {
+  const types = knownTypeBooleans(flat);
+  return {
     ...defaultNotificationPreferences(),
-    types: knownTypeBooleans(flat),
-  }),
-);
+    types,
+    // A v1 { TASK_DIGEST: true } counts as opting into the daily digest.
+    digest: { enabled: types[NotificationType.TASK_DIGEST] === true, hourLocal: DIGEST_HOUR_DEFAULT },
+  };
+});
 
 /**
  * The upgrade parser: v2 as is (repaired field by field), a flat v1 map
@@ -106,6 +118,7 @@ export const notificationPreferencesParser = z
       types: value.types,
       digest: { enabled: value.digest.enabled, hourLocal: value.digest.hourLocal },
       reminderLeadDays: value.reminderLeadDays,
+      collaboratorReminders: value.collaboratorReminders ?? false,
     }),
   )
   .catch(() => defaultNotificationPreferences());
@@ -115,10 +128,18 @@ export function parseNotificationPreferences(raw: unknown): NotificationPreferen
   return notificationPreferencesParser.parse(raw);
 }
 
-/** Whether `type` should also be emailed. TASK_DIGEST follows digest.enabled. */
+/**
+ * Whether `type` should also be emailed. TASK_DIGEST follows digest.enabled;
+ * DEFAULT_OFF_TYPES stay off until the user opts in; everything else is
+ * opt-out.
+ */
 export function emailEnabledFor(preferences: NotificationPreferences, type: NotificationType): boolean {
-  if (type === NotificationType.TASK_DIGEST) return preferences.digest.enabled;
-  return preferences.types[type] !== false;
+  if (type === NotificationType.TASK_DIGEST) {
+    return preferences.digest.enabled && preferences.types[type] !== false;
+  }
+  const explicit = preferences.types[type];
+  if (explicit !== undefined) return explicit;
+  return !DEFAULT_OFF_TYPES.has(type);
 }
 
 /** A partial update from the profile form. */
@@ -130,6 +151,7 @@ export const notificationPreferencesPatchSchema = z
       .strict()
       .optional(),
     reminderLeadDays: reminderLeadDaysSchema.optional(),
+    collaboratorReminders: z.boolean().optional(),
   })
   .strict();
 
@@ -151,6 +173,7 @@ export function applyNotificationPreferencesPatch(
       hourLocal: patch.digest?.hourLocal ?? current.digest.hourLocal,
     },
     reminderLeadDays: patch.reminderLeadDays ?? current.reminderLeadDays,
+    collaboratorReminders: patch.collaboratorReminders ?? current.collaboratorReminders,
   });
 }
 
