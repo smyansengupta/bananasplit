@@ -172,7 +172,7 @@ interface StreamRun {
  * A keyset stream (checkins, signups). With `reconcile`, reads from the
  * start without touching the stream's watermark and collects every id.
  */
-async function keysetStream<Row extends { id: string }>(opts: {
+async function keysetStream<Row extends { id: string; ts_key: string }>(opts: {
   stream: "checkins" | "signups";
   scope: SyncScope;
   state: StateRow;
@@ -206,7 +206,7 @@ async function keysetStream<Row extends { id: string }>(opts: {
     for (const r of rows) {
       const t = opts.tsOf(r);
       if (opts.reconcile || t.getTime() <= cutoff) {
-        next = { ts: t.toISOString(), id: r.id };
+        next = { ts: r.ts_key, id: r.id };
         if (opts.isUnmapped?.(r)) unmapped += 1;
       }
     }
@@ -230,7 +230,7 @@ async function keysetStream<Row extends { id: string }>(opts: {
     expected = { ts: next.ts, id: next.id, unmapped } as Prisma.JsonValue;
     if (opts.reconcile && rows.length === BATCH_SIZE) {
       const last = rows[rows.length - 1];
-      wm = { ts: opts.tsOf(last).toISOString(), id: last.id, unmapped };
+      wm = { ts: last.ts_key, id: last.id, unmapped };
       continue;
     }
     if (rows.length < BATCH_SIZE || !advanced) return { done: true, totals, seen };

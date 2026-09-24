@@ -109,6 +109,7 @@ export default async function DuplicatesPage({ params }: PageProps<"/app/[orgSlu
                   loserId={e.id}
                   loserTitle={e.title}
                   candidates={nearby.map((o) => ({ id: o.id, label: describe(o) }))}
+                  openSurvivor={false}
                 />
               </div>
             );
@@ -140,9 +141,8 @@ export default async function DuplicatesPage({ params }: PageProps<"/app/[orgSlu
                   organizationId={organization.id}
                   loserId={drop.id}
                   loserTitle={drop.title}
-                  candidates={[
-                    { id: keep.id, label: describe(keep) },
-                  ]}
+                  candidates={[{ id: keep.id, label: describe(keep) }]}
+                  openSurvivor={false}
                 />
               </div>
             );

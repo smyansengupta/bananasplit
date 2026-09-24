@@ -420,8 +420,9 @@ export interface MergeEventsResult {
  *      came from the website sync (synced rows are never deleted) and
  *      deleted when it is suite-native.
  *   2. Moves RSVPs (EventAttendee; the survivor's RSVP wins), Note.eventId,
- *      Transaction.eventId, BallotDefinition.linkedEventId, the import link
- *      log and a finalized availability poll.
+ *      Transaction.eventId, BallotDefinition.linkedEventId and a finalized
+ *      availability poll. The loser's import link log stays with it (the log
+ *      is append-only); a MERGED entry on the survivor records the merge.
  *   3. Copies the loser's website session link, term and stamp slot onto the
  *      survivor where the survivor has none. Two Events linked to different
  *      website sessions cannot be merged: the sync would recreate the loser.
@@ -532,10 +533,6 @@ export async function mergeEvents(
   const ballotDefinitions = await ctx.db.ballotDefinition.updateMany({
     where: { organizationId: org, linkedEventId: loser.id },
     data: { linkedEventId: survivor.id },
-  });
-  await ctx.db.eventLinkLog.updateMany({
-    where: { organizationId: org, eventId: loser.id },
-    data: { eventId: survivor.id },
   });
   const survivorPoll = await ctx.db.availabilityPoll.count({ where: { finalizedEventId: survivor.id } });
   if (survivorPoll === 0) {

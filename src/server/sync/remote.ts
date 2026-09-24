@@ -22,6 +22,8 @@ export interface RemoteSession {
 }
 
 export interface RemoteCheckin {
+  /** created_at as Postgres text (microseconds kept): the exact keyset position. */
+  ts_key: string;
   id: string;
   session_id: string;
   email: string;
@@ -32,6 +34,8 @@ export interface RemoteCheckin {
 }
 
 export interface RemoteSignup {
+  /** updated_at as Postgres text (microseconds kept): the exact keyset position. */
+  ts_key: string;
   id: string;
   name: string;
   email: string;
@@ -60,7 +64,12 @@ export interface RemoteUnsubscribe {
   handled_at: Date | null;
 }
 
-/** A keyset position: the last (timestamp, id) pair read. */
+/**
+ * A keyset position: the last (timestamp, id) pair read. `ts` is the
+ * timestamp as Postgres text, not a JS Date: a Date keeps milliseconds and
+ * Postgres keeps microseconds, so a Date watermark would re-read the last
+ * row forever.
+ */
 export interface Keyset {
   ts: string | null;
   id: string | null;
@@ -96,7 +105,7 @@ export function sourceReader(client: SourceQuery): SourceReader {
     },
     checkinsSince(after, limit = BATCH_SIZE) {
       return q<RemoteCheckin>(
-        `SELECT id, session_id, email, name, source, is_guest, created_at
+        `SELECT id, session_id, email, name, source, is_guest, created_at, created_at::text AS ts_key
            FROM suite_export.checkins_since($1::timestamptz, $2::uuid, $3::int)`,
         [after.ts, after.id, limit],
       );
@@ -104,7 +113,7 @@ export function sourceReader(client: SourceQuery): SourceReader {
     signupsSince(after, limit = BATCH_SIZE) {
       return q<RemoteSignup>(
         `SELECT id, name, email, class_year, colleges, meet_days, interests, term, source,
-                submissions, created_at, updated_at, added_to_list_at
+                submissions, created_at, updated_at, added_to_list_at, updated_at::text AS ts_key
            FROM suite_export.signups_since($1::timestamptz, $2::uuid, $3::int)`,
         [after.ts, after.id, limit],
       );

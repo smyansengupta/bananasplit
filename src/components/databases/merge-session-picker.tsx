@@ -20,6 +20,7 @@ export function MergeSessionPicker({
   loserTitle,
   candidates,
   startOpen = false,
+  openSurvivor = true,
 }: {
   organizationId: string;
   loserId: string;
@@ -27,6 +28,8 @@ export function MergeSessionPicker({
   /** Sessions to keep instead (nearby sessions, or the duplicate pair); without them an id is typed. */
   candidates?: { id: string; label: string }[];
   startOpen?: boolean;
+  /** After merging, open the surviving session in the drawer (Sessions page) or just refresh (queue). */
+  openSurvivor?: boolean;
 }) {
   const router = useRouter();
   const view = useViewParams();
@@ -87,7 +90,7 @@ export function MergeSessionPicker({
                   ? `Merged: ${moved.attendance} check-ins, ${moved.attendees} RSVPs, ${moved.notes} notes and ${moved.transactions} transactions moved.`
                   : "Merged.",
               );
-              view.update((p) => p.set("row", survivor), { keepPage: true });
+              if (openSurvivor) view.update((p) => p.set("row", survivor), { keepPage: true });
               router.refresh();
             });
           }}

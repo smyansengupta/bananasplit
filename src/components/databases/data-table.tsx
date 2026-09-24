@@ -534,6 +534,7 @@ export function DataTable(props: DataTableProps) {
                         "max-w-72 align-top whitespace-normal",
                         c.align === "right" && "text-right",
                         (c.type === "datetime" || c.type === "date") && "whitespace-nowrap",
+                        (c.type === "text" || c.type === "person" || c.type === "relation") && "min-w-36",
                       )}
                     >
                       <CellView cell={r.cells[c.key] ?? null} />
