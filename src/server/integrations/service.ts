@@ -9,6 +9,11 @@ import { can, requirePermission } from "@/lib/auth/permissions";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withOrgTx, withSystemOrgTx } from "@/server/db/context";
+// The data source's own tester: it understands the local stand-in config
+// and checks the export contract version, which is exactly what the sync
+// job will do next. One implementation, so Settings and the guided setup
+// can never disagree about whether the website is reachable.
+import { testSupabaseSource } from "@/server/sync/connection";
 import { displayName } from "@/server/email/escape";
 import { testEmail } from "@/server/email/templates";
 import { transportFor } from "@/server/email/transport";
@@ -45,7 +50,6 @@ import {
   claudeConnectionTest,
   testNetlifyHook,
   testResendDomain,
-  testSupabase,
 } from "./providers";
 
 /**
@@ -383,7 +387,7 @@ export async function saveSupabase(
       actor,
       provider: "SUPABASE_SOURCE",
       kind: "DB_PASSWORD",
-      test: testSupabase,
+      test: testSupabaseSource,
     }),
     "Saved. Connected read-only and found the website export functions.",
   );
@@ -594,7 +598,7 @@ export async function testProvider(
       return checkEmailDomain(orgId, actor);
     case "SUPABASE_SOURCE":
       return fromTest(
-        await testIntegration({ orgId, actor, provider, kind: "DB_PASSWORD", test: testSupabase }),
+        await testIntegration({ orgId, actor, provider, kind: "DB_PASSWORD", test: testSupabaseSource }),
         "Connected read-only and found the website export functions.",
       );
     case "NETLIFY_BUILD_HOOK":

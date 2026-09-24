@@ -10,11 +10,9 @@ import { toIntegrationDto } from "./catalog";
 import {
   clients,
   isNetlifyHookUrl,
-  supabaseConnection,
   claudeConnectionTest,
   testNetlifyHook,
   testResendDomain,
-  testSupabase,
 } from "./providers";
 
 const signal = new AbortController().signal;
@@ -115,78 +113,6 @@ describe("Resend domain check", () => {
     );
     expect(await testResendDomain(ctx("re_x", { fromAddress: "a@b.org" }))).toMatchObject({
       ok: false,
-    });
-  });
-});
-
-describe("Supabase data source", () => {
-  const good = {
-    projectRef: "abcdefghijklmnopqrst",
-    poolerRegion: "us-east-1",
-    poolerPrefix: "aws-0",
-    roleName: "cbc_suite_reader",
-  };
-
-  it("derives the pooler host and user; TLS is verified; no free-form host is accepted", () => {
-    const c = supabaseConnection(good, "pw", {});
-    expect(c).toMatchObject({
-      host: "aws-0-us-east-1.pooler.supabase.com",
-      user: "cbc_suite_reader.abcdefghijklmnopqrst",
-      database: "postgres",
-      ssl: { rejectUnauthorized: true, servername: "aws-0-us-east-1.pooler.supabase.com" },
-    });
-    expect(() =>
-      supabaseConnection({ ...good, poolerRegion: "evil.example.com" }, "pw", {}),
-    ).toThrow();
-    expect(() => supabaseConnection({ ...good, projectRef: "x.evil.com" }, "pw", {})).toThrow();
-    expect(() => supabaseConnection({ ...good, poolerPrefix: "aws-9" }, "pw", {})).toThrow();
-    expect(
-      supabaseConnection(good, "pw", { SUPABASE_ROOT_CA: "-----BEGIN CERTIFICATE-----\\nX" }).ssl,
-    ).toMatchObject({
-      ca: "-----BEGIN CERTIFICATE-----\nX",
-    });
-  });
-
-  function pgClient(query: (sql: string) => Promise<unknown>) {
-    return {
-      connect: vi.fn(async () => undefined),
-      query: vi.fn(query),
-      end: vi.fn(async () => undefined),
-    };
-  }
-
-  it("runs the contract check on a read-only connection and closes it", async () => {
-    const client = pgClient(async (sql) =>
-      sql.includes("contract_version") ? { rows: [{ v: 3 }] } : { rows: [] },
-    );
-    vi.spyOn(clients, "pg").mockReturnValue(client as never);
-    expect(await testSupabase(ctx("pw", good))).toEqual({
-      ok: true,
-      config: { contractVersion: "3" },
-    });
-    expect(client.query.mock.calls[0][0]).toBe("SET default_transaction_read_only = on");
-    expect(client.end).toHaveBeenCalled();
-  });
-
-  it("explains a bad password and a missing export contract", async () => {
-    vi.spyOn(clients, "pg").mockReturnValue(
-      pgClient(async () => {
-        throw Object.assign(new Error("password authentication failed"), { code: "28P01" });
-      }) as never,
-    );
-    expect(await testSupabase(ctx("pw", good))).toMatchObject({
-      ok: false,
-      reason: expect.stringMatching(/refused/),
-    });
-    vi.spyOn(clients, "pg").mockReturnValue(
-      pgClient(async (sql) => {
-        if (sql.startsWith("SET")) return { rows: [] };
-        throw Object.assign(new Error("schema does not exist"), { code: "3F000" });
-      }) as never,
-    );
-    expect(await testSupabase(ctx("pw", good))).toMatchObject({
-      ok: false,
-      reason: expect.stringMatching(/suite-export\.sql/),
     });
   });
 });

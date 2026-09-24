@@ -1,6 +1,7 @@
-import { ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
@@ -45,6 +46,24 @@ export default async function IntegrationsSettingsPage({
           Each integration uses this organization&apos;s own keys, stored encrypted and never shown
           again after saving. Owners and admins can connect and test; only owners can remove.
         </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border p-4">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-medium">Setting these up for the first time?</p>
+          <p className="text-muted-foreground text-sm">
+            The guided setup takes them one at a time, with where to find each credential and a test
+            that says what to change when it fails. This page stays here for changing one later.
+          </p>
+        </div>
+        <Button asChild>
+          <Link href={`/app/${orgSlug}/setup`}>
+            Guided setup
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href={`/app/${orgSlug}/setup/status`}>Connection status</Link>
+        </Button>
       </div>
       <p
         role="status"

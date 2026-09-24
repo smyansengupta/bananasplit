@@ -1,19 +1,25 @@
 import Link from "next/link";
 
+import { SetupPrompt } from "@/components/setup/setup-prompt";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMoneyOwedToUser } from "@/app/app/[orgSlug]/finance/queries";
+import { can } from "@/lib/auth/permissions";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { formatCents } from "@/lib/finance/money";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { loadSetupState } from "@/server/setup/progress";
 
 export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
-  const { organization: org, user } = await getOrgContextBySlug(orgSlug);
+  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  // Only owners and admins can act on it, and RLS hides the integration
+  // rows from everyone else anyway.
+  const canSetUp = can({ role }, "integrations.write");
 
   // One transaction as the member: the counts run one after another on its
   // connection, and RLS bounds each to the org.
   const now = new Date();
-  const { openTaskCount, overdueTaskCount, upcomingEventCount, moneyOwedToYouCents } =
+  const { openTaskCount, overdueTaskCount, upcomingEventCount, moneyOwedToYouCents, setup } =
     await withOrgTx(org.id, async ({ db }) => ({
       openTaskCount: await db.task.count({
         where: { organizationId: org.id, deletedAt: null, status: { not: "COMPLETED" } },
@@ -30,6 +36,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         where: { organizationId: org.id, deletedAt: null, startsAt: { gte: now } },
       }),
       moneyOwedToYouCents: await getMoneyOwedToUser(db, org.id, user.id),
+      setup: canSetUp ? await loadSetupState(db, org.id) : null,
     })).catch(handleAuthErrorInPage);
 
   return (
@@ -40,6 +47,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
           Organization: <span className="font-mono">{orgSlug}</span>
         </p>
       </div>
+      {setup ? <SetupPrompt orgSlug={orgSlug} state={setup} /> : null}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link href={`/app/${orgSlug}/tasks`}>
           <Card className="hover:bg-accent/50 transition-colors">
