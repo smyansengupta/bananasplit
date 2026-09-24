@@ -54,6 +54,32 @@ export interface EventServiceContext {
 export interface EventSaveOptions {
   /** "suite" (default) marks suiteEditedAt; the website sync and Google import pass their origin. */
   origin?: "suite" | "sync" | "import";
+  /**
+   * The Google import (B7) only: link the event to an existing Google event.
+   * On create the row starts SYNCED (its data came from that Google event)
+   * and no gcal job is queued; on update the link is recorded and the usual
+   * gcal job overwrites the Google copy with the suite's fields.
+   */
+  google?: GoogleLink;
+  /** Importers only: several candidate matches, so list it under 'Possible duplicates'. */
+  needsReview?: boolean;
+}
+
+/** An existing Google Calendar event an Event mirrors. */
+export interface GoogleLink {
+  calendarId: string;
+  eventId: string;
+  etag?: string | null;
+  htmlLink?: string | null;
+}
+
+function googleLinkData(link: GoogleLink) {
+  return {
+    googleCalendarId: link.calendarId,
+    googleEventId: link.eventId,
+    googleEtag: link.etag ?? null,
+    googleHtmlLink: link.htmlLink ?? null,
+  };
 }
 
 export class EventValidationError extends Error {
@@ -320,7 +346,10 @@ export async function createEvent(
   await checkHost(ctx, data.hostUserId);
 
   const integrations = await loadIntegrations(ctx);
-  const googleSync = needsGoogleSync(integrations, { visibility: data.visibility, deleted: false }, null);
+  const link = options.google;
+  const googleSync = link
+    ? false
+    : needsGoogleSync(integrations, { visibility: data.visibility, deleted: false }, null);
   const event = await ctx.db.event.create({
     data: {
       ...data,
@@ -330,7 +359,13 @@ export async function createEvent(
       hostName: data.hostUserId ? null : data.hostName,
       suiteEditedAt: (options.origin ?? "suite") === "suite" ? new Date() : null,
       syncVersion: 1,
-      googleSyncState: googleSync ? CalendarSyncState.PENDING : CalendarSyncState.NOT_APPLICABLE,
+      googleSyncState: link
+        ? CalendarSyncState.SYNCED
+        : googleSync
+          ? CalendarSyncState.PENDING
+          : CalendarSyncState.NOT_APPLICABLE,
+      ...(link ? { ...googleLinkData(link), googleSyncedAt: new Date() } : {}),
+      ...(options.needsReview ? { needsReview: true } : {}),
     },
     select: EVENT_SELECT,
   });
@@ -378,7 +413,10 @@ export async function updateEvent(
       ...(changes.hostUserId ? { hostName: null } : {}),
       ...((options.origin ?? "suite") === "suite" ? { suiteEditedAt: new Date() } : {}),
       syncVersion: { increment: 1 },
-      ...(googleSync ? { googleSyncState: CalendarSyncState.PENDING } : {}),
+      // A mirrored event edited while Google is disconnected stays PENDING,
+      // so "Sync now" after reconnecting pushes the edit.
+      ...(googleSync || before.googleEventId ? { googleSyncState: CalendarSyncState.PENDING } : {}),
+      ...(options.google ? googleLinkData(options.google) : {}),
     },
     select: EVENT_SELECT,
   });
@@ -409,7 +447,7 @@ export async function deleteEvent(
       deletedAt: new Date(),
       ...((options.origin ?? "suite") === "suite" ? { suiteEditedAt: new Date() } : {}),
       syncVersion: { increment: 1 },
-      ...(googleSync ? { googleSyncState: CalendarSyncState.PENDING } : {}),
+      ...(googleSync || before.googleEventId ? { googleSyncState: CalendarSyncState.PENDING } : {}),
     },
     select: EVENT_SELECT,
   });

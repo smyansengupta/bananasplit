@@ -41,7 +41,12 @@ needs, plus what to do when something breaks.
    every deploy, including the first one. Nothing manual required.
 5. **Auth** — create the Google OAuth client (see spec §11, human step 1:
    `openid email profile` scopes only, no Calendar scope) and add the
-   Vercel-assigned domain(s) to its authorized redirect URIs.
+   Vercel-assigned domain(s) to its authorized redirect URIs. Google
+   Calendar sync uses a **second, separate** OAuth client
+   (`GOOGLE_CALENDAR_CLIENT_ID` / `_SECRET`, Calendar API enabled, scopes
+   `calendar.events.owned` and `calendar.calendarlist.readonly`, a published
+   and verified consent screen); the sign-in client never asks for Calendar
+   access. Setup and the public events feed: `docs/features/calendar.md`.
 6. **Sentry** — create a project (Next.js platform), set
    `NEXT_PUBLIC_SENTRY_DSN` in Vercel. Optionally set `SENTRY_AUTH_TOKEN` /
    `SENTRY_ORG` / `SENTRY_PROJECT` too, so the build step uploads source maps

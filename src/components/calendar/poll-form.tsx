@@ -27,7 +27,16 @@ function minutesFromTimeInput(value: string): number {
   return h * 60 + m;
 }
 
-export function PollForm({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
+export function PollForm({
+  orgId,
+  orgSlug,
+  defaultTimezone,
+}: {
+  orgId: string;
+  orgSlug: string;
+  /** The org's timezone; the viewer's own is the fallback. */
+  defaultTimezone?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +57,9 @@ export function PollForm({ orgId, orgSlug }: { orgId: string; orgSlug: string })
       return ["UTC"];
     }
   }, []);
-  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [timezone, setTimezone] = useState(
+    () => defaultTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
 
   function handleSubmit() {
     setError(null);
@@ -62,7 +73,8 @@ export function PollForm({ orgId, orgSlug }: { orgId: string; orgSlug: string })
         dailyEndMinutes: minutesFromTimeInput(dailyEnd),
         granularityMinutes: granularity,
         durationMinutes: duration,
-        closesAt: closesAt || null,
+        // datetime-local is the viewer's wall time; send the instant.
+        closesAt: closesAt ? new Date(closesAt).toISOString() : null,
       });
       if (result.error) {
         setError(result.error);

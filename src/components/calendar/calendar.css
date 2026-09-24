@@ -1,0 +1,65 @@
+/*
+ * FullCalendar on the app's theme tokens (light, dark and org themes), so
+ * the grid follows Settings > Theme instead of FullCalendar's own colors.
+ * Scoped to .cbc-calendar.
+ */
+.cbc-calendar {
+  --fc-page-bg-color: var(--background);
+  --fc-neutral-bg-color: var(--muted);
+  --fc-neutral-text-color: var(--muted-foreground);
+  --fc-border-color: var(--border);
+  --fc-button-text-color: var(--foreground);
+  --fc-button-bg-color: var(--background);
+  --fc-button-border-color: var(--border);
+  --fc-button-hover-bg-color: var(--muted);
+  --fc-button-hover-border-color: var(--border);
+  --fc-button-active-bg-color: var(--accent);
+  --fc-button-active-border-color: var(--ring);
+  --fc-today-bg-color: color-mix(in oklch, var(--primary) 8%, transparent);
+  --fc-highlight-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  --fc-list-event-hover-bg-color: var(--muted);
+  --fc-now-indicator-color: var(--destructive);
+  --fc-more-link-bg-color: var(--muted);
+  --fc-more-link-text-color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.cbc-calendar .fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.cbc-calendar .fc .fc-button {
+  font-size: 0.8125rem;
+  border-radius: calc(var(--radius, 0.5rem) - 2px);
+  box-shadow: none;
+}
+
+.cbc-calendar .fc .fc-button-primary:not(:disabled).fc-button-active {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.cbc-calendar .fc .fc-col-header-cell-cushion,
+.cbc-calendar .fc .fc-daygrid-day-number,
+.cbc-calendar .fc .fc-list-day-text,
+.cbc-calendar .fc .fc-list-day-side-text {
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.cbc-calendar .fc .fc-daygrid-dot-event,
+.cbc-calendar .fc .fc-list-event {
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.cbc-calendar .fc .fc-daygrid-dot-event:hover {
+  background: var(--muted);
+}
+
+/* Internal events read a little quieter than public ones. */
+.cbc-calendar .fc .cbc-event-internal .fc-event-main,
+.cbc-calendar .fc .fc-daygrid-dot-event.cbc-event-internal {
+  opacity: 0.85;
+}
