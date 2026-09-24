@@ -1,11 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { Role } from "@/generated/prisma/client";
-import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
-import { buildPollView } from "@/lib/polls/poll-view";
-import { prisma } from "@/lib/prisma";
 import { PollResponder } from "@/components/calendar/poll-responder";
+import { can } from "@/lib/auth/permissions";
+import { buildPollView } from "@/lib/polls/poll-view";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import { getPollSource } from "../../queries";
 import { SharePollLink } from "./share-poll-link";
@@ -14,32 +12,18 @@ export default async function PollDetailPage({
   params,
 }: PageProps<"/app/[orgSlug]/calendar/polls/[pollId]">) {
   const { orgSlug, pollId } = await params;
+  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  const poll = await withOrgTx(org.id, ({ db }) => getPollSource(db, org.id, pollId));
+  if (!poll) notFound();
 
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    notFound();
-  }
-
-  let ctx: OrgContext;
-  try {
-    ctx = await requireOrgMembership(org.id);
-  } catch (error) {
-    handleAuthErrorInPage(error);
-  }
-
-  const poll = await getPollSource(pollId);
-  if (!poll || poll.organizationId !== org.id) {
-    notFound();
-  }
-
-  const canFinalize =
-    poll.createdById === ctx.user.id || ctx.role === Role.OWNER || ctx.role === Role.ADMIN;
+  // Finalizing creates an event, which is ADMIN+ (the event service).
+  const canFinalize = can({ role }, "events.write");
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <SharePollLink pollId={poll.id} />
       <PollResponder
-        poll={buildPollView(poll, { kind: "member", userId: ctx.user.id })}
+        poll={buildPollView(poll, { kind: "member", userId: user.id })}
         respondAs="member"
         orgId={org.id}
         orgSlug={orgSlug}

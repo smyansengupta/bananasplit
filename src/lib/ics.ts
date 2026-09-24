@@ -31,6 +31,8 @@ export interface IcsEvent {
   /** URL property (the RSVP link). http(s) only; anything else is dropped. */
   url?: string | null;
   createdAt?: Date | null;
+  /** The event's org timezone, when a feed mixes orgs (defaults to the calendar's). */
+  timeZone?: string;
 }
 
 export interface IcsCalendarOptions {
@@ -126,7 +128,7 @@ export function eventUid(eventId: string, uidHost: string = defaultUidHost()): s
 function buildVEvent(event: IcsEvent, timeZone: string, uidHost: string): string[] {
   const lines = ["BEGIN:VEVENT", `UID:${eventUid(event.id, uidHost)}`, `DTSTAMP:${formatUtc(event.updatedAt)}`];
   if (event.allDay) {
-    const span = allDaySpan(event.startsAt, event.endsAt, timeZone);
+    const span = allDaySpan(event.startsAt, event.endsAt, event.timeZone ? safeTimeZone(event.timeZone) : timeZone);
     lines.push(`DTSTART;VALUE=DATE:${compactDate(span.start)}`);
     lines.push(`DTEND;VALUE=DATE:${compactDate(span.endExclusive)}`);
   } else {

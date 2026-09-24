@@ -1,17 +1,26 @@
-import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { EventKind, EventVisibility, Prisma, Role } from "@/generated/prisma/client";
+import { can } from "@/lib/auth/permissions";
+import type { TxClient } from "@/server/db/context";
+import { userPublicSelect } from "@/server/members";
+
+/**
+ * Calendar reads. Every function takes the caller's transaction client
+ * (ctx.db from withOrgTx / withOrgAction, or withSystemOrgTx for the public
+ * poll page) and the org id; RLS scopes them to that org either way.
+ */
 
 /**
  * An event's relations as `viewerId` may see them. Linked notes follow the
  * notes rules (0A Fix 11): deleted notes never, and PRIVATE notes only for
- * their author, regardless of role (their titles used to leak here).
+ * their author, regardless of role.
  */
 export function eventInclude(viewerId: string) {
   return {
     attendees: {
-      include: { user: { select: { id: true, name: true, email: true, image: true } } },
+      select: { userId: true, rsvp: true, user: { select: userPublicSelect } },
     },
-    createdBy: { select: { id: true, name: true, email: true, image: true } },
+    host: { select: userPublicSelect },
+    createdBy: { select: userPublicSelect },
     notes: {
       where: {
         deletedAt: null,
@@ -34,53 +43,79 @@ export const calendarEventSelect = {
   startsAt: true,
   endsAt: true,
   allDay: true,
-  createdById: true,
+  kind: true,
+  visibility: true,
+  location: true,
+  googleSyncState: true,
+  needsReview: true,
 } satisfies Prisma.EventSelect;
 
 export type CalendarEventSummary = Prisma.EventGetPayload<{ select: typeof calendarEventSelect }>;
 
-export function getOrgEvents(organizationId: string) {
-  return prisma.event.findMany({
-    where: { organizationId, deletedAt: null },
+/** At most this many events per window (a month grid is a few dozen). */
+export const CALENDAR_WINDOW_LIMIT = 1000;
+
+export interface RangeFilter {
+  from: Date;
+  to: Date;
+  kinds?: readonly EventKind[];
+  visibility?: EventVisibility | null;
+}
+
+/**
+ * The range-windowed filter: events overlapping [from, to), i.e.
+ * startsAt < to AND endsAt > from, live and unmerged, optionally by kind
+ * and visibility.
+ */
+export function rangeWhere(organizationId: string, f: RangeFilter): Prisma.EventWhereInput {
+  return {
+    organizationId,
+    deletedAt: null,
+    mergedIntoId: null,
+    startsAt: { lt: f.to },
+    endsAt: { gt: f.from },
+    ...(f.kinds && f.kinds.length > 0 ? { kind: { in: [...f.kinds] } } : {}),
+    ...(f.visibility ? { visibility: f.visibility } : {}),
+  };
+}
+
+export function getEventsInRange(db: TxClient, organizationId: string, f: RangeFilter) {
+  return db.event.findMany({
+    where: rangeWhere(organizationId, f),
     select: calendarEventSelect,
-    orderBy: { startsAt: "asc" },
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+    take: CALENDAR_WINDOW_LIMIT,
   });
 }
 
-export function getEventById(organizationId: string, eventId: string, viewerId: string) {
-  return prisma.event.findFirst({
+export function getEventById(db: TxClient, organizationId: string, eventId: string, viewerId: string) {
+  return db.event.findFirst({
     where: { id: eventId, organizationId, deletedAt: null },
     include: eventInclude(viewerId),
   });
 }
 
 /**
- * Event create/update/delete rule (0A Fix 8): the creator, or OWNER/ADMIN.
- * The Event UPDATE and DELETE policies enforce the same rule for app_user.
+ * Who may create, edit, move and delete events: OWNER and ADMIN (the event
+ * service's events.write). The event argument is kept for call sites that
+ * pass it; ownership no longer grants editing.
  */
 export function canEditEvent(
-  event: { createdById: string },
-  viewer: { userId: string; role: string },
+  _event: unknown,
+  viewer: { userId?: string; role: Role | string | null | undefined },
 ): boolean {
-  return event.createdById === viewer.userId || viewer.role === "OWNER" || viewer.role === "ADMIN";
-}
-
-export function getOrgMembersForPicker(organizationId: string) {
-  return prisma.membership.findMany({
-    where: { organizationId },
-    include: { user: { select: { id: true, name: true, email: true, image: true } } },
-    orderBy: { user: { name: "asc" } },
-  });
+  return can({ role: viewer.role as Role | null | undefined }, "events.write");
 }
 
 /** The polls list: titles, a response count and whether each is finalized. */
-export function getOrgPolls(organizationId: string) {
-  return prisma.availabilityPoll.findMany({
+export function getOrgPolls(db: TxClient, organizationId: string) {
+  return db.availabilityPoll.findMany({
     where: { organizationId },
     select: {
       id: true,
       title: true,
       finalizedEventId: true,
+      createdById: true,
       _count: { select: { responses: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -92,9 +127,9 @@ export function getOrgPolls(organizationId: string) {
  * the org and creator for the caller's own checks. Never hand this to a
  * client component: it holds user ids and guest key hashes. Build the DTO.
  */
-export function getPollSource(pollId: string) {
-  return prisma.availabilityPoll.findUnique({
-    where: { id: pollId },
+export function getPollSource(db: TxClient, organizationId: string, pollId: string) {
+  return db.availabilityPoll.findFirst({
+    where: { id: pollId, organizationId },
     select: {
       id: true,
       organizationId: true,

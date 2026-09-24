@@ -2,269 +2,328 @@
 
 import { z } from "zod";
 
-import { ConferenceProvider, NotificationType, RSVPStatus } from "@/generated/prisma/client";
-import { withOrgContext } from "@/lib/auth/with-org-context";
-import { notifyUser } from "@/lib/notifications";
-import { prisma } from "@/lib/prisma";
-
-import { canEditEvent } from "./queries";
-
-async function notifyEventInvitees(
-  organizationId: string,
-  eventTitle: string,
-  attendeeIds: string[],
-) {
-  if (attendeeIds.length === 0) return;
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    select: { slug: true },
-  });
-  await Promise.all(
-    attendeeIds.map((userId) =>
-      notifyUser({
-        organizationId,
-        userId,
-        type: NotificationType.EVENT_INVITE,
-        title: `You were invited to "${eventTitle}"`,
-        linkUrl: org ? `/app/${org.slug}/calendar` : undefined,
-      }),
-    ),
-  );
-}
-
-const CONFERENCE_PROVIDER_VALUES = Object.values(ConferenceProvider) as [
+import {
   ConferenceProvider,
-  ...ConferenceProvider[],
-];
-const RSVP_VALUES = Object.values(RSVPStatus) as [RSVPStatus, ...RSVPStatus[]];
+  EventKind,
+  EventVisibility,
+  NotificationType,
+  RSVPStatus,
+} from "@/generated/prisma/client";
+import { requirePermission } from "@/lib/auth/permissions";
+import { conferenceUrlError, resolveTimes } from "@/lib/calendar/event-input";
+import { withOrgAction, type OrgContext } from "@/server/db/context";
+import * as events from "@/server/events/service";
+import { notifyUsers } from "@/server/notifications";
+
+import { actionError } from "./action-result";
 
 /**
- * Paste-only validation per provider (no auto-generated links in v1).
- * `Other` accepts any https URL; `None` requires the field to be empty.
+ * Calendar Server Actions. Every write goes through the event service
+ * (src/server/events/service.ts): ADMIN+ only, validated, audited, the
+ * Google mirror and the website rebuild queued, and the public feed's cache
+ * invalidated after commit (updateTag, since these are Server Actions).
+ * Attendees and their notifications are the calendar's own concern and
+ * happen in the same transaction.
+ *
+ * Times: timed events arrive as ISO instants (the browser converts its
+ * local wall time); all-day events arrive as the first and LAST day
+ * ("YYYY-MM-DD") and are stored as org-timezone midnights with an exclusive
+ * end. Each action returns { error } rather than throwing.
  */
-function validateConferenceUrl(provider: ConferenceProvider, url: string | null | undefined) {
-  const trimmed = url?.trim() || "";
 
-  if (provider === ConferenceProvider.NONE) {
-    return trimmed ? "Remove the link or choose a conferencing provider." : null;
-  }
-  if (!trimmed) {
-    return "Paste a meeting link for this provider.";
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
-    return "That doesn't look like a valid URL.";
-  }
-  if (parsed.protocol !== "https:") {
-    return "Meeting links must use https.";
-  }
-
-  switch (provider) {
-    case ConferenceProvider.MEET:
-      return parsed.hostname === "meet.google.com" ? null : "Expected a meet.google.com link.";
-    case ConferenceProvider.ZOOM:
-      return parsed.hostname.endsWith("zoom.us") ? null : "Expected a zoom.us link.";
-    case ConferenceProvider.TEAMS:
-      return parsed.hostname === "teams.microsoft.com"
-        ? null
-        : "Expected a teams.microsoft.com link.";
-    case ConferenceProvider.OTHER:
-      return null;
-    default:
-      return null;
-  }
-}
-
-const eventInputSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(200),
-  description: z.string().max(20_000).nullable().optional(),
-  startsAt: z.string(),
-  endsAt: z.string(),
-  allDay: z.boolean().optional(),
-  location: z.string().max(300).nullable().optional(),
-  conferenceProvider: z.enum(CONFERENCE_PROVIDER_VALUES).optional(),
-  conferenceUrl: z.string().max(2000).nullable().optional(),
-  attendeeIds: z.array(z.string()).max(200).optional(),
-});
-
-export type EventInput = z.infer<typeof eventInputSchema>;
-
-interface ActionResult {
+export interface ActionResult {
   error?: string;
   eventId?: string;
 }
 
-async function assertAttendeesAreMembers(organizationId: string, attendeeIds?: string[]) {
-  if (!attendeeIds?.length) return null;
-  const count = await prisma.membership.count({
-    where: { organizationId, userId: { in: attendeeIds } },
-  });
-  if (count !== new Set(attendeeIds).size) {
-    return "One or more attendees aren't members of this organization.";
-  }
-  return null;
+const eventFormSchema = z.object({
+  title: z.string().max(200),
+  description: z.string().max(20_000).nullish(),
+  allDay: z.boolean().default(false),
+  startsAt: z.string().min(1).max(40),
+  endsAt: z.string().min(1).max(40),
+  location: z.string().max(300).nullish(),
+  conferenceProvider: z.enum(ConferenceProvider).optional(),
+  conferenceUrl: z.string().max(2000).nullish(),
+  kind: z.enum(EventKind).optional(),
+  visibility: z.enum(EventVisibility).optional(),
+  hostUserId: z.string().max(100).nullish(),
+  hostName: z.string().max(120).nullish(),
+  rsvpUrl: z.string().max(2000).nullish(),
+  capacityFull: z.boolean().optional(),
+  featured: z.boolean().optional(),
+  publicNote: z.string().max(500).nullish(),
+  stampSlot: z.number().int().min(1).max(12).nullish(),
+  attendeeIds: z.array(z.string().min(1).max(100)).max(200).optional(),
+  /** Tell existing attendees about a reschedule, a move or a cancellation (default yes). */
+  notifyAttendees: z.boolean().optional(),
+});
+
+const eventPatchSchema = eventFormSchema.partial().extend({ allDay: z.boolean().optional() });
+
+export type EventFormInput = z.input<typeof eventFormSchema>;
+export type EventFormPatch = z.input<typeof eventPatchSchema>;
+
+function firstIssue(error: z.ZodError): string {
+  return error.issues[0]?.message ?? "Invalid input";
 }
 
-export const createEvent = withOrgContext(async (ctx, input: unknown): Promise<ActionResult> => {
-  const parsed = eventInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
+interface OrgInfo {
+  slug: string;
+  timezone: string;
+}
+
+async function orgInfo(ctx: OrgContext): Promise<OrgInfo> {
+  const org = await ctx.db.organization.findUnique({
+    where: { id: ctx.organizationId },
+    select: { slug: true, timezone: true },
+  });
+  return { slug: org?.slug ?? "", timezone: org?.timezone ?? "UTC" };
+}
+
+async function checkAttendees(ctx: OrgContext, attendeeIds: readonly string[]): Promise<string | null> {
+  if (attendeeIds.length === 0) return null;
+  const count = await ctx.db.membership.count({
+    where: { organizationId: ctx.organizationId, userId: { in: [...attendeeIds] } },
+  });
+  return count === attendeeIds.length ? null : "One or more attendees aren't members of this organization.";
+}
+
+function eventLink(slug: string, eventId: string): string {
+  return `/app/${slug}/calendar/${eventId}`;
+}
+
+async function notify(
+  ctx: OrgContext,
+  userIds: readonly string[],
+  type: NotificationType,
+  title: string,
+  linkUrl: string | null,
+): Promise<void> {
+  const recipients = userIds.filter((id) => id !== ctx.userId);
+  if (recipients.length === 0) return;
+  await notifyUsers(ctx.db, ctx.organizationId, recipients, { type, title, linkUrl, actorId: ctx.userId });
+}
+
+function serviceFields(data: z.infer<typeof eventPatchSchema>) {
+  const out: events.EventPatch = {};
+  if (data.title !== undefined) out.title = data.title;
+  if (data.description !== undefined) out.description = data.description;
+  if (data.location !== undefined) out.location = data.location;
+  if (data.conferenceProvider !== undefined) out.conferenceProvider = data.conferenceProvider;
+  if (data.conferenceUrl !== undefined) out.conferenceUrl = data.conferenceUrl;
+  if (data.kind !== undefined) out.kind = data.kind;
+  if (data.visibility !== undefined) out.visibility = data.visibility;
+  if (data.hostUserId !== undefined) out.hostUserId = data.hostUserId || null;
+  if (data.hostName !== undefined) out.hostName = data.hostName;
+  if (data.rsvpUrl !== undefined) out.rsvpUrl = data.rsvpUrl?.trim() || null;
+  if (data.capacityFull !== undefined) out.capacityFull = data.capacityFull;
+  if (data.featured !== undefined) out.featured = data.featured;
+  if (data.publicNote !== undefined) out.publicNote = data.publicNote;
+  if (data.stampSlot !== undefined) out.stampSlot = data.stampSlot;
+  return out;
+}
+
+const createEventTx = withOrgAction(async (ctx, input: unknown): Promise<ActionResult> => {
+  requirePermission(ctx, "events.write");
+  const parsed = eventFormSchema.safeParse(input);
+  if (!parsed.success) return { error: firstIssue(parsed.error) };
   const data = parsed.data;
-
   const provider = data.conferenceProvider ?? ConferenceProvider.NONE;
-  const urlError = validateConferenceUrl(provider, data.conferenceUrl);
+  const urlError = conferenceUrlError(provider, data.conferenceUrl);
   if (urlError) return { error: urlError };
-
-  const attendeeError = await assertAttendeesAreMembers(ctx.organizationId, data.attendeeIds);
+  const attendeeIds = [...new Set(data.attendeeIds ?? [])];
+  const attendeeError = await checkAttendees(ctx, attendeeIds);
   if (attendeeError) return { error: attendeeError };
 
-  const startsAt = new Date(data.startsAt);
-  const endsAt = new Date(data.endsAt);
-  if (endsAt < startsAt) {
-    return { error: "End time must be after the start time." };
-  }
+  const org = await orgInfo(ctx);
+  const times = resolveTimes(data.allDay, data.startsAt, data.endsAt, org.timezone);
+  if ("error" in times) return times;
 
-  const event = await prisma.event.create({
-    data: {
-      organizationId: ctx.organizationId,
-      title: data.title,
-      description: data.description ?? null,
-      startsAt,
-      endsAt,
-      allDay: data.allDay ?? false,
-      location: data.location ?? null,
-      conferenceProvider: provider,
-      conferenceUrl: provider === ConferenceProvider.NONE ? null : (data.conferenceUrl ?? null),
-      createdById: ctx.user.id,
-      attendees: data.attendeeIds?.length
-        ? { create: data.attendeeIds.map((userId) => ({ userId })) }
-        : undefined,
-    },
-    include: { attendees: { include: { user: true } } },
+  const { event } = await events.createEvent(ctx, {
+    ...serviceFields(data),
+    title: data.title,
+    conferenceProvider: provider,
+    ...times,
   });
-
-  const inviteeIds = event.attendees
-    .map((a) => a.userId)
-    .filter((userId) => userId !== ctx.user.id);
-  await notifyEventInvitees(ctx.organizationId, event.title, inviteeIds);
-
+  if (attendeeIds.length > 0) {
+    await ctx.db.eventAttendee.createMany({
+      data: attendeeIds.map((userId) => ({ organizationId: ctx.organizationId, eventId: event.id, userId })),
+      skipDuplicates: true,
+    });
+    await notify(
+      ctx,
+      attendeeIds,
+      NotificationType.EVENT_INVITE,
+      `You were invited to "${event.title}"`,
+      eventLink(org.slug, event.id),
+    );
+  }
   return { eventId: event.id };
 });
 
-export const updateEvent = withOrgContext(
+/** Creates an event (ADMIN+). */
+export async function createEvent(organizationId: string, input: EventFormInput): Promise<ActionResult> {
+  try {
+    return await createEventTx(organizationId, input);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+const updateEventTx = withOrgAction(
   async (ctx, eventId: string, input: unknown): Promise<ActionResult> => {
-    const existing = await prisma.event.findFirst({
-      where: { id: eventId, organizationId: ctx.organizationId, deletedAt: null },
-      include: { attendees: true },
-    });
-    if (!existing) {
-      return { error: "Event not found." };
-    }
-    // 0A Fix 8: only the creator or OWNER/ADMIN edits an event (a member
-    // could previously move or rewrite anyone's event).
-    if (!canEditEvent(existing, { userId: ctx.user.id, role: ctx.role })) {
-      return { error: "Only the event's creator or an admin can edit it." };
-    }
-
-    const parsed = eventInputSchema.partial().safeParse(input);
-    if (!parsed.success) {
-      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-    }
+    requirePermission(ctx, "events.write");
+    const parsed = eventPatchSchema.safeParse(input);
+    if (!parsed.success) return { error: firstIssue(parsed.error) };
     const data = parsed.data;
-
-    const provider = data.conferenceProvider ?? existing.conferenceProvider;
-    const urlValue = data.conferenceUrl !== undefined ? data.conferenceUrl : existing.conferenceUrl;
-    const urlError = validateConferenceUrl(provider, urlValue);
-    if (urlError) return { error: urlError };
-
-    const attendeeError = await assertAttendeesAreMembers(ctx.organizationId, data.attendeeIds);
-    if (attendeeError) return { error: attendeeError };
-
-    const startsAt = data.startsAt ? new Date(data.startsAt) : existing.startsAt;
-    const endsAt = data.endsAt ? new Date(data.endsAt) : existing.endsAt;
-    if (endsAt < startsAt) {
-      return { error: "End time must be after the start time." };
-    }
-
-    const previousAttendeeIds = new Set(existing.attendees.map((a) => a.userId));
-
-    await prisma.$transaction(async (tx) => {
-      await tx.event.update({
-        where: { id: eventId },
-        data: {
-          title: data.title,
-          description: data.description,
-          startsAt: data.startsAt ? startsAt : undefined,
-          endsAt: data.endsAt ? endsAt : undefined,
-          allDay: data.allDay,
-          location: data.location,
-          conferenceProvider: data.conferenceProvider,
-          conferenceUrl: provider === ConferenceProvider.NONE ? null : urlValue,
-        },
-      });
-
-      if (data.attendeeIds) {
-        await tx.eventAttendee.deleteMany({ where: { eventId } });
-        if (data.attendeeIds.length) {
-          await tx.eventAttendee.createMany({
-            data: data.attendeeIds.map((userId) => ({
-              organizationId: ctx.organizationId,
-              userId,
-              eventId,
-            })),
-          });
-        }
-      }
+    const before = await ctx.db.event.findFirst({
+      where: { id: eventId, organizationId: ctx.organizationId, deletedAt: null },
+      select: {
+        title: true,
+        allDay: true,
+        startsAt: true,
+        endsAt: true,
+        location: true,
+        conferenceProvider: true,
+        conferenceUrl: true,
+        attendees: { select: { userId: true } },
+      },
     });
+    if (!before) return { error: "That event no longer exists." };
 
-    if (data.attendeeIds) {
-      const newAttendeeIds = data.attendeeIds.filter(
-        (id) => !previousAttendeeIds.has(id) && id !== ctx.user.id,
-      );
-      await notifyEventInvitees(ctx.organizationId, data.title ?? existing.title, newAttendeeIds);
+    const provider = data.conferenceProvider ?? before.conferenceProvider;
+    const url = data.conferenceUrl !== undefined ? data.conferenceUrl : before.conferenceUrl;
+    if (data.conferenceProvider !== undefined || data.conferenceUrl !== undefined) {
+      const urlError = conferenceUrlError(provider, url);
+      if (urlError) return { error: urlError };
     }
 
+    const org = await orgInfo(ctx);
+    const patch: events.EventPatch = serviceFields(data);
+    if (data.startsAt !== undefined || data.endsAt !== undefined || data.allDay !== undefined) {
+      if (data.startsAt === undefined || data.endsAt === undefined) {
+        return { error: "Send both the start and the end." };
+      }
+      const times = resolveTimes(data.allDay ?? before.allDay, data.startsAt, data.endsAt, org.timezone);
+      if ("error" in times) return times;
+      Object.assign(patch, times);
+    }
+
+    const previous = new Set(before.attendees.map((a) => a.userId));
+    let added: string[] = [];
+    if (data.attendeeIds) {
+      const next = [...new Set(data.attendeeIds)];
+      const attendeeError = await checkAttendees(ctx, next);
+      if (attendeeError) return { error: attendeeError };
+      added = next.filter((id) => !previous.has(id));
+      const removed = [...previous].filter((id) => !next.includes(id));
+      if (removed.length > 0) {
+        await ctx.db.eventAttendee.deleteMany({
+          where: { organizationId: ctx.organizationId, eventId, userId: { in: removed } },
+        });
+      }
+      if (added.length > 0) {
+        await ctx.db.eventAttendee.createMany({
+          data: added.map((userId) => ({ organizationId: ctx.organizationId, eventId, userId })),
+          skipDuplicates: true,
+        });
+      }
+      for (const id of removed) previous.delete(id);
+    }
+
+    const { event } = await events.updateEvent(ctx, eventId, patch);
+    const link = eventLink(org.slug, eventId);
+    await notify(ctx, added, NotificationType.EVENT_INVITE, `You were invited to "${event.title}"`, link);
+    const rescheduled =
+      event.startsAt.getTime() !== before.startsAt.getTime() ||
+      event.endsAt.getTime() !== before.endsAt.getTime() ||
+      event.allDay !== before.allDay ||
+      (event.location ?? "") !== (before.location ?? "");
+    if (rescheduled && data.notifyAttendees !== false) {
+      await notify(ctx, [...previous], NotificationType.EVENT_UPDATED, `"${event.title}" changed time or place`, link);
+    }
     return { eventId };
   },
 );
 
-export const deleteEvent = withOrgContext(async (ctx, eventId: string): Promise<ActionResult> => {
-  const existing = await prisma.event.findFirst({
-    where: { id: eventId, organizationId: ctx.organizationId, deletedAt: null },
-  });
-  if (!existing) {
-    return { error: "Event not found." };
+/** Updates any subset of an event's fields (ADMIN+). */
+export async function updateEvent(
+  organizationId: string,
+  eventId: string,
+  input: EventFormPatch,
+): Promise<ActionResult> {
+  try {
+    return await updateEventTx(organizationId, eventId, input);
+  } catch (error) {
+    return actionError(error);
   }
-  if (!canEditEvent(existing, { userId: ctx.user.id, role: ctx.role })) {
-    return { error: "Only the event's creator or an admin can delete it." };
-  }
+}
 
-  await prisma.event.update({ where: { id: eventId }, data: { deletedAt: new Date() } });
-  return {};
-});
+/**
+ * Drag and resize on the grid (ADMIN+). Timed: ISO instants; all-day: the
+ * first and last day. Attendees are not notified for a drag.
+ */
+export async function moveEvent(
+  organizationId: string,
+  eventId: string,
+  times: { allDay: boolean; startsAt: string; endsAt: string },
+): Promise<ActionResult> {
+  return updateEvent(organizationId, eventId, { ...times, notifyAttendees: false });
+}
 
-export const rsvpToEvent = withOrgContext(
-  async (ctx, eventId: string, rsvp: string): Promise<ActionResult> => {
-    const parsedRsvp = z.enum(RSVP_VALUES).safeParse(rsvp);
-    if (!parsedRsvp.success) {
-      return { error: "Invalid RSVP value." };
-    }
-
-    const attendee = await prisma.eventAttendee.findUnique({
-      where: { eventId_userId: { eventId, userId: ctx.user.id } },
+const deleteEventTx = withOrgAction(
+  async (ctx, eventId: string, opts: { notifyAttendees?: boolean } = {}): Promise<ActionResult> => {
+    requirePermission(ctx, "events.write");
+    const attendees = await ctx.db.eventAttendee.findMany({
+      where: { organizationId: ctx.organizationId, eventId },
+      select: { userId: true },
     });
-    if (!attendee) {
-      return { error: "You aren't invited to this event." };
+    const { event } = await events.deleteEvent(ctx, eventId);
+    if (opts.notifyAttendees !== false) {
+      const org = await orgInfo(ctx);
+      await notify(
+        ctx,
+        attendees.map((a) => a.userId),
+        NotificationType.EVENT_CANCELLED,
+        `"${event.title}" was cancelled`,
+        `/app/${org.slug}/calendar`,
+      );
     }
-
-    await prisma.eventAttendee.update({
-      where: { eventId_userId: { eventId, userId: ctx.user.id } },
-      data: { rsvp: parsedRsvp.data },
-    });
     return {};
   },
 );
+
+/** Deletes (soft) an event (ADMIN+); its Google mirror goes in the gcal job. */
+export async function deleteEvent(
+  organizationId: string,
+  eventId: string,
+  opts: { notifyAttendees?: boolean } = {},
+): Promise<ActionResult> {
+  try {
+    return await deleteEventTx(organizationId, eventId, opts);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+const rsvpTx = withOrgAction(async (ctx, eventId: string, rsvp: unknown): Promise<ActionResult> => {
+  const parsed = z.enum(RSVPStatus).safeParse(rsvp);
+  if (!parsed.success) return { error: "Invalid RSVP value." };
+  // Only the caller's own invitation row.
+  const updated = await ctx.db.eventAttendee.updateMany({
+    where: { organizationId: ctx.organizationId, eventId, userId: ctx.userId },
+    data: { rsvp: parsed.data },
+  });
+  if (updated.count === 0) return { error: "You aren't invited to this event." };
+  return {};
+});
+
+/** Any member answers their own invitation. */
+export async function rsvpToEvent(organizationId: string, eventId: string, rsvp: RSVPStatus): Promise<ActionResult> {
+  try {
+    return await rsvpTx(organizationId, eventId, rsvp);
+  } catch (error) {
+    return actionError(error);
+  }
+}

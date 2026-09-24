@@ -1,12 +1,9 @@
 import { CalendarRange } from "lucide-react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireOrgMembership } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import { getOrgPolls } from "../queries";
 
@@ -15,18 +12,8 @@ export default async function PollsListPage({
 }: PageProps<"/app/[orgSlug]/calendar/polls">) {
   const { orgSlug } = await params;
 
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    notFound();
-  }
-
-  try {
-    await requireOrgMembership(org.id);
-  } catch (error) {
-    handleAuthErrorInPage(error);
-  }
-
-  const polls = await getOrgPolls(org.id);
+  const { organization: org } = await getOrgContextBySlug(orgSlug);
+  const polls = await withOrgTx(org.id, ({ db }) => getOrgPolls(db, org.id));
 
   return (
     <div className="space-y-6">

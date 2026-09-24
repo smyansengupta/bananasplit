@@ -13,23 +13,20 @@ import {
   hashGuestKey,
   isWellFormedGuestKey,
 } from "@/lib/polls/guest-key";
-import { prisma } from "@/lib/prisma";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
+import { withSystemOrgTx } from "@/server/db/context";
+
+import { pollOrgId } from "./poll-org";
 
 const RESPONSE_RATE_LIMIT = 30;
 const RESPONSE_RATE_WINDOW_SEC = 60;
 
-const AVAILABILITY_VALUES = Object.values(PollAvailability) as [
-  PollAvailability,
-  ...PollAvailability[],
-];
-
 const submitSchema = z.object({
-  pollId: z.string().min(1),
+  pollId: z.string().min(1).max(100),
   guestName: z.string().trim().max(100).nullable().optional(),
   entries: z
-    .array(z.object({ slotId: z.string(), availability: z.enum(AVAILABILITY_VALUES) }))
+    .array(z.object({ slotId: z.string().min(1).max(100), availability: z.enum(PollAvailability) }))
     .max(2000),
 });
 
@@ -38,8 +35,9 @@ interface ActionResult {
 }
 
 /**
- * No org-context guard: guests reach this through the poll's shareable link
- * (spec 4.4). Who may answer as whom (0A Fix 6):
+ * No org-context guard: guests reach this through the poll's shareable link.
+ * It runs on the service path (withSystemOrgTx with the poll's org, found
+ * through app.poll_org_id), not app_legacy. Who may answer as whom (0A Fix 6):
  *   - a signed-in MEMBER of the poll's org answers as themselves;
  *   - everyone else, including a signed-in user of another org, answers as
  *     a guest, and only finalizePoll's membership intersection decides who
@@ -59,95 +57,86 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
   }
 
   const parsed = submitSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   const data = parsed.data;
 
-  const poll = await prisma.availabilityPoll.findUnique({
-    where: { id: data.pollId },
-    select: {
-      id: true,
-      organizationId: true,
-      finalizedEventId: true,
-      closesAt: true,
-      slots: { select: { id: true } },
-    },
-  });
-  if (!poll) return { error: "Poll not found." };
-  if (poll.finalizedEventId) return { error: "This poll has already been finalized." };
-  if (poll.closesAt && poll.closesAt < new Date()) return { error: "This poll is closed." };
-
-  const validSlotIds = new Set(poll.slots.map((s) => s.id));
-  if (data.entries.some((e) => !validSlotIds.has(e.slotId))) {
-    return { error: "That slot isn't part of this poll." };
-  }
+  const organizationId = await pollOrgId(data.pollId);
+  if (!organizationId) return { error: "Poll not found." };
 
   const session = await getSession();
-  const membership = session
-    ? await prisma.membership.findUnique({
-        where: {
-          userId_organizationId: { userId: session.user.id, organizationId: poll.organizationId },
-        },
-        select: { userId: true },
-      })
-    : null;
+  const userId = session?.user.id ?? null;
 
-  if (session && membership) {
-    await prisma.$transaction(
-      data.entries.map((e) =>
-        prisma.pollResponse.upsert({
-          where: { slotId_userId: { slotId: e.slotId, userId: session.user.id } },
+  // The guest cookie is read (and minted) outside the transaction.
+  const cookieStore = await cookies();
+  const cookieName = guestCookieName(data.pollId);
+  const existingKey = cookieStore.get(cookieName)?.value;
+
+  type Outcome = { error: string } | { ok: true; guestKey?: string };
+  const outcome: Outcome = await withSystemOrgTx(organizationId, { userId }, async ({ db }) => {
+    const poll = await db.availabilityPoll.findFirst({
+      where: { id: data.pollId, organizationId },
+      select: { id: true, finalizedEventId: true, closesAt: true, slots: { select: { id: true } } },
+    });
+    if (!poll) return { error: "Poll not found." };
+    if (poll.finalizedEventId) return { error: "This poll has already been finalized." };
+    if (poll.closesAt && poll.closesAt < new Date()) return { error: "This poll is closed." };
+    const validSlotIds = new Set(poll.slots.map((s) => s.id));
+    if (data.entries.some((e) => !validSlotIds.has(e.slotId))) {
+      return { error: "That slot isn't part of this poll." };
+    }
+
+    const isMember = userId
+      ? (await db.membership.count({ where: { organizationId, userId } })) > 0
+      : false;
+
+    if (userId && isMember) {
+      for (const e of data.entries) {
+        await db.pollResponse.upsert({
+          where: { slotId_userId: { slotId: e.slotId, userId } },
           update: { availability: e.availability },
           create: {
-            organizationId: poll.organizationId,
+            organizationId,
             pollId: poll.id,
             slotId: e.slotId,
-            userId: session.user.id,
+            userId,
             availability: e.availability,
           },
-        }),
-      ),
-    );
-    return {};
-  }
+        });
+      }
+      return { ok: true };
+    }
 
-  const guestName = data.guestName?.trim();
-  if (!guestName) {
-    return { error: "Enter your name to respond." };
-  }
+    const guestName = data.guestName?.trim();
+    if (!guestName) return { error: "Enter your name to respond." };
+    const guestKey = isWellFormedGuestKey(existingKey) ? existingKey : generateGuestKey();
+    const guestKeyHash = hashGuestKey(guestKey);
+    // Only this guest's own rows: legacy rows (NULL hash) and other guests'
+    // rows never match, whatever name was typed.
+    await db.pollResponse.deleteMany({ where: { organizationId, pollId: poll.id, userId: null, guestKeyHash } });
+    if (data.entries.length > 0) {
+      await db.pollResponse.createMany({
+        data: data.entries.map((e) => ({
+          organizationId,
+          pollId: poll.id,
+          slotId: e.slotId,
+          guestName,
+          guestKeyHash,
+          availability: e.availability,
+        })),
+      });
+    }
+    return { ok: true, guestKey };
+  });
 
-  const cookieStore = await cookies();
-  const cookieName = guestCookieName(poll.id);
-  let guestKey = cookieStore.get(cookieName)?.value;
-  if (!isWellFormedGuestKey(guestKey)) {
-    guestKey = generateGuestKey();
-    cookieStore.set(cookieName, guestKey, {
+  if ("error" in outcome) return { error: outcome.error };
+  if (outcome.guestKey && outcome.guestKey !== existingKey) {
+    cookieStore.set(cookieName, outcome.guestKey, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      path: guestCookiePath(poll.id),
+      path: guestCookiePath(data.pollId),
       maxAge: GUEST_KEY_MAX_AGE_SECONDS,
     });
   }
-  const guestKeyHash = hashGuestKey(guestKey);
-
-  await prisma.$transaction([
-    // Only this guest's own rows: legacy rows (NULL hash) and other guests'
-    // rows never match, whatever name was typed.
-    prisma.pollResponse.deleteMany({
-      where: { pollId: poll.id, userId: null, guestKeyHash },
-    }),
-    prisma.pollResponse.createMany({
-      data: data.entries.map((e) => ({
-        organizationId: poll.organizationId,
-        pollId: poll.id,
-        slotId: e.slotId,
-        guestName,
-        guestKeyHash,
-        availability: e.availability,
-      })),
-    }),
-  ]);
   return {};
 }

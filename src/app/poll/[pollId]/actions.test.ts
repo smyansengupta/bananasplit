@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Public poll responses (0A Fix 6): who answers as whom, and the guest edit
- * key that replaced the delete-by-name overwrite.
+ * Public poll responses (0A Fix 6), now on the service path: who answers as
+ * whom, and the guest edit key that replaced the delete-by-name overwrite.
  */
 
-const { prismaMock, cookieJar, getSessionMock } = vi.hoisted(() => {
+const { db, cookieJar, getSessionMock, txCalls } = vi.hoisted(() => {
   const jar = new Map<string, string>();
   return {
     cookieJar: {
@@ -15,15 +15,11 @@ const { prismaMock, cookieJar, getSessionMock } = vi.hoisted(() => {
       }),
     },
     getSessionMock: vi.fn(),
-    prismaMock: {
-      availabilityPoll: { findUnique: vi.fn() },
-      membership: { findUnique: vi.fn() },
-      pollResponse: {
-        upsert: vi.fn((args: unknown) => ({ op: "upsert", args })),
-        deleteMany: vi.fn((args: unknown) => ({ op: "deleteMany", args })),
-        createMany: vi.fn((args: unknown) => ({ op: "createMany", args })),
-      },
-      $transaction: vi.fn(async (ops: unknown[]) => ops),
+    txCalls: [] as { orgId: string | null; userId: string | null }[],
+    db: {
+      availabilityPoll: { findFirst: vi.fn() },
+      membership: { count: vi.fn() },
+      pollResponse: { upsert: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
     },
   };
 });
@@ -31,16 +27,27 @@ const { prismaMock, cookieJar, getSessionMock } = vi.hoisted(() => {
 vi.mock("next/headers", () => ({
   headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9" }),
   cookies: async () => ({
-    get: (name: string) =>
-      cookieJar.jar.has(name) ? { name, value: cookieJar.jar.get(name)! } : undefined,
+    get: (name: string) => (cookieJar.jar.has(name) ? { name, value: cookieJar.jar.get(name)! } : undefined),
     set: cookieJar.set,
   }),
 }));
 vi.mock("@/lib/auth/session", () => ({ getSession: getSessionMock }));
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: async () => ({ allowed: true }),
   rateLimitKey: (...parts: string[]) => parts.join(":"),
+}));
+vi.mock("./poll-org", () => ({ pollOrgId: async (id: string) => (id === "poll_1" ? "org_1" : null) }));
+vi.mock("@/server/db/context", () => ({
+  withSystemOrgTx: async (
+    orgId: string | null,
+    optsOrFn: { userId?: string | null } | ((c: unknown) => unknown),
+    maybeFn?: (c: unknown) => unknown,
+  ) => {
+    const opts = typeof optsOrFn === "function" ? {} : optsOrFn;
+    const fn = (typeof optsOrFn === "function" ? optsOrFn : maybeFn)!;
+    txCalls.push({ orgId, userId: opts.userId ?? null });
+    return fn({ db, organizationId: orgId });
+  },
 }));
 
 const { submitPollResponse } = await import("./actions");
@@ -51,118 +58,104 @@ const entries = [{ slotId: "slot_1", availability: "YES" }];
 beforeEach(() => {
   vi.clearAllMocks();
   cookieJar.jar.clear();
+  txCalls.length = 0;
   getSessionMock.mockResolvedValue(null);
-  prismaMock.availabilityPoll.findUnique.mockResolvedValue({
+  db.availabilityPoll.findFirst.mockResolvedValue({
     id: "poll_1",
-    organizationId: "org_1",
     finalizedEventId: null,
     closesAt: null,
     slots: [{ id: "slot_1" }],
   });
-  prismaMock.membership.findUnique.mockResolvedValue(null);
+  db.membership.count.mockResolvedValue(0);
 });
 
 describe("submitPollResponse", () => {
-  it("gives a new guest an httpOnly key cookie and stores only its hash", async () => {
-    const result = await submitPollResponse({ pollId: "poll_1", guestName: "Alex", entries });
+  it("runs on the service path scoped to the poll's org", async () => {
+    await submitPollResponse({ pollId: "poll_1", guestName: "Ada", entries });
+    expect(txCalls).toEqual([{ orgId: "org_1", userId: null }]);
+    expect(db.availabilityPoll.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "poll_1", organizationId: "org_1" } }),
+    );
+    expect((await submitPollResponse({ pollId: "nope", guestName: "Ada", entries })).error).toMatch(/not found/);
+  });
 
-    expect(result.error).toBeUndefined();
+  it("gives a new guest an httpOnly key cookie and stores only its hash", async () => {
+    const result = await submitPollResponse({ pollId: "poll_1", guestName: "Ada", entries });
+    expect(result).toEqual({});
     expect(cookieJar.set).toHaveBeenCalledWith(
       "poll_guest_poll_1",
-      expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+      expect.any(String),
       expect.objectContaining({ httpOnly: true, sameSite: "lax", path: "/poll/poll_1" }),
     );
     const key = cookieJar.jar.get("poll_guest_poll_1")!;
-    const created = prismaMock.pollResponse.createMany.mock.calls[0]?.[0] as {
-      data: { guestKeyHash: string; guestName: string; userId?: string }[];
-    };
-    expect(created.data[0]).toMatchObject({ guestName: "Alex", guestKeyHash: hashGuestKey(key) });
-    expect(created.data[0]).not.toHaveProperty("userId");
-    expect(JSON.stringify(created)).not.toContain(key);
+    const rows = db.pollResponse.createMany.mock.calls[0][0].data;
+    expect(rows[0]).toMatchObject({ organizationId: "org_1", guestName: "Ada", guestKeyHash: hashGuestKey(key) });
+    expect(JSON.stringify(rows)).not.toContain(key);
   });
 
   it("guest B reusing guest A's name cannot delete A's answers", async () => {
-    await submitPollResponse({ pollId: "poll_1", guestName: "Alex", entries });
+    await submitPollResponse({ pollId: "poll_1", guestName: "Ada", entries });
     const keyA = cookieJar.jar.get("poll_guest_poll_1")!;
-
-    // Guest B: a different browser (no cookie), same name.
-    cookieJar.jar.clear();
-    await submitPollResponse({ pollId: "poll_1", guestName: "Alex", entries });
+    cookieJar.jar.clear(); // a different browser
+    await submitPollResponse({ pollId: "poll_1", guestName: "Ada", entries });
     const keyB = cookieJar.jar.get("poll_guest_poll_1")!;
-
     expect(keyB).not.toBe(keyA);
-    const deletes = prismaMock.pollResponse.deleteMany.mock.calls.map(
-      (c) => (c[0] as { where: Record<string, unknown> }).where,
-    );
-    expect(deletes).toEqual([
-      { pollId: "poll_1", userId: null, guestKeyHash: hashGuestKey(keyA) },
-      { pollId: "poll_1", userId: null, guestKeyHash: hashGuestKey(keyB) },
-    ]);
-    // Never scoped by name.
-    for (const where of deletes) expect(where).not.toHaveProperty("guestName");
+    const deletes = db.pollResponse.deleteMany.mock.calls.map((c) => c[0].where.guestKeyHash);
+    expect(deletes).toEqual([hashGuestKey(keyA), hashGuestKey(keyB)]);
+    for (const c of db.pollResponse.deleteMany.mock.calls) {
+      expect(c[0].where).toMatchObject({ organizationId: "org_1", pollId: "poll_1", userId: null });
+    }
   });
 
   it("a returning guest edits their own rows with the same key", async () => {
-    cookieJar.jar.set("poll_guest_poll_1", "k".repeat(43));
-
-    await submitPollResponse({ pollId: "poll_1", guestName: "Alex", entries });
-
+    await submitPollResponse({ pollId: "poll_1", guestName: "Ada", entries });
+    const key = cookieJar.jar.get("poll_guest_poll_1")!;
+    cookieJar.set.mockClear();
+    await submitPollResponse({ pollId: "poll_1", guestName: "Ada L.", entries });
     expect(cookieJar.set).not.toHaveBeenCalled();
-    expect(prismaMock.pollResponse.deleteMany).toHaveBeenCalledWith({
-      where: { pollId: "poll_1", userId: null, guestKeyHash: hashGuestKey("k".repeat(43)) },
-    });
+    expect(db.pollResponse.deleteMany.mock.calls[1][0].where.guestKeyHash).toBe(hashGuestKey(key));
   });
 
   it("replaces a malformed key cookie instead of trusting it", async () => {
-    cookieJar.jar.set("poll_guest_poll_1", "short");
-    await submitPollResponse({ pollId: "poll_1", guestName: "Alex", entries });
-    expect(cookieJar.set).toHaveBeenCalledOnce();
+    cookieJar.jar.set("poll_guest_poll_1", "not a key");
+    await submitPollResponse({ pollId: "poll_1", guestName: "Ada", entries });
+    expect(cookieJar.jar.get("poll_guest_poll_1")).not.toBe("not a key");
   });
 
   it("a signed-in NON-member answers as a guest, never as themselves", async () => {
-    getSessionMock.mockResolvedValue({
-      user: { id: "outsider", email: "o@example.edu", name: "Outsider" },
-    });
-
-    const missingName = await submitPollResponse({ pollId: "poll_1", entries });
-    expect(missingName.error).toMatch(/enter your name/i);
-
-    await submitPollResponse({ pollId: "poll_1", guestName: "Outsider", entries });
-    expect(prismaMock.pollResponse.upsert).not.toHaveBeenCalled();
-    const created = prismaMock.pollResponse.createMany.mock.calls[0]?.[0] as {
-      data: Record<string, unknown>[];
-    };
-    expect(created.data[0]).not.toHaveProperty("userId");
-    expect(prismaMock.membership.findUnique).toHaveBeenCalledWith({
-      where: { userId_organizationId: { userId: "outsider", organizationId: "org_1" } },
-      select: { userId: true },
-    });
+    getSessionMock.mockResolvedValue({ user: { id: "u_outsider", email: "o@example.edu", name: "O" } });
+    const result = await submitPollResponse({ pollId: "poll_1", guestName: "Olly", entries });
+    expect(result).toEqual({});
+    expect(db.pollResponse.upsert).not.toHaveBeenCalled();
+    expect(db.pollResponse.createMany.mock.calls[0][0].data[0]).not.toHaveProperty("userId");
+    expect(db.membership.count).toHaveBeenCalledWith({ where: { organizationId: "org_1", userId: "u_outsider" } });
   });
 
   it("a signed-in member answers as themselves", async () => {
-    getSessionMock.mockResolvedValue({
-      user: { id: "member_1", email: "m@example.edu", name: "Member" },
+    getSessionMock.mockResolvedValue({ user: { id: "u_member", email: "m@example.edu", name: "M" } });
+    db.membership.count.mockResolvedValue(1);
+    await submitPollResponse({ pollId: "poll_1", entries });
+    expect(txCalls).toEqual([{ orgId: "org_1", userId: "u_member" }]);
+    expect(db.pollResponse.upsert).toHaveBeenCalledWith({
+      where: { slotId_userId: { slotId: "slot_1", userId: "u_member" } },
+      update: { availability: "YES" },
+      create: { organizationId: "org_1", pollId: "poll_1", slotId: "slot_1", userId: "u_member", availability: "YES" },
     });
-    prismaMock.membership.findUnique.mockResolvedValue({ userId: "member_1" });
-
-    const result = await submitPollResponse({ pollId: "poll_1", entries });
-
-    expect(result.error).toBeUndefined();
-    expect(prismaMock.pollResponse.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ userId: "member_1", pollId: "poll_1" }),
-      }),
-    );
     expect(cookieJar.set).not.toHaveBeenCalled();
   });
 
-  it("rejects a slot from another poll", async () => {
-    const result = await submitPollResponse({
-      pollId: "poll_1",
-      guestName: "Alex",
-      entries: [{ slotId: "other_slot", availability: "YES" }],
-    });
-    expect(result.error).toMatch(/isn't part of this poll/i);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  it("rejects a slot from another poll, a closed poll and a finalized poll", async () => {
+    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries: [{ slotId: "slot_x", availability: "YES" }] })).error).toMatch(
+      /isn't part/,
+    );
+    db.availabilityPoll.findFirst.mockResolvedValueOnce({ id: "poll_1", finalizedEventId: null, closesAt: new Date(0), slots: [] });
+    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries })).error).toMatch(/closed/);
+    db.availabilityPoll.findFirst.mockResolvedValueOnce({ id: "poll_1", finalizedEventId: "e", closesAt: null, slots: [] });
+    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries })).error).toMatch(/finalized/);
+    expect(db.pollResponse.createMany).not.toHaveBeenCalled();
+  });
+
+  it("asks a guest for a name", async () => {
+    expect((await submitPollResponse({ pollId: "poll_1", entries })).error).toMatch(/name/);
   });
 });

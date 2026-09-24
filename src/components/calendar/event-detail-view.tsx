@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  AlertTriangle,
   CalendarPlus,
   ExternalLink,
   MapPin,
+  Mic,
   NotebookText,
   Pencil,
+  Ticket,
   Trash2,
   Video,
 } from "lucide-react";
@@ -14,16 +17,15 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { deleteEvent, rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
-import type { EventWithRelations } from "@/app/app/[orgSlug]/calendar/queries";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
-import type { OrgMemberOption } from "@/components/tasks/assignee-picker";
-import { initials } from "@/components/tasks/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RSVPStatus } from "@/generated/prisma/enums";
+import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
+import type { CalendarSyncState, RSVPStatus } from "@/generated/prisma/enums";
 
-import { EventFormDialog } from "./event-form-dialog";
+import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
+import { EventFormDialog, type EventFormEvent } from "./event-form-dialog";
+import type { CalendarMember } from "./member-picker";
 import { formatEventTimeRange } from "./utils";
 
 const RSVP_LABELS: Record<RSVPStatus, string> = {
@@ -33,17 +35,28 @@ const RSVP_LABELS: Record<RSVPStatus, string> = {
   MAYBE: "Maybe",
 };
 
-const RSVP_BADGE_VARIANT: Record<RSVPStatus, "default" | "destructive" | "secondary" | "outline"> =
-  {
-    PENDING: "outline",
-    YES: "default",
-    NO: "destructive",
-    MAYBE: "secondary",
-  };
+const RSVP_BADGE_VARIANT: Record<RSVPStatus, "default" | "destructive" | "secondary" | "outline"> = {
+  PENDING: "outline",
+  YES: "default",
+  NO: "destructive",
+  MAYBE: "secondary",
+};
+
+export interface EventDetail extends EventFormEvent {
+  needsReview: boolean;
+  googleSyncState: CalendarSyncState;
+  googleHtmlLink: string | null;
+  /** Admins only. */
+  googleSyncError: string | null;
+  host: (UserAvatarUser & { id: string }) | null;
+  attendees: { userId: string; rsvp: RSVPStatus; user: UserAvatarUser & { id: string } }[];
+  notes: { id: string; title: string | null }[];
+}
 
 export function EventDetailView({
   orgId,
   orgSlug,
+  timeZone,
   event,
   members,
   currentUserId,
@@ -51,86 +64,118 @@ export function EventDetailView({
 }: {
   orgId: string;
   orgSlug: string;
-  event: EventWithRelations;
-  members: OrgMemberOption[];
+  timeZone: string;
+  event: EventDetail;
+  members: CalendarMember[];
   currentUserId: string;
   canEdit: boolean;
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const myAttendance = event.attendees.find((a) => a.userId === currentUserId);
-  const breakdown = {
-    YES: event.attendees.filter((a) => a.rsvp === RSVPStatus.YES).length,
-    NO: event.attendees.filter((a) => a.rsvp === RSVPStatus.NO).length,
-    MAYBE: event.attendees.filter((a) => a.rsvp === RSVPStatus.MAYBE).length,
-    PENDING: event.attendees.filter((a) => a.rsvp === RSVPStatus.PENDING).length,
-  };
+  const count = (s: RSVPStatus) => event.attendees.filter((a) => a.rsvp === s).length;
 
   function handleRsvp(rsvp: RSVPStatus) {
     startTransition(async () => {
-      await rsvpToEvent(orgId, event.id, rsvp);
+      const result = await rsvpToEvent(orgId, event.id, rsvp);
+      if (result.error) setError(result.error);
       router.refresh();
     });
   }
 
   function handleDelete() {
+    if (!window.confirm(`Delete "${event.title}"? Invited members are told it was cancelled.`)) return;
     startTransition(async () => {
-      await deleteEvent(orgId, event.id);
+      const result = await deleteEvent(orgId, event.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
       router.push(`/app/${orgSlug}/calendar`);
     });
   }
 
   function handleCreateMeetingNotes() {
     startTransition(async () => {
-      const result = await createNote(orgId, {
-        title: `${event.title} — meeting notes`,
-        eventId: event.id,
-      });
-      if (result.noteId) {
-        router.push(`/app/${orgSlug}/notes/${result.noteId}`);
-      }
+      const result = await createNote(orgId, { title: `${event.title} — meeting notes`, eventId: event.id });
+      if (result.noteId) router.push(`/app/${orgSlug}/notes/${result.noteId}`);
     });
   }
 
-  const googleCalendarUrl = buildGoogleCalendarUrl(event);
+  const hostLabel = event.host?.name ?? event.hostName;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <Link
-            href={`/app/${orgSlug}/calendar`}
-            className="text-muted-foreground text-sm hover:underline"
-          >
+        <div className="min-w-0">
+          <Link href={`/app/${orgSlug}/calendar`} className="text-muted-foreground text-sm hover:underline">
             ← Back to calendar
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{event.title}</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight break-words">{event.title}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            {formatEventTimeRange(event.startsAt, event.endsAt, event.allDay)}
+            {formatEventTimeRange(event.startsAt, event.endsAt, event.allDay, timeZone)}
           </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <KindBadge kind={event.kind} />
+            <VisibilityBadge visibility={event.visibility} />
+            {canEdit && <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />}
+            {event.capacityFull && <Badge variant="secondary">Full</Badge>}
+            {event.featured && <Badge variant="secondary">Featured</Badge>}
+          </div>
         </div>
         {canEdit && (
           <div className="flex shrink-0 gap-2">
-            <Button variant="outline" size="icon" onClick={() => setEditOpen(true)}>
+            <Button variant="outline" size="icon" onClick={() => setEditOpen(true)} aria-label="Edit event">
               <Pencil className="size-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={handleDelete} disabled={isPending}>
+            <Button variant="outline" size="icon" onClick={handleDelete} disabled={isPending} aria-label="Delete event">
               <Trash2 className="size-4" />
             </Button>
           </div>
         )}
       </div>
 
-      {event.description && <p className="text-sm whitespace-pre-wrap">{event.description}</p>}
-
-      {event.location && (
-        <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <MapPin className="size-4" aria-hidden="true" />
-          {event.location}
+      {event.needsReview && canEdit && (
+        <p className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm" role="note">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+          Imported from Google Calendar with more than one possible match. Check whether it duplicates another
+          session and merge them in Databases &gt; Sessions.
         </p>
       )}
+      {canEdit && event.googleSyncState === "FAILED" && event.googleSyncError && (
+        <p className="text-destructive text-sm" role="note">
+          Google Calendar sync failed: {event.googleSyncError}
+        </p>
+      )}
+
+      {event.description && <p className="text-sm whitespace-pre-wrap">{event.description}</p>}
+
+      <div className="space-y-2 text-sm">
+        {event.location && (
+          <p className="text-muted-foreground flex items-center gap-2">
+            <MapPin className="size-4" aria-hidden="true" />
+            {event.location}
+          </p>
+        )}
+        {hostLabel && (
+          <p className="text-muted-foreground flex items-center gap-2">
+            <Mic className="size-4" aria-hidden="true" />
+            Hosted by {hostLabel}
+          </p>
+        )}
+        {event.rsvpUrl && (
+          <p className="flex items-center gap-2">
+            <Ticket className="text-muted-foreground size-4" aria-hidden="true" />
+            <a href={event.rsvpUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              RSVP link
+            </a>
+          </p>
+        )}
+        {event.publicNote && <p className="text-muted-foreground">Website note: {event.publicNote}</p>}
+      </div>
 
       {event.conferenceUrl && (
         <Button asChild>
@@ -149,7 +194,7 @@ export function EventDetailView({
           </a>
         </Button>
         <Button variant="outline" size="sm" asChild>
-          <a href={googleCalendarUrl} target="_blank" rel="noopener noreferrer">
+          <a href={buildGoogleCalendarUrl(event)} target="_blank" rel="noopener noreferrer">
             <ExternalLink className="size-4" />
             Add to Google Calendar
           </a>
@@ -178,42 +223,29 @@ export function EventDetailView({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Attendees ({event.attendees.length})</p>
+          <p className="text-sm font-medium">Invited ({event.attendees.length})</p>
           <p className="text-muted-foreground text-xs">
-            {breakdown.YES} yes · {breakdown.MAYBE} maybe · {breakdown.NO} no · {breakdown.PENDING}{" "}
-            pending
+            {count("YES")} yes · {count("MAYBE")} maybe · {count("NO")} no · {count("PENDING")} pending
           </p>
         </div>
         <ul className="space-y-1.5">
           {event.attendees.map((a) => (
             <li key={a.userId} className="flex items-center justify-between gap-2 text-sm">
               <span className="flex items-center gap-2">
-                <Avatar className="size-6">
-                  {a.user.image && <AvatarImage src={a.user.image} alt="" />}
-                  <AvatarFallback className="text-[10px]">
-                    {initials(a.user.name ?? a.user.email)}
-                  </AvatarFallback>
-                </Avatar>
-                {a.user.name ?? a.user.email}
+                <UserAvatar user={a.user} size="sm" />
+                {a.user.name ?? "Member"}
               </span>
               <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>{RSVP_LABELS[a.rsvp]}</Badge>
             </li>
           ))}
-          {event.attendees.length === 0 && (
-            <p className="text-muted-foreground text-sm">No attendees invited.</p>
-          )}
+          {event.attendees.length === 0 && <p className="text-muted-foreground text-sm">No members invited.</p>}
         </ul>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Linked notes</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCreateMeetingNotes}
-            disabled={isPending}
-          >
+          <Button variant="outline" size="sm" onClick={handleCreateMeetingNotes} disabled={isPending}>
             <NotebookText className="size-4" />
             Create meeting notes
           </Button>
@@ -222,10 +254,7 @@ export function EventDetailView({
           <ul className="space-y-1">
             {event.notes.map((note) => (
               <li key={note.id}>
-                <Link
-                  href={`/app/${orgSlug}/notes/${note.id}`}
-                  className="text-primary text-sm hover:underline"
-                >
+                <Link href={`/app/${orgSlug}/notes/${note.id}`} className="text-primary text-sm hover:underline">
                   {note.title || "Untitled note"}
                 </Link>
               </li>
@@ -236,18 +265,28 @@ export function EventDetailView({
         )}
       </div>
 
-      <EventFormDialog
-        orgId={orgId}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        event={event}
-        members={members}
-      />
+      {error && (
+        <p className="text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      )}
+
+      {canEdit && (
+        <EventFormDialog
+          orgId={orgId}
+          timeZone={timeZone}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          event={event}
+          members={members}
+          onDeleted={() => router.push(`/app/${orgSlug}/calendar`)}
+        />
+      )}
     </div>
   );
 }
 
-function buildGoogleCalendarUrl(event: EventWithRelations): string {
+function buildGoogleCalendarUrl(event: EventDetail): string {
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const params = new URLSearchParams({
     action: "TEMPLATE",
