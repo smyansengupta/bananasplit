@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { A, B, count, rc, runSuite, tryq, tryv } from "./lib.mjs";
+import { A, B, count, HASH, rc, runSuite, tryq, tryv } from "./lib.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -715,6 +715,84 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       return { member, admin };
     },
     { value: { member: 0, admin: 1 } },
+  );
+  // B2: "Turn off feed" on the profile's calendar card (migration
+  // b2_ics_feed_off). Request code runs it through withUserTx, i.e.
+  // app.set_context(user, NULL).
+  await tcase(
+    "P2-03",
+    "app.clear_ics_token_hash clears only the caller's own feed link",
+    "app_user",
+    { user: "u_adminA" },
+    async (q) => {
+      const s = {};
+      await q(`SELECT app.set_ics_token_hash($1)`, [HASH("f")]);
+      await q(`SELECT app.set_context('u_memberA', '')`);
+      await q(`SELECT app.set_ics_token_hash($1)`, [HASH("e")]);
+      s.member_active = (await q(`SELECT app.ics_token_created_at() t`)).rows[0].t !== null;
+      s.cleared = (await q(`SELECT app.clear_ics_token_hash() c`)).rows[0].c;
+      s.member_after = (await q(`SELECT app.ics_token_created_at() t`)).rows[0].t;
+      s.cleared_again = (await q(`SELECT app.clear_ics_token_hash() c`)).rows[0].c;
+      await q(`SELECT app.set_context('u_adminA', '')`);
+      s.admin_still_active = (await q(`SELECT app.ics_token_created_at() t`)).rows[0].t !== null;
+      return s;
+    },
+    {
+      value: {
+        member_active: true,
+        cleared: true,
+        member_after: null,
+        cleared_again: false,
+        admin_still_active: true,
+      },
+    },
+  );
+  await tcase(
+    "P2-04",
+    "app.clear_ics_token_hash without a user context is refused",
+    "app_user",
+    null,
+    (q) => q(`SELECT app.clear_ics_token_hash()`),
+    { error: "42501" },
+  );
+  await tcase(
+    "P2-05",
+    "app.clear_ics_token_hash is executable by app_user only",
+    "owner",
+    null,
+    async () => {
+      const out = {};
+      for (const role of ["app_service", "app_auth", "app_legacy"]) {
+        const c = clients[role];
+        await c.query("BEGIN");
+        try {
+          // The EXECUTE check comes before the body: no context is needed.
+          out[role] = await tryv((sql, params) => c.query(sql, params), `SELECT app.clear_ics_token_hash()`);
+        } finally {
+          await c.query("ROLLBACK");
+        }
+      }
+      return out;
+    },
+    { value: { app_service: "error:42501", app_auth: "error:42501", app_legacy: "error:42501" } },
+  );
+  await tcase(
+    "P2-06",
+    "people pages: a member sees co-members' profile columns, never a user only in another org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => ({
+      co_member: await count(
+        q,
+        `SELECT count(*) n FROM "User" WHERE "id" = 'u_adminA' AND "links" IS NOT NULL`,
+      ),
+      other_org_only: await count(q, `SELECT count(*) n FROM "User" WHERE "id" = 'u_memberB'`),
+      other_org_titles: await count(
+        q,
+        `SELECT count(*) n FROM "Membership" WHERE "organizationId" <> 'org_A' AND "userId" <> 'u_memberA'`,
+      ),
+    }),
+    { value: { co_member: 1, other_org_only: 0, other_org_titles: 0 } },
   );
 
   // ======================= Phase 3: org chart =======================
