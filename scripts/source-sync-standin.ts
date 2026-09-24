@@ -198,7 +198,7 @@ async function main() {
           "rest.cowork": r.pick(levels),
           "rest.demo": r.pick(levels),
           "rest.buildteams": r.pick(["yes", "maybe", "no"]),
-          ...(r.chance(0.2) ? { "rest.outcome": "A working project I can show" } : {}),
+          ...(r.chance(0.6) ? { "rest.outcome": r.pick(["resume", "tool", "understanding", "people"]) } : {}),
         },
         new Date(Date.UTC(2026, 8, 17, 22 + (i % 2), 0, 0)),
       ]);

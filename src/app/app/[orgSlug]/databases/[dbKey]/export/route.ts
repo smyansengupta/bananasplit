@@ -157,9 +157,7 @@ export async function GET(request: Request, ctx: RouteContext<"/app/[orgSlug]/da
       await writer.write(encoder.encode(BOM));
       for await (const line of lines) {
         await writer.ready;
-        await writer.write(encoder.encode(`${line}
-
-`));
+        await writer.write(encoder.encode(`${line}\r\n`));
       }
       await writer.close();
     } catch (error) {

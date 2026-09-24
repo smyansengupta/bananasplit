@@ -277,7 +277,8 @@ async function loadPage(
     rowAccess = await canViewBallotRows(db, org.id, vctx.tier);
     const requested = typeof sp.view === "string" ? sp.view : "results";
     ballotView = rowAccess && (requested === "rows" || requested === "ballots") ? requested : "results";
-    polls = await listPolls(db, org.id);
+    // Test polls are for admins checking the pipeline, not results.
+    polls = (await listPolls(db, org.id)).filter((p) => isAdmin || !p.isTest);
     pollId = selectedPollId(sp, polls);
     if (ballotView === "results") {
       view = "results";

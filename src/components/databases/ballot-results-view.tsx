@@ -25,8 +25,9 @@ export function BallotResultsView({ results }: { results: PollResults }) {
   return (
     <div className="space-y-6">
       <p className="text-muted-foreground text-sm">
-        {results.turnout.toLocaleString()} counted ballot{results.turnout === 1 ? "" : "s"}. Test ballots and ballots
-        outside the poll&apos;s window are not counted. Groups smaller than {k} show as &lt;{k}.
+        {results.turnout.toLocaleString()} counted ballot{results.turnout === 1 ? "" : "s"}. Test
+        ballots and ballots outside the poll&apos;s window are not counted. Groups smaller than {k}{" "}
+        show as &lt;{k}.
       </p>
       {results.questions.map((q) => {
         const ranked = q.type === "slots";
@@ -38,48 +39,58 @@ export function BallotResultsView({ results }: { results: PollResults }) {
                 ({q.ballots} answered{ranked ? ", ranked" : ""})
               </span>
             </h3>
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-muted-foreground text-left text-xs">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Option</th>
-                    <th className="px-3 py-2 text-right font-medium">Votes</th>
-                    <th className="w-1/3 px-3 py-2 font-medium">Share of ballots</th>
-                    {ranked && <th className="px-3 py-2 text-right font-medium">First choice</th>}
-                    {ranked && <th className="px-3 py-2 text-right font-medium">Borda</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {q.options.map((o) => (
-                    <tr key={o.key} className="border-t">
-                      <td className="px-3 py-1.5">{o.label}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        {o.suppressed ? <span title={`Fewer than ${k}`}>&lt;{k}</span> : o.votes}
-                      </td>
-                      <td className="px-3 py-1.5">
-                        {o.share !== null && (
-                          <div className="flex items-center gap-2">
-                            <div className="bg-muted h-2 flex-1 overflow-hidden rounded-full">
-                              <div
-                                className="bg-primary h-full rounded-full"
-                                style={{ width: `${Math.round(o.share * 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-muted-foreground w-10 text-right text-xs tabular-nums">
-                              {Math.round(o.share * 100)}%
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      {ranked && (
-                        <td className="px-3 py-1.5 text-right tabular-nums">{o.suppressed ? "" : o.firstChoice}</td>
-                      )}
-                      {ranked && <td className="px-3 py-1.5 text-right tabular-nums">{o.suppressed ? "" : o.borda}</td>}
+            {q.ballots === 0 ? (
+              <p className="text-muted-foreground text-sm">No answers yet.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-muted-foreground text-left text-xs">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Option</th>
+                      <th className="px-3 py-2 text-right font-medium">Votes</th>
+                      <th className="w-1/3 px-3 py-2 font-medium">Share of ballots</th>
+                      {ranked && <th className="px-3 py-2 text-right font-medium">First choice</th>}
+                      {ranked && <th className="px-3 py-2 text-right font-medium">Borda</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {q.options.map((o) => (
+                      <tr key={o.key} className="border-t">
+                        <td className="px-3 py-1.5">{o.label}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">
+                          {o.suppressed ? <span title={`Fewer than ${k}`}>&lt;{k}</span> : o.votes}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {o.share !== null && (
+                            <div className="flex items-center gap-2">
+                              <div className="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+                                <div
+                                  className="bg-primary h-full rounded-full"
+                                  style={{ width: `${Math.round(o.share * 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-muted-foreground w-10 text-right text-xs tabular-nums">
+                                {Math.round(o.share * 100)}%
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        {ranked && (
+                          <td className="px-3 py-1.5 text-right tabular-nums">
+                            {o.suppressed ? "" : o.firstChoice}
+                          </td>
+                        )}
+                        {ranked && (
+                          <td className="px-3 py-1.5 text-right tabular-nums">
+                            {o.suppressed ? "" : o.borda}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         );
       })}
