@@ -13,7 +13,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -145,12 +145,12 @@ function FilterBuilder({ columns, onAdd }: { columns: ColumnView[]; onAdd: (raw:
   const [op, setOp] = useState(column?.ops[0] ?? "eq");
   const [value, setValue] = useState("");
 
-  useEffect(() => {
-    const c = filterable.find((x) => x.key === col);
+  const pickColumn = (key: string) => {
+    const c = filterable.find((x) => x.key === key);
+    setCol(key);
     if (c && !c.ops.includes(op)) setOp(c.ops[0]);
     setValue("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [col]);
+  };
 
   if (filterable.length === 0) return null;
   const type = column?.type;
@@ -179,7 +179,7 @@ function FilterBuilder({ columns, onAdd }: { columns: ColumnView[]; onAdd: (raw:
           <label className="text-xs font-medium" htmlFor="db-filter-col">
             Column
           </label>
-          <Select value={col} onValueChange={setCol}>
+          <Select value={col} onValueChange={pickColumn}>
             <SelectTrigger id="db-filter-col" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -292,7 +292,12 @@ export function DataTable(props: DataTableProps) {
   const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const byKey = new Map(columns.map((c) => [c.key, c]));
 
-  useEffect(() => setSearch(props.q ?? ""), [props.q]);
+  // "Clear all" (or any other change that drops ?q=) empties the box.
+  const [seenQ, setSeenQ] = useState(props.q);
+  if (seenQ !== props.q) {
+    setSeenQ(props.q);
+    if (!props.q) setSearch("");
+  }
 
   const onSearch = (value: string) => {
     setSearch(value);

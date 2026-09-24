@@ -8,12 +8,17 @@ import { Button } from "@/components/ui/button";
 type Variant = "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
 /**
- * A button that runs one Server Action ({ error?, data? } result), shows
- * the error inline, and refreshes the page on success. `confirm` asks
- * first (irreversible actions).
+ * A button that runs one Server Action ({ error?, data? } result) with
+ * `args`, shows the error inline, and refreshes the page on success.
+ * `confirm` asks first (irreversible actions). Server components pass the
+ * action reference and serializable args, never a closure.
  */
-export function ActionButton({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyAction = (...args: any[]) => Promise<{ error?: string }>;
+
+export function ActionButton<A extends AnyAction>({
   action,
+  args,
   children,
   confirm,
   variant = "outline",
@@ -21,7 +26,8 @@ export function ActionButton({
   onDone,
   className,
 }: {
-  action: () => Promise<{ error?: string }>;
+  action: A;
+  args?: Parameters<A>;
   children: ReactNode;
   confirm?: string;
   variant?: Variant;
@@ -44,7 +50,7 @@ export function ActionButton({
           if (confirm && !window.confirm(confirm)) return;
           setError(null);
           start(async () => {
-            const result = await action();
+            const result = await action(...((args ?? []) as Parameters<A>));
             if (result.error) {
               setError(result.error);
               return;

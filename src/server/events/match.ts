@@ -35,7 +35,7 @@ export function titleTokens(title: string): string[] {
   const words = title
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{Mn}/gu, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .split(" ")

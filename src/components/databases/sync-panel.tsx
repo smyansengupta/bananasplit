@@ -56,13 +56,13 @@ export function SyncPanel({
           </p>
         </div>
         <div className="flex gap-2">
-          <ActionButton action={() => syncNowAction(organizationId, false)}>
+          <ActionButton action={syncNowAction} args={[organizationId, false]}>
             <RefreshCw aria-hidden="true" />
             Sync now
           </ActionButton>
           <ActionButton
             variant="ghost"
-            action={() => syncNowAction(organizationId, true)}
+            action={syncNowAction} args={[organizationId, true]}
             confirm="Re-read everything from the website and remove rows it no longer has?"
           >
             Full reconcile
