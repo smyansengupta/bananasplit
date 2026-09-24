@@ -171,7 +171,10 @@ export function tableWhere(organizationId: string, f: TableFilters, today?: Date
   if (f.status === "open") and.push({ status: { in: [...OPEN_STATUSES] } });
   else if (f.status) and.push({ status: f.status });
   if (f.ownerId) and.push({ ownerId: f.ownerId });
-  if (f.assigneeId) and.push({ assignees: { some: { userId: f.assigneeId } } });
+  // "Involving": the owner or a collaborator (the People page links ?assignee=).
+  if (f.assigneeId) {
+    and.push({ OR: [{ ownerId: f.assigneeId }, { assignees: { some: { userId: f.assigneeId } } }] });
+  }
   if (f.labelId) and.push({ labels: { some: { labelId: f.labelId } } });
   if (f.q) and.push({ title: { contains: f.q, mode: "insensitive" } });
   if (f.dueFrom || f.dueTo) {

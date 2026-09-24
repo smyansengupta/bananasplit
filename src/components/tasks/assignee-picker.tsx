@@ -3,7 +3,6 @@
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useState } from "react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -14,15 +13,16 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
-
-import { initials } from "./utils";
 
 export interface OrgMemberOption {
   userId: string;
   name: string | null;
   email: string;
   image: string | null;
+  /** Uploaded avatar variants (User.avatar), when the caller has them. */
+  avatar?: unknown;
 }
 
 export function AssigneePicker({
@@ -60,12 +60,11 @@ export function AssigneePicker({
           <span className="flex items-center -space-x-2">
             {selected.length === 0 && <span className="text-muted-foreground">Unassigned</span>}
             {selected.map((m) => (
-              <Avatar key={m.userId} className="border-background size-6 border-2">
-                {m.image && <AvatarImage src={m.image} alt="" />}
-                <AvatarFallback className="text-[10px]">
-                  {initials(m.name ?? m.email)}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar
+                key={m.userId}
+                user={{ name: m.name, email: m.email, image: m.image, avatar: m.avatar }}
+                size="sm"
+              />
             ))}
           </span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
@@ -89,6 +88,7 @@ export function AssigneePicker({
                       selectedIds.includes(m.userId) ? "opacity-100" : "opacity-0",
                     )}
                   />
+                  <UserAvatar user={{ name: m.name, email: m.email, image: m.image, avatar: m.avatar }} size="xs" />
                   {m.name ?? m.email}
                 </CommandItem>
               ))}

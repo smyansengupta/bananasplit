@@ -107,6 +107,13 @@ export function emailEnabledFor(prefs: NotificationPrefs, type: NotificationType
   return !DEFAULT_OFF_TYPES.has(type);
 }
 
+/**
+ * The same parser under the name the Profiles branch uses
+ * (src/lib/notifications/preferences.ts), for the integrator to reconcile.
+ */
+export const parseNotificationPreferences = parseNotificationPrefs;
+export type NotificationPreferences = NotificationPrefs;
+
 /** Raw User.emailPreferences -> whether `type` may be emailed. */
 export function isEmailEnabled(raw: unknown, type: NotificationType): boolean {
   return emailEnabledFor(parseNotificationPrefs(raw), type);

@@ -84,11 +84,11 @@ export function TaskTableFilters() {
         </SelectContent>
       </Select>
       <Select value={searchParams.get("assignee") ?? "all"} onValueChange={(v) => setParam("assignee", v)}>
-        <SelectTrigger className="w-44" aria-label="Involved filter">
-          <SelectValue placeholder="Involved" />
+        <SelectTrigger className="w-44" aria-label="Involving filter">
+          <SelectValue placeholder="Involving" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Anyone involved</SelectItem>
+          <SelectItem value="all">Involving anyone</SelectItem>
           {members.map((m) => (
             <SelectItem key={m.id} value={m.id}>
               {m.name ?? "Member"}
