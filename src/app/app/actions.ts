@@ -3,22 +3,24 @@
 import { redirect } from "next/navigation";
 
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
-import { requireOrgMembership } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/auth/session";
+import { withUserTx } from "@/server/db/context";
 
+/**
+ * The org switcher: remembers the chosen org for the next bare /app visit
+ * and navigates there. app_user's Organization policy shows only the
+ * caller's own orgs, so a slug the caller does not belong to finds nothing
+ * and the action is a no-op.
+ */
 export async function switchActiveOrg(orgSlug: string): Promise<void> {
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    return;
-  }
-
-  // requireOrgMembership throws for a non-member; the switcher only ever
-  // lists orgs the caller belongs to, so just no-op rather than surface it.
-  try {
-    await requireOrgMembership(org.id);
-  } catch {
-    return;
-  }
+  const user = await requireUser();
+  const org = await withUserTx(user.id, ({ db }) =>
+    db.organization.findFirst({
+      where: { slug: orgSlug, memberships: { some: { userId: user.id } } },
+      select: { id: true, slug: true },
+    }),
+  );
+  if (!org) return;
 
   await setActiveOrgCookie(org.id);
   redirect(`/app/${org.slug}`);
