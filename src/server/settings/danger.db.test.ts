@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Side-effecting import first: the runtime role URLs come from .env.
 import "dotenv/config";
 
