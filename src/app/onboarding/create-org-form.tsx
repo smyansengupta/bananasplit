@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { slugify } from "@/lib/slug";
 import { timeZoneOptions } from "@/lib/timezones";
+import { SUCCESS_TEXT } from "@/lib/status-tones";
 
 import { checkSlugAvailability, createOrganizationAction } from "./actions";
 
@@ -81,7 +82,7 @@ export function CreateOrgForm({ requiresCode = false }: { requiresCode?: boolean
         </div>
         {showChecking && <p className="text-muted-foreground text-sm">Checking…</p>}
         {showTaken && <p className="text-destructive text-sm">That URL is already taken.</p>}
-        {showAvailable && <p className="text-sm text-green-700 dark:text-green-500">Available</p>}
+        {showAvailable && <p className={`text-sm ${SUCCESS_TEXT}`}>Available</p>}
       </div>
       <div className="grid gap-1.5">
         <Label htmlFor="org-timezone">Timezone</Label>

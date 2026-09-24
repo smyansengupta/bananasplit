@@ -6,6 +6,7 @@ import { getOrgContextBySlug } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { PROVIDERS } from "@/server/integrations/catalog";
 import { loadIntegrations } from "@/server/integrations/service";
+import { WARNING_BOX } from "@/lib/status-tones";
 
 import { SettingsNoAccess } from "../settings-no-access";
 import { StatusBadge } from "./integration-ui";
@@ -49,7 +50,7 @@ export default async function IntegrationsSettingsPage({
         role="status"
         className={
           routing.mode === "none"
-            ? "rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+            ? `rounded-md p-3 text-sm ${WARNING_BOX}`
             : "bg-muted rounded-md p-3 text-sm"
         }
       >

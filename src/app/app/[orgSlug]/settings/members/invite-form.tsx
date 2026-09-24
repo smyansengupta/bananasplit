@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Role } from "@/generated/prisma/enums";
+import { SUCCESS_TEXT } from "@/lib/status-tones";
 
 import { inviteMember } from "./actions";
 
@@ -74,7 +75,7 @@ export function InviteForm({ orgId }: { orgId: string }) {
       </Button>
       <p className="w-full text-sm" role="status" aria-live="polite">
         {error && <span className="text-destructive">{error}</span>}
-        {success && <span className="text-green-700 dark:text-green-500">{success}</span>}
+        {success && <span className={SUCCESS_TEXT}>{success}</span>}
       </p>
     </form>
   );

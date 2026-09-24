@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { SUCCESS_TEXT } from "@/lib/status-tones";
 
 import {
   type PrivacyInput,
@@ -22,11 +23,7 @@ function StatusLine({ status }: { status: Status }) {
   return (
     <p
       role="status"
-      className={
-        status.tone === "error"
-          ? "text-destructive text-sm"
-          : "text-sm text-green-700 dark:text-green-500"
-      }
+      className={status.tone === "error" ? "text-destructive text-sm" : `text-sm ${SUCCESS_TEXT}`}
     >
       {status.text}
     </p>

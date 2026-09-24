@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SUCCESS_TEXT } from "@/lib/status-tones";
 
 import { resendInvitation, revokeInvitation } from "./actions";
 
@@ -53,9 +54,7 @@ function InviteRow({ orgId, invite }: { orgId: string; invite: PendingInviteRow 
           <p
             role="status"
             className={
-              message.tone === "error"
-                ? "text-destructive text-xs"
-                : "text-xs text-green-700 dark:text-green-500"
+              message.tone === "error" ? "text-destructive text-xs" : `text-xs ${SUCCESS_TEXT}`
             }
           >
             {message.text}

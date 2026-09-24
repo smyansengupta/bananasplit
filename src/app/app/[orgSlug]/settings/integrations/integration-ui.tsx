@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { IntegrationDto } from "@/server/integrations/catalog";
+import { SUCCESS_TEXT } from "@/lib/status-tones";
 
 import { removeIntegrationAction, testIntegrationAction } from "./actions";
 
@@ -35,11 +36,7 @@ export function FeedbackLine({ feedback }: { feedback: Feedback }) {
     <p
       role="status"
       aria-live="polite"
-      className={
-        feedback.tone === "error"
-          ? "text-destructive text-sm"
-          : "text-sm text-green-700 dark:text-green-500"
-      }
+      className={feedback.tone === "error" ? "text-destructive text-sm" : `text-sm ${SUCCESS_TEXT}`}
     >
       {feedback.text}
     </p>

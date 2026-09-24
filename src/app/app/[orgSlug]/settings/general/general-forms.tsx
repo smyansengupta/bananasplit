@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { slugify } from "@/lib/slug";
 import { timeZoneOptions } from "@/lib/timezones";
+import { SUCCESS_TEXT } from "@/lib/status-tones";
 
 import { renameOrgSlug, updateOrgName, updateOrgTimezone } from "./actions";
 
@@ -27,11 +28,7 @@ function StatusLine({ status }: { status: Status }) {
   return (
     <p
       role="status"
-      className={
-        status.tone === "error"
-          ? "text-destructive text-sm"
-          : "text-sm text-green-700 dark:text-green-500"
-      }
+      className={status.tone === "error" ? "text-destructive text-sm" : `text-sm ${SUCCESS_TEXT}`}
     >
       {status.text}
     </p>

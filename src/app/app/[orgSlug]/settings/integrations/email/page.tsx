@@ -1,6 +1,7 @@
 import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
+import { WARNING_BOX } from "@/lib/status-tones";
 
 import { SettingsNoAccess } from "../../settings-no-access";
 import { IntegrationHeader } from "../integration-header";
@@ -42,7 +43,7 @@ export default async function EmailIntegrationPage({
         role="status"
         className={
           routing.mode === "none"
-            ? "rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+            ? `rounded-md p-3 text-sm ${WARNING_BOX}`
             : "bg-muted rounded-md p-3 text-sm"
         }
       >

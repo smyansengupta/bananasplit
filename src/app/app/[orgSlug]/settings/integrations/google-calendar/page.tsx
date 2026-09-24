@@ -3,6 +3,7 @@ import {
   type GoogleCallbackError,
 } from "@/server/integrations/google-connect";
 import { isGoogleConfigured } from "@/server/integrations/google";
+import { WARNING_BOX } from "@/lib/status-tones";
 
 import { SettingsNoAccess } from "../../settings-no-access";
 import { IntegrationHeader } from "../integration-header";
@@ -48,7 +49,7 @@ export default async function GoogleCalendarIntegrationPage({
           className={
             code === "connected"
               ? "bg-muted rounded-md p-3 text-sm"
-              : "rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+              : `rounded-md p-3 text-sm ${WARNING_BOX}`
           }
         >
           {notice}

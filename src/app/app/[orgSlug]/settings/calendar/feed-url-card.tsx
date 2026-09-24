@@ -91,13 +91,7 @@ export function FeedUrlCard({
           ? " Your previous feed link has stopped working; replace it wherever you subscribed."
           : ""}
       </p>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={handleGenerate}
-        disabled={isPending}
-      >
+      <Button type="button" variant="ghost" size="sm" onClick={handleGenerate} disabled={isPending}>
         <RotateCcw className="size-4" />
         Regenerate link
       </Button>
