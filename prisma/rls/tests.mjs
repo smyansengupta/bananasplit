@@ -1825,6 +1825,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       org_has_other_owner: "us",
       org_id: "usal",
       organization_guard: "",
+      org_settings_guard: "",
       pending_invitations_for_me: "u",
       poll_org_id: "s",
       purge_unverified_users: "a",
