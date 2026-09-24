@@ -39,6 +39,27 @@ deployment/restore procedures.
    Finance → Budget → New period, with real allocation numbers from the
    funding award — don't inherit last year's guesses.
 
+## Handing off the calendar and the website feed
+
+Events live in the suite; Google Calendar and the club website are copies.
+
+1. **Google Calendar connection.** It belongs to the club's Google account,
+   not to a person. If the account that connected it is leaving, an owner or
+   admin reconnects it in Settings > Integrations > Google Calendar while
+   signed in to the club account, then presses **Sync now** on Calendar >
+   Sync and website feed. If the integration ever shows **Needs
+   reconnecting** (owners and admins get a notification), do the same.
+2. **Edit events in the suite only.** Changes made directly in Google
+   Calendar are overwritten by the next save in the suite.
+3. **The website feed.** Settings > Privacy > Public events feed must stay
+   on for the website to read the suite. The website's `SUITE_EVENTS_URL`
+   (Netlify build variable and GitHub Actions variable) contains the org
+   slug: if you rename the org, the old URL keeps redirecting, but update
+   both variables anyway.
+4. **The build hook.** If the website's Netlify site changes hands, create a
+   new build hook there and save it in Settings > Integrations > Website
+   build hook; the old one stops working when it is deleted in Netlify.
+
 ## Ongoing habits (these are habits, not features)
 
 - **Reconcile monthly** against the official statement (bank, SGA, Campus
