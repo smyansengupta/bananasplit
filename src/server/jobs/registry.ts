@@ -200,7 +200,9 @@ export const JOB_KINDS = {
     leaseSeconds: 330,
     tier: "heavy",
     afterEligible: false,
-    description: "Supabase website-data sync; key source-sync:{integrationId}:{stream}.",
+    handler: () => import("@/server/sync/job").then((m) => m.sourceSyncJob),
+    description:
+      "Supabase website-data sync; keys source-sync:{integrationId}:all (Sync now, stale-on-view, continuation) and :h{yyyymmddhh} (hourly backstop).",
   }),
 
   // ---- Org chart (Phase 3; handler owned by B3) ----
