@@ -386,6 +386,239 @@ export async function updateEvent(
   return { event, tags };
 }
 
+export class EventMergeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EventMergeError";
+  }
+}
+
+export interface MergeEventsResult {
+  survivor: ServiceEvent;
+  moved: {
+    /** Check-ins moved to the survivor. */
+    attendance: number;
+    /** The loser's synced check-ins of people already checked in to the survivor: suppressed, left on the loser. */
+    suppressed: number;
+    /** The loser's suite-native check-ins of people already checked in to the survivor: deleted. */
+    removed: number;
+    attendees: number;
+    notes: number;
+    transactions: number;
+    ballotDefinitions: number;
+  };
+  tags: string[];
+}
+
+/**
+ * Merges a duplicate Event into the one that survives (Phase 4b; the admin
+ * 'Possible duplicates' queue and the Sessions database call it):
+ *
+ *   1. Moves the loser's check-ins to the survivor. A person checked in to
+ *      both keeps the survivor's row; the loser's copy is suppressed when it
+ *      came from the website sync (synced rows are never deleted) and
+ *      deleted when it is suite-native.
+ *   2. Moves RSVPs (EventAttendee; the survivor's RSVP wins), Note.eventId,
+ *      Transaction.eventId, BallotDefinition.linkedEventId, the import link
+ *      log and a finalized availability poll.
+ *   3. Copies the loser's website session link, term and stamp slot onto the
+ *      survivor where the survivor has none. Two Events linked to different
+ *      website sessions cannot be merged: the sync would recreate the loser.
+ *   4. Soft-deletes the loser with mergedIntoId (its Google mirror is removed
+ *      by the gcal job), recomputes the rollups, records the merge in
+ *      EventLinkLog and OrgAuditLog, and invalidates reports (and the public
+ *      feed when either Event is PUBLIC) after commit.
+ *
+ * Unmerge is out of scope; the audit row records what moved.
+ *
+ * Run it on the service path (withSystemOrgTx(orgId, { userId })) after the
+ * caller has checked events.write: private notes and transactions are not
+ * visible or writable to every admin under RLS, and a merge must move all of
+ * them. A user context is authorized here as well.
+ */
+export async function mergeEvents(
+  ctx: EventServiceContext,
+  survivorId: string,
+  loserId: string,
+): Promise<MergeEventsResult> {
+  authorize(ctx);
+  if (survivorId === loserId) throw new EventMergeError("Pick two different sessions to merge.");
+  const [survivor, loser] = await Promise.all([loadLive(ctx, survivorId), loadLive(ctx, loserId)]);
+  if (survivor.mergedIntoId || loser.mergedIntoId) {
+    throw new EventMergeError("One of these sessions was already merged.");
+  }
+  const links = await ctx.db.event.findMany({
+    where: { id: { in: [survivor.id, loser.id] }, organizationId: ctx.organizationId },
+    select: { id: true, sourceSessionId: true, googleEventId: true },
+  });
+  const survivorLink = links.find((l) => l.id === survivor.id);
+  const loserLink = links.find((l) => l.id === loser.id);
+  if (
+    survivorLink?.sourceSessionId &&
+    loserLink?.sourceSessionId &&
+    survivorLink.sourceSessionId !== loserLink.sourceSessionId
+  ) {
+    throw new EventMergeError(
+      "Both sessions are linked to different website sessions. Fix the duplicate on the website first.",
+    );
+  }
+  const org = ctx.organizationId;
+
+  // 1. Check-ins.
+  const survivorContacts = new Set(
+    (
+      await ctx.db.attendance.findMany({
+        where: { organizationId: org, eventId: survivor.id },
+        select: { contactId: true },
+      })
+    ).map((a) => a.contactId),
+  );
+  const loserRows = await ctx.db.attendance.findMany({
+    where: { organizationId: org, eventId: loser.id },
+    select: { id: true, contactId: true, source: true, suppressedAt: true },
+  });
+  const moveIds: string[] = [];
+  const suppressIds: string[] = [];
+  const removeIds: string[] = [];
+  for (const row of loserRows) {
+    if (!survivorContacts.has(row.contactId)) moveIds.push(row.id);
+    else if (row.source === "SUPABASE_SYNC") {
+      if (!row.suppressedAt) suppressIds.push(row.id);
+    } else removeIds.push(row.id);
+  }
+  if (moveIds.length) {
+    await ctx.db.attendance.updateMany({
+      where: { organizationId: org, id: { in: moveIds } },
+      data: { eventId: survivor.id, term: survivor.term ?? undefined },
+    });
+  }
+  if (suppressIds.length) {
+    await ctx.db.attendance.updateMany({
+      where: { organizationId: org, id: { in: suppressIds } },
+      data: { suppressedAt: new Date() },
+    });
+  }
+  if (removeIds.length) {
+    await ctx.db.attendance.deleteMany({ where: { organizationId: org, id: { in: removeIds } } });
+  }
+
+  // 2. RSVPs, notes, transactions, ballot links, link log, polls.
+  const survivorAttendees = new Set(
+    (
+      await ctx.db.eventAttendee.findMany({ where: { eventId: survivor.id }, select: { userId: true } })
+    ).map((a) => a.userId),
+  );
+  const loserAttendees = await ctx.db.eventAttendee.findMany({
+    where: { eventId: loser.id },
+    select: { userId: true },
+  });
+  const moveAttendees = loserAttendees.filter((a) => !survivorAttendees.has(a.userId)).map((a) => a.userId);
+  if (moveAttendees.length) {
+    await ctx.db.eventAttendee.updateMany({
+      where: { eventId: loser.id, userId: { in: moveAttendees } },
+      data: { eventId: survivor.id },
+    });
+  }
+  await ctx.db.eventAttendee.deleteMany({ where: { eventId: loser.id } });
+  const notes = await ctx.db.note.updateMany({
+    where: { organizationId: org, eventId: loser.id },
+    data: { eventId: survivor.id },
+  });
+  const transactions = await ctx.db.transaction.updateMany({
+    where: { organizationId: org, eventId: loser.id },
+    data: { eventId: survivor.id },
+  });
+  const ballotDefinitions = await ctx.db.ballotDefinition.updateMany({
+    where: { organizationId: org, linkedEventId: loser.id },
+    data: { linkedEventId: survivor.id },
+  });
+  await ctx.db.eventLinkLog.updateMany({
+    where: { organizationId: org, eventId: loser.id },
+    data: { eventId: survivor.id },
+  });
+  const survivorPoll = await ctx.db.availabilityPoll.count({ where: { finalizedEventId: survivor.id } });
+  if (survivorPoll === 0) {
+    await ctx.db.availabilityPoll.updateMany({
+      where: { organizationId: org, finalizedEventId: loser.id },
+      data: { finalizedEventId: survivor.id },
+    });
+  }
+
+  // 3. The loser's source link moves to the survivor (unique per org, so
+  //    clear it on the loser first).
+  const survivorPatch: Prisma.EventUpdateInput = {};
+  if (loserLink?.sourceSessionId && !survivorLink?.sourceSessionId) {
+    await ctx.db.event.update({ where: { id: loser.id }, data: { sourceSessionId: null } });
+    survivorPatch.sourceSessionId = loserLink.sourceSessionId;
+  }
+  if (!survivor.term && loser.term) survivorPatch.term = loser.term;
+  if (survivor.stampSlot === null && loser.stampSlot !== null) survivorPatch.stampSlot = loser.stampSlot;
+  await ctx.db.event.update({
+    where: { id: survivor.id },
+    data: { ...survivorPatch, needsReview: false },
+  });
+
+  // 4. Soft-delete the loser (its mirror goes through the usual delete path).
+  const integrations = await loadIntegrations(ctx);
+  const googleSync = needsGoogleSync(integrations, { visibility: loser.visibility, deleted: true }, loser);
+  const deleted = await ctx.db.event.update({
+    where: { id: loser.id },
+    data: {
+      deletedAt: new Date(),
+      mergedIntoId: survivor.id,
+      needsReview: false,
+      syncVersion: { increment: 1 },
+      ...(googleSync ? { googleSyncState: CalendarSyncState.PENDING } : {}),
+    },
+    select: EVENT_SELECT,
+  });
+  const tags = await afterSave(ctx, "event.deleted", loser, deleted, integrations, googleSync);
+
+  const source = loserLink?.sourceSessionId ? "SUPABASE" : loserLink?.googleEventId ? "GOOGLE" : "SUITE";
+  await ctx.db.eventLinkLog.create({
+    data: {
+      organizationId: org,
+      eventId: survivor.id,
+      source,
+      externalId: loserLink?.sourceSessionId ?? loserLink?.googleEventId ?? loser.id,
+      method: "MERGED",
+      actorId: ctx.userId,
+    },
+  });
+
+  const contacts = [...new Set(loserRows.map((r) => r.contactId))];
+  if (contacts.length) {
+    await ctx.db.$queryRaw`SELECT app.refresh_contact_rollups(${org}, ${contacts}::text[])::text AS ok`;
+    await ctx.db.$queryRaw`SELECT app.refresh_lapsed(${org}) AS n`;
+  }
+  await ctx.db.orgSettings.updateMany({
+    where: { organizationId: org },
+    data: { reportsDataVersion: { increment: 1 } },
+  });
+
+  const moved = {
+    attendance: moveIds.length,
+    suppressed: suppressIds.length,
+    removed: removeIds.length,
+    attendees: moveAttendees.length,
+    notes: notes.count,
+    transactions: transactions.count,
+    ballotDefinitions: ballotDefinitions.count,
+  };
+  await writeOrgAuditLog(ctx.db, {
+    organizationId: org,
+    action: "event.merged",
+    targetType: "Event",
+    targetId: survivor.id,
+    diff: { mergedEventId: loser.id, mergedTitle: loser.title, ...moved },
+  });
+  const survivorTags = survivor.visibility === EventVisibility.PUBLIC ? [publicEvents(org)] : [];
+  if (survivorTags.length) invalidate(survivorTags);
+
+  const after = await loadLive(ctx, survivor.id);
+  return { survivor: after, moved, tags: [...new Set([...tags, ...survivorTags])] };
+}
+
 /**
  * Soft-deletes an event (deletedAt). Its Google mirror, if any, is removed
  * by the gcal job; a PUBLIC event triggers a website rebuild.
