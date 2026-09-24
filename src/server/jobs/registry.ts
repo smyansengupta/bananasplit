@@ -60,7 +60,11 @@ function kind<P>(def: JobKindDefinition<P>): JobKindDefinition<P> {
   return def;
 }
 
-const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/, "ids only");
+const id = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[A-Za-z0-9_-]+$/, "ids only");
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 /** Templates the generic `email` kind can render (src/server/email/jobs.ts). */
@@ -241,6 +245,7 @@ export const JOB_KINDS = {
     leaseSeconds: 330,
     tier: "heavy",
     afterEligible: false,
+    handler: () => import("@/server/export/service").then((m) => m.orgExportJob),
     description: "OWNER export of all org data to private Blob (cursor-resumable).",
   }),
   "export-expire": kind({
@@ -250,6 +255,7 @@ export const JOB_KINDS = {
     leaseSeconds: 90,
     tier: "fast",
     afterEligible: false,
+    handler: () => import("@/server/export/service").then((m) => m.exportExpireJob),
     description: "Delete an export's blob at its expiresAt.",
   }),
   "org-purge": kind({
@@ -259,6 +265,7 @@ export const JOB_KINDS = {
     leaseSeconds: 330,
     tier: "heavy",
     afterEligible: false,
+    handler: () => import("@/server/settings/purge").then((m) => m.orgPurgeJob),
     description: "Hard-delete an org after the 30-day grace (key org-purge:{orgId}).",
   }),
 

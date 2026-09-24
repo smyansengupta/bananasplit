@@ -25,23 +25,52 @@ import { authDb } from "@/server/db/clients";
  * 4. The Google provider allows email account linking, so a VERIFIED
  *    credentials user who signs in with Google is linked instead of locked
  *    out. That is safe only because both sides have verified the address.
- * 5. After sign-in, the user's emailVerified is set from the verified Google
- *    profile (Auth.js creates OAuth users with emailVerified NULL).
+ * 5. The user's emailVerified is set from the verified Google profile
+ *    (0A Fix 4(b)). Auth.js creates OAuth users with emailVerified NULL, so
+ *    the adapter does it at creation: the Google profile() callback marks
+ *    the user it hands Auth.js with the verified address (googleProfile),
+ *    and withNormalizedEmails' createUser strips the marker and stores
+ *    emailVerified when it matches the address being created. A returning
+ *    or email-linked user is marked after sign-in (markGoogleEmailVerified,
+ *    the signIn event). A brand-new Google user is therefore verified from
+ *    the first row, never observable as unverified.
  *
  * The gate fails closed: if the purge or the password strip throws, the
  * sign-in is refused. With email linking on, letting it through would link
  * the Google identity to the squatter's account.
  */
 
-export const googleProviderOptions = {
-  authorization: { params: { scope: "openid email profile" } },
-  allowDangerousEmailAccountLinking: true,
-} as const;
-
 interface GoogleProfile {
   email?: string | null;
   email_verified?: boolean | string | null;
 }
+
+/** The marker googleProfile() adds for the adapter (never stored). */
+export const VERIFIED_EMAIL_MARKER = "googleVerifiedEmail";
+
+/**
+ * The Google provider's profile(): Auth.js's default OIDC mapping plus the
+ * verified address (normalized), or null when Google did not verify it.
+ */
+export function googleProfile(profile: GoogleProfile & {
+  sub?: string;
+  name?: string | null;
+  picture?: string | null;
+}) {
+  return {
+    id: profile.sub ?? crypto.randomUUID(),
+    name: profile.name ?? null,
+    email: profile.email ?? null,
+    image: profile.picture ?? null,
+    [VERIFIED_EMAIL_MARKER]: verifiedGoogleEmail({ account: { provider: "google" }, profile }),
+  };
+}
+
+export const googleProviderOptions = {
+  authorization: { params: { scope: "openid email profile" } },
+  allowDangerousEmailAccountLinking: true,
+  profile: googleProfile,
+} as const;
 
 /**
  * The Auth.js signIn callback for OAuth providers. Returns true to continue,
@@ -87,12 +116,22 @@ export async function markGoogleEmailVerified(params: {
  * normalized, including addresses that arrive from an OAuth profile.
  */
 export function withNormalizedEmails(adapter: Adapter): Adapter {
-  const normalizeUser = <T extends Partial<AdapterUser>>(user: T): T =>
-    typeof user.email === "string" ? { ...user, email: normalizeEmail(user.email) } : user;
+  const normalizeUser = <T extends Partial<AdapterUser>>(user: T): T => {
+    const { [VERIFIED_EMAIL_MARKER]: _marker, ...rest } = user as T & Record<string, unknown>;
+    const clean = rest as T;
+    return typeof clean.email === "string" ? { ...clean, email: normalizeEmail(clean.email) } : clean;
+  };
   return {
     ...adapter,
     createUser: adapter.createUser
-      ? (user) => adapter.createUser!(normalizeUser(user))
+      ? (user) => {
+          const marker = (user as unknown as Record<string, unknown>)[VERIFIED_EMAIL_MARKER];
+          const data = normalizeUser(user);
+          // 0A Fix 4(b): a Google user whose address Google verified is
+          // created verified (the marker comes only from googleProfile).
+          const verified = typeof marker === "string" && sameEmail(marker, data.email);
+          return adapter.createUser!(verified ? { ...data, emailVerified: new Date() } : data);
+        }
       : undefined,
     getUserByEmail: adapter.getUserByEmail
       ? (email) => adapter.getUserByEmail!(normalizeEmail(email))

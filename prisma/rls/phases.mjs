@@ -680,6 +680,48 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     },
     { value: { foreign: "error:42501", logged: true, deleted: 1, slug_still_taken: true } },
   );
+  await tcase(
+    "P1-B1-01",
+    "OrgSettings.ballotIndividualVisibility: an ADMIN may not change it (it would grant ADMINs the votes); an OWNER may; other privacy columns stay ADMIN-editable",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      s.admin_ballots = await tryq(
+        q,
+        `UPDATE "OrgSettings" SET "ballotIndividualVisibility" = 'OWNER_AND_ADMINS'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_other = await rc(q, `UPDATE "OrgSettings" SET "ballotMinCellSize" = 5`);
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_ballots = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "ballotIndividualVisibility" = 'NOBODY'`,
+      );
+      return s;
+    },
+    { value: { admin_ballots: "42501", admin_other: 1, owner_ballots: 1 } },
+  );
+  await tcase(
+    "P1-B1-02",
+    "OrgSettings.ballotIndividualVisibility on the service path needs an OWNER actor (jobs cannot change it)",
+    "app_service",
+    { org: "org_A" },
+    async (q) => {
+      const s = {};
+      s.no_actor = await tryq(
+        q,
+        `UPDATE "OrgSettings" SET "ballotIndividualVisibility" = 'NOBODY'`,
+      );
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_actor = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "ballotIndividualVisibility" = 'NOBODY'`,
+      );
+      return s;
+    },
+    { value: { no_actor: "42501", owner_actor: 1 } },
+  );
 
   // ======================= Phase 2: profiles =======================
   await tcase(
@@ -1947,7 +1989,10 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         `UPDATE "Notification" SET "emailSentAt" = now() WHERE "id" = 'n_a3' AND "emailSentAt" IS NULL`,
       );
       await q(`SELECT app.set_context('', 'org_B')`);
-      s.other_org_sees = await count(q, `SELECT count(*) n FROM "Notification" WHERE "id" = 'n_a3'`);
+      s.other_org_sees = await count(
+        q,
+        `SELECT count(*) n FROM "Notification" WHERE "id" = 'n_a3'`,
+      );
       return s;
     },
     {
@@ -1969,9 +2014,15 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     async (q) => {
       const own = await rc(q, `UPDATE "Invitation" SET "token" = 'rotated_A' WHERE "id" = 'inv_A'`);
       await q(`SELECT app.set_context('', 'org_B')`);
-      const foreign = await rc(q, `UPDATE "Invitation" SET "token" = 'rotated_B' WHERE "id" = 'inv_A'`);
+      const foreign = await rc(
+        q,
+        `UPDATE "Invitation" SET "token" = 'rotated_B' WHERE "id" = 'inv_A'`,
+      );
       await q(`SELECT app.set_context('', '')`);
-      const none = await rc(q, `UPDATE "Invitation" SET "token" = 'rotated_0' WHERE "id" = 'inv_A'`);
+      const none = await rc(
+        q,
+        `UPDATE "Invitation" SET "token" = 'rotated_0' WHERE "id" = 'inv_A'`,
+      );
       return { own, foreign, none };
     },
     { value: { own: 1, foreign: 0, none: 0 } },
@@ -2019,7 +2070,9 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       );
       await q(`SELECT app.enqueue_job('org_A','gcal','gcal:e_A','{"eventId":"e_A"}'::jsonb)`);
       const claimed = (
-        await q(`SELECT "kind" FROM app.claim_jobs('{"site-rebuild":90,"gcal":90}'::jsonb, 10) ORDER BY 1`)
+        await q(
+          `SELECT "kind" FROM app.claim_jobs('{"site-rebuild":90,"gcal":90}'::jsonb, 10) ORDER BY 1`,
+        )
       ).rows.map((r) => r.kind);
       return claimed;
     },

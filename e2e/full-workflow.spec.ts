@@ -36,7 +36,7 @@ test("full workspace workflow", async ({ page }) => {
   const orgSlug = new URL(page.url()).pathname.split("/")[2];
 
   // --- invite a member and have them join ---
-  await page.goto(`/app/${orgSlug}/settings/invitations`);
+  await page.goto(`/app/${orgSlug}/settings/members`);
   await page.getByLabel("Email").fill(member.email);
   await page.getByRole("button", { name: "Send invite" }).click();
   await expect(page.getByText("Invite sent.")).toBeVisible();

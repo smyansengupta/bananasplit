@@ -1,39 +1,28 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { z } from "zod";
 
-import { Role } from "@/generated/prisma/client";
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
-import { getUserIdentity } from "@/lib/auth/email-verification";
-import { ORG_CREATION_DENIAL_MESSAGES, orgCreationDenial } from "@/lib/auth/org-creation";
 import { requireUser } from "@/lib/auth/session";
-import { ACCEPT_ERROR_MESSAGES, acceptInvitation } from "@/lib/invitations";
-import { prisma } from "@/lib/prisma";
-import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
-import { isReservedSlug } from "@/lib/slug";
-import { sqlStateOf } from "@/server/db/errors";
-
-const createOrgSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters").max(80),
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(2, "URL must be at least 2 characters")
-    .max(60)
-    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only"),
-});
+import { ACCEPT_ERROR_MESSAGES } from "@/lib/invitations";
+import { acceptInvitation, findPendingInvitationsForMe } from "@/server/settings/invitations";
+import { createOrganization, isSlugAvailable } from "@/server/settings/org-creation";
 
 /**
- * Org creation per user (Postgres-backed): every org can store third-party
- * keys under the platform KEK, so creation is limited. Only attempts that
- * pass validation count, so a taken slug does not use up the allowance.
+ * Onboarding and /app/new: create an organization, check a URL, or join a
+ * pending invitation. Off the legacy role: org creation and invite
+ * acceptance run on the service path for the signed-in user
+ * (src/server/settings), and every rule is checked there, so calling these
+ * actions directly gets the same answers as the pages.
  */
-const ORG_CREATION_LIMIT = { limit: 3, windowSec: 24 * 60 * 60 } as const;
 
 export interface CreateOrgState {
   error?: string;
+}
+
+function field(formData: FormData, name: string): string | undefined {
+  const value = formData.get(name);
+  return typeof value === "string" ? value : undefined;
 }
 
 export async function createOrganizationAction(
@@ -41,86 +30,42 @@ export async function createOrganizationAction(
   formData: FormData,
 ): Promise<CreateOrgState> {
   const user = await requireUser();
-
-  // 0A Fix 4(c) and Fix 16, checked on the server whatever the page showed:
-  // an unverified account never becomes an OWNER, and in production only
-  // the platform admins (PLATFORM_ADMIN_EMAILS) may create an org.
-  const denial = orgCreationDenial(await getUserIdentity(user.id));
-  if (denial) {
-    return { error: ORG_CREATION_DENIAL_MESSAGES[denial] };
-  }
-
-  const parsed = createOrgSchema.safeParse({
-    name: formData.get("name"),
-    slug: formData.get("slug"),
+  const result = await createOrganization(user, {
+    name: field(formData, "name") ?? "",
+    slug: field(formData, "slug") ?? "",
+    timezone: field(formData, "timezone") || "UTC",
+    code: field(formData, "code") || undefined,
   });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
+  if (!result.ok) return { error: result.error };
 
-  if (isReservedSlug(parsed.data.slug)) {
-    return { error: "That URL is reserved. Pick another." };
-  }
-  const existing = await prisma.organization.findUnique({ where: { slug: parsed.data.slug } });
-  if (existing) {
-    return { error: "That URL is already taken." };
-  }
-
-  const limited = await checkRateLimit(
-    rateLimitKey("org-create", user.id),
-    ORG_CREATION_LIMIT.limit,
-    ORG_CREATION_LIMIT.windowSec,
-  );
-  if (!limited.allowed) {
-    return {
-      error: `You've created several organizations recently. Try again ${retryAfterText(limited)}.`,
-    };
-  }
-
-  let org;
-  try {
-    org = await prisma.organization.create({
-      data: {
-        name: parsed.data.name,
-        slug: parsed.data.slug,
-        memberships: { create: { userId: user.id, role: Role.OWNER } },
-      },
-    });
-  } catch (error) {
-    // The database also reserves every slug an org has given up (renamed or
-    // deleted orgs), which this legacy path cannot read: 23505 either way.
-    if (sqlStateOf(error) === "23505") {
-      return { error: "That URL is already taken." };
-    }
-    throw error;
-  }
-
-  await setActiveOrgCookie(org.id);
-  redirect(`/app/${org.slug}`);
+  await setActiveOrgCookie(result.orgId);
+  redirect(`/app/${result.slug}`);
 }
 
 export async function checkSlugAvailability(slug: string): Promise<boolean> {
-  await requireUser();
-  if (isReservedSlug(slug)) return false;
-  const existing = await prisma.organization.findUnique({ where: { slug } });
-  return !existing;
+  const user = await requireUser();
+  return isSlugAvailable(user.id, slug);
 }
 
 export async function joinPendingInvitationAction(
   invitationId: string,
 ): Promise<{ error?: string }> {
   const user = await requireUser();
-  const invitation = await prisma.invitation.findUnique({ where: { id: invitationId } });
-  if (!invitation) {
-    return { error: "This invite no longer exists." };
-  }
+  // Only invitations to the caller's own verified address are visible here.
+  const pending = await findPendingInvitationsForMe(user.id);
+  const match = pending.find((p) => p.id === invitationId);
+  if (!match) return { error: "This invite no longer exists." };
 
-  // acceptInvitation requires the invited address to be this account's
-  // verified email (0A Fix 4(c)).
-  const result = await acceptInvitation(invitation, user);
-  if (!result.ok) {
-    return { error: ACCEPT_ERROR_MESSAGES[result.reason] };
-  }
+  const result = await acceptInvitation(
+    {
+      id: match.id,
+      organizationId: match.organizationId,
+      expiresAt: match.expiresAt,
+      acceptedAt: null,
+    },
+    user,
+  );
+  if (!result.ok) return { error: ACCEPT_ERROR_MESSAGES[result.reason] };
 
   await setActiveOrgCookie(result.orgId);
   redirect(`/app/${result.orgSlug}`);

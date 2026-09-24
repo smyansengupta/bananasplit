@@ -4,11 +4,8 @@ import { redirect } from "next/navigation";
 
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
 import { requireUser } from "@/lib/auth/session";
-import {
-  ACCEPT_ERROR_MESSAGES,
-  acceptInvitation,
-  findInvitationByRawToken,
-} from "@/lib/invitations";
+import { ACCEPT_ERROR_MESSAGES } from "@/lib/invitations";
+import { acceptInvitation, findInvitationByRawToken } from "@/server/settings/invitations";
 
 export async function acceptInvitationAction(
   rawToken: string,

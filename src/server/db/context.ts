@@ -375,6 +375,8 @@ export interface MembershipSummary {
   name: string;
   slug: string;
   role: Role;
+  /** Organization.logo ({ key, s64, s256, s512 }), for the org switcher. */
+  logo: Prisma.JsonValue | null;
 }
 
 export interface OrgContextBySlug {
@@ -388,8 +390,10 @@ export interface OrgContextBySlug {
     activeOrgChartVersionId: string | null;
   };
   role: Role;
-  /** Every org the user belongs to, by name. */
+  /** Every live org the user belongs to, by name. */
   memberships: MembershipSummary[];
+  /** The user's orgs scheduled for deletion (their URL shows the cancel page). */
+  pendingDeletion: MembershipSummary[];
   settings: OrgSettings | null;
   theme: OrgTheme | null;
 }
@@ -432,7 +436,9 @@ export const getOrgContextBySlug = cache(async (slug: string): Promise<OrgContex
         where: { userId: user.id },
         select: {
           role: true,
-          organization: { select: { id: true, name: true, slug: true, deletedAt: true } },
+          organization: {
+            select: { id: true, name: true, slug: true, deletedAt: true, logo: true },
+          },
         },
         orderBy: { organization: { name: "asc" } },
       });
@@ -442,18 +448,19 @@ export const getOrgContextBySlug = cache(async (slug: string): Promise<OrgContex
       const theme = await db.orgTheme.findUnique({
         where: { organizationId: resolved.organizationId },
       });
+      const summary = (m: (typeof memberships)[number]): MembershipSummary => ({
+        organizationId: m.organization.id,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        role: m.role,
+        logo: m.organization.logo,
+      });
       return {
         user,
         organization,
         role,
-        memberships: memberships
-          .filter((m) => m.organization.deletedAt === null)
-          .map((m) => ({
-            organizationId: m.organization.id,
-            name: m.organization.name,
-            slug: m.organization.slug,
-            role: m.role,
-          })),
+        memberships: memberships.filter((m) => m.organization.deletedAt === null).map(summary),
+        pendingDeletion: memberships.filter((m) => m.organization.deletedAt !== null).map(summary),
         settings,
         theme,
       };

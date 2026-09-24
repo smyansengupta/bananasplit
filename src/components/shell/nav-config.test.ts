@@ -45,9 +45,11 @@ describe("settings sub-navigation", () => {
       "Notifications",
       "Calendar feed",
       "Labels",
+      "Audit log",
       "Danger zone",
     ]);
     expect(labels("ADMIN")).not.toContain("Danger zone");
+    expect(labels("ADMIN")).toContain("Audit log");
     expect(labels("MEMBER")).toEqual(["Members", "Notifications", "Calendar feed"]);
     expect(labels("TREASURER")).toEqual(["Members", "Notifications", "Calendar feed"]);
   });

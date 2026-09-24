@@ -175,7 +175,7 @@ test("member roles: an admin is never offered OWNER and cannot touch an owner", 
   const orgSlug = await createOrg(page, "Roles Owner");
   const admin = makeUser("Roles Admin");
 
-  await page.goto(`/app/${orgSlug}/settings/invitations`);
+  await page.goto(`/app/${orgSlug}/settings/members`);
   await page.getByLabel("Email").fill(admin.email);
   await page.locator("#invite-role").click();
   await page.getByRole("option", { name: "Admin" }).click();
@@ -189,7 +189,7 @@ test("member roles: an admin is never offered OWNER and cannot touch an owner", 
 
   await adminSession.page.goto(`/app/${orgSlug}/settings/members`);
   await expect(adminSession.page.getByText("Only an owner can change an owner.")).toBeVisible();
-  await expect(adminSession.page.getByRole("combobox")).toHaveCount(0);
+  await expect(adminSession.page.getByRole("combobox", { name: /Role for/ })).toHaveCount(0);
   await adminSession.context.close();
 
   // The owner manages the admin, and the dropdown offers OWNER to owners only.

@@ -146,8 +146,14 @@ const NEW_CODE = [
   "src/components/tasks/**",
   "src/app/app/[[]orgSlug]/profile/**",
   "src/app/app/[[]orgSlug]/people/**",
-  "src/app/app/[[]orgSlug]/settings/{general,integrations,privacy,theme,danger}/**",
-  "src/app/app/[[]orgSlug]/settings/layout.tsx",
+  "src/app/app/[[]orgSlug]/settings/{general,integrations,privacy,theme,danger,members,invitations,labels,audit}/**",
+  "src/app/app/[[]orgSlug]/settings/{layout,page,settings-nav,settings-subnav,settings-no-access}.{ts,tsx}",
+  "src/app/app/[[]orgSlug]/{layout,org-pending-deletion}.tsx",
+  "src/app/app/{new,platform}/**",
+  "src/app/app/{page,actions}.{ts,tsx}",
+  "src/app/onboarding/**",
+  "src/app/invite/**",
+  "src/components/shell/org-switcher.tsx",
   "src/app/api/public/**",
   "src/app/api/integrations/**",
   "src/app/api/orgs/**",
@@ -184,6 +190,19 @@ const SESSION_CONTEXT_SQL = [
   { selector: `Literal[value=${re}]`, message: SESSION_CONTEXT_MESSAGE },
   { selector: `TemplateElement[value.raw=${re}]`, message: SESSION_CONTEXT_MESSAGE },
 ]);
+
+/**
+ * Secrets never reach client code (Phase 1): a "use client" module may not
+ * import the secrets module or the data layer (type-only imports are erased
+ * and allowed). Settings pages hand client components DTOs only.
+ */
+const CLIENT_SERVER_IMPORTS = [
+  {
+    selector:
+      "Program:has(> ExpressionStatement[directive='use client']) ImportDeclaration[importKind!='type'][source.value=/^@.server.(secrets|db)([^a-z-]|$)/]",
+    message: "Client components must not import @/server/secrets or @/server/db; pass DTOs from a server component.",
+  },
+];
 
 /** Runtime code gets its URL from src/server/db/urls.ts (per role, never the owner). */
 const DATABASE_URL_ENV = [
@@ -262,7 +281,12 @@ const eslintConfig = defineConfig([
         { property: "$executeRawUnsafe", message: "Use the tagged-template $executeRaw (values are bound)." },
         { object: "Prisma", property: "raw", message: "Prisma.raw splices text into SQL; bind values instead." },
       ],
-      "no-restricted-syntax": restrictSyntax(CACHE_TAG_LITERALS, SESSION_CONTEXT_SQL, DATABASE_URL_ENV),
+      "no-restricted-syntax": restrictSyntax(
+        CACHE_TAG_LITERALS,
+        SESSION_CONTEXT_SQL,
+        DATABASE_URL_ENV,
+        CLIENT_SERVER_IMPORTS,
+      ),
       "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, LEGACY_PRISMA),
     },
   },

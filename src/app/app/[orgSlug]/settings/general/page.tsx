@@ -1,14 +1,14 @@
-import { Building2 } from "lucide-react";
-
-import { EmptyState } from "@/components/empty-state";
+import { appOrigin } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
+import { orgLogoUrl } from "@/lib/org-logo";
 import { getOrgContextBySlug } from "@/server/db/context";
 
 import { SettingsNoAccess } from "../settings-no-access";
+import { LogoForm, NameForm, SlugForm, TimezoneForm } from "./general-forms";
 
 /**
- * Settings > General (stub). Shows the org's current name, URL and timezone;
- * the Settings builder adds editing (name, slug rename, logo, timezone).
+ * Settings > General: name and timezone (OWNER/ADMIN), logo (OWNER/ADMIN),
+ * and the URL (OWNER only; old URLs redirect and stay reserved).
  */
 export default async function GeneralSettingsPage({
   params,
@@ -18,23 +18,25 @@ export default async function GeneralSettingsPage({
   if (!can({ role }, "settings.view")) {
     return <SettingsNoAccess title="General" who="owners and admins" />;
   }
+  const canWrite = can({ role }, "settings.general.write");
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl space-y-8">
       <h1 className="text-2xl font-semibold tracking-tight">General</h1>
-      <dl className="grid gap-4 rounded-lg border p-4 text-sm sm:grid-cols-[10rem_1fr]">
-        <dt className="text-muted-foreground">Name</dt>
-        <dd className="font-medium">{organization.name}</dd>
-        <dt className="text-muted-foreground">URL</dt>
-        <dd className="font-mono text-xs">/app/{organization.slug}</dd>
-        <dt className="text-muted-foreground">Timezone</dt>
-        <dd>{organization.timezone}</dd>
-      </dl>
-      <EmptyState
-        icon={Building2}
-        title="Editing is coming soon"
-        description="Renaming the org, changing its URL, the logo and the timezone will be managed here."
+      <NameForm orgId={organization.id} name={organization.name} canEdit={canWrite} />
+      <SlugForm
+        orgId={organization.id}
+        slug={organization.slug}
+        canEdit={can({ role }, "org.slug.write")}
+        appOrigin={appOrigin()}
       />
+      <LogoForm
+        orgId={organization.id}
+        orgName={organization.name}
+        logoUrl={orgLogoUrl(organization.logo, 256)}
+        canEdit={can({ role }, "org.logo.write")}
+      />
+      <TimezoneForm orgId={organization.id} timezone={organization.timezone} canEdit={canWrite} />
     </div>
   );
 }

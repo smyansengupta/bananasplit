@@ -35,12 +35,23 @@ export const PERMISSIONS = {
   "members.grantOwner": OWNER,
   "members.transferOwnership": OWNER,
   "members.setTitle": ADMINS,
+  /** Any member may leave (the last OWNER must transfer ownership first). */
+  "members.leave": ALL,
+  /** Admins always see member emails; members only when Privacy allows. */
+  "members.viewEmails": ADMINS,
   // Integrations and secrets (D5): ADMIN+ set, replace and test; OWNER removes.
   "integrations.view": ADMINS,
   "integrations.write": ADMINS,
   "integrations.remove": OWNER,
   // Privacy, theme, labels
   "privacy.write": ADMINS,
+  /**
+   * Who may see individual votes. OWNER-only (also in the database): an
+   * ADMIN who could set OWNER_AND_ADMINS would grant themselves the votes.
+   */
+  "privacy.ballots": OWNER,
+  /** Turning off the platform mail fallback by hand (connecting a sender clears it too). */
+  "mail.fallback.write": OWNER,
   "theme.write": ADMINS,
   "labels.write": ADMINS,
   // Danger zone

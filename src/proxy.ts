@@ -34,6 +34,9 @@ export function proxy(request: NextRequest) {
   // /sign-in?callbackUrl=... and back (validated there as same-origin
   // relative). Always overwritten, never trusted from the client here.
   requestHeaders.set(CALLBACK_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  // The org layout reads the same header for its retired-slug redirect,
+  // which keeps the rest of a deep link
+  // (/app/old-slug/tasks/1 -> /app/new-slug/tasks/1).
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set(headerName, policy);

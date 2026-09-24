@@ -1,53 +1,69 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { requireUserMock } = vi.hoisted(() => ({ requireUserMock: vi.fn() }));
-vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
+vi.mock("@/server/db/context", async () =>
+  (await import("@/test/fake-context")).fakeContextModule(),
+);
 
-const { prismaMock } = vi.hoisted(() => ({
-  prismaMock: {
-    membership: { findUnique: vi.fn() },
-    label: { create: vi.fn(), updateMany: vi.fn(), delete: vi.fn() },
-    taskLabel: { deleteMany: vi.fn() },
-    $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
-  },
-}));
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
-
+const { fake, resetFake } = await import("@/test/fake-context");
 const { Role } = await import("@/generated/prisma/enums");
 const { createLabel, updateLabel, deleteLabel } = await import("./actions");
 
-const member = { id: "user_1", email: "member@example.edu", name: "Member" };
+function makeDb() {
+  return {
+    $queryRaw: vi.fn(async () => [{ id: "audit_1" }]),
+    label: {
+      create: vi.fn(async () => ({ id: "label_1" })),
+      updateMany: vi.fn(),
+      deleteMany: vi.fn(async () => ({ count: 1 })),
+    },
+    taskLabel: { deleteMany: vi.fn() },
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requireUserMock.mockResolvedValue(member);
+  resetFake({ db: makeDb() });
 });
 
-describe("label actions — only owners/admins can manage labels (spec 6.2 audit)", () => {
+describe("label actions — only owners/admins manage the palette (withOrgAction, app_user)", () => {
   it("rejects createLabel from a plain member", async () => {
-    prismaMock.membership.findUnique.mockResolvedValue({ role: Role.MEMBER });
-
+    fake.role = Role.MEMBER;
     await expect(createLabel("org_1", { name: "Urgent", color: "#ef4444" })).rejects.toThrow(
       /only owners and admins/i,
     );
-    expect(prismaMock.label.create).not.toHaveBeenCalled();
+    expect(fake.db.label.create).not.toHaveBeenCalled();
   });
 
   it("rejects updateLabel and deleteLabel from a treasurer (finance role, not admin)", async () => {
-    prismaMock.membership.findUnique.mockResolvedValue({ role: Role.TREASURER });
-
-    await expect(updateLabel("org_1", "label_1", { name: "x", color: "#3b82f6" })).rejects.toThrow();
+    fake.role = Role.TREASURER;
+    await expect(
+      updateLabel("org_1", "label_1", { name: "x", color: "#3b82f6" }),
+    ).rejects.toThrow();
     await expect(deleteLabel("org_1", "label_1")).rejects.toThrow();
-    expect(prismaMock.label.updateMany).not.toHaveBeenCalled();
-    expect(prismaMock.label.delete).not.toHaveBeenCalled();
+    expect(fake.db.label.updateMany).not.toHaveBeenCalled();
+    expect(fake.db.label.deleteMany).not.toHaveBeenCalled();
   });
 
-  it("allows an admin to create a label", async () => {
-    prismaMock.membership.findUnique.mockResolvedValue({ role: Role.ADMIN });
-
+  it("allows an admin to create a label in their org and audits it", async () => {
+    fake.role = Role.ADMIN;
     const result = await createLabel("org_1", { name: "Urgent", color: "#ef4444" });
-
     expect(result.error).toBeUndefined();
-    expect(prismaMock.label.create).toHaveBeenCalledOnce();
+    expect(fake.db.label.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { organizationId: "org_1", name: "Urgent", color: "#ef4444" },
+      }),
+    );
+    expect(fake.db.$queryRaw).toHaveBeenCalled();
+  });
+
+  it("scopes deletes to the caller's org", async () => {
+    fake.role = Role.OWNER;
+    await deleteLabel("org_1", "label_1");
+    expect(fake.db.taskLabel.deleteMany).toHaveBeenCalledWith({
+      where: { labelId: "label_1", organizationId: "org_1" },
+    });
+    expect(fake.db.label.deleteMany).toHaveBeenCalledWith({
+      where: { id: "label_1", organizationId: "org_1" },
+    });
   });
 });

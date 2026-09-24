@@ -1,31 +1,24 @@
-import { notFound } from "next/navigation";
+import { can } from "@/lib/auth/permissions";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
-import { Role } from "@/generated/prisma/client";
-import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireRole } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
-
+import { SettingsNoAccess } from "../settings-no-access";
 import { LabelForm } from "./label-form";
 import { LabelRow } from "./label-row";
 
 export default async function LabelsPage({ params }: PageProps<"/app/[orgSlug]/settings/labels">) {
   const { orgSlug } = await params;
-
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    notFound();
+  const { organization, role } = await getOrgContextBySlug(orgSlug);
+  if (!can({ role }, "labels.write")) {
+    return <SettingsNoAccess title="Labels" who="owners and admins" />;
   }
 
-  try {
-    await requireRole(org.id, Role.ADMIN);
-  } catch (error) {
-    handleAuthErrorInPage(error);
-  }
-
-  const labels = await prisma.label.findMany({
-    where: { organizationId: org.id },
-    orderBy: { name: "asc" },
-  });
+  const labels = await withOrgTx(organization.id, ({ db }) =>
+    db.label.findMany({
+      where: { organizationId: organization.id },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, color: true },
+    }),
+  );
 
   return (
     <div className="space-y-8">
@@ -36,13 +29,13 @@ export default async function LabelsPage({ params }: PageProps<"/app/[orgSlug]/s
         </p>
       </div>
 
-      <LabelForm orgId={org.id} />
+      <LabelForm orgId={organization.id} />
 
       <div className="space-y-2">
         {labels.length === 0 ? (
           <p className="text-muted-foreground text-sm">No labels yet.</p>
         ) : (
-          labels.map((label) => <LabelRow key={label.id} orgId={org.id} label={label} />)
+          labels.map((label) => <LabelRow key={label.id} orgId={organization.id} label={label} />)
         )}
       </div>
     </div>

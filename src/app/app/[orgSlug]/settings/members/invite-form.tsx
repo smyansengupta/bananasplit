@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState, useTransition } from "react";
 
-import { Role } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Role } from "@/generated/prisma/enums";
+import { SUCCESS_TEXT } from "@/lib/status-tones";
 
 import { inviteMember } from "./actions";
 
@@ -22,20 +23,20 @@ export function InviteForm({ orgId }: { orgId: string }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>(Role.MEMBER);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setSuccess(false);
+    setSuccess(null);
     startTransition(async () => {
       const result = await inviteMember(orgId, { email, role });
       if (result?.error) {
         setError(result.error);
         return;
       }
-      setSuccess(true);
+      setSuccess("Invite sent.");
       setEmail("");
       router.refresh();
     });
@@ -49,6 +50,7 @@ export function InviteForm({ orgId }: { orgId: string }) {
           id="invite-email"
           type="email"
           required
+          autoComplete="off"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-64"
@@ -71,8 +73,10 @@ export function InviteForm({ orgId }: { orgId: string }) {
       <Button type="submit" disabled={isPending}>
         {isPending ? "Sending…" : "Send invite"}
       </Button>
-      {error && <p className="text-destructive w-full text-sm">{error}</p>}
-      {success && <p className="w-full text-sm text-green-600">Invite sent.</p>}
+      <p className="w-full text-sm" role="status" aria-live="polite">
+        {error && <span className="text-destructive">{error}</span>}
+        {success && <span className={SUCCESS_TEXT}>{success}</span>}
+      </p>
     </form>
   );
 }
