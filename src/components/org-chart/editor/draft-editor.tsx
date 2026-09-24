@@ -41,7 +41,7 @@ import type { ChartNodeDTO, ChartWarning, OpenItem } from "@/lib/org-chart/types
 import { hasErrors, validateChart, type ValidationIssue } from "@/lib/org-chart/validate";
 
 import type { EditorMember } from "./member-picker";
-import { OutlineTree } from "./outline-tree";
+import { flattenOutline, OutlineTree } from "./outline-tree";
 import { PositionEditor } from "./position-editor";
 
 const ChartCanvas = dynamic(() => import("../chart-canvas"), {
@@ -91,7 +91,7 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
 
   const initialSelected = (() => {
     const key = searchParams.get("position");
-    return (key && initial.find((p) => p.key === key)?.id) || initial[0]?.id || null;
+    return (key && initial.find((p) => p.key === key)?.id) || flattenOutline(initial)[0]?.position.id || null;
   })();
   const [selectedId, setSelectedId] = useState<string | null>(initialSelected);
 

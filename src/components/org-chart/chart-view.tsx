@@ -59,9 +59,11 @@ export function ChartView({
       if (key) next.set("position", key);
       else next.delete("position");
       const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      // Native history integrates with the Next.js router (useSearchParams
+      // updates) without refetching the page, so the canvas keeps its view.
+      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
     },
-    [pathname, router, searchParams],
+    [pathname, searchParams],
   );
 
   const onSelect = useCallback(
@@ -109,6 +111,7 @@ export function ChartView({
               selectedId={selected?.id ?? null}
               onSelect={onSelect}
               focus={focus}
+              rightInset={isDesktop && selected ? 448 : 0}
               onReady={() => setReady(true)}
               showMiniMap={nodes.length > 12}
             />
