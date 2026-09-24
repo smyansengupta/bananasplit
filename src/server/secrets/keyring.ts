@@ -35,10 +35,28 @@ type Env = Record<string, string | undefined>;
 
 const KEK_ENV = /^SECRETS_KEK_V(\d+)$/;
 
+/** Canonical base64 of 32 bytes: 43 standard-alphabet characters and one '='. */
+const KEK_BASE64 = /^[A-Za-z0-9+/]{43}=$/;
+
+/**
+ * Buffer.from(value, "base64") is lenient: it skips every character outside
+ * the alphabet and ignores a missing or wrong pad, so a pasted passphrase of
+ * 43 'a' characters decoded to 32 bytes and was accepted as a key by a
+ * length check alone — a KEK with a few bits of entropy, silently. Only the
+ * text tells the two apart, so it is checked before decoding, and the
+ * re-encoding has to match as well (that rejects a non-canonical final
+ * character, whose last two bits are dropped on decode).
+ */
 function decodeKey(name: string, value: string): Buffer {
-  const key = Buffer.from(value.trim(), "base64");
-  if (key.length !== 32) {
-    throw new SecretsConfigError(`${name} must be base64 of exactly 32 bytes`);
+  const text = value.trim();
+  const key = Buffer.from(text, "base64");
+  if (!KEK_BASE64.test(text) || key.length !== 32 || key.toString("base64") !== text) {
+    throw new SecretsConfigError(
+      `${name} must be base64 of exactly 32 random bytes: 44 characters from A-Z a-z 0-9 + / ` +
+        `ending in '='. Generate one with ` +
+        `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))". ` +
+        `A passphrase, a hex string or a base64url value is not a key.`,
+    );
   }
   return key;
 }

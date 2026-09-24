@@ -80,7 +80,8 @@ describe("envelope encryption", () => {
 describe("keyring", () => {
   it("requires 32-byte keys and a configured current version", () => {
     expect(() => loadKeyring({})).toThrow(SecretsConfigError);
-    expect(() => loadKeyring({ SECRETS_KEK_V1: Buffer.alloc(16).toString("base64") })).toThrow(/32 bytes/);
+    // The base64 text itself is validated in keyring.test.ts.
+    expect(() => loadKeyring({ SECRETS_KEK_V1: Buffer.alloc(16).toString("base64") })).toThrow(/32 random bytes/);
     expect(() => loadKeyring({ SECRETS_KEK_V1: k1, SECRETS_KEK_CURRENT: "2" })).toThrow(SecretsConfigError);
     expect(loadKeyring({ SECRETS_KEK_V1: k1, SECRETS_KEK_V3: k2 }).current).toBe(3);
   });

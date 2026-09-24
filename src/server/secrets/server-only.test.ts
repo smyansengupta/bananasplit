@@ -27,8 +27,7 @@ describe("the secrets module is server-only", () => {
   });
 
   it.each(sources)("%s imports server-only before anything else", (name) => {
-    const source = readFileSync(path.join(dir, name), "utf8");
-    const firstImport = source.split("\n").find((line) => line.startsWith("import "));
-    expect(firstImport).toBe('import "server-only";');
+    const lines = readFileSync(path.join(dir, name), "utf8").split(/\r?\n/);
+    expect(lines.find((line) => line.startsWith("import "))).toBe('import "server-only";');
   });
 });
