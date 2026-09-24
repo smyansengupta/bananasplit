@@ -11,6 +11,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -26,7 +28,11 @@ function initials(name: string) {
 
 export function UserMenu({ user }: { user: ShellUser }) {
   const displayName = user.name ?? user.email;
-  const { setTheme } = useTheme();
+  // Each member's Light/Dark/System choice overrides the org's default mode,
+  // unless the org locks the mode (Settings > Theme), which next-themes
+  // reports as forcedTheme.
+  const { setTheme, theme, forcedTheme } = useTheme();
+  const locked = Boolean(forcedTheme);
 
   return (
     <DropdownMenu>
@@ -49,20 +55,22 @@ export function UserMenu({ user }: { user: ShellUser }) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-          Theme
+          {locked ? "Theme (set by your organization)" : "Theme"}
         </DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => setTheme("light")}>
-          <Sun className="size-4" aria-hidden="true" />
-          Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme("dark")}>
-          <Moon className="size-4" aria-hidden="true" />
-          Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme("system")}>
-          <Monitor className="size-4" aria-hidden="true" />
-          System
-        </DropdownMenuItem>
+        <DropdownMenuRadioGroup value={forcedTheme ?? theme ?? "system"} onValueChange={setTheme}>
+          <DropdownMenuRadioItem value="light" disabled={locked}>
+            <Sun className="size-4" aria-hidden="true" />
+            Light
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark" disabled={locked}>
+            <Moon className="size-4" aria-hidden="true" />
+            Dark
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system" disabled={locked}>
+            <Monitor className="size-4" aria-hidden="true" />
+            System
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => signOut({ redirectTo: "/" })}>
           <LogOut className="size-4" aria-hidden="true" />
