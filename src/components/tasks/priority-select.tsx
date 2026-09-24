@@ -19,14 +19,16 @@ export function PrioritySelect({
   value,
   onChange,
   disabled,
+  id,
 }: {
+  id?: string;
   value: TaskPriority;
   onChange: (value: TaskPriority) => void;
   disabled?: boolean;
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as TaskPriority)} disabled={disabled}>
-      <SelectTrigger className="w-full">
+      <SelectTrigger id={id} className="w-full">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

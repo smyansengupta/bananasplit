@@ -322,8 +322,8 @@ export function TaskEditor({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1.5">
-          <Label>Owner{ownerRequired && <span className="text-destructive"> *</span>}</Label>
-          <OwnerPicker value={ownerId} onChange={setOwnerId} disabled={readOnly || (intake && !triage)} />
+          <Label htmlFor="task-owner">Owner{ownerRequired && <span className="text-destructive"> *</span>}</Label>
+          <OwnerPicker id="task-owner" value={ownerId} onChange={setOwnerId} disabled={readOnly || (intake && !triage)} />
           {intake && !triage && (
             <p className="text-muted-foreground text-xs">
               {project?.triageUserId ? (memberById.get(project.triageUserId)?.name ?? "The triage owner") : "An admin"} sets the owner and
@@ -335,19 +335,19 @@ export function TaskEditor({
           )}
         </div>
         <div className="grid gap-1.5">
-          <Label>Also involved</Label>
-          <CollaboratorsPicker value={assigneeIds} onChange={setAssigneeIds} exclude={ownerId} disabled={readOnly} />
+          <Label htmlFor="task-involved">Also involved</Label>
+          <CollaboratorsPicker id="task-involved" value={assigneeIds} onChange={setAssigneeIds} exclude={ownerId} disabled={readOnly} />
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1.5">
-          <Label>Status</Label>
-          <StatusSelect value={status} onChange={setStatus} disabled={readOnly} />
+          <Label htmlFor="task-status">Status</Label>
+          <StatusSelect id="task-status" value={status} onChange={setStatus} disabled={readOnly} />
         </div>
         <div className="grid gap-1.5">
-          <Label>Priority</Label>
-          <PrioritySelect value={priority} onChange={setPriority} disabled={readOnly || (intake && !triage)} />
+          <Label htmlFor="task-priority">Priority</Label>
+          <PrioritySelect id="task-priority" value={priority} onChange={setPriority} disabled={readOnly || (intake && !triage)} />
         </div>
       </div>
 
@@ -372,9 +372,9 @@ export function TaskEditor({
           <Input id="task-due-date" type="date" value={dueDate} disabled={readOnly} onChange={(e) => setDueDate(e.target.value)} />
         </div>
         <div className="grid gap-1.5">
-          <Label>Project</Label>
+          <Label htmlFor="task-project">Project</Label>
           <Select value={projectId ?? "none"} onValueChange={(v) => setProjectId(v === "none" ? null : v)} disabled={readOnly}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger id="task-project" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -391,8 +391,8 @@ export function TaskEditor({
       </div>
 
       <div className="grid gap-1.5">
-        <Label>Labels</Label>
-        <LabelPicker labels={labels} selectedIds={labelIds} onChange={setLabelIds} disabled={readOnly} />
+        <Label htmlFor="task-labels">Labels</Label>
+        <LabelPicker id="task-labels" labels={labels} selectedIds={labelIds} onChange={setLabelIds} disabled={readOnly} />
       </div>
 
       {task && (

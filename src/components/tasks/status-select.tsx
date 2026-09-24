@@ -20,14 +20,16 @@ export function StatusSelect({
   value,
   onChange,
   disabled,
+  id,
 }: {
+  id?: string;
   value: TaskStatus;
   onChange: (value: TaskStatus) => void;
   disabled?: boolean;
 }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as TaskStatus)} disabled={disabled}>
-      <SelectTrigger className="w-full">
+      <SelectTrigger id={id} className="w-full">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
