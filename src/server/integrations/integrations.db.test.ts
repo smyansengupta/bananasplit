@@ -40,6 +40,7 @@ import {
   disconnectGoogle,
   loadIntegrations,
   removeProvider,
+  requestGoogleImportDryRun,
   resolveActor,
   saveClaude,
   saveEmailSender,
@@ -363,5 +364,27 @@ describe.skipIf(!dbReady)("integrations against the local database", () => {
       [orgId],
     );
     expect(job.rows.map((r) => r.status)).toEqual(["PENDING"]);
+  });
+
+  it("an OWNER's disconnect revokes at Google and deletes the refresh token; the import dry run needs a live connection", async () => {
+    mockGoogle();
+    sessionUser.current = owner;
+    const { cookie, state } = await start(orgId);
+    expect(await callback(state, cookie)).toBe("connected");
+    expect(await requestGoogleImportDryRun(orgId)).toMatchObject({ ok: true });
+    const importJob = await client.query(
+      `SELECT payload FROM "Job" WHERE "organizationId" = $1 AND kind = 'google-import'`,
+      [orgId],
+    );
+    expect(importJob.rows[0].payload).toMatchObject({ mode: "dry-run" });
+
+    const revoke = vi.spyOn(googleHttp, "fetch");
+    expect(await disconnectGoogle(orgId, await resolveActor(orgId))).toMatchObject({
+      ok: true,
+      message: expect.stringMatching(/token deleted/),
+    });
+    expect(revoke.mock.calls.some((c) => String(c[0]).startsWith("https://oauth2.googleapis.com/revoke"))).toBe(true);
+    expect(await getSecret({ orgId, provider: "GOOGLE_CALENDAR", kind: "REFRESH_TOKEN" })).toBeNull();
+    expect(await requestGoogleImportDryRun(orgId)).toMatchObject({ ok: false });
   });
 });

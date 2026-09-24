@@ -16,6 +16,7 @@ import {
 
 import {
   disconnectGoogleAction,
+  requestGoogleImportAction,
   saveClaudeAction,
   saveEmailSenderAction,
   saveGoogleCalendarsAction,
@@ -434,6 +435,7 @@ export function GoogleCalendarPanel({
   const [internalId, setInternalId] = useState(str(dto.config.internalCalendarId));
   const save = useSubmit();
   const disconnect = useSubmit();
+  const importRun = useSubmit();
   const connected = dto.status === "CONNECTED" || dto.status === "ERROR";
 
   return (
@@ -521,6 +523,23 @@ export function GoogleCalendarPanel({
           )}
           <FeedbackLine feedback={save.feedback} />
         </form>
+      )}
+      {canWrite && dto.status === "CONNECTED" && (
+        <div className="space-y-2 rounded-lg border p-4">
+          <p className="text-sm font-medium">Import existing events</p>
+          <p className="text-muted-foreground text-xs">
+            Bring events already in your Google calendars into the portal. This starts a dry run;
+            nothing changes until you review and apply it from Calendar &gt; Sync.
+          </p>
+          <Button
+            variant="outline"
+            disabled={importRun.isPending}
+            onClick={() => importRun.submit(() => requestGoogleImportAction(orgId))}
+          >
+            {importRun.isPending ? "Queuing…" : "Start import dry run"}
+          </Button>
+          <FeedbackLine feedback={importRun.feedback} />
+        </div>
       )}
       {canWrite && dto.hasSecret && dto.status !== "DISCONNECTED" && (
         <div className="space-y-2">

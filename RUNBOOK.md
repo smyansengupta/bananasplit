@@ -93,9 +93,12 @@ needs, plus what to do when something breaks.
 
 - **Org creation lock.** In production (`VERCEL_ENV=production`, or
   `NODE_ENV=production` off Vercel) only a verified address listed in
-  `PLATFORM_ADMIN_EMAILS` (comma-separated) can create an organization.
-  Everyone else joins by invitation. Previews and local dev are unrestricted.
-  The President creates the CBC org once through `/onboarding`.
+  `PLATFORM_ADMIN_EMAILS` (comma-separated) can create an organization
+  until `PLATFORM_ORG_CREATION_ENABLED=true` is set; then
+  `ORG_CREATION_MODE` (`admins`, `invite` with codes from
+  `/app/platform/org-codes`, or `open`) decides. Everyone else joins by
+  invitation. Previews and local dev are unrestricted. The President creates
+  the CBC org once through `/onboarding`. See docs/features/settings.md.
 - **Email verification.** Password sign-ups must verify their address before
   they can create or join an org, so the platform sender (`RESEND_API_KEY`,
   `EMAIL_FROM` on a verified domain) must work on day one. The link goes out

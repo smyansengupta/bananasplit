@@ -474,12 +474,25 @@ export async function saveGoogleCalendars(
 }
 
 /**
- * ADMIN+: marks the connection DISCONNECTED (sync stops) and queues a
- * google-revoke job, which revokes the refresh token at Google and deletes
- * it. An OWNER can also Remove, which revokes inline and deletes at once.
+ * Disconnect (OWNER/ADMIN): the connection stops at once (DISCONNECTED, so
+ * no sync runs) and a google-revoke job is queued; that job (calendar
+ * builder) revokes the grant at Google if it still can and settles pending
+ * event mirrors. Disconnect also revokes inline first (best effort, no
+ * transaction open) and, once the grant is revoked, deletes the stored
+ * refresh token when the actor may remove secrets (OWNER). For an ADMIN the
+ * revoked, now useless token stays encrypted until an OWNER removes it.
  */
 export async function disconnectGoogle(orgId: string, actor: OrgActor): Promise<IntegrationResult> {
   requirePermission(actor, "integrations.write");
+  let revoked = false;
+  try {
+    const token = await getSecret({ orgId, provider: "GOOGLE_CALENDAR", kind: "REFRESH_TOKEN" });
+    if (token) await revokeGoogleToken(token, AbortSignal.timeout(10_000));
+    revoked = true;
+  } catch (error) {
+    console.warn(`[integrations] inline Google revoke failed (the job retries): ${sanitize(error)}`);
+  }
+
   const done = await withSystemOrgTx(orgId, { userId: actor.userId }, async ({ db }) => {
     const row = await db.orgIntegration.findUnique({
       where: { organizationId_provider: { organizationId: orgId, provider: "GOOGLE_CALENDAR" } },
@@ -507,13 +520,59 @@ export async function disconnectGoogle(orgId: string, actor: OrgActor): Promise<
       action: "integration.disconnected",
       targetType: "OrgIntegration",
       targetId: row.id,
-      diff: { provider: "GOOGLE_CALENDAR" },
+      diff: { provider: "GOOGLE_CALENDAR", revokedInline: revoked },
     });
     return true;
   });
-  return done
-    ? { ok: true, message: "Disconnected. Access at Google is being revoked." }
-    : fail("Google Calendar is not connected.");
+  if (!done) return fail("Google Calendar is not connected.");
+
+  if (revoked && can(actor, "integrations.remove")) {
+    await removeSecret({ orgId, actor, provider: "GOOGLE_CALENDAR", kind: "REFRESH_TOKEN" });
+    return { ok: true, message: "Disconnected. Access was revoked at Google and the token deleted." };
+  }
+  return {
+    ok: true,
+    message: revoked
+      ? "Disconnected. Access was revoked at Google."
+      : "Disconnected. Access at Google is being revoked.",
+  };
+}
+
+/**
+ * "Import existing events": queues a DRY RUN of the calendar builder's
+ * google-import job (nothing is written until someone applies it from the
+ * calendar's Sync page). OWNER/ADMIN.
+ * TODO(integration): replace with requestGoogleImport(ctx, "dry-run") from
+ * src/server/google-calendar/requests.ts and show its SyncPanel here.
+ */
+export async function requestGoogleImportDryRun(orgId: string): Promise<IntegrationResult> {
+  return withOrgTx(orgId, async (ctx) => {
+    requirePermission(ctx, "integrations.write");
+    const row = await ctx.db.orgIntegration.findUnique({
+      where: { organizationId_provider: { organizationId: orgId, provider: "GOOGLE_CALENDAR" } },
+      select: { id: true, status: true },
+    });
+    if (!row || row.status !== IntegrationStatus.CONNECTED) {
+      return { ok: false as const, error: "Connect Google Calendar first." };
+    }
+    await enqueueJob(ctx.db, {
+      orgId,
+      kind: "google-import",
+      key: `${row.id}:dry-run`,
+      payload: { integrationId: row.id, mode: "dry-run" },
+    });
+    await writeOrgAuditLog(ctx.db, {
+      organizationId: orgId,
+      action: "calendar.google_import_requested",
+      targetType: "OrgIntegration",
+      targetId: row.id,
+      diff: { mode: "dry-run" },
+    });
+    return {
+      ok: true as const,
+      message: "Import dry run queued. Review and apply it from Calendar > Sync.",
+    };
+  });
 }
 
 // ---------------------------------------------------------------- Test and remove (all)

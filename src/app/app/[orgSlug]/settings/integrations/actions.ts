@@ -7,6 +7,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import {
   disconnectGoogle,
   removeProvider,
+  requestGoogleImportDryRun,
   resolveActor,
   saveClaude,
   saveEmailSender,
@@ -102,6 +103,10 @@ export async function saveGoogleCalendarsAction(
   input: z.input<typeof calendarsInput>,
 ) {
   return run(orgId, (actor) => saveGoogleCalendars(orgId, actor, calendarsInput.parse(input)));
+}
+
+export async function requestGoogleImportAction(orgId: string) {
+  return run(orgId, () => requestGoogleImportDryRun(orgId));
 }
 
 export async function disconnectGoogleAction(orgId: string) {
