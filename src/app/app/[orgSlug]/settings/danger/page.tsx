@@ -1,29 +1,80 @@
-import { TriangleAlert } from "lucide-react";
-
-import { EmptyState } from "@/components/empty-state";
 import { can } from "@/lib/auth/permissions";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { CBC_PEOPLE } from "@/server/bootstrap/cbc-template";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { EXPORT_EXPIRY_DAYS } from "@/server/export/service";
+import { suggestCbcMapping } from "@/server/settings/bootstrap";
 
 import { SettingsNoAccess } from "../settings-no-access";
+import { BootstrapCard } from "./bootstrap-card";
+import { DeleteCard } from "./delete-card";
+import { ExportCard, type ExportRow } from "./export-card";
 
-/** Settings > Danger zone (stub): export all data, delete the org. OWNER only. */
+/** Settings > Danger zone: export all data, bootstrap the CBC workspace, delete. OWNER only. */
 export default async function DangerZonePage({
   params,
 }: PageProps<"/app/[orgSlug]/settings/danger">) {
   const { orgSlug } = await params;
-  const { role } = await getOrgContextBySlug(orgSlug);
+  const { organization, role, settings } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "org.delete")) {
     return <SettingsNoAccess title="Danger zone" who="owners" />;
   }
+  const orgId = organization.id;
+
+  const { exports, members } = await withOrgTx(orgId, async ({ db }) => {
+    const exports = await db.orgExport.findMany({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        expiresAt: true,
+        downloadCount: true,
+        requestedBy: { select: { name: true } },
+      },
+    });
+    const members = await db.membership.findMany({
+      where: { organizationId: orgId },
+      select: { userId: true, user: { select: { name: true } } },
+    });
+    return { exports, members };
+  });
+
+  const exportRows: ExportRow[] = exports.map((e) => ({
+    id: e.id,
+    status: e.status,
+    createdAt: e.createdAt.toISOString(),
+    expiresAt: e.expiresAt?.toISOString() ?? null,
+    downloadCount: e.downloadCount,
+    requestedByName: e.requestedBy?.name ?? null,
+  }));
+  const memberOptions = members
+    .map((m) => ({ userId: m.userId, name: m.user.name ?? "Unnamed member" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const suggested = suggestCbcMapping(
+    members.map((m) => ({ userId: m.userId, name: m.user.name })),
+  ) as Record<string, string>;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Danger zone</h1>
-      <EmptyState
-        icon={TriangleAlert}
-        title="Export and delete are coming soon"
-        description="Owners will be able to export all of the org's data and schedule the org for deletion, with a 30-day grace period."
+      <ExportCard
+        orgId={orgId}
+        orgSlug={organization.slug}
+        exports={exportRows}
+        expiryDays={EXPORT_EXPIRY_DAYS}
       />
+      {can({ role }, "workspace.bootstrap") && (
+        <BootstrapCard
+          orgId={orgId}
+          people={CBC_PEOPLE.map((p) => ({ key: p.key, name: p.name, title: p.title }))}
+          members={memberOptions}
+          suggested={suggested}
+          bootstrappedAt={settings?.bootstrappedAt?.toISOString() ?? null}
+        />
+      )}
+      <DeleteCard orgId={orgId} orgName={organization.name} slug={organization.slug} />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import type { JobRun } from "@/server/jobs/types";
 import { setSecret } from "@/server/secrets";
 import { getBlob, listBlobs, putBlob, scopePrefix } from "@/server/storage";
 
+import { bootstrapCbcWorkspace } from "./bootstrap";
 import { cancelOrgDeletion, scheduleOrgDeletion } from "./deletion";
 import { createOrganization } from "./org-creation";
 import { orgPurgeJob } from "./purge";
@@ -275,6 +276,44 @@ describe.skipIf(!dbReady)("danger zone against the local database", () => {
     expect(row.status).toBe("EXPIRED");
     expect(row.blobKey).toBeNull();
     expect(await getBlob(`exports/${orgId}/${exportId}.zip`)).toBeNull();
+  });
+
+  const bootstrap = withOrgAction(async (ctx, mapping: Record<string, string>) =>
+    bootstrapCbcWorkspace(ctx, mapping),
+  );
+
+  it("Bootstrap CBC workspace is OWNER-only and applies the template under the owner's RLS", async () => {
+    requireUserMock.mockResolvedValue(member);
+    await expect(bootstrap(orgId, {})).rejects.toBeInstanceOf(ForbiddenError);
+
+    requireUserMock.mockResolvedValue(owner);
+    expect(await bootstrap(orgId, { jackson: member.id, oliver: member.id })).toMatchObject({
+      error: expect.stringMatching(/one person only/),
+    });
+    const result = await bootstrap(orgId, { jackson: owner.id, kristine: member.id });
+    expect(result.chartVersionId).toBeTruthy();
+    const state = await withSystemOrgTx(orgId, async ({ db }) => ({
+      labels: await db.label.findMany({ where: { organizationId: orgId }, select: { name: true } }),
+      org: await db.organization.findUniqueOrThrow({
+        where: { id: orgId },
+        select: { activeOrgChartVersionId: true },
+      }),
+      titles: await db.membership.findMany({
+        where: { organizationId: orgId },
+        select: { userId: true, title: true, role: true },
+      }),
+      settings: await db.orgSettings.findUniqueOrThrow({ where: { organizationId: orgId } }),
+    }));
+    expect(state.labels.map((l) => l.name)).toEqual(
+      expect.arrayContaining(["Needs President", "Design"]),
+    );
+    expect(state.org.activeOrgChartVersionId).toBe(result.chartVersionId);
+    expect(state.titles.find((t) => t.userId === owner.id)).toMatchObject({
+      title: "President",
+      role: "OWNER",
+    });
+    expect(state.titles.find((t) => t.userId === member.id)).toMatchObject({ role: "MEMBER" });
+    expect(state.settings.bootstrapTemplate).toBe("cbc");
   });
 
   const schedule = withOrgAction(async (ctx, confirm: string) => scheduleOrgDeletion(ctx, confirm));
