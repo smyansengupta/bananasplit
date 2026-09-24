@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { CALLBACK_HEADER } from "@/lib/auth/callback-url";
 import {
   buildNonceCsp,
   cspHeaderName,
@@ -29,6 +30,10 @@ export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set(headerName, policy);
+  // The requested path, so requireUser can send a signed-out visitor to
+  // /sign-in?callbackUrl=... and back (validated there as same-origin
+  // relative). Always overwritten, never trusted from the client here.
+  requestHeaders.set(CALLBACK_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set(headerName, policy);

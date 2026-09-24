@@ -20,6 +20,14 @@ describe("proxy — per-request nonce CSP (0A Fix 13)", () => {
     expect(response.headers.get("reporting-endpoints")).toContain("/api/csp-report");
   });
 
+  it("forwards the requested path for the sign-in callbackUrl, overwriting any client value", () => {
+    const request = new NextRequest("http://localhost:3000/app/cbc/tasks/t1?view=mine", {
+      headers: { "x-pathname": "https://evil.example" },
+    });
+    const response = proxy(request);
+    expect(response.headers.get("x-middleware-request-x-pathname")).toBe("/app/cbc/tasks/t1?view=mine");
+  });
+
   it("uses a new nonce for every request", () => {
     const a = proxy(new NextRequest("http://localhost:3000/sign-in"));
     const b = proxy(new NextRequest("http://localhost:3000/sign-in"));

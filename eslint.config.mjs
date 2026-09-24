@@ -88,6 +88,8 @@ const NEW_CODE = [
   "src/app/app/[[]orgSlug]/org-chart/**",
   "src/app/app/[[]orgSlug]/databases/**",
   "src/app/app/[[]orgSlug]/reports/**",
+  "src/app/app/[[]orgSlug]/tasks/**",
+  "src/components/tasks/**",
   "src/app/app/[[]orgSlug]/profile/**",
   "src/app/app/[[]orgSlug]/people/**",
   "src/app/app/[[]orgSlug]/settings/{general,integrations,privacy,theme,danger}/**",

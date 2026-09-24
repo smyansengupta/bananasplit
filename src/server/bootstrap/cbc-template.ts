@@ -15,6 +15,7 @@ import {
   ThemeMode,
   type AssignmentRelation,
 } from "@/generated/prisma/client";
+import { fromDateKey, localDateKey } from "@/lib/tasks/dates";
 
 /**
  * The Claude Builders Club workspace: the one source of the CBC structure
@@ -1916,7 +1917,9 @@ async function seedCbcTasks(db: Db, ctx: TaskSeedContext): Promise<number> {
       cursor.set(t.status, i + 1);
       rank = ranks.get(t.status)![i];
     }
-    const dueDate = cbcTime(monday, t.due[0], t.due[1], 23, 59);
+    // Due dates are floating calendar dates (UTC midnight of the local day; see
+    // src/lib/tasks/dates.ts), never an instant.
+    const dueDate = fromDateKey(localDateKey(cbcTime(monday, t.due[0], t.due[1], 12), CBC_TIMEZONE));
     const completed = t.status === TaskStatus.COMPLETED;
     const created = await db.task.create({
       data: {

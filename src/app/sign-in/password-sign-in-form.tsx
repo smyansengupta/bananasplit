@@ -9,11 +9,12 @@ import { Label } from "@/components/ui/label";
 
 import { passwordSignInAction } from "./actions";
 
-export function PasswordSignInForm() {
+export function PasswordSignInForm({ callbackUrl }: { callbackUrl?: string | null }) {
   const [state, formAction, isPending] = useActionState(passwordSignInAction, {});
 
   return (
     <form action={formAction} className="space-y-3">
+      {callbackUrl && <input type="hidden" name="callbackUrl" value={callbackUrl} />}
       <div className="grid gap-1.5">
         <Label htmlFor="email">Email</Label>
         <Input id="email" name="email" type="email" required autoComplete="email" />
