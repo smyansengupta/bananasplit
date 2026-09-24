@@ -213,8 +213,10 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
     });
 
     it("the ballot setting decides: OWNER_AND_ADMINS lets an admin see rows, NOBODY nobody", async () => {
+      // app.org_settings_guard (Settings): only an OWNER may change this
+      // setting, so the service transaction carries the owner's user id.
       const set = (value: "OWNER_ONLY" | "OWNER_AND_ADMINS" | "NOBODY") =>
-        withSystemOrgTx(s.orgId, ({ db }) =>
+        withSystemOrgTx(s.orgId, { userId: s.owner.id }, ({ db }) =>
           db.orgSettings.update({ where: { organizationId: s.orgId }, data: { ballotIndividualVisibility: value } }),
         );
       try {
