@@ -120,11 +120,11 @@ needs, plus what to do when something breaks.
   an org). Google sign-ins whose address Google has not verified are refused.
 - **Content Security Policy.** `/app`, `/poll`, `/invite` and the auth pages
   get a per-request nonce policy (`src/proxy.ts`); every other route gets a
-  static policy (`next.config.ts`). Production starts in report-only mode.
-  After a week of preview use, read the `[csp]` lines that
-  `/api/csp-report` logs; when there are none that matter, set
-  `CSP_MODE=enforce` in the Production scope and redeploy (the static policy
-  is fixed at build time).
+  static policy (`next.config.ts`). Both are **enforced** by default, in
+  every environment. To trial a policy change, set `CSP_MODE=report-only`
+  and redeploy (the static policy is fixed at build time), read the `[csp]`
+  lines that `/api/csp-report` logs for a week, then remove the variable.
+  Leaving it set is a standing weakness, so treat it as temporary.
 - **Receipts** are capped at 4 MB per file (Vercel's request body limit);
   the browser shrinks larger photos before uploading.
 

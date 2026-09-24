@@ -17,10 +17,13 @@
  * colors, progress bars, the kanban drag transform), React's hoisted
  * <style> and the Phase 8 theme <style>. Same as the club website.
  *
- * Mode: CSP_MODE=enforce | report-only. Unset, production ships
- * Content-Security-Policy-Report-Only (one week of preview use first, per
- * the plan) and development enforces, so violations show up while
- * building. Reports go to /api/csp-report.
+ * Mode: the policy is ENFORCED unless CSP_MODE=report-only says otherwise.
+ * It used to default to report-only in production whenever CSP_MODE was
+ * unset, which is the one environment that needs it enforced: a missing or
+ * misspelt variable, or a new deployment target nobody set it on, shipped a
+ * policy browsers only report on. Reports still go to /api/csp-report, and
+ * CSP_MODE=report-only is the deliberate, visible way to run a new policy
+ * for a week before turning it on.
  *
  * Contract for later phases: a server-rendered <script> on a nonce route
  * takes nonce={await getNonce()} (src/lib/security/nonce.ts), JSON-LD
@@ -49,8 +52,7 @@ export function isNonceRoute(pathname: string): boolean {
 export const CSP_REPORT_PATH = "/api/csp-report";
 
 export function cspMode(env: NodeJS.ProcessEnv = process.env): CspMode {
-  if (env.CSP_MODE === "enforce" || env.CSP_MODE === "report-only") return env.CSP_MODE;
-  return env.NODE_ENV === "production" ? "report-only" : "enforce";
+  return env.CSP_MODE === "report-only" ? "report-only" : "enforce";
 }
 
 export function cspHeaderName(mode: CspMode): string {

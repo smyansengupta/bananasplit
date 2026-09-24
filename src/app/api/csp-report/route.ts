@@ -4,10 +4,10 @@ import { clientIpFrom } from "@/lib/request-ip";
 /**
  * Receives Content-Security-Policy violation reports (0A Fix 13), both the
  * legacy report-uri form (application/csp-report) and the Reporting API
- * form (application/reports+json). The policy ships report-only first;
- * these log lines are how the report-only week is reviewed before
- * CSP_MODE=enforce. Only the directive and the blocked origin are logged,
- * never full URLs with query strings (they can carry tokens).
+ * form (application/reports+json). The policy is enforced by default; these
+ * log lines are how a CSP_MODE=report-only trial of a policy change is
+ * reviewed. Only the directive and the blocked origin are logged, never
+ * full URLs with query strings (they can carry tokens).
  */
 
 const REPORT_LIMIT = 60;

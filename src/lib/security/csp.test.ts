@@ -101,10 +101,18 @@ describe("static policy for every other route", () => {
 });
 
 describe("mode and headers", () => {
-  it("ships report-only in production until CSP_MODE=enforce, and enforces in development", () => {
-    expect(cspMode(env({ NODE_ENV: "production" }))).toBe("report-only");
-    expect(cspMode(env({ NODE_ENV: "production", CSP_MODE: "enforce" }))).toBe("enforce");
-    expect(cspMode(env({ NODE_ENV: "development" }))).toBe("enforce");
+  it("enforces everywhere unless CSP_MODE=report-only opts out", () => {
+    // It used to default to report-only in production whenever CSP_MODE was
+    // unset, so a missing variable shipped a policy browsers only report on.
+    for (const nodeEnv of ["production", "development", "test"]) {
+      expect(cspMode(env({ NODE_ENV: nodeEnv })), nodeEnv).toBe("enforce");
+      expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "enforce" })), nodeEnv).toBe("enforce");
+      expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "report-only" })), nodeEnv).toBe("report-only");
+      // Anything else is not an opt-out.
+      expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "" })), nodeEnv).toBe("enforce");
+      expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "Report-Only" })), nodeEnv).toBe("enforce");
+      expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "off" })), nodeEnv).toBe("enforce");
+    }
     expect(cspHeaderName("report-only")).toBe("Content-Security-Policy-Report-Only");
     expect(cspHeaderName("enforce")).toBe("Content-Security-Policy");
   });
