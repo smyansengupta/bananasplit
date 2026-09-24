@@ -1,4 +1,4 @@
-import type { EventKind, EventVisibility, Prisma, Role } from "@/generated/prisma/client";
+import type { EventKind, EventVisibility, Prisma, Role, RSVPStatus } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
@@ -85,6 +85,26 @@ export function getEventsInRange(db: TxClient, organizationId: string, f: RangeF
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     take: CALENDAR_WINDOW_LIMIT,
   });
+}
+
+/**
+ * The viewer's OWN answer for each of these events, so the grid can show an
+ * RSVP at a glance without shipping the attendee list. A separate query
+ * rather than an include: sibling includes run concurrently, which a single
+ * transaction connection cannot do (see getEventById).
+ */
+export async function getViewerRsvps(
+  db: TxClient,
+  organizationId: string,
+  viewerId: string,
+  eventIds: readonly string[],
+): Promise<Map<string, RSVPStatus>> {
+  if (eventIds.length === 0) return new Map();
+  const rows = await db.eventAttendee.findMany({
+    where: { organizationId, userId: viewerId, eventId: { in: [...eventIds] } },
+    select: { eventId: true, rsvp: true },
+  });
+  return new Map(rows.map((row) => [row.eventId, row.rsvp]));
 }
 
 /**

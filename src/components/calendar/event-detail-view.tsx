@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  ArrowLeft,
   CalendarPlus,
   ExternalLink,
   MapPin,
@@ -25,15 +26,18 @@ import type { CalendarSyncState, RSVPStatus } from "@/generated/prisma/enums";
 
 import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
 import { EventFormDialog, type EventFormEvent } from "./event-form-dialog";
+import { RSVP_META } from "./kinds";
 import type { CalendarMember } from "./member-picker";
 import { formatEventTimeRange } from "./utils";
 
-const RSVP_LABELS: Record<RSVPStatus, string> = {
-  PENDING: "Pending",
-  YES: "Yes",
-  NO: "No",
-  MAYBE: "Maybe",
-};
+/**
+ * One event, in full.
+ *
+ * The grid's popover answers "what is this"; this page answers "who is
+ * coming, what was decided, and is it really on Google". It is laid out in
+ * two columns on a wide screen so the answer to the second question is
+ * beside the event rather than a scroll below it, and stacks on a phone.
+ */
 
 const RSVP_BADGE_VARIANT: Record<RSVPStatus, "default" | "destructive" | "secondary" | "outline"> = {
   PENDING: "outline",
@@ -61,6 +65,7 @@ export function EventDetailView({
   members,
   currentUserId,
   canEdit,
+  startInEdit = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -69,9 +74,11 @@ export function EventDetailView({
   members: CalendarMember[];
   currentUserId: string;
   canEdit: boolean;
+  /** Opened from the calendar's "Edit" (?edit=1), so the form is already up. */
+  startInEdit?: boolean;
 }) {
   const router = useRouter();
-  const [editOpen, setEditOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(canEdit && startInEdit);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -108,17 +115,22 @@ export function EventDetailView({
   const hostLabel = event.host?.name ?? event.hostName;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href={`/app/${orgSlug}/calendar`} className="text-muted-foreground text-sm hover:underline">
-            ← Back to calendar
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight break-words">{event.title}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <Link
+        href={`/app/${orgSlug}/calendar`}
+        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm transition-colors"
+      >
+        <ArrowLeft aria-hidden className="size-4" />
+        Back to calendar
+      </Link>
+
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight break-words">{event.title}</h1>
+          <p className="mt-1.5 text-sm font-medium">
             {formatEventTimeRange(event.startsAt, event.endsAt, event.allDay, timeZone)}
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             <KindBadge kind={event.kind} />
             <VisibilityBadge visibility={event.visibility} />
             {canEdit && <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />}
@@ -128,15 +140,16 @@ export function EventDetailView({
         </div>
         {canEdit && (
           <div className="flex shrink-0 gap-2">
-            <Button variant="outline" size="icon" onClick={() => setEditOpen(true)} aria-label="Edit event">
-              <Pencil className="size-4" />
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil aria-hidden className="size-4" />
+              Edit
             </Button>
             <Button variant="outline" size="icon" onClick={handleDelete} disabled={isPending} aria-label="Delete event">
               <Trash2 className="size-4" />
             </Button>
           </div>
         )}
-      </div>
+      </header>
 
       {event.needsReview && canEdit && (
         <p className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3 text-sm" role="note">
@@ -151,118 +164,140 @@ export function EventDetailView({
         </p>
       )}
 
-      {event.description && <p className="text-sm whitespace-pre-wrap">{event.description}</p>}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="space-y-5">
+          {event.description && <p className="text-sm leading-relaxed whitespace-pre-wrap">{event.description}</p>}
 
-      <div className="space-y-2 text-sm">
-        {event.location && (
-          <p className="text-muted-foreground flex items-center gap-2">
-            <MapPin className="size-4" aria-hidden="true" />
-            {event.location}
-          </p>
-        )}
-        {hostLabel && (
-          <p className="text-muted-foreground flex items-center gap-2">
-            <Mic className="size-4" aria-hidden="true" />
-            Hosted by {hostLabel}
-          </p>
-        )}
-        {event.rsvpUrl && (
-          <p className="flex items-center gap-2">
-            <Ticket className="text-muted-foreground size-4" aria-hidden="true" />
-            <a href={event.rsvpUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-              RSVP link
-            </a>
-          </p>
-        )}
-        {event.publicNote && <p className="text-muted-foreground">Website note: {event.publicNote}</p>}
-      </div>
+          {(event.location || hostLabel || event.rsvpUrl || event.publicNote) && (
+            <dl className="divide-border grid gap-0 divide-y rounded-lg border text-sm">
+              {event.location && (
+                <Fact icon={<MapPin aria-hidden className="size-4" />} label="Where">
+                  {event.location}
+                </Fact>
+              )}
+              {hostLabel && (
+                <Fact icon={<Mic aria-hidden className="size-4" />} label="Host">
+                  {hostLabel}
+                </Fact>
+              )}
+              {event.rsvpUrl && (
+                <Fact icon={<Ticket aria-hidden className="size-4" />} label="RSVP link">
+                  <a
+                    href={event.rsvpUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary break-all hover:underline"
+                  >
+                    {event.rsvpUrl}
+                  </a>
+                </Fact>
+              )}
+              {event.publicNote && (
+                <Fact icon={<AlertTriangle aria-hidden className="size-4" />} label="Website note">
+                  {event.publicNote}
+                </Fact>
+              )}
+            </dl>
+          )}
 
-      {event.conferenceUrl && (
-        <Button asChild>
-          <a href={event.conferenceUrl} target="_blank" rel="noopener noreferrer">
-            <Video className="size-4" />
-            Join meeting
-          </a>
-        </Button>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <a href={`/api/calendar/${event.id}/ics`} download>
-            <CalendarPlus className="size-4" />
-            Download .ics
-          </a>
-        </Button>
-        <Button variant="outline" size="sm" asChild>
-          <a href={buildGoogleCalendarUrl(event)} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="size-4" />
-            Add to Google Calendar
-          </a>
-        </Button>
-      </div>
-
-      {myAttendance && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Your RSVP</p>
-          <div className="flex gap-2">
-            {(["YES", "MAYBE", "NO"] as const).map((status) => (
-              <Button
-                key={status}
-                type="button"
-                size="sm"
-                variant={myAttendance.rsvp === status ? "default" : "outline"}
-                disabled={isPending}
-                onClick={() => handleRsvp(status)}
-              >
-                {RSVP_LABELS[status]}
+          <div className="flex flex-wrap gap-2">
+            {event.conferenceUrl && (
+              <Button asChild size="sm">
+                <a href={event.conferenceUrl} target="_blank" rel="noopener noreferrer">
+                  <Video className="size-4" />
+                  Join meeting
+                </a>
               </Button>
-            ))}
+            )}
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/api/calendar/${event.id}/ics`} download>
+                <CalendarPlus className="size-4" />
+                Download .ics
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a href={buildGoogleCalendarUrl(event)} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-4" />
+                Add to Google Calendar
+              </a>
+            </Button>
           </div>
-        </div>
-      )}
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Invited ({event.attendees.length})</p>
-          <p className="text-muted-foreground text-xs">
-            {count("YES")} yes · {count("MAYBE")} maybe · {count("NO")} no · {count("PENDING")} pending
-          </p>
+          <section className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-medium">Linked notes</h2>
+              <Button variant="outline" size="sm" onClick={handleCreateMeetingNotes} disabled={isPending}>
+                <NotebookText className="size-4" />
+                Create meeting notes
+              </Button>
+            </div>
+            {event.notes.length > 0 ? (
+              <ul className="space-y-1">
+                {event.notes.map((note) => (
+                  <li key={note.id}>
+                    <Link href={`/app/${orgSlug}/notes/${note.id}`} className="text-primary text-sm hover:underline">
+                      {note.title || "Untitled note"}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Nothing yet. Meeting notes made here stay linked to this event.
+              </p>
+            )}
+          </section>
         </div>
-        <ul className="space-y-1.5">
-          {event.attendees.map((a) => (
-            <li key={a.userId} className="flex items-center justify-between gap-2 text-sm">
-              <span className="flex items-center gap-2">
-                <UserAvatar user={a.user} size="sm" />
-                {a.user.name ?? "Member"}
-              </span>
-              <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>{RSVP_LABELS[a.rsvp]}</Badge>
-            </li>
-          ))}
-          {event.attendees.length === 0 && <p className="text-muted-foreground text-sm">No members invited.</p>}
-        </ul>
-      </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Linked notes</p>
-          <Button variant="outline" size="sm" onClick={handleCreateMeetingNotes} disabled={isPending}>
-            <NotebookText className="size-4" />
-            Create meeting notes
-          </Button>
-        </div>
-        {event.notes.length > 0 ? (
-          <ul className="space-y-1">
-            {event.notes.map((note) => (
-              <li key={note.id}>
-                <Link href={`/app/${orgSlug}/notes/${note.id}`} className="text-primary text-sm hover:underline">
-                  {note.title || "Untitled note"}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-muted-foreground text-sm">No notes linked to this event yet.</p>
-        )}
+        <aside className="space-y-5">
+          {myAttendance && (
+            <section className="bg-muted/40 space-y-2 rounded-lg border p-3">
+              <h2 className="text-sm font-medium">Your RSVP</h2>
+              <div className="flex gap-2" role="group" aria-label="Your RSVP">
+                {(["YES", "MAYBE", "NO"] as const).map((status) => (
+                  <Button
+                    key={status}
+                    type="button"
+                    size="sm"
+                    className="flex-1"
+                    variant={myAttendance.rsvp === status ? "default" : "outline"}
+                    aria-pressed={myAttendance.rsvp === status}
+                    disabled={isPending}
+                    onClick={() => handleRsvp(status)}
+                  >
+                    {RSVP_META[status].short}
+                  </Button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-medium">Invited ({event.attendees.length})</h2>
+            {event.attendees.length > 0 ? (
+              <>
+                <p className="text-muted-foreground text-xs tabular-nums">
+                  {count("YES")} going · {count("MAYBE")} maybe · {count("NO")} not going · {count("PENDING")} no answer
+                </p>
+                <ul className="space-y-1.5">
+                  {event.attendees.map((a) => (
+                    <li key={a.userId} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <UserAvatar user={a.user} size="sm" />
+                        <span className="truncate">{a.user.name ?? "Member"}</span>
+                      </span>
+                      <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>{RSVP_META[a.rsvp].short}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Nobody is invited yet.{canEdit && " Add members under More details when you edit."}
+              </p>
+            )}
+          </section>
+        </aside>
       </div>
 
       {error && (
@@ -282,6 +317,16 @@ export function EventDetailView({
           onDeleted={() => router.push(`/app/${orgSlug}/calendar`)}
         />
       )}
+    </div>
+  );
+}
+
+function Fact({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[auto_5.5rem_minmax(0,1fr)] items-start gap-3 px-3 py-2.5">
+      <span className="text-muted-foreground mt-0.5">{icon}</span>
+      <dt className="text-muted-foreground mt-0.5 text-xs font-medium tracking-wide uppercase">{label}</dt>
+      <dd className="break-words">{children}</dd>
     </div>
   );
 }

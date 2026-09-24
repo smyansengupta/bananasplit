@@ -7,7 +7,10 @@ import { getOrgMembersForPicker } from "@/server/members";
 
 import { getEventById } from "../queries";
 
-export default async function EventDetailPage({ params }: PageProps<"/app/[orgSlug]/calendar/[eventId]">) {
+export default async function EventDetailPage({
+  params,
+  searchParams,
+}: PageProps<"/app/[orgSlug]/calendar/[eventId]">) {
   const { orgSlug, eventId } = await params;
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
   const event = await withOrgTx(org.id, ({ db }) => getEventById(db, org.id, eventId, user.id));
@@ -15,6 +18,11 @@ export default async function EventDetailPage({ params }: PageProps<"/app/[orgSl
 
   const canEdit = can({ role }, "events.write");
   const members = canEdit ? await getOrgMembersForPicker(org.id) : [];
+  // The calendar's "Edit" sends people here with the form already open, so
+  // one click from a chip lands on a filled-in form rather than a page to
+  // read and a button to find.
+  const { edit } = await searchParams;
+  const startInEdit = (Array.isArray(edit) ? edit[0] : edit) === "1";
 
   return (
     <EventDetailView
@@ -52,6 +60,7 @@ export default async function EventDetailPage({ params }: PageProps<"/app/[orgSl
       members={members.map((m) => ({ id: m.id, name: m.name, image: m.image, avatar: m.avatar, title: m.title }))}
       currentUserId={user.id}
       canEdit={canEdit}
+      startInEdit={startInEdit}
     />
   );
 }
