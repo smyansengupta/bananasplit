@@ -216,20 +216,49 @@ export function sniffSource(bytes: Buffer, filename: string): SniffedSource {
 // ---------------------------------------------------------------- PDF
 
 /**
+ * One left-to-right pass over the file: `/Type /Page`, `/Type /Pages`,
+ * `/Count n`, and `>`, which ends a dictionary.
+ *
+ * Every quantifier is bounded, so the scan is linear in the buffer. The
+ * earlier form paired the two markers with `[^>]*?`, which re-scanned to the
+ * end of the file for every `/Count n` that never found a `/Type /Pages`:
+ * quadratic, and ~4x per doubling of the input (measured: 1 MB of
+ * `"/Count 1 "` took 22.5 s, so minutes at the 4 MB upload cap). It runs
+ * synchronously on the upload request and in the shared job drain, where no
+ * abort signal can interrupt a regex, so one crafted file stalled the queue
+ * for every org.
+ */
+const PDF_TOKEN = /\/Type\s{0,16}\/(Pages|Page)(?![A-Za-z])|\/Count\s{1,16}(\d{1,9})|>/g;
+
+/** Bytes of a PDF scanned for the page tree. Uploads are capped at 4 MB. */
+export const MAX_PDF_SCAN_BYTES = 8 * 1024 * 1024;
+
+/**
  * Page count from the page tree (the largest /Count of a /Pages node, or the
  * number of /Page objects), or null when the tree is in compressed object
  * streams. Claude's own limits and the token preflight still apply.
+ *
+ * A /Count belongs to a /Pages node when the two sit in the same dictionary,
+ * in either order — that is, with no `>` between them.
  */
 export function countPdfPages(bytes: Buffer): number | null {
-  const text = bytes.toString("latin1");
+  const text = bytes.subarray(0, MAX_PDF_SCAN_BYTES).toString("latin1");
   let pages = 0;
-  for (const m of text.matchAll(/\/Type\s*\/Page(?![a-zA-Z])/g)) {
-    if (m.index !== undefined) pages++;
-  }
   let counted = 0;
-  for (const m of text.matchAll(/\/Type\s*\/Pages\b[^>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]*?\/Type\s*\/Pages\b/g)) {
-    counted = Math.max(counted, Number(m[1] ?? m[2] ?? 0));
+  // Per dictionary: the largest /Count seen, and whether /Type /Pages appeared.
+  let sawPages = false;
+  let dictCount = 0;
+  for (const m of text.matchAll(PDF_TOKEN)) {
+    if (m[1] === "Page") pages++;
+    else if (m[1] === "Pages") sawPages = true;
+    else if (m[2] !== undefined) dictCount = Math.max(dictCount, Number(m[2]));
+    else {
+      if (sawPages) counted = Math.max(counted, dictCount);
+      sawPages = false;
+      dictCount = 0;
+    }
   }
+  if (sawPages) counted = Math.max(counted, dictCount);
   const best = Math.max(pages, counted);
   return best > 0 ? best : null;
 }

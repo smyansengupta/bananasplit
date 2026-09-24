@@ -141,3 +141,37 @@ describe("extractSource", () => {
     expect(rejected(() => preflightSource(encrypted, sniffSource(encrypted, "a.pdf")))).toMatch(/Password/);
   });
 });
+
+describe("countPdfPages", () => {
+  // The old `/Count n[^>]*?/Type /Pages` alternation re-scanned to the end of
+  // the buffer for every /Count, so this input took ~22.5 s at 1 MB and
+  // minutes at the 4 MB upload cap, with nothing able to interrupt it.
+  it("scans a 1 MB buffer of /Count markers in well under 250 ms", () => {
+    const hostile = Buffer.from(`%PDF-1.4\n${"/Count 1 ".repeat(Math.ceil((1024 * 1024) / 9))}`, "latin1");
+    expect(hostile.length).toBeGreaterThan(1024 * 1024);
+    const started = performance.now();
+    const pages = countPdfPages(hostile);
+    const elapsed = performance.now() - started;
+    expect(elapsed).toBeLessThan(250);
+    // No /Type /Pages and no /Type /Page anywhere, so there is nothing to count.
+    expect(pages).toBeNull();
+  });
+
+  it("still reads the page tree, in either order and past a long /Kids array", () => {
+    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Type /Pages /Kids [3 0 R] /Count 7 >>"))).toBe(7);
+    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Count 9 /Kids [3 0 R] /Type /Pages >>"))).toBe(9);
+    const kids = Array.from({ length: 400 }, (_, i) => `${i + 4} 0 R`).join(" ");
+    expect(countPdfPages(Buffer.from(`%PDF-1.4\n<< /Type /Pages /Kids [${kids}] /Count 400 >>`))).toBe(400);
+    // A /Count in another dictionary does not belong to the page tree.
+    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Count 900 >>\n<< /Type /Pages /Count 3 >>"))).toBe(3);
+    // /Pages is never counted as a /Page object.
+    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Type /Pages >>"))).toBeNull();
+    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Type /Page >>\n<< /Type /Page >>"))).toBe(2);
+  });
+
+  it("counts the real fixture and the generated multi-page PDF", () => {
+    expect(countPdfPages(fixture("cbc-fall-2026.pdf"))).toBe(2);
+    expect(countPdfPages(buildPdf(Array.from({ length: 60 * 5 }, (_, i) => `line ${i}`)))).toBe(5);
+    expect(countPdfPages(Buffer.from("%PDF-1.4\nnothing here"))).toBeNull();
+  });
+});
