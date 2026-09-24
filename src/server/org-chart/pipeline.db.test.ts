@@ -135,6 +135,8 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
   const s = seeded as Seeded;
   const createdVersions: string[] = [];
   let createdIntegration = false;
+  /** The integration's secretLast4 before the test, restored afterwards. */
+  let originalLast4: string | null | undefined;
   let firstDraft = "";
 
   beforeAll(async () => {
@@ -147,6 +149,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         where: { organizationId_provider: { organizationId: s.cbcId, provider: "CLAUDE" } },
         select: { id: true, secretLast4: true },
       });
+      originalLast4 = existing ? existing.secretLast4 : undefined;
       if (existing?.secretLast4) return false;
       if (existing) {
         await db.orgIntegration.update({ where: { id: existing.id }, data: { secretLast4: "0000" } });
@@ -183,6 +186,11 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       await db.orgChartVersion.deleteMany({ where: { id: { in: createdVersions } } });
       if (createdIntegration) {
         await db.orgIntegration.deleteMany({ where: { organizationId: s.cbcId, provider: "CLAUDE" } });
+      } else if (originalLast4 !== undefined) {
+        await db.orgIntegration.updateMany({
+          where: { organizationId: s.cbcId, provider: "CLAUDE" },
+          data: { secretLast4: originalLast4 },
+        });
       }
       return rows.map((r) => r.sourceBlobKey).filter((k): k is string => Boolean(k));
     });
