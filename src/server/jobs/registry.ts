@@ -211,6 +211,7 @@ export const JOB_KINDS = {
     leaseSeconds: 360,
     tier: "heavy",
     afterEligible: false,
+    handler: () => import("@/server/org-chart/parse-job").then((m) => m.claudeParseJob),
     description: "Parse an uploaded org-chart document with the org's Claude key.",
   }),
 

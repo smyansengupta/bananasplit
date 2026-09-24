@@ -1,0 +1,99 @@
+## Seed data: Claude Builders Club (Fall 2026)
+
+```
+                     President (Jackson)
+                     + Partnerships
+                            |
+                            |-- Advisor (Mehr)
+                            |
+        +-------------------+-------------------+
+  VP Ops & Programs    Head of Finance       VP Growth
+     (Oliver)            (Anthony)            (Lucas)
+        |                                      |
+  |-- Programs (Alex)                   |-- Social & Membership (Kristine)
+  |-- Tech (Smyan)                      |-- Graphic Designer [OPEN HIRE]
+```
+
+### President: Jackson Lamoureux
+Reports to: N/A · Manages: Oliver, Lucas, Anthony · Advisor: Mehr
+- Sets semester vision, goals, and priorities for the club
+- Owns all partnerships: Anthropic, Khoury, faculty advisor, sponsors, guest speakers
+- Leads funding asks with Anthony
+- Final say on budget, Anthropic brand use, new partnerships, and board changes
+- Opens the weekly exec sync and holds biweekly 1:1s with both VPs
+- Reads Sunday updates and clears blockers the VPs can't solve
+
+### Founder & Advisor: Mehr Anand
+Reports to: Jackson
+- Sounding board for Jackson on strategy and tough calls
+- Answers questions from Jackson as needed
+- Optional technical input on the ops suite and workshops
+- Provides continuity from the club's founding
+
+### VP Ops & Programs: Oliver Ward
+Reports to: Jackson · Manages: Alex, Smyan
+- Runs the weekly exec sync agenda and owns the task board
+- Collects Sunday updates from all leads and flags blockers to Jackson
+- Owns the semester calendar for workshops, hackathon, and events
+- Makes sure Programs and Tech deliver on time
+- Keeps shared Drive and Slack organized
+- Decides alone: deadlines, task assignments, internal process
+
+### VP Growth: Lucas Salzgeber
+Reports to: Jackson · Manages: Kristine, Designer
+- Owns member growth, event turnout, and club brand on campus
+- Builds relationships with other clubs and campus orgs
+- Manages the designer and sets priority across all design requests
+- Signs off on brand consistency for posts, flyers, and decks
+- Leads recruitment for the next board application round
+- Decides alone: campus outreach, brand calls, design priorities
+
+### Head of Finance: Anthony Jones
+Reports to: Jackson
+- Keeps the budget tracker and all spending records
+- Processes reimbursements and purchase requests
+- Supports funding applications (SAO, Anthropic, Khoury) with Jackson
+- Sends Jackson a monthly budget report
+- Decides alone: approving spend under the set limit
+
+### Head of Programs: Alex Green
+Reports to: Oliver
+- Owns the 17-workshop plan: topics, order, dates
+- Recruits and preps presenters (board, members, guests)
+- Owns workshop materials: slides, starter repos, handouts
+- Runs logistics: rooms, food, run-of-show, day-of setup
+- Sets hackathon tracks, theme, judging, and logistics
+- Collects feedback after each session and improves the next one
+
+### Head of Tech: Smyan Sengupta
+Reports to: Oliver
+- Builds and maintains the internal ops suite
+- Owns claudeneu.com and all site updates
+- Owns the check-in system, attendance data, and stamp-card rewards
+- Gives member data to Kristine for outreach
+- Technical QA on workshop materials and starter code
+- Hands off current partnership contacts and threads to Jackson
+
+### Head of Social & Membership: Kristine Min
+Reports to: Lucas
+- Owns the content calendar across Instagram and TikTok
+- Promotes every workshop and event
+- Sends the new-member welcome and Slack invite
+- Runs the newsletter and keeps Slack active between events
+- Uses attendance data from Smyan to re-engage inactive members
+- Sends design requests through the intake queue
+
+### Graphic Designer: Open Hire
+Reports to: Lucas
+- Builds and maintains the brand kit: colors, fonts, templates
+- Designs flyers, social graphics, and event visuals
+- Makes slide templates for workshops and partner decks
+- Works only from the intake queue, no DM requests
+- Turns requests around within an agreed window (3 to 5 days)
+
+### How we work (use for defaults in Tasks)
+- One task board. Every task has one owner and a due date
+- Sunday updates: every lead posts done / next / blocked by Sunday night
+- Weekly 30-minute exec sync, blockers only, run by the VP Ops & Programs
+- Design requests go through an intake queue; VP Growth sets priority
+- Needs President: Anthropic brand use, spend over the set limit, new partnerships, board changes

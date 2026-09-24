@@ -1,0 +1,46 @@
+/*
+ * React Flow's --xy-* variables mapped to the app's design tokens, so the
+ * canvas follows the theme (light, dark and the Phase 8 org themes) with
+ * no hard-coded colors.
+ */
+.org-chart-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: var(--border);
+  --xy-edge-stroke: var(--muted-foreground);
+  --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-selected: var(--primary);
+  --xy-connectionline-stroke: var(--muted-foreground);
+  --xy-node-background-color: transparent;
+  --xy-node-border: none;
+  --xy-node-border-radius: var(--radius);
+  --xy-node-color: var(--foreground);
+  --xy-node-boxshadow-hover: none;
+  --xy-node-boxshadow-selected: none;
+  --xy-handle-background-color: transparent;
+  --xy-handle-border-color: transparent;
+  --xy-controls-button-background-color: var(--background);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 12%, transparent);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(in oklch, var(--muted) 70%, transparent);
+  --xy-minimap-mask-stroke-color: var(--border);
+  --xy-minimap-node-background-color: var(--muted-foreground);
+  --xy-minimap-node-stroke-color: transparent;
+  --xy-attribution-background-color: color-mix(in oklch, var(--background) 70%, transparent);
+  background: var(--background);
+}
+
+.org-chart-flow .react-flow__node {
+  cursor: default;
+}
+
+.org-chart-flow .react-flow__edge.advisor .react-flow__edge-path {
+  stroke-dasharray: 6 5;
+}
+
+.org-chart-flow .react-flow__attribution a {
+  color: var(--muted-foreground);
+}
