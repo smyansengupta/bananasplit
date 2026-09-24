@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { invalidate } from "@/server/cache/invalidate";
 import { reports } from "@/server/cache/tags";
+import { markReportsDataChanged } from "@/server/reports/data-version";
 
 /**
  * After any write to check-ins, signups, contacts or sessions, in the SAME
@@ -21,7 +21,7 @@ import { reports } from "@/server/cache/tags";
  * it has a check-in), and the function is one pass over the org's contacts.
  */
 
-export type RollupDb = Pick<Prisma.TransactionClient, "$queryRaw" | "orgSettings">;
+export type RollupDb = Prisma.TransactionClient;
 
 export async function refreshRollups(
   db: RollupDb,
@@ -34,15 +34,14 @@ export async function refreshRollups(
   await db.$queryRaw`SELECT app.refresh_lapsed(${organizationId}) AS n`;
 }
 
-/** Bumps the reports data version and queues the reports invalidation after commit. */
+/**
+ * Bumps the reports data version and queues the reports invalidation after
+ * commit, through the Reports hook (markReportsDataChanged,
+ * src/server/reports/data-version.ts), in the caller's transaction.
+ */
 export async function markDataChanged(db: RollupDb, organizationId: string): Promise<string[]> {
-  await db.orgSettings.updateMany({
-    where: { organizationId },
-    data: { reportsDataVersion: { increment: 1 } },
-  });
-  const tags = [reports(organizationId)];
-  invalidate(tags);
-  return tags;
+  await markReportsDataChanged({ db, organizationId });
+  return [reports(organizationId)];
 }
 
 /** refreshRollups, then markDataChanged. */

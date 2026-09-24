@@ -17,6 +17,7 @@ import { invalidate } from "@/server/cache/invalidate";
 import { publicEvents, reports } from "@/server/cache/tags";
 import type { TxClient, TxKind } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
+import { markReportsDataChanged } from "@/server/reports/data-version";
 
 /**
  * The event service: the ONE place events (calendar events and Sessions,
@@ -591,10 +592,7 @@ export async function mergeEvents(
     await ctx.db.$queryRaw`SELECT app.refresh_contact_rollups(${org}, ${contacts}::text[])::text AS ok`;
     await ctx.db.$queryRaw`SELECT app.refresh_lapsed(${org}) AS n`;
   }
-  await ctx.db.orgSettings.updateMany({
-    where: { organizationId: org },
-    data: { reportsDataVersion: { increment: 1 } },
-  });
+  await markReportsDataChanged({ db: ctx.db, organizationId: org });
 
   const moved = {
     attendance: moveIds.length,

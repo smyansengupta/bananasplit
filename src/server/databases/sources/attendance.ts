@@ -38,6 +38,7 @@ export const attendanceColumns = defineColumns([
   { key: "term", label: "Term", type: "text", sortable: true, filterable: true },
   { key: "source", label: "Source", type: "select", filterable: true, hiddenByDefault: true, options: options(SOURCE_LABELS) },
   { key: "suppressed", label: "Suppressed", type: "boolean", filterable: true, hiddenByDefault: true },
+  { key: "suppressedAt", label: "Suppressed at", type: "datetime", filterable: true, hiddenByDefault: true },
   { key: "nameAsEntered", label: "Name as entered", type: "text", filterable: true, hiddenByDefault: true, pii: true },
 ]);
 
@@ -63,6 +64,7 @@ function querySpec(): QuerySpec {
         ops: ["eq"],
         where: (_op, v) => ({ suppressedAt: v === true ? { not: null } : null }),
       },
+      suppressedAt: { path: ["suppressedAt"], kind: "datetime", nullable: true, filterable: true },
       nameAsEntered: { path: ["nameAsEntered"], kind: "text", nullable: true, filterable: true },
     },
     aliases: {
@@ -83,7 +85,8 @@ function querySpec(): QuerySpec {
     dateField: "checkedInAt",
     defaultSort: { col: "checkedInAt", dir: "desc" },
     tiebreak: (dir) => [{ id: dir }],
-    defaultFilters: [{ col: "suppressed", op: "eq", value: "false" }],
+    // Suppressed check-ins are hidden unless the view asks about suppression.
+    defaultFilters: [{ col: "suppressedAt", op: "isnull", value: "true", skipIf: ["suppressed"] }],
   };
 }
 
@@ -128,6 +131,7 @@ function map(a: Row, ctx: ViewContext): MappedRow {
       term: text(termLabel(a.term)),
       source: { t: "badge", v: SOURCE_LABELS[a.source] ?? a.source, tone: "secondary" },
       suppressed: a.suppressedAt ? { t: "badge", v: "Suppressed", tone: "warning" } : { t: "bool", v: false },
+      suppressedAt: dateTimeCell(a.suppressedAt, ctx.timezone),
       nameAsEntered: text(a.nameAsEntered),
     },
     csv: {
@@ -142,6 +146,7 @@ function map(a: Row, ctx: ViewContext): MappedRow {
       term: a.term,
       source: SOURCE_LABELS[a.source] ?? a.source,
       suppressed: a.suppressedAt !== null,
+      suppressedAt: csvDateTime(a.suppressedAt, ctx.timezone),
       nameAsEntered: a.nameAsEntered,
     },
   };

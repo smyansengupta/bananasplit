@@ -47,6 +47,7 @@ export const signupColumns = defineColumns([
   { key: "term", label: "Term", type: "text", sortable: true, filterable: true },
   { key: "recordSource", label: "Record source", type: "select", filterable: true, hiddenByDefault: true, options: options(SOURCE_LABELS) },
   { key: "suppressed", label: "Suppressed", type: "boolean", filterable: true, hiddenByDefault: true },
+  { key: "suppressedAt", label: "Suppressed at", type: "datetime", filterable: true, hiddenByDefault: true },
 ]);
 
 function querySpec(): QuerySpec {
@@ -74,6 +75,7 @@ function querySpec(): QuerySpec {
         ops: ["eq"],
         where: (_op, v) => ({ suppressedAt: v === true ? { not: null } : null }),
       },
+      suppressedAt: { path: ["suppressedAt"], kind: "datetime", nullable: true, filterable: true },
     },
     aliases: {
       ...CONTACT_ALIASES,
@@ -89,7 +91,7 @@ function querySpec(): QuerySpec {
     dateField: "signedUpAt",
     defaultSort: { col: "signedUpAt", dir: "desc" },
     tiebreak: (dir) => [{ id: dir }],
-    defaultFilters: [{ col: "suppressed", op: "eq", value: "false" }],
+    defaultFilters: [{ col: "suppressedAt", op: "isnull", value: "true", skipIf: ["suppressed"] }],
   };
 }
 
@@ -150,6 +152,7 @@ function map(s: Row, ctx: ViewContext): MappedRow {
       term: text(termLabel(s.term)),
       recordSource: { t: "badge", v: SOURCE_LABELS[s.recordSource] ?? s.recordSource, tone: "secondary" },
       suppressed: s.suppressedAt ? { t: "badge", v: "Suppressed", tone: "warning" } : { t: "bool", v: false },
+      suppressedAt: dateTimeCell(s.suppressedAt, ctx.timezone),
     },
     csv: {
       person: contactName(s.contact),
@@ -168,6 +171,7 @@ function map(s: Row, ctx: ViewContext): MappedRow {
       term: s.term,
       recordSource: SOURCE_LABELS[s.recordSource] ?? s.recordSource,
       suppressed: s.suppressedAt !== null,
+      suppressedAt: csvDateTime(s.suppressedAt, ctx.timezone),
     },
   };
 }

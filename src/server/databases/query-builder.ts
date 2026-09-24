@@ -82,8 +82,19 @@ export interface QuerySpec {
   defaultSort: DbViewSort;
   /** A unique, stable tiebreaker appended to every sort. */
   tiebreak: (dir: "asc" | "desc") => Where[];
-  /** Filters applied when the URL has no filter on that column and does not name it in nd. */
-  defaultFilters?: readonly ParsedDbFilter[];
+  /**
+   * Filters applied when the URL has no filter on that column and does not
+   * name it in nd=. `skipIf` lists other keys whose explicit filter also
+   * turns the default off; `onlyUnfiltered` applies it only when the URL has
+   * no explicit filter at all (a report deep link states everything it
+   * means, e.g. People's current-term default).
+   */
+  defaultFilters?: readonly DefaultFilter[];
+}
+
+export interface DefaultFilter extends ParsedDbFilter {
+  skipIf?: readonly string[];
+  onlyUnfiltered?: boolean;
 }
 
 export interface QueryOptions {
@@ -379,6 +390,8 @@ export function buildQuery(
   for (const f of spec.defaultFilters ?? []) {
     const key = resolveKey(spec, f.col);
     if (!key || filteredKeys.has(key) || noDefaults.has(key)) continue;
+    if (f.skipIf?.some((k) => filteredKeys.has(k))) continue;
+    if (f.onlyUnfiltered && filters.length > 0) continue;
     const field = spec.fields[key];
     const value = parseFilterValue(field, f, tz);
     const where = value === undefined ? null : filterWhere(field, f.op, value);

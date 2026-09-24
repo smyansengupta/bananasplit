@@ -246,7 +246,7 @@ const ballotSpec: QuerySpec = {
   dateField: "castAt",
   defaultSort: { col: "castAt", dir: "desc" },
   tiebreak: (dir) => [{ id: dir }],
-  defaultFilters: [{ col: "excluded", op: "eq", value: "false" }],
+  defaultFilters: [{ col: "excluded", op: "eq", value: "false", skipIf: ["excludedReason"] }],
 };
 
 const ballotSelect = {

@@ -73,7 +73,9 @@ function querySpec(ctx: ViewContext): QuerySpec {
     dateField: "lastCheckInAt",
     defaultSort: { col: "stampCount", dir: "desc" },
     tiebreak: (dir) => [{ contactId: dir }, { term: dir }],
-    defaultFilters: [{ col: "term", op: "eq", value: termOf(ctx.now, ctx.timezone) }],
+    // The current term, unless the URL states its own filters (report deep
+    // links such as "stopped showing up" span terms).
+    defaultFilters: [{ col: "term", op: "eq", value: termOf(ctx.now, ctx.timezone), onlyUnfiltered: true }],
   };
 }
 
