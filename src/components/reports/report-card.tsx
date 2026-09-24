@@ -35,7 +35,7 @@ export function ReportCard({
 }) {
   const headingId = `report-${id}-title`;
   return (
-    <Card className={cn("min-w-0", className)} aria-labelledby={headingId} role="region">
+    <Card className={cn("min-w-0 flex-1", className)} aria-labelledby={headingId} role="region">
       <CardHeader>
         <CardTitle id={headingId}>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>

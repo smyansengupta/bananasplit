@@ -145,6 +145,8 @@ export interface BallotResult {
   title: string;
   opensAt: string | null;
   closesAt: string | null;
+  /** Org-local date the ballot opened. */
+  opensOn: string | null;
   /** Valid ballots (not excluded as test or out of window). */
   ballots: number;
   linkedSession: { id: string; title: string; localDate: string; checkIns: number } | null;

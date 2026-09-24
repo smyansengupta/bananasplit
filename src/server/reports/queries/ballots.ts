@@ -46,6 +46,7 @@ export const queryBallots: ReportQuery<BallotsReport> = async (db, args) => {
       title: string;
       opens_at: string | null;
       closes_at: string | null;
+      opens_on: string | null;
       definition: unknown;
       ballots: number;
       event_id: string | null;
@@ -57,6 +58,7 @@ export const queryBallots: ReportQuery<BallotsReport> = async (db, args) => {
     SELECT d."id" AS id, d."slug" AS slug, d."title" AS title,
            ${isoText(Prisma.sql`d."opensAt"`)} AS opens_at,
            ${isoText(Prisma.sql`d."closesAt"`)} AS closes_at,
+           ${localDateText(Prisma.sql`d."opensAt"`, args.tz)} AS opens_on,
            d."definition" AS definition,
            (SELECT count(*)::int FROM public."Ballot" b
              WHERE b."organizationId" = ${args.orgId} AND b."ballotDefinitionId" = d."id"
@@ -114,6 +116,7 @@ export const queryBallots: ReportQuery<BallotsReport> = async (db, args) => {
       title: d.title,
       opensAt: d.opens_at,
       closesAt: d.closes_at,
+      opensOn: d.opens_on,
       ballots: count,
       linkedSession:
         d.event_id && d.event_title && d.event_date
