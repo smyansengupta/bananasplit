@@ -91,10 +91,10 @@ export async function loadSyncContext(orgId: string, integrationId: string): Pro
   return withSystemOrgTx(orgId, async ({ db }) => {
     const integration = await db.orgIntegration.findFirst({
       where: { id: integrationId, organizationId: orgId, provider: IntegrationProvider.SUPABASE_SOURCE },
-      select: { id: true, config: true, connectedById: true, secretLast4: true },
+      select: { id: true, config: true, connectedById: true, secretFingerprint: true },
     });
     const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true, deletedAt: true } });
-    if (!integration || !integration.secretLast4 || !org || org.deletedAt) return null;
+    if (!integration || !integration.secretFingerprint || !org || org.deletedAt) return null;
 
     const members = await db.membership.findMany({
       where: { organizationId: orgId },
