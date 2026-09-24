@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { authDbMock, signInMock, enqueueMock, rateLimitMock } = vi.hoisted(() => ({
   authDbMock: { user: { findUnique: vi.fn(), create: vi.fn() } },
@@ -31,11 +31,19 @@ function form(email: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // These cases describe a real deployment, where an address must be
+  // confirmed. Locally, with no sender, the gate is off (see
+  // emailVerificationRequired and the local case at the end).
+  vi.stubEnv("AUTH_REQUIRE_EMAIL_VERIFICATION", "true");
   authDbMock.user.findUnique.mockResolvedValue(null);
   authDbMock.user.create.mockResolvedValue({ id: "u_new" });
   enqueueMock.mockResolvedValue(undefined);
   rateLimitMock.mockResolvedValue({ allowed: true });
   signInMock.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("signUpAction (0A Fix 4(a,b))", () => {
@@ -46,7 +54,7 @@ describe("signUpAction (0A Fix 4(a,b))", () => {
       data: { email: string; emailVerified?: unknown };
     };
     expect(created.data.email).toBe("new.person@example.edu");
-    expect(created.data).not.toHaveProperty("emailVerified");
+    expect(created.data.emailVerified).toBeNull();
     // The link goes out through the outbox (a verify-email job for the new user).
     expect(enqueueMock).toHaveBeenCalledWith("u_new");
     expect(signInMock).toHaveBeenCalledWith(
@@ -61,6 +69,22 @@ describe("signUpAction (0A Fix 4(a,b))", () => {
     const state = await signUpAction({}, form("a@example.edu"));
 
     expect(state).toEqual({ checkEmail: "a@example.edu" });
+  });
+
+  it("skips confirmation locally, where the link could never arrive", async () => {
+    vi.stubEnv("AUTH_REQUIRE_EMAIL_VERIFICATION", "");
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("NODE_ENV", "development");
+
+    const state = await signUpAction({}, form("local@example.edu"));
+
+    const created = authDbMock.user.create.mock.calls[0]?.[0] as {
+      data: { emailVerified?: unknown };
+    };
+    expect(created.data.emailVerified).toBeInstanceOf(Date);
+    expect(enqueueMock).not.toHaveBeenCalled();
+    expect(state).toEqual({});
   });
 
   it("still creates the account when the email cannot be queued (resend is offered)", async () => {

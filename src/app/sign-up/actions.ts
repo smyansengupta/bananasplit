@@ -4,6 +4,7 @@ import { AuthError } from "next-auth";
 import { z } from "zod";
 
 import { signIn } from "@/lib/auth/config";
+import { emailVerificationRequired } from "@/lib/auth/email-verification";
 import { hashPassword } from "@/lib/auth/password";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
@@ -80,10 +81,15 @@ export async function signUpAction(
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
+  // Local development has no sender, so the link would never arrive: the
+  // address counts as confirmed and the account goes straight to onboarding
+  // (see emailVerificationRequired; a deployment always verifies).
+  const mustVerify = emailVerificationRequired();
   const user = await authDb.user.create({
     data: {
       email: parsed.data.email,
       name: parsed.data.name,
+      emailVerified: mustVerify ? null : new Date(),
       credential: { create: { passwordHash } },
     },
     select: { id: true },
@@ -94,10 +100,12 @@ export async function signUpAction(
   // confirmed, and never joins an org, is removed after 72 hours.
   // If queueing fails the account exists either way; onboarding offers
   // "Resend link".
-  try {
-    await enqueueVerificationEmail(user.id);
-  } catch (error) {
-    console.error("[sign-up] could not queue the verification email", error instanceof Error ? error.message : error);
+  if (mustVerify) {
+    try {
+      await enqueueVerificationEmail(user.id);
+    } catch (error) {
+      console.error("[sign-up] could not queue the verification email", error instanceof Error ? error.message : error);
+    }
   }
 
   try {
@@ -108,9 +116,9 @@ export async function signUpAction(
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      return { checkEmail: parsed.data.email };
+      return mustVerify ? { checkEmail: parsed.data.email } : { error: "Could not sign you in. Try signing in with your new password." };
     }
     throw error;
   }
-  return { checkEmail: parsed.data.email };
+  return mustVerify ? { checkEmail: parsed.data.email } : {};
 }

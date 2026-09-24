@@ -1,38 +1,57 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { authDbMock } = vi.hoisted(() => ({
-  authDbMock: { user: { findUnique: vi.fn() } },
-}));
-vi.mock("@/server/db/clients", () => ({ authDb: authDbMock }));
+import { emailVerificationRequired } from "./email-verification";
 
-const { getUserIdentity } = await import("./email-verification");
+/**
+ * The gate is off only where the link could never arrive: a local machine
+ * with no sender. Anywhere real - a deployment, or any environment with a
+ * sender configured - an address must still be confirmed before it can hold
+ * a Membership.
+ */
+const KEYS = ["VERCEL_ENV", "RESEND_API_KEY", "AUTH_REQUIRE_EMAIL_VERIFICATION", "NODE_ENV"] as const;
 
-beforeEach(() => {
-  vi.clearAllMocks();
+/** Sets exactly these four, clearing any the case leaves out. */
+function env(values: Partial<Record<(typeof KEYS)[number], string>>): void {
+  for (const key of KEYS) {
+    const value = values[key];
+    if (value === undefined) vi.stubEnv(key, "");
+    else vi.stubEnv(key, value);
+  }
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
-describe("getUserIdentity (0A Fix 4(c))", () => {
-  it("reads the stored email and verification state through the identity role", async () => {
-    const verifiedAt = new Date("2026-09-01T00:00:00Z");
-    authDbMock.user.findUnique.mockResolvedValue({
-      id: "u1",
-      email: "a@example.edu",
-      emailVerified: verifiedAt,
-    });
-
-    expect(await getUserIdentity("u1")).toEqual({
-      id: "u1",
-      email: "a@example.edu",
-      emailVerified: verifiedAt,
-    });
-    expect(authDbMock.user.findUnique).toHaveBeenCalledWith({
-      where: { id: "u1" },
-      select: { id: true, email: true, emailVerified: true },
-    });
+describe("emailVerificationRequired", () => {
+  it("is off on a local machine with no sender", () => {
+    env({ NODE_ENV: "development" });
+    expect(emailVerificationRequired()).toBe(false);
   });
 
-  it("returns null for an unknown user", async () => {
-    authDbMock.user.findUnique.mockResolvedValue(null);
-    expect(await getUserIdentity("missing")).toBeNull();
+  it("is on wherever a sender exists, even locally", () => {
+    env({ NODE_ENV: "development", RESEND_API_KEY: "re_live_key" });
+    expect(emailVerificationRequired()).toBe(true);
+  });
+
+  it("is on for every deployment, sender or not", () => {
+    for (const vercelEnv of ["production", "preview", "development"]) {
+      env({ VERCEL_ENV: vercelEnv });
+      expect(emailVerificationRequired()).toBe(true);
+    }
+    env({ NODE_ENV: "production" });
+    expect(emailVerificationRequired()).toBe(true);
+  });
+
+  it("can be forced on locally", () => {
+    env({ NODE_ENV: "development", AUTH_REQUIRE_EMAIL_VERIFICATION: "true" });
+    expect(emailVerificationRequired()).toBe(true);
+  });
+
+  it("refuses to be switched off where it matters", () => {
+    env({ VERCEL_ENV: "production", AUTH_REQUIRE_EMAIL_VERIFICATION: "false" });
+    expect(emailVerificationRequired()).toBe(true);
+    env({ NODE_ENV: "development", RESEND_API_KEY: "re_live_key", AUTH_REQUIRE_EMAIL_VERIFICATION: "false" });
+    expect(emailVerificationRequired()).toBe(true);
   });
 });
