@@ -25,6 +25,16 @@ describe("permissions matrix", () => {
     ["org.export.download", [OWNER]],
     ["org.delete", [OWNER]],
     ["members.grantOwner", [OWNER]],
+    ["members.transferOwnership", [OWNER]],
+    ["members.leave", [OWNER, ADMIN, TREASURER, MEMBER]],
+    ["members.viewEmails", [OWNER, ADMIN]],
+    ["privacy.write", [OWNER, ADMIN]],
+    // OWNER-only: an ADMIN who could pick OWNER_AND_ADMINS would grant
+    // themselves the individual votes (app.org_settings_guard agrees).
+    ["privacy.ballots", [OWNER]],
+    ["mail.fallback.write", [OWNER]],
+    ["workspace.bootstrap", [OWNER]],
+    ["audit.view", [OWNER, ADMIN]],
     ["members.invite", [OWNER, ADMIN]],
     ["events.write", [OWNER, ADMIN]],
     ["finance.manage", [OWNER, TREASURER]],
