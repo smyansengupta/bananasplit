@@ -18,9 +18,15 @@ import {
 
 import { archiveProject, createProject } from "./projects-actions";
 
-/** The project filter (?project=), plus creating and archiving projects. */
+/**
+ * The project filter (?project=). Creating and archiving are org-wide
+ * structure changes, so those two controls appear only for OWNER/ADMIN
+ * (viewer.isAdmin is `can(ctx, "tasks.manageAll")`); the server actions
+ * check the same permission.
+ */
 export function ProjectSelect() {
-  const { org, projects, announce } = useTasks();
+  const { org, projects, viewer, announce } = useTasks();
+  const canManage = viewer.isAdmin;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -59,7 +65,7 @@ export function ProjectSelect() {
     });
   }
 
-  if (creating) {
+  if (creating && canManage) {
     return (
       <div className="flex items-center gap-2">
         <Input
@@ -96,10 +102,12 @@ export function ProjectSelect() {
           ))}
         </SelectContent>
       </Select>
-      <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
-        New project
-      </Button>
-      {currentProject !== "all" && (
+      {canManage && (
+        <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+          New project
+        </Button>
+      )}
+      {canManage && currentProject !== "all" && (
         <Button size="sm" variant="ghost" disabled={isPending} onClick={handleArchive}>
           Archive
         </Button>

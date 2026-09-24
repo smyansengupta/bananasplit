@@ -78,6 +78,16 @@ remove **themselves** as a collaborator on any task they can see, and take
 ownership of a task that has no owner. Nothing else — no title, status or
 due-date edits, and never removing somebody else's ownership.
 
+### Who can change the project list
+
+**Owners and admins only.** Projects are org-wide structure: everyone sees
+the same list in the project filter, one of them can be the intake queue,
+and the Claude Builders Club set comes from **Bootstrap CBC workspace**. So
+creating, archiving and unarchiving a project, and turning one into an
+intake queue, all need the same permission, and members do not see the
+**New project** or **Archive** buttons. Every member still files tasks into
+any project and filters by it. Ask an owner or admin for a new project.
+
 ### Handing work down
 
 Assigning someone is classified against the published chart:
