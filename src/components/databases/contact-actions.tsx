@@ -142,7 +142,7 @@ export function ContactActions({
           {error}
         </p>
       )}
-      {notice && <p className="text-xs text-emerald-700 dark:text-emerald-300">{notice}</p>}
+      {notice && <p className="text-success text-xs">{notice}</p>}
     </div>
   );
 }

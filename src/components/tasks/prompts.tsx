@@ -106,7 +106,7 @@ export function useConfirmFlagged(): [React.ReactNode, (names: string[]) => Prom
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <TriangleAlert className="size-5 text-amber-600" aria-hidden="true" />
+            <TriangleAlert className="text-warning size-5" aria-hidden="true" />
             Assign above your level?
           </DialogTitle>
           <DialogDescription>

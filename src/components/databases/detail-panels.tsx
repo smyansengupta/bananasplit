@@ -221,7 +221,7 @@ export function SessionPanel({
         {e.description && <Field label="Description">{e.description}</Field>}
       </dl>
       {e.needsReview && (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+        <p className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
           The website sync found more than one possible match for this session. Merge it into the right one, or mark it
           as not a duplicate.
         </p>

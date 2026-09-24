@@ -70,7 +70,7 @@ export function CsvImportForm({ uploadUrl, backHref }: { uploadUrl: string; back
         </p>
       )}
       {preview?.committed && (
-        <p className="text-sm text-emerald-700 dark:text-emerald-300">
+        <p className="text-success text-sm">
           Imported {preview.committed.created} rows ({preview.committed.skipped} skipped as duplicates or problems).{" "}
           <a className="underline underline-offset-2" href={backHref}>
             Back to the table
@@ -83,7 +83,7 @@ export function CsvImportForm({ uploadUrl, backHref }: { uploadUrl: string; back
         </p>
       )}
       {preview?.issues && preview.issues.length > 0 && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+        <div className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
           <p className="font-medium">Rows that will be skipped</p>
           <ul className="mt-1 max-h-48 list-disc overflow-y-auto pl-5 text-xs">
             {preview.issues.map((i) => (

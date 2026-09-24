@@ -18,7 +18,7 @@ export function FlagBadge({ className, label = "Flagged" }: { className?: string
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200",
+        "bg-warning/15 text-warning inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
         className,
       )}
       title="Assigned above the assigner's level in the org chart"
@@ -58,7 +58,7 @@ export function DueLabel({
       className={cn(
         "inline-flex items-center gap-1 whitespace-nowrap",
         overdue && "text-destructive font-medium",
-        today && "font-medium text-amber-700 dark:text-amber-400",
+        today && "text-warning font-medium",
         className,
       )}
     >
@@ -74,7 +74,7 @@ export function PriorityDot({ priority }: { priority: string }) {
       aria-hidden="true"
       className={cn(
         "inline-block size-2 shrink-0 rounded-full",
-        priority === "HIGH" ? "bg-red-500" : priority === "MEDIUM" ? "bg-amber-400" : "bg-slate-300",
+        priority === "HIGH" ? "bg-destructive" : priority === "MEDIUM" ? "bg-warning" : "bg-muted-foreground/40",
       )}
     />
   );

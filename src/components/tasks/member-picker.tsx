@@ -41,7 +41,7 @@ function RelationHint({ userId }: { userId: string }) {
     <span
       className={cn(
         "ml-auto shrink-0 text-xs",
-        relation === "ABOVE" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground",
+        relation === "ABOVE" ? "text-warning" : "text-muted-foreground",
       )}
     >
       {relation === "ABOVE" && <TriangleAlert className="mr-0.5 inline size-3" aria-hidden="true" />}

@@ -483,7 +483,7 @@ function Checklist({
   if (errors.length === 0 && warnings.length === 0 && parseWarnings.length === 0) {
     return (
       <p className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-        <CheckCheck className="size-4 text-emerald-600" aria-hidden="true" />
+        <CheckCheck className="text-success size-4" aria-hidden="true" />
         No problems found. Review the positions, then publish.
       </p>
     );

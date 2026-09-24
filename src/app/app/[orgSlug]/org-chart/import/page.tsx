@@ -52,7 +52,7 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
       </div>
 
       {!keySaved && (
-        <div role="status" className="flex gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+        <div role="status" className="border-warning/40 bg-warning/10 flex gap-3 rounded-lg border p-4 text-sm">
           <KeyRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="space-y-2">
             <p>

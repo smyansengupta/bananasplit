@@ -86,7 +86,7 @@ export function PositionEditor({
               className={
                 issue.level === "error"
                   ? "border-destructive/40 bg-destructive/10 rounded-md border px-3 py-2 text-sm"
-                  : "rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm"
+                  : "border-warning/40 bg-warning/10 rounded-md border px-3 py-2 text-sm"
               }
             >
               {issue.message}

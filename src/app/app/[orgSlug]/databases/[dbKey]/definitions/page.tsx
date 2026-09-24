@@ -86,7 +86,7 @@ export default async function BallotDefinitionsPage({
       <DefinitionImportForm organizationId={organization.id} sessions={sessions} />
 
       {unknown.length > 0 && (
-        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+        <p className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
           Ballots are waiting for a definition: {unknown.join(", ")}. Import the poll file to count them.
         </p>
       )}

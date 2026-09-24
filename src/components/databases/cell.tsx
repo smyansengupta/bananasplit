@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 import type { Cell } from "./column-config";
 
 const TONE_CLASS: Record<string, string> = {
-  success: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  warning: "border-transparent bg-amber-500/15 text-amber-800 dark:text-amber-300",
+  success: "bg-success/15 text-success border-transparent",
+  warning: "bg-warning/15 text-warning border-transparent",
 };
 
 /** Renders one database cell (server-formatted value). Works in server and client components. */
@@ -32,7 +32,7 @@ export function CellView({ cell }: { cell: Cell }) {
       );
     case "bool":
       return cell.v ? (
-        <Check className="size-4 text-emerald-600" aria-label="Yes" />
+        <Check className="text-success size-4" aria-label="Yes" />
       ) : (
         <Minus className="text-muted-foreground size-4" aria-label="No" />
       );

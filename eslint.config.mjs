@@ -220,9 +220,9 @@ const restrictSyntax = (...selectors) => ["error", ...selectors.flat()];
 /**
  * Components colour with the design tokens (bg-primary, text-success,
  * var(--chart-2)), never Tailwind palette classes (text-green-600) or raw
- * colour values, so an org theme restyles everything. A warning for now:
- * the remaining sites belong to other sections and are listed in
- * docs/features/themes.md; raise it to "error" once they are gone.
+ * colour values, so an org theme restyles everything. An error: every site
+ * has been converted (see docs/features/themes.md). The only exceptions are
+ * the ignores below: brand marks and email HTML.
  */
 const PALETTE_CLASS =
   /(?:^|[\s"'`:!])(?:bg|text|border|ring|fill|stroke|from|to|via|outline|decoration|divide|accent|caret|shadow|placeholder)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/;
@@ -379,7 +379,7 @@ const eslintConfig = defineConfig([
       "src/server/email/**",
     ],
     plugins: { theme: themePlugin },
-    rules: { "theme/no-raw-colors": "warn" },
+    rules: { "theme/no-raw-colors": "error" },
   },
   // Tests drive every layer directly.
   {

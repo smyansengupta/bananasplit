@@ -258,9 +258,9 @@ function EventForm({
         {isPublic && (
           <p
             role="note"
-            className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed"
+            className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3 text-xs leading-relaxed"
           >
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+            <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
               Public events are world-readable: the title, description, location and RSVP link appear on the club
               website, the public events feed and the public Google Calendar. Attendees and meeting links never do.

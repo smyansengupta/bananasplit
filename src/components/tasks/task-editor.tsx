@@ -248,7 +248,7 @@ export function TaskEditor({
       )}
 
       {flaggedPeople.length > 0 && (
-        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+        <div className="border-warning/40 bg-warning/10 space-y-2 rounded-md border p-3 text-sm">
           {flaggedPeople.map((f) => (
             <div key={`${f.role}-${f.userId}`} className="flex flex-wrap items-center gap-2">
               <FlagBadge />
@@ -343,7 +343,7 @@ export function TaskEditor({
             </p>
           )}
           {ownerId && relationFor(viewer.chart, ownerId) === "ABOVE" && ownerId !== task?.ownerId && (
-            <p className="text-xs text-amber-700 dark:text-amber-400">Above your level: this assignment will be flagged.</p>
+            <p className="text-warning text-xs">Above your level: this assignment will be flagged.</p>
           )}
         </div>
         <div className="grid gap-1.5">

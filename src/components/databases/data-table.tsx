@@ -477,7 +477,7 @@ export function DataTable(props: DataTableProps) {
       )}
 
       {rejected.length > 0 && (
-        <p role="status" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+        <p role="status" className="border-warning/40 bg-warning/10 rounded-md border px-3 py-2 text-xs">
           Ignored: {rejected.map((r) => `${r.part} (${r.reason})`).join("; ")}
         </p>
       )}

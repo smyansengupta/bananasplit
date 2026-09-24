@@ -74,7 +74,7 @@ export function TransactionTable({
                   <span className="text-muted-foreground ml-1.5 text-xs">locked</span>
                 )}
               </TableCell>
-              <TableCell className={cn("text-right", t.direction === "IN" && "text-emerald-600")}>
+              <TableCell className={cn("text-right", t.direction === "IN" && "text-success")}>
                 {t.direction === "IN" ? "+" : "-"}
                 {formatCents(t.amountCents)}
               </TableCell>

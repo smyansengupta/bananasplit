@@ -97,23 +97,25 @@ In production an admin picks it on the Theme page.
   portals, FullCalendar, default mode vs stored choice, lock, the themed public
   poll page, zero CSP violations); it mints sessions for the seeded fixture users
   and resets their orgs to the default theme afterwards.
-- **Lint.** `theme/no-raw-colors` (eslint.config.mjs) warns on Tailwind palette
-  classes (`text-green-600`) and raw colour values in `.tsx` files. It is a warning
-  until the sites below are converted; then raise it to `error`.
+- **Lint.** `theme/no-raw-colors` (eslint.config.mjs) is an `error` on Tailwind
+  palette classes (`text-green-600`) and raw colour values in `.tsx` files. Every
+  site is converted; the only exceptions are the two ignores below.
 
-## Hard-coded colours still to convert
+## Converted colours
 
-These files belong to other sections, so the Themes build did not change them.
-Suggested replacements:
+The sites that other sections left hard-coded now use tokens:
 
-| File                                                            | Now                                             | Use                                                         |
-| --------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------- |
-| `src/app/app/[orgSlug]/settings/integrations/page.tsx:79`       | `border-amber-500/40 bg-amber-500/10`           | `border-warning/40 bg-warning/10`                           |
-| `src/app/app/[orgSlug]/settings/invitations/invite-form.tsx:75` | `text-green-600`                                | `text-success`                                              |
-| `src/app/onboarding/create-org-form.tsx:67`                     | `text-green-600`                                | `text-success`                                              |
-| `src/components/calendar/poll-responder.tsx:25-27, 31-32`       | `bg-emerald-500`, `bg-amber-500`, `bg-rose-500` | `bg-success`, `bg-warning`, `bg-destructive`                |
-| `src/components/calendar/poll-responder.tsx:337`                | `rgba(16, 185, 129, a)` heat map                | `color-mix(in oklab, var(--success) {a*100}%, transparent)` |
-| `src/components/finance/transaction-table.tsx:77`               | `text-emerald-600`                              | `text-success`                                              |
+| Was                                                          | Now                                                        | Where                                                                    |
+| ------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `border-amber-500/40 bg-amber-500/10` callouts               | `border-warning/40 bg-warning/10`                          | databases definitions, org-chart import, calendar detail and form, profile feed, CSV import, data table, detail panels, position editor |
+| `text-amber-600`, `text-amber-700 dark:text-amber-400`       | `text-warning`                                             | the same callouts, member picker, prompts, task editor, due label        |
+| `bg-amber-100 ... dark:bg-amber-900/40` flag badge           | `bg-warning/15 text-warning`                               | `tasks/task-badges.tsx`                                                  |
+| `text-emerald-600`, `text-emerald-700 dark:text-emerald-300` | `text-success`                                             | finance transactions, org-chart draft editor, databases cell and forms   |
+| `bg-emerald-500`, `bg-amber-500`, `bg-rose-500` poll brushes | `bg-success`, `bg-warning`, `bg-destructive`               | `calendar/poll-responder.tsx`                                            |
+| `rgba(16, 185, 129, a)` heat map                             | `color-mix(in oklab, var(--success) N%, transparent)`      | `calendar/poll-responder.tsx`                                            |
+| `bg-red-500` / `bg-amber-400` / `bg-slate-300` priority dots | `bg-destructive` / `bg-warning` / `bg-muted-foreground/40` | `tasks/task-badges.tsx`                                                  |
+| `bg-amber-500` outline warning dot                           | `bg-warning`                                               | `org-chart/editor/outline-tree.tsx`                                      |
+| `bg-emerald-500/15`, `bg-amber-500/15` badge tones           | `bg-success/15`, `bg-warning/15`                           | `databases/cell.tsx`                                                     |
 
 Not converted on purpose: `google-icon.tsx` (Google's brand colours), email HTML
 in `src/server/email/**` (mail clients have no CSS variables), label colours

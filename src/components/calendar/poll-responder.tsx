@@ -22,14 +22,14 @@ import {
 } from "./poll-grid-utils";
 
 const BRUSH_OPTIONS = [
-  { value: PollAvailability.YES, label: "Available", className: "bg-emerald-500" },
-  { value: PollAvailability.IF_NEEDED, label: "If needed", className: "bg-amber-500" },
-  { value: PollAvailability.NO, label: "Unavailable", className: "bg-rose-500" },
+  { value: PollAvailability.YES, label: "Available", className: "bg-success" },
+  { value: PollAvailability.IF_NEEDED, label: "If needed", className: "bg-warning" },
+  { value: PollAvailability.NO, label: "Unavailable", className: "bg-destructive" },
 ] as const;
 
 const CELL_COLOR: Record<PollAvailability, string> = {
-  YES: "bg-emerald-500",
-  IF_NEEDED: "bg-amber-500",
+  YES: "bg-success",
+  IF_NEEDED: "bg-warning",
   NO: "bg-transparent",
 };
 
@@ -333,6 +333,6 @@ function formatDayHeader(dayKey: string): string {
 
 function heatColor(count: number, total: number): string {
   const intensity = Math.min(1, count / Math.max(1, total));
-  const alpha = 0.15 + intensity * 0.65;
-  return `rgba(16, 185, 129, ${alpha})`;
+  const percent = Math.round((0.15 + intensity * 0.65) * 100);
+  return `color-mix(in oklab, var(--success) ${percent}%, transparent)`;
 }

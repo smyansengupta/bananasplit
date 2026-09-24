@@ -237,7 +237,7 @@ function OutlineRow({
           </span>
           {issue && (
             <span
-              className={cn("size-2 shrink-0 rounded-full", issue === "error" ? "bg-destructive" : "bg-amber-500")}
+              className={cn("size-2 shrink-0 rounded-full", issue === "error" ? "bg-destructive" : "bg-warning")}
               aria-label={issue === "error" ? "Has a problem" : "Has a warning"}
               role="img"
             />

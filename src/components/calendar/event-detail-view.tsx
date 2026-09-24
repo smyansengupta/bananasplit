@@ -139,8 +139,8 @@ export function EventDetailView({
       </div>
 
       {event.needsReview && canEdit && (
-        <p className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm" role="note">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+        <p className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3 text-sm" role="note">
+          <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
           Imported from Google Calendar with more than one possible match. Check whether it duplicates another
           session and merge them in Databases &gt; Sessions.
         </p>

@@ -104,7 +104,7 @@ export function DefinitionImportForm({
           {error}
         </p>
       )}
-      {notice && <p className="text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}
+      {notice && <p className="text-success text-sm">{notice}</p>}
       <Button type="submit" size="sm" disabled={pending || json.trim().length < 2}>
         {pending ? "Importing…" : "Import"}
       </Button>
@@ -192,7 +192,7 @@ export function DefinitionEditForm({
             {error}
           </span>
         )}
-        {notice && <span className="text-sm text-emerald-700 dark:text-emerald-300">{notice}</span>}
+        {notice && <span className="text-success text-sm">{notice}</span>}
       </div>
     </form>
   );

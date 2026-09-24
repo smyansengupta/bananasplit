@@ -92,8 +92,8 @@ export function CalendarFeedCard({ activeSince }: { activeSince: string | null }
               {copied ? "Copied" : "Copy"}
             </Button>
           </div>
-          <div className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <div className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3 text-sm">
+            <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <p>
               Copy this link now. For your security it won&apos;t be shown again: to see a link
               later you&apos;ll need to generate a new one.

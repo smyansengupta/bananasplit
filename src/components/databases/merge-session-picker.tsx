@@ -108,7 +108,7 @@ export function MergeSessionPicker({
           {error}
         </p>
       )}
-      {done && <p className="text-xs text-emerald-700 dark:text-emerald-300">{done}</p>}
+      {done && <p className="text-success text-xs">{done}</p>}
     </div>
   );
 }
