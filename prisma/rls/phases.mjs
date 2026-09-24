@@ -1800,6 +1800,24 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     (q) => count(q, `SELECT count(*) n FROM "OrgTheme"`),
     { value: 0 },
   );
+  // B8 migration b8_theme_logo_display: the new column rides on the same
+  // per-command policies (no new table, no new grant).
+  await tcase(
+    "P8-03",
+    "OrgTheme.logoDisplay: defaults to LOGO_AND_NAME; members cannot change it, admins can",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.default = (await q(`SELECT "logoDisplay"::text AS v FROM "OrgTheme"`)).rows[0]?.v ?? null;
+      s.member_update = await rc(q, `UPDATE "OrgTheme" SET "logoDisplay" = 'NAME_ONLY'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_update = await rc(q, `UPDATE "OrgTheme" SET "logoDisplay" = 'LOGO_ONLY'`);
+      s.bad_value = await tryq(q, `UPDATE "OrgTheme" SET "logoDisplay" = 'x'`);
+      return s;
+    },
+    { value: { default: "LOGO_AND_NAME", member_update: 0, admin_update: 1, bad_value: "22P02" } },
+  );
 
   // ======================= A3: platform services =======================
   // The maintenance definer functions (migration a3_platform_maintenance),

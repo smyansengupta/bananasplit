@@ -1708,26 +1708,35 @@ enum ThemeMode {
   SYSTEM
 }
 
+/// How the org logo shows in the app shell and on the org's public pages.
+enum ThemeLogoDisplay {
+  LOGO_AND_NAME
+  LOGO_ONLY
+  NAME_ONLY
+}
+
 /// Per-org theme: five colour roles per mode, the derived token map and the
 /// stored WCAG contrast warnings. Every colour is strict hex
 /// (/^#[0-9a-f]{6}$/i), validated on write and again at render. Members read;
 /// OWNER/ADMIN write. Deleting the row resets the org to the default preset.
 model OrgTheme {
-  organizationId   String    @id
-  /// default | cbc-light | cbc-dark | ... | custom
-  preset           String    @default("default")
-  mode             ThemeMode @default(SYSTEM)
+  organizationId   String           @id
+  /// default | cbc | harbor | evergreen | orchid | custom (src/lib/theme/presets.ts)
+  preset           String           @default("default")
+  mode             ThemeMode        @default(SYSTEM)
   /// Forces `mode` for every member (next-themes forcedTheme).
-  lockMode         Boolean   @default(false)
+  lockMode         Boolean          @default(false)
+  logoDisplay      ThemeLogoDisplay @default(LOGO_AND_NAME)
   /// {primary, accent, background, surface, text}
   light            Json
   /// Same shape; NULL = derived from light.
   dark             Json?
-  /// {light: {--token: value}, dark: {...}}, from src/lib/theme/derive.ts.
-  tokens           Json      @default("{}")
-  contrastWarnings Json      @default("[]")
+  /// {light: {token: value}, dark: {...}}, from src/lib/theme/derive.ts (a record;
+  /// the layout re-derives from light/dark at render).
+  tokens           Json             @default("{}")
+  contrastWarnings Json             @default("[]")
   updatedById      String?
-  updatedAt        DateTime  @default(now()) @updatedAt
+  updatedAt        DateTime         @default(now()) @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }

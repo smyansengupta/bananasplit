@@ -2,10 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth/config";
-import { getNonce } from "@/lib/security/nonce";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,10 +22,6 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await auth();
-  // The theme's inline script needs the request's CSP nonce on the nonce
-  // routes (0A Fix 13). The layout is already dynamic (auth()), so reading
-  // it costs nothing; Phase 9 moves this into a route-group layout.
-  const nonce = await getNonce();
 
   return (
     <html
@@ -36,16 +30,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        {/*
+          No ThemeProvider here (Phase 8): next-themes makes a nested provider
+          a pass-through, so each page family mounts its own with the right
+          default and the request's CSP nonce: the org layout (org mode and
+          lock), the org-owned public pages, and PublicThemeRoot elsewhere.
+          See src/components/theme-provider.tsx.
+        */}
         <SessionProvider session={session}>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-            nonce={nonce}
-          >
-            <TooltipProvider>{children}</TooltipProvider>
-          </ThemeProvider>
+          <TooltipProvider>{children}</TooltipProvider>
         </SessionProvider>
       </body>
     </html>
