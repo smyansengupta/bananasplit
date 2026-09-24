@@ -96,15 +96,11 @@ const CLIENT_ALLOWLIST = [
 const LEGACY_ALLOWLIST = [
   // B1 Settings: settings pages and actions, invitations, onboarding.
   "src/app/app/[[]orgSlug]/settings/page.tsx",
-  "src/app/app/[[]orgSlug]/settings/calendar/actions.ts",
-  "src/app/app/[[]orgSlug]/settings/calendar/page.tsx",
   "src/app/app/[[]orgSlug]/settings/invitations/actions.ts",
   "src/app/app/[[]orgSlug]/settings/invitations/page.tsx",
   "src/app/app/[[]orgSlug]/settings/labels/actions.ts",
   "src/app/app/[[]orgSlug]/settings/labels/page.tsx",
   "src/app/app/[[]orgSlug]/settings/members/page.tsx",
-  "src/app/app/[[]orgSlug]/settings/notifications/actions.ts",
-  "src/app/app/[[]orgSlug]/settings/notifications/page.tsx",
   "src/app/onboarding/actions.ts",
   "src/app/onboarding/page.tsx",
   "src/lib/invitations.ts",
