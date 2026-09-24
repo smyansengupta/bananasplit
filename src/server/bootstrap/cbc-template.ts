@@ -12,6 +12,7 @@ import {
   SignupSource,
   TaskPriority,
   TaskStatus,
+  TaskVisibility,
   ThemeMode,
   type AssignmentRelation,
 } from "@/generated/prisma/client";
@@ -1665,6 +1666,8 @@ interface TaskPlan {
   relation?: AssignmentRelation;
   blockedReason?: string;
   collaborators?: CbcPersonKey[];
+  /** C4: PRIVATE narrows the task to its own people plus OWNER/ADMIN. */
+  visibility?: TaskVisibility;
 }
 
 const CBC_TASKS: readonly TaskPlan[] = [
@@ -1896,6 +1899,45 @@ const CBC_TASKS: readonly TaskPlan[] = [
     status: TaskStatus.COMPLETED,
     priority: TaskPriority.LOW,
   },
+  // C4: the board is open by default, and these three are the exception. A
+  // club board has a handful of things that are not everybody's business
+  // yet: succession, a pay-style conversation, an unannounced partnership.
+  {
+    ref: "transition",
+    title: "Spring exec transition plan",
+    description:
+      "Who takes President, VP Ops and Treasurer in the spring, and what each handover needs. Share once the slate is settled.",
+    owner: "jackson",
+    createdBy: "jackson",
+    due: [2, 4],
+    status: TaskStatus.IN_PROGRESS,
+    priority: TaskPriority.HIGH,
+    visibility: TaskVisibility.PRIVATE,
+    collaborators: ["oliver"],
+  },
+  {
+    // Inherits PRIVATE from its parent (the database trigger enforces it).
+    ref: "transition-slate",
+    title: "Draft the slate and check who is returning",
+    owner: "oliver",
+    createdBy: "jackson",
+    due: [1, 4],
+    status: TaskStatus.NOT_STARTED,
+    priority: TaskPriority.MEDIUM,
+    parent: "transition",
+    relation: "DOWN_LINE",
+  },
+  {
+    ref: "alex-growth",
+    title: "1:1 notes and growth plan for Alex",
+    description: "Prep for the mid-semester check-in. Not for the board channel.",
+    owner: "oliver",
+    createdBy: "oliver",
+    due: [1, 2],
+    status: TaskStatus.NOT_STARTED,
+    priority: TaskPriority.MEDIUM,
+    visibility: TaskVisibility.PRIVATE,
+  },
 ];
 
 async function seedCbcTasks(db: Db, ctx: TaskSeedContext): Promise<number> {
@@ -1928,6 +1970,9 @@ async function seedCbcTasks(db: Db, ctx: TaskSeedContext): Promise<number> {
         title: t.title,
         description: t.description ?? null,
         status: t.status,
+        // A subtask's flag is forced to its parent's by the
+        // task_visibility_inherit trigger, whatever is passed here.
+        visibility: t.visibility ?? TaskVisibility.ORG,
         priority: t.priority,
         dueDate,
         rank,
