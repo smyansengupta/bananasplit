@@ -1,3 +1,6 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
 import { AppShell } from "@/components/shell/app-shell";
 import type { OrgSummary } from "@/components/shell/types";
 import { requireUser } from "@/lib/auth/session";
@@ -19,6 +22,24 @@ import { OrgPendingDeletion } from "./org-pending-deletion";
  * Server Action or Route Handler): org creation, invite acceptance and the
  * org switcher set it.
  */
+
+/**
+ * getOrgContextBySlug answers a retired slug (a renamed org) with a 307 to
+ * /app/{current}. Keep the rest of the path, so deep links from emails and
+ * bookmarks survive a rename: /app/old/tasks/1 -> /app/new/tasks/1.
+ */
+async function deepRedirectTarget(error: unknown, orgSlug: string): Promise<string | null> {
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  if (typeof digest !== "string" || !digest.startsWith("NEXT_REDIRECT;")) return null;
+  const target = digest.split(";")[2];
+  if (!target || !/^\/app\/[a-z0-9-]+$/.test(target)) return null;
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const prefix = `/app/${orgSlug}`;
+  if (!pathname.startsWith(`${prefix}/`)) return null;
+  const rest = pathname.slice(prefix.length);
+  return /^[A-Za-z0-9/_.~-]*$/.test(rest) && !rest.includes("..") ? `${target}${rest}` : null;
+}
+
 function isNotFound(error: unknown): boolean {
   const digest = (error as { digest?: unknown } | null)?.digest;
   return typeof digest === "string" && digest.startsWith("NEXT_HTTP_ERROR_FALLBACK;404");
@@ -34,6 +55,8 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   } catch (error) {
     // Only on a 404 (the common path costs nothing extra): is it one of
     // the caller's orgs that is scheduled for deletion?
+    const deep = await deepRedirectTarget(error, orgSlug);
+    if (deep) redirect(deep);
     if (isNotFound(error)) {
       const pending = await findPendingDeletionOrg(user.id, orgSlug);
       if (pending) return <OrgPendingDeletion org={pending} />;

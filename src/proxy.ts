@@ -29,6 +29,9 @@ export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set(headerName, policy);
+  // The request path, for the org layout's retired-slug redirect, which keeps
+  // the rest of a deep link (/app/old-slug/tasks/1 -> /app/new-slug/tasks/1).
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set(headerName, policy);

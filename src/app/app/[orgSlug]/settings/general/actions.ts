@@ -108,7 +108,9 @@ export const renameOrgSlug = withOrgAction(
       targetId: ctx.organizationId,
       diff: { from: org.slug, to: slug },
     });
-    invalidate([tags.publicEvents(ctx.organizationId)]);
+    // The themed public pages (/poll, /invite) carry the org name, logo and
+    // links, so they refresh with the theme tag.
+    invalidate([tags.publicEvents(ctx.organizationId), tags.theme(ctx.organizationId)]);
     return { slug };
   },
 );
