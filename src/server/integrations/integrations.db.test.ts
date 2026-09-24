@@ -31,7 +31,8 @@ import { GET as callbackRoute } from "@/app/api/integrations/google-calendar/cal
 import { authDb, disconnectAll } from "@/server/db/clients";
 import { withSystemOrgTx } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
-import { getSecret } from "@/server/secrets";
+import { getSecret, setSecret } from "@/server/secrets";
+import { secretLast4 } from "@/server/secrets/fingerprint";
 import { createOrganization } from "@/server/settings/org-creation";
 
 import { googleHttp, OAUTH_COOKIE } from "./google";
@@ -248,6 +249,39 @@ describe.skipIf(!dbReady)("integrations against the local database", () => {
     ).toMatchObject({ ok: true });
     const hook = (await loadIntegrations(orgId)).find((d) => d.provider === "NETLIFY_BUILD_HOOK")!;
     expect(hook).toMatchObject({ status: "CONNECTED", last4: "3def" });
+  });
+
+  /**
+   * secretLast4 is null under 16 characters, and the DTO used to read
+   * "is a secret stored?" off it: Settings showed "Not saved" and hid
+   * Remove, so an OWNER could not revoke a credential that was encrypted,
+   * stored and still in use. hasSecret now comes from secretFingerprint.
+   */
+  it("a credential too short for a last4 is still shown as saved, and can be removed", async () => {
+    const SHORT = "re_t1ny";
+    expect(secretLast4(SHORT)).toBeNull();
+    sessionUser.current = admin;
+    await setSecret({
+      orgId,
+      actor: await resolveActor(orgId),
+      provider: "EMAIL_RESEND",
+      kind: "API_KEY",
+      value: SHORT,
+      status: "CONNECTED",
+    });
+
+    const saved = (await loadIntegrations(orgId)).find((d) => d.provider === "EMAIL_RESEND")!;
+    expect(saved).toMatchObject({ status: "CONNECTED", hasSecret: true, last4: null });
+    expect(JSON.stringify(saved)).not.toContain(SHORT);
+    expect(await getSecret({ orgId, provider: "EMAIL_RESEND", kind: "API_KEY" })).toBe(SHORT);
+
+    sessionUser.current = owner;
+    expect(await removeProvider(orgId, await resolveActor(orgId), "EMAIL_RESEND")).toMatchObject({
+      ok: true,
+    });
+    const gone = (await loadIntegrations(orgId)).find((d) => d.provider === "EMAIL_RESEND")!;
+    expect(gone).toMatchObject({ hasSecret: false, last4: null });
+    expect(await getSecret({ orgId, provider: "EMAIL_RESEND", kind: "API_KEY" })).toBeNull();
   });
 
   // ---------------------------------------------------------------- Google

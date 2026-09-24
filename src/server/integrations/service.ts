@@ -81,6 +81,7 @@ export async function loadIntegrations(orgId: string): Promise<IntegrationDto[]>
       select: {
         provider: true,
         status: true,
+        secretFingerprint: true,
         secretLast4: true,
         lastVerifiedAt: true,
         lastError: true,

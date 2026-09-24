@@ -190,6 +190,8 @@ export interface IntegrationDto {
 export interface IntegrationRowForDto {
   provider: IntegrationProvider;
   status: IntegrationStatus;
+  /** Whether a secret is stored. Set for every secret; last4 is not. */
+  secretFingerprint: string | null;
   secretLast4: string | null;
   lastVerifiedAt: Date | null;
   lastError: string | null;
@@ -202,6 +204,13 @@ export interface IntegrationRowForDto {
  * The only shape an integration reaches a page in: whitelisted config keys,
  * status and last4. Never the fingerprint, never ciphertext, never a value
  * that is not in the provider's configKeys.
+ *
+ * `hasSecret` comes from secretFingerprint, not from last4: secretLast4 is
+ * null for a credential shorter than 16 characters (four characters of a
+ * short secret would give too much of it away), and reading "is a secret
+ * stored?" off it made a short-but-valid credential look absent. Settings
+ * then showed "Not saved" and hid Remove, so an OWNER could not revoke a
+ * credential the app was still using.
  */
 export function toIntegrationDto(
   provider: IntegrationProvider,
@@ -229,7 +238,7 @@ export function toIntegrationDto(
     provider,
     status: row.status,
     last4: row.secretLast4,
-    hasSecret: row.secretLast4 !== null,
+    hasSecret: row.secretFingerprint !== null,
     lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
     lastError: row.lastError,
     config,

@@ -106,13 +106,17 @@ async function activeVersionId(db: Db, organizationId: string): Promise<string |
 
 // ------------------------------------------------------------------ uploads
 
-/** Whether the org has a Claude key saved (the upload needs one). */
+/**
+ * Whether the org has a Claude key saved (the upload needs one). Read from
+ * secretFingerprint, which is set for every stored secret; secretLast4 is
+ * null for anything shorter than 16 characters.
+ */
 export async function hasClaudeKey(db: Db, organizationId: string): Promise<boolean> {
   const row = await db.orgIntegration.findUnique({
     where: { organizationId_provider: { organizationId, provider: "CLAUDE" } },
-    select: { secretLast4: true },
+    select: { secretFingerprint: true },
   });
-  return Boolean(row?.secretLast4);
+  return Boolean(row?.secretFingerprint);
 }
 
 /** The DB quota: 20 imports per org per rolling day, one active parse at a time. */

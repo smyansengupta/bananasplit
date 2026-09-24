@@ -78,6 +78,7 @@ export function ClaudeForm({
       <SecretInput
         id="claude-key"
         label="API key"
+        hasSecret={dto.hasSecret}
         last4={dto.last4}
         value={apiKey}
         onChange={setApiKey}
@@ -190,6 +191,7 @@ export function EmailSenderForm({
         <SecretInput
           id="resend-key"
           label="Resend API key"
+          hasSecret={dto.hasSecret}
           last4={dto.last4}
           value={apiKey}
           onChange={setApiKey}
@@ -351,6 +353,7 @@ export function SupabaseForm({
       <SecretInput
         id="sb-password"
         label="Role password"
+        hasSecret={dto.hasSecret}
         last4={dto.last4}
         value={password}
         onChange={setPassword}
@@ -393,6 +396,7 @@ export function NetlifyForm({
       <SecretInput
         id="netlify-hook"
         label="Build hook URL"
+        hasSecret={dto.hasSecret}
         last4={dto.last4}
         value={hook}
         onChange={setHook}

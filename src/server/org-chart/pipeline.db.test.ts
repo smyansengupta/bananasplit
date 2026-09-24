@@ -131,12 +131,19 @@ function uploadRequest(orgId: string, name: string, bytes: Buffer, type: string)
   );
 }
 
+/** What a saved Claude key looks like on OrgIntegration (the key itself is mocked). */
+const KEY_MARKER = { secretFingerprint: "0".repeat(32), secretLast4: "0000" } as const;
+
 describe.skipIf(!seeded)("org chart pipeline against the local database (seeded CBC)", () => {
   const s = seeded as Seeded;
   const createdVersions: string[] = [];
   let createdIntegration = false;
-  /** The integration's secretLast4 before the test, restored afterwards. */
-  let originalLast4: string | null | undefined;
+  /**
+   * The integration's secretFingerprint before the test, restored afterwards.
+   * The fingerprint, not secretLast4, is what "a key is saved" reads: last4
+   * is null for a credential under 16 characters.
+   */
+  let originalFingerprint: string | null | undefined;
   let firstDraft = "";
 
   beforeAll(async () => {
@@ -147,16 +154,16 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     createdIntegration = await withSystemOrgTx(s.cbcId, async ({ db }) => {
       const existing = await db.orgIntegration.findUnique({
         where: { organizationId_provider: { organizationId: s.cbcId, provider: "CLAUDE" } },
-        select: { id: true, secretLast4: true },
+        select: { id: true, secretFingerprint: true },
       });
-      originalLast4 = existing ? existing.secretLast4 : undefined;
-      if (existing?.secretLast4) return false;
+      originalFingerprint = existing ? existing.secretFingerprint : undefined;
+      if (existing?.secretFingerprint) return false;
       if (existing) {
-        await db.orgIntegration.update({ where: { id: existing.id }, data: { secretLast4: "0000" } });
+        await db.orgIntegration.update({ where: { id: existing.id }, data: KEY_MARKER });
         return false;
       }
       await db.orgIntegration.create({
-        data: { organizationId: s.cbcId, provider: "CLAUDE", secretLast4: "0000", connectedById: s.jackson.id },
+        data: { organizationId: s.cbcId, provider: "CLAUDE", ...KEY_MARKER, connectedById: s.jackson.id },
       });
       return true;
     });
@@ -186,10 +193,10 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       await db.orgChartVersion.deleteMany({ where: { id: { in: createdVersions } } });
       if (createdIntegration) {
         await db.orgIntegration.deleteMany({ where: { organizationId: s.cbcId, provider: "CLAUDE" } });
-      } else if (originalLast4 !== undefined) {
+      } else if (originalFingerprint !== undefined) {
         await db.orgIntegration.updateMany({
           where: { organizationId: s.cbcId, provider: "CLAUDE" },
-          data: { secretLast4: originalLast4 },
+          data: { secretFingerprint: originalFingerprint },
         });
       }
       return rows.map((r) => r.sourceBlobKey).filter((k): k is string => Boolean(k));
@@ -410,7 +417,10 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       }),
     );
     await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgIntegration.updateMany({ where: { organizationId: s.cbcId, provider: "CLAUDE" }, data: { secretLast4: null } }),
+      db.orgIntegration.updateMany({
+        where: { organizationId: s.cbcId, provider: "CLAUDE" },
+        data: { secretFingerprint: null, secretLast4: null },
+      }),
     );
     try {
       const res = await track(await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown"));
@@ -420,7 +430,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       await withSystemOrgTx(s.cbcId, ({ db }) =>
         db.orgIntegration.updateMany({
           where: { organizationId: s.cbcId, provider: "CLAUDE" },
-          data: { secretLast4: "0000" },
+          data: KEY_MARKER,
         }),
       );
     }

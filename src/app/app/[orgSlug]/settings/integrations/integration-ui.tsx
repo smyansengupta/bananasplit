@@ -78,7 +78,10 @@ export function StatusPanel({ dto, secretLabel }: { dto: IntegrationDto; secretL
         <StatusBadge status={dto.status} />
       </dd>
       <dt className="text-muted-foreground">{secretLabel}</dt>
-      <dd className="font-mono text-xs">{dto.last4 ? `•••• ${dto.last4}` : "Not saved"}</dd>
+      {/* hasSecret, not last4: last4 is null for a secret under 16 characters. */}
+      <dd className="font-mono text-xs">
+        {dto.hasSecret ? (dto.last4 ? `•••• ${dto.last4}` : "Saved") : "Not saved"}
+      </dd>
       {dto.lastVerifiedAt && (
         <>
           <dt className="text-muted-foreground">Last checked</dt>
@@ -108,6 +111,7 @@ export function StatusPanel({ dto, secretLabel }: { dto: IntegrationDto; secretL
 export function SecretInput({
   id,
   label,
+  hasSecret,
   last4,
   value,
   onChange,
@@ -116,12 +120,17 @@ export function SecretInput({
 }: {
   id: string;
   label: string;
+  /** A secret is stored. last4 may still be null (a short one shows none). */
+  hasSecret: boolean;
   last4: string | null;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   help?: string;
 }) {
+  const saved = hasSecret
+    ? `Saved${last4 ? ` (•••• ${last4})` : ""}. Paste a new one to replace it.`
+    : placeholder;
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -132,7 +141,7 @@ export function SecretInput({
         spellCheck={false}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={last4 ? `Saved (•••• ${last4}). Paste a new one to replace it.` : placeholder}
+        placeholder={saved}
       />
       <p className="text-muted-foreground text-xs">
         {help ? `${help} ` : ""}Stored encrypted; it is never shown again after saving.

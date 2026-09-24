@@ -249,4 +249,41 @@ describe("integration DTOs never carry secrets", () => {
       hasSecret: false,
     });
   });
+
+  /**
+   * secretLast4 is null for a credential under 16 characters, so reading
+   * "is a secret stored?" off it hid a short-but-valid one: Settings said
+   * "Not saved" and hid Remove, and an OWNER could not revoke a credential
+   * the app was still using. hasSecret comes from secretFingerprint, which
+   * every stored secret has, and the fingerprint stays out of the DTO.
+   */
+  const row = {
+    provider: "NETLIFY_BUILD_HOOK",
+    status: "CONNECTED",
+    lastVerifiedAt: null,
+    lastError: null,
+    config: {},
+    updatedAt: new Date("2026-09-01T00:00:00Z"),
+    connectedBy: null,
+  } as const;
+
+  it("reports a short secret as saved, with no last4 to show", () => {
+    const dto = toIntegrationDto("NETLIFY_BUILD_HOOK", {
+      ...row,
+      secretFingerprint: "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+      secretLast4: null,
+    });
+    expect(dto).toMatchObject({ hasSecret: true, last4: null });
+    expect(JSON.stringify(dto)).not.toContain("0f1e2d3c4b5a69788796a5b4c3d2e1f0");
+  });
+
+  it("reports no secret only when the fingerprint is gone (removeSecret clears both)", () => {
+    const dto = toIntegrationDto("NETLIFY_BUILD_HOOK", {
+      ...row,
+      status: "DISCONNECTED",
+      secretFingerprint: null,
+      secretLast4: null,
+    });
+    expect(dto).toMatchObject({ hasSecret: false, last4: null });
+  });
 });
