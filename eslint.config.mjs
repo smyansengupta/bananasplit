@@ -37,10 +37,14 @@ const LEGACY_CLIENT_ONLY = [
   { name: "@/server/db/clients", importNames: ["legacyDb"], message: PRIVILEGED_CLIENT_MESSAGE },
   { name: "@/server/db", importNames: ["legacyDb"], message: PRIVILEGED_CLIENT_MESSAGE },
 ];
-/** New code never uses the legacy role: it has no grants on any table added after 0B. */
+/**
+ * The legacy client (app_legacy) is banned everywhere except LEGACY_ALLOWLIST
+ * below: it has no grants on any table added after 0B, and the role is
+ * dropped once the last module moves to the wrappers (0C).
+ */
 const LEGACY_PRISMA = {
   name: "@/lib/prisma",
-  message: "New code never uses the legacy client (app_legacy); use ctx.db from the wrappers in @/server/db/context.",
+  message: "The legacy client (app_legacy) is only for the files in LEGACY_ALLOWLIST (eslint.config.mjs); use ctx.db from the wrappers in @/server/db/context.",
 };
 /** Navigation belongs to the action and page layer, not to services. */
 const NAVIGATION = {
@@ -80,6 +84,59 @@ const CLIENT_ALLOWLIST = [
   "src/server/email/verification.ts",
   "src/server/health.ts",
   "scripts/**",
+];
+
+/**
+ * 0C: the files that still import @/lib/prisma (the app_legacy client), and
+ * nothing else. Every entry is a module another builder is moving to the
+ * wrappers; each builder deletes its own entries when its module moves, and
+ * the final integration removes the list, @/lib/prisma and the role. Never
+ * add a path: new code uses the wrappers in @/server/db/context.
+ */
+const LEGACY_ALLOWLIST = [
+  // B1 Settings: settings pages and actions, invitations, onboarding.
+  "src/app/app/[[]orgSlug]/settings/page.tsx",
+  "src/app/app/[[]orgSlug]/settings/calendar/actions.ts",
+  "src/app/app/[[]orgSlug]/settings/calendar/page.tsx",
+  "src/app/app/[[]orgSlug]/settings/invitations/actions.ts",
+  "src/app/app/[[]orgSlug]/settings/invitations/page.tsx",
+  "src/app/app/[[]orgSlug]/settings/labels/actions.ts",
+  "src/app/app/[[]orgSlug]/settings/labels/page.tsx",
+  "src/app/app/[[]orgSlug]/settings/members/page.tsx",
+  "src/app/app/[[]orgSlug]/settings/notifications/actions.ts",
+  "src/app/app/[[]orgSlug]/settings/notifications/page.tsx",
+  "src/app/onboarding/actions.ts",
+  "src/app/onboarding/page.tsx",
+  "src/lib/invitations.ts",
+  // B6 Tasks.
+  "src/app/app/[[]orgSlug]/tasks/actions.ts",
+  "src/app/app/[[]orgSlug]/tasks/page.tsx",
+  "src/app/app/[[]orgSlug]/tasks/projects-actions.ts",
+  "src/app/app/[[]orgSlug]/tasks/queries.ts",
+  // B7 Calendar: calendar pages and actions, polls, the per-event .ics.
+  "src/app/app/[[]orgSlug]/calendar/actions.ts",
+  "src/app/app/[[]orgSlug]/calendar/page.tsx",
+  "src/app/app/[[]orgSlug]/calendar/queries.ts",
+  "src/app/app/[[]orgSlug]/calendar/[[]eventId]/page.tsx",
+  "src/app/app/[[]orgSlug]/calendar/polls/actions.ts",
+  "src/app/app/[[]orgSlug]/calendar/polls/page.tsx",
+  "src/app/app/[[]orgSlug]/calendar/polls/new/page.tsx",
+  "src/app/app/[[]orgSlug]/calendar/polls/[[]pollId]/page.tsx",
+  "src/app/poll/[[]pollId]/actions.ts",
+  "src/app/poll/[[]pollId]/page.tsx",
+  "src/app/api/calendar/[[]eventId]/ics/route.ts",
+  // B8 Themes (the org layout; B1's plan item moves it to getOrgContextBySlug).
+  "src/app/app/[[]orgSlug]/layout.tsx",
+  // Shared by the unmigrated modules above; removed with their last caller.
+  "src/lib/auth/guards.ts", // requireOrgMembership / requireRole / requireFinanceAccess
+  "src/lib/notifications.ts", // notifyUser's legacy default db
+];
+/** LEGACY_ALLOWLIST files that are also in CLIENT_ALLOWLIST (service/auth clients). */
+const LEGACY_CLIENT_ALLOWLIST = [
+  // B7 Calendar: the ICS feed.
+  "src/app/api/calendar/feed/[[]token]/route.ts",
+  // B6 Tasks: the due-date digest, replaced by reminder jobs in Phase 6.
+  "src/app/api/cron/due-date-digest/route.ts",
 ];
 
 /** Directories written after the 0B cutover: no legacy client, ever. */
@@ -166,10 +223,11 @@ const eslintConfig = defineConfig([
         { object: "Prisma", property: "raw", message: "Prisma.raw splices text into SQL; bind values instead." },
       ],
       "no-restricted-syntax": restrictSyntax(CACHE_TAG_LITERALS, SESSION_CONTEXT_SQL, DATABASE_URL_ENV),
-      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS),
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, LEGACY_PRISMA),
     },
   },
-  // New code: additionally no legacy client.
+  // New code: no legacy client (also banned above since 0C; kept so the
+  // NEW_CODE list stays the record of post-0B directories).
   {
     files: NEW_CODE,
     rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, LEGACY_PRISMA) },
@@ -197,7 +255,7 @@ const eslintConfig = defineConfig([
   // The client allowlist: the service and auth clients are allowed.
   {
     files: CLIENT_ALLOWLIST,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, LEGACY_CLIENT_ONLY) },
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, LEGACY_CLIENT_ONLY, LEGACY_PRISMA) },
   },
   {
     files: ["src/server/jobs/**", "src/server/email/**", "src/server/health.ts"],
@@ -236,6 +294,16 @@ const eslintConfig = defineConfig([
     rules: {
       "no-restricted-imports": restrictImports(PRIVILEGED_CLIENTS, LEGACY_PRISMA, NAVIGATION),
     },
+  },
+  // 0C: the unmigrated legacy modules may still import @/lib/prisma. Last
+  // among the source blocks, so no later block takes it away again.
+  {
+    files: LEGACY_ALLOWLIST,
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS) },
+  },
+  {
+    files: LEGACY_CLIENT_ALLOWLIST,
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, LEGACY_CLIENT_ONLY) },
   },
   // Tests drive every layer directly.
   {
