@@ -112,6 +112,17 @@ export function isEmailEnabled(raw: unknown, type: NotificationType): boolean {
   return emailEnabledFor(parseNotificationPrefs(raw), type);
 }
 
+/**
+ * The user's reminder lead in days: their own setting when they saved one
+ * (v2), else the org default (OrgSettings.reminderLeadDaysDefault).
+ */
+export function reminderLeadDaysFor(raw: unknown, orgDefault: number): number {
+  if (isRecord(raw) && raw.v === 2 && typeof raw.reminderLeadDays === "number") {
+    return parseNotificationPrefs(raw).reminderLeadDays;
+  }
+  return clampInt(orgDefault, 0, MAX_REMINDER_LEAD_DAYS, DEFAULT_REMINDER_LEAD_DAYS);
+}
+
 /** The value to store (always v2, normalized). */
 export function serializeNotificationPrefs(prefs: NotificationPrefs): NotificationPrefs {
   const parsed = parseNotificationPrefs(prefs);

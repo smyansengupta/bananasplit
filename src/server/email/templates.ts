@@ -13,7 +13,7 @@ export interface RenderedEmail {
   text: string;
 }
 
-interface LayoutInput {
+export interface LayoutInput {
   subject: string;
   /** Small line above the body, e.g. the org name. */
   eyebrow?: string;
@@ -27,7 +27,7 @@ interface LayoutInput {
 
 const PRODUCT = "CBC Portal";
 
-function layout(input: LayoutInput): RenderedEmail {
+export function layout(input: LayoutInput): RenderedEmail {
   const subject = subjectLine(input.subject);
   const footer =
     input.footer ?? `You're receiving this because of your account on ${PRODUCT}.`;
@@ -54,7 +54,7 @@ ${eyebrow}${input.bodyHtml}${cta}
   return { subject, html, text: textParts.filter(Boolean).join("\n\n") };
 }
 
-function paragraph(text: string): string {
+export function paragraph(text: string): string {
   return `<p style="margin:0 0 12px">${escapeHtml(text)}</p>`;
 }
 

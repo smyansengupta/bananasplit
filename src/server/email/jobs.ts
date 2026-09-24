@@ -8,6 +8,7 @@ import { authDb } from "@/server/db/clients";
 import { withSystemOrgTx } from "@/server/db/context";
 import type { EMAIL_JOB_TEMPLATES } from "@/server/jobs/registry";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
+import { renderTaskNotificationEmail } from "@/server/tasks/email";
 
 import { getOrgMailer, getPlatformMailer } from "./mailer";
 import {
@@ -41,11 +42,15 @@ export const notifyEmailJob: JobHandler<{ notificationId: string }> = async (run
     db.notification.findFirst({
       where: { id, organizationId: orgId },
       select: {
+        userId: true,
         type: true,
         title: true,
         body: true,
         linkUrl: true,
         emailSentAt: true,
+        taskId: true,
+        actorId: true,
+        dedupeKey: true,
         user: { select: { email: true, emailPreferences: true } },
         organization: { select: { name: true } },
       },
@@ -53,6 +58,11 @@ export const notifyEmailJob: JobHandler<{ notificationId: string }> = async (run
   );
   if (!n || n.emailSentAt) return; // gone, or already sent
   if (!isEmailEnabled(n.user.emailPreferences, n.type)) return;
+
+  // Task notifications (Phase 6) render their own templates: title, who
+  // assigned it, due date, a direct link. "skip" means it no longer applies.
+  const taskEmail = await renderTaskNotificationEmail(orgId, n);
+  if (taskEmail === "skip") return;
 
   const mailer = await getOrgMailer(orgId);
   if (!mailer) return; // in-app only for this org
@@ -69,12 +79,13 @@ export const notifyEmailJob: JobHandler<{ notificationId: string }> = async (run
     await mailer.send(
       {
         to: n.user.email,
-        ...notificationEmail({
-          orgName: n.organization.name,
-          title: n.title,
-          body: n.body,
-          url: n.linkUrl ? appUrl(n.linkUrl) : null,
-        }),
+        ...(taskEmail ??
+          notificationEmail({
+            orgName: n.organization.name,
+            title: n.title,
+            body: n.body,
+            url: n.linkUrl ? appUrl(n.linkUrl) : null,
+          })),
       },
       { signal: run.signal, idempotencyKey: `notify-email-${id}` },
     );
