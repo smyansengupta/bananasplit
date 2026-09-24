@@ -20,7 +20,11 @@ export type StoreName = "private" | "public";
 export interface StorageKind {
   store: StoreName;
   scope: "org" | "user";
-  /** Upload cap for user uploads of this kind (bytes); server-made files are exempt. */
+  /**
+   * Upload cap for user uploads of this kind (bytes). 0 means the kind takes
+   * no user upload at all. Server-made files (`serverGenerated: true`) are
+   * exempt; the content type never is.
+   */
   maxUploadBytes: number;
   /** Content types accepted for this kind (after magic-byte sniffing). */
   contentTypes: readonly string[];
@@ -54,9 +58,10 @@ export const STORAGE_KINDS = {
   exports: {
     store: "private",
     scope: "org",
+    // Server-made only: the export job writes the per-table parts and the zip.
     maxUploadBytes: 0,
-    contentTypes: ["application/zip"],
-    description: "OWNER data exports: exports/{orgId}/{exportId}.zip (server-made)",
+    contentTypes: ["application/zip", "application/x-ndjson", "text/csv"],
+    description: "OWNER data exports: exports/{orgId}/{exportId}.zip and its parts (server-made)",
   },
   logos: {
     store: "public",
@@ -91,6 +96,45 @@ export class StorageKeyError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "StorageKeyError";
+  }
+}
+
+/** A blob that the kind does not accept: wrong content type, or too large. */
+export class StorageLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageLimitError";
+  }
+}
+
+/**
+ * The per-kind maxUploadBytes and contentTypes limits, enforced for every
+ * blob. They were declared in this file and read by nothing: each route
+ * happened to check a cap and sniff a type of its own, so the declarations
+ * drifted freely and a new caller inherited no limit at all. putBlob now
+ * calls this, so the registry is the limit, and the kind that takes no user
+ * upload (exports) refuses one outright.
+ */
+export function assertBlobAllowed(
+  kind: StorageKindName,
+  contentType: string,
+  byteLength: number,
+  { serverGenerated = false }: { serverGenerated?: boolean } = {},
+): void {
+  const spec: StorageKind = STORAGE_KINDS[kind];
+  if (!spec.contentTypes.includes(contentType)) {
+    throw new StorageLimitError(
+      `${kind} does not accept ${contentType} (allowed: ${spec.contentTypes.join(", ")})`,
+    );
+  }
+  if (serverGenerated) return;
+  if (spec.maxUploadBytes === 0) {
+    throw new StorageLimitError(`${kind} takes no uploads; it holds server-made files only`);
+  }
+  if (byteLength > spec.maxUploadBytes) {
+    throw new StorageLimitError(
+      `${kind} is limited to ${spec.maxUploadBytes} bytes (got ${byteLength})`,
+    );
   }
 }
 

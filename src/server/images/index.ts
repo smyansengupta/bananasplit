@@ -126,6 +126,8 @@ export async function storeImage(
     for (const [name, body] of Object.entries(processed.variants)) {
       const blob = await putBlob(kind, scopeId, [id, `${name}.webp`], body, {
         contentType: "image/webp",
+        // Re-encoded by processImage, not the uploaded bytes.
+        serverGenerated: true,
       });
       written.push(blob.key);
       stored[name as `s${number}`] = blob.url ?? "";

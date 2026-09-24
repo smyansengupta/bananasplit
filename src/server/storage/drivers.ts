@@ -18,6 +18,13 @@ export interface PutOptions {
   /** Browser/CDN cache lifetime in seconds (public store). */
   cacheControlMaxAge?: number;
   signal?: AbortSignal;
+  /**
+   * The server made these bytes (an export part, a re-encoded image
+   * variant), so the kind's user-upload size cap does not apply. Its
+   * content types still do. Never set it for bytes that came from a
+   * request body.
+   */
+  serverGenerated?: boolean;
 }
 
 export interface StoredBlob {

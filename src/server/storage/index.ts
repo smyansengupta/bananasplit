@@ -4,6 +4,7 @@ import { assertNoTx } from "@/server/db/context";
 
 import { driverFor, type PutOptions, type StoredBlob } from "./drivers";
 import {
+  assertBlobAllowed,
   ORG_SCOPED_KINDS,
   parseStorageKey,
   scopePrefix,
@@ -32,6 +33,8 @@ export {
   ORG_SCOPED_KINDS,
   STORAGE_KINDS,
   StorageKeyError,
+  StorageLimitError,
+  assertBlobAllowed,
   parseStorageKey,
   scopePrefix,
   storageKey,
@@ -48,7 +51,11 @@ function storeOf(key: string) {
   return STORAGE_KINDS[parseStorageKey(key).kind].store;
 }
 
-/** Stores `body` under `{kind}/{scopeId}/{...segments}`. */
+/**
+ * Stores `body` under `{kind}/{scopeId}/{...segments}`, within the kind's
+ * declared contentTypes and maxUploadBytes. Pass `serverGenerated: true`
+ * only for bytes the server made itself, which skips the size cap.
+ */
 export async function putBlob(
   kind: StorageKindName,
   scopeId: string,
@@ -58,6 +65,9 @@ export async function putBlob(
 ): Promise<StoredBlob> {
   assertNoTx("putBlob");
   const key = storageKey(kind, scopeId, ...segments);
+  assertBlobAllowed(kind, options.contentType, body.length, {
+    serverGenerated: options.serverGenerated,
+  });
   const store = STORAGE_KINDS[kind].store;
   return driverFor(store).put(store, key, body, {
     ...options,

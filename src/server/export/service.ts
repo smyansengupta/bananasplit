@@ -320,9 +320,11 @@ export const orgExportJob: JobHandler<{ exportId: string }> = async (
       await deleteBlobs([nd, cs]);
       await putBlob("exports", orgId, [exportId, `${table.model}.ndjson`], Buffer.from(ndjson), {
         contentType: "application/x-ndjson",
+        serverGenerated: true,
       });
       await putBlob("exports", orgId, [exportId, `${table.model}.csv`], Buffer.from(csv), {
         contentType: "text/csv",
+        serverGenerated: true,
       });
       cursor.done.push(table.model);
       if (rows > 0) console.info(`[export] ${exportId}: ${table.model} ${rows} row(s)`);
@@ -372,6 +374,7 @@ export const orgExportJob: JobHandler<{ exportId: string }> = async (
     await deleteBlobs([zipKey]);
     await putBlob("exports", orgId, [`${exportId}.zip`], archive, {
       contentType: "application/zip",
+      serverGenerated: true,
     });
 
     const expiresAt = new Date(Date.now() + EXPORT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);

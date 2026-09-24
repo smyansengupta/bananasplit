@@ -7,11 +7,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { blobStoreIdFromToken, driverFor, localDriver, StorageConfigError } from "./drivers";
 import {
+  assertBlobAllowed,
+  MAX_UPLOAD_BYTES,
   ORG_SCOPED_KINDS,
   parseStorageKey,
   scopePrefix,
   storageKey,
   StorageKeyError,
+  StorageLimitError,
   STORAGE_KINDS,
 } from "./kinds";
 import { readUpload, UploadError, uploadErrorResponse } from "./upload";
@@ -39,6 +42,65 @@ describe("storage kinds and keys", () => {
     });
     expect(() => parseStorageKey("avatars/u1/../../etc/passwd")).toThrow(StorageKeyError);
     expect(scopePrefix("logos", "org_1")).toBe("logos/org_1/");
+  });
+
+  /**
+   * maxUploadBytes and contentTypes were declared per kind and read by
+   * nothing: each route happened to cap and sniff on its own, so a new
+   * caller inherited no limit and the declarations could drift from what
+   * the code actually allowed.
+   */
+  describe("per-kind limits", () => {
+    const ok = Buffer.alloc(16);
+
+    it("refuses a content type the kind does not declare", () => {
+      expect(() => assertBlobAllowed("receipts", "image/svg+xml", ok.length)).toThrow(
+        StorageLimitError,
+      );
+      expect(() => assertBlobAllowed("avatars", "application/pdf", ok.length)).toThrow(
+        /avatars does not accept application\/pdf/,
+      );
+      // The type is checked for server-made files too.
+      expect(() =>
+        assertBlobAllowed("exports", "text/html", ok.length, { serverGenerated: true }),
+      ).toThrow(StorageLimitError);
+      expect(() => assertBlobAllowed("receipts", "application/pdf", ok.length)).not.toThrow();
+    });
+
+    it("refuses an upload over the kind's cap", () => {
+      const cap = STORAGE_KINDS.receipts.maxUploadBytes;
+      expect(() => assertBlobAllowed("receipts", "application/pdf", cap)).not.toThrow();
+      expect(() => assertBlobAllowed("receipts", "application/pdf", cap + 1)).toThrow(
+        /limited to 4194304 bytes/,
+      );
+      expect(() => assertBlobAllowed("org-chart", "application/pdf", cap + 1)).toThrow(
+        StorageLimitError,
+      );
+    });
+
+    it("lets server-made files past the size cap, including the upload-free kind", () => {
+      const huge = STORAGE_KINDS.receipts.maxUploadBytes * 4;
+      // exports takes no user upload at all (maxUploadBytes 0)...
+      expect(() => assertBlobAllowed("exports", "application/zip", 10)).toThrow(/takes no uploads/);
+      // ...but the export job writes the zip and the per-table parts.
+      for (const type of ["application/zip", "application/x-ndjson", "text/csv"]) {
+        expect(() =>
+          assertBlobAllowed("exports", type, huge, { serverGenerated: true }),
+        ).not.toThrow();
+      }
+      // Re-encoded image variants are server-made as well.
+      expect(() =>
+        assertBlobAllowed("logos", "image/webp", huge, { serverGenerated: true }),
+      ).not.toThrow();
+    });
+
+    it("every declared content type is a plain media type and every cap is sane", () => {
+      for (const [kind, spec] of Object.entries(STORAGE_KINDS)) {
+        expect(spec.contentTypes.length, kind).toBeGreaterThan(0);
+        for (const type of spec.contentTypes) expect(type, kind).toMatch(/^[a-z]+\/[a-z0-9.+-]+$/);
+        expect(spec.maxUploadBytes, kind).toBeLessThanOrEqual(MAX_UPLOAD_BYTES);
+      }
+    });
   });
 
   it("reads the store id out of a Blob token", () => {
