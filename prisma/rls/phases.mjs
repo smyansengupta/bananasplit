@@ -1962,6 +1962,151 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     },
   );
 
+  // ============ B10: tables no test referenced ============
+  await tcase(
+    "P-B10-01",
+    "BudgetPeriod: every member reads their org's; only OWNER/TREASURER write",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_reads = await count(q, `SELECT count(*) n FROM "BudgetPeriod"`);
+      s.member_sees_foreign = await count(
+        q,
+        `SELECT count(*) n FROM "BudgetPeriod" WHERE "organizationId" = 'org_B'`,
+      );
+      s.member_insert = await tryq(
+        q,
+        `INSERT INTO "BudgetPeriod" ("id","organizationId","label","startsOn","endsOn") VALUES ('bp_m','org_A','M','2027-01-01','2027-06-30')`,
+      );
+      s.member_update = await rc(q, `UPDATE "BudgetPeriod" SET "label" = 'M' WHERE "id" = 'bp_A'`);
+      s.member_delete = await rc(q, `DELETE FROM "BudgetPeriod" WHERE "id" = 'bp_A'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      // ADMIN is not a finance role.
+      s.admin_insert = await tryq(
+        q,
+        `INSERT INTO "BudgetPeriod" ("id","organizationId","label","startsOn","endsOn") VALUES ('bp_ad','org_A','A','2027-01-01','2027-06-30')`,
+      );
+      s.admin_update = await rc(q, `UPDATE "BudgetPeriod" SET "label" = 'A' WHERE "id" = 'bp_A'`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.treasurer_insert = await tryq(
+        q,
+        `INSERT INTO "BudgetPeriod" ("id","organizationId","label","startsOn","endsOn") VALUES ('bp_t','org_A','T','2027-01-01','2027-06-30')`,
+      );
+      s.treasurer_update = await rc(q, `UPDATE "BudgetPeriod" SET "label" = 'T' WHERE "id" = 'bp_A'`);
+      s.treasurer_foreign = await rc(q, `UPDATE "BudgetPeriod" SET "label" = 'X' WHERE "id" = 'bp_B'`);
+      return s;
+    },
+    {
+      value: {
+        member_reads: 1,
+        member_sees_foreign: 0,
+        member_insert: "42501",
+        member_update: 0,
+        member_delete: 0,
+        admin_insert: "42501",
+        admin_update: 0,
+        treasurer_insert: 1,
+        treasurer_update: 1,
+        treasurer_foreign: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-B10-02",
+    "Sponsor and Sponsorship: members read, OWNER/TREASURER write, and neither crosses an org",
+    "app_user",
+    A("u_treasA"),
+    async (q) => {
+      const s = {};
+      s.treasurer_sponsor = await tryq(
+        q,
+        `INSERT INTO "Sponsor" ("id","organizationId","name") VALUES ('sp_A','org_A','Acme')`,
+      );
+      s.foreign_sponsor = await tryq(
+        q,
+        `INSERT INTO "Sponsor" ("id","organizationId","name") VALUES ('sp_X','org_B','Acme B')`,
+      );
+      s.treasurer_sponsorship = await tryq(
+        q,
+        `INSERT INTO "Sponsorship" ("id","organizationId","sponsorId","budgetPeriodId","amountCents","ownerId","updatedAt")
+         VALUES ('ss_A','org_A','sp_A','bp_A',50000,'u_treasA', now())`,
+      );
+      // The same-org trigger, not a policy, catches a parent in another org.
+      s.foreign_period = await tryq(
+        q,
+        `INSERT INTO "Sponsorship" ("id","organizationId","sponsorId","budgetPeriodId","amountCents","ownerId","updatedAt")
+         VALUES ('ss_X','org_A','sp_A','bp_B',50000,'u_treasA', now())`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_reads_sponsor = await count(q, `SELECT count(*) n FROM "Sponsor"`);
+      s.member_reads_sponsorship = await count(q, `SELECT count(*) n FROM "Sponsorship"`);
+      s.member_update = await rc(q, `UPDATE "Sponsor" SET "name" = 'Mine' WHERE "id" = 'sp_A'`);
+      s.member_delete = await rc(q, `DELETE FROM "Sponsorship" WHERE "id" = 'ss_A'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_update = await rc(q, `UPDATE "Sponsor" SET "name" = 'Admin' WHERE "id" = 'sp_A'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "Sponsor"`);
+      return s;
+    },
+    {
+      value: {
+        treasurer_sponsor: 1,
+        foreign_sponsor: "42501",
+        treasurer_sponsorship: 1,
+        foreign_period: "23503",
+        member_reads_sponsor: 1,
+        member_reads_sponsorship: 1,
+        member_update: 0,
+        member_delete: 0,
+        admin_update: 0,
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-B10-03",
+    "OrgMemberHistory is written only by the membership trigger, and read only inside the org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_reads = await count(q, `SELECT count(*) n FROM "OrgMemberHistory"`);
+      s.foreign_rows = await count(
+        q,
+        `SELECT count(*) n FROM "OrgMemberHistory" WHERE "organizationId" = 'org_B'`,
+      );
+      // No INSERT, UPDATE or DELETE policy exists for app_user at all.
+      s.member_insert = await tryq(
+        q,
+        `INSERT INTO "OrgMemberHistory" ("organizationId","userId") VALUES ('org_A','u_memberB')`,
+      );
+      s.member_rewrite = await tryq(
+        q,
+        `UPDATE "OrgMemberHistory" SET "leftAt" = NULL WHERE "organizationId" = 'org_A'`,
+      );
+      s.member_delete = await tryq(q, `DELETE FROM "OrgMemberHistory"`);
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_delete = await tryq(q, `DELETE FROM "OrgMemberHistory"`);
+      // The trigger records a join, so leaving and rejoining is visible.
+      s.records_the_former_member = await count(
+        q,
+        `SELECT count(*) n FROM "OrgMemberHistory" WHERE "userId" = 'u_formerA'`,
+      );
+      return s;
+    },
+    {
+      check: (v) =>
+        v.member_reads > 0 &&
+        v.foreign_rows === 0 &&
+        v.member_insert === "42501" &&
+        v.member_rewrite === "42501" &&
+        v.member_delete === "42501" &&
+        v.owner_delete === "42501" &&
+        v.records_the_former_member === 1,
+    },
+  );
+
   // ======================= A3: platform services =======================
   // The maintenance definer functions (migration a3_platform_maintenance),
   // and the service-path patterns the job handlers rely on.
