@@ -6,13 +6,12 @@
  * anything running as the owner bypasses RLS because it owns the tables.
  *
  * Resolution, per role:
- *   1. An explicit DATABASE_URL_APP / _SERVICE / _AUTH / _LEGACY (local, CI).
+ *   1. An explicit DATABASE_URL_APP / _SERVICE / _AUTH (local, CI).
  *   2. Otherwise derived from the base DATABASE_URL (the per-branch URL the
  *      Neon Vercel integration injects, so previews work without per-branch
  *      configuration): same host, port, database and query string, with the
  *      username swapped for the role and the password taken from
- *      APP_DB_PASSWORD / SERVICE_DB_PASSWORD / AUTH_DB_PASSWORD /
- *      LEGACY_DB_PASSWORD.
+ *      APP_DB_PASSWORD / SERVICE_DB_PASSWORD / AUTH_DB_PASSWORD.
  * A role with neither throws: there is deliberately no fallback to the base
  * (owner) URL.
  *
@@ -20,27 +19,24 @@
  * (prisma.config.ts and prisma/seed.ts are the other two readers).
  */
 
-export type DbRole = "app" | "service" | "auth" | "legacy";
+export type DbRole = "app" | "service" | "auth";
 
 export const DB_ROLE_NAMES: Record<DbRole, string> = {
   app: "app_user",
   service: "app_service",
   auth: "app_auth",
-  legacy: "app_legacy",
 };
 
 const URL_OVERRIDE_ENV: Record<DbRole, string> = {
   app: "DATABASE_URL_APP",
   service: "DATABASE_URL_SERVICE",
   auth: "DATABASE_URL_AUTH",
-  legacy: "DATABASE_URL_LEGACY",
 };
 
 const PASSWORD_ENV: Record<DbRole, string> = {
   app: "APP_DB_PASSWORD",
   service: "SERVICE_DB_PASSWORD",
   auth: "AUTH_DB_PASSWORD",
-  legacy: "LEGACY_DB_PASSWORD",
 };
 
 export class MissingDatabaseUrlError extends Error {

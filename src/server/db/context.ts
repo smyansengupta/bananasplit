@@ -253,8 +253,8 @@ async function runInTx<T>(opts: RunOptions, fn: (ctx: TxContext) => Promise<T>):
 }
 
 /**
- * Wraps a Server Action. Signature `(organizationId, ...args)`, the same as
- * the legacy withOrgContext: the session user must be a member of the org
+ * Wraps a Server Action. Signature `(organizationId, ...args)`: the session
+ * user must be a member of the org
  * (checked by the database in the set_context round trip; a non-member gets
  * NotFoundError, so an action cannot probe whether an org exists).
  *

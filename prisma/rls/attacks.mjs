@@ -272,7 +272,7 @@ runSuite("rls-attacks", async ({ clients, record: rec }) => {
     null,
     async (q) =>
       (
-        await q(`SELECT r FROM unnest(ARRAY['app_user','app_service','app_auth','app_legacy']) r
+        await q(`SELECT r FROM unnest(ARRAY['app_user','app_service','app_auth']) r
                WHERE has_database_privilege(r, current_database(), 'TEMPORARY') ORDER BY 1`)
       ).rows.map((x) => x.r),
     { value: [] },
@@ -309,34 +309,32 @@ runSuite("rls-attacks", async ({ clients, record: rec }) => {
   await acase(
     "A-N2a",
     "N2",
-    "app_legacy may enqueue only its email kinds, for a row of the org it names",
-    "app_legacy",
+    "app_auth may enqueue platform jobs only; 0C left no legacy branch to abuse",
+    "app_auth",
     null,
     async (q) => ({
+      // The removed app_legacy branch accepted notify-email, invite-email
+      // and reimbursement-email for any row of the org it named. No login
+      // role but app_user and app_service may name an org at all now.
       foreign_org_purge: await tryv(
         q,
         `SELECT app.enqueue_job('org_B','org-purge','org-purge:org_B','{}')`,
       ),
-      platform_job: await tryv(
+      notify_email_for_org: await tryv(
         q,
-        `SELECT app.enqueue_job(NULL,'site-rebuild','site-rebuild:all','{}')`,
+        `SELECT app.enqueue_job('org_A','notify-email','notify-email:notif_memberA','{}')`,
       ),
-      row_of_another_org: await tryv(
-        q,
-        `SELECT app.enqueue_job('org_B','notify-email','notify-email:notif_memberA','{}')`,
-      ),
-      own_notification_ok:
+      platform_job_ok:
         typeof (await tryv(
           q,
-          `SELECT app.enqueue_job('org_A','notify-email','notify-email:notif_memberA','{}')`,
+          `SELECT app.enqueue_job(NULL,'verify-email','verify-email:u_memberA','{}')`,
         )) === "string",
     }),
     {
       check: (v) =>
         v.foreign_org_purge === "error:42501" &&
-        v.platform_job === "error:42501" &&
-        v.row_of_another_org === "error:42501" &&
-        v.own_notification_ok === true,
+        v.notify_email_for_org === "error:42501" &&
+        v.platform_job_ok === true,
     },
   );
   {
@@ -530,15 +528,6 @@ runSuite("rls-attacks", async ({ clients, record: rec }) => {
     (q) => q(`SELECT * FROM app.rate_limit_hit('signin:owner.b@example.edu', 1, 900)`),
     { error: "42501" },
   );
-  await acase(
-    "A-N6b",
-    "N6",
-    "the legacy role cannot either",
-    "app_legacy",
-    null,
-    (q) => q(`SELECT * FROM app.rate_limit_hit('signin:owner.b@example.edu', 1, 900)`),
-    { error: "42501" },
-  );
 
   // ======================= N7: catalog blind spots =======================
   await acase(
@@ -556,7 +545,7 @@ runSuite("rls-attacks", async ({ clients, record: rec }) => {
       await q(`GRANT SELECT ON public.zz_mat TO app_service`);
       await q(`GRANT TRUNCATE ON "Task" TO app_user`);
       await q(`GRANT TRIGGER ON "Event" TO app_service`);
-      await q(`GRANT REFERENCES ("id") ON "Note" TO app_legacy`);
+      await q(`GRANT REFERENCES ("id") ON "Note" TO app_auth`);
       await q(`CREATE FUNCTION public.zz_pub() RETURNS int LANGUAGE sql AS 'SELECT 1'`);
       await q(`GRANT EXECUTE ON FUNCTION public.zz_pub() TO PUBLIC`);
       await q(

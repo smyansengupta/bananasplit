@@ -22,30 +22,16 @@ const NEXT_CACHE = {
 };
 
 /**
- * The service, auth and legacy clients bypass the member path: only the
- * enumerated paths in CLIENT_ALLOWLIST may import them. Everything else
- * reaches the database through the wrappers in @/server/db/context.
+ * The service and auth clients bypass the member path: only the enumerated
+ * paths in CLIENT_ALLOWLIST may import them. Everything else reaches the
+ * database through the wrappers in @/server/db/context.
  */
 const PRIVILEGED_CLIENT_MESSAGE =
-  "serviceDb, authDb, legacyDb and getClient are for the allowlisted paths in eslint.config.mjs (CLIENT_ALLOWLIST); use the wrappers in @/server/db/context.";
+  "serviceDb, authDb and getClient are for the allowlisted paths in eslint.config.mjs (CLIENT_ALLOWLIST); use the wrappers in @/server/db/context.";
 const PRIVILEGED_CLIENTS = [
-  { name: "@/server/db/clients", importNames: ["serviceDb", "authDb", "legacyDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
-  { name: "@/server/db", importNames: ["serviceDb", "authDb", "legacyDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
+  { name: "@/server/db/clients", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
+  { name: "@/server/db", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
 ];
-/** For allowlisted files: the service and auth clients are fine, the legacy one is not. */
-const LEGACY_CLIENT_ONLY = [
-  { name: "@/server/db/clients", importNames: ["legacyDb"], message: PRIVILEGED_CLIENT_MESSAGE },
-  { name: "@/server/db", importNames: ["legacyDb"], message: PRIVILEGED_CLIENT_MESSAGE },
-];
-/**
- * The legacy client (app_legacy) is banned everywhere except LEGACY_ALLOWLIST
- * below: it has no grants on any table added after 0B, and the role is
- * dropped once the last module moves to the wrappers (0C).
- */
-const LEGACY_PRISMA = {
-  name: "@/lib/prisma",
-  message: "The legacy client (app_legacy) is only for the files in LEGACY_ALLOWLIST (eslint.config.mjs); use ctx.db from the wrappers in @/server/db/context.",
-};
 /** Navigation belongs to the action and page layer, not to services. */
 const NAVIGATION = {
   name: "next/navigation",
@@ -86,49 +72,7 @@ const CLIENT_ALLOWLIST = [
   "scripts/**",
 ];
 
-/**
- * 0C: the files that still import @/lib/prisma (the app_legacy client), and
- * nothing else. Every entry is a module another builder is moving to the
- * wrappers; each builder deletes its own entries when its module moves, and
- * the final integration removes the list, @/lib/prisma and the role. Never
- * add a path: new code uses the wrappers in @/server/db/context.
- */
-const LEGACY_ALLOWLIST = [
-  // B1 Settings: settings pages and actions, invitations, onboarding.
-  "src/app/app/[[]orgSlug]/settings/page.tsx",
-  "src/app/app/[[]orgSlug]/settings/invitations/actions.ts",
-  "src/app/app/[[]orgSlug]/settings/invitations/page.tsx",
-  "src/app/app/[[]orgSlug]/settings/labels/actions.ts",
-  "src/app/app/[[]orgSlug]/settings/labels/page.tsx",
-  "src/app/app/[[]orgSlug]/settings/members/page.tsx",
-  "src/app/onboarding/actions.ts",
-  "src/app/onboarding/page.tsx",
-  "src/lib/invitations.ts",
-  // B7 Calendar: calendar pages and actions, polls, the per-event .ics.
-  "src/app/app/[[]orgSlug]/calendar/actions.ts",
-  "src/app/app/[[]orgSlug]/calendar/page.tsx",
-  "src/app/app/[[]orgSlug]/calendar/queries.ts",
-  "src/app/app/[[]orgSlug]/calendar/[[]eventId]/page.tsx",
-  "src/app/app/[[]orgSlug]/calendar/polls/actions.ts",
-  "src/app/app/[[]orgSlug]/calendar/polls/page.tsx",
-  "src/app/app/[[]orgSlug]/calendar/polls/new/page.tsx",
-  "src/app/app/[[]orgSlug]/calendar/polls/[[]pollId]/page.tsx",
-  "src/app/poll/[[]pollId]/actions.ts",
-  "src/app/poll/[[]pollId]/page.tsx",
-  "src/app/api/calendar/[[]eventId]/ics/route.ts",
-  // B8 Themes (the org layout; B1's plan item moves it to getOrgContextBySlug).
-  "src/app/app/[[]orgSlug]/layout.tsx",
-  // Shared by the unmigrated modules above; removed with their last caller.
-  "src/lib/auth/guards.ts", // requireOrgMembership / requireRole / requireFinanceAccess
-  "src/lib/notifications.ts", // notifyUser's legacy default db
-];
-/** LEGACY_ALLOWLIST files that are also in CLIENT_ALLOWLIST (service/auth clients). */
-const LEGACY_CLIENT_ALLOWLIST = [
-  // B7 Calendar: the ICS feed.
-  "src/app/api/calendar/feed/[[]token]/route.ts",
-];
-
-/** Directories written after the 0B cutover: no legacy client, ever. */
+/** Directories written after the 0B cutover (the record of post-0B layout). */
 const NEW_CODE = [
   "src/server/**/*.{ts,tsx}",
   "src/app/app/[[]orgSlug]/org-chart/**",
@@ -283,58 +227,48 @@ const eslintConfig = defineConfig([
         DATABASE_URL_ENV,
         CLIENT_SERVER_IMPORTS,
       ),
-      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, LEGACY_PRISMA),
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS),
     },
   },
-  // New code: no legacy client (also banned above since 0C; kept so the
-  // NEW_CODE list stays the record of post-0B directories).
   {
     files: NEW_CODE,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, LEGACY_PRISMA) },
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS) },
   },
   // Services: additionally no navigation.
   {
     files: ["src/server/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, LEGACY_PRISMA, NAVIGATION),
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, NAVIGATION),
     },
   },
   // Cached loaders: additionally no request context.
   {
     files: ["src/server/cached/**/*.ts", "src/server/org-chart/queries.ts"],
     rules: {
-      "no-restricted-imports": restrictImports(
-        NEXT_CACHE,
-        PRIVILEGED_CLIENTS,
-        LEGACY_PRISMA,
-        NAVIGATION,
-        REQUEST_CONTEXT,
-      ),
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, NAVIGATION, REQUEST_CONTEXT),
     },
   },
   // The client allowlist: the service and auth clients are allowed.
   {
     files: CLIENT_ALLOWLIST,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, LEGACY_CLIENT_ONLY, LEGACY_PRISMA) },
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE) },
   },
   {
     files: ["src/server/jobs/**", "src/server/email/**", "src/server/health.ts"],
-    rules: {
-      "no-restricted-imports": restrictImports(NEXT_CACHE, LEGACY_CLIENT_ONLY, LEGACY_PRISMA, NAVIGATION),
-    },
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, NAVIGATION) },
   },
   // Re-apply the stricter rules to the non-allowlisted email modules.
   {
     files: ["src/server/email/**"],
     ignores: ["src/server/email/jobs.ts", "src/server/email/verification.ts"],
     rules: {
-      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, LEGACY_PRISMA, NAVIGATION),
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, NAVIGATION),
     },
   },
   // The data layer: defines and re-exports the clients; context.ts owns
   // navigation (getOrgContextBySlug) and set_context.
   {
-    files: ["src/server/db/**", "src/lib/prisma.ts"],
+    files: ["src/server/db/**"],
     rules: { "no-restricted-imports": restrictImports(NEXT_CACHE) },
   },
   {
@@ -352,18 +286,8 @@ const eslintConfig = defineConfig([
   {
     files: ["src/server/cache/invalidate.ts"],
     rules: {
-      "no-restricted-imports": restrictImports(PRIVILEGED_CLIENTS, LEGACY_PRISMA, NAVIGATION),
+      "no-restricted-imports": restrictImports(PRIVILEGED_CLIENTS, NAVIGATION),
     },
-  },
-  // 0C: the unmigrated legacy modules may still import @/lib/prisma. Last
-  // among the source blocks, so no later block takes it away again.
-  {
-    files: LEGACY_ALLOWLIST,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS) },
-  },
-  {
-    files: LEGACY_CLIENT_ALLOWLIST,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, LEGACY_CLIENT_ONLY) },
   },
   // Theme tokens only in components and pages (see themePlugin).
   {

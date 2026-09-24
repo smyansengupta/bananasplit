@@ -17,7 +17,8 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock, getSession:
 
 import { ForbiddenError } from "@/lib/auth/errors";
 import { loadPublicEvents } from "@/server/cached/public-events";
-import { authDb, disconnectAll, legacyDb } from "@/server/db/clients";
+import { authDb, disconnectAll } from "@/server/db/clients";
+import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withOrgAction, withSystemOrgTx } from "@/server/db/context";
 import { createEvent, deleteEvent } from "@/server/events/service";
 
@@ -33,7 +34,7 @@ interface Person {
 let seeded: { cbcId: string; oliver: Person; kristine: Person } | null = null;
 try {
   const [cbc, oliver, kristine] = await Promise.all([
-    legacyDb.organization.findUnique({ where: { slug: "claude-builders-club" }, select: { id: true } }),
+    ownerDb.organization.findUnique({ where: { slug: "claude-builders-club" }, select: { id: true } }),
     authDb.user.findUnique({ where: { email: "oliver@example.edu" }, select: { id: true, email: true, name: true } }),
     authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
   ]);
@@ -67,6 +68,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
       });
     });
     await disconnectAll();
+    await disconnectOwnerDb();
   });
 
   it("the public feed holds only PUBLIC, live, unmerged, in-window events of the org", async () => {

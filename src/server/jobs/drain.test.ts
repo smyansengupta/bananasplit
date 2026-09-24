@@ -12,7 +12,6 @@ vi.mock("@/server/db/clients", () => ({
   serviceDb: { $queryRaw: serviceQuery },
   appDb: {},
   authDb: {},
-  legacyDb: {},
 }));
 vi.mock("@/server/email/config", () => ({ emailDelivery }));
 

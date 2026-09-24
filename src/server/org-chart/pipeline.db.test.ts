@@ -44,7 +44,8 @@ import { tags } from "@/server/cache/tags";
 import { drainJobs } from "@/server/jobs/drain";
 import { deleteBlobs } from "@/server/storage";
 
-import { authDb, disconnectAll, legacyDb } from "../db/clients";
+import { authDb, disconnectAll } from "../db/clients";
+import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { currentTx, withOrgAction, withOrgTx, withSystemOrgTx } from "../db/context";
 
 import { anthropicClientFactory } from "./claude";
@@ -72,7 +73,7 @@ interface Seeded {
 let seeded: Seeded | null = null;
 try {
   const [cbc, jackson, kristine] = await Promise.all([
-    legacyDb.organization.findUnique({
+    ownerDb.organization.findUnique({
       where: { slug: "claude-builders-club" },
       select: { id: true, activeOrgChartVersionId: true },
     }),
@@ -203,6 +204,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     });
     if (blobs.length) await deleteBlobs(blobs);
     await disconnectAll();
+    await disconnectOwnerDb();
   });
 
   async function track(res: Response) {

@@ -8,7 +8,7 @@ vi.mock("@/server/db/clients", () => ({ getClient: vi.fn() }));
 import { runHealthChecks, type HealthProbes, type RoleProbe } from "./health";
 import { kekFingerprint, loadKeyring } from "./secrets/keyring";
 
-const ROLE_NAMES = { app: "app_user", service: "app_service", auth: "app_auth", legacy: "app_legacy" } as const;
+const ROLE_NAMES = { app: "app_user", service: "app_service", auth: "app_auth" } as const;
 
 function probes(over: {
   role?: (role: keyof typeof ROLE_NAMES) => Partial<RoleProbe>;
@@ -48,7 +48,6 @@ describe("health checks", () => {
       "role:app_user",
       "role:app_service",
       "role:app_auth",
-      "role:app_legacy",
       "security_manifest",
     ]);
   });

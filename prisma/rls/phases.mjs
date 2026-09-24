@@ -13,67 +13,67 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 // The reviewed table-privilege matrix. S=SELECT I=INSERT U=UPDATE (u = a
 // column-level UPDATE grant only) D=DELETE; roles in the order app_user,
-// app_service, app_auth, app_legacy. A new table, or a changed grant, fails
+// app_service, app_auth. A new table, or a changed grant, fails
 // P-CAT1 until this matrix is updated in review.
 const GRANTS = {
-  Account: ["", "", "SIUD", ""],
-  Attendance: ["SIUD", "SIUD", "", ""],
-  AvailabilityPoll: ["SIUD", "SIUD", "", "SIUD"],
-  Ballot: ["SIUD", "SIUD", "", ""],
-  BallotChoice: ["S", "SIUD", "", ""],
-  BallotDefinition: ["SIUD", "SIUD", "", ""],
-  BudgetCategory: ["SIUD", "SIUD", "", "SIUD"],
-  BudgetPeriod: ["SIUD", "SIUD", "", "SIUD"],
-  Contact: ["SIUD", "SIUD", "", ""],
-  ContactEmail: ["SIUD", "SIUD", "", ""],
-  ContactTermStats: ["S", "SIUD", "", ""],
-  DataSourceSyncState: ["S", "SIUD", "", ""],
-  DatabaseDefinition: ["SIU", "SIUD", "", ""],
-  Event: ["SIUD", "SIUD", "", "SIUD"],
-  EventAttendee: ["SIUD", "SIUD", "", "SIUD"],
-  EventLinkLog: ["SI", "SI", "", ""],
-  FinanceAuditLog: ["S", "S", "", "SI"],
-  Invitation: ["SIUD", "SIUD", "", "SIUD"],
-  Job: ["S", "S", "", ""],
-  Label: ["SIUD", "SIUD", "", "SIUD"],
-  Membership: ["SUD", "SIUD", "", "SIUD"],
-  Note: ["SIUD", "SIUD", "", "SIUD"],
-  Notification: ["SIu", "SIUD", "", "SIUD"],
-  OrgAuditLog: ["S", "S", "", ""],
+  Account: ["", "", "SIUD"],
+  Attendance: ["SIUD", "SIUD", ""],
+  AvailabilityPoll: ["SIUD", "SIUD", ""],
+  Ballot: ["SIUD", "SIUD", ""],
+  BallotChoice: ["S", "SIUD", ""],
+  BallotDefinition: ["SIUD", "SIUD", ""],
+  BudgetCategory: ["SIUD", "SIUD", ""],
+  BudgetPeriod: ["SIUD", "SIUD", ""],
+  Contact: ["SIUD", "SIUD", ""],
+  ContactEmail: ["SIUD", "SIUD", ""],
+  ContactTermStats: ["S", "SIUD", ""],
+  DataSourceSyncState: ["S", "SIUD", ""],
+  DatabaseDefinition: ["SIU", "SIUD", ""],
+  Event: ["SIUD", "SIUD", ""],
+  EventAttendee: ["SIUD", "SIUD", ""],
+  EventLinkLog: ["SI", "SI", ""],
+  FinanceAuditLog: ["S", "S", ""],
+  Invitation: ["SIUD", "SIUD", ""],
+  Job: ["S", "S", ""],
+  Label: ["SIUD", "SIUD", ""],
+  Membership: ["SUD", "SIUD", ""],
+  Note: ["SIUD", "SIUD", ""],
+  Notification: ["SIu", "SIUD", ""],
+  OrgAuditLog: ["S", "S", ""],
   // DELETE only on DRAFT positions (b3_org_chart_draft_delete; P-CAT5, P3-05).
-  OrgChartPosition: ["SIUD", "SIUD", "", ""],
-  OrgChartVersion: ["SIU", "SIUD", "", ""],
-  OrgCreationCode: ["", "", "", ""],
-  OrgDeletionLog: ["", "", "", ""],
-  OrgExport: ["SI", "SIUD", "", ""],
-  OrgIntegration: ["SIUD", "SIUD", "", ""],
-  OrgMemberHistory: ["S", "S", "", ""],
-  OrgSecret: ["", "", "", ""],
-  OrgSettings: ["SU", "SIUD", "", ""],
-  OrgSlugHistory: ["", "", "", ""],
-  OrgTheme: ["SIUD", "SIUD", "", ""],
-  Organization: ["SU", "SIUD", "", "SIUD"],
-  PollResponse: ["SIUD", "SIUD", "", "SIUD"],
-  PollSlot: ["SIUD", "SIUD", "", "SIUD"],
-  Project: ["SIUD", "SIUD", "", "SIUD"],
-  RateLimitBucket: ["", "", "", ""],
-  Receipt: ["SID", "SID", "", "SIUD"],
-  Session: ["", "", "SIUD", ""],
-  Signup: ["SIUD", "SIUD", "", ""],
-  Sponsor: ["SIUD", "SIUD", "", "SIUD"],
-  Sponsorship: ["SIUD", "SIUD", "", "SIUD"],
-  Task: ["SIUD", "SIUD", "", "SIUD"],
-  TaskActivity: ["SI", "SI", "", ""],
-  TaskAssignee: ["SIUD", "SIUD", "", "SIUD"],
-  TaskComment: ["SIUD", "SIUD", "", ""],
-  TaskLabel: ["SIUD", "SIUD", "", "SIUD"],
-  TaskMention: ["SIUD", "SIUD", "", ""],
-  Transaction: ["SIU", "SIU", "", "SIUD"],
-  User: ["Su", "S", "SIUD", "SIUD"],
-  UserCredential: ["", "", "SIUD", ""],
-  VerificationToken: ["", "", "SIUD", ""],
-  WeeklyUpdate: ["SIUD", "SIUD", "", ""],
-  _prisma_migrations: ["", "", "", ""],
+  OrgChartPosition: ["SIUD", "SIUD", ""],
+  OrgChartVersion: ["SIU", "SIUD", ""],
+  OrgCreationCode: ["", "", ""],
+  OrgDeletionLog: ["", "", ""],
+  OrgExport: ["SI", "SIUD", ""],
+  OrgIntegration: ["SIUD", "SIUD", ""],
+  OrgMemberHistory: ["S", "S", ""],
+  OrgSecret: ["", "", ""],
+  OrgSettings: ["SU", "SIUD", ""],
+  OrgSlugHistory: ["", "", ""],
+  OrgTheme: ["SIUD", "SIUD", ""],
+  Organization: ["SU", "SIUD", ""],
+  PollResponse: ["SIUD", "SIUD", ""],
+  PollSlot: ["SIUD", "SIUD", ""],
+  Project: ["SIUD", "SIUD", ""],
+  RateLimitBucket: ["", "", ""],
+  Receipt: ["SID", "SID", ""],
+  Session: ["", "", "SIUD"],
+  Signup: ["SIUD", "SIUD", ""],
+  Sponsor: ["SIUD", "SIUD", ""],
+  Sponsorship: ["SIUD", "SIUD", ""],
+  Task: ["SIUD", "SIUD", ""],
+  TaskActivity: ["SI", "SI", ""],
+  TaskAssignee: ["SIUD", "SIUD", ""],
+  TaskComment: ["SIUD", "SIUD", ""],
+  TaskLabel: ["SIUD", "SIUD", ""],
+  TaskMention: ["SIUD", "SIUD", ""],
+  Transaction: ["SIU", "SIU", ""],
+  User: ["Su", "S", "SIUD"],
+  UserCredential: ["", "", "SIUD"],
+  VerificationToken: ["", "", "SIUD"],
+  WeeklyUpdate: ["SIUD", "SIUD", ""],
+  _prisma_migrations: ["", "", ""],
 };
 
 // Tables with no organizationId, each for a reason (Phase 9 org-id coverage).
@@ -137,7 +137,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
            (CASE WHEN has_table_privilege(r, c.oid, 'UPDATE') THEN 'U'
                  WHEN has_any_column_privilege(r, c.oid, 'UPDATE') THEN 'u' ELSE '' END) ||
            (CASE WHEN has_table_privilege(r, c.oid, 'DELETE') THEN 'D' ELSE '' END) ORDER BY o)
-           FROM unnest(ARRAY['app_user','app_service','app_auth','app_legacy']) WITH ORDINALITY AS x(r, o)) AS g
+           FROM unnest(ARRAY['app_user','app_service','app_auth']) WITH ORDINALITY AS x(r, o)) AS g
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind IN ('r','p') ORDER BY 1`)
       ).rows;
@@ -594,11 +594,13 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
   );
   await tcase(
     "P1-08b",
-    "a retired slug stays reserved after its org is renamed (legacy path included)",
-    "app_legacy",
-    null,
+    "a retired slug stays reserved after its org is renamed (service path too)",
+    "app_service",
+    B("u_ownerB"),
     async (q) => {
       await q(`UPDATE "Organization" SET "slug" = 'fx-b-renamed' WHERE "id" = 'org_B'`);
+      // The claim is a different org, so the service context moves with it.
+      await q(`SELECT app.set_context('u_ownerB','org_y')`);
       return {
         claim_old: await tryq(
           q,
@@ -807,7 +809,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     null,
     async () => {
       const out = {};
-      for (const role of ["app_service", "app_auth", "app_legacy"]) {
+      for (const role of ["app_service", "app_auth"]) {
         const c = clients[role];
         await c.query("BEGIN");
         try {
@@ -819,7 +821,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       }
       return out;
     },
-    { value: { app_service: "error:42501", app_auth: "error:42501", app_legacy: "error:42501" } },
+    { value: { app_service: "error:42501", app_auth: "error:42501" } },
   );
   await tcase(
     "P2-06",
@@ -1871,7 +1873,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     null,
     async () => {
       const out = {};
-      for (const role of ["app_user", "app_auth", "app_legacy"]) {
+      for (const role of ["app_user", "app_auth"]) {
         const c = clients[role];
         await c.query("BEGIN");
         try {
@@ -1890,7 +1892,6 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       value: {
         app_user: ["error:42501", "error:42501"],
         app_auth: ["error:42501", "error:42501"],
-        app_legacy: ["error:42501", "error:42501"],
       },
     },
   );
@@ -2029,35 +2030,24 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
   );
   await tcase(
     "P-A3-06",
-    "app_legacy may enqueue the three legacy email kinds for its org's rows, never the generic email kind",
-    "app_legacy",
+    "app.enqueue_job has no legacy branch left: an unknown login role is refused outright",
+    "app_auth",
     null,
     async (q) => ({
-      invite: await tryv(
+      // 0C removed the app_legacy branch, which could queue invite-email,
+      // reimbursement-email and notify-email for any row of the org it
+      // named. app_auth is the remaining non-tenant login role: platform
+      // jobs only, never an org job.
+      org_job: await tryv(
         q,
-        `SELECT app.enqueue_job('org_A','invite-email','invite-email:inv_A','{"invitationId":"inv_A"}'::jsonb) IS NOT NULL`,
+        `SELECT app.enqueue_job('org_A','invite-email','invite-email:inv_A','{"invitationId":"inv_A"}'::jsonb)`,
       ),
-      reimbursement: await tryv(
+      platform_job: await tryv(
         q,
-        `SELECT app.enqueue_job('org_A','reimbursement-email','reimbursement-email:tx_A_sub:APPROVED','{"transactionId":"tx_A_sub","status":"APPROVED"}'::jsonb) IS NOT NULL`,
-      ),
-      wrong_org_row: await tryv(
-        q,
-        `SELECT app.enqueue_job('org_B','invite-email','invite-email:inv_A','{"invitationId":"inv_A"}'::jsonb)`,
-      ),
-      generic_email: await tryv(
-        q,
-        `SELECT app.enqueue_job('org_A','email','email:treasurer-digest:u_treasA:2026-09-22','{"template":"treasurer-digest","toUserId":"u_treasA"}'::jsonb)`,
+        `SELECT app.enqueue_job(NULL,'verify-email','verify-email:u_memberA','{}'::jsonb) IS NOT NULL`,
       ),
     }),
-    {
-      value: {
-        invite: true,
-        reimbursement: true,
-        wrong_org_row: "error:42501",
-        generic_email: "error:42501",
-      },
-    },
+    { value: { org_job: "error:42501", platform_job: true } },
   );
   await tcase(
     "P-A3-07",

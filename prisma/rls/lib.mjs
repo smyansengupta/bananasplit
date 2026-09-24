@@ -1,7 +1,7 @@
 // Shared harness for the RLS suites (tests.mjs, attacks.mjs, phases.mjs).
 // Each suite runs against the throwaway database that run.mjs prepared
 // (migrations, local-roles.sql, fixtures.sql) and connects as the table
-// owner plus the four runtime roles (password 'test', local-roles.sql).
+// owner plus the three runtime roles (password 'test', local-roles.sql).
 //
 // Connection settings come from run.mjs through the environment:
 //   RLS_HOST, RLS_PORT, RLS_DB        the throwaway database
@@ -9,7 +9,7 @@
 //   RLS_ROLE_PASSWORD                 runtime role password (default 'test')
 import pg from "pg";
 
-export const ROLES = ["app_user", "app_service", "app_auth", "app_legacy"];
+export const ROLES = ["app_user", "app_service", "app_auth"];
 
 export function dbConfig() {
   const database = process.env.RLS_DB;

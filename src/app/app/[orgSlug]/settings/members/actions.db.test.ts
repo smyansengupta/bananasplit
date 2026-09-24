@@ -19,7 +19,8 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 
 import { ForbiddenError } from "@/lib/auth/errors";
 import { feedEventsWhere } from "@/lib/calendar-feed";
-import { authDb, disconnectAll, legacyDb } from "@/server/db/clients";
+import { authDb, disconnectAll } from "@/server/db/clients";
+import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withOrgAction, withSystemOrgTx } from "@/server/db/context";
 
 import { changeMemberRole, leaveOrg, removeMember, transferOwnership } from "./actions";
@@ -40,7 +41,7 @@ interface Seeded {
 
 let seeded: Seeded | null = null;
 try {
-  const cbc = await legacyDb.organization.findUnique({
+  const cbc = await ownerDb.organization.findUnique({
     where: { slug: "claude-builders-club" },
     select: { id: true },
   });
@@ -50,7 +51,7 @@ try {
   });
   const byEmail = new Map(users.map((u) => [u.email, u]));
   const event = cbc
-    ? await legacyDb.event.findFirst({
+    ? await ownerDb.event.findFirst({
         where: { organizationId: cbc.id, deletedAt: null },
         select: { id: true },
       })
@@ -200,7 +201,7 @@ describe.skipIf(!seeded)("member management against the local database", () => {
   });
 
   async function roleOf(userId: string) {
-    const m = await legacyDb.membership.findUnique({
+    const m = await ownerDb.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId: s.cbcId } },
       select: { role: true },
     });
@@ -244,16 +245,16 @@ describe.skipIf(!seeded)("member management against the local database", () => {
   });
 
   it("removal deletes the membership, event invitations and notifications, and frees the position", async () => {
-    expect(await legacyDb.event.count({ where: feedEventsWhere(temp.id) })).toBe(1);
+    expect(await ownerDb.event.count({ where: feedEventsWhere(temp.id) })).toBe(1);
 
     const result = await removeMember(s.cbcId, temp.id);
     expect(result).toEqual({});
 
     expect(await roleOf(temp.id)).toBeNull();
-    const attendee = await legacyDb.eventAttendee.count({
+    const attendee = await ownerDb.eventAttendee.count({
       where: { organizationId: s.cbcId, userId: temp.id },
     });
-    const notifications = await legacyDb.notification.count({
+    const notifications = await ownerDb.notification.count({
       where: { organizationId: s.cbcId, userId: temp.id },
     });
     const position = await withSystemOrgTx(s.cbcId, ({ db }) =>
@@ -283,7 +284,7 @@ describe.skipIf(!seeded)("member management against the local database", () => {
     );
     expect(draft.suggestedUserIds).toEqual([s.oliver.id]);
     // A removed member is absent from their ICS feed (0A Fix 7).
-    expect(await legacyDb.event.count({ where: feedEventsWhere(temp.id) })).toBe(0);
+    expect(await ownerDb.event.count({ where: feedEventsWhere(temp.id) })).toBe(0);
   });
 
   it("the feed drops an org's events once membership is gone, even if an invitation row survived", async () => {
@@ -306,7 +307,7 @@ describe.skipIf(!seeded)("member management against the local database", () => {
           data: { organizationId: s.cbcId, eventId: s.eventId, userId: other.id },
         });
       });
-      expect(await legacyDb.event.count({ where: feedEventsWhere(other.id) })).toBe(1);
+      expect(await ownerDb.event.count({ where: feedEventsWhere(other.id) })).toBe(1);
 
       // Remove the membership WITHOUT the removeMember cleanup.
       await withSystemOrgTx(s.cbcId, async ({ db }) => {
@@ -315,9 +316,9 @@ describe.skipIf(!seeded)("member management against the local database", () => {
         });
       });
       expect(
-        await legacyDb.eventAttendee.count({ where: { userId: other.id, eventId: s.eventId } }),
+        await ownerDb.eventAttendee.count({ where: { userId: other.id, eventId: s.eventId } }),
       ).toBe(1);
-      expect(await legacyDb.event.count({ where: feedEventsWhere(other.id) })).toBe(0);
+      expect(await ownerDb.event.count({ where: feedEventsWhere(other.id) })).toBe(0);
     } finally {
       await authDb.user.deleteMany({ where: { id: other.id } });
     }
@@ -329,7 +330,7 @@ describe.skipIf(!seeded)("ownership transfer and leaving, against the local data
   let heir: SeedUser;
 
   async function roleOf(userId: string) {
-    const m = await legacyDb.membership.findUnique({
+    const m = await ownerDb.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId: s.cbcId } },
       select: { role: true },
     });
@@ -402,4 +403,5 @@ describe.skipIf(!seeded)("ownership transfer and leaving, against the local data
 
 afterAll(async () => {
   await disconnectAll();
+    await disconnectOwnerDb();
 });

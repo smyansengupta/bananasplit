@@ -2,7 +2,7 @@
 
 ## Data layer: roles, RLS and the transaction wrappers
 
-The runtime never connects as the table owner. Four runtime roles, all
+The runtime never connects as the table owner. Three runtime roles, all
 `NOBYPASSRLS` non-owners (created `NOLOGIN` by migration
 `20260922000400_0b_rls_roles_policies_triggers`; production pre-creates them
 with `LOGIN PASSWORD`, see RUNBOOK):
@@ -12,11 +12,10 @@ with `LOGIN PASSWORD`, see RUNBOOK):
 | `app_user` | `appDb` | request code, only through the wrappers below |
 | `app_service` | `serviceDb` | jobs, crons, the secrets accessor, the enumerated no-context paths |
 | `app_auth` | `authDb` | the Auth.js adapter, credentials sign-in, sign-up, ICS token lookup, the rate limiter |
-| `app_legacy` | `legacyDb` (= `@/lib/prisma`) | TEMPORARY: modules not yet moved to `withOrgAction`; dropped when none remain |
 
 URLs come from `src/server/db/urls.ts`: explicit `DATABASE_URL_APP` /
-`_SERVICE` / `_AUTH` / `_LEGACY`, or derived from `DATABASE_URL` plus the four
-role passwords (Neon previews). There is no fallback to the owner URL.
+`_SERVICE` / `_AUTH`, or derived from `DATABASE_URL` plus the three role
+passwords (Neon previews). There is no fallback to the owner URL.
 
 **Transaction-bound context.** Every unit of work is one interactive
 transaction whose first statement is `SELECT app.set_context(user, org)`: it
@@ -167,20 +166,19 @@ the link page share one resend limit per account.
 - `process.env.DATABASE_URL*` outside `urls.ts` and owner scripts;
 - cache-tag string literals outside `tags.ts`, and the `next/cache`
   invalidation APIs outside `invalidate.ts`;
-- importing `serviceDb`, `authDb`, `legacyDb` or `getClient` outside
+- importing `serviceDb`, `authDb` or `getClient` outside
   `CLIENT_ALLOWLIST` (the identity plane, the rate limiter, the ICS feed, the
   cron routes and job runner, the health check, scripts and the data layer;
   adding a path is a security review item);
-- `@/lib/prisma` (the `app_legacy` client) everywhere except `LEGACY_ALLOWLIST`
-  (see "0C: legacy modules on the RLS path" below);
 - `redirect`/`notFound` in `src/server` services (except `context.ts`), and
   request-context imports in cached loaders.
 
-## 0C: legacy modules on the RLS path
+## 0C: legacy modules on the RLS path (done)
 
-The Phase 0-6 modules started on `app_legacy`, the temporary role with
-`FOR ALL` policies on the 23 legacy tables. Phase 0C moves each one onto
-`app_user` through the wrappers, so RLS covers it. Notes, workspace search
+The Phase 0-6 modules started on `app_legacy`, a temporary role with
+`FOR ALL USING (true)` policies on 23 tables — for that role, row-level
+security was effectively off. Phase 0C moved each module onto `app_user`
+through the wrappers, so RLS covers it. Notes, workspace search
 (the command palette), finance (periods, categories, transactions, sponsors
 and sponsorships, the dashboard, the CSV export, the finance digest and
 receipts), the org overview, the org switcher, the notification bell and
@@ -223,16 +221,23 @@ each module pin these rules against the real policies: PRIVATE notes and
 author-or-admin edits, finance-role writes, separation of duties against
 the acting user, Receipt visibility and cross-org refusal.
 
-**What is left.** `LEGACY_ALLOWLIST` in `eslint.config.mjs` lists every file
-that may still import `@/lib/prisma`: the settings, onboarding and
-invitations modules (B1), tasks and the due-date cron (B6), calendar, polls
-and both `.ics` routes (B7), the org layout (B8), and two shared helpers
-their code calls (`src/lib/auth/guards.ts` and `notifyUser`'s default `db`
-in `src/lib/notifications.ts`). Any other import of `@/lib/prisma` is a
-lint error. Each builder deletes its entries as its module moves. The final
-integration then removes the list, `withOrgContext`, `guards.ts`,
-`src/lib/prisma.ts` and `LEGACY_DB_PASSWORD`, and drops the role (the
-`drop_app_legacy` migration in the plan).
+**Teardown.** Nothing reaches `app_legacy` any more. Migration
+`20260924120000_0c_drop_app_legacy` drops the 23 `FOR ALL` policies and every
+grant, removes the role's branches from `app.enqueue_job`, the ICS token
+functions, `app.immutable_columns` and `app.security_manifest`, and drops the
+role itself. `src/lib/prisma.ts`, `legacyDb`, `withOrgContext`,
+`src/lib/auth/guards.ts`, `src/lib/notifications.ts`, `DATABASE_URL_LEGACY`,
+`LEGACY_DB_PASSWORD` and the ESLint `LEGACY_ALLOWLIST` are gone with it. RLS
+case T24 asserts the role holds no policy, no table grant and no function
+EXECUTE in the database.
+
+Roles are cluster-global while a migration is per-database, and Postgres
+checks only the current database before `DROP ROLE`: dropping it while
+another database still grants it leaves dangling ACL entries there. So the
+migration drops the role only when it is the cluster's single application
+database (a Neon project, CI). On a shared cluster it raises a notice and
+leaves the role with nothing granted; drop it by hand once every database
+has run the migration.
 
 ## Tenancy model
 

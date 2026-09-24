@@ -14,7 +14,8 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 // The wrappers import the session module, which pulls in next-auth.
 vi.mock("@/lib/auth/session", () => ({ requireUser: vi.fn() }));
 
-import { authDb, disconnectAll, legacyDb } from "@/server/db/clients";
+import { authDb, disconnectAll } from "@/server/db/clients";
+import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withSystemOrgTx } from "@/server/db/context";
 
 import { consumeVerificationToken } from "@/server/email/verification";
@@ -23,7 +24,7 @@ import { googleSignInGate } from "./google-linking";
 
 let cbcId: string | null = null;
 try {
-  const cbc = await legacyDb.organization.findUnique({
+  const cbc = await ownerDb.organization.findUnique({
     where: { slug: "claude-builders-club" },
     select: { id: true },
   });
@@ -59,6 +60,7 @@ describe.skipIf(!cbcId)("identity fixes against the local database", () => {
   afterAll(async () => {
     await authDb.user.deleteMany({ where: { id: { in: created } } });
     await disconnectAll();
+    await disconnectOwnerDb();
   });
 
   it("a verified Google sign-in purges an unverified password squatter", async () => {

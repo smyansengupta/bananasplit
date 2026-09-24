@@ -17,7 +17,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 const { requireUserMock } = vi.hoisted(() => ({ requireUserMock: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 
-import { appDb, authDb, disconnectAll, legacyDb, serviceDb } from "./clients";
+import { appDb, authDb, disconnectAll, serviceDb } from "./clients";
 import { getOrgContextBySlug, withOrgAction, withOrgTx, withSystemOrgTx } from "./context";
 import { InvalidReferenceError } from "./errors";
 
@@ -176,8 +176,8 @@ describe.skipIf(!seeded)("data layer against the local database (seeded CBC)", (
   });
 
   it("each role reaches only its own plane", async () => {
-    await expect(legacyDb.task.count()).resolves.toBeGreaterThan(0);
     await expect(authDb.task.count()).rejects.toBeTruthy();
+    await expect(appDb.userCredential.count()).rejects.toBeTruthy();
     await expect(serviceDb.userCredential.count()).rejects.toBeTruthy();
     const [row] = await serviceDb.$queryRaw<{ allowed: boolean }[]>`
       SELECT allowed FROM app.rate_limit_hit(${`itest:${Date.now()}`}, 5, 60)`;

@@ -7,11 +7,10 @@
  *
  * Import rules (enforced in review, and by lint once the allowlist lands):
  * - Request code uses appDb only through the context wrappers.
- * - serviceDb, authDb and legacyDb are for the enumerated paths in
- *   docs/ARCHITECTURE.md (jobs and crons; Auth.js and credentials; the
- *   legacy modules until their 0C migration).
+ * - serviceDb and authDb are for the enumerated paths in
+ *   docs/ARCHITECTURE.md (jobs and crons; Auth.js and credentials).
  */
-export { appDb, authDb, disconnectAll, getClient, legacyDb, serviceDb } from "./clients";
+export { appDb, authDb, disconnectAll, getClient, serviceDb } from "./clients";
 export {
   AppError,
   ConflictError,

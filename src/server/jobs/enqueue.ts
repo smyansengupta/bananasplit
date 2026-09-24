@@ -13,9 +13,7 @@ import { isJobKind, jobKind, type JobKind, type JobPayload } from "./registry";
  *     be the member org);
  *   - in a job or cron: ctx.db from withSystemOrgTx(orgId) (app_service;
  *     orgId must equal the org GUC, NULL for platform jobs);
- *   - sign-up: authDb (app_auth; platform jobs only);
- *   - legacy modules: @/lib/prisma (app_legacy; only notify-email,
- *     invite-email and reimbursement-email for a row of that org).
+ *   - sign-up: authDb (app_auth; platform jobs only).
  *
  * The dedupe key is `${kind}:${key}`. Dedupe is per org: while a job with
  * the same org and key is PENDING a second enqueue merges into it (earliest

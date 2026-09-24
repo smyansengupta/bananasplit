@@ -242,7 +242,7 @@ vi.mock("@/server/secrets", () => ({
 }));
 vi.mock("@/server/db/clients", () => {
   const client = { $transaction: async (fn: (tx: unknown) => unknown) => fn(makeTx()) };
-  return { appDb: client, serviceDb: client, authDb: client, legacyDb: client, getClient: () => client };
+  return { appDb: client, serviceDb: client, authDb: client, getClient: () => client };
 });
 
 // A tiny Google Calendar v3.

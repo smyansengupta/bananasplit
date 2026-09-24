@@ -23,7 +23,7 @@
 //                        integration id is refused outright (23503).
 //   T27c-f               the reviewed lists include the Phase 1-8 functions
 //                        and definer-only tables.
-import { A, count, connect, HASH, rc, runSuite, tryq } from "./lib.mjs";
+import { A, B, count, connect, HASH, rc, runSuite, tryq } from "./lib.mjs";
 
 runSuite("rls-tests", async ({ clients, tcase, record }) => {
   // ---------------- Tenant isolation ----------------
@@ -460,17 +460,17 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T14c",
-    "same-org trigger also protects the legacy path",
-    "app_legacy",
-    null,
+    "same-org trigger also protects the service path",
+    "app_service",
+    A("u_adminA"),
     (q) => q(`UPDATE "Transaction" SET "eventId" = 'e_B' WHERE "id" = 'tx_A_draft'`),
     { error: "23503" },
   );
   await tcase(
     "T14d",
-    "member-of-org trigger protects the legacy path (bulkAssign class)",
-    "app_legacy",
-    null,
+    "member-of-org trigger protects the service path (bulkAssign class)",
+    "app_service",
+    B("u_memberB"),
     (q) =>
       q(
         `INSERT INTO "TaskAssignee" ("organizationId","taskId","userId") VALUES ('org_B','t_B','u_memberA')`,
@@ -560,9 +560,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T16c",
-    "app_legacy cannot SELECT OrgSecret",
-    "app_legacy",
-    null,
+    "app_user cannot SELECT OrgSecret",
+    "app_user",
+    A("u_ownerA"),
     (q) => q(`SELECT * FROM "OrgSecret"`),
     { error: "42501" },
   );
@@ -1028,8 +1028,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T18l",
-    "D3: app_legacy (the 0B settings/calendar actions) sets the hash under set_context(user, NULL)",
-    "app_legacy",
+    "D3: the ICS functions take app_user only (0C removed the app_legacy branch)",
+    "app_user",
     { user: "u_memberA" },
     async (q) => ({
       set: (await q(`SELECT app.set_ics_token_hash($1) t`, [HASH("c")])).rows[0].t !== null,
@@ -1039,8 +1039,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T18m",
-    "D3: app_legacy without a user context is refused",
-    "app_legacy",
+    "D3: app_user without a user context is refused",
+    "app_user",
     null,
     (q) => q(`SELECT app.set_ics_token_hash($1)`, [HASH("d")]),
     { error: "42501" },
@@ -1229,9 +1229,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T21b",
-    "FinanceAuditLog DELETE denied for app_legacy (migration 20260913223951 now effective)",
-    "app_legacy",
-    null,
+    "FinanceAuditLog DELETE denied on the service path too (migration 20260913223951)",
+    "app_service",
+    A("u_ownerA"),
     (q) => q(`DELETE FROM "FinanceAuditLog"`),
     { error: "42501" },
   );
@@ -1355,29 +1355,34 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     { value: { member: 0, treasurer: 1 } },
   );
 
+  // 0C closed the strangler window: app_legacy held FOR ALL USING(true)
+  // policies on 23 tables, so row-level security was effectively off for
+  // it. The role now holds nothing here, and nothing connects as it.
   await tcase(
     "T24",
-    "app_legacy is permissive on legacy tables during the strangler window",
-    "app_legacy",
-    null,
-    async (q) => ({
-      tasks_all_orgs: await count(q, `SELECT count(*) n FROM "Task"`),
-    }),
-    { value: { tasks_all_orgs: 3 } },
-  );
-  await tcase(
-    "T24b",
-    "app_legacy has no privilege on UserCredential, Job, OrgAuditLog, OrgSecret or Account",
+    "app_legacy holds no policy, no table grant and no function EXECUTE in this database",
     "owner",
     null,
-    async (q) =>
-      (
-        await q(`SELECT t, has_any_column_privilege('app_legacy', format('public.%I', t)::regclass, 'SELECT') p
-               FROM unnest(ARRAY['UserCredential','Job','OrgAuditLog','OrgSecret','Account','Session','VerificationToken']) t`)
-      ).rows
-        .filter((r) => r.p)
-        .map((r) => r.t),
-    { value: [] },
+    async (q) => ({
+      policies: await count(q, `SELECT count(*) n FROM pg_policies WHERE 'app_legacy' = ANY(roles)`),
+      tables: await count(
+        q,
+        `SELECT count(*) n FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace
+          WHERE ns.nspname = 'public' AND c.relkind IN ('r','p')
+            AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_legacy')
+            AND (has_any_column_privilege('app_legacy', c.oid, 'SELECT')
+              OR has_any_column_privilege('app_legacy', c.oid, 'INSERT')
+              OR has_any_column_privilege('app_legacy', c.oid, 'UPDATE')
+              OR has_table_privilege('app_legacy', c.oid, 'DELETE'))`,
+      ),
+      functions: await count(
+        q,
+        `SELECT count(*) n FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
+          WHERE ns.nspname = 'app' AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_legacy')
+            AND has_function_privilege('app_legacy', p.oid, 'EXECUTE')`,
+      ),
+    }),
+    { value: { policies: 0, tables: 0, functions: 0 } },
   );
 
   await tcase(
@@ -1636,7 +1641,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       await q(`GRANT SELECT ON public.zz_mat TO app_service`);
       await q(`GRANT TRUNCATE ON "Task" TO app_user`);
       await q(`GRANT TRIGGER ON "Event" TO app_service`);
-      await q(`GRANT REFERENCES ("id") ON "Note" TO app_legacy`);
+      await q(`GRANT REFERENCES ("id") ON "Note" TO app_auth`);
       await q(`CREATE FUNCTION public.zz_pub() RETURNS int LANGUAGE sql AS 'SELECT 1'`);
       await q(`GRANT EXECUTE ON FUNCTION public.zz_pub() TO PUBLIC`);
       await q(
@@ -1659,7 +1664,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     {
       value: [
         'dangerous_privilege public."Event":app_service:TRIGGER',
-        'dangerous_privilege public."Note":app_legacy:REFERENCES',
+        'dangerous_privilege public."Note":app_auth:REFERENCES',
         'dangerous_privilege public."Task":app_user:TRUNCATE',
         "definer_search_path app.zz_def()",
         "matview_or_foreign_granted public.zz_mat",
@@ -1764,15 +1769,17 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   );
   await tcase(
     "T27d",
-    "app_legacy policies exist only on the 23 legacy tables",
+    "no policy anywhere names a role outside the reviewed three",
     "owner",
     null,
     async (q) =>
       (
-        await q(`SELECT count(*)::int n, bool_and(tablename NOT IN ('Job','OrgAuditLog','OrgSecret','UserCredential','OrgMemberHistory','RateLimitBucket','Account','Session','VerificationToken')) ok
-                FROM pg_policies WHERE schemaname='public' AND 'app_legacy' = ANY(roles)`)
-      ).rows[0],
-    { value: { n: 23, ok: true } },
+        await q(`SELECT DISTINCT unnest(roles)::text AS r FROM pg_policies
+                  WHERE schemaname IN ('public','app')
+                    AND NOT (roles <@ ARRAY['app_user','app_service','app_auth']::name[])
+                  ORDER BY 1`)
+      ).rows.map((r) => r.r),
+    { value: [] },
   );
   await tcase(
     "T27e",
@@ -1783,7 +1790,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       (
         await q(`SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                WHERE n.nspname='public' AND c.relkind IN ('r','p') AND c.relname <> '_prisma_migrations'
-                 AND NOT EXISTS (SELECT 1 FROM unnest(ARRAY['app_user','app_service','app_auth','app_legacy']) r(role)
+                 AND NOT EXISTS (SELECT 1 FROM unnest(ARRAY['app_user','app_service','app_auth']) r(role)
                                  WHERE has_any_column_privilege(r.role, c.oid, 'SELECT'))
                ORDER BY 1`)
       ).rows.map((r) => r.relname),
@@ -1798,7 +1805,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     },
   );
   {
-    // The reviewed EXECUTE matrix for schema app. u=app_user s=app_service a=app_auth l=app_legacy.
+    // The reviewed EXECUTE matrix for schema app. u=app_user s=app_service a=app_auth.
     const expected = {
       // 0B
       active_org_ids: "s",
@@ -1807,10 +1814,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       caller_org: "us",
       cancel_job: "us",
       claim_jobs: "s",
-      ctx_valid: "usal",
-      enqueue_job: "usal",
+      ctx_valid: "usa",
+      enqueue_job: "usa",
       finish_job: "s",
-      ics_token_created_at: "ul",
+      ics_token_created_at: "u",
       immutable_columns: "",
       invitation_by_token_hash: "s",
       is_finance: "us",
@@ -1818,13 +1825,13 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       is_org_owner: "us",
       lock_org: "us",
       member_org_id: "us",
-      member_role: "usl",
+      member_role: "us",
       member_tier: "us",
       membership_guard: "",
       membership_history: "",
       org_has_members: "us",
       org_has_other_owner: "us",
-      org_id: "usal",
+      org_id: "usa",
       organization_guard: "",
       org_settings_guard: "",
       pending_invitations_for_me: "u",
@@ -1835,12 +1842,12 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       secret_read: "s",
       secret_write: "s",
       security_manifest: "s",
-      set_context: "usl",
-      set_ics_token_hash: "ul",
+      set_context: "us",
+      set_ics_token_hash: "u",
       transaction_guard: "",
       user_has_role: "us",
-      user_id: "usal",
-      utc_now: "usal",
+      user_id: "usa",
+      utc_now: "usa",
       write_finance_audit: "us",
       write_org_audit: "us",
       // Phase 1: slug_available also serves service-path org creation; the
@@ -1885,8 +1892,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
           await q(`SELECT p.proname,
           (CASE WHEN has_function_privilege('app_user', p.oid, 'EXECUTE') THEN 'u' ELSE '' END ||
            CASE WHEN has_function_privilege('app_service', p.oid, 'EXECUTE') THEN 's' ELSE '' END ||
-           CASE WHEN has_function_privilege('app_auth', p.oid, 'EXECUTE') THEN 'a' ELSE '' END ||
-           CASE WHEN has_function_privilege('app_legacy', p.oid, 'EXECUTE') THEN 'l' ELSE '' END) AS g,
+           CASE WHEN has_function_privilege('app_auth', p.oid, 'EXECUTE') THEN 'a' ELSE '' END) AS g,
           has_function_privilege('public', p.oid, 'EXECUTE') AS pub
         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'app' ORDER BY 1`)
         ).rows;
@@ -1915,7 +1921,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       (
         await q(`SELECT r.rolname, r.rolsuper, r.rolbypassrls,
                      (SELECT count(*)::int FROM pg_class c WHERE c.relowner = r.oid) owned
-                FROM pg_roles r WHERE r.rolname IN ('app_user','app_service','app_auth','app_legacy') ORDER BY 1`)
+                FROM pg_roles r WHERE r.rolname IN ('app_user','app_service','app_auth') ORDER BY 1`)
       ).rows.every((r) => !r.rolsuper && !r.rolbypassrls && r.owned === 0),
     { value: true },
   );

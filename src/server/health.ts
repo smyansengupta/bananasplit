@@ -12,7 +12,7 @@ import { blobStoreIdFromToken } from "@/server/storage/drivers";
  * drifted security manifest or a preview wired to production credentials
  * never serves traffic quietly.
  *
- * On every runtime URL (app_user, app_service, app_auth, app_legacy):
+ * On every runtime URL (app_user, app_service, app_auth):
  *   - it logs in as that role, which is not a superuser, has no BYPASSRLS
  *     and owns no relation in public;
  *   - SHOW timezone / statement_timeout / idle_in_transaction_session_timeout
@@ -100,7 +100,7 @@ export const databaseProbes: HealthProbes = {
   },
 };
 
-const ROLES: DbRole[] = ["app", "service", "auth", "legacy"];
+const ROLES: DbRole[] = ["app", "service", "auth"];
 
 async function timed<T>(ms: number, work: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;

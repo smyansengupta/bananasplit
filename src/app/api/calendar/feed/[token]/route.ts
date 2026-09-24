@@ -53,7 +53,7 @@ export const feedReads = {
  * the credential (unguessable, regenerable in Settings), so calendar apps
  * can subscribe to it. It lists the events the user is invited to, in the
  * orgs they are STILL a member of (0A Fix 7), read org by org on the
- * service path (never app_legacy).
+ * service path.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

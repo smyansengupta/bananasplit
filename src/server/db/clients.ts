@@ -16,10 +16,6 @@ import { runtimeDatabaseUrl, type DbRole } from "./urls";
  * - authDb     app_auth: the Auth.js adapter, credentials sign-in, sign-up,
  *              verify-email, ICS token resolution and the rate limiter. No
  *              tenant access at all.
- * - legacyDb   app_legacy: the TEMPORARY strangler role for the Phase 0-6
- *              modules until each moves to withOrgAction/appDb (0C). It has
- *              FOR ALL policies on the 23 legacy tables and nothing else.
- *              @/lib/prisma re-exports it.
  *
  * Clients are created lazily on first use, so importing this module never
  * needs a database URL (next build, vitest, prisma generate). Each pool is
@@ -80,7 +76,6 @@ function lazyClient(role: DbRole): PrismaClient {
 export const appDb: PrismaClient = lazyClient("app");
 export const serviceDb: PrismaClient = lazyClient("service");
 export const authDb: PrismaClient = lazyClient("auth");
-export const legacyDb: PrismaClient = lazyClient("legacy");
 
 /** Closes every pool that was opened (scripts and tests). */
 export async function disconnectAll(): Promise<void> {

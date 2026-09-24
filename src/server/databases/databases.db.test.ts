@@ -20,7 +20,8 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock, getSession:
 
 import { AttendanceMethod, RecordSource, type Role } from "@/generated/prisma/client";
 import { ForbiddenError } from "@/lib/auth/errors";
-import { authDb, disconnectAll, legacyDb } from "@/server/db/clients";
+import { authDb, disconnectAll } from "@/server/db/clients";
+import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withOrgAction, withOrgTx, withSystemOrgTx, type OrgContext } from "@/server/db/context";
 import { mergeEvents } from "@/server/events/service";
 import {
@@ -55,7 +56,7 @@ interface Seeded {
 
 let seeded: Seeded | null = null;
 try {
-  const org = await legacyDb.organization.findUnique({
+  const org = await ownerDb.organization.findUnique({
     where: { slug: "claude-builders-club" },
     select: { id: true },
   });
@@ -65,7 +66,7 @@ try {
   });
   const by = (email: string) => users.find((u) => u.email === email);
   const events = org
-    ? await legacyDb.event.findMany({
+    ? await ownerDb.event.findMany({
         where: { organizationId: org.id, deletedAt: null, mergedIntoId: null, startsAt: { lt: new Date() } },
         orderBy: { startsAt: "desc" },
         select: { id: true },
@@ -133,6 +134,7 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       await db.$queryRaw`SELECT app.refresh_contact_rollups(${s.orgId}, NULL)::text AS ok`;
     });
     await disconnectAll();
+    await disconnectOwnerDb();
   });
 
   // ---- Privacy tiers -----------------------------------------------------------

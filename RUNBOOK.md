@@ -19,16 +19,15 @@ needs, plus what to do when something breaks.
    `20260922000400_0b_rls_roles_policies_triggers`)** — the app never
    connects as the table owner. As `neondb_owner`, in the SQL editor of the
    production parent branch (never through the Neon Console or API, which add
-   `neon_superuser` membership), create the four runtime roles with
+   `neon_superuser` membership), create the three runtime roles with
    generated passwords:
    ```sql
    CREATE ROLE app_user    LOGIN PASSWORD '<generated>' NOSUPERUSER NOBYPASSRLS NOINHERIT;
    CREATE ROLE app_service LOGIN PASSWORD '<generated>' NOSUPERUSER NOBYPASSRLS NOINHERIT;
    CREATE ROLE app_auth    LOGIN PASSWORD '<generated>' NOSUPERUSER NOBYPASSRLS NOINHERIT;
-   CREATE ROLE app_legacy  LOGIN PASSWORD '<generated>' NOSUPERUSER NOBYPASSRLS NOINHERIT;
    ```
-   Store the passwords as `APP_DB_PASSWORD`, `SERVICE_DB_PASSWORD`,
-   `AUTH_DB_PASSWORD` and `LEGACY_DB_PASSWORD` in Vercel (Production scope;
+   Store the passwords as `APP_DB_PASSWORD`, `SERVICE_DB_PASSWORD` and
+   `AUTH_DB_PASSWORD` in Vercel (Production scope;
    previews get their own values). The runtime URLs are derived from
    `DATABASE_URL` with the role swapped in (`src/server/db/urls.ts`). Without
    this step the migration creates the roles `NOLOGIN` and the app cannot
@@ -36,6 +35,11 @@ needs, plus what to do when something breaks.
    `SECRETS_FINGERPRINT_KEY`, `CRON_SECRET` and `PLATFORM_ADMIN_EMAILS`
    (see `.env.example`). Locally, `pnpm db:local-roles` gives the roles the
    password `test`.
+   A cluster upgraded from before `20260924120000_0c_drop_app_legacy` also
+   has an `app_legacy` role. That migration revokes everything from it in the
+   database it runs on, and drops the role only when that is the cluster's
+   single application database; otherwise drop it by hand (`DROP ROLE
+   app_legacy`) once every database has run the migration.
 4. **First migration** — `vercel.json`'s `buildCommand` runs
    `prisma migrate deploy && next build`, so migrations apply automatically on
    every deploy, including the first one. Nothing manual required.

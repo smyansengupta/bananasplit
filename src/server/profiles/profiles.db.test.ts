@@ -27,7 +27,8 @@ vi.mock("@/server/images", () => ({
 import { Prisma } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/auth/errors";
 import { hashIcsToken } from "@/lib/ics-token";
-import { authDb, disconnectAll, legacyDb } from "@/server/db/clients";
+import { authDb, disconnectAll } from "@/server/db/clients";
+import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 
 import { getOrgPerson, getOwnProfile, getShellUser, listOrgPeople } from "./queries";
@@ -71,7 +72,7 @@ const EMAILS = [
 let seeded: Seeded | null = null;
 let kristineBefore: Record<string, unknown> | null = null;
 try {
-  const orgs = await legacyDb.organization.findMany({
+  const orgs = await ownerDb.organization.findMany({
     where: { slug: { in: ["claude-builders-club", "robotics-club", "debate-society"] } },
     select: { id: true, slug: true },
   });
@@ -162,6 +163,7 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
       db.membership.updateMany({ where: { organizationId: s.roboticsId, userId: s.dave.id }, data: { title: null } }),
     );
     await disconnectAll();
+    await disconnectOwnerDb();
   });
 
   it("a profile save changes only the caller's row, and the shell reads it from the database", async () => {

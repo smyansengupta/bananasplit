@@ -37,7 +37,7 @@ interface ActionResult {
 /**
  * No org-context guard: guests reach this through the poll's shareable link.
  * It runs on the service path (withSystemOrgTx with the poll's org, found
- * through app.poll_org_id), not app_legacy. Who may answer as whom (0A Fix 6):
+ * through app.poll_org_id). Who may answer as whom (0A Fix 6):
  *   - a signed-in MEMBER of the poll's org answers as themselves;
  *   - everyone else, including a signed-in user of another org, answers as
  *     a guest, and only finalizePoll's membership intersection decides who

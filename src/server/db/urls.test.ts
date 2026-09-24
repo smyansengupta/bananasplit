@@ -16,7 +16,6 @@ describe("runtimeDatabaseUrl", () => {
       APP_DB_PASSWORD: "a",
       SERVICE_DB_PASSWORD: "s",
       AUTH_DB_PASSWORD: "u",
-      LEGACY_DB_PASSWORD: "l",
     };
     const app = new URL(runtimeDatabaseUrl("app", env));
     expect(app.username).toBe("app_user");
@@ -26,7 +25,6 @@ describe("runtimeDatabaseUrl", () => {
     expect(app.searchParams.get("sslmode")).toBe("require");
     expect(usernameOf(runtimeDatabaseUrl("service", env))).toBe("app_service");
     expect(usernameOf(runtimeDatabaseUrl("auth", env))).toBe("app_auth");
-    expect(usernameOf(runtimeDatabaseUrl("legacy", env))).toBe("app_legacy");
   });
 
   it("never falls back to the owner URL when the role password is missing", () => {

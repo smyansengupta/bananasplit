@@ -22,7 +22,8 @@ process.env.EMAIL_DELIVERY = "sink";
 import { NotificationType, TaskStatus } from "@/generated/prisma/client";
 import { addDaysToKey, localDateKey, zonedInstant } from "@/lib/tasks/dates";
 
-import { authDb, disconnectAll, legacyDb } from "../db/clients";
+import { authDb, disconnectAll } from "../db/clients";
+import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withOrgAction, withSystemOrgTx, type SystemContext } from "../db/context";
 import type { JobRun } from "../jobs/types";
 import { taskDigestJob, taskReminderJob } from "./jobs";
@@ -39,7 +40,7 @@ type Key = "jackson" | "oliver" | "alex" | "kristine" | "smyan";
 
 let seeded: { cbcId: string; people: Record<Key, Person> } | null = null;
 try {
-  const cbc = await legacyDb.organization.findUnique({
+  const cbc = await ownerDb.organization.findUnique({
     where: { slug: "claude-builders-club" },
     select: { id: true },
   });
@@ -105,6 +106,7 @@ describe.skipIf(!seeded)("tasks against the local database (seeded CBC)", () => 
       })(s.cbcId);
     }
     await disconnectAll();
+    await disconnectOwnerDb();
   });
 
   it("hands a task down: Oliver to Alex is DOWN_LINE, emails Alex and schedules his reminder", async () => {
@@ -162,7 +164,7 @@ describe.skipIf(!seeded)("tasks against the local database (seeded CBC)", () => 
   });
 
   it("bulk assign refuses another org's task and writes nothing", async () => {
-    const other = await legacyDb.task.findFirst({
+    const other = await ownerDb.task.findFirst({
       where: { organization: { slug: "robotics-club" } },
       select: { id: true },
     });

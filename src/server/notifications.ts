@@ -15,7 +15,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
  *   compare-and-set (src/server/email/jobs.ts).
  *
  * `db` is the caller's transaction client (ctx.db from withOrgAction or
- * withSystemOrgTx), or @/lib/prisma for legacy modules.
+ * withSystemOrgTx).
  */
 
 export type NotifyDb = Pick<Prisma.TransactionClient, "notification" | "membership" | "$queryRaw">;
