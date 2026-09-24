@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { ExternalLink, UserMinus, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 
 import {
   acknowledgeTaskFlag,
@@ -189,6 +189,7 @@ export function TaskEditor({
   function selfAssign(action: "join" | "leave" | "claim") {
     if (!task) return;
     startTransition(async () => {
+      setSelf(action);
       const result = await selfAssignTask(org.id, task.id, action);
       if (result.error) {
         announce(result.error);
@@ -216,8 +217,17 @@ export function TaskEditor({
           .map((a) => ({ userId: a.userId, role: "collaborator" as const })),
       ]
     : [];
-  const involved = task ? task.ownerId === viewer.userId || task.assignees.some((a) => a.userId === viewer.userId) : false;
-  const isAssignee = task?.assignees.some((a) => a.userId === viewer.userId) ?? false;
+  // Self-assignment shows at once (useOptimistic) while the action runs.
+  const [self, setSelf] = useOptimistic(
+    {
+      owner: task?.ownerId === viewer.userId,
+      joined: task?.assignees.some((a) => a.userId === viewer.userId) ?? false,
+    },
+    (state, action: "join" | "leave" | "claim") =>
+      action === "claim" ? { ...state, owner: true } : { ...state, joined: action === "join" },
+  );
+  const involved = self.owner || self.joined;
+  const isAssignee = self.joined;
 
   return (
     <div className="space-y-5">
@@ -261,7 +271,9 @@ export function TaskEditor({
           <span className="text-muted-foreground min-w-0 flex-1">
             Only the creator, owner, collaborators, their managers and admins edit this task. You can still add yourself.
           </span>
-          {!task.ownerId && !intake && (
+          {self.owner && <span className="text-sm font-medium">You own this task.</span>}
+          {self.joined && <span className="text-sm font-medium">You&apos;re on this task.</span>}
+          {!task.ownerId && !self.owner && !intake && (
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => selfAssign("claim")}>
               Take ownership
             </Button>

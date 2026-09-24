@@ -25,7 +25,6 @@ export function TaskPageEditor({
       mode="page"
       initialComments={initialComments}
       onOpenTask={(id) => router.push(`/app/${org.slug}/tasks/${id}`)}
-      onDone={() => router.refresh()}
       onDeleted={() => router.push(`/app/${org.slug}/tasks`)}
     />
   );
