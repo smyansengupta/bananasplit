@@ -28,11 +28,18 @@ interface Seeded {
   kristine: { id: string; email: string; name: string | null };
 }
 
+/** Slug -> { id } on the service path (app.resolve_org_slug), before any org GUC. */
+async function orgBySlug(slug: string) {
+  const rows = await serviceDb.$queryRaw<{ id: string }[]>`
+    SELECT "organizationId" AS id FROM app.resolve_org_slug(${slug})`;
+  return rows[0] ?? null;
+}
+
 let seeded: Seeded | null = null;
 try {
   const [cbc, robotics, jackson, kristine] = await Promise.all([
-    legacyDb.organization.findUnique({ where: { slug: "claude-builders-club" }, select: { id: true } }),
-    legacyDb.organization.findUnique({ where: { slug: "robotics-club" }, select: { id: true } }),
+    orgBySlug("claude-builders-club"),
+    orgBySlug("robotics-club"),
     authDb.user.findUnique({ where: { email: "jackson@example.edu" }, select: { id: true, email: true, name: true } }),
     authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
   ]);

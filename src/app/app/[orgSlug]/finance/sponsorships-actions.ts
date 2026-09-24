@@ -7,9 +7,21 @@ import {
   TransactionDirection,
   TransactionKind,
 } from "@/generated/prisma/client";
-import { requireFinanceAccess } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/permissions";
 import { writeFinanceAuditLog } from "@/lib/finance/audit";
-import { prisma } from "@/lib/prisma";
+import { withOrgAction } from "@/server/db/context";
+
+/**
+ * Sponsors and sponsorships (0C). These used to call requireFinanceAccess
+ * directly; each now runs in one withOrgAction transaction as app_user,
+ * checks finance.manage (OWNER or TREASURER), and RLS allows the writes only
+ * to finance roles of the org (policy 6.9). Audit rows go through
+ * app.write_finance_audit in the same transaction.
+ *
+ * Error semantics: every action returns its { error } before any write
+ * (case a). The nested $transaction blocks are flattened into the wrapper's
+ * transaction, so a failing audit write still rolls the change back.
+ */
 
 interface ActionResult {
   error?: string;
@@ -24,26 +36,29 @@ const sponsorInputSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
-export async function createSponsor(organizationId: string, input: unknown): Promise<ActionResult> {
-  await requireFinanceAccess(organizationId);
+export const createSponsor = withOrgAction(
+  async (ctx, input: unknown): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
 
-  const parsed = sponsorInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
-  const data = parsed.data;
+    const parsed = sponsorInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+    const data = parsed.data;
 
-  const sponsor = await prisma.sponsor.create({
-    data: {
-      organizationId,
-      name: data.name,
-      contactName: data.contactName || null,
-      contactEmail: data.contactEmail || null,
-      notes: data.notes || null,
-    },
-  });
-  return { sponsorId: sponsor.id };
-}
+    const sponsor = await ctx.db.sponsor.create({
+      data: {
+        organizationId: ctx.organizationId,
+        name: data.name,
+        contactName: data.contactName || null,
+        contactEmail: data.contactEmail || null,
+        notes: data.notes || null,
+      },
+      select: { id: true },
+    });
+    return { sponsorId: sponsor.id };
+  },
+);
 
 const SPONSORSHIP_STATUS_VALUES = Object.values(SponsorshipStatus) as [
   SponsorshipStatus,
@@ -60,31 +75,35 @@ const sponsorshipInputSchema = z.object({
   ownerId: z.string(),
 });
 
-export async function createSponsorship(
-  organizationId: string,
-  input: unknown,
-): Promise<ActionResult> {
-  const ctx = await requireFinanceAccess(organizationId);
+export const createSponsorship = withOrgAction(
+  async (ctx, input: unknown): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
+    const organizationId = ctx.organizationId;
 
-  const parsed = sponsorshipInputSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
-  const data = parsed.data;
+    const parsed = sponsorshipInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    }
+    const data = parsed.data;
 
-  const [sponsor, period, owner] = await Promise.all([
-    prisma.sponsor.findFirst({ where: { id: data.sponsorId, organizationId } }),
-    prisma.budgetPeriod.findFirst({ where: { id: data.budgetPeriodId, organizationId } }),
-    prisma.membership.findUnique({
+    // Sequential: one transaction, one connection.
+    const sponsor = await ctx.db.sponsor.findFirst({
+      where: { id: data.sponsorId, organizationId },
+      select: { id: true },
+    });
+    if (!sponsor) return { error: "Sponsor not found." };
+    const period = await ctx.db.budgetPeriod.findFirst({
+      where: { id: data.budgetPeriodId, organizationId },
+      select: { id: true },
+    });
+    if (!period) return { error: "Budget period not found." };
+    const owner = await ctx.db.membership.findUnique({
       where: { userId_organizationId: { userId: data.ownerId, organizationId } },
-    }),
-  ]);
-  if (!sponsor) return { error: "Sponsor not found." };
-  if (!period) return { error: "Budget period not found." };
-  if (!owner) return { error: "Owner must be a member of this organization." };
+      select: { userId: true },
+    });
+    if (!owner) return { error: "Owner must be a member of this organization." };
 
-  const sponsorship = await prisma.$transaction(async (tx) => {
-    const created = await tx.sponsorship.create({
+    const created = await ctx.db.sponsorship.create({
       data: {
         organizationId,
         sponsorId: data.sponsorId,
@@ -96,18 +115,16 @@ export async function createSponsorship(
         ownerId: data.ownerId,
       },
     });
-    await writeFinanceAuditLog(tx, {
+    await writeFinanceAuditLog(ctx.db, {
       organizationId,
-      actorId: ctx.user.id,
       sponsorshipId: created.id,
       action: "SPONSORSHIP_CREATE",
       after: created,
     });
-    return created;
-  });
 
-  return { sponsorshipId: sponsorship.id };
-}
+    return { sponsorshipId: created.id };
+  },
+);
 
 /**
  * Reaching RECEIVED generates the corresponding IN transaction; nothing
@@ -115,43 +132,40 @@ export async function createSponsorship(
  * transaction rather than deleting it (spec 5.6) — pledged money never
  * silently disappears from the audit trail.
  */
-export async function updateSponsorshipStatus(
-  organizationId: string,
-  sponsorshipId: string,
-  status: string,
-): Promise<ActionResult> {
-  const ctx = await requireFinanceAccess(organizationId);
+export const updateSponsorshipStatus = withOrgAction(
+  async (ctx, sponsorshipId: string, status: string): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
+    const organizationId = ctx.organizationId;
+    const db = ctx.db;
 
-  const parsedStatus = z.enum(SPONSORSHIP_STATUS_VALUES).safeParse(status);
-  if (!parsedStatus.success) return { error: "Invalid status." };
+    const parsedStatus = z.enum(SPONSORSHIP_STATUS_VALUES).safeParse(status);
+    if (!parsedStatus.success) return { error: "Invalid status." };
 
-  const sponsorship = await prisma.sponsorship.findFirst({
-    where: { id: sponsorshipId, organizationId },
-  });
-  if (!sponsorship) return { error: "Sponsorship not found." };
+    const sponsorship = await db.sponsorship.findFirst({
+      where: { id: sponsorshipId, organizationId },
+    });
+    if (!sponsorship) return { error: "Sponsorship not found." };
 
-  const nextStatus = parsedStatus.data;
-  if (nextStatus === sponsorship.status) return { sponsorshipId };
+    const nextStatus = parsedStatus.data;
+    if (nextStatus === sponsorship.status) return { sponsorshipId };
 
-  await prisma.$transaction(async (tx) => {
     let transactionId = sponsorship.transactionId;
 
     if (nextStatus === SponsorshipStatus.RECEIVED) {
       const existing = transactionId
-        ? await tx.transaction.findUnique({ where: { id: transactionId } })
+        ? await db.transaction.findFirst({ where: { id: transactionId, organizationId } })
         : null;
 
       if (existing) {
         // Re-entering RECEIVED after a prior void (e.g. RECEIVED -> COMMITTED
         // -> RECEIVED): un-void the same transaction instead of creating a
         // second one for the same pledge.
-        await tx.transaction.update({
+        await db.transaction.update({
           where: { id: existing.id },
           data: { voidedAt: null, voidReason: null },
         });
-        await writeFinanceAuditLog(tx, {
+        await writeFinanceAuditLog(db, {
           organizationId,
-          actorId: ctx.user.id,
           transactionId: existing.id,
           sponsorshipId,
           action: "SPONSORSHIP_TRANSACTION_UNVOID",
@@ -159,7 +173,7 @@ export async function updateSponsorshipStatus(
           after: { voidedAt: null },
         });
       } else {
-        const transaction = await tx.transaction.create({
+        const transaction = await db.transaction.create({
           data: {
             organizationId,
             budgetPeriodId: sponsorship.budgetPeriodId,
@@ -168,14 +182,13 @@ export async function updateSponsorshipStatus(
             amountCents: sponsorship.amountCents,
             description: `Sponsorship received`,
             occurredAt: new Date(),
-            submittedById: ctx.user.id,
+            submittedById: ctx.userId,
             status: "NOT_APPLICABLE",
           },
         });
         transactionId = transaction.id;
-        await writeFinanceAuditLog(tx, {
+        await writeFinanceAuditLog(db, {
           organizationId,
-          actorId: ctx.user.id,
           transactionId,
           sponsorshipId,
           action: "SPONSORSHIP_TRANSACTION_CREATE",
@@ -183,18 +196,19 @@ export async function updateSponsorshipStatus(
         });
       }
     } else if (sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
-      const existing = await tx.transaction.findUnique({ where: { id: transactionId } });
+      const existing = await db.transaction.findFirst({
+        where: { id: transactionId, organizationId },
+      });
       if (existing && !existing.voidedAt) {
-        await tx.transaction.update({
+        await db.transaction.update({
           where: { id: transactionId },
           data: {
             voidedAt: new Date(),
             voidReason: `Sponsorship moved from RECEIVED to ${nextStatus}`,
           },
         });
-        await writeFinanceAuditLog(tx, {
+        await writeFinanceAuditLog(db, {
           organizationId,
-          actorId: ctx.user.id,
           transactionId,
           sponsorshipId,
           action: "SPONSORSHIP_TRANSACTION_VOID",
@@ -204,19 +218,18 @@ export async function updateSponsorshipStatus(
       }
     }
 
-    const updated = await tx.sponsorship.update({
+    const updated = await db.sponsorship.update({
       where: { id: sponsorshipId },
       data: { status: nextStatus, transactionId },
     });
-    await writeFinanceAuditLog(tx, {
+    await writeFinanceAuditLog(db, {
       organizationId,
-      actorId: ctx.user.id,
       sponsorshipId,
       action: "SPONSORSHIP_STATUS_CHANGE",
       before: { status: sponsorship.status },
       after: { status: updated.status },
     });
-  });
 
-  return { sponsorshipId };
-}
+    return { sponsorshipId };
+  },
+);

@@ -22,7 +22,7 @@ process.env.EMAIL_DELIVERY = "sink";
 import { ForbiddenError } from "@/lib/auth/errors";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 
-import { authDb, disconnectAll, legacyDb } from "./db/clients";
+import { authDb, disconnectAll, serviceDb } from "./db/clients";
 import { withOrgAction, withOrgTx, withSystemOrgTx } from "./db/context";
 import { createEvent } from "./events/service";
 import { runHealthChecks } from "./health";
@@ -43,10 +43,17 @@ interface Seeded {
   kristine: Person;
 }
 
+/** Slug -> { id } on the service path (app.resolve_org_slug), before any org GUC. */
+async function orgBySlug(slug: string) {
+  const rows = await serviceDb.$queryRaw<{ id: string }[]>`
+    SELECT "organizationId" AS id FROM app.resolve_org_slug(${slug})`;
+  return rows[0] ?? null;
+}
+
 let seeded: Seeded | null = null;
 try {
   const [cbc, jackson, kristine] = await Promise.all([
-    legacyDb.organization.findUnique({ where: { slug: "claude-builders-club" }, select: { id: true } }),
+    orgBySlug("claude-builders-club"),
     authDb.user.findUnique({ where: { email: "jackson@example.edu" }, select: { id: true, email: true, name: true } }),
     authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
   ]);
@@ -125,10 +132,7 @@ describe.skipIf(!seeded)("platform services against the local database (seeded C
 
   it("outbox: a member can enqueue only for their own org", async () => {
     requireUserMock.mockResolvedValue(s.kristine);
-    const other = await legacyDb.organization.findFirst({
-      where: { slug: "robotics-club" },
-      select: { id: true },
-    });
+    const other = await orgBySlug("robotics-club");
     const attempt = withOrgAction(async (ctx) =>
       enqueueJob(ctx.db, {
         orgId: other!.id,

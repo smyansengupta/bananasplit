@@ -12,7 +12,8 @@ export { isEmailEnabled } from "@/lib/notification-preferences";
  * (getOrgMailer) and sends at most once, after commit.
  *
  * `db` defaults to the legacy client for the not-yet-migrated modules; new
- * code passes its ctx.db (or calls src/server/notifications directly).
+ * code passes its ctx.db (or calls src/server/notifications directly). The
+ * bell's reads moved to withUserTx (src/app/app/notifications-actions.ts).
  */
 export async function notifyUser(
   params: {
@@ -30,17 +31,5 @@ export async function notifyUser(
     title: params.title,
     body: params.body ?? null,
     linkUrl: params.linkUrl ?? null,
-  });
-}
-
-export function getUnreadCount(userId: string) {
-  return prisma.notification.count({ where: { userId, readAt: null } });
-}
-
-export function getRecentNotifications(userId: string, limit = 20) {
-  return prisma.notification.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: limit,
   });
 }

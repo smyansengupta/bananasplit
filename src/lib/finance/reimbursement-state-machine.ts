@@ -8,7 +8,7 @@ export interface TransitionContext {
   transition: ExpenseTransition;
   actorId: string;
   submitterId: string;
-  /** OWNER or TREASURER, per requireFinanceAccess. */
+  /** OWNER or TREASURER: can(ctx, "finance.manage"). */
   actorHasFinanceAccess: boolean;
 }
 

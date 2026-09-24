@@ -4,28 +4,54 @@ import {
   TransactionStatus,
 } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { TxClient } from "@/server/db/context";
 
-export function getActivePeriod(organizationId: string) {
-  return prisma.budgetPeriod.findFirst({ where: { organizationId, isActive: true } });
+/**
+ * Finance reads. Every helper takes the caller's transaction client (ctx.db
+ * from withOrgTx or withOrgAction) and runs as app_user under RLS: finance
+ * rows of other orgs are invisible, and a Receipt is visible only to its
+ * transaction's submitter or to OWNER/TREASURER. Helpers run their queries
+ * one after another: a transaction has one connection.
+ */
+
+export function getActivePeriod(db: TxClient, organizationId: string) {
+  return db.budgetPeriod.findFirst({ where: { organizationId, isActive: true } });
 }
 
-export function getOrgPeriods(organizationId: string) {
-  return prisma.budgetPeriod.findMany({
+export function getOrgPeriods(db: TxClient, organizationId: string) {
+  return db.budgetPeriod.findMany({
     where: { organizationId },
     orderBy: { startsOn: "desc" },
   });
 }
 
-export function getCategoriesForPeriod(budgetPeriodId: string) {
-  return prisma.budgetCategory.findMany({
-    where: { budgetPeriodId },
+export function getCategoriesForPeriod(db: TxClient, organizationId: string, budgetPeriodId: string) {
+  return db.budgetCategory.findMany({
+    where: { organizationId, budgetPeriodId },
     orderBy: { sortOrder: "asc" },
   });
 }
 
-export function getOrgMembersForPicker(organizationId: string) {
-  return prisma.membership.findMany({
+/**
+ * The categories of every period in `periods`, grouped in the periods' order
+ * (then by sortOrder): one query instead of one per period.
+ */
+export async function getCategoriesForPeriods(
+  db: TxClient,
+  organizationId: string,
+  periods: readonly { id: string }[],
+) {
+  if (periods.length === 0) return [];
+  const rows = await db.budgetCategory.findMany({
+    where: { organizationId, budgetPeriodId: { in: periods.map((p) => p.id) } },
+    orderBy: { sortOrder: "asc" },
+  });
+  const rank = new Map(periods.map((p, i) => [p.id, i]));
+  return rows.sort((a, b) => (rank.get(a.budgetPeriodId) ?? 0) - (rank.get(b.budgetPeriodId) ?? 0));
+}
+
+export function getOrgMembersForPicker(db: TxClient, organizationId: string) {
+  return db.membership.findMany({
     where: { organizationId },
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
     orderBy: { user: { name: "asc" } },
@@ -79,28 +105,28 @@ export function buildTransactionWhere(
   };
 }
 
-export function getTransactions(organizationId: string, filters: TransactionFilters = {}) {
-  return prisma.transaction.findMany({
+export function getTransactions(db: TxClient, organizationId: string, filters: TransactionFilters = {}) {
+  return db.transaction.findMany({
     where: buildTransactionWhere(organizationId, filters),
     include: transactionInclude,
     orderBy: { occurredAt: "desc" },
   });
 }
 
-export function getMyReimbursements(organizationId: string, userId: string) {
-  return prisma.transaction.findMany({
+export function getMyReimbursements(db: TxClient, organizationId: string, userId: string) {
+  return db.transaction.findMany({
     where: { organizationId, kind: TransactionKind.EXPENSE, submittedById: userId },
     include: transactionInclude,
     orderBy: { occurredAt: "desc" },
   });
 }
 
-export function getSponsors(organizationId: string) {
-  return prisma.sponsor.findMany({ where: { organizationId }, orderBy: { name: "asc" } });
+export function getSponsors(db: TxClient, organizationId: string) {
+  return db.sponsor.findMany({ where: { organizationId }, orderBy: { name: "asc" } });
 }
 
-export function getSponsorships(organizationId: string) {
-  return prisma.sponsorship.findMany({
+export function getSponsorships(db: TxClient, organizationId: string) {
+  return db.sponsorship.findMany({
     where: { organizationId },
     include: {
       sponsor: true,
@@ -109,19 +135,6 @@ export function getSponsorships(organizationId: string) {
     },
     orderBy: { createdAt: "desc" },
   });
-}
-
-/** Net, non-voided amount for a period, optionally scoped to a direction. */
-async function sumTransactions(
-  organizationId: string,
-  budgetPeriodId: string,
-  where: Prisma.TransactionWhereInput = {},
-) {
-  const result = await prisma.transaction.aggregate({
-    where: { organizationId, budgetPeriodId, voidedAt: null, ...where },
-    _sum: { amountCents: true },
-  });
-  return result._sum.amountCents ?? 0;
 }
 
 export interface DashboardData {
@@ -136,8 +149,8 @@ export interface DashboardData {
   unreconciledOver60DaysCount: number;
 }
 
-export async function getDashboardData(organizationId: string): Promise<DashboardData> {
-  const period = await getActivePeriod(organizationId);
+export async function getDashboardData(db: TxClient, organizationId: string): Promise<DashboardData> {
+  const period = await getActivePeriod(db, organizationId);
   if (!period) {
     return {
       period: null,
@@ -152,36 +165,42 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     };
   }
 
-  const [inTotal, outTotal, categories, outstanding, sponsorships, allTransactions] =
-    await Promise.all([
-      sumTransactions(organizationId, period.id, { direction: TransactionDirection.IN }),
-      sumTransactions(organizationId, period.id, { direction: TransactionDirection.OUT }),
-      prisma.budgetCategory.findMany({
-        where: { budgetPeriodId: period.id },
-        orderBy: { sortOrder: "asc" },
-      }),
-      prisma.transaction.aggregate({
-        where: {
-          organizationId,
-          budgetPeriodId: period.id,
-          kind: TransactionKind.EXPENSE,
-          status: { in: [TransactionStatus.SUBMITTED, TransactionStatus.APPROVED] },
-          voidedAt: null,
-        },
-        _sum: { amountCents: true },
-      }),
-      prisma.sponsorship.findMany({ where: { organizationId, budgetPeriodId: period.id } }),
-      prisma.transaction.findMany({
-        where: { organizationId, budgetPeriodId: period.id, voidedAt: null },
-        select: {
-          direction: true,
-          amountCents: true,
-          occurredAt: true,
-          reconciledAt: true,
-          categoryId: true,
-        },
-      }),
-    ]);
+  // Sequential: one transaction, one connection. The balance and the
+  // outstanding total are summed from the period's non-voided transactions
+  // fetched once, the same rows the separate aggregates used to read.
+  const categories = await db.budgetCategory.findMany({
+    where: { organizationId, budgetPeriodId: period.id },
+    orderBy: { sortOrder: "asc" },
+  });
+  const sponsorships = await db.sponsorship.findMany({
+    where: { organizationId, budgetPeriodId: period.id },
+  });
+  const allTransactions = await db.transaction.findMany({
+    where: { organizationId, budgetPeriodId: period.id, voidedAt: null },
+    select: {
+      direction: true,
+      kind: true,
+      status: true,
+      amountCents: true,
+      occurredAt: true,
+      reconciledAt: true,
+      categoryId: true,
+    },
+  });
+
+  let inTotal = 0;
+  let outTotal = 0;
+  let outstandingReimbursementsCents = 0;
+  for (const t of allTransactions) {
+    if (t.direction === TransactionDirection.IN) inTotal += t.amountCents;
+    else outTotal += t.amountCents;
+    if (
+      t.kind === TransactionKind.EXPENSE &&
+      (t.status === TransactionStatus.SUBMITTED || t.status === TransactionStatus.APPROVED)
+    ) {
+      outstandingReimbursementsCents += t.amountCents;
+    }
+  }
 
   // Single pass over the already-fetched period transactions instead of one
   // aggregate query per category (was O(categories) round-trips).
@@ -219,7 +238,7 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
     balanceCents: inTotal - outTotal,
     totalAllocatedCents: categories.reduce((sum, c) => sum + c.allocatedCents, 0),
     categories: categorySpent,
-    outstandingReimbursementsCents: outstanding._sum.amountCents ?? 0,
+    outstandingReimbursementsCents,
     sponsorshipCommittedCents: sponsorships
       .filter((s) => s.status === "COMMITTED" || s.status === "INVOICED")
       .reduce((sum, s) => sum + s.amountCents, 0),
@@ -231,8 +250,8 @@ export async function getDashboardData(organizationId: string): Promise<Dashboar
   };
 }
 
-export async function getMoneyOwedToUser(organizationId: string, userId: string): Promise<number> {
-  const result = await prisma.transaction.aggregate({
+export async function getMoneyOwedToUser(db: TxClient, organizationId: string, userId: string): Promise<number> {
+  const result = await db.transaction.aggregate({
     where: {
       organizationId,
       kind: TransactionKind.EXPENSE,

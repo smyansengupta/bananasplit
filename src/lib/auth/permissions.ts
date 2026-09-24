@@ -63,6 +63,8 @@ export const PERMISSIONS = {
   // Finance
   "finance.manage": FINANCE,
   "finance.submit": ALL,
+  // Notes: authors edit their own; OWNER/ADMIN edit any note they can see.
+  "notes.manageAll": ADMINS,
   // Operations
   "jobs.view": ADMINS,
   "audit.view": ADMINS,

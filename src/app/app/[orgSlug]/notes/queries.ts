@@ -1,5 +1,13 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { TxClient } from "@/server/db/context";
+
+/**
+ * Note reads. Every helper takes the caller's transaction client (ctx.db
+ * from withOrgTx or withOrgAction), so it runs as app_user under RLS: the
+ * database already hides other orgs' notes and other authors' PRIVATE notes
+ * (policy 6.8). The explicit organizationId and visibility filters stay as
+ * the first check and so the planner can use the indexes.
+ */
 
 export const noteListInclude = {
   author: { select: { id: true, name: true, email: true, image: true } },
@@ -14,11 +22,12 @@ function visibleToUser(userId: string): Prisma.NoteWhereInput {
 }
 
 export function getNotesForList(
+  db: TxClient,
   organizationId: string,
   userId: string,
   filters: { visibility?: "PRIVATE" | "ORGANIZATION"; authorId?: string } = {},
 ) {
-  return prisma.note.findMany({
+  return db.note.findMany({
     where: {
       organizationId,
       deletedAt: null,
@@ -31,23 +40,23 @@ export function getNotesForList(
   });
 }
 
-export function getNoteById(organizationId: string, userId: string, noteId: string) {
-  return prisma.note.findFirst({
+export function getNoteById(db: TxClient, organizationId: string, userId: string, noteId: string) {
+  return db.note.findFirst({
     where: { id: noteId, organizationId, deletedAt: null, ...visibleToUser(userId) },
     include: noteListInclude,
   });
 }
 
-export function getOrgMembersForFilter(organizationId: string) {
-  return prisma.membership.findMany({
+export function getOrgMembersForFilter(db: TxClient, organizationId: string) {
+  return db.membership.findMany({
     where: { organizationId },
     include: { user: { select: { id: true, name: true, email: true } } },
     orderBy: { user: { name: "asc" } },
   });
 }
 
-export function getOrgEventsForPicker(organizationId: string) {
-  return prisma.event.findMany({
+export function getOrgEventsForPicker(db: TxClient, organizationId: string) {
+  return db.event.findMany({
     where: { organizationId, deletedAt: null },
     select: { id: true, title: true, startsAt: true },
     orderBy: { startsAt: "desc" },
@@ -62,11 +71,20 @@ interface NoteSearchRow {
   updatedAt: Date;
 }
 
-export async function searchNotes(organizationId: string, userId: string, query: string) {
+/**
+ * Full-text search over the note's searchVector. A tagged-template $queryRaw:
+ * every value is a bound parameter, never spliced into the SQL.
+ */
+export async function searchNotes(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  query: string,
+) {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  return prisma.$queryRaw<NoteSearchRow[]>`
+  return db.$queryRaw<NoteSearchRow[]>`
     SELECT id, title, visibility, "updatedAt"
     FROM "Note"
     WHERE "organizationId" = ${organizationId}
@@ -78,11 +96,11 @@ export async function searchNotes(organizationId: string, userId: string, query:
   `;
 }
 
-export function searchTasks(organizationId: string, query: string) {
+export async function searchTasks(db: TxClient, organizationId: string, query: string) {
   const trimmed = query.trim();
-  if (!trimmed) return Promise.resolve([]);
+  if (!trimmed) return [];
 
-  return prisma.task.findMany({
+  return db.task.findMany({
     where: { organizationId, deletedAt: null, title: { contains: trimmed, mode: "insensitive" } },
     select: { id: true, title: true, status: true },
     take: 10,
