@@ -138,7 +138,7 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
   // ---- Privacy tiers -----------------------------------------------------------
 
   describe("PII visibility per tier (RLS with the tier as an explicit argument)", () => {
-    const counts = (p: Person) =>
+    const counts = () =>
       withOrgTx(s.orgId, async ({ db, role }) => ({
         role,
         attendance: await db.attendance.count(),
@@ -152,7 +152,7 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
     it("an owner sees every table", async () => {
       as(s.owner);
-      const c = await counts(s.owner);
+      const c = await counts();
       expect(c.role).toBe("OWNER");
       for (const key of ["attendance", "contacts", "emails", "signups", "ballots", "choices"] as const) {
         expect(c[key], key).toBeGreaterThan(0);
@@ -161,7 +161,7 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
     it("an admin sees signups and emails but not individual ballots (OWNER_ONLY by default)", async () => {
       as(s.admin);
-      const c = await counts(s.admin);
+      const c = await counts();
       expect(c.role).toBe("ADMIN");
       expect(c.signups).toBeGreaterThan(0);
       expect(c.emails).toBeGreaterThan(0);
@@ -171,7 +171,7 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
     it("a member sees attendance and people but no signups, emails or ballots", async () => {
       as(s.member);
-      const c = await counts(s.member);
+      const c = await counts();
       expect(c.role).toBe("MEMBER");
       expect(c.attendance).toBeGreaterThan(0);
       expect(c.termStats).toBeGreaterThan(0);
@@ -182,7 +182,7 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
     it("a treasurer reads as a member", async () => {
       as(s.treasurer);
-      const c = await counts(s.treasurer);
+      const c = await counts();
       expect(c.role).toBe("TREASURER");
       expect(c.signups).toBe(0);
       expect(c.emails).toBe(0);
