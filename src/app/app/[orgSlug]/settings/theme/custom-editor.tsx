@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { deriveDarkRoles } from "@/lib/theme/derive";
+import { DEFAULT_PRESET } from "@/lib/theme/presets";
 import {
   ROLE_HINTS,
   ROLE_KEYS,
@@ -125,7 +126,7 @@ function RoleField({
         <input
           type="color"
           aria-label={`${label} colour picker`}
-          value={HEX_RE.test(value) ? value : "#000000"}
+          value={HEX_RE.test(value) ? value : DEFAULT_PRESET[mode][role]}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value.toLowerCase())}
           className="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-0.5 disabled:cursor-not-allowed disabled:opacity-50"

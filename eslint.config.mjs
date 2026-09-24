@@ -140,6 +140,47 @@ const DATABASE_URL_ENV = [
 
 const restrictSyntax = (...selectors) => ["error", ...selectors.flat()];
 
+// ---- Theme tokens (Phase 8) ------------------------------------------
+
+/**
+ * Components colour with the design tokens (bg-primary, text-success,
+ * var(--chart-2)), never Tailwind palette classes (text-green-600) or raw
+ * colour values, so an org theme restyles everything. A warning for now:
+ * the remaining sites belong to other sections and are listed in
+ * docs/features/themes.md; raise it to "error" once they are gone.
+ */
+const PALETTE_CLASS =
+  /(?:^|[\s"'`:!])(?:bg|text|border|ring|fill|stroke|from|to|via|outline|decoration|divide|accent|caret|shadow|placeholder)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/;
+const RAW_COLOR = /(?:^|[\s:(,'"])#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(?:rgba?|hsla?)\(\s*\d/;
+const themePlugin = {
+  rules: {
+    "no-raw-colors": {
+      meta: {
+        type: "suggestion",
+        schema: [],
+        messages: {
+          palette: "Use a theme token (bg-primary, text-success, text-warning, bg-chart-1, ...) instead of a Tailwind palette colour.",
+          raw: "Use a theme token (var(--primary), var(--chart-1), ...) instead of a raw colour value.",
+        },
+      },
+      create(context) {
+        const check = (node, text) => {
+          if (PALETTE_CLASS.test(text)) context.report({ node, messageId: "palette" });
+          else if (RAW_COLOR.test(text)) context.report({ node, messageId: "raw" });
+        };
+        return {
+          Literal(node) {
+            if (typeof node.value === "string") check(node, node.value);
+          },
+          TemplateElement(node) {
+            check(node, node.value.raw);
+          },
+        };
+      },
+    },
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -242,6 +283,18 @@ const eslintConfig = defineConfig([
   {
     files: ["src/app/api/orgs/[[]orgId]/receipts/**"],
     rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS) },
+  },
+  // Theme tokens only in components and pages (see themePlugin).
+  {
+    files: ["src/**/*.tsx"],
+    ignores: [
+      ...TESTS,
+      // Brand marks with fixed colours, and email HTML (no CSS variables in mail clients).
+      "src/components/google-icon.tsx",
+      "src/server/email/**",
+    ],
+    plugins: { theme: themePlugin },
+    rules: { "theme/no-raw-colors": "warn" },
   },
   // Tests drive every layer directly.
   {
