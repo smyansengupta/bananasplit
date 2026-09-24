@@ -2,7 +2,7 @@
  * A local stand-in for the club website's Supabase project, for exercising
  * the website sync end to end without touching the real one (Phase 4b).
  *
- *   pnpm exec tsx scripts/source-sync-standin.ts \
+ *   pnpm exec tsx --tsconfig tsconfig.scripts.json scripts/source-sync-standin.ts \
  *     --website ../anthropic-club-website --db cbc_source_standin [--org claude-builders-club]
  *
  * It:

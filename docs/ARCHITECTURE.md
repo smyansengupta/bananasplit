@@ -122,8 +122,13 @@ through `app.secret_read/write/delete` on the service role. Set, replace and
 test need ADMIN+, remove needs OWNER; every change writes `OrgAuditLog` in the
 same transaction and alerts every OWNER. Decryption and network tests run
 outside transactions. `pnpm secrets:rotate-kek` rewraps data keys after a KEK
-rotation. Sentry events and (in production) console output pass through the
-scrubber in `src/lib/observability/scrub.ts`.
+rotation. Every file in `src/server/secrets/` imports `server-only`, so a
+client module that reaches one — directly or through a re-export — fails the
+build. The package throws outside the Next.js server layer, so the Vitest
+config and the `scripts/` entry points (`tsconfig.scripts.json`) map it to the
+package's own empty build, the way Next.js resolves it. Sentry events and (in
+production) console output pass through the scrubber in
+`src/lib/observability/scrub.ts`.
 
 **Storage.** Every file belongs to a kind in `src/server/storage/kinds.ts`
 (store, org or user scope, upload cap); keys are `{kind}/{orgId}/...` or

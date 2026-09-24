@@ -1,0 +1,17 @@
+{
+  // The tsconfig the `scripts/` entry points run under (tsx --tsconfig).
+  //
+  // src/server/secrets/** imports `server-only`, whose package exports throw
+  // unless the importer resolves with the "react-server" condition, which
+  // only the Next.js server layer sets. Passing --conditions=react-server to
+  // tsx would also swap React for its react-server build, and the job drain
+  // reaches next/navigation, so it breaks. Mapping the one bare specifier to
+  // the package's own empty build is the narrow fix.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "server-only": ["./node_modules/server-only/empty.js"]
+    }
+  }
+}

@@ -1,3 +1,7 @@
+// The KEK, the plaintext of every org secret and the fingerprint key live
+// here. `server-only` makes a client import a build error, not a review item.
+import "server-only";
+
 import { createHmac } from "node:crypto";
 
 import { SecretsConfigError } from "./keyring";

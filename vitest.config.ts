@@ -12,6 +12,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // `server-only` throws unless the importer resolves with the
+      // "react-server" condition, which only Next.js's server layer sets.
+      // Tests drive those modules directly, so resolve the package's own
+      // empty build the way Next.js does.
+      "server-only": path.resolve(__dirname, "./node_modules/server-only/empty.js"),
     },
   },
 });
