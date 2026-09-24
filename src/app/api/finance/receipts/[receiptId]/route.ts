@@ -1,22 +1,33 @@
 import { NextResponse } from "next/server";
 
-import { Role } from "@/generated/prisma/client";
+import { NotFoundError } from "@/lib/auth/errors";
 import { getSession } from "@/lib/auth/session";
-import { getReceiptBytes } from "@/lib/finance/receipt-storage";
+import { readReceiptBlob } from "@/lib/finance/receipt-storage";
 import { verifyReceiptToken } from "@/lib/finance/receipt-signed-url";
 import { contentDisposition } from "@/lib/http/content-disposition";
-import { prisma } from "@/lib/prisma";
+import { withOrgTx } from "@/server/db/context";
 
+/**
+ * GET /api/finance/receipts/{receiptId}?org={orgId}&token=... — streams a
+ * receipt back, only to someone who may see it right now (spec 5.5).
+ *
+ * The signed token (receipt, org, expiry; minted by getSignedReceiptUrl
+ * after its own permission check) only proves the link is recent. The row
+ * is read in a withOrgTx transaction as the caller, so membership and the
+ * Receipt policy (the transaction's submitter, or OWNER/TREASURER) are
+ * checked again by the database; the file is read after that transaction,
+ * outside it.
+ */
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ receiptId: string }> },
 ) {
   const { receiptId } = await params;
-  const token = new URL(request.url).searchParams.get("token");
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token");
+  const organizationId = url.searchParams.get("org");
 
-  // The signed token proves the link hasn't expired; it is never a
-  // substitute for re-checking who is asking right now.
-  if (!token || !verifyReceiptToken(receiptId, token)) {
+  if (!token || !organizationId || !verifyReceiptToken(receiptId, organizationId, token)) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 
@@ -25,32 +36,28 @@ export async function GET(
     return new NextResponse("Forbidden", { status: 403 });
   }
 
-  const receipt = await prisma.receipt.findUnique({
-    where: { id: receiptId },
-    include: { transaction: true },
-  });
+  let receipt;
+  try {
+    receipt = await withOrgTx(organizationId, ({ db }) =>
+      db.receipt.findFirst({
+        where: { id: receiptId, organizationId },
+        select: { blobKey: true, filename: true, mimeType: true },
+      }),
+    );
+  } catch (error) {
+    // No longer a member of the org.
+    if (error instanceof NotFoundError) return new NextResponse("Forbidden", { status: 403 });
+    throw error;
+  }
+  // Missing, or not visible to the caller (RLS hides both the same way).
   if (!receipt) {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  const membership = await prisma.membership.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: session.user.id,
-        organizationId: receipt.transaction.organizationId,
-      },
-    },
-  });
-  const isPermitted =
-    membership &&
-    (receipt.transaction.submittedById === session.user.id ||
-      membership.role === Role.OWNER ||
-      membership.role === Role.TREASURER);
-  if (!isPermitted) {
-    return new NextResponse("Forbidden", { status: 403 });
+  const bytes = await readReceiptBlob(receipt.blobKey);
+  if (!bytes) {
+    return new NextResponse("Not found", { status: 404 });
   }
-
-  const bytes = await getReceiptBytes(receipt.blobKey);
   return new NextResponse(new Uint8Array(bytes), {
     headers: {
       "Content-Type": receipt.mimeType,

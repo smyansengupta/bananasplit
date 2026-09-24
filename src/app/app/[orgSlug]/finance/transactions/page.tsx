@@ -1,13 +1,13 @@
 import { Download } from "lucide-react";
-import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { NewTransactionButton, TransactionTable } from "@/components/finance/transaction-table";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireFinanceAccess } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/lib/auth/permissions";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import {
+  getCategoriesForPeriods,
   getOrgMembersForPicker,
   getOrgPeriods,
   getTransactions,
@@ -22,17 +22,9 @@ export default async function TransactionsPage({
   const { orgSlug } = await params;
   const query = await searchParams;
 
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    notFound();
-  }
-
-  let ctx;
-  try {
-    ctx = await requireFinanceAccess(org.id);
-  } catch (error) {
-    handleAuthErrorInPage(error);
-  }
+  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  // ForbiddenError renders the segment's "no access" state (error.tsx).
+  requirePermission({ role }, "finance.manage");
 
   const filters: TransactionFilters = {
     budgetPeriodId: typeof query.period === "string" ? query.period : undefined,
@@ -47,16 +39,16 @@ export default async function TransactionsPage({
       query.reconciled === "yes" || query.reconciled === "no" ? query.reconciled : undefined,
   };
 
-  const [transactions, periods, memberships] = await Promise.all([
-    getTransactions(org.id, filters),
-    getOrgPeriods(org.id),
-    getOrgMembersForPicker(org.id),
-  ]);
-  const categories = (
-    await Promise.all(
-      periods.map((p) => prisma.budgetCategory.findMany({ where: { budgetPeriodId: p.id } })),
-    )
-  ).flat();
+  const { transactions, periods, categories, memberships } = await withOrgTx(
+    org.id,
+    async ({ db }) => {
+      const transactions = await getTransactions(db, org.id, filters);
+      const periods = await getOrgPeriods(db, org.id);
+      const categories = await getCategoriesForPeriods(db, org.id, periods);
+      const memberships = await getOrgMembersForPicker(db, org.id);
+      return { transactions, periods, categories, memberships };
+    },
+  ).catch(handleAuthErrorInPage);
   const members = memberships.map((m) => ({
     userId: m.userId,
     name: m.user.name,
@@ -83,7 +75,7 @@ export default async function TransactionsPage({
             periods={periods}
             categories={categories}
             isFinance
-            currentUserId={ctx.user.id}
+            currentUserId={user.id}
           />
         </div>
       </div>
@@ -94,7 +86,7 @@ export default async function TransactionsPage({
         periods={periods}
         categories={categories}
         isFinance
-        currentUserId={ctx.user.id}
+        currentUserId={user.id}
       />
     </div>
   );

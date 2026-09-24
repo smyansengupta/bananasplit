@@ -1,22 +1,46 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { prismaMock, getSessionMock, putMock, deleteMock } = vi.hoisted(() => ({
+/**
+ * The receipt upload route against fake wrappers: withOrgTx / withOrgAction
+ * hand the handler a mocked transaction client and the caller's role (or
+ * throw NotFoundError for a non-member, like set_context does), and the
+ * storage calls are mocked. The real policies are covered by
+ * finance.db.test.ts.
+ */
+
+const { state, db, getSessionMock, putBlobMock, deleteMock, txKinds } = vi.hoisted(() => ({
+  state: { role: "MEMBER" as string, member: true },
   getSessionMock: vi.fn(),
-  putMock: vi.fn(),
+  putBlobMock: vi.fn(),
   deleteMock: vi.fn(),
-  prismaMock: {
-    membership: { findUnique: vi.fn() },
+  txKinds: [] as string[],
+  db: {
     transaction: { findFirst: vi.fn() },
     receipt: { create: vi.fn() },
   },
 }));
+
 vi.mock("@/lib/auth/session", () => ({ getSession: getSessionMock }));
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
-vi.mock("@/lib/finance/receipt-storage", () => ({
-  putReceipt: putMock,
-  deleteReceipt: deleteMock,
-}));
+vi.mock("@/server/db/context", async () => {
+  const { NotFoundError } = await import("@/lib/auth/errors");
+  const run = async (kind: string, organizationId: string, fn: (ctx: unknown) => unknown) => {
+    const session = await getSessionMock();
+    if (!state.member) throw new NotFoundError();
+    txKinds.push(kind);
+    return fn({ kind, db, userId: session.user.id, organizationId, role: state.role });
+  };
+  return {
+    withOrgTx: (organizationId: string, fn: (ctx: unknown) => unknown) =>
+      run("page", organizationId, fn),
+    withOrgAction:
+      (handler: (ctx: unknown, ...args: unknown[]) => unknown) =>
+      (organizationId: string, ...args: unknown[]) =>
+        run("action", organizationId, (ctx) => handler(ctx, ...args)),
+  };
+});
+vi.mock("@/server/storage", () => ({ putBlob: putBlobMock }));
+vi.mock("@/lib/finance/receipt-storage", () => ({ deleteReceiptBlobs: deleteMock }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: async () => ({ allowed: true }),
   rateLimitKey: (...parts: string[]) => parts.join(":"),
@@ -51,14 +75,21 @@ function upload(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  txKinds.length = 0;
+  state.role = "MEMBER";
+  state.member = true;
   getSessionMock.mockResolvedValue({ user: { id: "member_1", email: "m@example.edu", name: "M" } });
-  prismaMock.membership.findUnique.mockResolvedValue({ role: "MEMBER" });
-  prismaMock.transaction.findFirst.mockResolvedValue({ id: "txn_1", submittedById: "member_1" });
-  prismaMock.receipt.create.mockResolvedValue({ id: "receipt_1" });
-  putMock.mockImplementation(async (key: string) => ({ blobKey: `blob:${key}` }));
+  db.transaction.findFirst.mockResolvedValue({ id: "txn_1", submittedById: "member_1" });
+  db.receipt.create.mockResolvedValue({ id: "receipt_1" });
+  putBlobMock.mockImplementation(
+    async (kind: string, scopeId: string, segments: string[]) => ({
+      key: [kind, scopeId, ...segments].join("/"),
+      url: null,
+    }),
+  );
 });
 
-describe("POST /api/orgs/[orgId]/receipts (0A Fix 15)", () => {
+describe("POST /api/orgs/[orgId]/receipts (0A Fix 15, 0C wrappers)", () => {
   it("allows a minute for large uploads", () => {
     expect(maxDuration).toBe(60);
   });
@@ -83,36 +114,69 @@ describe("POST /api/orgs/[orgId]/receipts (0A Fix 15)", () => {
 
     expect(response.status).toBe(413);
     expect((await response.json()).error).toMatch(/capped at 4 MB/);
-    expect(putMock).not.toHaveBeenCalled();
-    expect(prismaMock.receipt.create).not.toHaveBeenCalled();
+    expect(putBlobMock).not.toHaveBeenCalled();
+    expect(db.receipt.create).not.toHaveBeenCalled();
   });
 
-  it("keys the blob by org, transaction and a random id, never the client file name", async () => {
+  it("stores under the receipts kind, keyed by org, transaction and a random id, never the file name", async () => {
     await upload({ bytes: jpegOfSize(1024), name: "../../etc/passwd.jpg", type: "image/jpeg" });
 
-    const key = putMock.mock.calls[0]?.[0] as string;
-    expect(key).toMatch(/^receipts\/org_1\/txn_1\/[0-9a-f-]{36}\.jpg$/);
-    expect(prismaMock.receipt.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          organizationId: "org_1",
-          transactionId: "txn_1",
-          filename: "../../etc/passwd.jpg",
-          mimeType: "image/jpeg",
-          uploadedById: "member_1",
-        }),
-      }),
-    );
+    const [kind, scopeId, segments, , options] = putBlobMock.mock.calls[0] as [
+      string,
+      string,
+      string[],
+      Buffer,
+      { contentType: string },
+    ];
+    expect(kind).toBe("receipts");
+    expect(scopeId).toBe("org_1");
+    expect(segments[0]).toBe("txn_1");
+    expect(segments[1]).toMatch(/^[0-9a-f-]{36}\.jpg$/);
+    expect(options).toEqual({ contentType: "image/jpeg" });
+    expect(db.receipt.create).toHaveBeenCalledWith({
+      data: {
+        organizationId: "org_1",
+        uploadedById: "member_1",
+        transactionId: "txn_1",
+        blobKey: `receipts/org_1/txn_1/${segments[1]}`,
+        filename: "../../etc/passwd.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 1024,
+      },
+      select: { id: true },
+    });
+  });
+
+  it("reads in one transaction, puts the blob outside any, then writes in another", async () => {
+    const order: string[] = [];
+    db.transaction.findFirst.mockImplementation(async () => {
+      order.push("read");
+      return { id: "txn_1", submittedById: "member_1" };
+    });
+    putBlobMock.mockImplementation(async () => {
+      order.push("put");
+      return { key: "receipts/org_1/txn_1/x.jpg", url: null };
+    });
+    db.receipt.create.mockImplementation(async () => {
+      order.push("write");
+      return { id: "receipt_1" };
+    });
+
+    await upload({ bytes: jpegOfSize(1024), name: "r.jpg", type: "image/jpeg" });
+
+    expect(order).toEqual(["read", "put", "write"]);
+    // membership check, read, write: the write runs with action semantics.
+    expect(txKinds).toEqual(["page", "page", "action"]);
   });
 
   it("deletes the blob again when the row cannot be written", async () => {
-    prismaMock.receipt.create.mockRejectedValue(new Error("db down"));
+    db.receipt.create.mockRejectedValue(new Error("db down"));
 
     await expect(
       upload({ bytes: jpegOfSize(1024), name: "r.jpg", type: "image/jpeg" }),
     ).rejects.toThrow("db down");
-    const key = putMock.mock.calls[0]?.[0] as string;
-    expect(deleteMock).toHaveBeenCalledWith(`blob:${key}`);
+    const segments = putBlobMock.mock.calls[0]?.[2] as string[];
+    expect(deleteMock).toHaveBeenCalledWith([`receipts/org_1/${segments.join("/")}`]);
   });
 
   it("requires a session and membership", async () => {
@@ -124,29 +188,31 @@ describe("POST /api/orgs/[orgId]/receipts (0A Fix 15)", () => {
     getSessionMock.mockResolvedValue({
       user: { id: "outsider", email: "o@example.edu", name: null },
     });
-    prismaMock.membership.findUnique.mockResolvedValue(null);
+    state.member = false;
     expect(
       (await upload({ bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" })).status,
     ).toBe(404);
+    expect(putBlobMock).not.toHaveBeenCalled();
   });
 
   it("only the submitter or OWNER/TREASURER may attach", async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue({
-      id: "txn_1",
-      submittedById: "someone_else",
-    });
+    db.transaction.findFirst.mockResolvedValue({ id: "txn_1", submittedById: "someone_else" });
     const response = await upload({ bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
+
+    state.role = "TREASURER";
+    const asTreasurer = await upload({ bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" });
+    expect(asTreasurer.status).toBe(201);
   });
 
   it("looks the transaction up inside the org", async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue(null);
+    db.transaction.findFirst.mockResolvedValue(null);
     const response = await upload(
       { bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" },
       { transactionId: "foreign" },
     );
     expect(response.status).toBe(404);
-    expect(prismaMock.transaction.findFirst).toHaveBeenCalledWith({
+    expect(db.transaction.findFirst).toHaveBeenCalledWith({
       where: { id: "foreign", organizationId: "org_1" },
       select: { id: true, submittedById: true },
     });
@@ -159,7 +225,7 @@ describe("POST /api/orgs/[orgId]/receipts (0A Fix 15)", () => {
       type: "image/jpeg",
     });
     expect(response.status).toBe(415);
-    expect(putMock).not.toHaveBeenCalled();
+    expect(putBlobMock).not.toHaveBeenCalled();
   });
 
   it("refuses a cross-site POST", async () => {

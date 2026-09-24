@@ -1,24 +1,32 @@
 import { NextResponse } from "next/server";
 
-import { requireFinanceAccess } from "@/lib/auth/guards";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
+import { can } from "@/lib/auth/permissions";
+import { getSession } from "@/lib/auth/session";
 import { csvContentDisposition, toCsv } from "@/lib/csv";
-import { prisma } from "@/lib/prisma";
+import { withOrgTx, withUserTx } from "@/server/db/context";
 
 import { getTransactions, type TransactionFilters } from "../../queries";
 
+/**
+ * GET /app/{orgSlug}/finance/transactions/export: the filtered transaction
+ * list as CSV, for OWNER/TREASURER. The slug resolves through
+ * app.resolve_org_slug (a renamed org's old slug still works), and the rows
+ * are read in a withOrgTx transaction as the caller: 401 without a session,
+ * 404 for an unknown org or a non-member, 403 for a member without finance
+ * access.
+ */
 export async function GET(request: Request, { params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) return new NextResponse("Not found", { status: 404 });
+  const session = await getSession();
+  if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
-  try {
-    await requireFinanceAccess(org.id);
-  } catch (error) {
-    if (error instanceof ForbiddenError) return new NextResponse("Forbidden", { status: 403 });
-    if (error instanceof NotFoundError) return new NextResponse("Not found", { status: 404 });
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  const orgId = await withUserTx(session.user.id, async ({ db }) => {
+    const rows = await db.$queryRaw<{ organizationId: string }[]>`
+      SELECT "organizationId" FROM app.resolve_org_slug(${orgSlug})`;
+    return rows[0]?.organizationId ?? null;
+  });
+  if (!orgId) return new NextResponse("Not found", { status: 404 });
 
   const url = new URL(request.url);
   const q = url.searchParams;
@@ -36,7 +44,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ orgS
         : undefined,
   };
 
-  const transactions = await getTransactions(org.id, filters);
+  let transactions;
+  try {
+    transactions = await withOrgTx(orgId, async (ctx) => {
+      if (!can(ctx, "finance.manage")) throw new ForbiddenError();
+      return getTransactions(ctx.db, orgId, filters);
+    });
+  } catch (error) {
+    if (error instanceof ForbiddenError) return new NextResponse("Forbidden", { status: 403 });
+    if (error instanceof NotFoundError) return new NextResponse("Not found", { status: 404 });
+    throw error;
+  }
 
   const header = [
     "Date",

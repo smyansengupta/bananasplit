@@ -1,40 +1,23 @@
-import { notFound } from "next/navigation";
-
-import { Role } from "@/generated/prisma/client";
 import { NewTransactionButton, TransactionTable } from "@/components/finance/transaction-table";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { can } from "@/lib/auth/permissions";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
-import { getMyReimbursements, getOrgPeriods } from "../queries";
+import { getCategoriesForPeriods, getMyReimbursements, getOrgPeriods } from "../queries";
 
 export default async function MyReimbursementsPage({
   params,
 }: PageProps<"/app/[orgSlug]/finance/my-reimbursements">) {
   const { orgSlug } = await params;
+  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  const isFinance = can({ role }, "finance.manage");
 
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    notFound();
-  }
-
-  let ctx: OrgContext;
-  try {
-    ctx = await requireOrgMembership(org.id);
-  } catch (error) {
-    handleAuthErrorInPage(error);
-  }
-
-  const isFinance = ctx.role === Role.OWNER || ctx.role === Role.TREASURER;
-  const [transactions, periods] = await Promise.all([
-    getMyReimbursements(org.id, ctx.user.id),
-    getOrgPeriods(org.id),
-  ]);
-  const categories = (
-    await Promise.all(
-      periods.map((p) => prisma.budgetCategory.findMany({ where: { budgetPeriodId: p.id } })),
-    )
-  ).flat();
+  const { transactions, periods, categories } = await withOrgTx(org.id, async ({ db }) => {
+    const transactions = await getMyReimbursements(db, org.id, user.id);
+    const periods = await getOrgPeriods(db, org.id);
+    const categories = await getCategoriesForPeriods(db, org.id, periods);
+    return { transactions, periods, categories };
+  }).catch(handleAuthErrorInPage);
 
   return (
     <div className="space-y-4">
@@ -47,7 +30,7 @@ export default async function MyReimbursementsPage({
           periods={periods}
           categories={categories}
           isFinance={isFinance}
-          currentUserId={ctx.user.id}
+          currentUserId={user.id}
         />
       </div>
       <TransactionTable
@@ -56,7 +39,7 @@ export default async function MyReimbursementsPage({
         periods={periods}
         categories={categories}
         isFinance={isFinance}
-        currentUserId={ctx.user.id}
+        currentUserId={user.id}
       />
     </div>
   );

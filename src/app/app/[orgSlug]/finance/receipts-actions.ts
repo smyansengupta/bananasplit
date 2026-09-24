@@ -1,10 +1,9 @@
 "use server";
 
-import { Role } from "@/generated/prisma/client";
-import { withOrgContext } from "@/lib/auth/with-org-context";
-import { deleteReceipt } from "@/lib/finance/receipt-storage";
-import { signReceiptToken } from "@/lib/finance/receipt-signed-url";
-import { prisma } from "@/lib/prisma";
+import { can } from "@/lib/auth/permissions";
+import { deleteReceiptBlobs } from "@/lib/finance/receipt-storage";
+import { receiptDownloadUrl } from "@/lib/finance/receipt-signed-url";
+import { withOrgAction, type OrgContext } from "@/server/db/context";
 
 // Uploads go through POST /api/orgs/{orgId}/receipts (0A Fix 15): a route
 // handler, because Server Actions accept 1 MB bodies and receipts are
@@ -15,32 +14,33 @@ interface ActionResult {
   receiptId?: string;
 }
 
-function canAccessTransaction(
-  ctx: { role: Role; user: { id: string } },
-  transaction: { submittedById: string },
-) {
-  return (
-    transaction.submittedById === ctx.user.id ||
-    ctx.role === Role.OWNER ||
-    ctx.role === Role.TREASURER
-  );
+/** The transaction's submitter, or OWNER/TREASURER (the Receipt policy repeats this). */
+function canAccessTransaction(ctx: OrgContext, transaction: { submittedById: string }) {
+  return transaction.submittedById === ctx.userId || can(ctx, "finance.manage");
 }
 
-export const deleteReceiptAction = withOrgContext(
+/**
+ * Deletes the row in the action's transaction and the file after it commits
+ * (row first, blob second: a failed blob delete leaves an orphan file, never
+ * a row pointing at nothing). Error semantics: { error } before the write
+ * (case a); the Blob delete is network I/O and runs after commit (case d).
+ */
+export const deleteReceiptAction = withOrgAction(
   async (ctx, receiptId: string): Promise<ActionResult> => {
-    const receipt = await prisma.receipt.findFirst({
-      where: { id: receiptId, transaction: { organizationId: ctx.organizationId } },
-      include: { transaction: true },
+    const receipt = await ctx.db.receipt.findFirst({
+      where: { id: receiptId, organizationId: ctx.organizationId },
+      include: { transaction: { select: { submittedById: true } } },
     });
     if (!receipt) return { error: "Receipt not found." };
     if (!canAccessTransaction(ctx, receipt.transaction)) {
       return { error: "You don't have permission to remove this receipt." };
     }
 
-    // Row first, blob second: a failed blob delete leaves an orphan file,
-    // never a row pointing at nothing.
-    await prisma.receipt.delete({ where: { id: receiptId } });
-    await deleteReceipt(receipt.blobKey);
+    await ctx.db.receipt.deleteMany({
+      where: { id: receiptId, organizationId: ctx.organizationId },
+    });
+    const blobKey = receipt.blobKey;
+    ctx.afterCommit(() => deleteReceiptBlobs([blobKey]));
     return {};
   },
 );
@@ -50,18 +50,17 @@ export const deleteReceiptAction = withOrgContext(
  * permission check as the parent transaction (spec 5.5) — never the raw
  * blob key/URL.
  */
-export const getSignedReceiptUrl = withOrgContext(
+export const getSignedReceiptUrl = withOrgAction(
   async (ctx, receiptId: string): Promise<{ url?: string; error?: string }> => {
-    const receipt = await prisma.receipt.findFirst({
-      where: { id: receiptId, transaction: { organizationId: ctx.organizationId } },
-      include: { transaction: true },
+    const receipt = await ctx.db.receipt.findFirst({
+      where: { id: receiptId, organizationId: ctx.organizationId },
+      include: { transaction: { select: { submittedById: true } } },
     });
     if (!receipt) return { error: "Receipt not found." };
     if (!canAccessTransaction(ctx, receipt.transaction)) {
       return { error: "You don't have permission to view this receipt." };
     }
 
-    const token = signReceiptToken(receiptId);
-    return { url: `/api/finance/receipts/${receiptId}?token=${token}` };
+    return { url: receiptDownloadUrl(receiptId, ctx.organizationId) };
   },
 );

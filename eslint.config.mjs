@@ -237,12 +237,6 @@ const eslintConfig = defineConfig([
       "no-restricted-imports": restrictImports(PRIVILEGED_CLIENTS, LEGACY_PRISMA, NAVIGATION),
     },
   },
-  // The 0A receipt upload route is legacy finance code on app_legacy until
-  // B9 moves finance to the wrappers; it keeps the base rules meanwhile.
-  {
-    files: ["src/app/api/orgs/[[]orgId]/receipts/**"],
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS) },
-  },
   // Tests drive every layer directly.
   {
     files: TESTS,
