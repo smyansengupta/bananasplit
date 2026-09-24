@@ -69,7 +69,7 @@ interface Props {
 export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...rest }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-xl">
         {open && (
           <EventForm
             key={event?.id ?? `new-${defaultStart?.toISOString() ?? ""}`}
@@ -221,7 +221,7 @@ function EventForm({
           <Input id="event-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus maxLength={200} />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
           <div className="grid gap-1.5">
             <Label htmlFor="event-kind">Type</Label>
             <Select value={kind} onValueChange={(v) => setKind(v as EventKind)}>
@@ -246,11 +246,12 @@ function EventForm({
               <SelectContent>
                 {(["INTERNAL", "PUBLIC"] as const).map((v) => (
                   <SelectItem key={v} value={v}>
-                    {VISIBILITY_META[v].label}: {VISIBILITY_META[v].hint.toLowerCase()}
+                    {VISIBILITY_META[v].label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-muted-foreground text-xs">{VISIBILITY_META[visibility].hint}</p>
           </div>
         </div>
 

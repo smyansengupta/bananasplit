@@ -20,7 +20,6 @@ export function eventInclude(viewerId: string) {
       select: { userId: true, rsvp: true, user: { select: userPublicSelect } },
     },
     host: { select: userPublicSelect },
-    createdBy: { select: userPublicSelect },
     notes: {
       where: {
         deletedAt: null,
@@ -88,11 +87,34 @@ export function getEventsInRange(db: TxClient, organizationId: string, f: RangeF
   });
 }
 
-export function getEventById(db: TxClient, organizationId: string, eventId: string, viewerId: string) {
-  return db.event.findFirst({
-    where: { id: eventId, organizationId, deletedAt: null },
-    include: eventInclude(viewerId),
+/**
+ * One event with its relations, as `viewerId` may see them. The relations
+ * are read one query at a time: Prisma runs sibling includes concurrently,
+ * which a single transaction connection cannot do.
+ */
+export async function getEventById(
+  db: TxClient,
+  organizationId: string,
+  eventId: string,
+  viewerId: string,
+): Promise<EventWithRelations | null> {
+  const include = eventInclude(viewerId);
+  const event = await db.event.findFirst({ where: { id: eventId, organizationId, deletedAt: null } });
+  if (!event) return null;
+  const attendees = await db.eventAttendee.findMany({
+    where: { organizationId, eventId },
+    select: include.attendees.select,
+    orderBy: { userId: "asc" },
   });
+  const host = event.hostUserId
+    ? await db.user.findUnique({ where: { id: event.hostUserId }, select: include.host.select })
+    : null;
+  const notes = await db.note.findMany({
+    where: { organizationId, eventId, ...include.notes.where },
+    select: include.notes.select,
+    orderBy: include.notes.orderBy,
+  });
+  return { ...event, attendees, host, notes };
 }
 
 /**

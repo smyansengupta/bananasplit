@@ -18,6 +18,7 @@ import { addDaysToKey } from "@/lib/calendar/dates";
 import { calendarSearch, CALENDAR_VIEWS, type CalendarView } from "@/lib/calendar/range";
 import { cn } from "@/lib/utils";
 
+import "./calendar.css";
 import { EventFormDialog } from "./event-form-dialog";
 import { KIND_META, KIND_ORDER, SYNC_META, VISIBILITY_META } from "./kinds";
 import type { CalendarMember } from "./member-picker";
@@ -62,6 +63,9 @@ function renderEventContent(arg: EventContentArg, showSync: boolean) {
   const VisIcon = item.visibility === "PUBLIC" ? Globe : Lock;
   return (
     <span className="flex min-w-0 items-center gap-1 overflow-hidden px-0.5 text-xs">
+      {!arg.event.allDay && arg.view.type !== "timeGridWeek" && arg.view.type !== "timeGridDay" && (
+        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: KIND_META[item.kind].color }} />
+      )}
       {arg.timeText && !arg.event.allDay && <span className="shrink-0 opacity-80">{arg.timeText}</span>}
       <VisIcon aria-label={VISIBILITY_META[item.visibility].label} className="size-3 shrink-0 opacity-80" />
       {showSync && <SyncIcon state={item.syncState} />}
@@ -208,7 +212,7 @@ export function EventCalendar({
         </p>
       )}
 
-      <div className={cn("transition-opacity", isPending && "opacity-60")}>
+      <div className={cn("cbc-calendar transition-opacity", isPending && "opacity-60")}>
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
           initialView={range.view}
