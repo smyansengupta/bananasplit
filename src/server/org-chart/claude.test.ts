@@ -71,7 +71,7 @@ const config = { apiKey: "sk-ant-test-0000", model: DEFAULT_MODEL, fallbacks: tr
 let factory: ReturnType<typeof vi.spyOn>;
 afterEach(() => factory?.mockRestore());
 
-function useClient(fake: ReturnType<typeof fakeClient>) {
+function installClient(fake: ReturnType<typeof fakeClient>) {
   factory = vi.spyOn(anthropicClientFactory, "create").mockReturnValue(fake.client);
 }
 
@@ -105,7 +105,7 @@ describe("buildParseRequest", () => {
 describe("parseWithClaude", () => {
   it("counts tokens, then asks for the strict schema with adaptive thinking and default fallbacks", async () => {
     const fake = fakeClient([message({ text: rawJson })]);
-    useClient(fake);
+    installClient(fake);
     const result = await parseWithClaude({ config, source: textSource, filename: "cbc.md", timeoutMs: 120_000 });
 
     expect(result.parse).toEqual(OrgChartParseSchema.parse(JSON.parse(rawJson)));
@@ -127,7 +127,7 @@ describe("parseWithClaude", () => {
 
   it("refuses a document over the token budget without calling the model", async () => {
     const fake = fakeClient([], MAX_INPUT_TOKENS + 1);
-    useClient(fake);
+    installClient(fake);
     const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch((e) => e);
     expect(err).toBeInstanceOf(ClaudeParseError);
     expect(err.retryable).toBe(false);
@@ -138,7 +138,7 @@ describe("parseWithClaude", () => {
   it("fails a refusal and a max_tokens stop without reading the content, and never retries them", async () => {
     for (const stop of ["refusal", "max_tokens"] as const) {
       const fake = fakeClient([message({ stop_reason: stop, text: '{"positions": [' })]);
-      useClient(fake);
+      installClient(fake);
       const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch(
         (e) => e,
       );
@@ -151,7 +151,7 @@ describe("parseWithClaude", () => {
 
   it("treats output that breaks the schema as a retryable failure", async () => {
     const fake = fakeClient([message({ text: '{"positions": [{"id": 1}], "open_items": []}' })]);
-    useClient(fake);
+    installClient(fake);
     const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch((e) => e);
     expect(err).toBeInstanceOf(ClaudeParseError);
     expect(err.retryable).toBe(true);
@@ -165,7 +165,7 @@ describe("parseWithClaude", () => {
       new Headers(),
     );
     const fake = fakeClient([rejection, message({ text: rawJson })]);
-    useClient(fake);
+    installClient(fake);
     await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 });
     expect(fake.create).toHaveBeenCalledTimes(2);
     expect(fake.create.mock.calls[1][0]).not.toHaveProperty("fallbacks");
@@ -179,7 +179,7 @@ describe("parseWithClaude", () => {
       [new Anthropic.APIConnectionTimeoutError(), true, /too long to answer/],
     ];
     for (const [error, retryable, pattern] of cases) {
-      useClient(fakeClient([error]));
+      installClient(fakeClient([error]));
       const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch(
         (e) => e,
       );
@@ -192,7 +192,7 @@ describe("parseWithClaude", () => {
   });
 
   it("parses the injection fixture's answer into schema-valid data only", async () => {
-    useClient(fakeClient([message({ text: injectionRaw })]));
+    installClient(fakeClient([message({ text: injectionRaw })]));
     const result = await parseWithClaude({
       config,
       source: { type: "text", text: injectionMd, format: "markdown" },
@@ -218,7 +218,7 @@ describe("settings", () => {
 
   it("tests a key by retrieving the configured model", async () => {
     const fake = fakeClient([]);
-    useClient(fake);
+    installClient(fake);
     const ok = await claudeConnectionTest({ secret: "sk", config: {}, signal: new AbortController().signal });
     expect(ok).toEqual({ ok: true, config: { model: DEFAULT_MODEL } });
     expect(fake.retrieve).toHaveBeenCalledWith(DEFAULT_MODEL, {}, expect.anything());
