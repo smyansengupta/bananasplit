@@ -18,6 +18,7 @@ const DEFAULTS = {
   types: {},
   digest: { enabled: false, hourLocal: 8 },
   reminderLeadDays: 1,
+  collaboratorReminders: false,
 };
 
 describe("parseNotificationPreferences (v2 upgrade parser)", () => {
@@ -50,6 +51,7 @@ describe("parseNotificationPreferences (v2 upgrade parser)", () => {
       types: { TASK_MENTIONED: false },
       digest: { enabled: true, hourLocal: 18 },
       reminderLeadDays: 3,
+      collaboratorReminders: true,
     };
     expect(parseNotificationPreferences(stored)).toEqual(stored);
   });
@@ -115,6 +117,7 @@ describe("preference patches", () => {
       types: { TASK_ASSIGNED: false },
       digest: { enabled: true, hourLocal: 17 },
       reminderLeadDays: 2,
+      collaboratorReminders: false,
     });
   });
 

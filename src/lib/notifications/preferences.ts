@@ -81,19 +81,29 @@ function knownTypeBooleans(map: Record<string, unknown>): TypePreferences {
 
 const objectMap = z.record(z.string(), z.unknown());
 
-/** A v2 value; each field falls back to its default on its own. */
-const v2Input = z.object({
-  v: z.literal(2),
-  types: objectMap.transform(knownTypeBooleans).catch({}),
-  digest: z
-    .object({
-      enabled: z.boolean().catch(false),
-      hourLocal: digestHourSchema.catch(DIGEST_HOUR_DEFAULT),
-    })
-    .catch({ enabled: false, hourLocal: DIGEST_HOUR_DEFAULT }),
-  reminderLeadDays: reminderLeadDaysSchema.catch(REMINDER_LEAD_DAYS_DEFAULT),
-  collaboratorReminders: z.boolean().catch(false),
-});
+/**
+ * A v2 value; each field falls back to its default on its own. Top-level
+ * type keys are read too: a legacy writer could spread a flat map onto a v2
+ * object, and that opt-out must not be lost (it wins over `types`).
+ */
+const v2Input = z
+  .object({
+    v: z.literal(2),
+    types: objectMap.transform(knownTypeBooleans).catch({}),
+    digest: z
+      .object({
+        enabled: z.boolean().catch(false),
+        hourLocal: digestHourSchema.catch(DIGEST_HOUR_DEFAULT),
+      })
+      .catch({ enabled: false, hourLocal: DIGEST_HOUR_DEFAULT }),
+    reminderLeadDays: reminderLeadDaysSchema.catch(REMINDER_LEAD_DAYS_DEFAULT),
+    collaboratorReminders: z.boolean().catch(false),
+  })
+  .passthrough()
+  .transform((value) => ({
+    ...value,
+    types: { ...value.types, ...knownTypeBooleans(value as Record<string, unknown>) },
+  }));
 
 /** The pre-v2 flat map ({ TASK_DUE_SOON: false }), upgraded. */
 const v1Input = objectMap.transform((flat): NotificationPreferences => {

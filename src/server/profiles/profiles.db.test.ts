@@ -270,6 +270,7 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
       types: { TASK_DUE_SOON: false, TASK_MENTIONED: false },
       digest: { enabled: true, hourLocal: 17 },
       reminderLeadDays: 3,
+      collaboratorReminders: false,
     });
 
     // Concurrent toggles never lose each other (the row is locked).
