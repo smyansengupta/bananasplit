@@ -4,18 +4,20 @@ import { Prisma, Role, TaskStatus } from "@/generated/prisma/client";
 import {
   addDaysToKey,
   dueDateKey,
-  formatDueKey,
   fromDateKey,
   isDateKey,
   localDateKey,
   weekBounds,
   weekdayOfKey,
 } from "@/lib/tasks/dates";
+import { summaryLines, type WeeklyItem, type WeeklySummary } from "@/lib/tasks/weekly-text";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
 
 import type { TaskEnv } from "./service";
 import { TaskError } from "./service";
+
+export type { WeeklyItem, WeeklySummary };
 
 /**
  * The Sunday update helper (view=updates). Weeks run Monday 00:00 to Sunday
@@ -43,23 +45,6 @@ const weeklyItemSelect = {
   ownerId: true,
   parentTask: { select: { title: true } },
 } satisfies Prisma.TaskSelect;
-
-export interface WeeklyItem {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  dueKey: string | null;
-  blockedReason: string | null;
-  role: "owner" | "collaborator";
-  parentTitle: string | null;
-}
-
-export interface WeeklySummary {
-  weekStart: string;
-  done: WeeklyItem[];
-  next: WeeklyItem[];
-  blocked: WeeklyItem[];
-}
 
 function toItem(
   t: Prisma.TaskGetPayload<{ select: typeof weeklyItemSelect }>,
@@ -129,40 +114,6 @@ export async function getWeeklySummary(
     next: next.map((t) => toItem(t, userId)),
     blocked: blocked.map((t) => toItem(t, userId)),
   };
-}
-
-function itemLine(item: WeeklyItem, todayKey: string, kind: "done" | "next" | "blocked"): string {
-  const parent = item.parentTitle ? ` (${item.parentTitle})` : "";
-  if (kind === "blocked") return `${item.title}${parent}: ${item.blockedReason ?? "blocked"}`;
-  if (kind === "next" && item.dueKey) return `${item.title}${parent} (due ${formatDueKey(item.dueKey, todayKey)})`;
-  return `${item.title}${parent}`;
-}
-
-export function summaryLines(summary: WeeklySummary, todayKey: string) {
-  return {
-    done: summary.done.map((i) => itemLine(i, todayKey, "done")),
-    next: summary.next.map((i) => itemLine(i, todayKey, "next")),
-    blocked: summary.blocked.map((i) => itemLine(i, todayKey, "blocked")),
-  };
-}
-
-/** The plain-text update for 'Copy as text'. */
-export function formatWeeklyText(input: {
-  personName: string;
-  weekStart: string;
-  lines: { done: string[]; next: string[]; blocked: string[] };
-  note?: string | null;
-}): string {
-  const section = (title: string, lines: string[]) =>
-    `${title}\n${lines.length > 0 ? lines.map((l) => `- ${l}`).join("\n") : "- Nothing"}`;
-  const parts = [
-    `Sunday update: ${input.personName}, week of ${formatDueKey(input.weekStart)}`,
-    section("Done", input.lines.done),
-    section("Next", input.lines.next),
-    section("Blocked", input.lines.blocked),
-  ];
-  if (input.note?.trim()) parts.push(`Note\n${input.note.trim()}`);
-  return parts.join("\n\n");
 }
 
 /**
