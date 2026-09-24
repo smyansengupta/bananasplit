@@ -37,7 +37,8 @@ const optionalSecret = z.string().max(8192).optional();
 
 const claudeInput = z.object({
   apiKey: optionalSecret,
-  defaultModel: z.string().max(100).optional(),
+  model: z.string().max(100).optional(),
+  fallbacks: z.boolean().optional(),
 });
 const emailInput = z.object({
   fromName: z.string().max(200),

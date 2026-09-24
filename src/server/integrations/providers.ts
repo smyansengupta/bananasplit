@@ -28,8 +28,13 @@ export const clients = {
 
 // ---------------------------------------------------------------- Claude
 
-/** Lists the models the key can use and checks the default model is among them. */
-export async function testClaude(ctx: IntegrationTestContext): Promise<IntegrationTestResult> {
+/**
+ * The Claude key's "Test connection": lists the models the key can use
+ * (models.list) and checks the configured model is among them. Same name
+ * and signature as the org chart's claudeConnectionTest
+ * (src/server/org-chart/claude.ts), which the integration may point at.
+ */
+export async function claudeConnectionTest(ctx: IntegrationTestContext): Promise<IntegrationTestResult> {
   assertNoTx("claude test");
   if (!ctx.secret) return { ok: false, reason: "Add an API key first." };
   const client = clients.anthropic(ctx.secret);
@@ -51,14 +56,14 @@ export async function testClaude(ctx: IntegrationTestContext): Promise<Integrati
       return { ok: false, reason: `Claude answered ${error.status ?? "an error"}.` };
     throw error;
   }
-  const model = typeof ctx.config.defaultModel === "string" ? ctx.config.defaultModel : null;
+  const model = typeof ctx.config.model === "string" ? ctx.config.model : null;
   if (model && !ids.includes(model)) {
     return {
       ok: false,
       reason: `The key works, but it cannot use ${model}. Pick another default model.`,
     };
   }
-  return { ok: true, config: { modelsCheckedAt: new Date().toISOString() } };
+  return { ok: true, config: model ? { model } : {} };
 }
 
 // ---------------------------------------------------------------- Resend

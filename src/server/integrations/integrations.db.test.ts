@@ -150,7 +150,7 @@ describe.skipIf(!dbReady)("integrations against the local database", () => {
     const actor = await resolveActor(orgId);
     const result = await saveClaude(orgId, actor, {
       apiKey: CLAUDE_KEY,
-      defaultModel: "claude-opus-5",
+      model: "claude-opus-5",
     });
     expect(result).toMatchObject({ ok: true });
     expect(JSON.stringify(result)).not.toContain(CLAUDE_KEY);

@@ -60,7 +60,8 @@ export function ClaudeForm({
   canWrite: boolean;
 }) {
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState(str(dto.config.defaultModel) || DEFAULT_CLAUDE_MODEL);
+  const [model, setModel] = useState(str(dto.config.model) || DEFAULT_CLAUDE_MODEL);
+  const [fallbacks, setFallbacks] = useState(dto.config.fallbacks !== false);
   const { feedback, isPending, submit } = useSubmit();
   return (
     <form
@@ -68,7 +69,7 @@ export function ClaudeForm({
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
         submit(
-          () => saveClaudeAction(orgId, { apiKey: apiKey || undefined, defaultModel: model }),
+          () => saveClaudeAction(orgId, { apiKey: apiKey || undefined, model, fallbacks }),
           () => setApiKey(""),
         );
       }}
@@ -97,6 +98,15 @@ export function ClaudeForm({
           ))}
         </select>
         <p className="text-muted-foreground text-xs">Used to read uploaded org charts.</p>
+      </div>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Label htmlFor="claude-fallbacks">Retry declined requests on a fallback model</Label>
+          <p className="text-muted-foreground text-xs">
+            If Claude declines a document, Anthropic re-runs it on its recommended fallback model.
+          </p>
+        </div>
+        <Switch id="claude-fallbacks" checked={fallbacks} onCheckedChange={setFallbacks} />
       </div>
       {canWrite && (
         <Button type="submit" disabled={isPending}>

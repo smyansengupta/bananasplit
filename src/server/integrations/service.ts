@@ -42,7 +42,7 @@ import {
 import {
   domainOfAddress,
   isNetlifyHookUrl,
-  testClaude,
+  claudeConnectionTest,
   testNetlifyHook,
   testResendDomain,
   testSupabase,
@@ -139,10 +139,10 @@ async function updateConfig(
 export async function saveClaude(
   orgId: string,
   actor: OrgActor,
-  input: { apiKey?: string; defaultModel?: string },
+  input: { apiKey?: string; model?: string; fallbacks?: boolean },
 ): Promise<IntegrationResult> {
   requirePermission(actor, "integrations.write");
-  const parsed = claudeConfigSchema.safeParse({ defaultModel: input.defaultModel });
+  const parsed = claudeConfigSchema.safeParse({ model: input.model, fallbacks: input.fallbacks });
   if (!parsed.success) return fail("Choose one of the listed models.");
   const apiKey = input.apiKey?.trim();
   if (apiKey) {
@@ -157,7 +157,7 @@ export async function saveClaude(
       config: parsed.data,
     });
     return fromTest(
-      await testIntegration({ orgId, actor, provider: "CLAUDE", test: testClaude }),
+      await testIntegration({ orgId, actor, provider: "CLAUDE", test: claudeConnectionTest }),
       "Saved. The key works and can use the default model.",
     );
   }
@@ -527,7 +527,7 @@ export async function testProvider(
   switch (provider) {
     case "CLAUDE":
       return fromTest(
-        await testIntegration({ orgId, actor, provider, test: testClaude }),
+        await testIntegration({ orgId, actor, provider, test: claudeConnectionTest }),
         "The key works and can use the default model.",
       );
     case "EMAIL_RESEND":

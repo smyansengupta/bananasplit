@@ -11,7 +11,7 @@ import {
   clients,
   isNetlifyHookUrl,
   supabaseConnection,
-  testClaude,
+  claudeConnectionTest,
   testNetlifyHook,
   testResendDomain,
   testSupabase,
@@ -42,14 +42,14 @@ describe("Claude test (models.list)", () => {
     vi.spyOn(clients, "anthropic").mockReturnValue(
       models(["claude-opus-5", "claude-haiku-4-5"]) as never,
     );
-    expect(await testClaude(ctx("sk-ant-x", { defaultModel: "claude-opus-5" }))).toMatchObject({
+    expect(await claudeConnectionTest(ctx("sk-ant-x", { model: "claude-opus-5" }))).toMatchObject({
       ok: true,
     });
   });
 
   it("fails when the default model is not available to the key", async () => {
     vi.spyOn(clients, "anthropic").mockReturnValue(models(["claude-haiku-4-5"]) as never);
-    const r = await testClaude(ctx("sk-ant-x", { defaultModel: "claude-opus-5" }));
+    const r = await claudeConnectionTest(ctx("sk-ant-x", { model: "claude-opus-5" }));
     expect(r).toMatchObject({
       ok: false,
       reason: expect.stringMatching(/cannot use claude-opus-5/),
@@ -70,12 +70,12 @@ describe("Claude test (models.list)", () => {
           })(),
       },
     } as never);
-    const r = await testClaude(ctx("sk-ant-SECRET-KEY-VALUE"));
+    const r = await claudeConnectionTest(ctx("sk-ant-SECRET-KEY-VALUE"));
     expect(r).toEqual({ ok: false, reason: "Claude rejected this API key." });
   });
 
   it("needs a key", async () => {
-    expect(await testClaude(ctx(null))).toMatchObject({ ok: false });
+    expect(await claudeConnectionTest(ctx(null))).toMatchObject({ ok: false });
   });
 });
 
@@ -231,13 +231,13 @@ describe("integration DTOs never carry secrets", () => {
       secretLast4: "WXYZ",
       lastVerifiedAt: new Date("2026-09-01T00:00:00Z"),
       lastError: null,
-      config: { defaultModel: "claude-opus-5", apiKey: "sk-ant-LEAKED", secretFingerprint: "abc" },
+      config: { model: "claude-opus-5", apiKey: "sk-ant-LEAKED", secretFingerprint: "abc" },
       updatedAt: new Date("2026-09-01T00:00:00Z"),
       connectedBy: { name: "Owner" },
       ...({ secretFingerprint: "hmac-value" } as object),
     } as never);
     const text = JSON.stringify(dto);
-    expect(dto.config).toEqual({ defaultModel: "claude-opus-5" });
+    expect(dto.config).toEqual({ model: "claude-opus-5" });
     expect(text).not.toContain("sk-ant-LEAKED");
     expect(text).not.toContain("hmac-value");
     expect(dto).toMatchObject({ last4: "WXYZ", hasSecret: true, status: "CONNECTED" });

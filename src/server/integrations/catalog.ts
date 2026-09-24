@@ -19,10 +19,16 @@ export const CLAUDE_MODELS = [
 
 export const DEFAULT_CLAUDE_MODEL = "claude-opus-5";
 
+/**
+ * OrgIntegration.config for CLAUDE: { model, fallbacks }, the keys the org
+ * chart parser reads (src/server/org-chart/claude.ts readClaudeSettings).
+ * fallbacks: send Anthropic's server-side refusal fallbacks (default on).
+ */
 export const claudeConfigSchema = z.object({
-  defaultModel: z
+  model: z
     .enum(CLAUDE_MODELS.map((m) => m.id) as [string, ...string[]])
     .default(DEFAULT_CLAUDE_MODEL),
+  fallbacks: z.boolean().default(true),
 });
 
 export const emailSenderConfigSchema = z.object({
@@ -126,7 +132,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     label: "Claude API",
     description: "Reads uploaded org charts with your org's own Claude key.",
     secretKind: "API_KEY",
-    configKeys: ["defaultModel"],
+    configKeys: ["model", "fallbacks"],
   },
   {
     provider: "GOOGLE_CALENDAR",

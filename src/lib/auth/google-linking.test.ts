@@ -128,3 +128,45 @@ describe("withNormalizedEmails", () => {
     expect(base.getUserByEmail).toHaveBeenCalledWith("bob@example.edu");
   });
 });
+
+describe("Google sign-in sets emailVerified at creation (0A Fix 4(b))", () => {
+  it("the Google profile() marks the verified address, and only a verified one", async () => {
+    const { googleProfile, VERIFIED_EMAIL_MARKER } = await import("./google-linking");
+    expect(googleProviderOptions.profile).toBe(googleProfile);
+    const verified = googleProfile({ sub: "g1", email: "New@Example.edu", email_verified: true, name: "N" });
+    expect(verified).toMatchObject({ id: "g1", email: "New@Example.edu", name: "N" });
+    expect(verified[VERIFIED_EMAIL_MARKER]).toBe("new@example.edu");
+    expect(googleProfile({ sub: "g2", email: "x@example.edu", email_verified: false })[VERIFIED_EMAIL_MARKER]).toBeNull();
+  });
+
+  it("the adapter creates a verified Google user verified, and strips the marker", async () => {
+    const { VERIFIED_EMAIL_MARKER } = await import("./google-linking");
+    const base = { createUser: vi.fn(async (u: Record<string, unknown>) => ({ id: "x", ...u })) };
+    const adapter = withNormalizedEmails(base as never);
+    await adapter.createUser!({
+      id: "x",
+      email: "New@Example.edu",
+      emailVerified: null,
+      [VERIFIED_EMAIL_MARKER]: "new@example.edu",
+    } as never);
+    const data = base.createUser.mock.calls[0][0];
+    expect(data.email).toBe("new@example.edu");
+    expect(data.emailVerified).toBeInstanceOf(Date);
+    expect(VERIFIED_EMAIL_MARKER in data).toBe(false);
+  });
+
+  it("never verifies a mismatched or missing marker (credentials sign-up stays unverified)", async () => {
+    const { VERIFIED_EMAIL_MARKER } = await import("./google-linking");
+    const base = { createUser: vi.fn(async (u: Record<string, unknown>) => ({ id: "x", ...u })) };
+    const adapter = withNormalizedEmails(base as never);
+    await adapter.createUser!({
+      id: "x",
+      email: "a@example.edu",
+      emailVerified: null,
+      [VERIFIED_EMAIL_MARKER]: "b@example.edu",
+    } as never);
+    await adapter.createUser!({ id: "y", email: "c@example.edu", emailVerified: null });
+    expect(base.createUser.mock.calls[0][0].emailVerified).toBeNull();
+    expect(base.createUser.mock.calls[1][0].emailVerified).toBeNull();
+  });
+});

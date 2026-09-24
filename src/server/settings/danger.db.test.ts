@@ -164,7 +164,7 @@ describe.skipIf(!dbReady)("danger zone against the local database", () => {
       provider: "CLAUDE",
       kind: "API_KEY",
       value: SECRET,
-      config: { defaultModel: "claude-opus-5" },
+      config: { model: "claude-opus-5" },
     });
   });
 
