@@ -16,7 +16,7 @@ import {
   type RoleKey,
   type ThemeRoles,
 } from "@/lib/theme/types";
-import { HEX_RE } from "@/lib/theme/validate";
+import { HEX_RE } from "@/lib/theme/hex";
 import { cn } from "@/lib/utils";
 
 /**

@@ -64,7 +64,9 @@
  * token at runtime with a server-rendered <style> (html:root{...} and
  * html.dark{...}, src/components/theme/org-theme-root.tsx), so a theme change
  * needs no rebuild. Strict #rrggbb only; components use the tokens, never
- * palette classes (bg-emerald-500) or raw hex.
+ * palette classes (bg-emerald-500) or raw hex. --chart-1..5 are a validated
+ * categorical palette (src/lib/theme/chart.ts): the data-viz reference slots,
+ * snapped to 3:1 on these surfaces and checked for colour-blind separation.
  */
 :root {
   --background: #ffffff;
@@ -93,11 +95,11 @@
   --border: #e0e0e0;
   --input: #dadada;
   --ring: #171717;
-  --chart-1: #4682cc;
-  --chart-2: #c06240;
-  --chart-3: #47944c;
-  --chart-4: #926abe;
-  --chart-5: #a27900;
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #09a974;
+  --chart-4: #c78600;
+  --chart-5: #dd719a;
   --sidebar: #f8f8f8;
   --sidebar-foreground: #0a0a0a;
   --sidebar-primary: #171717;
@@ -136,11 +138,11 @@
   --border: #292929;
   --input: #313131;
   --ring: #e5e5e5;
-  --chart-1: #70adfb;
-  --chart-2: #f08d6a;
-  --chart-3: #73c076;
-  --chart-4: #be95ec;
-  --chart-5: #d0a43a;
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
   --sidebar: #171717;
   --sidebar-foreground: #fafafa;
   --sidebar-primary: #e5e5e5;

@@ -73,6 +73,17 @@ describe("contrast check", () => {
     }
   });
 
+  it("offers one fix per role that clears every pair that role controls", () => {
+    const light = contrastWarnings(FAILING, null).filter((w) => w.mode === "light");
+    const textFixes = new Set(light.filter((w) => w.fix?.role === "text").map((w) => w.fix!.value));
+    expect(textFixes.size).toBe(1);
+    const fixed = { ...FAILING, text: [...textFixes][0] };
+    const after = contrastWarnings(fixed, null).filter((w) => w.mode === "light");
+    expect(
+      after.filter((w) => CONTRAST_PAIRS.find((p) => p.id === w.pair)?.role === "text"),
+    ).toEqual([]);
+  });
+
   it("returns no fix for a pair no single role controls", () => {
     const pair = CONTRAST_PAIRS.find((p) => p.id === "destructive-text")!;
     expect(suggestFix(FAILING, "light", pair)).toBeNull();

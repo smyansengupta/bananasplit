@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { contrastRatio, hexToOklch, isLight } from "./color";
+import { checkChartPalette } from "./chart";
 import { deriveDarkRoles, deriveTheme, deriveTokens, TOKEN_NAMES } from "./derive";
-import { CBC_PRESET, DEFAULT_PRESET, THEME_PRESETS } from "./presets";
+import { CBC_PRESET, THEME_PRESETS } from "./presets";
 import { HEX_RE } from "./validate";
 
 describe("deriveTokens", () => {
@@ -37,6 +38,7 @@ describe("deriveTokens", () => {
     expect(tokens.primary).toBe(light.primary);
     expect(tokens["brand-accent"]).toBe(light.accent);
     expect(tokens["sidebar-primary"]).toBe(light.primary);
+    // A chromatic, in-band brand primary leads the chart palette.
     expect(tokens["chart-1"]).toBe(light.primary);
   });
 
@@ -59,23 +61,19 @@ describe("deriveTokens", () => {
     }
   });
 
-  it("builds a categorical chart palette of distinct hues that reads on cards (3:1)", () => {
-    for (const roles of [
-      CBC_PRESET.light,
-      CBC_PRESET.dark,
-      DEFAULT_PRESET.light,
-      DEFAULT_PRESET.dark,
-    ]) {
-      const t = deriveTokens(roles);
-      const charts = [t["chart-1"], t["chart-2"], t["chart-3"], t["chart-4"], t["chart-5"]];
-      expect(new Set(charts).size).toBe(5);
-      for (const c of charts) expect(contrastRatio(c, t.card)).toBeGreaterThanOrEqual(3);
-      const hues = charts.map((c) => hexToOklch(c).h);
-      for (let i = 0; i < hues.length; i++) {
-        for (let j = i + 1; j < hues.length; j++) {
-          const d = Math.abs(hues[i] - hues[j]);
-          expect(Math.min(d, 360 - d)).toBeGreaterThan(25);
-        }
+  it("builds a validated categorical chart palette for every preset", () => {
+    for (const preset of THEME_PRESETS) {
+      for (const roles of [preset.light, preset.dark]) {
+        const t = deriveTokens(roles);
+        const charts = [t["chart-1"], t["chart-2"], t["chart-3"], t["chart-4"], t["chart-5"]];
+        const mode = isLight(t.background) ? "light" : "dark";
+        const report = checkChartPalette(charts, mode, [t.background, t.card]);
+        expect(report, `${preset.id} ${mode}`).toMatchObject({
+          ok: true,
+          band: true,
+          chroma: true,
+        });
+        expect(new Set(charts).size).toBe(5);
       }
     }
   });

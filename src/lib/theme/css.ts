@@ -1,5 +1,5 @@
 import { TOKEN_NAMES, type DerivedTheme, type TokenMap, type TokenName } from "./derive";
-import { isHex } from "./validate";
+import { isHex } from "./hex";
 
 /**
  * Turns derived tokens into CSS. Render-time validation lives here: every

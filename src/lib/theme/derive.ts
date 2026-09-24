@@ -7,12 +7,13 @@ import {
   mixOklab,
   oklchToHex,
 } from "./color";
+import { deriveChartPalette } from "./chart";
 import type { ThemeRoles } from "./types";
 
 /**
  * Maps the five colour roles to the full design-token set (the shadcn
  * tokens in globals.css plus --primary-hover, --brand-accent, --success,
- * --warning and a categorical chart palette).
+ * --warning and a validated categorical chart palette, see chart.ts).
  *
  * Deterministic and pure: the same roles always give the same tokens, on
  * the server and in the browser. Derived foregrounds and status colours are
@@ -128,25 +129,6 @@ function statusColor(
   );
 }
 
-/** Hue offsets from the primary for the categorical chart palette. */
-const CHART_HUE_OFFSETS = [0, 210, 90, 300, 150];
-/** Used when the primary is (near) grey and has no usable hue. */
-const NEUTRAL_CHART_HUES = [255, 40, 145, 305, 85];
-
-function chartPalette(primary: string, dark: boolean, grounds: readonly string[]): string[] {
-  const p = hexToOklch(primary);
-  const chromatic = p.C >= 0.04;
-  const chroma = chromatic ? Math.min(0.16, Math.max(0.1, p.C)) : 0.13;
-  const L = dark ? 0.74 : 0.6;
-  return CHART_HUE_OFFSETS.map((offset, i) => {
-    const seed =
-      chromatic && i === 0
-        ? primary
-        : oklchToHex({ L, C: chroma, h: chromatic ? p.h + offset : NEUTRAL_CHART_HUES[i] });
-    return readableOn(seed, grounds, GRAPHIC_TARGET);
-  });
-}
-
 /**
  * The primary's hover colour. It replaces Tailwind's `bg-primary/80` (which
  * lightens a dark primary towards the page and can drop its label below AA)
@@ -194,10 +176,11 @@ export function deriveTokens(roles: ThemeRoles): TokenMap {
   const sidebar = dark ? surface : mixOklab(background, text, 0.025);
   const sidebarAccent = readableTint(sidebar, accent, dark ? 0.22 : 0.16, text);
 
-  const [chart1, chart2, chart3, chart4, chart5] = chartPalette(primary, dark, [
-    background,
-    surface,
-  ]);
+  const [chart1, chart2, chart3, chart4, chart5] = deriveChartPalette(
+    primary,
+    dark ? "dark" : "light",
+    [background, surface],
+  );
 
   return {
     background,

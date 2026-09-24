@@ -243,48 +243,72 @@ export function checkTokens(tokens: TokenMap, mode: ColorMode): ContrastResult[]
   });
 }
 
+function tokensWith(
+  roles: ThemeRoles,
+  role: RoleKey,
+  value: string,
+  cache: Map<string, TokenMap>,
+): TokenMap {
+  const key = `${role}:${value}`;
+  let tokens = cache.get(key);
+  if (!tokens) {
+    tokens = deriveTokens({ ...roles, [role]: value });
+    cache.set(key, tokens);
+  }
+  return tokens;
+}
+
 /**
- * The smallest lightness change to `pair.role` (hue and chroma kept) that
- * makes the pair pass once the tokens are re-derived, or null.
+ * The smallest lightness change to one role (hue and chroma kept) that
+ * makes every given pair pass once the tokens are re-derived, or null. All
+ * pairs must be fixed by the same role. `ratio` is the first pair's ratio
+ * after the fix.
  */
 export function suggestFix(
   roles: ThemeRoles,
   mode: ColorMode,
-  pair: ContrastPair,
+  pairs: ContrastPair | readonly ContrastPair[],
   cache: Map<string, TokenMap> = new Map(),
 ): ContrastFix | null {
-  const role = pair.role;
-  if (!role) return null;
+  const list: readonly ContrastPair[] = "id" in pairs ? [pairs] : pairs;
+  const role = list[0]?.role;
+  if (!role || list.some((pair) => pair.role !== role)) return null;
   const base = hexToOklch(roles[role]);
   for (let step = 1; step <= 100; step++) {
     for (const direction of [-1, 1]) {
       const L = base.L + direction * step * 0.01;
       if (L < 0 || L > 1) continue;
       const value = oklchToHex({ L, C: base.C, h: base.h });
-      const key = `${role}:${value}`;
-      let tokens = cache.get(key);
-      if (!tokens) {
-        tokens = deriveTokens({ ...roles, [role]: value });
-        cache.set(key, tokens);
+      const tokens = tokensWith(roles, role, value, cache);
+      const ratios = list.map((pair) => contrastRatio(tokens[pair.fg], tokens[pair.bg]));
+      if (ratios.every((ratio, i) => ratio >= list[i].required)) {
+        return { mode, role, value, ratio: ratios[0] };
       }
-      const ratio = contrastRatio(tokens[pair.fg], tokens[pair.bg]);
-      if (ratio >= pair.required) return { mode, role, value, ratio };
     }
   }
   return null;
 }
 
 function warningsFor(roles: ThemeRoles, mode: ColorMode): ContrastWarning[] {
-  const tokens = deriveTokens(roles);
-  // Pairs fixed by the same role walk the same candidates: derive each once.
+  const failing = checkTokens(deriveTokens(roles), mode).filter((result) => !result.pass);
+  // One fix per role that clears every failing pair that role controls, so
+  // "Apply fix" on any of them fixes them all. Candidates are derived once.
   const cache = new Map<string, TokenMap>();
-  return checkTokens(tokens, mode)
-    .filter((result) => !result.pass)
-    .map((result) => {
-      const pair = CONTRAST_PAIRS.find((p) => p.id === result.pair)!;
-      const { pass: _pass, ...rest } = result;
-      return { ...rest, fix: suggestFix(roles, mode, pair, cache) };
-    });
+  const fixes = new Map<RoleKey, ContrastFix | null>();
+  const pairOf = (id: string) => CONTRAST_PAIRS.find((p) => p.id === id)!;
+  for (const result of failing) {
+    const role = pairOf(result.pair).role;
+    if (!role || fixes.has(role)) continue;
+    const pairs = failing.map((r) => pairOf(r.pair)).filter((p) => p.role === role);
+    fixes.set(role, suggestFix(roles, mode, pairs, cache));
+  }
+  return failing.map(({ pass: _pass, ...rest }) => {
+    const pair = pairOf(rest.pair);
+    const shared = pair.role ? fixes.get(pair.role) : null;
+    if (!shared) return { ...rest, fix: null };
+    const tokens = tokensWith(roles, shared.role, shared.value, cache);
+    return { ...rest, fix: { ...shared, ratio: contrastRatio(tokens[pair.fg], tokens[pair.bg]) } };
+  });
 }
 
 /**

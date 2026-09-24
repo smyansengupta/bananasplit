@@ -4,7 +4,15 @@ import { Check, CheckCircle2, Palette, TriangleAlert } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useTheme } from "next-themes";
-import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 
 import { OrgBrand } from "@/components/theme/org-brand";
 import { Button } from "@/components/ui/button";
@@ -118,6 +126,11 @@ export function ThemeSettings({
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [previewApp, setPreviewApp] = useState(false);
   const [isPending, startTransition] = useTransition();
+  // Radio groups are named per instance: a page Next keeps hidden (Activity)
+  // or a streamed copy must not share a group with the visible one.
+  const groupId = useId();
+  // The whole-app preview ends when this page is hidden or left.
+  useLayoutEffect(() => () => setPreviewApp(false), []);
 
   const dirty = !sameDraft(draft, saved);
   const tokens = useMemo(() => deriveTheme(draft.light, draft.dark), [draft.light, draft.dark]);
@@ -236,6 +249,7 @@ export function ThemeSettings({
           {THEME_PRESETS.map((preset) => (
             <PresetCard
               key={preset.id}
+              group={`${groupId}-preset`}
               name={preset.name}
               description={preset.description}
               light={preset.light}
@@ -245,6 +259,7 @@ export function ThemeSettings({
             />
           ))}
           <PresetCard
+            group={`${groupId}-preset`}
             name="Custom"
             description="Your own five colours for light, and optionally dark."
             light={draft.light}
@@ -316,7 +331,7 @@ export function ThemeSettings({
           The mode members see until they pick their own in the user menu.
         </SectionHeading>
         <OptionGroup
-          name="theme-mode"
+          name={`${groupId}-mode`}
           labelledBy="theme-mode"
           options={MODE_OPTIONS}
           value={draft.mode}
@@ -369,7 +384,7 @@ export function ThemeSettings({
           )}
         </SectionHeading>
         <OptionGroup
-          name="logo-display"
+          name={`${groupId}-logo`}
           labelledBy="theme-logo"
           options={LOGO_OPTIONS}
           value={draft.logoDisplay}
@@ -451,6 +466,7 @@ function Swatches({ roles, label }: { roles: ThemeRoles; label: string }) {
 }
 
 function PresetCard({
+  group,
   name,
   description,
   light,
@@ -459,6 +475,7 @@ function PresetCard({
   onSelect,
   icon = false,
 }: {
+  group: string;
   name: string;
   description: string;
   light: ThemeRoles;
@@ -474,13 +491,7 @@ function PresetCard({
         selected ? "border-primary ring-primary ring-1" : "hover:border-foreground/30",
       )}
     >
-      <input
-        type="radio"
-        name="theme-preset"
-        checked={selected}
-        onChange={onSelect}
-        className="sr-only"
-      />
+      <input type="radio" name={group} checked={selected} onChange={onSelect} className="sr-only" />
       <span className="flex items-center gap-2 pr-6">
         {icon && <Palette className="text-muted-foreground size-4" aria-hidden="true" />}
         <span className="font-medium">{name}</span>
@@ -554,7 +565,7 @@ function WarningList({
   const title = mode === "light" ? "Light" : "Dark";
   if (warnings.length === 0) {
     return (
-      <div className="rounded-lg border p-3">
+      <div className="self-start rounded-lg border p-3">
         <p className="text-success flex items-center gap-2 text-sm font-medium">
           <CheckCircle2 className="size-4" aria-hidden="true" />
           {title}: passes AA
@@ -563,7 +574,7 @@ function WarningList({
     );
   }
   return (
-    <div className="border-warning/40 bg-warning/5 space-y-3 rounded-lg border p-3">
+    <div className="border-warning/40 bg-warning/5 space-y-3 self-start rounded-lg border p-3">
       <p className="text-warning flex items-center gap-2 text-sm font-medium">
         <TriangleAlert className="size-4" aria-hidden="true" />
         {title}: {warnings.length} {warnings.length === 1 ? "pair fails" : "pairs fail"} AA
