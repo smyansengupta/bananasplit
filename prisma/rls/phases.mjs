@@ -1863,6 +1863,105 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     { value: { default: "LOGO_AND_NAME", member_update: 0, admin_update: 1, bad_value: "22P02" } },
   );
 
+  // ============ B9: org-wide collaboration tables ============
+  // Label, Task, Project and the task/poll/event children were given
+  // policies that test organizationId and nothing else, so any member could
+  // write them at the database level. Label was the one that contradicted
+  // the app (labels.write is ADMIN+), and a member deleting every label in
+  // the org was reproduced. The rest stay tenant-only by decision, and the
+  // 'tenant_only_write' manifest check holds the reviewed list.
+  await tcase(
+    "P-B9-01",
+    "labels: every member reads, only OWNER/ADMIN insert, rename or delete",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_reads = await count(q, `SELECT count(*) n FROM "Label"`);
+      s.member_insert = await tryq(
+        q,
+        `INSERT INTO "Label" ("id","organizationId","name","color") VALUES ('l_m','org_A','Member','#000000')`,
+      );
+      s.member_rename = await rc(q, `UPDATE "Label" SET "name" = 'Renamed' WHERE "id" = 'l_A'`);
+      s.member_deletes_all = await rc(q, `DELETE FROM "Label"`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.treasurer_insert = await tryq(
+        q,
+        `INSERT INTO "Label" ("id","organizationId","name","color") VALUES ('l_t','org_A','Treasurer','#000000')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_insert = await tryq(
+        q,
+        `INSERT INTO "Label" ("id","organizationId","name","color") VALUES ('l_a','org_A','Admin','#000000')`,
+      );
+      s.admin_rename = await rc(q, `UPDATE "Label" SET "name" = 'Renamed' WHERE "id" = 'l_A'`);
+      s.admin_foreign = await rc(q, `UPDATE "Label" SET "name" = 'X' WHERE "id" = 'l_B'`);
+      s.admin_delete = await rc(q, `DELETE FROM "Label" WHERE "id" = 'l_A'`);
+      return s;
+    },
+    {
+      value: {
+        member_reads: 1,
+        member_insert: "42501",
+        member_rename: 0,
+        member_deletes_all: 0,
+        treasurer_insert: "42501",
+        admin_insert: 1,
+        admin_rename: 1,
+        admin_foreign: 0,
+        admin_delete: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-B9-02",
+    "projects: OWNER/ADMIN create and delete; a member may still clear a triage owner and write tasks",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_insert = await tryq(
+        q,
+        `INSERT INTO "Project" ("id","organizationId","name") VALUES ('p_m','org_A','Member project')`,
+      );
+      s.member_delete = await rc(q, `DELETE FROM "Project" WHERE "id" = 'p_A'`);
+      // The documented carve-out: untieDepartingMember runs as the member
+      // who is leaving and clears the triage owner.
+      s.member_clears_triage = await rc(
+        q,
+        `UPDATE "Project" SET "triageUserId" = NULL WHERE "id" = 'p_A'`,
+      );
+      // Members still own the task board itself.
+      s.member_task = await tryq(
+        q,
+        `INSERT INTO "Task" ("id","organizationId","title","rank","createdById","updatedAt")
+         VALUES ('t_m','org_A','Member task','a0','u_memberA', now())`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_insert = await tryq(
+        q,
+        `INSERT INTO "Project" ("id","organizationId","name") VALUES ('p_a','org_A','Admin project')`,
+      );
+      s.admin_delete = await rc(q, `DELETE FROM "Project" WHERE "id" = 'p_a'`);
+      s.admin_foreign_insert = await tryq(
+        q,
+        `INSERT INTO "Project" ("id","organizationId","name") VALUES ('p_x','org_B','Wrong org')`,
+      );
+      return s;
+    },
+    {
+      value: {
+        member_insert: "42501",
+        member_delete: 0,
+        member_clears_triage: 1,
+        member_task: 1,
+        admin_insert: 1,
+        admin_delete: 1,
+        admin_foreign_insert: "42501",
+      },
+    },
+  );
+
   // ======================= A3: platform services =======================
   // The maintenance definer functions (migration a3_platform_maintenance),
   // and the service-path patterns the job handlers rely on.

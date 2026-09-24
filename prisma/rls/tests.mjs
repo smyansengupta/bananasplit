@@ -1782,6 +1782,98 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     { value: [] },
   );
   await tcase(
+    "T27h",
+    "the manifest reports a write policy that tests only organizationId, unless the table is allowlisted",
+    "owner",
+    null,
+    async (q) => {
+      const tenantOnly = async () =>
+        (
+          await q(
+            `SELECT object_name FROM app.security_manifest() WHERE check_name = 'tenant_only_write' ORDER BY 1`,
+          )
+        ).rows.map((r) => r.object_name);
+      const s = {};
+      s.clean = await tenantOnly();
+      await q(`CREATE TABLE public.zz_tenant (id int, "organizationId" text)`);
+      await q(`ALTER TABLE public.zz_tenant ENABLE ROW LEVEL SECURITY`);
+      await q(`GRANT INSERT, UPDATE ON public.zz_tenant TO app_user`);
+      // A tenant check with no role predicate: every member of the org may
+      // write it. This is what Label shipped with.
+      await q(`CREATE POLICY app_user_insert ON public.zz_tenant FOR INSERT TO app_user
+                 WITH CHECK ("organizationId" = (SELECT app.member_org_id()))`);
+      await q(`CREATE POLICY app_user_update ON public.zz_tenant FOR UPDATE TO app_user
+                 USING ("organizationId" = (SELECT app.member_org_id())
+                        AND (SELECT app.is_org_admin()))`);
+      s.planted = await tenantOnly();
+      // Adding the role predicate clears it; the allowlist is the only other
+      // way, and it lives in the migration that defines the function.
+      await q(`DROP POLICY app_user_insert ON public.zz_tenant`);
+      await q(`CREATE POLICY app_user_insert ON public.zz_tenant FOR INSERT TO app_user
+                 WITH CHECK ("organizationId" = (SELECT app.member_org_id())
+                             AND (SELECT app.is_org_admin()))`);
+      s.fixed = await tenantOnly();
+      return s;
+    },
+    { value: { clean: [], planted: ["zz_tenant:INSERT"], fixed: [] } },
+  );
+  await tcase(
+    "T27i",
+    "the allowlisted tenant-only writes are exactly the reviewed set",
+    "owner",
+    null,
+    async (q) =>
+      (
+        await q(`SELECT p.tablename || ':' || p.cmd AS v FROM pg_policies p
+                  WHERE p.schemaname = 'public'
+                    AND p.roles && ARRAY['app_user']::name[]
+                    AND p.cmd IN ('INSERT','UPDATE','DELETE')
+                    AND coalesce(p.qual,'') || coalesce(p.with_check,'') NOT LIKE '%is_org_admin%'
+                    AND coalesce(p.qual,'') || coalesce(p.with_check,'') NOT LIKE '%is_org_owner%'
+                    AND coalesce(p.qual,'') || coalesce(p.with_check,'') NOT LIKE '%is_finance%'
+                  ORDER BY 1`)
+      ).rows.map((r) => r.v),
+    {
+      // Members legitimately write all of these; Label and Project:INSERT
+      // /DELETE left the list in 20260924130000_b9_tenant_write_backstop.
+      value: [
+        "AvailabilityPoll:DELETE",
+        "AvailabilityPoll:INSERT",
+        "AvailabilityPoll:UPDATE",
+        "EventAttendee:DELETE",
+        "EventAttendee:INSERT",
+        "EventAttendee:UPDATE",
+        "Note:INSERT",
+        "Notification:INSERT",
+        "Notification:UPDATE",
+        "PollResponse:DELETE",
+        "PollResponse:INSERT",
+        "PollResponse:UPDATE",
+        "PollSlot:DELETE",
+        "PollSlot:INSERT",
+        "PollSlot:UPDATE",
+        "Project:UPDATE",
+        "Task:DELETE",
+        "Task:INSERT",
+        "Task:UPDATE",
+        "TaskActivity:INSERT",
+        "TaskAssignee:DELETE",
+        "TaskAssignee:INSERT",
+        "TaskAssignee:UPDATE",
+        "TaskComment:INSERT",
+        "TaskLabel:DELETE",
+        "TaskLabel:INSERT",
+        "TaskLabel:UPDATE",
+        "TaskMention:DELETE",
+        "TaskMention:INSERT",
+        "TaskMention:UPDATE",
+        "User:UPDATE",
+        "WeeklyUpdate:INSERT",
+        "WeeklyUpdate:UPDATE",
+      ],
+    },
+  );
+  await tcase(
     "T27e",
     "tables with no grants to any runtime role (definer-only)",
     "owner",

@@ -47,6 +47,19 @@ migration that creates the table; add it to the reviewed grant matrix in
 tables carry `organizationId` with a composite FK to the parent's
 `(organizationId, id)`.
 
+**Write policies need a role predicate.** An `app_user` INSERT/UPDATE/DELETE
+policy that tests only `organizationId` is a tenant check, not a permission
+check: every member of the org may do it and the app layer is the only
+control. `app.security_manifest()`'s `tenant_only_write` check reports any
+such policy unless its `table:command` is on the allowlist inside the
+function (migration `20260924130000_b9_tenant_write_backstop`), which names
+the places members legitimately write — tasks and their collaborators,
+labels on a task, comments, mentions, activity, Sunday updates, availability
+polls and their slots and responses, event attendees, notifications and a
+user's own row. Everything else gets `AND (SELECT app.is_org_admin())` (or
+`is_org_owner`, `is_finance`) beside the tenant test. Adding an entry to the
+allowlist is a security review item.
+
 **Known limitation.** RLS contains logic bugs, not SQL injection: SQL that
 runs as a runtime role can call `set_config()` itself and forge the context
 (test T29). The injection control is the ban on `$queryRawUnsafe`,
