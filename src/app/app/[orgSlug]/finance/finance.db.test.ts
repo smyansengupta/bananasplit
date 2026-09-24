@@ -25,6 +25,7 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { authDb, disconnectAll, serviceDb } from "@/server/db/clients";
 import { withOrgTx, withSystemOrgTx } from "@/server/db/context";
+import { getBlob, putBlob } from "@/server/storage";
 
 import { createBudgetPeriod, createCategory, deleteCategory } from "./periods-actions";
 import { deleteReceiptAction, getSignedReceiptUrl } from "./receipts-actions";
@@ -297,6 +298,40 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
 
     as(people.treasurer);
     expect((await getSignedReceiptUrl(orgId, receipt.id)).url).toBeTruthy();
+  });
+
+  it("deleting a receipt removes the row, then the stored file after commit", async () => {
+    as(people.member);
+    const { transactionId } = await createTransaction(orgId, {
+      budgetPeriodId: periodId,
+      direction: "OUT",
+      kind: "EXPENSE",
+      amountCents: 700,
+      description: "Receipt delete test",
+      occurredAt: "2026-09-04T00:00:00.000Z",
+    });
+    const stored = await putBlob("receipts", orgId, [transactionId!, "itest.pdf"], Buffer.from("%PDF-1.4"), {
+      contentType: "application/pdf",
+    });
+    const receipt = await withOrgTx(orgId, ({ db, userId }) =>
+      db.receipt.create({
+        data: {
+          organizationId: orgId,
+          transactionId: transactionId!,
+          blobKey: stored.key,
+          filename: "r.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 8,
+          uploadedById: userId,
+        },
+        select: { id: true },
+      }),
+    );
+    expect(await getBlob(stored.key)).not.toBeNull();
+
+    expect(await deleteReceiptAction(orgId, receipt.id)).toEqual({});
+    expect(await withOrgTx(orgId, ({ db }) => db.receipt.count({ where: { id: receipt.id } }))).toBe(0);
+    expect(await getBlob(stored.key)).toBeNull();
   });
 
   it("nothing crosses into another org", async () => {
