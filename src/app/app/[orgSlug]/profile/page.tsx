@@ -47,18 +47,20 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
-      <header className="flex flex-wrap items-center gap-4">
-        <UserAvatar user={profile} size="xl" />
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
-          <p className="text-muted-foreground text-sm">
-            Members of your organizations see your name, picture, pronouns, major, bio and links.
-            Your email is not shown on people pages.
-          </p>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
+          <UserAvatar user={profile} size="xl" className="shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
+            <p className="text-muted-foreground text-sm">
+              Members of your organizations see your name, picture, pronouns, major, bio and links.
+              Your email is not shown on people pages.
+            </p>
+          </div>
         </div>
         <Link
           href={personHref(orgSlug, profile.id)}
-          className="text-primary inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
+          className="text-primary inline-flex shrink-0 items-center gap-1 self-start text-sm font-medium underline-offset-4 hover:underline sm:self-center"
         >
           View as others see it
           <ArrowUpRight className="size-4" aria-hidden="true" />

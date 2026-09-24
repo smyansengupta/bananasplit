@@ -71,7 +71,7 @@ export function DetailsForm({ initial, orgTimezone }: { initial: DetailsInitial;
 
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="profile-name">Name</Label>
           <Input

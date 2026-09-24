@@ -74,7 +74,7 @@ export default async function PeoplePage({ params, searchParams }: PageProps<"/a
           }
         />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {people.map((person) => {
             const detail = majorAndYear(person.major, person.gradYear);
             const isSelf = person.id === user.id;

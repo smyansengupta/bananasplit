@@ -61,7 +61,7 @@ export function TimezoneSelect({
           aria-invalid={invalid || undefined}
           className="w-full justify-between font-normal"
         >
-          <span className="truncate">
+          <span className="min-w-0 truncate">
             {value ? timeZoneLabel(value) : `Organization's timezone (${timeZoneLabel(orgTimezone)})`}
           </span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
