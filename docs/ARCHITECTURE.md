@@ -166,9 +166,68 @@ the link page share one resend limit per account.
   `CLIENT_ALLOWLIST` (the identity plane, the rate limiter, the ICS feed, the
   cron routes and job runner, the health check, scripts and the data layer;
   adding a path is a security review item);
-- `@/lib/prisma` in new code (`src/server/**` and the new sections);
+- `@/lib/prisma` (the `app_legacy` client) everywhere except `LEGACY_ALLOWLIST`
+  (see "0C: legacy modules on the RLS path" below);
 - `redirect`/`notFound` in `src/server` services (except `context.ts`), and
   request-context imports in cached loaders.
+
+## 0C: legacy modules on the RLS path
+
+The Phase 0-6 modules started on `app_legacy`, the temporary role with
+`FOR ALL` policies on the 23 legacy tables. Phase 0C moves each one onto
+`app_user` through the wrappers, so RLS covers it. Notes, workspace search
+(the command palette), finance (periods, categories, transactions, sponsors
+and sponsorships, the dashboard, the CSV export, the finance digest and
+receipts), the org overview, the org switcher, the notification bell and
+bare `/app` are done. The pattern every module follows:
+
+- **Actions.** `withOrgContext` becomes `withOrgAction`. Actions that used
+  to call `requireFinanceAccess`/`requireOrgMembership` directly use the
+  wrapper too, then check `can(ctx, perm)` or `requirePermission(ctx, perm)`
+  (a `ForbiddenError`, as before). Nested `prisma.$transaction` blocks are
+  flattened: the wrapper's transaction already covers the action.
+- **Reads.** Query helpers take `db` as their first argument. Pages resolve
+  the org with `getOrgContextBySlug(slug)` (`notFound()` for a non-member,
+  so another org's pages answer 404) and read in one `withOrgTx`. Reads in
+  a transaction share one connection, so they run one after another rather
+  than in `Promise.all`; the finance dashboard fetches the period's
+  transactions once and sums them in memory instead of running parallel
+  aggregates. Every query keeps its explicit `organizationId` filter.
+- **Audit and email.** `writeFinanceAuditLog(ctx.db, ...)`
+  (`src/lib/finance/audit.ts`) calls `app.write_finance_audit`, which fixes
+  the actor, org and timestamp; no runtime role can INSERT into
+  `FinanceAuditLog`. Reimbursement status mail stays an outbox job enqueued
+  in the same transaction.
+- **Files.** The receipt upload route (`/api/orgs/[orgId]/receipts`) checks
+  membership, reads the body with `readUpload`, reads the transaction in one
+  `withOrgTx`, writes the blob with `putBlob("receipts", ...)` outside any
+  transaction, then inserts the row in a second transaction and deletes the
+  blob if that fails. The download route reads the row in `withOrgTx` (the
+  Receipt policy decides who may see it) and the file afterwards; its signed
+  token binds the receipt and the org. Deleting a receipt deletes the row in
+  the action and the file after commit. Receipt keys written before the
+  move (Vercel pathnames and `local:` files) still read.
+
+**Error semantics.** A handler that returns `{ error }` commits whatever it
+wrote first; a throw rolls everything back. Every migrated action returns
+its errors before its first write, so neither case leaves a partial write.
+A rule the database refuses after the app check passed (for example
+`transaction_guard` after a concurrent change) now rolls back the whole
+action, audit row and outbox job included. The `*.db.test.ts` files next to
+each module pin these rules against the real policies: PRIVATE notes and
+author-or-admin edits, finance-role writes, separation of duties against
+the acting user, Receipt visibility and cross-org refusal.
+
+**What is left.** `LEGACY_ALLOWLIST` in `eslint.config.mjs` lists every file
+that may still import `@/lib/prisma`: the settings, onboarding and
+invitations modules (B1), tasks and the due-date cron (B6), calendar, polls
+and both `.ics` routes (B7), the org layout (B8), and two shared helpers
+their code calls (`src/lib/auth/guards.ts` and `notifyUser`'s default `db`
+in `src/lib/notifications.ts`). Any other import of `@/lib/prisma` is a
+lint error. Each builder deletes its entries as its module moves. The final
+integration then removes the list, `withOrgContext`, `guards.ts`,
+`src/lib/prisma.ts` and `LEGACY_DB_PASSWORD`, and drops the role (the
+`drop_app_legacy` migration in the plan).
 
 ## Tenancy model
 
@@ -233,15 +292,12 @@ live in `tasks/actions.test.ts` and `settings/labels/actions.test.ts`.
 
 ### Money, audit logs, and the one place tenancy isn't just app-code
 
-`FinanceAuditLog` is append-only by design (spec 5.9): the app never issues
-an `UPDATE` or `DELETE` against it, and the migration
-(`20260913223951_lock_finance_audit_log`) additionally revokes `UPDATE`/
-`DELETE` at the Postgres role level. In this dev environment the connecting
-role is a superuser, so that revoke has no practical effect locally — it's
-real protection only once a properly-scoped, non-superuser production role
-exists. This is the one spot where tenancy-adjacent enforcement is meant to
-live below the application layer, everywhere else it's guard functions and
-scoped queries.
+`FinanceAuditLog` is append-only by design (spec 5.9). No runtime role has
+`INSERT`, `UPDATE` or `DELETE` on it: finance actions write their entry
+through `app.write_finance_audit` in the same transaction as the change
+(`writeFinanceAuditLog`, `src/lib/finance/audit.ts`), and the function
+fixes the actor, the org and the timestamp. The runtime never connects as a
+superuser or the table owner, so the revokes hold locally too.
 
 ### Public, unauthenticated surfaces
 
