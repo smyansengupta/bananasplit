@@ -196,8 +196,8 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
         { channel: "WEB", signups: 7, converted: 3 },
         { channel: "TYPEFORM", signups: 1, converted: 1 },
       ]);
-      expect(r.weeks).toHaveLength(27);
-      expect(r.weeks[0]).toEqual({ week: "2026-06-29", signups: 0, converted: 0 });
+      expect(r.weeks).toHaveLength(19);
+      expect(r.weeks[0]).toEqual({ week: "2026-08-24", signups: 1, converted: 1 });
       expect(r.weeks.at(-1)).toEqual({ week: "2026-12-28", signups: 0, converted: 0 });
       expect(r.weeks.filter((w) => w.signups > 0)).toEqual([
         { week: "2026-08-24", signups: 1, converted: 1 },

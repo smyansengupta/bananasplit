@@ -13,17 +13,13 @@ export const MAX_SIGNUP_WEEKS = 260;
  * - Per org-local week (Monday start): signups, and how many of them have
  *   attended since (Signup.firstAttendedAt, a 4b rollup: the first
  *   check-in from one day before the signup on). Weeks with no signups are
- *   zero-filled from the range start (or the first signup) to the range end
- *   or the current week, whichever is earlier.
+ *   zero-filled from the first signup of the range to the range end or the
+ *   current week, whichever is earlier.
  * - Conversion: converted / signups; median Signup.daysToFirstAttendance.
  * - The same numbers per channel (web, Typeform, officer, CSV, manual).
  */
 export const querySignups: ReportQuery<SignupsReport> = async (db, args) => {
   const signedUp = Prisma.sql`s."signedUpAt"`;
-  const fromWeek =
-    args.from === null
-      ? Prisma.sql`NULL::date`
-      : Prisma.sql`date_trunc('week', (${args.from}::date)::timestamp)::date`;
   const toWeek =
     args.to === null ? Prisma.sql`NULL::date` : Prisma.sql`date_trunc('week', (${args.to}::date)::timestamp)::date`;
   const thisWeek = Prisma.sql`date_trunc('week', ${localTime(nowUtc(args.asOf), args.tz)})::date`;
@@ -37,7 +33,7 @@ export const querySignups: ReportQuery<SignupsReport> = async (db, args) => {
          AND ${inRange(signedUp, args.from, args.to, args.tz)}
     ),
     span AS (
-      SELECT coalesce(${fromWeek}, min(su.wk)) AS first_wk,
+      SELECT min(su.wk) AS first_wk,
              least(coalesce(${toWeek}, max(su.wk)), ${thisWeek}) AS last_wk
         FROM su
     ),
