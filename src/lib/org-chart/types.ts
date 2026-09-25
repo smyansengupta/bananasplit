@@ -59,7 +59,9 @@ export interface ChartNodeDTO {
 /** How a node renders: a linked member, a placeholder (named but not on the portal) or an open hire. */
 export type NodeVariant = "member" | "placeholder" | "open" | "empty";
 
-export function nodeVariant(node: Pick<ChartNodeDTO, "isOpen" | "user" | "personName">): NodeVariant {
+export function nodeVariant(
+  node: Pick<ChartNodeDTO, "isOpen" | "user" | "personName">,
+): NodeVariant {
   if (node.isOpen) return "open";
   if (node.user) return "member";
   if (node.personName) return "placeholder";
@@ -73,7 +75,10 @@ export function personLabel(node: Pick<ChartNodeDTO, "isOpen" | "user" | "person
 }
 
 /** Compares fractional-indexing ranks (plain code-unit order, never localeCompare). */
-export function compareRank(a: { rank: string; id: string }, b: { rank: string; id: string }): number {
+export function compareRank(
+  a: { rank: string; id: string },
+  b: { rank: string; id: string },
+): number {
   if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

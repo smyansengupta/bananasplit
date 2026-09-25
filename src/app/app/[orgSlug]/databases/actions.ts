@@ -3,7 +3,12 @@
 import { TZDate } from "@date-fns/tz";
 import { z } from "zod";
 
-import { DatabaseKind, EventKind, EventVisibility, IntegrationProvider } from "@/generated/prisma/client";
+import {
+  DatabaseKind,
+  EventKind,
+  EventVisibility,
+  IntegrationProvider,
+} from "@/generated/prisma/client";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
@@ -52,14 +57,24 @@ export interface ActionResult<T = undefined> {
   data?: T;
 }
 
-const KNOWN = [DatabaseEditError, EventValidationError, EventMergeError, ForbiddenError, NotFoundError, AppError, z.ZodError];
+const KNOWN = [
+  DatabaseEditError,
+  EventValidationError,
+  EventMergeError,
+  ForbiddenError,
+  NotFoundError,
+  AppError,
+  z.ZodError,
+];
 
 async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { data: await fn() };
   } catch (error) {
-    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Check the form." };
-    if (error instanceof NotFoundError) return { error: "That record no longer exists, or you can't see it." };
+    if (error instanceof z.ZodError)
+      return { error: error.issues[0]?.message ?? "Check the form." };
+    if (error instanceof NotFoundError)
+      return { error: "That record no longer exists, or you can't see it." };
     if (KNOWN.some((K) => error instanceof K)) return { error: (error as Error).message };
     throw error;
   }
@@ -97,7 +112,10 @@ function fromLocal(value: string, timezone: string): Date {
 async function sessionInput(organizationId: string, form: SessionForm) {
   const data = sessionFormSchema.parse(form);
   const org = await withOrgTx(organizationId, ({ db }) =>
-    db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } }),
+    db.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { timezone: true },
+    }),
   );
   const slot = data.stampSlot?.trim() ? Number(data.stampSlot) : null;
   return {
@@ -116,12 +134,14 @@ async function sessionInput(organizationId: string, form: SessionForm) {
   };
 }
 
-const createSessionTx = withOrgAction(async (ctx, input: Awaited<ReturnType<typeof sessionInput>>) => {
-  await assertCanEdit(ctx, DatabaseKind.SESSIONS);
-  const { event } = await createEvent(ctx, input);
-  await markReportsDataChanged(ctx);
-  return event.id;
-});
+const createSessionTx = withOrgAction(
+  async (ctx, input: Awaited<ReturnType<typeof sessionInput>>) => {
+    await assertCanEdit(ctx, DatabaseKind.SESSIONS);
+    const { event } = await createEvent(ctx, input);
+    await markReportsDataChanged(ctx);
+    return event.id;
+  },
+);
 
 export async function createSessionAction(organizationId: string, form: SessionForm) {
   return run(async () => createSessionTx(organizationId, await sessionInput(organizationId, form)));
@@ -136,8 +156,14 @@ const updateSessionTx = withOrgAction(
   },
 );
 
-export async function updateSessionAction(organizationId: string, eventId: string, form: SessionForm) {
-  return run(async () => updateSessionTx(organizationId, eventId, await sessionInput(organizationId, form)));
+export async function updateSessionAction(
+  organizationId: string,
+  eventId: string,
+  form: SessionForm,
+) {
+  return run(async () =>
+    updateSessionTx(organizationId, eventId, await sessionInput(organizationId, form)),
+  );
 }
 
 const deleteSessionTx = withOrgAction(async (ctx, eventId: string) => {
@@ -175,11 +201,19 @@ async function authorizeServiceWrite(organizationId: string, kind: DatabaseKind)
   return { userId: user.id, role };
 }
 
-export async function mergeSessionsAction(organizationId: string, survivorId: string, loserId: string) {
+export async function mergeSessionsAction(
+  organizationId: string,
+  survivorId: string,
+  loserId: string,
+) {
   return run(async () => {
     const actor = await authorizeServiceWrite(organizationId, DatabaseKind.SESSIONS);
     const result = await withSystemOrgTx(organizationId, { userId: actor.userId }, (ctx) =>
-      mergeEvents({ ...ctx, organizationId, userId: actor.userId, role: actor.role, kind: "system" }, survivorId, loserId),
+      mergeEvents(
+        { ...ctx, organizationId, userId: actor.userId, role: actor.role, kind: "system" },
+        survivorId,
+        loserId,
+      ),
     );
     return result.moved;
   });
@@ -187,11 +221,15 @@ export async function mergeSessionsAction(organizationId: string, survivorId: st
 
 // ---- Attendance -------------------------------------------------------------------
 
-const addAttendanceTx = withOrgAction(async (ctx, input: Parameters<typeof addManualAttendance>[1]) =>
-  (await addManualAttendance(ctx, input)).id,
+const addAttendanceTx = withOrgAction(
+  async (ctx, input: Parameters<typeof addManualAttendance>[1]) =>
+    (await addManualAttendance(ctx, input)).id,
 );
 
-export async function addAttendanceAction(organizationId: string, input: Parameters<typeof addManualAttendance>[1]) {
+export async function addAttendanceAction(
+  organizationId: string,
+  input: Parameters<typeof addManualAttendance>[1],
+) {
   return run(() => addAttendanceTx(organizationId, input));
 }
 
@@ -199,7 +237,11 @@ const suppressAttendanceTx = withOrgAction((ctx, id: string, suppressed: boolean
   setAttendanceSuppressed(ctx, id, suppressed),
 );
 
-export async function setAttendanceSuppressedAction(organizationId: string, id: string, suppressed: boolean) {
+export async function setAttendanceSuppressedAction(
+  organizationId: string,
+  id: string,
+  suppressed: boolean,
+) {
   return run(() => suppressAttendanceTx(organizationId, id, suppressed));
 }
 
@@ -213,21 +255,31 @@ const renameAttendanceTx = withOrgAction((ctx, id: string, name: string | null) 
   setAttendanceNameOverride(ctx, id, name),
 );
 
-export async function setAttendanceNameAction(organizationId: string, id: string, name: string | null) {
+export async function setAttendanceNameAction(
+  organizationId: string,
+  id: string,
+  name: string | null,
+) {
   return run(() => renameAttendanceTx(organizationId, id, name));
 }
 
 // ---- Signups ------------------------------------------------------------------------
 
-const addSignupTx = withOrgAction(async (ctx, input: Parameters<typeof addManualSignup>[1]) =>
-  (await addManualSignup(ctx, input)).id,
+const addSignupTx = withOrgAction(
+  async (ctx, input: Parameters<typeof addManualSignup>[1]) =>
+    (await addManualSignup(ctx, input)).id,
 );
 
-export async function addSignupAction(organizationId: string, input: Parameters<typeof addManualSignup>[1]) {
+export async function addSignupAction(
+  organizationId: string,
+  input: Parameters<typeof addManualSignup>[1],
+) {
   return run(() => addSignupTx(organizationId, input));
 }
 
-const addedToListTx = withOrgAction((ctx, ids: string[], added: boolean) => setSignupsAddedToList(ctx, ids, added));
+const addedToListTx = withOrgAction((ctx, ids: string[], added: boolean) =>
+  setSignupsAddedToList(ctx, ids, added),
+);
 
 export async function setSignupsAddedAction(organizationId: string, ids: string[], added: boolean) {
   return run(() => addedToListTx(organizationId, ids, added));
@@ -237,7 +289,11 @@ const suppressSignupTx = withOrgAction((ctx, id: string, suppressed: boolean) =>
   setSignupSuppressed(ctx, id, suppressed),
 );
 
-export async function setSignupSuppressedAction(organizationId: string, id: string, suppressed: boolean) {
+export async function setSignupSuppressedAction(
+  organizationId: string,
+  id: string,
+  suppressed: boolean,
+) {
   return run(() => suppressSignupTx(organizationId, id, suppressed));
 }
 
@@ -249,7 +305,9 @@ export async function deleteSignupAction(organizationId: string, id: string) {
 
 // ---- Contacts -----------------------------------------------------------------------
 
-const renameContactTx = withOrgAction((ctx, id: string, name: string) => renameContact(ctx, id, name));
+const renameContactTx = withOrgAction((ctx, id: string, name: string) =>
+  renameContact(ctx, id, name),
+);
 
 export async function renameContactAction(organizationId: string, contactId: string, name: string) {
   return run(() => renameContactTx(organizationId, contactId, name));
@@ -259,11 +317,19 @@ const linkContactTx = withOrgAction((ctx, id: string, userId: string | null) =>
   linkContactToMember(ctx, id, userId),
 );
 
-export async function linkContactAction(organizationId: string, contactId: string, userId: string | null) {
+export async function linkContactAction(
+  organizationId: string,
+  contactId: string,
+  userId: string | null,
+) {
   return run(() => linkContactTx(organizationId, contactId, userId));
 }
 
-export async function mergeContactsAction(organizationId: string, survivorId: string, loserId: string) {
+export async function mergeContactsAction(
+  organizationId: string,
+  survivorId: string,
+  loserId: string,
+) {
   return run(async () => {
     const actor = await authorizeServiceWrite(organizationId, DatabaseKind.ATTENDANCE);
     const result = await withSystemOrgTx(organizationId, { userId: actor.userId }, (ctx) =>
@@ -273,7 +339,11 @@ export async function mergeContactsAction(organizationId: string, survivorId: st
   });
 }
 
-export async function splitContactEmailAction(organizationId: string, contactId: string, emailId: string) {
+export async function splitContactEmailAction(
+  organizationId: string,
+  contactId: string,
+  emailId: string,
+) {
   return run(async () => {
     const actor = await authorizeServiceWrite(organizationId, DatabaseKind.ATTENDANCE);
     return withSystemOrgTx(organizationId, { userId: actor.userId }, (ctx) =>
@@ -299,7 +369,13 @@ export async function searchContactsAction(organizationId: string, q: string) {
         },
         orderBy: [{ lastCheckInAt: { sort: "desc", nulls: "last" } }],
         take: 12,
-        select: { id: true, displayName: true, emailMasked: true, sessionsAttended: true, userId: true },
+        select: {
+          id: true,
+          displayName: true,
+          emailMasked: true,
+          sessionsAttended: true,
+          userId: true,
+        },
       });
       return rows;
     }),
@@ -308,14 +384,16 @@ export async function searchContactsAction(organizationId: string, q: string) {
 
 // ---- Ballots ----------------------------------------------------------------------------
 
-const importDefinitionTx = withOrgAction((ctx, input: Parameters<typeof importBallotDefinition>[1]) =>
-  importBallotDefinition(ctx, input),
+const importDefinitionTx = withOrgAction(
+  (ctx, input: Parameters<typeof importBallotDefinition>[1]) => importBallotDefinition(ctx, input),
 );
 
 /** Re-evaluates a poll's ballots on the service path (after the admin's own write committed). */
 async function reevaluateAsService(organizationId: string, slug: string) {
   const user = await requireUser();
-  return withSystemOrgTx(organizationId, { userId: user.id }, ({ db }) => reevaluatePoll(db, organizationId, slug));
+  return withSystemOrgTx(organizationId, { userId: user.id }, ({ db }) =>
+    reevaluatePoll(db, organizationId, slug),
+  );
 }
 
 export async function importDefinitionAction(
@@ -329,8 +407,9 @@ export async function importDefinitionAction(
   });
 }
 
-const updateDefinitionTx = withOrgAction((ctx, id: string, patch: Parameters<typeof updateBallotDefinition>[2]) =>
-  updateBallotDefinition(ctx, id, patch),
+const updateDefinitionTx = withOrgAction(
+  (ctx, id: string, patch: Parameters<typeof updateBallotDefinition>[2]) =>
+    updateBallotDefinition(ctx, id, patch),
 );
 
 export interface DefinitionForm {
@@ -342,10 +421,17 @@ export interface DefinitionForm {
   isTest?: boolean;
 }
 
-export async function updateDefinitionAction(organizationId: string, id: string, form: DefinitionForm) {
+export async function updateDefinitionAction(
+  organizationId: string,
+  id: string,
+  form: DefinitionForm,
+) {
   return run(async () => {
     const org = await withOrgTx(organizationId, ({ db }) =>
-      db.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } }),
+      db.organization.findUniqueOrThrow({
+        where: { id: organizationId },
+        select: { timezone: true },
+      }),
     );
     const when = (v: string | undefined) =>
       v === undefined ? undefined : v ? fromLocal(localDateTime.parse(v), org.timezone) : null;
@@ -364,7 +450,11 @@ const suppressBallotTx = withOrgAction((ctx, id: string, suppressed: boolean) =>
   setBallotSuppressed(ctx, id, suppressed),
 );
 
-export async function setBallotSuppressedAction(organizationId: string, id: string, suppressed: boolean) {
+export async function setBallotSuppressedAction(
+  organizationId: string,
+  id: string,
+  suppressed: boolean,
+) {
   return run(() => suppressBallotTx(organizationId, id, suppressed));
 }
 
@@ -377,7 +467,9 @@ const syncNowTx = withOrgAction(async (ctx, reconcile: boolean) => {
     select: { id: true, secretFingerprint: true },
   });
   if (!integration?.secretFingerprint) {
-    throw new DatabaseEditError("Connect the website data source in Settings > Integrations first.");
+    throw new DatabaseEditError(
+      "Connect the website data source in Settings > Integrations first.",
+    );
   }
   await requestSync(ctx.db, ctx.organizationId, integration.id, { reconcile });
 });

@@ -62,9 +62,7 @@ export function rateLimitKey(scope: string, ...parts: string[]): string {
   if (!/^[a-z][a-z0-9._-]{0,63}$/.test(scope)) {
     throw new TypeError(`rate limit scope must be a short lowercase name (got ${scope})`);
   }
-  const hashed = parts.map((p) =>
-    createHash("sha256").update(p.trim()).digest("hex").slice(0, 24),
-  );
+  const hashed = parts.map((p) => createHash("sha256").update(p.trim()).digest("hex").slice(0, 24));
   return [scope, ...hashed].join(":");
 }
 
@@ -78,11 +76,13 @@ export async function checkRateLimit(
   windowSec: number,
   options: RateLimitOptions = {},
 ): Promise<RateLimitResult> {
-  if (!Number.isInteger(limit) || limit < 1) throw new RangeError("limit must be a positive integer");
+  if (!Number.isInteger(limit) || limit < 1)
+    throw new RangeError("limit must be a positive integer");
   if (!Number.isInteger(windowSec) || windowSec < 1 || windowSec > MAX_WINDOW_SECONDS) {
     throw new RangeError(`windowSec must be an integer between 1 and ${MAX_WINDOW_SECONDS}`);
   }
-  if (key.length === 0 || key.length > 200) throw new RangeError("rate limit key must be 1-200 characters");
+  if (key.length === 0 || key.length > 200)
+    throw new RangeError("rate limit key must be 1-200 characters");
 
   try {
     const { allowed, retryAfterMs } = await rateLimitBackend.hit(
@@ -91,7 +91,9 @@ export async function checkRateLimit(
       windowSec,
       options.via ?? "service",
     );
-    return allowed ? { allowed: true } : { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
+    return allowed
+      ? { allowed: true }
+      : { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
   } catch (error) {
     console.error(
       `[rate-limit] ${key.split(":")[0]}: limiter unavailable, allowing the request`,

@@ -61,19 +61,40 @@ try {
     select: { id: true },
   });
   const users = await authDb.user.findMany({
-    where: { email: { in: ["jackson@example.edu", "oliver@example.edu", "kristine@example.edu", "anthony@example.edu"] } },
+    where: {
+      email: {
+        in: [
+          "jackson@example.edu",
+          "oliver@example.edu",
+          "kristine@example.edu",
+          "anthony@example.edu",
+        ],
+      },
+    },
     select: { id: true, email: true },
   });
   const by = (email: string) => users.find((u) => u.email === email);
   const events = org
     ? await ownerDb.event.findMany({
-        where: { organizationId: org.id, deletedAt: null, mergedIntoId: null, startsAt: { lt: new Date() } },
+        where: {
+          organizationId: org.id,
+          deletedAt: null,
+          mergedIntoId: null,
+          startsAt: { lt: new Date() },
+        },
         orderBy: { startsAt: "desc" },
         select: { id: true },
         take: 3,
       })
     : [];
-  if (org && by("jackson@example.edu") && by("oliver@example.edu") && by("kristine@example.edu") && by("anthony@example.edu") && events.length >= 2) {
+  if (
+    org &&
+    by("jackson@example.edu") &&
+    by("oliver@example.edu") &&
+    by("kristine@example.edu") &&
+    by("anthony@example.edu") &&
+    events.length >= 2
+  ) {
     seeded = {
       orgId: org.id,
       owner: by("jackson@example.edu")!,
@@ -91,7 +112,11 @@ const TAG = `dbtest_${Date.now().toString(36)}`;
 /** The website ids this run pretends to read: unique, so a failed run leaves nothing behind. */
 const RUN = randomUUID().slice(0, 8);
 const uuid = (n: number) => `${RUN}-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const created = { contacts: new Set<string>(), events: new Set<string>(), integrations: new Set<string>() };
+const created = {
+  contacts: new Set<string>(),
+  events: new Set<string>(),
+  integrations: new Set<string>(),
+};
 /** Integrations whose sync-state rows this run created (the integration itself may predate it). */
 const syncStates = new Set<string>();
 
@@ -101,7 +126,8 @@ function id(suffix: string): string {
 
 describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", () => {
   const s = seeded as Seeded;
-  const as = (p: Person) => requireUserMock.mockResolvedValue({ id: p.id, email: p.email, name: null });
+  const as = (p: Person) =>
+    requireUserMock.mockResolvedValue({ id: p.id, email: p.email, name: null });
 
   beforeEach(() => {
     as(s.owner);
@@ -109,28 +135,63 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
   afterAll(async () => {
     await withSystemOrgTx(s.orgId, async ({ db }) => {
-      await db.attendance.deleteMany({ where: { organizationId: s.orgId, externalId: { startsWith: RUN } } });
-      await db.signup.deleteMany({ where: { organizationId: s.orgId, externalId: { startsWith: RUN } } });
-      await db.ballot.deleteMany({ where: { organizationId: s.orgId, externalId: { startsWith: RUN } } });
+      await db.attendance.deleteMany({
+        where: { organizationId: s.orgId, externalId: { startsWith: RUN } },
+      });
+      await db.signup.deleteMany({
+        where: { organizationId: s.orgId, externalId: { startsWith: RUN } },
+      });
+      await db.ballot.deleteMany({
+        where: { organizationId: s.orgId, externalId: { startsWith: RUN } },
+      });
       const synced = await db.event.findMany({
         where: { organizationId: s.orgId, sourceSessionId: { startsWith: RUN } },
         select: { id: true },
       });
       for (const e of synced) created.events.add(e.id);
-      await db.attendance.deleteMany({ where: { organizationId: s.orgId, eventId: { in: [...created.events] } } });
-      await db.attendance.deleteMany({ where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } } });
-      await db.attendance.deleteMany({ where: { organizationId: s.orgId, eventId: { in: [...created.events] } } });
-      await db.ballotChoice.deleteMany({ where: { organizationId: s.orgId, ballot: { externalId: { startsWith: TAG } } } });
-      await db.ballot.deleteMany({ where: { organizationId: s.orgId, externalId: { startsWith: TAG } } });
-      await db.ballotDefinition.deleteMany({ where: { organizationId: s.orgId, slug: { startsWith: TAG } } });
-      await db.signup.deleteMany({ where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } } });
-      await db.contactTermStats.deleteMany({ where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } } });
-      await db.contactEmail.deleteMany({ where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } } });
-      await db.contact.deleteMany({ where: { organizationId: s.orgId, id: { in: [...created.contacts] } } });
+      await db.attendance.deleteMany({
+        where: { organizationId: s.orgId, eventId: { in: [...created.events] } },
+      });
+      await db.attendance.deleteMany({
+        where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } },
+      });
+      await db.attendance.deleteMany({
+        where: { organizationId: s.orgId, eventId: { in: [...created.events] } },
+      });
+      await db.ballotChoice.deleteMany({
+        where: { organizationId: s.orgId, ballot: { externalId: { startsWith: TAG } } },
+      });
+      await db.ballot.deleteMany({
+        where: { organizationId: s.orgId, externalId: { startsWith: TAG } },
+      });
+      await db.ballotDefinition.deleteMany({
+        where: { organizationId: s.orgId, slug: { startsWith: TAG } },
+      });
+      await db.signup.deleteMany({
+        where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } },
+      });
+      await db.contactTermStats.deleteMany({
+        where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } },
+      });
+      await db.contactEmail.deleteMany({
+        where: { organizationId: s.orgId, contactId: { in: [...created.contacts] } },
+      });
+      await db.contact.deleteMany({
+        where: { organizationId: s.orgId, id: { in: [...created.contacts] } },
+      });
       // EventLinkLog is append-only for every runtime role; it cascades with its Event.
-      await db.event.deleteMany({ where: { organizationId: s.orgId, id: { in: [...created.events] } } });
-      await db.dataSourceSyncState.deleteMany({ where: { organizationId: s.orgId, integrationId: { in: [...created.integrations, ...syncStates] } } });
-      await db.orgIntegration.deleteMany({ where: { organizationId: s.orgId, id: { in: [...created.integrations] } } });
+      await db.event.deleteMany({
+        where: { organizationId: s.orgId, id: { in: [...created.events] } },
+      });
+      await db.dataSourceSyncState.deleteMany({
+        where: {
+          organizationId: s.orgId,
+          integrationId: { in: [...created.integrations, ...syncStates] },
+        },
+      });
+      await db.orgIntegration.deleteMany({
+        where: { organizationId: s.orgId, id: { in: [...created.integrations] } },
+      });
       await db.$queryRaw`SELECT app.refresh_contact_rollups(${s.orgId}, NULL)::text AS ok`;
     });
     await disconnectAll();
@@ -156,7 +217,14 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       as(s.owner);
       const c = await counts();
       expect(c.role).toBe("OWNER");
-      for (const key of ["attendance", "contacts", "emails", "signups", "ballots", "choices"] as const) {
+      for (const key of [
+        "attendance",
+        "contacts",
+        "emails",
+        "signups",
+        "ballots",
+        "choices",
+      ] as const) {
         expect(c[key], key).toBeGreaterThan(0);
       }
     });
@@ -219,7 +287,10 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       // setting, so the service transaction carries the owner's user id.
       const set = (value: "OWNER_ONLY" | "OWNER_AND_ADMINS" | "NOBODY") =>
         withSystemOrgTx(s.orgId, { userId: s.owner.id }, ({ db }) =>
-          db.orgSettings.update({ where: { organizationId: s.orgId }, data: { ballotIndividualVisibility: value } }),
+          db.orgSettings.update({
+            where: { organizationId: s.orgId },
+            data: { ballotIndividualVisibility: value },
+          }),
         );
       try {
         await set("OWNER_AND_ADMINS");
@@ -241,14 +312,18 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       as(s.owner);
       const results = await withOrgTx(s.orgId, async ({ db }) => {
         const polls = await listPolls(db, s.orgId);
-        const poll = polls.find((p) => !p.isTest && p.slug === "fall-workshop-topics") ?? polls.find((p) => !p.isTest)!;
+        const poll =
+          polls.find((p) => !p.isTest && p.slug === "fall-workshop-topics") ??
+          polls.find((p) => !p.isTest)!;
         return loadPollResults(db, s.orgId, poll, "OWNER");
       });
       expect(results.turnout).toBeGreaterThan(0);
       const ranked = results.questions.find((q) => q.type === "slots");
       expect(ranked).toBeDefined();
       expect(ranked!.options.every((o) => !o.suppressed)).toBe(true);
-      expect(ranked!.options.some((o) => (o.borda ?? 0) > 0 && (o.firstChoice ?? 0) >= 0)).toBe(true);
+      expect(ranked!.options.some((o) => (o.borda ?? 0) > 0 && (o.firstChoice ?? 0) >= 0)).toBe(
+        true,
+      );
       // Borda is highest for the most-ranked option, and the list is sorted by it.
       const bordas = ranked!.options.map((o) => o.borda ?? 0);
       expect([...bordas].sort((a, b) => b - a)).toEqual(bordas);
@@ -258,7 +333,12 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       as(s.member);
       const results = await withOrgTx(s.orgId, async ({ db }) => {
         const polls = await listPolls(db, s.orgId);
-        return loadPollResults(db, s.orgId, polls.find((p) => !p.isTest)!, "MEMBER");
+        return loadPollResults(
+          db,
+          s.orgId,
+          polls.find((p) => !p.isTest)!,
+          "MEMBER",
+        );
       });
       const k = results.minCellSize;
       for (const q of results.questions) {
@@ -274,8 +354,9 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
     it("refuses to tally for another org, whatever tier is passed", async () => {
       as(s.owner);
       await expect(
-        withOrgTx(s.orgId, ({ db }) =>
-          db.$queryRaw`SELECT * FROM app.ballot_tally('org_other', 'bd_1', 'OWNER')`,
+        withOrgTx(
+          s.orgId,
+          ({ db }) => db.$queryRaw`SELECT * FROM app.ballot_tally('org_other', 'bd_1', 'OWNER')`,
         ),
       ).rejects.toBeInstanceOf(ForbiddenError);
     });
@@ -287,37 +368,67 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
     it("an admin's DELETE of a synced check-in is refused, and suppress works", async () => {
       const synced = await withSystemOrgTx(s.orgId, ({ db }) =>
         db.attendance.findFirst({
-          where: { organizationId: s.orgId, source: RecordSource.SUPABASE_SYNC, suppressedAt: null },
+          where: {
+            organizationId: s.orgId,
+            source: RecordSource.SUPABASE_SYNC,
+            suppressedAt: null,
+          },
           select: { id: true, contactId: true },
         }),
       );
       expect(synced).not.toBeNull();
       as(s.admin);
-      await expect(withOrgAction((ctx: OrgContext) => deleteAttendance(ctx, synced!.id))(s.orgId)).rejects.toThrow(
-        /suppressed but not deleted/i,
+      await expect(
+        withOrgAction((ctx: OrgContext) => deleteAttendance(ctx, synced!.id))(s.orgId),
+      ).rejects.toThrow(/suppressed but not deleted/i);
+      const stillThere = await withSystemOrgTx(s.orgId, ({ db }) =>
+        db.attendance.count({ where: { id: synced!.id } }),
       );
-      const stillThere = await withSystemOrgTx(s.orgId, ({ db }) => db.attendance.count({ where: { id: synced!.id } }));
       expect(stillThere).toBe(1);
 
-      await withOrgAction((ctx: OrgContext) => setAttendanceSuppressed(ctx, synced!.id, true))(s.orgId);
+      await withOrgAction((ctx: OrgContext) => setAttendanceSuppressed(ctx, synced!.id, true))(
+        s.orgId,
+      );
       const after = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.attendance.findUniqueOrThrow({ where: { id: synced!.id }, select: { suppressedAt: true, stampNumber: true } }),
+        db.attendance.findUniqueOrThrow({
+          where: { id: synced!.id },
+          select: { suppressedAt: true, stampNumber: true },
+        }),
       );
       expect(after.suppressedAt).not.toBeNull();
       expect(after.stampNumber).toBeNull();
-      await withOrgAction((ctx: OrgContext) => setAttendanceSuppressed(ctx, synced!.id, false))(s.orgId);
+      await withOrgAction((ctx: OrgContext) => setAttendanceSuppressed(ctx, synced!.id, false))(
+        s.orgId,
+      );
     });
 
     it("the DELETE policy itself refuses a synced row and allows a suite-native one", async () => {
       as(s.admin);
       const rows = await withSystemOrgTx(s.orgId, async ({ db }) => {
         const contactId = id("del_contact");
-        await db.contact.create({ data: { id: contactId, organizationId: s.orgId, displayName: "Delete Me" } });
+        await db.contact.create({
+          data: { id: contactId, organizationId: s.orgId, displayName: "Delete Me" },
+        });
         created.contacts.add(contactId);
-        const base = { organizationId: s.orgId, contactId, eventId: s.pastEventIds[0], term: "fall-2026", checkedInAt: new Date(), method: AttendanceMethod.MANUAL };
-        await db.attendance.create({ data: { ...base, id: id("suite_att"), source: RecordSource.SUITE } });
+        const base = {
+          organizationId: s.orgId,
+          contactId,
+          eventId: s.pastEventIds[0],
+          term: "fall-2026",
+          checkedInAt: new Date(),
+          method: AttendanceMethod.MANUAL,
+        };
         await db.attendance.create({
-          data: { ...base, id: id("sync_att"), eventId: s.pastEventIds[1], source: RecordSource.SUPABASE_SYNC, externalId: id("ext") },
+          data: { ...base, id: id("suite_att"), source: RecordSource.SUITE },
+        });
+        await db.attendance.create({
+          data: {
+            ...base,
+            id: id("sync_att"),
+            eventId: s.pastEventIds[1],
+            source: RecordSource.SUPABASE_SYNC,
+            externalId: id("ext"),
+          },
         });
         return { suite: id("suite_att"), synced: id("sync_att") };
       });
@@ -337,9 +448,14 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       const eventA = s.pastEventIds[0];
       const eventB = s.pastEventIds[1];
       await withSystemOrgTx(s.orgId, async ({ db }) => {
-        await db.contact.create({ data: { id: contactId, organizationId: s.orgId, displayName: "Rollup Test" } });
+        await db.contact.create({
+          data: { id: contactId, organizationId: s.orgId, displayName: "Rollup Test" },
+        });
         created.contacts.add(contactId);
-        const events = await db.event.findMany({ where: { id: { in: [eventA, eventB] } }, select: { id: true, term: true, startsAt: true } });
+        const events = await db.event.findMany({
+          where: { id: { in: [eventA, eventB] } },
+          select: { id: true, term: true, startsAt: true },
+        });
         for (const [i, e] of events.entries()) {
           await db.attendance.create({
             data: {
@@ -358,8 +474,10 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       });
 
       const expected = async () =>
-        withSystemOrgTx(s.orgId, ({ db }) =>
-          db.$queryRaw<{ id: string; stamp: number | null; total: number; first: boolean }[]>`
+        withSystemOrgTx(
+          s.orgId,
+          ({ db }) =>
+            db.$queryRaw<{ id: string; stamp: number | null; total: number; first: boolean }[]>`
             SELECT a."id",
                    CASE WHEN a."suppressedAt" IS NULL THEN
                      row_number() OVER (PARTITION BY a."contactId", a."term", (a."suppressedAt" IS NULL)
@@ -383,21 +501,36 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
       const compare = async () => {
         const [want, got] = [await expected(), await stored()];
-        expect(got.map((g) => ({ id: g.id, stamp: g.stampNumber, total: g.termStampTotal, first: g.isFirstVisit }))).toEqual(
+        expect(
+          got.map((g) => ({
+            id: g.id,
+            stamp: g.stampNumber,
+            total: g.termStampTotal,
+            first: g.isFirstVisit,
+          })),
+        ).toEqual(
           want.map((w) => ({ id: w.id, stamp: w.stamp, total: Number(w.total), first: w.first })),
         );
       };
       await compare();
       const termStats = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.contactTermStats.findFirst({ where: { organizationId: s.orgId, contactId }, select: { sessionsAttended: true, stampCount: true } }),
+        db.contactTermStats.findFirst({
+          where: { organizationId: s.orgId, contactId },
+          select: { sessionsAttended: true, stampCount: true },
+        }),
       );
       expect(termStats).toMatchObject({ sessionsAttended: 2, stampCount: 2 });
 
       as(s.admin);
-      await withOrgAction((ctx: OrgContext) => setAttendanceSuppressed(ctx, id("rollup_0"), true))(s.orgId);
+      await withOrgAction((ctx: OrgContext) => setAttendanceSuppressed(ctx, id("rollup_0"), true))(
+        s.orgId,
+      );
       await compare();
       const afterSuppress = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.attendance.findUniqueOrThrow({ where: { id: id("rollup_1") }, select: { stampNumber: true, termStampTotal: true, isFirstVisit: true } }),
+        db.attendance.findUniqueOrThrow({
+          where: { id: id("rollup_1") },
+          select: { stampNumber: true, termStampTotal: true, isFirstVisit: true },
+        }),
       );
       expect(afterSuppress).toEqual({ stampNumber: 1, termStampTotal: 1, isFirstVisit: true });
     });
@@ -412,7 +545,9 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       const contactId = id("merge_contact");
       const startsAt = new Date("2026-10-06T22:00:00Z");
       await withSystemOrgTx(s.orgId, async ({ db }) => {
-        await db.contact.create({ data: { id: contactId, organizationId: s.orgId, displayName: "Merge Test" } });
+        await db.contact.create({
+          data: { id: contactId, organizationId: s.orgId, displayName: "Merge Test" },
+        });
         created.contacts.add(contactId);
         for (const [eid, title] of [
           [survivorId, "Merge Test Session"],
@@ -447,15 +582,36 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       });
 
       const result = await withSystemOrgTx(s.orgId, { userId: s.owner.id }, (ctx) =>
-        mergeEvents({ ...ctx, organizationId: s.orgId, userId: s.owner.id, role: "OWNER" as Role, kind: "system" }, survivorId, loserId),
+        mergeEvents(
+          {
+            ...ctx,
+            organizationId: s.orgId,
+            userId: s.owner.id,
+            role: "OWNER" as Role,
+            kind: "system",
+          },
+          survivorId,
+          loserId,
+        ),
       );
       expect(result.moved.attendance).toBe(1);
 
       const after = await withSystemOrgTx(s.orgId, async ({ db }) => ({
-        loser: await db.event.findUniqueOrThrow({ where: { id: loserId }, select: { deletedAt: true, mergedIntoId: true } }),
-        survivor: await db.event.findUniqueOrThrow({ where: { id: survivorId }, select: { attendanceCount: true } }),
-        attendance: await db.attendance.findUniqueOrThrow({ where: { id: id("merge_att") }, select: { eventId: true, stampNumber: true } }),
-        audit: await db.orgAuditLog.count({ where: { organizationId: s.orgId, action: "event.merged", targetId: survivorId } }),
+        loser: await db.event.findUniqueOrThrow({
+          where: { id: loserId },
+          select: { deletedAt: true, mergedIntoId: true },
+        }),
+        survivor: await db.event.findUniqueOrThrow({
+          where: { id: survivorId },
+          select: { attendanceCount: true },
+        }),
+        attendance: await db.attendance.findUniqueOrThrow({
+          where: { id: id("merge_att") },
+          select: { eventId: true, stampNumber: true },
+        }),
+        audit: await db.orgAuditLog.count({
+          where: { organizationId: s.orgId, action: "event.merged", targetId: survivorId },
+        }),
       }));
       expect(after.loser.deletedAt).not.toBeNull();
       expect(after.loser.mergedIntoId).toBe(survivorId);
@@ -483,11 +639,23 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
           });
           created.contacts.add(cid);
         }
-        const base = { organizationId: s.orgId, term: "fall-2026", checkedInAt: new Date(), method: AttendanceMethod.MANUAL, source: RecordSource.SUITE };
+        const base = {
+          organizationId: s.orgId,
+          term: "fall-2026",
+          checkedInAt: new Date(),
+          method: AttendanceMethod.MANUAL,
+          source: RecordSource.SUITE,
+        };
         // Both attended session 0 (a duplicate); only the loser attended session 1.
-        await db.attendance.create({ data: { ...base, id: id("mc_keep_0"), contactId: keep, eventId: s.pastEventIds[0] } });
-        await db.attendance.create({ data: { ...base, id: id("mc_drop_0"), contactId: drop, eventId: s.pastEventIds[0] } });
-        await db.attendance.create({ data: { ...base, id: id("mc_drop_1"), contactId: drop, eventId: s.pastEventIds[1] } });
+        await db.attendance.create({
+          data: { ...base, id: id("mc_keep_0"), contactId: keep, eventId: s.pastEventIds[0] },
+        });
+        await db.attendance.create({
+          data: { ...base, id: id("mc_drop_0"), contactId: drop, eventId: s.pastEventIds[0] },
+        });
+        await db.attendance.create({
+          data: { ...base, id: id("mc_drop_1"), contactId: drop, eventId: s.pastEventIds[1] },
+        });
         await db.$queryRaw`SELECT app.refresh_contact_rollups(${s.orgId}, ${[keep, drop]}::text[])::text AS ok`;
       });
 
@@ -498,8 +666,15 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
       const after = await withSystemOrgTx(s.orgId, async ({ db }) => ({
         gone: await db.contact.count({ where: { id: drop } }),
-        emails: await db.contactEmail.count({ where: { organizationId: s.orgId, contactId: keep } }),
-        sessions: (await db.contact.findUniqueOrThrow({ where: { id: keep }, select: { sessionsAttended: true } })).sessionsAttended,
+        emails: await db.contactEmail.count({
+          where: { organizationId: s.orgId, contactId: keep },
+        }),
+        sessions: (
+          await db.contact.findUniqueOrThrow({
+            where: { id: keep },
+            select: { sessionsAttended: true },
+          })
+        ).sessionsAttended,
         rows: await db.attendance.count({ where: { organizationId: s.orgId, contactId: keep } }),
       }));
       expect(after).toEqual({ gone: 0, emails: 2, sessions: 2, rows: 2 });
@@ -537,7 +712,9 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
     it("creates the session, maps every check-in source and links a member's verified email", async () => {
       const stats = await withSystemOrgTx(s.orgId, async (ctx) => {
-        const sessions = await applySessions({ ...ctx, organizationId: s.orgId }, scope(), [sessionRow]);
+        const sessions = await applySessions({ ...ctx, organizationId: s.orgId }, scope(), [
+          sessionRow,
+        ]);
         const checkins = await applyCheckins(ctx.db, scope(), [
           checkin(1, `${TAG}.code@husky.example.edu`, "code"),
           checkin(2, `${TAG}.link@husky.example.edu`, "link"),
@@ -554,29 +731,59 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       const rows = await withSystemOrgTx(s.orgId, async ({ db }) => {
         const event = await db.event.findFirstOrThrow({
           where: { organizationId: s.orgId, sourceSessionId: sessionRow.id },
-          select: { id: true, title: true, visibility: true, term: true, stampSlot: true, kind: true },
+          select: {
+            id: true,
+            title: true,
+            visibility: true,
+            term: true,
+            stampSlot: true,
+            kind: true,
+          },
         });
         created.events.add(event.id);
         const attendance = await db.attendance.findMany({
           where: { organizationId: s.orgId, eventId: event.id },
-          select: { method: true, contact: { select: { id: true, userId: true, emailMasked: true, emails: { select: { emailNormalized: true } } } } },
+          select: {
+            method: true,
+            contact: {
+              select: {
+                id: true,
+                userId: true,
+                emailMasked: true,
+                emails: { select: { emailNormalized: true } },
+              },
+            },
+          },
         });
         attendance.forEach((a) => created.contacts.add(a.contact.id));
         return { event, attendance };
       });
-      expect(rows.event).toMatchObject({ visibility: "INTERNAL", term: "fall-2026", stampSlot: 9, kind: "WORKSHOP" });
+      expect(rows.event).toMatchObject({
+        visibility: "INTERNAL",
+        term: "fall-2026",
+        stampSlot: 9,
+        kind: "WORKSHOP",
+      });
       const methods = rows.attendance.map((a) => a.method).sort();
       expect(methods).toEqual(["FORM", "FORM", "FORM", "MANUAL", "QR"]);
-      const linked = rows.attendance.find((a) => a.contact.emails.some((e) => e.emailNormalized === "kristine@example.edu"));
+      const linked = rows.attendance.find((a) =>
+        a.contact.emails.some((e) => e.emailNormalized === "kristine@example.edu"),
+      );
       expect(linked?.contact.userId).toBe(s.member.id);
-      const masked = rows.attendance.find((a) => a.contact.emails.some((e) => e.emailNormalized.startsWith(`${TAG}.code`)));
+      const masked = rows.attendance.find((a) =>
+        a.contact.emails.some((e) => e.emailNormalized.startsWith(`${TAG}.code`)),
+      );
       expect(masked?.contact.emailMasked).toMatch(/^.\*\*\*@husky\.example\.edu$/);
     });
 
     it("is idempotent: the same batch again writes nothing new", async () => {
       const again = await withSystemOrgTx(s.orgId, async (ctx) => {
-        const sessions = await applySessions({ ...ctx, organizationId: s.orgId }, scope(), [sessionRow]);
-        const checkins = await applyCheckins(ctx.db, scope(), [checkin(1, `${TAG}.code@husky.example.edu`, "code")]);
+        const sessions = await applySessions({ ...ctx, organizationId: s.orgId }, scope(), [
+          sessionRow,
+        ]);
+        const checkins = await applyCheckins(ctx.db, scope(), [
+          checkin(1, `${TAG}.code@husky.example.edu`, "code"),
+        ]);
         return { sessions, checkins };
       });
       expect(again.sessions).toMatchObject({ created: 0, linked: 0 });
@@ -585,10 +792,20 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
     it("an exact-linked session keeps suite edits but still takes the term and slot", async () => {
       const edited = await withSystemOrgTx(s.orgId, async (ctx) => {
-        const event = await ctx.db.event.findFirstOrThrow({ where: { organizationId: s.orgId, sourceSessionId: sessionRow.id } });
-        await ctx.db.event.update({ where: { id: event.id }, data: { title: "Renamed in the suite", suiteEditedAt: new Date() } });
-        await applySessions({ ...ctx, organizationId: s.orgId }, scope(), [{ ...sessionRow, title: "Changed on the website", slot: 11 }]);
-        return ctx.db.event.findFirstOrThrow({ where: { id: event.id }, select: { title: true, stampSlot: true } });
+        const event = await ctx.db.event.findFirstOrThrow({
+          where: { organizationId: s.orgId, sourceSessionId: sessionRow.id },
+        });
+        await ctx.db.event.update({
+          where: { id: event.id },
+          data: { title: "Renamed in the suite", suiteEditedAt: new Date() },
+        });
+        await applySessions({ ...ctx, organizationId: s.orgId }, scope(), [
+          { ...sessionRow, title: "Changed on the website", slot: 11 },
+        ]);
+        return ctx.db.event.findFirstOrThrow({
+          where: { id: event.id },
+          select: { title: true, stampSlot: true },
+        });
       });
       expect(edited).toEqual({ title: "Renamed in the suite", stampSlot: 11 });
     });
@@ -618,15 +835,23 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
       // The suite marks it added; a later sync of the same row must not clear that.
       await withSystemOrgTx(s.orgId, async ({ db }) => {
-        await db.signup.updateMany({ where: { organizationId: s.orgId, contactId }, data: { addedToListAt: new Date() } });
+        await db.signup.updateMany({
+          where: { organizationId: s.orgId, contactId },
+          data: { addedToListAt: new Date() },
+        });
         // Status is a rollup: every write path refreshes it in the same transaction.
         await refreshRollups(db, s.orgId, [contactId]);
       });
       await withSystemOrgTx(s.orgId, ({ db }) =>
-        applySignups(db, scope(), [{ ...signup, submissions: 2, updated_at: new Date("2026-09-06T16:00:00Z") }]),
+        applySignups(db, scope(), [
+          { ...signup, submissions: 2, updated_at: new Date("2026-09-06T16:00:00Z") },
+        ]),
       );
       const stored = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.signup.findFirstOrThrow({ where: { organizationId: s.orgId, contactId }, select: { addedToListAt: true, submissions: true, status: true } }),
+        db.signup.findFirstOrThrow({
+          where: { organizationId: s.orgId, contactId },
+          select: { addedToListAt: true, submissions: true, status: true },
+        }),
       );
       expect(stored.addedToListAt).not.toBeNull();
       expect(stored.submissions).toBe(2);
@@ -634,19 +859,39 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
 
       const ballots = await withSystemOrgTx(s.orgId, ({ db }) =>
         applyBallots(db, scope(), [
-          { id: uuid(300), poll_slug: `${TAG}-poll`, answers: { q: "a" }, created_at: new Date("2026-09-10T18:00:00Z") },
-          { id: uuid(301), poll_slug: "loadtest-7", answers: { q: "a" }, created_at: new Date("2026-09-10T18:00:00Z") },
-          { id: uuid(302), poll_slug: "smoke-test-2", answers: { q: "a" }, created_at: new Date("2026-09-10T18:00:00Z") },
+          {
+            id: uuid(300),
+            poll_slug: `${TAG}-poll`,
+            answers: { q: "a" },
+            created_at: new Date("2026-09-10T18:00:00Z"),
+          },
+          {
+            id: uuid(301),
+            poll_slug: "loadtest-7",
+            answers: { q: "a" },
+            created_at: new Date("2026-09-10T18:00:00Z"),
+          },
+          {
+            id: uuid(302),
+            poll_slug: "smoke-test-2",
+            answers: { q: "a" },
+            created_at: new Date("2026-09-10T18:00:00Z"),
+          },
         ]),
       );
       expect(ballots.details?.testSlug).toBe(2);
       expect(ballots.upserted).toBe(1);
       const kept = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.ballot.findFirstOrThrow({ where: { organizationId: s.orgId, externalId: uuid(300) }, select: { id: true, excludedReason: true } }),
+        db.ballot.findFirstOrThrow({
+          where: { organizationId: s.orgId, externalId: uuid(300) },
+          select: { id: true, excludedReason: true },
+        }),
       );
       // No definition for this slug yet, so it is stored but not counted.
       expect(kept.excludedReason).toBe("no-definition");
-      await withSystemOrgTx(s.orgId, ({ db }) => db.ballot.deleteMany({ where: { organizationId: s.orgId, externalId: uuid(300) } }));
+      await withSystemOrgTx(s.orgId, ({ db }) =>
+        db.ballot.deleteMany({ where: { organizationId: s.orgId, externalId: uuid(300) } }),
+      );
     });
 
     it("marks unsubscribed contacts and removes rows the source no longer has", async () => {
@@ -656,25 +901,38 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       );
       expect(unsub.upserted).toBe(1);
       const contact = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.contact.findFirstOrThrow({ where: { organizationId: s.orgId, emails: { some: { emailNormalized: email } } }, select: { unsubscribedAt: true } }),
+        db.contact.findFirstOrThrow({
+          where: { organizationId: s.orgId, emails: { some: { emailNormalized: email } } },
+          select: { unsubscribedAt: true },
+        }),
       );
       expect(contact.unsubscribedAt).not.toBeNull();
 
       // A reconcile that no longer sees one check-in removes exactly that row.
       const before = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.attendance.count({ where: { organizationId: s.orgId, source: RecordSource.SUPABASE_SYNC } }),
+        db.attendance.count({
+          where: { organizationId: s.orgId, source: RecordSource.SUPABASE_SYNC },
+        }),
       );
       const seen = await withSystemOrgTx(s.orgId, async ({ db }) => {
         const all = await db.attendance.findMany({
-          where: { organizationId: s.orgId, source: RecordSource.SUPABASE_SYNC, externalId: { not: null } },
+          where: {
+            organizationId: s.orgId,
+            source: RecordSource.SUPABASE_SYNC,
+            externalId: { not: null },
+          },
           select: { externalId: true },
         });
         return new Set(all.map((a) => a.externalId as string).filter((e) => e !== uuid(104)));
       });
-      const removed = await withSystemOrgTx(s.orgId, ({ db }) => removeMissing(db, s.orgId, "checkins", seen));
+      const removed = await withSystemOrgTx(s.orgId, ({ db }) =>
+        removeMissing(db, s.orgId, "checkins", seen),
+      );
       expect(removed.removed).toBe(1);
       const after = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.attendance.count({ where: { organizationId: s.orgId, source: RecordSource.SUPABASE_SYNC } }),
+        db.attendance.count({
+          where: { organizationId: s.orgId, source: RecordSource.SUPABASE_SYNC },
+        }),
       );
       expect(after).toBe(before - 1);
     });
@@ -690,7 +948,12 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
         const useId = existing?.id ?? integrationId;
         if (!existing) {
           await db.orgIntegration.create({
-            data: { id: useId, organizationId: s.orgId, provider: "NETLIFY_BUILD_HOOK", config: {} },
+            data: {
+              id: useId,
+              organizationId: s.orgId,
+              provider: "NETLIFY_BUILD_HOOK",
+              config: {},
+            },
           });
           created.integrations.add(useId);
         }
@@ -700,14 +963,36 @@ describe.skipIf(!seeded)("Databases against the local database (seeded CBC)", ()
       });
       const state = states.get("checkins")!;
       const before = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.dataSourceSyncState.findUniqueOrThrow({ where: { id: state.id }, select: { rowsUpserted: true } }),
+        db.dataSourceSyncState.findUniqueOrThrow({
+          where: { id: state.id },
+          select: { rowsUpserted: true },
+        }),
       );
-      await withSystemOrgTx(s.orgId, ({ db }) => advanceWatermark(db, state, state.watermark, { ts: "2026-10-07 18:05:00-04", id: uuid(105) }, 5));
+      await withSystemOrgTx(s.orgId, ({ db }) =>
+        advanceWatermark(
+          db,
+          state,
+          state.watermark,
+          { ts: "2026-10-07 18:05:00-04", id: uuid(105) },
+          5,
+        ),
+      );
       await expect(
-        withSystemOrgTx(s.orgId, ({ db }) => advanceWatermark(db, state, state.watermark, { ts: "2026-10-07 18:01:00-04", id: uuid(101) }, 1)),
+        withSystemOrgTx(s.orgId, ({ db }) =>
+          advanceWatermark(
+            db,
+            state,
+            state.watermark,
+            { ts: "2026-10-07 18:01:00-04", id: uuid(101) },
+            1,
+          ),
+        ),
       ).rejects.toBeInstanceOf(StaleWatermarkError);
       const now = await withSystemOrgTx(s.orgId, ({ db }) =>
-        db.dataSourceSyncState.findUniqueOrThrow({ where: { id: state.id }, select: { watermark: true, rowsUpserted: true } }),
+        db.dataSourceSyncState.findUniqueOrThrow({
+          where: { id: state.id },
+          select: { watermark: true, rowsUpserted: true },
+        }),
       );
       expect(now.watermark).toMatchObject({ id: uuid(105) });
       expect(now.rowsUpserted).toBe(before.rowsUpserted + 5);

@@ -35,10 +35,7 @@ export function assignableRoles(actorRole: Role | null | undefined): Role[] {
 }
 
 /** Whether `actorRole` may act on (change or remove) a member holding `targetRole`. */
-export function canActOnMember(
-  actorRole: Role | null | undefined,
-  targetRole: Role,
-): boolean {
+export function canActOnMember(actorRole: Role | null | undefined, targetRole: Role): boolean {
   if (!canManageMembers(actorRole)) return false;
   if (targetRole === Role.OWNER) return canTouchOwner(actorRole);
   return true;

@@ -1,6 +1,11 @@
 import { TZDate } from "@date-fns/tz";
 
-import type { DbFilterOp, DbViewSort, ParsedDbFilter, ParsedDbViewParams } from "@/lib/databases/href";
+import type {
+  DbFilterOp,
+  DbViewSort,
+  ParsedDbFilter,
+  ParsedDbViewParams,
+} from "@/lib/databases/href";
 
 /**
  * The allowlisted query builder for database views (Phase 4a).
@@ -30,14 +35,7 @@ import type { DbFilterOp, DbViewSort, ParsedDbFilter, ParsedDbViewParams } from 
  */
 
 export type FieldKind =
-  | "string"
-  | "text"
-  | "int"
-  | "float"
-  | "datetime"
-  | "boolean"
-  | "enum"
-  | "jsonArray";
+  "string" | "text" | "int" | "float" | "datetime" | "boolean" | "enum" | "jsonArray";
 
 type Where = Record<string, unknown>;
 
@@ -60,7 +58,8 @@ export interface FieldSpec {
   orderBy?: (dir: "asc" | "desc") => Where[];
 }
 
-export type ParsedValue = string | number | boolean | Date | (string | number | boolean)[] | DayRange | null;
+export type ParsedValue =
+  string | number | boolean | Date | (string | number | boolean)[] | DayRange | null;
 
 /** An org-local calendar day: [start, end). */
 export interface DayRange {
@@ -290,7 +289,8 @@ export function filterWhere(spec: FieldSpec, op: DbFilterOp, value: ParsedValue)
   }
   if (spec.kind === "jsonArray") {
     const jsonPath = [...(spec.jsonPath ?? [])];
-    const one = (v: string | number | boolean) => nest(spec.path, { path: jsonPath, array_contains: [v] });
+    const one = (v: string | number | boolean) =>
+      nest(spec.path, { path: jsonPath, array_contains: [v] });
     if (op === "in" && Array.isArray(value)) return { OR: value.map(one) };
     if ((op === "contains" || op === "eq") && typeof value === "string") return one(value);
     return null;
@@ -476,7 +476,10 @@ export function parseSize(raw: string | string[] | undefined): number {
 }
 
 /** Parses a comma list param (cols=, nd=) into keys of the given set. */
-export function parseKeyList(raw: string | string[] | undefined, allowed: Iterable<string>): string[] | null {
+export function parseKeyList(
+  raw: string | string[] | undefined,
+  allowed: Iterable<string>,
+): string[] | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (value === undefined) return null;
   const set = new Set(allowed);

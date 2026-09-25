@@ -4,7 +4,15 @@ import { reportLinks } from "@/server/reports/links";
 
 import { BarList } from "../bar-list";
 import { LazyAttendanceLineChart } from "../charts/lazy";
-import { formatCount, formatDecimal, formatSigned, formatSignedPct, kindLabel, longDate, shortDate } from "../format";
+import {
+  formatCount,
+  formatDecimal,
+  formatSigned,
+  formatSignedPct,
+  kindLabel,
+  longDate,
+  shortDate,
+} from "../format";
 import { ReportCard, ReportEmpty, ReportError } from "../report-card";
 import { Stat, StatRow } from "../stat";
 import { TableView } from "../table-view";
@@ -46,16 +54,21 @@ export async function LastSessionSection({ ctx }: { ctx: ReportViewContext }) {
                 ) : (
                   <Minus className="size-3.5" aria-hidden="true" />
                 )}
-                <span className="sr-only">{delta > 0 ? "Up" : delta < 0 ? "Down" : "No change"}</span>
+                <span className="sr-only">
+                  {delta > 0 ? "Up" : delta < 0 ? "Down" : "No change"}
+                </span>
                 {formatSigned(delta)}
                 {deltaPct !== null ? ` (${formatSignedPct(deltaPct)})` : ""}
               </span>
               <span className="text-muted-foreground">
-                vs. {previous.title} on {shortDate(previous.localDate)} ({formatCount(previous.checkIns)})
+                vs. {previous.title} on {shortDate(previous.localDate)} (
+                {formatCount(previous.checkIns)})
               </span>
             </p>
           ) : (
-            <p className="text-muted-foreground text-sm">The first session on record: nothing to compare with yet.</p>
+            <p className="text-muted-foreground text-sm">
+              The first session on record: nothing to compare with yet.
+            </p>
           )}
           <StatRow className="sm:grid-cols-2">
             <Stat
@@ -67,7 +80,10 @@ export async function LastSessionSection({ ctx }: { ctx: ReportViewContext }) {
                   : undefined
               }
             />
-            <Stat label="Type" value={<span className="text-base">{kindLabel(current.kind)}</span>} />
+            <Stat
+              label="Type"
+              value={<span className="text-base">{kindLabel(current.kind)}</span>}
+            />
           </StatRow>
         </>
       )}
@@ -96,9 +112,16 @@ export async function AttendanceSection({ ctx }: { ctx: ReportViewContext }) {
       ) : (
         <>
           <StatRow className="sm:grid-cols-4">
-            <Stat label="Sessions" value={formatCount(r.totalSessions)} href={reportLinks.sessions(ctx.slug, ctx.link)} />
+            <Stat
+              label="Sessions"
+              value={formatCount(r.totalSessions)}
+              href={reportLinks.sessions(ctx.slug, ctx.link)}
+            />
             <Stat label="Check-ins" value={formatCount(r.totalCheckIns)} />
-            <Stat label="Average per session" value={r.average === null ? "–" : formatDecimal(r.average)} />
+            <Stat
+              label="Average per session"
+              value={r.average === null ? "–" : formatDecimal(r.average)}
+            />
             <Stat
               label="Best turnout"
               value={r.peak ? formatCount(r.peak.checkIns) : "–"}
@@ -118,7 +141,8 @@ export async function AttendanceSection({ ctx }: { ctx: ReportViewContext }) {
           ) : null}
           {r.sessions.length < r.totalSessions ? (
             <p className="text-muted-foreground text-xs">
-              Showing the latest {formatCount(r.sessions.length)} of {formatCount(r.totalSessions)} sessions.
+              Showing the latest {formatCount(r.sessions.length)} of {formatCount(r.totalSessions)}{" "}
+              sessions.
             </p>
           ) : null}
           <TableView

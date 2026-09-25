@@ -125,7 +125,9 @@ export function sourceReader(client: SourceQuery): SourceReader {
       );
     },
     unsubscribes() {
-      return q<RemoteUnsubscribe>("SELECT email, created_at, handled_at FROM suite_export.unsubscribes_all()");
+      return q<RemoteUnsubscribe>(
+        "SELECT email, created_at, handled_at FROM suite_export.unsubscribes_all()",
+      );
     },
   };
 }

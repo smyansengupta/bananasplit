@@ -40,8 +40,14 @@ try {
   const [cbc, robotics, jackson, kristine] = await Promise.all([
     orgBySlug("claude-builders-club"),
     orgBySlug("robotics-club"),
-    authDb.user.findUnique({ where: { email: "jackson@example.edu" }, select: { id: true, email: true, name: true } }),
-    authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
+    authDb.user.findUnique({
+      where: { email: "jackson@example.edu" },
+      select: { id: true, email: true, name: true },
+    }),
+    authDb.user.findUnique({
+      where: { email: "kristine@example.edu" },
+      select: { id: true, email: true, name: true },
+    }),
   ]);
   if (cbc && robotics && jackson && kristine) {
     seeded = { cbcId: cbc.id, roboticsId: robotics.id, jackson, kristine };
@@ -86,8 +92,12 @@ describe.skipIf(!seeded)("data layer against the local database (seeded CBC)", (
   });
 
   it("a non-member gets NotFoundError, never another org's data", async () => {
-    await expect(withOrgTx(s.roboticsId, async ({ db }) => db.task.count())).rejects.toBeInstanceOf(NotFoundError);
-    await expect(withOrgAction(async () => "ran")(s.roboticsId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(withOrgTx(s.roboticsId, async ({ db }) => db.task.count())).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    await expect(withOrgAction(async () => "ran")(s.roboticsId)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it("the service path is fail-closed without an org and scoped with one", async () => {
@@ -139,7 +149,9 @@ describe.skipIf(!seeded)("data layer against the local database (seeded CBC)", (
     const name = `itest-${Date.now()}`;
     await expect(
       withOrgAction(async ({ db, organizationId }) => {
-        await db.label.create({ data: { organizationId, name: `${name}-rolled-back`, color: "#000000" } });
+        await db.label.create({
+          data: { organizationId, name: `${name}-rolled-back`, color: "#000000" },
+        });
         throw new Error("boom");
       })(s.cbcId),
     ).rejects.toThrow("boom");
@@ -151,7 +163,9 @@ describe.skipIf(!seeded)("data layer against the local database (seeded CBC)", (
       });
       createdLabels.push(label.id);
       ctx.afterCommit(async () => {
-        seenAfterCommit = await withOrgTx(s.cbcId, ({ db }) => db.label.count({ where: { id: label.id } }));
+        seenAfterCommit = await withOrgTx(s.cbcId, ({ db }) =>
+          db.label.count({ where: { id: label.id } }),
+        );
       });
       redirect("/app/claude-builders-club");
     })(s.cbcId).catch((e: unknown) => e);

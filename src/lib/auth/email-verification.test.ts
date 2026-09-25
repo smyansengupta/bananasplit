@@ -8,7 +8,12 @@ import { emailVerificationRequired } from "./email-verification";
  * sender configured - an address must still be confirmed before it can hold
  * a Membership.
  */
-const KEYS = ["VERCEL_ENV", "RESEND_API_KEY", "AUTH_REQUIRE_EMAIL_VERIFICATION", "NODE_ENV"] as const;
+const KEYS = [
+  "VERCEL_ENV",
+  "RESEND_API_KEY",
+  "AUTH_REQUIRE_EMAIL_VERIFICATION",
+  "NODE_ENV",
+] as const;
 
 /** Sets exactly these four, clearing any the case leaves out. */
 function env(values: Partial<Record<(typeof KEYS)[number], string>>): void {
@@ -51,7 +56,11 @@ describe("emailVerificationRequired", () => {
   it("refuses to be switched off where it matters", () => {
     env({ VERCEL_ENV: "production", AUTH_REQUIRE_EMAIL_VERIFICATION: "false" });
     expect(emailVerificationRequired()).toBe(true);
-    env({ NODE_ENV: "development", RESEND_API_KEY: "re_live_key", AUTH_REQUIRE_EMAIL_VERIFICATION: "false" });
+    env({
+      NODE_ENV: "development",
+      RESEND_API_KEY: "re_live_key",
+      AUTH_REQUIRE_EMAIL_VERIFICATION: "false",
+    });
     expect(emailVerificationRequired()).toBe(true);
   });
 });

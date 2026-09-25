@@ -65,7 +65,9 @@ export function UserAvatar({
           referrerPolicy="no-referrer"
         />
       )}
-      <AvatarFallback className="text-[length:inherit]">{initialsOf(user.name, user.email)}</AvatarFallback>
+      <AvatarFallback className="text-[length:inherit]">
+        {initialsOf(user.name, user.email)}
+      </AvatarFallback>
     </Avatar>
   );
 }

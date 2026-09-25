@@ -56,8 +56,10 @@ describe("personal ICS feed (0A Fix 7)", () => {
         title: `All day in ${org.id}`,
         description: null,
         location: null,
-        startsAt: org.id === "org_ny" ? new Date("2026-10-10T04:00:00Z") : new Date("2026-10-09T15:00:00Z"),
-        endsAt: org.id === "org_ny" ? new Date("2026-10-11T04:00:00Z") : new Date("2026-10-10T15:00:00Z"),
+        startsAt:
+          org.id === "org_ny" ? new Date("2026-10-10T04:00:00Z") : new Date("2026-10-09T15:00:00Z"),
+        endsAt:
+          org.id === "org_ny" ? new Date("2026-10-11T04:00:00Z") : new Date("2026-10-10T15:00:00Z"),
         allDay: true,
         updatedAt: new Date("2026-09-01T00:00:00Z"),
         timeZone: org.timezone,

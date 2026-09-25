@@ -130,19 +130,27 @@ export function rowsToWrites(
   options: { memberIds?: ReadonlySet<string>; userNames?: ReadonlyMap<string, string | null> } = {},
 ): PositionWrite[] {
   return rows.map((r) => {
-    const stillMember = r.userId !== null && (!options.memberIds || options.memberIds.has(r.userId));
+    const stillMember =
+      r.userId !== null && (!options.memberIds || options.memberIds.has(r.userId));
     // A member who left becomes a placeholder that keeps their name.
     const personName =
-      r.personName ?? (r.userId && !stillMember ? (options.userNames?.get(r.userId) ?? null) : null);
+      r.personName ??
+      (r.userId && !stillMember ? (options.userNames?.get(r.userId) ?? null) : null);
     return {
       ref: r.id,
       key: r.key,
       title: r.title,
       personName,
       userId: stillMember ? r.userId : null,
-      matchState: stillMember ? r.matchState : r.matchState === "CONFIRMED" ? "UNMATCHED" : r.matchState,
+      matchState: stillMember
+        ? r.matchState
+        : r.matchState === "CONFIRMED"
+          ? "UNMATCHED"
+          : r.matchState,
       matchScore: stillMember ? r.matchScore : null,
-      suggestedUserIds: options.memberIds ? r.suggestedUserIds.filter((id) => options.memberIds!.has(id)) : r.suggestedUserIds,
+      suggestedUserIds: options.memberIds
+        ? r.suggestedUserIds.filter((id) => options.memberIds!.has(id))
+        : r.suggestedUserIds,
       reportsToRef: r.reportsToId,
       isOpen: r.isOpen,
       isAdvisor: r.isAdvisor,

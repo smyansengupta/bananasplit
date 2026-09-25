@@ -1,7 +1,6 @@
 import type { NotificationType } from "@/generated/prisma/enums";
 import { emailEnabledFor, parseNotificationPreferences } from "@/lib/notifications/preferences";
 
-
 /**
  * Whether a user's User.emailPreferences allow email for `type`. Reads
  * through the v2 upgrade parser (src/lib/notifications/preferences.ts), so

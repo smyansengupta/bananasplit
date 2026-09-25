@@ -35,12 +35,13 @@ const RSVP_LABELS: Record<RSVPStatus, string> = {
   MAYBE: "Maybe",
 };
 
-const RSVP_BADGE_VARIANT: Record<RSVPStatus, "default" | "destructive" | "secondary" | "outline"> = {
-  PENDING: "outline",
-  YES: "default",
-  NO: "destructive",
-  MAYBE: "secondary",
-};
+const RSVP_BADGE_VARIANT: Record<RSVPStatus, "default" | "destructive" | "secondary" | "outline"> =
+  {
+    PENDING: "outline",
+    YES: "default",
+    NO: "destructive",
+    MAYBE: "secondary",
+  };
 
 export interface EventDetail extends EventFormEvent {
   needsReview: boolean;
@@ -87,7 +88,8 @@ export function EventDetailView({
   }
 
   function handleDelete() {
-    if (!window.confirm(`Delete "${event.title}"? Invited members are told it was cancelled.`)) return;
+    if (!window.confirm(`Delete "${event.title}"? Invited members are told it was cancelled.`))
+      return;
     startTransition(async () => {
       const result = await deleteEvent(orgId, event.id);
       if (result.error) {
@@ -100,7 +102,10 @@ export function EventDetailView({
 
   function handleCreateMeetingNotes() {
     startTransition(async () => {
-      const result = await createNote(orgId, { title: `${event.title} — meeting notes`, eventId: event.id });
+      const result = await createNote(orgId, {
+        title: `${event.title} — meeting notes`,
+        eventId: event.id,
+      });
       if (result.noteId) router.push(`/app/${orgSlug}/notes/${result.noteId}`);
     });
   }
@@ -111,7 +116,10 @@ export function EventDetailView({
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link href={`/app/${orgSlug}/calendar`} className="text-muted-foreground text-sm hover:underline">
+          <Link
+            href={`/app/${orgSlug}/calendar`}
+            className="text-muted-foreground text-sm hover:underline"
+          >
             ← Back to calendar
           </Link>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight break-words">{event.title}</h1>
@@ -128,10 +136,21 @@ export function EventDetailView({
         </div>
         {canEdit && (
           <div className="flex shrink-0 gap-2">
-            <Button variant="outline" size="icon" onClick={() => setEditOpen(true)} aria-label="Edit event">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setEditOpen(true)}
+              aria-label="Edit event"
+            >
               <Pencil className="size-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={handleDelete} disabled={isPending} aria-label="Delete event">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleDelete}
+              disabled={isPending}
+              aria-label="Delete event"
+            >
               <Trash2 className="size-4" />
             </Button>
           </div>
@@ -139,10 +158,13 @@ export function EventDetailView({
       </div>
 
       {event.needsReview && canEdit && (
-        <p className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3 text-sm" role="note">
+        <p
+          className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3 text-sm"
+          role="note"
+        >
           <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
-          Imported from Google Calendar with more than one possible match. Check whether it duplicates another
-          session and merge them in Databases &gt; Sessions.
+          Imported from Google Calendar with more than one possible match. Check whether it
+          duplicates another session and merge them in Databases &gt; Sessions.
         </p>
       )}
       {canEdit && event.googleSyncState === "FAILED" && event.googleSyncError && (
@@ -169,12 +191,19 @@ export function EventDetailView({
         {event.rsvpUrl && (
           <p className="flex items-center gap-2">
             <Ticket className="text-muted-foreground size-4" aria-hidden="true" />
-            <a href={event.rsvpUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+            <a
+              href={event.rsvpUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
               RSVP link
             </a>
           </p>
         )}
-        {event.publicNote && <p className="text-muted-foreground">Website note: {event.publicNote}</p>}
+        {event.publicNote && (
+          <p className="text-muted-foreground">Website note: {event.publicNote}</p>
+        )}
       </div>
 
       {event.conferenceUrl && (
@@ -225,7 +254,8 @@ export function EventDetailView({
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Invited ({event.attendees.length})</p>
           <p className="text-muted-foreground text-xs">
-            {count("YES")} yes · {count("MAYBE")} maybe · {count("NO")} no · {count("PENDING")} pending
+            {count("YES")} yes · {count("MAYBE")} maybe · {count("NO")} no · {count("PENDING")}{" "}
+            pending
           </p>
         </div>
         <ul className="space-y-1.5">
@@ -238,14 +268,21 @@ export function EventDetailView({
               <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>{RSVP_LABELS[a.rsvp]}</Badge>
             </li>
           ))}
-          {event.attendees.length === 0 && <p className="text-muted-foreground text-sm">No members invited.</p>}
+          {event.attendees.length === 0 && (
+            <p className="text-muted-foreground text-sm">No members invited.</p>
+          )}
         </ul>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Linked notes</p>
-          <Button variant="outline" size="sm" onClick={handleCreateMeetingNotes} disabled={isPending}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCreateMeetingNotes}
+            disabled={isPending}
+          >
             <NotebookText className="size-4" />
             Create meeting notes
           </Button>
@@ -254,7 +291,10 @@ export function EventDetailView({
           <ul className="space-y-1">
             {event.notes.map((note) => (
               <li key={note.id}>
-                <Link href={`/app/${orgSlug}/notes/${note.id}`} className="text-primary text-sm hover:underline">
+                <Link
+                  href={`/app/${orgSlug}/notes/${note.id}`}
+                  className="text-primary text-sm hover:underline"
+                >
                   {note.title || "Untitled note"}
                 </Link>
               </li>

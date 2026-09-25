@@ -52,7 +52,8 @@ const ALGORITHM = "aes-256-gcm";
 
 export function secretAad(loc: SecretLocator): Buffer {
   for (const [name, value] of Object.entries(loc)) {
-    if (!value || value.includes("|")) throw new TypeError(`secret ${name} is empty or contains "|"`);
+    if (!value || value.includes("|"))
+      throw new TypeError(`secret ${name} is empty or contains "|"`);
   }
   return Buffer.from(
     `cbc-secret:v1|${loc.orgId}|${loc.integrationId}|${loc.provider}|${loc.kind}`,
@@ -98,7 +99,11 @@ function unwrapDek(ring: Keyring, record: EncryptedSecret, aad: Buffer): Buffer 
   );
 }
 
-export function encryptSecret(plaintext: string, loc: SecretLocator, ring: Keyring): EncryptedSecret {
+export function encryptSecret(
+  plaintext: string,
+  loc: SecretLocator,
+  ring: Keyring,
+): EncryptedSecret {
   const aad = secretAad(loc);
   const dek = randomBytes(32);
   try {

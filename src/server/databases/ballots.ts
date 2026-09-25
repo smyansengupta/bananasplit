@@ -1,7 +1,12 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { TxClient } from "@/server/db/context";
 
-import { classifyBallot, readDefinition, STICKY_REASONS, type ImportedDefinition } from "./ballot-definitions";
+import {
+  classifyBallot,
+  readDefinition,
+  STICKY_REASONS,
+  type ImportedDefinition,
+} from "./ballot-definitions";
 
 /**
  * Ballot writes shared by the admin actions (app_user, OWNER/ADMIN) and the
@@ -34,7 +39,14 @@ export async function reevaluateBallots(
   const bySlug = new Map(defs.map((d) => [d.slug, { ...d, parsed: readDefinition(d.definition) }]));
   const ballots = await db.ballot.findMany({
     where: { organizationId, ...(slugs ? { pollSlug: { in: [...slugs] } } : {}) },
-    select: { id: true, pollSlug: true, castAt: true, answers: true, ballotDefinitionId: true, excludedReason: true },
+    select: {
+      id: true,
+      pollSlug: true,
+      castAt: true,
+      answers: true,
+      ballotDefinitionId: true,
+      excludedReason: true,
+    },
   });
   let excluded = 0;
   let exploded = 0;
@@ -45,7 +57,14 @@ export async function reevaluateBallots(
       ? b.excludedReason
       : classifyBallot(
           { pollSlug: b.pollSlug, castAt: b.castAt, answers: b.answers },
-          def ? { isTest: def.isTest, opensAt: def.opensAt, closesAt: def.closesAt, definition: def.parsed } : null,
+          def
+            ? {
+                isTest: def.isTest,
+                opensAt: def.opensAt,
+                closesAt: def.closesAt,
+                definition: def.parsed,
+              }
+            : null,
         );
     const defId = def?.id ?? null;
     const changed = defId !== b.ballotDefinitionId || reason !== b.excludedReason;
@@ -90,7 +109,8 @@ export async function upsertBallotDefinition(
     ...(extra.isTest !== undefined ? { isTest: extra.isTest } : {}),
   };
   const id = existing
-    ? (await db.ballotDefinition.update({ where: { id: existing.id }, data, select: { id: true } })).id
+    ? (await db.ballotDefinition.update({ where: { id: existing.id }, data, select: { id: true } }))
+        .id
     : (
         await db.ballotDefinition.create({
           data: { organizationId, slug: imported.slug, ...data },

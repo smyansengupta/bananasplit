@@ -68,6 +68,8 @@ export function initialsOf(name?: string | null, email?: string | null): string 
   if (!source) return "?";
   const words = source.split(/[\s._-]+/).filter(Boolean);
   const letters =
-    words.length >= 2 ? [words[0][0], words[words.length - 1][0]] : [...(words[0] ?? source)].slice(0, 2);
+    words.length >= 2
+      ? [words[0][0], words[words.length - 1][0]]
+      : [...(words[0] ?? source)].slice(0, 2);
   return letters.join("").toUpperCase() || "?";
 }

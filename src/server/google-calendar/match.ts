@@ -39,7 +39,23 @@ export type ImportDecision =
   | { action: "create"; google: ImportedEvent }
   | { action: "skip"; google: ImportedEvent; reason: string };
 
-const STOP = new Set(["the", "a", "an", "and", "of", "to", "for", "with", "on", "at", "in", "cbc", "claude", "builders", "club"]);
+const STOP = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "of",
+  "to",
+  "for",
+  "with",
+  "on",
+  "at",
+  "in",
+  "cbc",
+  "claude",
+  "builders",
+  "club",
+]);
 
 export function titleTokens(title: string): string[] {
   return title
@@ -105,7 +121,8 @@ export function planImport(
   const decisions: ImportDecision[] = [];
 
   const sorted = [...googleEvents].sort(
-    (a, b) => a.startsAt.getTime() - b.startsAt.getTime() || (a.googleEventId < b.googleEventId ? -1 : 1),
+    (a, b) =>
+      a.startsAt.getTime() - b.startsAt.getTime() || (a.googleEventId < b.googleEventId ? -1 : 1),
   );
 
   // Pass 1: exact links, so pass 2 never offers an already-linked event.
@@ -118,7 +135,8 @@ export function planImport(
       continue;
     }
     if (g.mirrorOf) {
-      const own = g.mirrorOf.orgId === ctx.organizationId ? byId.get(g.mirrorOf.suiteEventId) : undefined;
+      const own =
+        g.mirrorOf.orgId === ctx.organizationId ? byId.get(g.mirrorOf.suiteEventId) : undefined;
       if (own && !own.deletedAt && !own.mergedIntoId && !own.googleEventId) {
         claimed.add(own.id);
         decisions.push({ action: "relink", google: g, suiteEventId: own.id });
@@ -163,7 +181,14 @@ export interface ImportSummary {
 }
 
 export function summarize(decisions: readonly ImportDecision[]): ImportSummary {
-  const s: ImportSummary = { total: decisions.length, unchanged: 0, linked: 0, created: 0, ambiguous: 0, skipped: 0 };
+  const s: ImportSummary = {
+    total: decisions.length,
+    unchanged: 0,
+    linked: 0,
+    created: 0,
+    ambiguous: 0,
+    skipped: 0,
+  };
   for (const d of decisions) {
     if (d.action === "unchanged") s.unchanged += 1;
     else if (d.action === "link" || d.action === "relink") s.linked += 1;

@@ -2,7 +2,13 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { num, round1 } from "../sql";
 import type { AttendanceReport } from "../types";
-import { sessionColumns, sessionsInRange, toSessionPoint, type ReportQuery, type SessionRow } from "./common";
+import {
+  sessionColumns,
+  sessionsInRange,
+  toSessionPoint,
+  type ReportQuery,
+  type SessionRow,
+} from "./common";
 
 /** The chart shows at most this many sessions (the most recent). */
 export const MAX_SESSION_POINTS = 400;
@@ -13,7 +19,9 @@ export const MAX_SESSION_POINTS = 400;
  * computed before the LIMIT, so they stay exact past 400 sessions.
  */
 export const queryAttendance: ReportQuery<AttendanceReport> = async (db, args) => {
-  const rows = await db.$queryRaw<(SessionRow & { total_sessions: number; total_checkins: number })[]>`
+  const rows = await db.$queryRaw<
+    (SessionRow & { total_sessions: number; total_checkins: number })[]
+  >`
     WITH s AS (${sessionsInRange(args)})
     SELECT ${sessionColumns(Prisma.sql`s`, args.tz)},
            (count(*) OVER ())::int AS total_sessions,

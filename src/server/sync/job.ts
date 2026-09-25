@@ -87,13 +87,23 @@ export interface Loaded {
 }
 
 /** Step 1 of a run (exported for the database tests). */
-export async function loadSyncContext(orgId: string, integrationId: string): Promise<Loaded | null> {
+export async function loadSyncContext(
+  orgId: string,
+  integrationId: string,
+): Promise<Loaded | null> {
   return withSystemOrgTx(orgId, async ({ db }) => {
     const integration = await db.orgIntegration.findFirst({
-      where: { id: integrationId, organizationId: orgId, provider: IntegrationProvider.SUPABASE_SOURCE },
+      where: {
+        id: integrationId,
+        organizationId: orgId,
+        provider: IntegrationProvider.SUPABASE_SOURCE,
+      },
       select: { id: true, config: true, connectedById: true, secretFingerprint: true },
     });
-    const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true, deletedAt: true } });
+    const org = await db.organization.findUnique({
+      where: { id: orgId },
+      select: { timezone: true, deletedAt: true },
+    });
     if (!integration || !integration.secretFingerprint || !org || org.deletedAt) return null;
 
     const members = await db.membership.findMany({
@@ -102,7 +112,8 @@ export async function loadSyncContext(orgId: string, integrationId: string): Pro
     });
     const memberEmails = new Map<string, string>();
     for (const m of members) {
-      if (m.user.emailVerified && m.user.email) memberEmails.set(m.user.email.trim().toLowerCase(), m.userId);
+      if (m.user.emailVerified && m.user.email)
+        memberEmails.set(m.user.email.trim().toLowerCase(), m.userId);
     }
     const connected = members.find((m) => m.userId === integration.connectedById);
     const owner = members.find((m) => m.role === "OWNER");
@@ -129,7 +140,11 @@ export async function loadSyncContext(orgId: string, integrationId: string): Pro
   });
 }
 
-async function recordIntegration(orgId: string, integrationId: string, error: string | null): Promise<void> {
+async function recordIntegration(
+  orgId: string,
+  integrationId: string,
+  error: string | null,
+): Promise<void> {
   await withSystemOrgTx(orgId, async ({ db }) => {
     await db.orgIntegration.updateMany({
       where: { id: integrationId, organizationId: orgId },
@@ -145,14 +160,19 @@ async function writeBatch(
   scope: SyncScope,
   state: StateRow,
   apply: (db: Prisma.TransactionClient) => Promise<ApplyStats>,
-  watermark: { expected: Prisma.JsonValue; next: Prisma.InputJsonValue } | { full: Prisma.InputJsonValue } | null,
+  watermark:
+    | { expected: Prisma.JsonValue; next: Prisma.InputJsonValue }
+    | { full: Prisma.InputJsonValue }
+    | null,
 ): Promise<ApplyStats> {
   return withSystemOrgTx(scope.organizationId, async ({ db }) => {
     const stats = await apply(db);
     if (stats.contacts.length) await refreshRollups(db, scope.organizationId, stats.contacts);
     if (stats.upserted > 0) await markDataChanged(db, scope.organizationId);
-    if (watermark && "full" in watermark) await markStream(db, state, watermark.full, stats.upserted);
-    else if (watermark) await advanceWatermark(db, state, watermark.expected, watermark.next, stats.upserted);
+    if (watermark && "full" in watermark)
+      await markStream(db, state, watermark.full, stats.upserted);
+    else if (watermark)
+      await advanceWatermark(db, state, watermark.expected, watermark.next, stats.upserted);
     return stats;
   });
 }
@@ -290,7 +310,8 @@ export async function runSync(
     return row;
   };
   const summary: SyncRunSummary = { streams: {}, reconciled: false, complete: true };
-  const only = (s: Stream) => options.stream === "all" || options.stream === "reconcile" || options.stream === s;
+  const only = (s: Stream) =>
+    options.stream === "all" || options.stream === "reconcile" || options.stream === s;
 
   const guard = async (s: Stream, fn: () => Promise<void>) => {
     try {
@@ -301,9 +322,9 @@ export async function runSync(
         return;
       }
       const message = sanitize(error, 300);
-      await withSystemOrgTx(scope.organizationId, ({ db }) => recordStreamError(db, state(s), message)).catch(
-        () => undefined,
-      );
+      await withSystemOrgTx(scope.organizationId, ({ db }) =>
+        recordStreamError(db, state(s), message),
+      ).catch(() => undefined);
       throw error;
     }
   };
@@ -312,9 +333,19 @@ export async function runSync(
     await guard("sessions", async () => {
       const sessions = await reader.sessions();
       const stats = await withSystemOrgTx(scope.organizationId, async (ctx) => {
-        const out = await applySessions({ ...ctx, organizationId: scope.organizationId }, scope, sessions);
-        await markStream(ctx.db, state("sessions"), { total: sessions.length } as Prisma.InputJsonValue, out.created + out.linked + out.updated);
-        if (out.created + out.linked + out.updated + out.unlinked > 0) await markDataChanged(ctx.db, scope.organizationId);
+        const out = await applySessions(
+          { ...ctx, organizationId: scope.organizationId },
+          scope,
+          sessions,
+        );
+        await markStream(
+          ctx.db,
+          state("sessions"),
+          { total: sessions.length } as Prisma.InputJsonValue,
+          out.created + out.linked + out.updated,
+        );
+        if (out.created + out.linked + out.updated + out.unlinked > 0)
+          await markDataChanged(ctx.db, scope.organizationId);
         return out;
       });
       summary.streams.sessions = { ...stats };
@@ -367,9 +398,14 @@ export async function runSync(
   if (only("unsubscribes") && timeLeft()) {
     await guard("unsubscribes", async () => {
       const rows = await reader.unsubscribes();
-      const stats = await writeBatch(scope, state("unsubscribes"), (db) => applyUnsubscribes(db, scope, rows), {
-        full: { total: rows.length } as Prisma.InputJsonValue,
-      });
+      const stats = await writeBatch(
+        scope,
+        state("unsubscribes"),
+        (db) => applyUnsubscribes(db, scope, rows),
+        {
+          full: { total: rows.length } as Prisma.InputJsonValue,
+        },
+      );
       summary.streams.unsubscribes = { upserted: stats.upserted, skipped: stats.skipped };
     });
   }
@@ -407,15 +443,28 @@ export async function runSync(
         return;
       }
       const removed = await withSystemOrgTx(scope.organizationId, async ({ db }) => {
-        const a = await removeMissing(db, scope.organizationId, "checkins", checkins.seen ?? new Set());
-        const s = await removeMissing(db, scope.organizationId, "signups", signups.seen ?? new Set());
+        const a = await removeMissing(
+          db,
+          scope.organizationId,
+          "checkins",
+          checkins.seen ?? new Set(),
+        );
+        const s = await removeMissing(
+          db,
+          scope.organizationId,
+          "signups",
+          signups.seen ?? new Set(),
+        );
         const b = await removeMissing(db, scope.organizationId, "ballots", ballotIds ?? new Set());
         await refreshRollups(db, scope.organizationId, null);
         await markDataChanged(db, scope.organizationId);
         await markStream(
           db,
           state("reconcile"),
-          { lastAt: new Date(now()).toISOString(), removed: a.removed + s.removed + b.removed } as Prisma.InputJsonValue,
+          {
+            lastAt: new Date(now()).toISOString(),
+            removed: a.removed + s.removed + b.removed,
+          } as Prisma.InputJsonValue,
           0,
         );
         return { checkins: a.removed, signups: s.removed, ballots: b.removed };
@@ -427,7 +476,9 @@ export async function runSync(
   return summary;
 }
 
-export const sourceSyncJob: JobHandler<SourceSyncPayload> = async (run): Promise<JobOutcome | void> => {
+export const sourceSyncJob: JobHandler<SourceSyncPayload> = async (
+  run,
+): Promise<JobOutcome | void> => {
   const orgId = run.organizationId;
   if (!orgId) throw new PermanentJobError("source-sync is an org job");
   const { integrationId, stream } = run.payload;
@@ -439,7 +490,8 @@ export const sourceSyncJob: JobHandler<SourceSyncPayload> = async (run): Promise
   try {
     config = parseSourceConfig(loaded.config);
   } catch (error) {
-    const reason = error instanceof SourceConfigError ? error.message : "Invalid data source settings.";
+    const reason =
+      error instanceof SourceConfigError ? error.message : "Invalid data source settings.";
     await recordIntegration(orgId, integrationId, reason);
     throw new PermanentJobError(reason);
   }
@@ -466,7 +518,9 @@ export const sourceSyncJob: JobHandler<SourceSyncPayload> = async (run): Promise
     summary = await runSync(loaded, reader, { deadline: run.deadline, stream });
   } catch (error) {
     if (!(error instanceof PermanentJobError)) {
-      await recordIntegration(orgId, integrationId, describeConnectionError(error)).catch(() => undefined);
+      await recordIntegration(orgId, integrationId, describeConnectionError(error)).catch(
+        () => undefined,
+      );
     }
     throw error;
   } finally {

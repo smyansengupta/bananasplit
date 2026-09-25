@@ -22,7 +22,9 @@ function toNodes(detail: VersionDetail): ChartNodeDTO[] {
     title: p.title,
     personName: p.personName,
     userId: p.userId,
-    user: p.user ? { id: p.user.id, name: p.user.name, image: p.user.image, avatar: p.user.avatar } : null,
+    user: p.user
+      ? { id: p.user.id, name: p.user.name, image: p.user.image, avatar: p.user.avatar }
+      : null,
     reportsToId: p.reportsToId,
     isOpen: p.isOpen,
     isAdvisor: p.isAdvisor,
@@ -125,12 +127,21 @@ export default async function VersionPage({
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             Version {version.number}
-            {version.isActive ? <Badge>Published</Badge> : <Badge variant="outline">{version.status.toLowerCase()}</Badge>}
+            {version.isActive ? (
+              <Badge>Published</Badge>
+            ) : (
+              <Badge variant="outline">{version.status.toLowerCase()}</Badge>
+            )}
           </h1>
           <p className="text-muted-foreground text-sm">{detail.positions.length} positions</p>
         </div>
         {!version.isActive && (version.status === "ARCHIVED" || version.status === "PUBLISHED") && (
-          <RollbackButton orgId={organization.id} orgSlug={orgSlug} versionId={version.id} number={version.number} />
+          <RollbackButton
+            orgId={organization.id}
+            orgSlug={orgSlug}
+            versionId={version.id}
+            number={version.number}
+          />
         )}
       </div>
 
@@ -176,7 +187,9 @@ export default async function VersionPage({
             </div>
           )
         ) : (
-          <p className="text-muted-foreground text-sm">There is no other version to compare with.</p>
+          <p className="text-muted-foreground text-sm">
+            There is no other version to compare with.
+          </p>
         )}
       </section>
 

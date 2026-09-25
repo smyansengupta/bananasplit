@@ -1961,7 +1961,9 @@ async function seedCbcTasks(db: Db, ctx: TaskSeedContext): Promise<number> {
     }
     // Due dates are floating calendar dates (UTC midnight of the local day; see
     // src/lib/tasks/dates.ts), never an instant.
-    const dueDate = fromDateKey(localDateKey(cbcTime(monday, t.due[0], t.due[1], 12), CBC_TIMEZONE));
+    const dueDate = fromDateKey(
+      localDateKey(cbcTime(monday, t.due[0], t.due[1], 12), CBC_TIMEZONE),
+    );
     const completed = t.status === TaskStatus.COMPLETED;
     const created = await db.task.create({
       data: {

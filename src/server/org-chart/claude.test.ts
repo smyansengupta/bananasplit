@@ -31,7 +31,9 @@ const injectionRaw = readFileSync(path.join(dir, "cbc-injection.raw.json"), "utf
 
 type CreateArgs = [Record<string, unknown>, Record<string, unknown>?];
 
-function message(over: Partial<Anthropic.Beta.BetaMessage> & { text?: string }): Anthropic.Beta.BetaMessage {
+function message(
+  over: Partial<Anthropic.Beta.BetaMessage> & { text?: string },
+): Anthropic.Beta.BetaMessage {
   const { text, ...rest } = over;
   return {
     id: "msg_1",
@@ -65,7 +67,11 @@ function fakeClient(responses: Array<Anthropic.Beta.BetaMessage | Error>, tokens
   return { client: client as unknown as Anthropic, create, countTokens, retrieve };
 }
 
-const textSource: ExtractedSource = { type: "text", text: "President: Jackson", format: "markdown" };
+const textSource: ExtractedSource = {
+  type: "text",
+  text: "President: Jackson",
+  format: "markdown",
+};
 const config = { apiKey: "sk-ant-test-0000", model: DEFAULT_MODEL, fallbacks: true };
 
 let factory: ReturnType<typeof vi.spyOn>;
@@ -77,7 +83,10 @@ function installClient(fake: ReturnType<typeof fakeClient>) {
 
 describe("buildParseRequest", () => {
   it("sends the document as a document block, framed as data, with no tools", () => {
-    const req = buildParseRequest({ type: "text", text: injectionMd, format: "markdown" }, "board <v2>.md");
+    const req = buildParseRequest(
+      { type: "text", text: injectionMd, format: "markdown" },
+      "board <v2>.md",
+    );
     expect(req.system).toBe(SYSTEM_PROMPT);
     expect(req.system).toMatch(/untrusted data/);
     expect(req).not.toHaveProperty("tools");
@@ -106,10 +115,19 @@ describe("parseWithClaude", () => {
   it("counts tokens, then asks for the strict schema with adaptive thinking and default fallbacks", async () => {
     const fake = fakeClient([message({ text: rawJson })]);
     installClient(fake);
-    const result = await parseWithClaude({ config, source: textSource, filename: "cbc.md", timeoutMs: 120_000 });
+    const result = await parseWithClaude({
+      config,
+      source: textSource,
+      filename: "cbc.md",
+      timeoutMs: 120_000,
+    });
 
     expect(result.parse).toEqual(OrgChartParseSchema.parse(JSON.parse(rawJson)));
-    expect(result.usage).toMatchObject({ inputTokens: 2100, outputTokens: 1800, fallbackUsed: false });
+    expect(result.usage).toMatchObject({
+      inputTokens: 2100,
+      outputTokens: 1800,
+      fallbackUsed: false,
+    });
     expect(factory).toHaveBeenCalledWith(config.apiKey, 120_000);
     expect(fake.countTokens).toHaveBeenCalledTimes(1);
     const [body, options] = fake.create.mock.calls[0];
@@ -128,7 +146,12 @@ describe("parseWithClaude", () => {
   it("refuses a document over the token budget without calling the model", async () => {
     const fake = fakeClient([], MAX_INPUT_TOKENS + 1);
     installClient(fake);
-    const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch((e) => e);
+    const err = await parseWithClaude({
+      config,
+      source: textSource,
+      filename: null,
+      timeoutMs: 1000,
+    }).catch((e) => e);
     expect(err).toBeInstanceOf(ClaudeParseError);
     expect(err.retryable).toBe(false);
     expect(err.message).toMatch(/too long/);
@@ -139,12 +162,17 @@ describe("parseWithClaude", () => {
     for (const stop of ["refusal", "max_tokens"] as const) {
       const fake = fakeClient([message({ stop_reason: stop, text: '{"positions": [' })]);
       installClient(fake);
-      const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch(
-        (e) => e,
-      );
+      const err = await parseWithClaude({
+        config,
+        source: textSource,
+        filename: null,
+        timeoutMs: 1000,
+      }).catch((e) => e);
       expect(err).toBeInstanceOf(ClaudeParseError);
       expect(err.retryable).toBe(false);
-      expect(err.message).toMatch(stop === "refusal" ? /declined/ : /too long for Claude to finish/);
+      expect(err.message).toMatch(
+        stop === "refusal" ? /declined/ : /too long for Claude to finish/,
+      );
       factory.mockRestore();
     }
   });
@@ -152,7 +180,12 @@ describe("parseWithClaude", () => {
   it("treats output that breaks the schema as a retryable failure", async () => {
     const fake = fakeClient([message({ text: '{"positions": [{"id": 1}], "open_items": []}' })]);
     installClient(fake);
-    const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch((e) => e);
+    const err = await parseWithClaude({
+      config,
+      source: textSource,
+      filename: null,
+      timeoutMs: 1000,
+    }).catch((e) => e);
     expect(err).toBeInstanceOf(ClaudeParseError);
     expect(err.retryable).toBe(true);
   });
@@ -160,7 +193,10 @@ describe("parseWithClaude", () => {
   it("resends once without fallbacks when the API rejects the parameter", async () => {
     const rejection = new Anthropic.BadRequestError(
       400,
-      { type: "error", error: { type: "invalid_request_error", message: "fallbacks: not supported" } },
+      {
+        type: "error",
+        error: { type: "invalid_request_error", message: "fallbacks: not supported" },
+      },
       "fallbacks: not supported",
       new Headers(),
     );
@@ -173,16 +209,36 @@ describe("parseWithClaude", () => {
 
   it("maps SDK errors to safe messages and retry decisions, never echoing the key", async () => {
     const cases: [Error, boolean, RegExp][] = [
-      [new Anthropic.AuthenticationError(401, undefined, "invalid x-api-key sk-ant-test-0000", new Headers()), false, /rejected/],
-      [new Anthropic.RateLimitError(429, undefined, "rate limited", new Headers()), true, /rate-limiting/],
-      [new Anthropic.InternalServerError(529, undefined, "overloaded", new Headers()), true, /could not be reached/],
+      [
+        new Anthropic.AuthenticationError(
+          401,
+          undefined,
+          "invalid x-api-key sk-ant-test-0000",
+          new Headers(),
+        ),
+        false,
+        /rejected/,
+      ],
+      [
+        new Anthropic.RateLimitError(429, undefined, "rate limited", new Headers()),
+        true,
+        /rate-limiting/,
+      ],
+      [
+        new Anthropic.InternalServerError(529, undefined, "overloaded", new Headers()),
+        true,
+        /could not be reached/,
+      ],
       [new Anthropic.APIConnectionTimeoutError(), true, /too long to answer/],
     ];
     for (const [error, retryable, pattern] of cases) {
       installClient(fakeClient([error]));
-      const err = await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 }).catch(
-        (e) => e,
-      );
+      const err = await parseWithClaude({
+        config,
+        source: textSource,
+        filename: null,
+        timeoutMs: 1000,
+      }).catch((e) => e);
       expect(err).toBeInstanceOf(ClaudeParseError);
       expect(err.retryable).toBe(retryable);
       expect(err.message).toMatch(pattern);
@@ -219,10 +275,20 @@ describe("settings", () => {
   it("tests a key by retrieving the configured model", async () => {
     const fake = fakeClient([]);
     installClient(fake);
-    const ok = await claudeConnectionTest({ secret: "sk", config: {}, signal: new AbortController().signal });
+    const ok = await claudeConnectionTest({
+      secret: "sk",
+      config: {},
+      signal: new AbortController().signal,
+    });
     expect(ok).toEqual({ ok: true, config: { model: DEFAULT_MODEL } });
     expect(fake.retrieve).toHaveBeenCalledWith(DEFAULT_MODEL, {}, expect.anything());
-    expect(await claudeConnectionTest({ secret: null, config: {}, signal: new AbortController().signal })).toMatchObject({
+    expect(
+      await claudeConnectionTest({
+        secret: null,
+        config: {},
+        signal: new AbortController().signal,
+      }),
+    ).toMatchObject({
       ok: false,
     });
   });

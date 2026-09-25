@@ -37,7 +37,9 @@ export class GoogleReauthError extends Error {
 /** The deployment has no Google Calendar OAuth client configured. */
 export class GoogleNotConfiguredError extends PermanentJobError {
   constructor() {
-    super("Google Calendar is not configured on this deployment (GOOGLE_CALENDAR_CLIENT_ID / _SECRET).");
+    super(
+      "Google Calendar is not configured on this deployment (GOOGLE_CALENDAR_CLIENT_ID / _SECRET).",
+    );
     this.name = "GoogleNotConfiguredError";
   }
 }
@@ -60,7 +62,10 @@ export function clearAllAccessTokens(): void {
   cache.clear();
 }
 
-function oauthClient(env: Record<string, string | undefined> = process.env): { id: string; secret: string } {
+function oauthClient(env: Record<string, string | undefined> = process.env): {
+  id: string;
+  secret: string;
+} {
   const id = env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
   const secret = env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
   if (!id || !secret) throw new GoogleNotConfiguredError();
@@ -74,7 +79,8 @@ export async function getRefreshToken(orgId: string): Promise<string> {
     provider: IntegrationProvider.GOOGLE_CALENDAR,
     kind: "REFRESH_TOKEN",
   });
-  if (!token) throw new GoogleReauthError("No Google Calendar authorization is stored for this org.");
+  if (!token)
+    throw new GoogleReauthError("No Google Calendar authorization is stored for this org.");
   return token;
 }
 
@@ -83,7 +89,10 @@ function fingerprint(refreshToken: string): string {
 }
 
 /** A valid access token for the org's Google Calendar connection. */
-export async function getAccessToken(orgId: string, options: { signal?: AbortSignal } = {}): Promise<string> {
+export async function getAccessToken(
+  orgId: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<string> {
   assertNoTx("Google token refresh");
   const client = oauthClient();
   const refreshToken = await getRefreshToken(orgId);
@@ -105,7 +114,12 @@ export async function getAccessToken(orgId: string, options: { signal?: AbortSig
     cache: "no-store",
     redirect: "error",
   });
-  let body: { access_token?: string; expires_in?: number; error?: string; error_description?: string } = {};
+  let body: {
+    access_token?: string;
+    expires_in?: number;
+    error?: string;
+    error_description?: string;
+  } = {};
   try {
     body = (await res.json()) as typeof body;
   } catch {
@@ -117,7 +131,11 @@ export async function getAccessToken(orgId: string, options: { signal?: AbortSig
     if (body.error === "invalid_client" || body.error === "unauthorized_client") {
       throw new PermanentJobError(`Google rejected the OAuth client (${body.error}).`);
     }
-    throw new GoogleApiError(res.status || 500, body.error ?? null, body.error_description ?? "token refresh failed");
+    throw new GoogleApiError(
+      res.status || 500,
+      body.error ?? null,
+      body.error_description ?? "token refresh failed",
+    );
   }
   cache.set(orgId, {
     accessToken: body.access_token,
@@ -131,7 +149,10 @@ export async function getAccessToken(orgId: string, options: { signal?: AbortSig
  * Revokes a grant at Google. An already invalid token counts as revoked.
  * Throws GoogleApiError (retryable) on server errors.
  */
-export async function revokeGrant(token: string, options: { signal?: AbortSignal } = {}): Promise<void> {
+export async function revokeGrant(
+  token: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<void> {
   assertNoTx("Google revoke");
   const timeout = AbortSignal.timeout(10_000);
   const res = await fetch(GOOGLE_REVOKE_URL, {

@@ -22,7 +22,10 @@ export const metadata: Metadata = { title: "Org Chart" };
  * getOrgContextBySlug. ?view=list renders the accessible list on the
  * server; ?position={key} opens the side panel.
  */
-export default async function OrgChartPage({ params, searchParams }: PageProps<"/app/[orgSlug]/org-chart">) {
+export default async function OrgChartPage({
+  params,
+  searchParams,
+}: PageProps<"/app/[orgSlug]/org-chart">) {
   const { orgSlug } = await params;
   const query = await searchParams;
   const { organization, role } = await getOrgContextBySlug(orgSlug);
@@ -49,7 +52,9 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
     title: p.title,
     personName: p.personName,
     userId: p.userId,
-    user: p.user ? { id: p.user.id, name: p.user.name, image: p.user.image, avatar: p.user.avatar } : null,
+    user: p.user
+      ? { id: p.user.id, name: p.user.name, image: p.user.image, avatar: p.user.avatar }
+      : null,
     reportsToId: p.reportsToId,
     isOpen: p.isOpen,
     isAdvisor: p.isAdvisor,
@@ -58,7 +63,8 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
     rank: p.rank,
   }));
 
-  const hrefFor = (key: string) => `${base}?${mode === "list" ? "view=list&" : ""}position=${encodeURIComponent(key)}`;
+  const hrefFor = (key: string) =>
+    `${base}?${mode === "list" ? "view=list&" : ""}position=${encodeURIComponent(key)}`;
 
   return (
     <div className="space-y-4">
@@ -82,8 +88,18 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
         <div className="flex flex-wrap items-center gap-2">
           {chart && (
             <nav aria-label="Chart view" className="bg-muted flex rounded-lg p-0.5">
-              <ViewLink href={base} active={mode === "chart"} icon={<Network className="size-4" />} label="Chart" />
-              <ViewLink href={`${base}?view=list`} active={mode === "list"} icon={<List className="size-4" />} label="List" />
+              <ViewLink
+                href={base}
+                active={mode === "chart"}
+                icon={<Network className="size-4" />}
+                label="Chart"
+              />
+              <ViewLink
+                href={`${base}?view=list`}
+                active={mode === "list"}
+                icon={<List className="size-4" />}
+                label="List"
+              />
             </nav>
           )}
           {canEdit && (
@@ -168,7 +184,17 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
   );
 }
 
-function ViewLink({ href, active, icon, label }: { href: string; active: boolean; icon: React.ReactNode; label: string }) {
+function ViewLink({
+  href,
+  active,
+  icon,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
     <Link
       href={href}

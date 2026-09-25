@@ -33,7 +33,10 @@ const { store, requireUserMock, secrets, invalidateMock } = vi.hoisted(() => ({
   invalidateMock: vi.fn(),
 }));
 
-function matchWhere(row: Record<string, unknown>, where: Record<string, unknown> | undefined): boolean {
+function matchWhere(
+  row: Record<string, unknown>,
+  where: Record<string, unknown> | undefined,
+): boolean {
   for (const [key, cond] of Object.entries(where ?? {})) {
     if (key === "OR") {
       if (!(cond as Record<string, unknown>[]).some((w) => matchWhere(row, w))) return false;
@@ -57,7 +60,8 @@ function matchWhere(row: Record<string, unknown>, where: Record<string, unknown>
     } else if (typeof cond === "object") {
       const c = cond as { in?: unknown[]; not?: unknown; gte?: Date; lte?: Date };
       if (c.in && !c.in.includes(value)) return false;
-      if ("not" in c && (c.not === null ? value === null || value === undefined : value === c.not)) return false;
+      if ("not" in c && (c.not === null ? value === null || value === undefined : value === c.not))
+        return false;
       if (c.gte && !((value as Date) >= c.gte)) return false;
       if (c.lte && !((value as Date) <= c.lte)) return false;
     } else if (value !== cond) {
@@ -80,7 +84,7 @@ function applyData(row: Row, data: Record<string, unknown>): void {
 let jobSeq = 0;
 function makeTx() {
   const visible = (r: Row) => r.organizationId === store.org;
-  const clone = <T,>(r: T): T => (r ? { ...(r as object) } : r) as T;
+  const clone = <T>(r: T): T => (r ? { ...(r as object) } : r) as T;
   return {
     async $queryRaw(strings: TemplateStringsArray, ...values: unknown[]) {
       const sql = strings.join("?");
@@ -117,7 +121,10 @@ function makeTx() {
         }
       } else if (sql.includes("'NOT_APPLICABLE'")) {
         for (const r of store.events.values()) {
-          if (r.organizationId === values[0] && ["PENDING", "FAILED"].includes(r.googleSyncState as string)) {
+          if (
+            r.organizationId === values[0] &&
+            ["PENDING", "FAILED"].includes(r.googleSyncState as string)
+          ) {
             r.googleSyncState = "NOT_APPLICABLE";
             r.googleSyncError = null;
             n += 1;
@@ -128,7 +135,9 @@ function makeTx() {
     },
     event: {
       async findFirst({ where }: { where: Record<string, unknown> }) {
-        return clone([...store.events.values()].find((r) => visible(r) && matchWhere(r, where)) ?? null);
+        return clone(
+          [...store.events.values()].find((r) => visible(r) && matchWhere(r, where)) ?? null,
+        );
       },
       async findMany({ where, take }: { where: Record<string, unknown>; take?: number }) {
         const rows = [...store.events.values()]
@@ -136,7 +145,13 @@ function makeTx() {
           .sort((a, b) => (a.startsAt as Date).getTime() - (b.startsAt as Date).getTime());
         return rows.slice(0, take ?? rows.length).map(clone);
       },
-      async updateMany({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) {
+      async updateMany({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) {
         let count = 0;
         for (const r of store.events.values()) {
           if (visible(r) && matchWhere(r, where)) {
@@ -203,7 +218,13 @@ function makeTx() {
         Object.assign(r, data);
         return clone(r);
       },
-      async updateMany({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) {
+      async updateMany({
+        where,
+        data,
+      }: {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      }) {
         const rows = store.integrations.filter((r) => visible(r) && matchWhere(r, where));
         for (const r of rows) Object.assign(r, data);
         return { count: rows.length };
@@ -238,7 +259,8 @@ function makeTx() {
 vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 vi.mock("@/server/cache/invalidate", () => ({ invalidate: invalidateMock }));
 vi.mock("@/server/secrets", () => ({
-  getSecret: async ({ orgId, kind }: { orgId: string; kind: string }) => secrets.get(`${orgId}:${kind}`) ?? null,
+  getSecret: async ({ orgId, kind }: { orgId: string; kind: string }) =>
+    secrets.get(`${orgId}:${kind}`) ?? null,
 }));
 vi.mock("@/server/db/clients", () => {
   const client = { $transaction: async (fn: (tx: unknown) => unknown) => fn(makeTx()) };
@@ -256,7 +278,10 @@ const google = {
   calls: [] as string[],
   inject: [] as { method: string; status: number; reason?: string }[],
   hook: null as null | ((method: string, calendarId: string, eventId?: string) => void),
-  token: { status: 200, body: { access_token: "ya29.test-token", expires_in: 3600 } as Record<string, unknown> },
+  token: {
+    status: 200,
+    body: { access_token: "ya29.test-token", expires_in: 3600 } as Record<string, unknown>,
+  },
   tokenCalls: 0,
 };
 
@@ -274,7 +299,9 @@ function json(status: number, body?: unknown): Response {
 }
 
 async function fakeFetch(input: string | URL | Request, init: RequestInit = {}): Promise<Response> {
-  const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
+  const url = new URL(
+    typeof input === "string" || input instanceof URL ? input.toString() : input.url,
+  );
   const method = (init.method ?? "GET").toUpperCase();
   if (url.host === "oauth2.googleapis.com") {
     google.tokenCalls += 1;
@@ -289,33 +316,59 @@ async function fakeFetch(input: string | URL | Request, init: RequestInit = {}):
   const injected = google.inject.findIndex((i) => i.method === method);
   if (injected >= 0) {
     const [i] = google.inject.splice(injected, 1);
-    return json(i.status, { error: { code: i.status, message: `injected ${i.status}`, errors: [{ reason: i.reason ?? "x" }] } });
+    return json(i.status, {
+      error: {
+        code: i.status,
+        message: `injected ${i.status}`,
+        errors: [{ reason: i.reason ?? "x" }],
+      },
+    });
   }
   const events = cal(calendarId);
   const body = init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
   switch (method) {
     case "POST": {
       const id = String(body.id);
-      if (events.has(id)) return json(409, { error: { message: "The requested identifier already exists.", errors: [{ reason: "duplicate" }] } });
-      const e: GEvent = { ...body, id, status: "confirmed", etag: '"1"', htmlLink: `https://www.google.com/calendar/event?eid=${id.slice(0, 6)}` };
+      if (events.has(id))
+        return json(409, {
+          error: {
+            message: "The requested identifier already exists.",
+            errors: [{ reason: "duplicate" }],
+          },
+        });
+      const e: GEvent = {
+        ...body,
+        id,
+        status: "confirmed",
+        etag: '"1"',
+        htmlLink: `https://www.google.com/calendar/event?eid=${id.slice(0, 6)}`,
+      };
       events.set(id, e);
       return json(200, e);
     }
     case "GET": {
-      if (!eventId) return json(200, { items: [...events.values()].filter((e) => e.status !== "cancelled") });
+      if (!eventId)
+        return json(200, { items: [...events.values()].filter((e) => e.status !== "cancelled") });
       const e = events.get(eventId);
-      return e ? json(200, e) : json(404, { error: { message: "Not Found", errors: [{ reason: "notFound" }] } });
+      return e
+        ? json(200, e)
+        : json(404, { error: { message: "Not Found", errors: [{ reason: "notFound" }] } });
     }
     case "PATCH": {
       const e = eventId ? events.get(eventId) : undefined;
-      if (!e) return json(404, { error: { message: "Not Found", errors: [{ reason: "notFound" }] } });
+      if (!e)
+        return json(404, { error: { message: "Not Found", errors: [{ reason: "notFound" }] } });
       Object.assign(e, body, { etag: `"${Number(String(e.etag).replace(/"/g, "")) + 1}"` });
       return json(200, e);
     }
     case "DELETE": {
       const e = eventId ? events.get(eventId) : undefined;
-      if (!e) return json(404, { error: { message: "Not Found", errors: [{ reason: "notFound" }] } });
-      if (e.status === "cancelled") return json(410, { error: { message: "Resource has been deleted", errors: [{ reason: "deleted" }] } });
+      if (!e)
+        return json(404, { error: { message: "Not Found", errors: [{ reason: "notFound" }] } });
+      if (e.status === "cancelled")
+        return json(410, {
+          error: { message: "Resource has been deleted", errors: [{ reason: "deleted" }] },
+        });
       e.status = "cancelled";
       return new Response(null, { status: 204 });
     }
@@ -330,7 +383,8 @@ const { googleImportJob } = await import("./import");
 const { googleRevokeJob } = await import("./revoke");
 const { siteRebuildJob, parseBuildHookUrl } = await import("@/server/public-events/rebuild");
 const { createCalendarClient } = await import("./client");
-const { getAccessToken, clearAllAccessTokens, GoogleReauthError, GoogleNotConfiguredError } = await import("./token");
+const { getAccessToken, clearAllAccessTokens, GoogleReauthError, GoogleNotConfiguredError } =
+  await import("./token");
 const { googleEventId } = await import("./mapping");
 const { withSystemOrgTx, NetworkInTransactionError } = await import("@/server/db/context");
 const { PermanentJobError } = await import("@/server/jobs/types");
@@ -414,9 +468,26 @@ beforeEach(() => {
         connectedById: "u_admin",
         lastError: null,
       },
-      { id: "int_hook", organizationId: ORG, provider: "NETLIFY_BUILD_HOOK", status: "CONNECTED", config: {} },
+      {
+        id: "int_hook",
+        organizationId: ORG,
+        provider: "NETLIFY_BUILD_HOOK",
+        status: "CONNECTED",
+        config: {},
+      },
     ],
-    orgs: new Map([[ORG, { id: ORG, organizationId: ORG, slug: "claude-builders-club", timezone: "America/New_York", name: "CBC" }]]),
+    orgs: new Map([
+      [
+        ORG,
+        {
+          id: ORG,
+          organizationId: ORG,
+          slug: "claude-builders-club",
+          timezone: "America/New_York",
+          name: "CBC",
+        },
+      ],
+    ]),
     members: [
       { id: "m1", organizationId: ORG, userId: "u_owner", role: "OWNER", joinedAt: new Date(0) },
       { id: "m2", organizationId: ORG, userId: "u_admin", role: "ADMIN", joinedAt: new Date(1) },
@@ -489,7 +560,11 @@ describe("gcal: mirroring one event", () => {
     await gcalJob(run("e1"));
     expect(google.calls.map((c) => c.split(" ")[0])).toEqual(["POST", "GET", "PATCH"]);
     expect(liveGoogle(PUBLIC_CAL)).toHaveLength(1);
-    expect(ev("e1")).toMatchObject({ googleSyncState: "SYNCED", googleEventId: id, googleEtag: '"8"' });
+    expect(ev("e1")).toMatchObject({
+      googleSyncState: "SYNCED",
+      googleEventId: id,
+      googleEtag: '"8"',
+    });
   });
 
   it("restores a mirror someone deleted in Google (409 on a cancelled id)", async () => {
@@ -503,22 +578,42 @@ describe("gcal: mirroring one event", () => {
   it.each([404, 410])("re-inserts when a patch answers %i", async (status) => {
     store.events.set(
       "e1",
-      event("e1", { googleCalendarId: PUBLIC_CAL, googleEventId: "hand_made_id", googleSyncState: "PENDING" }),
+      event("e1", {
+        googleCalendarId: PUBLIC_CAL,
+        googleEventId: "hand_made_id",
+        googleSyncState: "PENDING",
+      }),
     );
-    google.inject.push({ method: "PATCH", status, reason: status === 404 ? "notFound" : "deleted" });
+    google.inject.push({
+      method: "PATCH",
+      status,
+      reason: status === 404 ? "notFound" : "deleted",
+    });
     await gcalJob(run("e1"));
-    expect(ev("e1")).toMatchObject({ googleSyncState: "SYNCED", googleEventId: googleEventId(ORG, "e1") });
+    expect(ev("e1")).toMatchObject({
+      googleSyncState: "SYNCED",
+      googleEventId: googleEventId(ORG, "e1"),
+    });
     expect(liveGoogle(PUBLIC_CAL)).toHaveLength(1);
   });
 
   it.each([404, 410])("treats %i on delete as done", async (status) => {
     store.events.set(
       "e1",
-      event("e1", { googleCalendarId: PUBLIC_CAL, googleEventId: "gone", deletedAt: new Date(), syncVersion: 3 }),
+      event("e1", {
+        googleCalendarId: PUBLIC_CAL,
+        googleEventId: "gone",
+        deletedAt: new Date(),
+        syncVersion: 3,
+      }),
     );
     google.inject.push({ method: "DELETE", status });
     await gcalJob(run("e1"));
-    expect(ev("e1")).toMatchObject({ googleSyncState: "NOT_APPLICABLE", googleEventId: null, googleCalendarId: null });
+    expect(ev("e1")).toMatchObject({
+      googleSyncState: "NOT_APPLICABLE",
+      googleEventId: null,
+      googleCalendarId: null,
+    });
   });
 
   it("deletes the mirror when the event is deleted", async () => {
@@ -531,7 +626,10 @@ describe("gcal: mirroring one event", () => {
   });
 
   it("never puts an INTERNAL event on the public calendar", async () => {
-    store.events.set("e_int", event("e_int", { visibility: "INTERNAL", conferenceUrl: "https://meet.google.com/a" }));
+    store.events.set(
+      "e_int",
+      event("e_int", { visibility: "INTERNAL", conferenceUrl: "https://meet.google.com/a" }),
+    );
     await gcalJob(run("e_int"));
     expect(google.calls).toEqual([]);
     expect(ev("e_int")).toMatchObject({ googleSyncState: "NOT_APPLICABLE", googleEventId: null });
@@ -547,7 +645,10 @@ describe("gcal: mirroring one event", () => {
   });
 
   it("a visibility flip moves the event between the public and internal calendars", async () => {
-    store.integrations[0].config = { publicCalendarId: PUBLIC_CAL, internalCalendarId: INTERNAL_CAL };
+    store.integrations[0].config = {
+      publicCalendarId: PUBLIC_CAL,
+      internalCalendarId: INTERNAL_CAL,
+    };
     store.events.set("e1", event("e1", { conferenceUrl: "https://meet.google.com/abc" }));
     await gcalJob(run("e1"));
     expect(JSON.stringify(liveGoogle(PUBLIC_CAL))).not.toContain("meet.google.com");
@@ -555,7 +656,9 @@ describe("gcal: mirroring one event", () => {
     await gcalJob(run("e1"));
     expect(liveGoogle(PUBLIC_CAL)).toHaveLength(0);
     expect(liveGoogle(INTERNAL_CAL)).toHaveLength(1);
-    expect(String(liveGoogle(INTERNAL_CAL)[0].description)).toContain("Join: https://meet.google.com/abc");
+    expect(String(liveGoogle(INTERNAL_CAL)[0].description)).toContain(
+      "Join: https://meet.google.com/abc",
+    );
     expect(ev("e1")).toMatchObject({ googleSyncState: "SYNCED", googleCalendarId: INTERNAL_CAL });
     // And back.
     Object.assign(ev("e1"), { visibility: "PUBLIC", syncVersion: 3 });
@@ -573,7 +676,10 @@ describe("gcal: mirroring one event", () => {
       }
     };
     await gcalJob(run("e1"));
-    expect(ev("e1")).toMatchObject({ googleSyncState: "PENDING", googleEventId: googleEventId(ORG, "e1") });
+    expect(ev("e1")).toMatchObject({
+      googleSyncState: "PENDING",
+      googleEventId: googleEventId(ORG, "e1"),
+    });
     google.hook = null;
     await gcalJob(run("e1"));
     expect(ev("e1")).toMatchObject({ googleSyncState: "SYNCED" });
@@ -630,7 +736,10 @@ describe("invalid_grant", () => {
     expect(first).toMatchObject({ status: "CANCELLED" });
     expect(store.integrations[0]).toMatchObject({ status: "NEEDS_REAUTH" });
     expect(store.notifications.map((n) => n.userId).sort()).toEqual(["u_admin", "u_owner"]);
-    expect(store.notifications[0]).toMatchObject({ type: "INTEGRATION_ERROR", linkUrl: "/app/claude-builders-club/settings/integrations" });
+    expect(store.notifications[0]).toMatchObject({
+      type: "INTEGRATION_ERROR",
+      linkUrl: "/app/claude-builders-club/settings/integrations",
+    });
     expect(store.jobs.filter((j) => j.kind === "notify-email")).toHaveLength(2);
     expect(ev("e1")).toMatchObject({ googleSyncState: "FAILED" });
 
@@ -648,7 +757,10 @@ describe("invalid_grant", () => {
       expect(await getAccessToken(ORG)).toBe("ya29.test-token");
       expect(google.tokenCalls).toBe(1);
       clearAllAccessTokens();
-      google.token = { status: 400, body: { error: "invalid_grant", error_description: "Token has been expired or revoked." } };
+      google.token = {
+        status: 400,
+        body: { error: "invalid_grant", error_description: "Token has been expired or revoked." },
+      };
       await expect(getAccessToken(ORG)).rejects.toBeInstanceOf(GoogleReauthError);
       secrets.delete(`${ORG}:REFRESH_TOKEN`);
       await expect(getAccessToken(ORG)).rejects.toBeInstanceOf(GoogleReauthError);
@@ -675,7 +787,10 @@ describe("the job-runner contract", () => {
 
   it("pushToGoogle is pure network: it works with no database at all", async () => {
     const client = createCalendarClient({ accessToken: "ya29.x" });
-    const outcome = await pushToGoogle(client, event("e9") as never, { target: PUBLIC_CAL, timeZone: "UTC" });
+    const outcome = await pushToGoogle(client, event("e9") as never, {
+      target: PUBLIC_CAL,
+      timeZone: "UTC",
+    });
     expect(outcome).toMatchObject({ kind: "mirrored", link: { calendarId: PUBLIC_CAL } });
   });
 
@@ -688,14 +803,19 @@ describe("the job-runner contract", () => {
 
 describe("the event service feeds the worker", () => {
   it("a save coalesces into one gcal job per event and marks it PENDING", async () => {
-    store.events.set("e1", event("e1", { googleSyncState: "SYNCED", googleCalendarId: PUBLIC_CAL, googleEventId: "g" }));
+    store.events.set(
+      "e1",
+      event("e1", { googleSyncState: "SYNCED", googleCalendarId: PUBLIC_CAL, googleEventId: "g" }),
+    );
     await withSystemOrgTx(ORG, { userId: "u_admin" }, async (ctx) => {
       const svc = { ...ctx, organizationId: ORG, userId: "u_admin" };
       await updateEvent(svc, "e1", { title: "A" });
       await updateEvent(svc, "e1", { title: "B" });
     });
     // enqueueJob merges same-key jobs in SQL; here both calls carry the same key.
-    expect(new Set(store.jobs.filter((j) => j.kind === "gcal").map((j) => j.key))).toEqual(new Set(["e1"]));
+    expect(new Set(store.jobs.filter((j) => j.kind === "gcal").map((j) => j.key))).toEqual(
+      new Set(["e1"]),
+    );
     expect(ev("e1")).toMatchObject({ googleSyncState: "PENDING", syncVersion: 3 });
     // A PUBLIC change also queues the (debounced) site rebuild.
     expect(store.jobs.some((j) => j.kind === "site-rebuild")).toBe(true);
@@ -703,7 +823,10 @@ describe("the event service feeds the worker", () => {
 
   it("deleting a mirrored event while Google is disconnected leaves it PENDING for Sync now", async () => {
     store.integrations[0].status = "DISCONNECTED";
-    store.events.set("e1", event("e1", { googleSyncState: "SYNCED", googleCalendarId: PUBLIC_CAL, googleEventId: "g" }));
+    store.events.set(
+      "e1",
+      event("e1", { googleSyncState: "SYNCED", googleCalendarId: PUBLIC_CAL, googleEventId: "g" }),
+    );
     await withSystemOrgTx(ORG, { userId: "u_admin" }, async (ctx) => {
       await deleteEvent({ ...ctx, organizationId: ORG, userId: "u_admin" }, "e1");
     });
@@ -740,7 +863,8 @@ describe("google-import", () => {
         htmlLink: `https://www.google.com/calendar/event?eid=${id}`,
         ...extra,
       });
-    const soon = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 13) + ":00:00.000Z";
+    const soon = (days: number) =>
+      new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 13) + ":00:00.000Z";
     put("g_w1", "Workshop 1: Prompting Fundamentals", soon(3));
     put("g_new", "Guest talk: Evals", soon(10));
     put("g_amb", "Info Session", soon(5));
@@ -756,9 +880,20 @@ describe("google-import", () => {
       }),
     );
     // Two suite copies of the info session: ambiguous.
-    for (const [id, offset] of [["e_i1", 0], ["e_i2", 30]] as const) {
+    for (const [id, offset] of [
+      ["e_i1", 0],
+      ["e_i2", 30],
+    ] as const) {
       const start = new Date(new Date(soon(5)).getTime() + offset * 60 * 1000);
-      store.events.set(id, event(id, { title: "Info session", startsAt: start, endsAt: start, googleSyncState: "NOT_APPLICABLE" }));
+      store.events.set(
+        id,
+        event(id, {
+          title: "Info session",
+          startsAt: start,
+          endsAt: start,
+          googleSyncState: "NOT_APPLICABLE",
+        }),
+      );
     }
   }
 
@@ -784,7 +919,11 @@ describe("google-import", () => {
     const all = [...store.events.values()];
     const workshops = all.filter((e) => /Workshop 1/.test(String(e.title)));
     expect(workshops).toHaveLength(1);
-    expect(ev("e_w1")).toMatchObject({ googleEventId: "g_w1", googleCalendarId: PUBLIC_CAL, visibility: "PUBLIC" });
+    expect(ev("e_w1")).toMatchObject({
+      googleEventId: "g_w1",
+      googleCalendarId: PUBLIC_CAL,
+      visibility: "PUBLIC",
+    });
     const created = all.find((e) => e.title === "Guest talk: Evals");
     expect(created).toMatchObject({
       visibility: "PUBLIC",
@@ -805,7 +944,9 @@ describe("google-import", () => {
     const count = store.events.size;
     await googleImportJob(importRun("apply"));
     expect(store.events.size).toBe(count);
-    expect((store.integrations[0].config as { import: { unchanged: number } }).import).toMatchObject({
+    expect(
+      (store.integrations[0].config as { import: { unchanged: number } }).import,
+    ).toMatchObject({
       unchanged: 3,
       linked: 0,
       created: 0,
@@ -866,20 +1007,28 @@ describe("site-rebuild", () => {
     await siteRebuildJob(rebuildRun());
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
-    expect(url.toString()).toMatch(/^https:\/\/api\.netlify\.com\/build_hooks\/5f1a2b3c4d5e6f7a8b9c0d1e\?trigger_title=/);
+    expect(url.toString()).toMatch(
+      /^https:\/\/api\.netlify\.com\/build_hooks\/5f1a2b3c4d5e6f7a8b9c0d1e\?trigger_title=/,
+    );
     expect(init.method).toBe("POST");
   });
 
   it("marks a deleted hook ERROR and stops", async () => {
     secrets.set(`${ORG}:HOOK_URL`, "https://api.netlify.com/build_hooks/5f1a2b3c4d5e6f7a8b9c0d1e");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 404 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 404 })),
+    );
     await expect(siteRebuildJob(rebuildRun())).rejects.toBeInstanceOf(PermanentJobError);
     expect(store.integrations[1]).toMatchObject({ status: "ERROR" });
   });
 
   it("retries Netlify outages", async () => {
     secrets.set(`${ORG}:HOOK_URL`, "https://api.netlify.com/build_hooks/5f1a2b3c4d5e6f7a8b9c0d1e");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 502 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 502 })),
+    );
     await expect(siteRebuildJob(rebuildRun())).rejects.not.toBeInstanceOf(PermanentJobError);
   });
 
@@ -887,7 +1036,9 @@ describe("site-rebuild", () => {
     expect(parseBuildHookUrl("https://api.netlify.com/build_hooks/abc123def456")).not.toBeNull();
     expect(parseBuildHookUrl("http://api.netlify.com/build_hooks/abc123def456")).toBeNull();
     expect(parseBuildHookUrl("https://169.254.169.254/latest/meta-data")).toBeNull();
-    expect(parseBuildHookUrl("https://api.netlify.com.evil.example/build_hooks/abc123def456")).toBeNull();
+    expect(
+      parseBuildHookUrl("https://api.netlify.com.evil.example/build_hooks/abc123def456"),
+    ).toBeNull();
     secrets.set(`${ORG}:HOOK_URL`, "https://example.com/hook");
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

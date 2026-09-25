@@ -16,7 +16,9 @@ import { loadVersion } from "@/server/org-chart/service";
 export const metadata: Metadata = { title: "Edit org chart draft" };
 
 /** The draft editor (OWNER/ADMIN). Members get a 404: drafts are invisible to them under RLS too. */
-export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/org-chart/drafts/[versionId]">) {
+export default async function DraftPage({
+  params,
+}: PageProps<"/app/[orgSlug]/org-chart/drafts/[versionId]">) {
   const { orgSlug, versionId } = await params;
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "orgchart.write")) notFound();
@@ -31,7 +33,10 @@ export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/or
 
   const header = (
     <div className="space-y-1">
-      <Link href={base} className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm">
+      <Link
+        href={base}
+        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
+      >
         <ChevronLeft className="size-4" aria-hidden="true" />
         Org Chart
       </Link>
@@ -47,7 +52,8 @@ export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/or
             ) : (
               version.sourceFilename
             )}
-            {version.parseModel ? ` by ${version.parseModel}` : ""}. Check every position before publishing.
+            {version.parseModel ? ` by ${version.parseModel}` : ""}. Check every position before
+            publishing.
           </>
         ) : (
           "Edit the positions, then publish when the chart is right."
@@ -64,7 +70,10 @@ export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/or
           title={`Version ${version.number} is ${version.status.toLowerCase()}`}
           description="Only drafts can be edited. Start a new draft from the published chart, or restore this version from the history."
           action={
-            <Link href={`${base}/versions/${version.id}`} className="text-primary text-sm underline underline-offset-4">
+            <Link
+              href={`${base}/versions/${version.id}`}
+              className="text-primary text-sm underline underline-offset-4"
+            >
               View this version
             </Link>
           }
@@ -127,7 +136,13 @@ export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/or
             openItems: version.openItems,
           }}
           positions={positions}
-          members={members.map((m) => ({ id: m.id, name: m.name, image: m.image, avatar: m.avatar, title: m.title }))}
+          members={members.map((m) => ({
+            id: m.id,
+            name: m.name,
+            image: m.image,
+            avatar: m.avatar,
+            title: m.title,
+          }))}
         />
       </Suspense>
     </div>

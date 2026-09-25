@@ -10,7 +10,13 @@ import { Button } from "@/components/ui/button";
 import { StartDraftButton } from "../start-draft-button";
 
 /** Re-renders the server page every few seconds while `active`. */
-export function AutoRefresh({ active, intervalMs = 3000 }: { active: boolean; intervalMs?: number }) {
+export function AutoRefresh({
+  active,
+  intervalMs = 3000,
+}: {
+  active: boolean;
+  intervalMs?: number;
+}) {
   const router = useRouter();
   useEffect(() => {
     if (!active) return;
@@ -64,10 +70,15 @@ export function ParseStatus({
         {failed ? (
           <TriangleAlert className="text-destructive mt-0.5 size-5 shrink-0" aria-hidden="true" />
         ) : (
-          <Loader2 className="text-muted-foreground mt-0.5 size-5 shrink-0 animate-spin" aria-hidden="true" />
+          <Loader2
+            className="text-muted-foreground mt-0.5 size-5 shrink-0 animate-spin"
+            aria-hidden="true"
+          />
         )}
         <div className="min-w-0 space-y-1" role="status" aria-live="polite">
-          <p className="font-medium">{failed ? "The document couldn't be read" : STEPS[parseStatus] ?? "Working…"}</p>
+          <p className="font-medium">
+            {failed ? "The document couldn't be read" : (STEPS[parseStatus] ?? "Working…")}
+          </p>
           {filename && (
             <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
               <FileText className="size-4" aria-hidden="true" />
@@ -84,7 +95,8 @@ export function ParseStatus({
             <p className="text-sm">{parseError ?? "Something went wrong while parsing."}</p>
           ) : (
             <p className="text-muted-foreground text-sm">
-              This usually takes under two minutes. You can leave this page; the draft will be waiting here.
+              This usually takes under two minutes. You can leave this page; the draft will be
+              waiting here.
             </p>
           )}
         </div>
@@ -100,7 +112,12 @@ export function ParseStatus({
             type="button"
             size="sm"
             disabled={pending}
-            onClick={() => run(() => retryParseAction(orgId, versionId), () => router.refresh())}
+            onClick={() =>
+              run(
+                () => retryParseAction(orgId, versionId),
+                () => router.refresh(),
+              )
+            }
           >
             <RotateCcw className="size-4" aria-hidden="true" />
             Try again

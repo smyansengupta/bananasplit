@@ -2,7 +2,13 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { num, pct } from "../sql";
 import type { LastSessionReport } from "../types";
-import { sessionColumns, sessionsInRange, toSessionPoint, type ReportQuery, type SessionRow } from "./common";
+import {
+  sessionColumns,
+  sessionsInRange,
+  toSessionPoint,
+  type ReportQuery,
+  type SessionRow,
+} from "./common";
 
 /**
  * 1. Last session: the latest session in the range and the session right

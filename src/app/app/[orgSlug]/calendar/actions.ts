@@ -81,12 +81,17 @@ async function orgInfo(ctx: OrgContext): Promise<OrgInfo> {
   return { slug: org?.slug ?? "", timezone: org?.timezone ?? "UTC" };
 }
 
-async function checkAttendees(ctx: OrgContext, attendeeIds: readonly string[]): Promise<string | null> {
+async function checkAttendees(
+  ctx: OrgContext,
+  attendeeIds: readonly string[],
+): Promise<string | null> {
   if (attendeeIds.length === 0) return null;
   const count = await ctx.db.membership.count({
     where: { organizationId: ctx.organizationId, userId: { in: [...attendeeIds] } },
   });
-  return count === attendeeIds.length ? null : "One or more attendees aren't members of this organization.";
+  return count === attendeeIds.length
+    ? null
+    : "One or more attendees aren't members of this organization.";
 }
 
 function eventLink(slug: string, eventId: string): string {
@@ -102,7 +107,12 @@ async function notify(
 ): Promise<void> {
   const recipients = userIds.filter((id) => id !== ctx.userId);
   if (recipients.length === 0) return;
-  await notifyUsers(ctx.db, ctx.organizationId, recipients, { type, title, linkUrl, actorId: ctx.userId });
+  await notifyUsers(ctx.db, ctx.organizationId, recipients, {
+    type,
+    title,
+    linkUrl,
+    actorId: ctx.userId,
+  });
 }
 
 function serviceFields(data: z.infer<typeof eventPatchSchema>) {
@@ -148,7 +158,11 @@ const createEventTx = withOrgAction(async (ctx, input: unknown): Promise<ActionR
   });
   if (attendeeIds.length > 0) {
     await ctx.db.eventAttendee.createMany({
-      data: attendeeIds.map((userId) => ({ organizationId: ctx.organizationId, eventId: event.id, userId })),
+      data: attendeeIds.map((userId) => ({
+        organizationId: ctx.organizationId,
+        eventId: event.id,
+        userId,
+      })),
       skipDuplicates: true,
     });
     await notify(
@@ -163,7 +177,10 @@ const createEventTx = withOrgAction(async (ctx, input: unknown): Promise<ActionR
 });
 
 /** Creates an event (ADMIN+). */
-export async function createEvent(organizationId: string, input: EventFormInput): Promise<ActionResult> {
+export async function createEvent(
+  organizationId: string,
+  input: EventFormInput,
+): Promise<ActionResult> {
   try {
     return await createEventTx(organizationId, input);
   } catch (error) {
@@ -205,7 +222,12 @@ const updateEventTx = withOrgAction(
       if (data.startsAt === undefined || data.endsAt === undefined) {
         return { error: "Send both the start and the end." };
       }
-      const times = resolveTimes(data.allDay ?? before.allDay, data.startsAt, data.endsAt, org.timezone);
+      const times = resolveTimes(
+        data.allDay ?? before.allDay,
+        data.startsAt,
+        data.endsAt,
+        org.timezone,
+      );
       if ("error" in times) return times;
       Object.assign(patch, times);
     }
@@ -234,14 +256,26 @@ const updateEventTx = withOrgAction(
 
     const { event } = await events.updateEvent(ctx, eventId, patch);
     const link = eventLink(org.slug, eventId);
-    await notify(ctx, added, NotificationType.EVENT_INVITE, `You were invited to "${event.title}"`, link);
+    await notify(
+      ctx,
+      added,
+      NotificationType.EVENT_INVITE,
+      `You were invited to "${event.title}"`,
+      link,
+    );
     const rescheduled =
       event.startsAt.getTime() !== before.startsAt.getTime() ||
       event.endsAt.getTime() !== before.endsAt.getTime() ||
       event.allDay !== before.allDay ||
       (event.location ?? "") !== (before.location ?? "");
     if (rescheduled && data.notifyAttendees !== false) {
-      await notify(ctx, [...previous], NotificationType.EVENT_UPDATED, `"${event.title}" changed time or place`, link);
+      await notify(
+        ctx,
+        [...previous],
+        NotificationType.EVENT_UPDATED,
+        `"${event.title}" changed time or place`,
+        link,
+      );
     }
     return { eventId };
   },
@@ -320,7 +354,11 @@ const rsvpTx = withOrgAction(async (ctx, eventId: string, rsvp: unknown): Promis
 });
 
 /** Any member answers their own invitation. */
-export async function rsvpToEvent(organizationId: string, eventId: string, rsvp: RSVPStatus): Promise<ActionResult> {
+export async function rsvpToEvent(
+  organizationId: string,
+  eventId: string,
+  rsvp: RSVPStatus,
+): Promise<ActionResult> {
   try {
     return await rsvpTx(organizationId, eventId, rsvp);
   } catch (error) {

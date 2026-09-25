@@ -37,7 +37,7 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
   let categoryId: string;
 
   const dashboard = () => withOrgTx(orgId, ({ db }) => getDashboardData(db, orgId));
-  const sql = <T,>(fn: (ctx: SystemContext) => Promise<T>) => withSystemOrgTx(orgId, fn);
+  const sql = <T>(fn: (ctx: SystemContext) => Promise<T>) => withSystemOrgTx(orgId, fn);
 
   beforeAll(async () => {
     const user = await authDb.user.create({
@@ -53,7 +53,11 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
 
     await withSystemOrgTx(orgId, { userId }, async ({ db }) => {
       await db.organization.create({
-        data: { id: orgId, name: "Dashboard Integration Test Org", slug: `dashboard-itest-${Date.now()}` },
+        data: {
+          id: orgId,
+          name: "Dashboard Integration Test Org",
+          slug: `dashboard-itest-${Date.now()}`,
+        },
       });
       await db.membership.create({ data: { organizationId: orgId, userId, role: "OWNER" } });
     });
@@ -115,7 +119,9 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
 
   afterAll(async () => {
     if (userId) {
-      await withSystemOrgTx(orgId, ({ db }) => db.organization.deleteMany({ where: { id: orgId } }));
+      await withSystemOrgTx(orgId, ({ db }) =>
+        db.organization.deleteMany({ where: { id: orgId } }),
+      );
       await authDb.user.deleteMany({ where: { id: userId } });
     }
     await disconnectAll();
@@ -124,8 +130,9 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
   it("balance equals SUM(IN) - SUM(OUT) over non-voided transactions", async () => {
     const data = await dashboard();
 
-    const [{ balance }] = await sql(({ db }) =>
-      db.$queryRaw<{ balance: bigint }[]>`
+    const [{ balance }] = await sql(
+      ({ db }) =>
+        db.$queryRaw<{ balance: bigint }[]>`
         SELECT COALESCE(
           SUM(CASE WHEN direction = 'IN' THEN "amountCents" ELSE -"amountCents" END), 0
         ) AS balance
@@ -140,8 +147,9 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
   it("outstanding reimbursements equals SUM(amount) for SUBMITTED/APPROVED expenses", async () => {
     const data = await dashboard();
 
-    const [{ total }] = await sql(({ db }) =>
-      db.$queryRaw<{ total: bigint | null }[]>`
+    const [{ total }] = await sql(
+      ({ db }) =>
+        db.$queryRaw<{ total: bigint | null }[]>`
         SELECT SUM("amountCents") AS total
         FROM "Transaction"
         WHERE "organizationId" = ${orgId}
@@ -158,8 +166,9 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
   it("category spend equals SUM(OUT, non-voided) grouped by category", async () => {
     const data = await dashboard();
 
-    const [{ spent }] = await sql(({ db }) =>
-      db.$queryRaw<{ spent: bigint | null }[]>`
+    const [{ spent }] = await sql(
+      ({ db }) =>
+        db.$queryRaw<{ spent: bigint | null }[]>`
         SELECT SUM("amountCents") AS spent
         FROM "Transaction"
         WHERE "organizationId" = ${orgId}
@@ -177,8 +186,9 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
   it("total allocated equals SUM(allocatedCents) for the active period's categories", async () => {
     const data = await dashboard();
 
-    const [{ total }] = await sql(({ db }) =>
-      db.$queryRaw<{ total: bigint }[]>`
+    const [{ total }] = await sql(
+      ({ db }) =>
+        db.$queryRaw<{ total: bigint }[]>`
         SELECT SUM("allocatedCents") AS total
         FROM "BudgetCategory"
         WHERE "budgetPeriodId" = ${periodId}
@@ -194,8 +204,9 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
     const burnInTotal = data.burnByMonth.reduce((sum, m) => sum + m.inCents, 0);
     const burnOutTotal = data.burnByMonth.reduce((sum, m) => sum + m.outCents, 0);
 
-    const [{ inTotal, outTotal }] = await sql(({ db }) =>
-      db.$queryRaw<{ inTotal: bigint | null; outTotal: bigint | null }[]>`
+    const [{ inTotal, outTotal }] = await sql(
+      ({ db }) =>
+        db.$queryRaw<{ inTotal: bigint | null; outTotal: bigint | null }[]>`
         SELECT
           SUM(CASE WHEN direction = 'IN' THEN "amountCents" ELSE 0 END) AS "inTotal",
           SUM(CASE WHEN direction = 'OUT' THEN "amountCents" ELSE 0 END) AS "outTotal"
@@ -209,7 +220,11 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
   });
 
   it("a non-member cannot read the dashboard", async () => {
-    requireUserMock.mockResolvedValueOnce({ id: "not-a-member", email: "x@example.edu", name: null });
+    requireUserMock.mockResolvedValueOnce({
+      id: "not-a-member",
+      email: "x@example.edu",
+      name: null,
+    });
     await expect(dashboard()).rejects.toThrow();
   });
 });

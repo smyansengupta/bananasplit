@@ -19,7 +19,8 @@ vi.mock("resend", () => ({
 }));
 vi.mock("@/server/db/context", () => ({
   assertNoTx: (label: string) => {
-    if (txOpen.value) throw new Error(`${label}: network I/O must not run inside a database transaction`);
+    if (txOpen.value)
+      throw new Error(`${label}: network I/O must not run inside a database transaction`);
   },
   withSystemOrgTx: async (_org: string, fn: (ctx: unknown) => unknown) =>
     fn({ db: { organization: { findUnique: async () => orgRow.current } } }),
@@ -28,9 +29,18 @@ vi.mock("@/server/secrets", () => ({ getSecret }));
 
 import { getOrgMailer, getPlatformMailer, resolveOrgMailRouting } from "./mailer";
 import { notificationEmail } from "./templates";
-import { EmailConfigError, EmailSendError, resendTransport, sinkTransport, transportFor } from "./transport";
+import {
+  EmailConfigError,
+  EmailSendError,
+  resendTransport,
+  sinkTransport,
+  transportFor,
+} from "./transport";
 
-const message = { to: "kristine@example.edu", ...notificationEmail({ orgName: "CBC", title: "Hello" }) };
+const message = {
+  to: "kristine@example.edu",
+  ...notificationEmail({ orgName: "CBC", title: "Hello" }),
+};
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -53,15 +63,28 @@ describe("transports", () => {
     expect(result.transport).toBe("sink");
     const files = await readdir(dir);
     expect(files.filter((f) => f.endsWith(".html"))).toHaveLength(1);
-    const meta = JSON.parse(await readFile(path.join(dir, files.find((f) => f.endsWith(".json"))!), "utf8"));
+    const meta = JSON.parse(
+      await readFile(
+        path.join(
+          dir,
+          files.find((f) => f.endsWith(".json"))!,
+        ),
+        "utf8",
+      ),
+    );
     expect(meta).toMatchObject({ to: "kristine@example.edu", subject: "Hello" });
     expect(send).not.toHaveBeenCalled();
     info.mockRestore();
   });
 
   it("Resend errors are raised, not swallowed", async () => {
-    send.mockResolvedValueOnce({ data: null, error: { name: "validation_error", message: "domain not verified" } });
-    await expect(resendTransport("re_key").send({ from: "a@x.org", ...message })).rejects.toThrow(EmailSendError);
+    send.mockResolvedValueOnce({
+      data: null,
+      error: { name: "validation_error", message: "domain not verified" },
+    });
+    await expect(resendTransport("re_key").send({ from: "a@x.org", ...message })).rejects.toThrow(
+      EmailSendError,
+    );
     send.mockResolvedValueOnce({ data: { id: "em_1" }, error: null });
     await expect(resendTransport("re_key").send({ from: "a@x.org", ...message })).resolves.toEqual({
       id: "em_1",
@@ -71,7 +94,9 @@ describe("transports", () => {
 
   it("never sends inside a transaction", async () => {
     txOpen.value = true;
-    await expect(resendTransport("re_key").send({ from: "a@x.org", ...message })).rejects.toThrow(/transaction/);
+    await expect(resendTransport("re_key").send({ from: "a@x.org", ...message })).rejects.toThrow(
+      /transaction/,
+    );
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -127,13 +152,19 @@ describe("mail routing", () => {
       from: '"CBC Board" <board@claudeneu.com>',
       replyTo: "hello@claudeneu.com",
     });
-    expect(getSecret).toHaveBeenCalledWith({ orgId: "org1", integrationId: "int_email", kind: "API_KEY" });
+    expect(getSecret).toHaveBeenCalledWith({
+      orgId: "org1",
+      integrationId: "int_email",
+      kind: "API_KEY",
+    });
   });
 
   it("does not use an unverified or disconnected org sender", async () => {
     orgRow.current = cbc({
       settings: { platformMailFallback: false },
-      integrations: [{ id: "i", status: "CONNECTED", config: { fromAddress: "board@claudeneu.com" } }],
+      integrations: [
+        { id: "i", status: "CONNECTED", config: { fromAddress: "board@claudeneu.com" } },
+      ],
     });
     expect(await getOrgMailer("org1")).toBeNull();
   });

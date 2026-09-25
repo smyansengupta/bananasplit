@@ -24,7 +24,8 @@ export async function enqueueVerificationEmail(userId: string): Promise<void> {
   });
 }
 
-export type VerifyResult = { ok: true; email: string } | { ok: false; reason: "invalid" | "expired" };
+export type VerifyResult =
+  { ok: true; email: string } | { ok: false; reason: "invalid" | "expired" };
 
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{20,200}$/;
 
@@ -37,7 +38,9 @@ function hashToken(rawToken: string): string {
  * "Confirm" button and consumes only on POST, so a mail scanner that
  * prefetches the link cannot use it up.
  */
-export async function peekVerificationToken(rawToken: string): Promise<"valid" | "expired" | "invalid"> {
+export async function peekVerificationToken(
+  rawToken: string,
+): Promise<"valid" | "expired" | "invalid"> {
   if (!TOKEN_SHAPE.test(rawToken)) return "invalid";
   const row = await authDb.verificationToken.findFirst({
     where: { token: hashToken(rawToken) },
@@ -61,7 +64,10 @@ export async function consumeVerificationToken(rawToken: string): Promise<Verify
       data: { emailVerified: new Date() },
     });
     if (updated.count === 0) {
-      const exists = await tx.user.findUnique({ where: { email: row.identifier }, select: { id: true } });
+      const exists = await tx.user.findUnique({
+        where: { email: row.identifier },
+        select: { id: true },
+      });
       if (!exists) return { ok: false, reason: "invalid" } as const;
     }
     return { ok: true, email: row.identifier } as const;

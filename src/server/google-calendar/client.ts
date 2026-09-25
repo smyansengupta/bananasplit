@@ -30,8 +30,12 @@ export class GoogleApiError extends Error {
   }
   /** Worth retrying with backoff: server errors, throttling, an expired access token. */
   get retryable(): boolean {
-    if (this.status >= 500 || this.status === 429 || this.status === 408 || this.status === 401) return true;
-    return this.status === 403 && /rateLimitExceeded|userRateLimitExceeded|quotaExceeded/i.test(this.reason ?? "");
+    if (this.status >= 500 || this.status === 429 || this.status === 408 || this.status === 401)
+      return true;
+    return (
+      this.status === 403 &&
+      /rateLimitExceeded|userRateLimitExceeded|quotaExceeded/i.test(this.reason ?? "")
+    );
   }
 }
 
@@ -127,7 +131,8 @@ export function createCalendarClient(options: ClientOptions): CalendarClient {
   ): Promise<T> {
     assertNoTx("Google Calendar");
     const url = new URL(`${GOOGLE_CALENDAR_API}${path}`);
-    for (const [k, v] of Object.entries(init.query ?? {})) if (v !== undefined) url.searchParams.set(k, v);
+    for (const [k, v] of Object.entries(init.query ?? {}))
+      if (v !== undefined) url.searchParams.set(k, v);
     const res = await fetch(url, {
       method,
       headers: {
@@ -149,7 +154,8 @@ export function createCalendarClient(options: ClientOptions): CalendarClient {
   }
 
   const cal = (calendarId: string) => `/calendars/${encodeURIComponent(calendarId)}/events`;
-  const ev = (calendarId: string, eventId: string) => `${cal(calendarId)}/${encodeURIComponent(eventId)}`;
+  const ev = (calendarId: string, eventId: string) =>
+    `${cal(calendarId)}/${encodeURIComponent(eventId)}`;
 
   return {
     insertEvent: (calendarId, body) =>
@@ -158,22 +164,29 @@ export function createCalendarClient(options: ClientOptions): CalendarClient {
     patchEvent: (calendarId, eventId, body) => {
       // The id is fixed at insert; Google rejects a patch that repeats it.
       const { id: _id, ...rest } = body;
-      return call<GoogleEvent>("PATCH", ev(calendarId, eventId), { body: rest, query: { sendUpdates: "none" } });
+      return call<GoogleEvent>("PATCH", ev(calendarId, eventId), {
+        body: rest,
+        query: { sendUpdates: "none" },
+      });
     },
     deleteEvent: (calendarId, eventId) =>
       call<void>("DELETE", ev(calendarId, eventId), { query: { sendUpdates: "none" } }),
     listEvents: async (calendarId, opts = {}) => {
-      const page = await call<{ items?: GoogleEvent[]; nextPageToken?: string }>("GET", cal(calendarId), {
-        query: {
-          singleEvents: "true",
-          showDeleted: "false",
-          orderBy: "startTime",
-          maxResults: String(opts.maxResults ?? 250),
-          timeMin: opts.timeMin?.toISOString(),
-          timeMax: opts.timeMax?.toISOString(),
-          pageToken: opts.pageToken,
+      const page = await call<{ items?: GoogleEvent[]; nextPageToken?: string }>(
+        "GET",
+        cal(calendarId),
+        {
+          query: {
+            singleEvents: "true",
+            showDeleted: "false",
+            orderBy: "startTime",
+            maxResults: String(opts.maxResults ?? 250),
+            timeMin: opts.timeMin?.toISOString(),
+            timeMax: opts.timeMax?.toISOString(),
+            pageToken: opts.pageToken,
+          },
         },
-      });
+      );
       return { items: page.items ?? [], nextPageToken: page.nextPageToken ?? null };
     },
   };

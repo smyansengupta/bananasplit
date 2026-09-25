@@ -9,18 +9,14 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { parseAvatarVariants } from "@/lib/avatar";
 
-import {
-  ACCEPTED_IMAGE_TYPES,
-  cropToSquare,
-  MAX_SOURCE_BYTES,
-  type PixelArea,
-} from "./crop-image";
+import { ACCEPTED_IMAGE_TYPES, cropToSquare, MAX_SOURCE_BYTES, type PixelArea } from "./crop-image";
 
 // react-easy-crop loads only when someone picks a file (or hovers the button).
 const loadCropDialog = () => import("./avatar-crop-dialog");
 const AvatarCropDialog = dynamic(loadCropDialog, { ssr: false });
 
-type Status = { kind: "idle" } | { kind: "saved"; message: string } | { kind: "error"; message: string };
+type Status =
+  { kind: "idle" } | { kind: "saved"; message: string } | { kind: "error"; message: string };
 
 async function readError(response: Response, fallback: string): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
@@ -82,7 +78,9 @@ export function AvatarEditor({ user }: { user: UserAvatarUser }) {
       setStatus({ kind: "saved", message: "Picture updated." });
       router.refresh();
     } catch (error) {
-      setCropError(error instanceof Error ? error.message : "Couldn't save your picture. Try again.");
+      setCropError(
+        error instanceof Error ? error.message : "Couldn't save your picture. Try again.",
+      );
     } finally {
       setUploading(false);
     }
@@ -94,7 +92,10 @@ export function AvatarEditor({ user }: { user: UserAvatarUser }) {
     try {
       const response = await fetch("/api/profile/avatar", { method: "DELETE" });
       if (!response.ok) {
-        setStatus({ kind: "error", message: await readError(response, "Couldn't remove your picture.") });
+        setStatus({
+          kind: "error",
+          message: await readError(response, "Couldn't remove your picture."),
+        });
         return;
       }
       setStatus({ kind: "saved", message: "Picture removed." });

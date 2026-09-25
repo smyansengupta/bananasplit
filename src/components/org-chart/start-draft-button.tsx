@@ -37,7 +37,8 @@ export function StartDraftButton({
           startTransition(async () => {
             setError(null);
             const result = await startDraftAction(orgId, from);
-            if (result.ok && "versionId" in result) router.push(`/app/${orgSlug}/org-chart/drafts/${result.versionId}`);
+            if (result.ok && "versionId" in result)
+              router.push(`/app/${orgSlug}/org-chart/drafts/${result.versionId}`);
             else setError("error" in result ? result.error : "The draft could not be started.");
           })
         }

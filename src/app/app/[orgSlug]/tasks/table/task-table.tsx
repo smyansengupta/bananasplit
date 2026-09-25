@@ -102,7 +102,7 @@ export function TaskTable({
   const [visible, setVisible] = useState<Record<ColumnKey, boolean>>({
     owner: true,
     involved: false,
-    creator: true,
+    creator: false,
     project: true,
     labels: true,
     priority: true,

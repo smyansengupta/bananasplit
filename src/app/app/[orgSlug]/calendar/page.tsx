@@ -16,7 +16,10 @@ import { getEventsInRange } from "./queries";
  * kind and visibility filters. Editing (create, drag, resize) is offered only
  * to OWNER/ADMIN; members see and RSVP.
  */
-export default async function CalendarPage({ params, searchParams }: PageProps<"/app/[orgSlug]/calendar">) {
+export default async function CalendarPage({
+  params,
+  searchParams,
+}: PageProps<"/app/[orgSlug]/calendar">) {
   const { orgSlug } = await params;
   const { organization: org, role } = await getOrgContextBySlug(orgSlug);
   const range = parseCalendarRange(await searchParams, org.timezone);
@@ -80,7 +83,13 @@ export default async function CalendarPage({ params, searchParams }: PageProps<"
         orgSlug={orgSlug}
         timeZone={org.timezone}
         items={items}
-        members={members.map((m) => ({ id: m.id, name: m.name, image: m.image, avatar: m.avatar, title: m.title }))}
+        members={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          image: m.image,
+          avatar: m.avatar,
+          title: m.title,
+        }))}
         canManage={canManage}
         window={{
           fromKey: range.fromKey,

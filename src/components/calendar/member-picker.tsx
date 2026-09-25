@@ -40,7 +40,11 @@ export function MemberMultiPicker({
   const selected = members.filter((m) => selectedIds.includes(m.id));
 
   function toggle(userId: string) {
-    onChange(selectedIds.includes(userId) ? selectedIds.filter((x) => x !== userId) : [...selectedIds, userId]);
+    onChange(
+      selectedIds.includes(userId)
+        ? selectedIds.filter((x) => x !== userId)
+        : [...selectedIds, userId],
+    );
   }
 
   return (
@@ -62,10 +66,17 @@ export function MemberMultiPicker({
               <>
                 <span className="flex -space-x-2">
                   {selected.slice(0, 6).map((m) => (
-                    <UserAvatar key={m.id} user={m} size="sm" className="border-background border-2" />
+                    <UserAvatar
+                      key={m.id}
+                      user={m}
+                      size="sm"
+                      className="border-background border-2"
+                    />
                   ))}
                 </span>
-                <span className="text-muted-foreground truncate text-xs">{selected.length} invited</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {selected.length} invited
+                </span>
               </>
             )}
           </span>
@@ -79,11 +90,24 @@ export function MemberMultiPicker({
             <CommandEmpty>No members found.</CommandEmpty>
             <CommandGroup>
               {members.map((m) => (
-                <CommandItem key={m.id} value={`${m.name ?? ""} ${m.id}`} onSelect={() => toggle(m.id)}>
-                  <Check className={cn("size-4", selectedIds.includes(m.id) ? "opacity-100" : "opacity-0")} />
+                <CommandItem
+                  key={m.id}
+                  value={`${m.name ?? ""} ${m.id}`}
+                  onSelect={() => toggle(m.id)}
+                >
+                  <Check
+                    className={cn(
+                      "size-4",
+                      selectedIds.includes(m.id) ? "opacity-100" : "opacity-0",
+                    )}
+                  />
                   <UserAvatar user={m} size="xs" />
                   <span className="truncate">{m.name ?? "Member"}</span>
-                  {m.title && <span className="text-muted-foreground ml-auto truncate text-xs">{m.title}</span>}
+                  {m.title && (
+                    <span className="text-muted-foreground ml-auto truncate text-xs">
+                      {m.title}
+                    </span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>

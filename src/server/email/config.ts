@@ -88,7 +88,10 @@ export function emailConfigProblems(env: Env = process.env): string[] {
   const problems: string[] = [];
   if (!env.RESEND_API_KEY) problems.push("RESEND_API_KEY is not set");
   if (!env.EMAIL_FROM) problems.push("EMAIL_FROM is not set");
-  else if (env.NEXT_PUBLIC_APP_URL && !fromMatchesAppDomain(env.EMAIL_FROM, env.NEXT_PUBLIC_APP_URL)) {
+  else if (
+    env.NEXT_PUBLIC_APP_URL &&
+    !fromMatchesAppDomain(env.EMAIL_FROM, env.NEXT_PUBLIC_APP_URL)
+  ) {
     problems.push("EMAIL_FROM is not on the app's (verified) domain");
   }
   return problems;

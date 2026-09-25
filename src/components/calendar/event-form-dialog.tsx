@@ -17,7 +17,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
@@ -87,7 +93,12 @@ export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...re
 const NO_HOST = "__none";
 const GUEST_HOST = "__guest";
 
-function initialTimes(event: EventFormEvent | null, defaultStart: Date | null | undefined, allDay: boolean, timeZone: string) {
+function initialTimes(
+  event: EventFormEvent | null,
+  defaultStart: Date | null | undefined,
+  allDay: boolean,
+  timeZone: string,
+) {
   if (event?.allDay) {
     const span = allDaySpan(event.startsAt, event.endsAt, timeZone);
     return { start: span.start, end: span.lastDay };
@@ -117,15 +128,26 @@ function EventForm({
   const [title, setTitle] = useState(event?.title ?? "");
   const [description, setDescription] = useState(event?.description ?? "");
   const [kind, setKind] = useState<EventKind>(event?.kind ?? EventKind.OTHER);
-  const [visibility, setVisibility] = useState<EventVisibility>(event?.visibility ?? EventVisibility.INTERNAL);
+  const [visibility, setVisibility] = useState<EventVisibility>(
+    event?.visibility ?? EventVisibility.INTERNAL,
+  );
   const [allDay, setAllDay] = useState(event?.allDay ?? defaultAllDay ?? false);
-  const initial = initialTimes(event, defaultStart, event?.allDay ?? defaultAllDay ?? false, timeZone);
+  const initial = initialTimes(
+    event,
+    defaultStart,
+    event?.allDay ?? defaultAllDay ?? false,
+    timeZone,
+  );
   const [startValue, setStartValue] = useState(initial.start);
   const [endValue, setEndValue] = useState(initial.end);
   const [location, setLocation] = useState(event?.location ?? "");
-  const [provider, setProvider] = useState<ConferenceProvider>(event?.conferenceProvider ?? ConferenceProvider.NONE);
+  const [provider, setProvider] = useState<ConferenceProvider>(
+    event?.conferenceProvider ?? ConferenceProvider.NONE,
+  );
   const [conferenceUrl, setConferenceUrl] = useState(event?.conferenceUrl ?? "");
-  const [host, setHost] = useState<string>(event?.hostUserId ?? (event?.hostName ? GUEST_HOST : NO_HOST));
+  const [host, setHost] = useState<string>(
+    event?.hostUserId ?? (event?.hostName ? GUEST_HOST : NO_HOST),
+  );
   const [hostName, setHostName] = useState(event?.hostName ?? "");
   const [rsvpUrl, setRsvpUrl] = useState(event?.rsvpUrl ?? "");
   const [capacityFull, setCapacityFull] = useState(event?.capacityFull ?? false);
@@ -176,12 +198,17 @@ function EventForm({
 
   function handleSave() {
     setError(null);
-    if (!allDay && (Number.isNaN(new Date(startValue).getTime()) || Number.isNaN(new Date(endValue).getTime()))) {
+    if (
+      !allDay &&
+      (Number.isNaN(new Date(startValue).getTime()) || Number.isNaN(new Date(endValue).getTime()))
+    ) {
       setError("Enter a valid start and end time.");
       return;
     }
     startTransition(async () => {
-      const result = event ? await updateEvent(orgId, event.id, payload()) : await createEvent(orgId, payload());
+      const result = event
+        ? await updateEvent(orgId, event.id, payload())
+        : await createEvent(orgId, payload());
       if (result?.error) {
         setError(result.error);
         return;
@@ -211,14 +238,21 @@ function EventForm({
       <DialogHeader>
         <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
         <DialogDescription>
-          Sessions, workshops and board meetings. Saved events sync to Google Calendar when it is connected.
+          Sessions, workshops and board meetings. Saved events sync to Google Calendar when it is
+          connected.
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-4">
         <div className="grid gap-1.5">
           <Label htmlFor="event-title">Title</Label>
-          <Input id="event-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus maxLength={200} />
+          <Input
+            id="event-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoFocus
+            maxLength={200}
+          />
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
@@ -262,8 +296,9 @@ function EventForm({
           >
             <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
-              Public events are world-readable: the title, description, location and RSVP link appear on the club
-              website, the public events feed and the public Google Calendar. Attendees and meeting links never do.
+              Public events are world-readable: the title, description, location and RSVP link
+              appear on the club website, the public events feed and the public Google Calendar.
+              Attendees and meeting links never do.
             </span>
           </p>
         )}
@@ -294,7 +329,9 @@ function EventForm({
           </div>
         </div>
         <p className="text-muted-foreground -mt-2 text-xs">
-          {allDay ? `All-day events are whole days in ${timeZone}.` : "Times are in your own timezone."}
+          {allDay
+            ? `All-day events are whole days in ${timeZone}.`
+            : "Times are in your own timezone."}
         </p>
 
         <div className="grid gap-1.5">

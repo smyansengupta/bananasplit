@@ -57,8 +57,7 @@ export async function saveProfileLinks(input: unknown): Promise<SaveResult> {
 }
 
 export type PreferencesResult =
-  | { ok: true; preferences: NotificationPreferences }
-  | { ok: false; error: string };
+  { ok: true; preferences: NotificationPreferences } | { ok: false; error: string };
 
 /** One change from the notification section (a switch, the digest hour, the lead). */
 export async function saveNotificationPreferences(patch: unknown): Promise<PreferencesResult> {
@@ -69,14 +68,16 @@ export async function saveNotificationPreferences(patch: unknown): Promise<Prefe
     const preferences = await updateOwnNotificationPreferences(user.id, parsed.data);
     return { ok: true, preferences };
   } catch (error) {
-    console.error("[profile] save preferences failed", error instanceof Error ? error.message : error);
+    console.error(
+      "[profile] save preferences failed",
+      error instanceof Error ? error.message : error,
+    );
     return { ok: false, error: "Couldn't save that change. Try again." };
   }
 }
 
 export type FeedLinkResult =
-  | { ok: true; url: string; createdAt: string }
-  | { ok: false; error: string };
+  { ok: true; url: string; createdAt: string } | { ok: false; error: string };
 
 /**
  * Creates (or replaces) the calendar feed link and returns its URL ONCE:

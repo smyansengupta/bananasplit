@@ -31,7 +31,13 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 }
 
 /** Name, pronouns, major and year, bio and timezone. */
-export function DetailsForm({ initial, orgTimezone }: { initial: DetailsInitial; orgTimezone: string }) {
+export function DetailsForm({
+  initial,
+  orgTimezone,
+}: {
+  initial: DetailsInitial;
+  orgTimezone: string;
+}) {
   const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);

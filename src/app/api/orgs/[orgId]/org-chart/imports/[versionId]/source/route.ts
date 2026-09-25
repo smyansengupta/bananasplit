@@ -12,7 +12,8 @@ import { getBlob } from "@/server/storage";
  */
 export const dynamic = "force-dynamic";
 
-const NOT_FOUND = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+const NOT_FOUND = () =>
+  new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
 function asciiFilename(name: string): string {
   return name.replace(/[^\w .()-]+/g, "_").slice(0, 120) || "document";

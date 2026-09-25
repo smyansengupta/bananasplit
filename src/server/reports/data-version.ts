@@ -16,7 +16,10 @@ import type { TxClient } from "@/server/db/context";
  * same callers that can write report data; for anyone else the UPDATE
  * matches no row under RLS and only the invalidation happens.
  */
-export async function markReportsDataChanged(ctx: { db: TxClient; organizationId: string }): Promise<void> {
+export async function markReportsDataChanged(ctx: {
+  db: TxClient;
+  organizationId: string;
+}): Promise<void> {
   await ctx.db.$executeRaw`
     UPDATE public."OrgSettings"
        SET "reportsDataVersion" = "reportsDataVersion" + 1

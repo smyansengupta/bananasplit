@@ -27,7 +27,10 @@ const contactDetailSelect = {
   lapsedSince: true,
   user: { select: userPublicSelect },
   // Row-gated by RLS (CONTACT_EMAIL): empty for viewers without access.
-  emails: { select: { id: true, emailNormalized: true, isPrimary: true }, orderBy: { isPrimary: "desc" } },
+  emails: {
+    select: { id: true, emailNormalized: true, isPrimary: true },
+    orderBy: { isPrimary: "desc" },
+  },
 } satisfies Prisma.ContactSelect;
 
 export type ContactDetail = Prisma.ContactGetPayload<{ select: typeof contactDetailSelect }>;
@@ -52,8 +55,15 @@ export interface ContactPanel {
 }
 
 /** A contact with its check-in history, per-term stats and signups (each part under its own RLS). */
-export async function loadContactPanel(db: TxClient, organizationId: string, contactId: string): Promise<ContactPanel | null> {
-  const contact = await db.contact.findFirst({ where: { id: contactId, organizationId }, select: contactDetailSelect });
+export async function loadContactPanel(
+  db: TxClient,
+  organizationId: string,
+  contactId: string,
+): Promise<ContactPanel | null> {
+  const contact = await db.contact.findFirst({
+    where: { id: contactId, organizationId },
+    select: contactDetailSelect,
+  });
   if (!contact) return null;
   const [history, terms, signups] = [
     await db.attendance.findMany({
@@ -107,7 +117,13 @@ export async function loadStampStrip(
   term: string,
 ): Promise<{ slot: number; title: string; startsAt: Date; stamped: boolean }[]> {
   const events = await db.event.findMany({
-    where: { organizationId, term, deletedAt: null, mergedIntoId: null, OR: [{ stampSlot: { not: null } }, { attendanceCount: { gt: 0 } }] },
+    where: {
+      organizationId,
+      term,
+      deletedAt: null,
+      mergedIntoId: null,
+      OR: [{ stampSlot: { not: null } }, { attendanceCount: { gt: 0 } }],
+    },
     orderBy: [{ startsAt: "asc" }],
     select: { id: true, title: true, startsAt: true, stampSlot: true },
     take: 40,
@@ -173,7 +189,13 @@ export async function loadSessionDetail(db: TxClient, ctx: ViewContext, eventId:
       suppressedAt: true,
       nameOverride: true,
       contact: {
-        select: { id: true, displayName: true, emailMasked: true, userId: true, user: { select: userPublicSelect } },
+        select: {
+          id: true,
+          displayName: true,
+          emailMasked: true,
+          userId: true,
+          user: { select: userPublicSelect },
+        },
       },
     },
   });
@@ -256,7 +278,13 @@ export async function loadPersonDetail(db: TxClient, ctx: ViewContext, rowId: st
   const term = rowId.slice(sep + 1);
   const stats = await db.contactTermStats.findFirst({
     where: { organizationId: ctx.organizationId, contactId, term },
-    select: { term: true, sessionsAttended: true, stampCount: true, firstCheckInAt: true, lastCheckInAt: true },
+    select: {
+      term: true,
+      sessionsAttended: true,
+      stampCount: true,
+      firstCheckInAt: true,
+      lastCheckInAt: true,
+    },
   });
   if (!stats) return null;
   const panel = await loadContactPanel(db, ctx.organizationId, contactId);
@@ -272,7 +300,12 @@ export type PersonDetail = NonNullable<Awaited<ReturnType<typeof loadPersonDetai
  * Opening it writes OrgAuditLog REVEAL_VOTES in the same transaction, so a
  * rolled-back read leaves no row and a committed one always does.
  */
-export async function loadBallotDetail(db: TxClient, ctx: ViewContext, rowId: string, view: "choices" | "ballots") {
+export async function loadBallotDetail(
+  db: TxClient,
+  ctx: ViewContext,
+  rowId: string,
+  view: "choices" | "ballots",
+) {
   const ballotId =
     view === "choices"
       ? (
@@ -294,18 +327,44 @@ export async function loadBallotDetail(db: TxClient, ctx: ViewContext, rowId: st
       excludedReason: true,
       answers: true,
       ballotDefinition: { select: { id: true, title: true, slug: true, definition: true } },
-      voter: { select: { id: true, displayName: true, emailMasked: true, userId: true, user: { select: userPublicSelect } } },
+      voter: {
+        select: {
+          id: true,
+          displayName: true,
+          emailMasked: true,
+          userId: true,
+          user: { select: userPublicSelect },
+        },
+      },
       choices: {
         orderBy: [{ questionKey: "asc" }, { rank: "asc" }],
-        select: { id: true, questionKey: true, choiceKey: true, choiceText: true, isFreeText: true, rank: true },
+        select: {
+          id: true,
+          questionKey: true,
+          choiceKey: true,
+          choiceText: true,
+          isFreeText: true,
+          rank: true,
+        },
       },
     },
   });
   if (!ballot) return null;
   const labels = definitionLabels(readDefinition(ballot.ballotDefinition?.definition));
-  const questions = new Map<string, { key: string; label: string; answers: { label: string; rank: number | null; freeText: boolean }[] }>();
+  const questions = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      answers: { label: string; rank: number | null; freeText: boolean }[];
+    }
+  >();
   for (const c of ballot.choices) {
-    const q = questions.get(c.questionKey) ?? { key: c.questionKey, label: labels.question(c.questionKey), answers: [] };
+    const q = questions.get(c.questionKey) ?? {
+      key: c.questionKey,
+      label: labels.question(c.questionKey),
+      answers: [],
+    };
     q.answers.push({
       label: c.isFreeText ? (c.choiceText ?? "") : labels.choice(c.questionKey, c.choiceKey),
       rank: c.rank,

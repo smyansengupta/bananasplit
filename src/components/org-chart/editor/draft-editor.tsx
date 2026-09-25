@@ -74,7 +74,13 @@ export interface DraftEditorProps {
   members: EditorMember[];
 }
 
-export function DraftEditor({ orgId, orgSlug, version, positions: initial, members }: DraftEditorProps) {
+export function DraftEditor({
+  orgId,
+  orgSlug,
+  version,
+  positions: initial,
+  members,
+}: DraftEditorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [positions, setPositions] = useState<DraftPosition[]>(initial);
@@ -91,7 +97,11 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
 
   const initialSelected = (() => {
     const key = searchParams.get("position");
-    return (key && initial.find((p) => p.key === key)?.id) || flattenOutline(initial)[0]?.position.id || null;
+    return (
+      (key && initial.find((p) => p.key === key)?.id) ||
+      flattenOutline(initial)[0]?.position.id ||
+      null
+    );
   })();
   const [selectedId, setSelectedId] = useState<string | null>(initialSelected);
 
@@ -102,7 +112,8 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
     const map = new Map<string, "error" | "warning">();
     for (const issue of issues) {
       if (!issue.positionId) continue;
-      if (issue.level === "error" || !map.has(issue.positionId)) map.set(issue.positionId, issue.level);
+      if (issue.level === "error" || !map.has(issue.positionId))
+        map.set(issue.positionId, issue.level);
     }
     return map;
   }, [issues]);
@@ -165,7 +176,9 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
     }
     const ids = "ids" in result ? result.ids : {};
     const remap = (id: string | null) => (id && ids[id] ? ids[id] : id);
-    setPositions((current) => current.map((p) => ({ ...p, id: remap(p.id) as string, reportsTo: remap(p.reportsTo) })));
+    setPositions((current) =>
+      current.map((p) => ({ ...p, id: remap(p.id) as string, reportsTo: remap(p.reportsTo) })),
+    );
     setSelectedId((id) => remap(id));
     setEditVersion(result.editVersion);
     setDirty(false);
@@ -181,9 +194,15 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
     startTransition(async () => {
       const current = dirty ? await save() : editVersion;
       if (current === null) return;
-      const result = await publishDraftAction(orgId, version.id, { setTitles, expectedEditVersion: current });
+      const result = await publishDraftAction(orgId, version.id, {
+        setTitles,
+        expectedEditVersion: current,
+      });
       if (!result.ok) {
-        const detail = "issues" in result && result.issues?.length ? ` ${result.issues.map((i) => i.message).join(" ")}` : "";
+        const detail =
+          "issues" in result && result.issues?.length
+            ? ` ${result.issues.map((i) => i.message).join(" ")}`
+            : "";
         setStatus({ tone: "error", text: `${result.error}${detail}` });
         setPublishOpen(false);
         return;
@@ -197,7 +216,10 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
     startTransition(async () => {
       const result = await discardDraftAction(orgId, version.id);
       if (!result.ok) {
-        setStatus({ tone: "error", text: "error" in result ? result.error : "The draft could not be discarded." });
+        setStatus({
+          tone: "error",
+          text: "error" in result ? result.error : "The draft could not be discarded.",
+        });
         return;
       }
       setDirty(false);
@@ -238,14 +260,31 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={() => setDiscardOpen(true)} disabled={pending}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setDiscardOpen(true)}
+            disabled={pending}
+          >
             <Trash2 className="size-4" aria-hidden="true" />
             Discard
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onSave} disabled={pending || !dirty || conflict}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onSave}
+            disabled={pending || !dirty || conflict}
+          >
             Save draft
           </Button>
-          <Button type="button" size="sm" onClick={() => setPublishOpen(true)} disabled={pending || conflict}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setPublishOpen(true)}
+            disabled={pending || conflict}
+          >
             Review and publish
           </Button>
         </div>
@@ -289,7 +328,12 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
               </TabsList>
               <div className="flex flex-wrap gap-2">
                 {exact.length > 0 && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => update(confirmAllExact(positions, names))}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => update(confirmAllExact(positions, names))}
+                  >
                     <CheckCheck className="size-4" aria-hidden="true" />
                     Confirm all exact ({exact.length})
                   </Button>
@@ -353,7 +397,10 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
               issues={issues.filter((i) => i.positionId === selected.id)}
               onChange={(next) => update(positions.map((p) => (p.id === next.id ? next : p)))}
               onSetManager={(managerId) =>
-                update(setManager(positions, selected.id, managerId), "That would make the chart loop back on itself.")
+                update(
+                  setManager(positions, selected.id, managerId),
+                  "That would make the chart loop back on itself.",
+                )
               }
               onMove={(direction) => update(moveSibling(positions, selected.id, direction))}
               onAddReport={() => {
@@ -363,11 +410,15 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
               }}
               onRemove={() => {
                 update(removePosition(positions, selected.id));
-                setSelectedId(selected.reportsTo ?? positions.find((p) => p.id !== selected.id)?.id ?? null);
+                setSelectedId(
+                  selected.reportsTo ?? positions.find((p) => p.id !== selected.id)?.id ?? null,
+                );
               }}
             />
           ) : (
-            <p className="text-muted-foreground text-sm">Select a position in the outline to edit it.</p>
+            <p className="text-muted-foreground text-sm">
+              Select a position in the outline to edit it.
+            </p>
           )}
         </section>
       </div>
@@ -385,13 +436,16 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
           <DialogHeader>
             <DialogTitle>Publish draft v{version.number}?</DialogTitle>
             <DialogDescription>
-              Everyone in the workspace will see this chart. The current chart is kept in the version history and can be
-              restored.
+              Everyone in the workspace will see this chart. The current chart is kept in the
+              version history and can be restored.
             </DialogDescription>
           </DialogHeader>
           {errors.length > 0 ? (
             <div role="alert" className="space-y-1 text-sm">
-              <p className="font-medium">Fix {errors.length === 1 ? "this problem" : `these ${errors.length} problems`} first:</p>
+              <p className="font-medium">
+                Fix {errors.length === 1 ? "this problem" : `these ${errors.length} problems`}{" "}
+                first:
+              </p>
               <ul className="list-disc pl-5">
                 {errors.slice(0, 6).map((e, i) => (
                   <li key={i}>{e.message}</li>
@@ -401,8 +455,12 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
           ) : (
             <div className="space-y-3 text-sm">
               <p>
-                {positions.length} positions, {positions.filter((p) => p.userId).length} linked to members
-                {warnings.length > 0 ? `, ${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : ""}.
+                {positions.length} positions, {positions.filter((p) => p.userId).length} linked to
+                members
+                {warnings.length > 0
+                  ? `, ${warnings.length} warning${warnings.length === 1 ? "" : "s"}`
+                  : ""}
+                .
               </p>
               {warnings.length > 0 && (
                 <ul className="text-muted-foreground list-disc pl-5">
@@ -412,7 +470,11 @@ export function DraftEditor({ orgId, orgSlug, version, positions: initial, membe
                 </ul>
               )}
               <div className="flex items-start gap-2">
-                <Checkbox id="set-titles" checked={setTitles} onCheckedChange={(v) => setSetTitles(v === true)} />
+                <Checkbox
+                  id="set-titles"
+                  checked={setTitles}
+                  onCheckedChange={(v) => setSetTitles(v === true)}
+                />
                 <Label htmlFor="set-titles" className="leading-snug font-normal">
                   Also set each linked member&apos;s title in this workspace from their position
                 </Label>
@@ -519,13 +581,16 @@ function Checklist({
           <p className="text-sm font-medium">
             {warnings.length} thing{warnings.length === 1 ? "" : "s"} to check
           </p>
-          <ul className="text-muted-foreground list-disc space-y-0.5 pl-6 text-sm">{warnings.map(item)}</ul>
+          <ul className="text-muted-foreground list-disc space-y-0.5 pl-6 text-sm">
+            {warnings.map(item)}
+          </ul>
         </div>
       )}
       {parseWarnings.length > 0 && (
         <details className="text-sm">
           <summary className="cursor-pointer font-medium">
-            {parseWarnings.length} note{parseWarnings.length === 1 ? "" : "s"} from reading the document
+            {parseWarnings.length} note{parseWarnings.length === 1 ? "" : "s"} from reading the
+            document
           </summary>
           <ul className="text-muted-foreground mt-1 list-disc space-y-0.5 pl-6">
             {parseWarnings.map((w, i) => (
@@ -538,13 +603,21 @@ function Checklist({
   );
 }
 
-function OpenItemsEditor({ items, onChange }: { items: OpenItem[]; onChange: (items: OpenItem[]) => void }) {
+function OpenItemsEditor({
+  items,
+  onChange,
+}: {
+  items: OpenItem[];
+  onChange: (items: OpenItem[]) => void;
+}) {
   return (
     <section aria-label="Open items" className="space-y-2 rounded-xl border p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-medium">Open items</h2>
-          <p className="text-muted-foreground text-xs">Questions the document leaves open, with who should answer.</p>
+          <p className="text-muted-foreground text-xs">
+            Questions the document leaves open, with who should answer.
+          </p>
         </div>
         <Button
           type="button"
@@ -568,14 +641,18 @@ function OpenItemsEditor({ items, onChange }: { items: OpenItem[]; onChange: (it
                 maxLength={120}
                 placeholder="Who"
                 aria-label={`Open item ${i + 1}: who`}
-                onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, who: e.target.value } : x)))}
+                onChange={(e) =>
+                  onChange(items.map((x, j) => (j === i ? { ...x, who: e.target.value } : x)))
+                }
               />
               <Input
                 value={item.question}
                 maxLength={500}
                 placeholder="Question"
                 aria-label={`Open item ${i + 1}: question`}
-                onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, question: e.target.value } : x)))}
+                onChange={(e) =>
+                  onChange(items.map((x, j) => (j === i ? { ...x, question: e.target.value } : x)))
+                }
               />
               <Button
                 type="button"

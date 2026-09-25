@@ -34,7 +34,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 import { CellView } from "./cell";
@@ -123,7 +130,9 @@ function FilterChip({
     <Badge variant={filter.isDefault ? "outline" : "secondary"} className="h-6 gap-1 pr-1">
       <span className="font-medium">{column?.label ?? filter.col}</span>
       {filter.op === "isnull" ? (
-        <span className="text-muted-foreground">{filter.value === "false" ? "is set" : "is empty"}</span>
+        <span className="text-muted-foreground">
+          {filter.value === "false" ? "is set" : "is empty"}
+        </span>
       ) : (
         <>
           <span className="text-muted-foreground">{SHORT_OPS[filter.op] ?? filter.op}</span>
@@ -143,7 +152,13 @@ function FilterChip({
   );
 }
 
-function FilterBuilder({ columns, onAdd }: { columns: ColumnView[]; onAdd: (raw: string) => void }) {
+function FilterBuilder({
+  columns,
+  onAdd,
+}: {
+  columns: ColumnView[];
+  onAdd: (raw: string) => void;
+}) {
   const filterable = columns.filter((c) => c.filterable && c.ops.length > 0);
   const [open, setOpen] = useState(false);
   const [col, setCol] = useState(filterable[0]?.key ?? "");
@@ -254,7 +269,9 @@ function FilterBuilder({ columns, onAdd }: { columns: ColumnView[]; onAdd: (raw:
                       checked={checked}
                       onChange={() =>
                         setValue(
-                          (checked ? list.filter((v) => v !== o.value) : [...list, o.value]).join(","),
+                          (checked ? list.filter((v) => v !== o.value) : [...list, o.value]).join(
+                            ",",
+                          ),
                         )
                       }
                     />
@@ -393,7 +410,9 @@ export function DataTable(props: DataTableProps) {
               defaultValue={props.from ?? ""}
               key={`from-${props.from ?? ""}`}
               onChange={(e) =>
-                view.update((p) => (e.target.value ? p.set("from", e.target.value) : p.delete("from")))
+                view.update((p) =>
+                  e.target.value ? p.set("from", e.target.value) : p.delete("from"),
+                )
               }
               className="w-36"
             />
@@ -442,7 +461,9 @@ export function DataTable(props: DataTableProps) {
             </a>
           </Button>
         )}
-        {view.pending && <Loader2 className="text-muted-foreground size-4 animate-spin" aria-label="Loading" />}
+        {view.pending && (
+          <Loader2 className="text-muted-foreground size-4 animate-spin" aria-label="Loading" />
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-2">{props.toolbar}</div>
       </div>
 
@@ -477,7 +498,10 @@ export function DataTable(props: DataTableProps) {
       )}
 
       {rejected.length > 0 && (
-        <p role="status" className="border-warning/40 bg-warning/10 rounded-md border px-3 py-2 text-xs">
+        <p
+          role="status"
+          className="border-warning/40 bg-warning/10 rounded-md border px-3 py-2 text-xs"
+        >
           Ignored: {rejected.map((r) => `${r.part} (${r.reason})`).join("; ")}
         </p>
       )}
@@ -511,7 +535,10 @@ export function DataTable(props: DataTableProps) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={visible.length} className="text-muted-foreground h-24 text-center">
+                <TableCell
+                  colSpan={visible.length}
+                  className="text-muted-foreground h-24 text-center"
+                >
                   {props.emptyTitle ?? "No rows match this view."}
                 </TableCell>
               </TableRow>
@@ -521,10 +548,13 @@ export function DataTable(props: DataTableProps) {
                   key={r.id}
                   data-state={props.selectedRowId === r.id ? "selected" : undefined}
                   className={cn("cursor-pointer", r.dim && "opacity-60")}
-                  onClick={() => view.update((p) => p.set("row", r.id), { keepPage: true, push: true })}
+                  onClick={() =>
+                    view.update((p) => p.set("row", r.id), { keepPage: true, push: true })
+                  }
                   tabIndex={0}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") view.update((p) => p.set("row", r.id), { keepPage: true, push: true });
+                    if (e.key === "Enter")
+                      view.update((p) => p.set("row", r.id), { keepPage: true, push: true });
                   }}
                 >
                   {visible.map((c) => (
@@ -534,7 +564,8 @@ export function DataTable(props: DataTableProps) {
                         "max-w-72 align-top whitespace-normal",
                         c.align === "right" && "text-right",
                         (c.type === "datetime" || c.type === "date") && "whitespace-nowrap",
-                        (c.type === "text" || c.type === "person" || c.type === "relation") && "min-w-36",
+                        (c.type === "text" || c.type === "person" || c.type === "relation") &&
+                          "min-w-36",
                       )}
                     >
                       <CellView cell={r.cells[c.key] ?? null} />
@@ -549,12 +580,16 @@ export function DataTable(props: DataTableProps) {
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="text-muted-foreground">
-          {total === 0 ? "No rows" : `${first.toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}`}
+          {total === 0
+            ? "No rows"
+            : `${first.toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}`}
         </span>
         <div className="flex items-center gap-2">
           <Select
             value={String(size)}
-            onValueChange={(v) => view.update((p) => (v === "50" ? p.delete("size") : p.set("size", v)))}
+            onValueChange={(v) =>
+              view.update((p) => (v === "50" ? p.delete("size") : p.set("size", v)))
+            }
           >
             <SelectTrigger className="h-8 w-28" aria-label="Rows per page">
               <SelectValue />
@@ -571,7 +606,12 @@ export function DataTable(props: DataTableProps) {
             variant="outline"
             size="icon-sm"
             disabled={page <= 1}
-            onClick={() => view.update((p) => (page - 1 <= 1 ? p.delete("page") : p.set("page", String(page - 1))), { keepPage: true })}
+            onClick={() =>
+              view.update(
+                (p) => (page - 1 <= 1 ? p.delete("page") : p.set("page", String(page - 1))),
+                { keepPage: true },
+              )
+            }
             aria-label="Previous page"
           >
             <ChevronLeft />

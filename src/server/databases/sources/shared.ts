@@ -57,7 +57,10 @@ export function contactFields(prefix: readonly string[]): Record<string, FieldSp
   };
 }
 
-export function nestPath(prefix: readonly string[], leaf: Record<string, unknown>): Record<string, unknown> {
+export function nestPath(
+  prefix: readonly string[],
+  leaf: Record<string, unknown>,
+): Record<string, unknown> {
   let out: Record<string, unknown> = leaf;
   for (let i = prefix.length - 1; i >= 0; i--) out = { [prefix[i]]: out };
   return out;

@@ -39,10 +39,12 @@ describe("dbViewHref", () => {
   });
 
   it("refuses malformed parts", () => {
-    expect(() => dbViewHref("cbc", "sessions", { filters: [{ col: "a;drop", op: "eq", value: "x" }] })).toThrow(
-      DbViewParamError,
-    );
-    expect(() => dbViewHref("cbc", "sessions", { filters: [{ col: "a", op: "in", value: ["x,y"] }] })).toThrow();
+    expect(() =>
+      dbViewHref("cbc", "sessions", { filters: [{ col: "a;drop", op: "eq", value: "x" }] }),
+    ).toThrow(DbViewParamError);
+    expect(() =>
+      dbViewHref("cbc", "sessions", { filters: [{ col: "a", op: "in", value: ["x,y"] }] }),
+    ).toThrow();
     expect(() => dbViewHref("cbc", "sessions", { filters: [{ col: "a", op: "eq" }] })).toThrow();
     expect(() => dbViewHref("cbc", "sessions", { from: "09/01/2026" })).toThrow();
     expect(() => dbViewHref("Bad Slug", "sessions")).toThrow();

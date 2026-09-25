@@ -81,7 +81,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     if (error instanceof NotFoundError) return json(404, { error: "Not found." });
     throw error;
   }
-  if (!access.allowed) return json(403, { error: "Only owners and admins can import an org chart." });
+  if (!access.allowed)
+    return json(403, { error: "Only owners and admins can import an org chart." });
 
   const limited = await checkRateLimit(
     rateLimitKey("orgchart-upload", session.user.id),
@@ -114,7 +115,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
   try {
     await withOrgTx(orgId, async (ctx) => {
       if (!(await hasClaudeKey(ctx.db, orgId))) {
-        throw new OrgChartError("Add a Claude API key in Settings > Integrations before importing a document.", 409);
+        throw new OrgChartError(
+          "Add a Claude API key in Settings > Integrations before importing a document.",
+          409,
+        );
       }
       await assertUploadAllowed(ctx.db, orgId);
     });
@@ -124,9 +128,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
   }
 
   const versionId = newVersionId();
-  const stored = await putBlob("org-chart", orgId, [versionId, `${randomKeyId()}.${sniffed.extension}`], bytes, {
-    contentType: sniffed.mimeType,
-  });
+  const stored = await putBlob(
+    "org-chart",
+    orgId,
+    [versionId, `${randomKeyId()}.${sniffed.extension}`],
+    bytes,
+    {
+      contentType: sniffed.mimeType,
+    },
+  );
 
   try {
     const created = await createVersion(orgId, {

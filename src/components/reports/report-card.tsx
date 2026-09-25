@@ -2,7 +2,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowUpRight, TriangleAlert } from "lucide-react";
 
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 import { asOfLabel } from "./format";
@@ -53,7 +60,9 @@ export function ReportCard({
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">{children}</CardContent>
       {computedAt ? (
-        <p className="text-muted-foreground px-(--card-spacing) text-xs tabular-nums">{asOfLabel(computedAt, tz)}</p>
+        <p className="text-muted-foreground px-(--card-spacing) text-xs tabular-nums">
+          {asOfLabel(computedAt, tz)}
+        </p>
       ) : null}
     </Card>
   );

@@ -65,8 +65,8 @@ function Ballot({ ballot, ctx, k }: { ballot: BallotResult; ctx: ReportViewConte
               <span title="No linked session with check-ins to compare with">n/a</span>
             ) : (
               <>
-                {formatPct(ballot.turnoutPct)} of {formatCount(ballot.linkedSession?.checkIns ?? 0)} at{" "}
-                {ballot.linkedSession?.title}
+                {formatPct(ballot.turnoutPct)} of {formatCount(ballot.linkedSession?.checkIns ?? 0)}{" "}
+                at {ballot.linkedSession?.title}
               </>
             )}
           </p>
@@ -88,7 +88,9 @@ function Ballot({ ballot, ctx, k }: { ballot: BallotResult; ctx: ReportViewConte
         </div>
       )}
       {ballot.freeTextQuestions > 0 ? (
-        <p className="text-muted-foreground text-xs">Free-text answers are never included in reports.</p>
+        <p className="text-muted-foreground text-xs">
+          Free-text answers are never included in reports.
+        </p>
       ) : null}
     </section>
   );
@@ -123,8 +125,8 @@ export async function BallotsSection({ ctx }: { ctx: ReportViewContext }) {
         <>
           {!r.fullCounts ? (
             <p className="text-muted-foreground text-xs">
-              Totals only. Options with fewer than {r.minCellSize} votes show as &lt;{r.minCellSize} so no one&apos;s
-              vote can be singled out.
+              Totals only. Options with fewer than {r.minCellSize} votes show as &lt;{r.minCellSize}{" "}
+              so no one&apos;s vote can be singled out.
             </p>
           ) : null}
           <div className="flex flex-col gap-4">

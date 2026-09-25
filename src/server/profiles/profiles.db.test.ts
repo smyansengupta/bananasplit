@@ -157,10 +157,16 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
       data: { icsTokenHash: null, icsTokenCreatedAt: null },
     });
     await withSystemOrgTx(s.debateId, ({ db }) =>
-      db.membership.updateMany({ where: { organizationId: s.debateId, userId: s.dave.id }, data: { title: null } }),
+      db.membership.updateMany({
+        where: { organizationId: s.debateId, userId: s.dave.id },
+        data: { title: null },
+      }),
     );
     await withSystemOrgTx(s.roboticsId, ({ db }) =>
-      db.membership.updateMany({ where: { organizationId: s.roboticsId, userId: s.dave.id }, data: { title: null } }),
+      db.membership.updateMany({
+        where: { organizationId: s.roboticsId, userId: s.dave.id },
+        data: { title: null },
+      }),
     );
     await disconnectAll();
     await disconnectOwnerDb();
@@ -192,7 +198,11 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
   it("the people queries only show current members of the org, with this org's title", async () => {
     requireUserMock.mockResolvedValue(s.jackson);
     const oliver = await getOrgPerson(s.cbcId, s.oliver.id);
-    expect(oliver).toMatchObject({ name: "Oliver Ward", title: "VP Ops & Programs", role: "ADMIN" });
+    expect(oliver).toMatchObject({
+      name: "Oliver Ward",
+      title: "VP Ops & Programs",
+      role: "ADMIN",
+    });
     expect(oliver).not.toHaveProperty("email");
 
     // A user who is only in another org, and ids that are not users at all.
@@ -214,12 +224,18 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
 
   it("a former member keeps a readable User row but has no person page", async () => {
     const temp = await authDb.user.create({
-      data: { email: `b2-former-${Date.now()}@example.edu`, name: "Former Member", emailVerified: new Date() },
+      data: {
+        email: `b2-former-${Date.now()}@example.edu`,
+        name: "Former Member",
+        emailVerified: new Date(),
+      },
       select: { id: true },
     });
     try {
       await withSystemOrgTx(s.cbcId, { userId: temp.id }, ({ db }) =>
-        db.membership.create({ data: { organizationId: s.cbcId, userId: temp.id, role: "MEMBER" } }),
+        db.membership.create({
+          data: { organizationId: s.cbcId, userId: temp.id, role: "MEMBER" },
+        }),
       );
       requireUserMock.mockResolvedValue(s.jackson);
       expect(await getOrgPerson(s.cbcId, temp.id)).toMatchObject({ name: "Former Member" });
@@ -259,8 +275,13 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
   });
 
   it("preference changes write the v2 shape and survive a reload", async () => {
-    await authDb.user.update({ where: { id: s.kristine.id }, data: { emailPreferences: { TASK_DUE_SOON: false } } });
-    await updateOwnNotificationPreferences(s.kristine.id, { digest: { enabled: true, hourLocal: 17 } });
+    await authDb.user.update({
+      where: { id: s.kristine.id },
+      data: { emailPreferences: { TASK_DUE_SOON: false } },
+    });
+    await updateOwnNotificationPreferences(s.kristine.id, {
+      digest: { enabled: true, hourLocal: 17 },
+    });
     await updateOwnNotificationPreferences(s.kristine.id, { reminderLeadDays: 3 });
     await updateOwnNotificationPreferences(s.kristine.id, { types: { TASK_MENTIONED: false } });
     const stored = await authDb.user.findUnique({
@@ -281,7 +302,10 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
       updateOwnNotificationPreferences(s.kristine.id, { types: { EVENT_UPDATED: false } }),
       updateOwnNotificationPreferences(s.kristine.id, { types: { INVITE_ACCEPTED: false } }),
     ]);
-    const after = await authDb.user.findUnique({ where: { id: s.kristine.id }, select: { emailPreferences: true } });
+    const after = await authDb.user.findUnique({
+      where: { id: s.kristine.id },
+      select: { emailPreferences: true },
+    });
     expect((after?.emailPreferences as { types: Record<string, boolean> }).types).toMatchObject({
       EVENT_INVITE: false,
       EVENT_UPDATED: false,
@@ -292,7 +316,10 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
   it("the calendar feed link is stored only as a hash; a new one kills the old; turning off clears it", async () => {
     const first = await rotateOwnIcsToken(s.kristine.id);
     const resolve = (token: string) =>
-      authDb.userCredential.findUnique({ where: { icsTokenHash: hashIcsToken(token) }, select: { userId: true } });
+      authDb.userCredential.findUnique({
+        where: { icsTokenHash: hashIcsToken(token) },
+        select: { userId: true },
+      });
     expect((await resolve(first.token))?.userId).toBe(s.kristine.id);
     expect((await getOwnProfile(s.kristine.id))?.icsActiveSince).toBeInstanceOf(Date);
 
@@ -316,14 +343,23 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
     storeImageMock.mockResolvedValueOnce(one).mockResolvedValueOnce(two);
 
     await replaceOwnAvatar(s.kristine.id, Buffer.from("img-1"));
-    expect(storeImageMock).toHaveBeenCalledWith("avatars", s.kristine.id, "avatar", Buffer.from("img-1"));
-    const deletedBeforeFirst = deleteStoredImageMock.mock.calls.map((c) => (c[0] as { key: string }).key);
+    expect(storeImageMock).toHaveBeenCalledWith(
+      "avatars",
+      s.kristine.id,
+      "avatar",
+      Buffer.from("img-1"),
+    );
+    const deletedBeforeFirst = deleteStoredImageMock.mock.calls.map(
+      (c) => (c[0] as { key: string }).key,
+    );
     expect(deletedBeforeFirst).not.toContain(one.key);
 
     // When the old variants are deleted, the row already points at the new ones.
     let rowAtDelete: unknown = "not called";
     deleteStoredImageMock.mockImplementationOnce(async () => {
-      rowAtDelete = (await authDb.user.findUnique({ where: { id: s.kristine.id }, select: { avatar: true } }))?.avatar;
+      rowAtDelete = (
+        await authDb.user.findUnique({ where: { id: s.kristine.id }, select: { avatar: true } })
+      )?.avatar;
     });
     await replaceOwnAvatar(s.kristine.id, Buffer.from("img-2"));
     expect(deleteStoredImageMock).toHaveBeenCalledTimes(1);
@@ -332,7 +368,10 @@ describe.skipIf(!seeded)("profiles against the local database", () => {
 
     await removeOwnAvatar(s.kristine.id);
     expect(deleteStoredImageMock).toHaveBeenLastCalledWith(two);
-    expect((await authDb.user.findUnique({ where: { id: s.kristine.id }, select: { avatar: true } }))?.avatar).toBeNull();
+    expect(
+      (await authDb.user.findUnique({ where: { id: s.kristine.id }, select: { avatar: true } }))
+        ?.avatar,
+    ).toBeNull();
   });
 
   it("a failed row write deletes the new variants, and a foreign key is never deleted", async () => {

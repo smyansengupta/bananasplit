@@ -26,8 +26,23 @@ export const MATCH_WINDOW_MINUTES = 90;
 export const TITLE_SIMILARITY_THRESHOLD = 0.8;
 
 const STOP_WORDS = new Set([
-  "a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with",
-  "cbc", "session", "sessions",
+  "a",
+  "an",
+  "and",
+  "at",
+  "by",
+  "for",
+  "from",
+  "in",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "with",
+  "cbc",
+  "session",
+  "sessions",
 ]);
 
 /** Lower-case word tokens of a title, without punctuation and stop words. */
@@ -110,7 +125,8 @@ export function pickMatch(
     if (t.match) hits.push({ eventId: c.id, score: Math.round(t.score * 1000) / 1000 });
   }
   if (hits.length === 1) return { kind: "matched", eventId: hits[0].eventId, score: hits[0].score };
-  if (hits.length > 1) return { kind: "ambiguous", candidates: hits.sort((a, b) => b.score - a.score) };
+  if (hits.length > 1)
+    return { kind: "ambiguous", candidates: hits.sort((a, b) => b.score - a.score) };
   return { kind: "none" };
 }
 

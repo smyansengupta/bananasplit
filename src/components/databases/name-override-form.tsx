@@ -37,7 +37,11 @@ export function NameOverrideForm({
           disabled={pending || value === (current ?? "")}
           onClick={() =>
             start(async () => {
-              const r = await setAttendanceNameAction(organizationId, attendanceId, value.trim() || null);
+              const r = await setAttendanceNameAction(
+                organizationId,
+                attendanceId,
+                value.trim() || null,
+              );
               if (r.error) setError(r.error);
               else {
                 setError(null);

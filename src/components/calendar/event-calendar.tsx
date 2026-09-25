@@ -2,7 +2,10 @@
 
 import type { DatesSetArg, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin, { type DateClickArg, type EventResizeDoneArg } from "@fullcalendar/interaction";
+import interactionPlugin, {
+  type DateClickArg,
+  type EventResizeDoneArg,
+} from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -12,7 +15,13 @@ import { useState, useTransition } from "react";
 
 import { moveEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { CalendarSyncState, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { addDaysToKey } from "@/lib/calendar/dates";
 import { calendarSearch, CALENDAR_VIEWS, type CalendarView } from "@/lib/calendar/range";
@@ -53,23 +62,39 @@ function initialDate(w: CalendarWindow): string {
 }
 
 function SyncIcon({ state }: { state: CalendarSyncState }) {
-  if (state === "FAILED") return <CalendarX2 aria-label={SYNC_META.FAILED.label} className="size-3 shrink-0" />;
-  if (state === "PENDING") return <CalendarClock aria-label={SYNC_META.PENDING.label} className="size-3 shrink-0" />;
+  if (state === "FAILED")
+    return <CalendarX2 aria-label={SYNC_META.FAILED.label} className="size-3 shrink-0" />;
+  if (state === "PENDING")
+    return <CalendarClock aria-label={SYNC_META.PENDING.label} className="size-3 shrink-0" />;
   return null;
 }
 
 function renderEventContent(arg: EventContentArg, showSync: boolean) {
-  const item = arg.event.extendedProps as Omit<CalendarItem, "id" | "title" | "start" | "end" | "allDay">;
+  const item = arg.event.extendedProps as Omit<
+    CalendarItem,
+    "id" | "title" | "start" | "end" | "allDay"
+  >;
   const VisIcon = item.visibility === "PUBLIC" ? Globe : Lock;
   return (
     <span className="flex min-w-0 items-center gap-1 overflow-hidden px-0.5 text-xs">
       {!arg.event.allDay && arg.view.type !== "timeGridWeek" && arg.view.type !== "timeGridDay" && (
-        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: KIND_META[item.kind].color }} />
+        <span
+          aria-hidden
+          className="size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: KIND_META[item.kind].color }}
+        />
       )}
-      {arg.timeText && !arg.event.allDay && <span className="shrink-0 opacity-80">{arg.timeText}</span>}
-      <VisIcon aria-label={VISIBILITY_META[item.visibility].label} className="size-3 shrink-0 opacity-80" />
+      {arg.timeText && !arg.event.allDay && (
+        <span className="shrink-0 opacity-80">{arg.timeText}</span>
+      )}
+      <VisIcon
+        aria-label={VISIBILITY_META[item.visibility].label}
+        className="size-3 shrink-0 opacity-80"
+      />
       {showSync && <SyncIcon state={item.syncState} />}
-      {item.needsReview && <AlertTriangle aria-label="Possible duplicate" className="size-3 shrink-0" />}
+      {item.needsReview && (
+        <AlertTriangle aria-label="Possible duplicate" className="size-3 shrink-0" />
+      )}
       <span className="truncate font-medium">{arg.event.title}</span>
     </span>
   );
@@ -111,11 +136,18 @@ export function EventCalendar({
     const view = (CALENDAR_VIEWS as readonly string[]).includes(arg.view.type)
       ? (arg.view.type as CalendarView)
       : "dayGridMonth";
-    navigate({ ...range, fromKey: toDateInputValue(arg.start), toKey: toDateInputValue(arg.end), view });
+    navigate({
+      ...range,
+      fromKey: toDateInputValue(arg.start),
+      toKey: toDateInputValue(arg.end),
+      view,
+    });
   }
 
   function toggleKind(kind: EventKind) {
-    const kinds = range.kinds.includes(kind) ? range.kinds.filter((k) => k !== kind) : [...range.kinds, kind];
+    const kinds = range.kinds.includes(kind)
+      ? range.kinds.filter((k) => k !== kind)
+      : [...range.kinds, kind];
     navigate({ ...range, kinds: KIND_ORDER.filter((k) => kinds.includes(k)) });
   }
 
@@ -165,7 +197,11 @@ export function EventCalendar({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by type">
+        <div
+          className="flex flex-wrap items-center gap-1.5"
+          role="group"
+          aria-label="Filter by type"
+        >
           {KIND_ORDER.map((kind) => {
             const active = range.kinds.includes(kind);
             return (
@@ -176,10 +212,16 @@ export function EventCalendar({
                 onClick={() => toggleKind(kind)}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  active ? "border-foreground/40 bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60",
+                  active
+                    ? "border-foreground/40 bg-muted font-medium"
+                    : "text-muted-foreground hover:bg-muted/60",
                 )}
               >
-                <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: KIND_META[kind].color }} />
+                <span
+                  aria-hidden
+                  className="size-2 rounded-full"
+                  style={{ backgroundColor: KIND_META[kind].color }}
+                />
                 {KIND_META[kind].label}
               </button>
             );
@@ -187,7 +229,9 @@ export function EventCalendar({
         </div>
         <Select
           value={range.visibility ?? "ALL"}
-          onValueChange={(v) => navigate({ ...range, visibility: v === "ALL" ? null : (v as EventVisibility) })}
+          onValueChange={(v) =>
+            navigate({ ...range, visibility: v === "ALL" ? null : (v as EventVisibility) })
+          }
         >
           <SelectTrigger size="sm" className="w-40" aria-label="Filter by visibility">
             <SelectValue />
@@ -238,7 +282,9 @@ export function EventCalendar({
             backgroundColor: KIND_META[item.kind].color,
             borderColor: KIND_META[item.kind].color,
             textColor: "white",
-            classNames: [item.visibility === "INTERNAL" ? "cbc-event-internal" : "cbc-event-public"],
+            classNames: [
+              item.visibility === "INTERNAL" ? "cbc-event-internal" : "cbc-event-public",
+            ],
             extendedProps: {
               kind: item.kind,
               visibility: item.visibility,

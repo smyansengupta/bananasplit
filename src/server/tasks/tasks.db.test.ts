@@ -19,8 +19,9 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
 
 process.env.EMAIL_DELIVERY = "sink";
 
-import { NotificationType, TaskStatus } from "@/generated/prisma/client";
+import { NotificationType, TaskStatus, TaskVisibility } from "@/generated/prisma/client";
 import { addDaysToKey, localDateKey, zonedInstant } from "@/lib/tasks/dates";
+import { mentionToken } from "@/lib/tasks/mentions";
 
 import { authDb, disconnectAll } from "../db/clients";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
@@ -396,5 +397,134 @@ describe.skipIf(!seeded)("tasks against the local database (seeded CBC)", () => 
         data: { emailPreferences: original?.emailPreferences ?? {} },
       });
     }
+  });
+
+  // ---- C4: task visibility -------------------------------------------------
+
+  it("a private task is invisible to a member outside it, and visible to the people on it", async () => {
+    as(p.oliver);
+    const id = await create({
+      title: "C4 test: private",
+      ownerId: p.oliver.id,
+      assigneeIds: [p.alex.id],
+      dueDate: due(9),
+      visibility: TaskVisibility.PRIVATE,
+    });
+
+    // RLS is what hides it: read through the request path as each person.
+    const seenBy = async (person: Person) => {
+      as(person);
+      return withOrgAction((ctx) => ctx.db.task.findFirst({ where: { id }, select: { id: true } }))(
+        s.cbcId,
+      );
+    };
+    expect(await seenBy(p.oliver)).not.toBeNull(); // owner and creator
+    expect(await seenBy(p.alex)).not.toBeNull(); // collaborator
+    expect(await seenBy(p.jackson)).not.toBeNull(); // OWNER
+    expect(await seenBy(p.kristine)).toBeNull(); // uninvolved MEMBER
+    expect(await seenBy(p.smyan)).toBeNull();
+  });
+
+  it("a subtask inherits its parent's visibility, and follows when the parent opens up", async () => {
+    as(p.oliver);
+    const parent = await create({
+      title: "C4 test: private parent",
+      ownerId: p.oliver.id,
+      dueDate: due(9),
+      visibility: TaskVisibility.PRIVATE,
+    });
+    // Asks for ORG on purpose; the service and the database both overrule it.
+    const child = await create({
+      title: "C4 test: inherited subtask",
+      parentTaskId: parent,
+      ownerId: p.alex.id,
+      visibility: TaskVisibility.ORG,
+    });
+    const visibilityOf = (taskId: string) =>
+      read(({ db }) => db.task.findUnique({ where: { id: taskId }, select: { visibility: true } }));
+    expect(await visibilityOf(child)).toEqual({ visibility: TaskVisibility.PRIVATE });
+
+    // Opening the parent cascades to the child.
+    const opened = await act(svc.updateTask)(s.cbcId, parent, {
+      visibility: TaskVisibility.ORG,
+    });
+    expect(opened.error).toBeUndefined();
+    expect(await visibilityOf(child)).toEqual({ visibility: TaskVisibility.ORG });
+  });
+
+  it("only the owner, the creator or an admin flips the flag; a collaborator cannot publish it", async () => {
+    as(p.oliver);
+    const id = await create({
+      title: "C4 test: who may publish",
+      ownerId: p.oliver.id,
+      assigneeIds: [p.alex.id],
+      dueDate: due(9),
+      visibility: TaskVisibility.PRIVATE,
+    });
+
+    as(p.alex); // a collaborator: may edit, may not publish
+    await expect(
+      act(svc.updateTask)(s.cbcId, id, { visibility: TaskVisibility.ORG }),
+    ).rejects.toThrow(/owner, its creator or an admin/i);
+
+    const titleEdit = await act(svc.updateTask)(s.cbcId, id, { title: "C4 test: still private" });
+    expect(titleEdit.error).toBeUndefined();
+    expect(
+      await read(({ db }) => db.task.findUnique({ where: { id }, select: { visibility: true } })),
+    ).toEqual({ visibility: TaskVisibility.PRIVATE });
+
+    as(p.jackson); // an OWNER may
+    const byAdmin = await act(svc.updateTask)(s.cbcId, id, { visibility: TaskVisibility.ORG });
+    expect(byAdmin.error).toBeUndefined();
+  });
+
+  it("a mention on a private task never reaches somebody outside it", async () => {
+    as(p.oliver);
+    const id = await create({
+      title: "C4 test: mention audience",
+      ownerId: p.oliver.id,
+      assigneeIds: [p.alex.id],
+      dueDate: due(9),
+      visibility: TaskVisibility.PRIVATE,
+    });
+
+    const result = await act(svc.updateTask)(s.cbcId, id, {
+      description: `Ping ${mentionToken("Alex Green", p.alex.id)} and ${mentionToken("Kristine Min", p.kristine.id)}`,
+    });
+    expect(result.error).toBeUndefined();
+    // Kristine cannot see the task, so she is reported as dropped...
+    expect(result.droppedMentions).toEqual([p.kristine.id]);
+
+    const state = await read(async ({ db }) => ({
+      mentioned: (
+        await db.taskMention.findMany({ where: { taskId: id }, select: { mentionedUserId: true } })
+      ).map((m) => m.mentionedUserId),
+      notified: (
+        await db.notification.findMany({
+          where: { taskId: id, type: NotificationType.TASK_MENTIONED },
+          select: { userId: true },
+        })
+      ).map((n) => n.userId),
+    }));
+    // ... and no row, no notification and therefore no email exists for her.
+    expect(state.mentioned).toEqual([p.alex.id]);
+    expect(state.notified).toEqual([p.alex.id]);
+  });
+
+  it("making an open task private stops mentioning somebody who is no longer in the audience", async () => {
+    as(p.oliver);
+    const id = await create({
+      title: "C4 test: closing the door",
+      ownerId: p.oliver.id,
+      dueDate: due(9),
+      description: `Heads up ${mentionToken("Kristine Min", p.kristine.id)}`,
+    });
+    const before = await read(({ db }) => db.taskMention.count({ where: { taskId: id } }));
+    expect(before).toBe(1);
+
+    const closed = await act(svc.updateTask)(s.cbcId, id, { visibility: TaskVisibility.PRIVATE });
+    expect(closed.error).toBeUndefined();
+    expect(closed.droppedMentions).toEqual([p.kristine.id]);
+    expect(await read(({ db }) => db.taskMention.count({ where: { taskId: id } }))).toBe(0);
   });
 });

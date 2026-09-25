@@ -23,14 +23,21 @@ function sources(dir: string): string[] {
   });
 }
 
-const REQUEST_CONTEXT = /\b(currentTx|afterCommitOrNow|withOrgTx|withOrgAction|withUserTx|getOrgContextBySlug)\b/;
+const REQUEST_CONTEXT =
+  /\b(currentTx|afterCommitOrNow|withOrgTx|withOrgAction|withUserTx|getOrgContextBySlug)\b/;
 
 describe("src/server/reports stays a cached-loader module", () => {
   const files = sources(DIR);
 
   it("finds the modules", () => {
     expect(files.map((f) => path.basename(f))).toEqual(
-      expect.arrayContaining(["cache.ts", "visibility.ts", "last-session.ts", "ballots.ts", "signups.ts"]),
+      expect.arrayContaining([
+        "cache.ts",
+        "visibility.ts",
+        "last-session.ts",
+        "ballots.ts",
+        "signups.ts",
+      ]),
     );
   });
 

@@ -48,17 +48,23 @@ describe("sniffSource", () => {
     const docm = buildDocx(["Hi"], { macroEnabled: true });
     expect(rejected(() => sniffSource(docm, "a.docm"))).toMatch(/Macro-enabled/);
     const odt = buildZip([
-      { name: "mimetype", data: Buffer.from("application/vnd.oasis.opendocument.text"), store: true },
+      {
+        name: "mimetype",
+        data: Buffer.from("application/vnd.oasis.opendocument.text"),
+        store: true,
+      },
       { name: "content.xml", data: Buffer.from("<x/>") },
     ]);
     expect(rejected(() => sniffSource(odt, "a.odt"))).toMatch(/OpenDocument/);
     expect(rejected(() => sniffSource(Buffer.from("{\\rtf1\\ansi hi}"), "a.rtf"))).toMatch(/RTF/);
-    expect(rejected(() => sniffSource(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 1, 2]), "a.doc"))).toMatch(/\.doc/);
+    expect(
+      rejected(() => sniffSource(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 1, 2]), "a.doc")),
+    ).toMatch(/\.doc/);
     const zip = buildZip([{ name: "photo.jpg", data: Buffer.from("x") }]);
     expect(rejected(() => sniffSource(zip, "a.zip"))).toMatch(/isn't a Word document/);
-    expect(rejected(() => sniffSource(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0xff]), "a.png"))).toMatch(
-      /isn't supported/,
-    );
+    expect(
+      rejected(() => sniffSource(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0xff]), "a.png")),
+    ).toMatch(/isn't supported/);
     expect(rejected(() => sniffSource(Buffer.alloc(0), "a.txt"))).toMatch(/empty/);
   });
 });
@@ -83,7 +89,11 @@ describe("DOCX zip-bomb guards", () => {
 
   it("refuses too many parts and a total over 20 MB", () => {
     const many = buildZip(
-      Array.from({ length: 501 }, (_, i) => ({ name: `p${i}.xml`, data: Buffer.from("x"), store: true })),
+      Array.from({ length: 501 }, (_, i) => ({
+        name: `p${i}.xml`,
+        data: Buffer.from("x"),
+        store: true,
+      })),
     );
     expect(rejected(() => sniffSource(many, "many.docx"))).toMatch(/too many parts/);
     const big = buildZip([
@@ -137,8 +147,13 @@ describe("extractSource", () => {
     const long = buildPdf(Array.from({ length: 60 * 21 }, (_, i) => `line ${i}`));
     expect(countPdfPages(long)).toBe(21);
     expect(rejected(() => preflightSource(long, sniffSource(long, "a.pdf")))).toMatch(/20 pages/);
-    const encrypted = Buffer.concat([buildPdf(["x"]), Buffer.from("trailer << /Encrypt 9 0 R >>\n%%EOF")]);
-    expect(rejected(() => preflightSource(encrypted, sniffSource(encrypted, "a.pdf")))).toMatch(/Password/);
+    const encrypted = Buffer.concat([
+      buildPdf(["x"]),
+      Buffer.from("trailer << /Encrypt 9 0 R >>\n%%EOF"),
+    ]);
+    expect(rejected(() => preflightSource(encrypted, sniffSource(encrypted, "a.pdf")))).toMatch(
+      /Password/,
+    );
   });
 });
 
@@ -147,7 +162,10 @@ describe("countPdfPages", () => {
   // the buffer for every /Count, so this input took ~22.5 s at 1 MB and
   // minutes at the 4 MB upload cap, with nothing able to interrupt it.
   it("scans a 1 MB buffer of /Count markers in well under 250 ms", () => {
-    const hostile = Buffer.from(`%PDF-1.4\n${"/Count 1 ".repeat(Math.ceil((1024 * 1024) / 9))}`, "latin1");
+    const hostile = Buffer.from(
+      `%PDF-1.4\n${"/Count 1 ".repeat(Math.ceil((1024 * 1024) / 9))}`,
+      "latin1",
+    );
     expect(hostile.length).toBeGreaterThan(1024 * 1024);
     const started = performance.now();
     const pages = countPdfPages(hostile);
@@ -158,12 +176,20 @@ describe("countPdfPages", () => {
   });
 
   it("still reads the page tree, in either order and past a long /Kids array", () => {
-    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Type /Pages /Kids [3 0 R] /Count 7 >>"))).toBe(7);
-    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Count 9 /Kids [3 0 R] /Type /Pages >>"))).toBe(9);
+    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Type /Pages /Kids [3 0 R] /Count 7 >>"))).toBe(
+      7,
+    );
+    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Count 9 /Kids [3 0 R] /Type /Pages >>"))).toBe(
+      9,
+    );
     const kids = Array.from({ length: 400 }, (_, i) => `${i + 4} 0 R`).join(" ");
-    expect(countPdfPages(Buffer.from(`%PDF-1.4\n<< /Type /Pages /Kids [${kids}] /Count 400 >>`))).toBe(400);
+    expect(
+      countPdfPages(Buffer.from(`%PDF-1.4\n<< /Type /Pages /Kids [${kids}] /Count 400 >>`)),
+    ).toBe(400);
     // A /Count in another dictionary does not belong to the page tree.
-    expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Count 900 >>\n<< /Type /Pages /Count 3 >>"))).toBe(3);
+    expect(
+      countPdfPages(Buffer.from("%PDF-1.4\n<< /Count 900 >>\n<< /Type /Pages /Count 3 >>")),
+    ).toBe(3);
     // /Pages is never counted as a /Page object.
     expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Type /Pages >>"))).toBeNull();
     expect(countPdfPages(Buffer.from("%PDF-1.4\n<< /Type /Page >>\n<< /Type /Page >>"))).toBe(2);

@@ -49,7 +49,11 @@ function tooLarge(maxBytes: number): UploadError {
   return new UploadError(413, `Files are limited to ${mb} MB.`);
 }
 
-async function readCapped(body: ReadableStream<Uint8Array>, cap: number, maxBytes: number): Promise<Buffer> {
+async function readCapped(
+  body: ReadableStream<Uint8Array>,
+  cap: number,
+  maxBytes: number,
+): Promise<Buffer> {
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -85,7 +89,9 @@ export async function readUpload(
   const raw = await readCapped(request.body, cap, maxBytes);
   let form: FormData;
   try {
-    form = await new Response(new Uint8Array(raw), { headers: { "content-type": contentType } }).formData();
+    form = await new Response(new Uint8Array(raw), {
+      headers: { "content-type": contentType },
+    }).formData();
   } catch {
     throw new UploadError(400, "The upload could not be read.");
   }

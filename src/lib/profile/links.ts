@@ -10,7 +10,15 @@
  * - Rendered with rel="noopener noreferrer nofollow" (ProfileLinks).
  */
 
-export const LINK_KINDS = ["linkedin", "github", "website", "instagram", "tiktok", "x", "other"] as const;
+export const LINK_KINDS = [
+  "linkedin",
+  "github",
+  "website",
+  "instagram",
+  "tiktok",
+  "x",
+  "other",
+] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
 export const MAX_LINKS = 8;
@@ -21,12 +29,27 @@ export interface ProfileLink {
   url: string;
 }
 
-export const LINK_KIND_META: Record<LinkKind, { label: string; hosts?: readonly string[]; example: string }> = {
-  linkedin: { label: "LinkedIn", hosts: ["linkedin.com"], example: "https://www.linkedin.com/in/your-name" },
+export const LINK_KIND_META: Record<
+  LinkKind,
+  { label: string; hosts?: readonly string[]; example: string }
+> = {
+  linkedin: {
+    label: "LinkedIn",
+    hosts: ["linkedin.com"],
+    example: "https://www.linkedin.com/in/your-name",
+  },
   github: { label: "GitHub", hosts: ["github.com"], example: "https://github.com/your-handle" },
   website: { label: "Website", example: "https://your-site.com" },
-  instagram: { label: "Instagram", hosts: ["instagram.com"], example: "https://instagram.com/your-handle" },
-  tiktok: { label: "TikTok", hosts: ["tiktok.com"], example: "https://www.tiktok.com/@your-handle" },
+  instagram: {
+    label: "Instagram",
+    hosts: ["instagram.com"],
+    example: "https://instagram.com/your-handle",
+  },
+  tiktok: {
+    label: "TikTok",
+    hosts: ["tiktok.com"],
+    example: "https://www.tiktok.com/@your-handle",
+  },
   x: { label: "X", hosts: ["x.com", "twitter.com"], example: "https://x.com/your-handle" },
   other: { label: "Other", example: "https://..." },
 };

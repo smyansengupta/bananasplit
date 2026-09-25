@@ -7,7 +7,9 @@ import { getOrgMembersForPicker } from "@/server/members";
 
 import { getEventById } from "../queries";
 
-export default async function EventDetailPage({ params }: PageProps<"/app/[orgSlug]/calendar/[eventId]">) {
+export default async function EventDetailPage({
+  params,
+}: PageProps<"/app/[orgSlug]/calendar/[eventId]">) {
   const { orgSlug, eventId } = await params;
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
   const event = await withOrgTx(org.id, ({ db }) => getEventById(db, org.id, eventId, user.id));
@@ -49,7 +51,13 @@ export default async function EventDetailPage({ params }: PageProps<"/app/[orgSl
         attendeeIds: event.attendees.map((a) => a.userId),
         notes: event.notes,
       }}
-      members={members.map((m) => ({ id: m.id, name: m.name, image: m.image, avatar: m.avatar, title: m.title }))}
+      members={members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        image: m.image,
+        avatar: m.avatar,
+        title: m.title,
+      }))}
       currentUserId={user.id}
       canEdit={canEdit}
     />

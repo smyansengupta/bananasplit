@@ -48,7 +48,9 @@ export const nextCache = {
 };
 
 function isOutsideActionError(error: unknown): boolean {
-  return error instanceof Error && /only be called from within a Server Action/i.test(error.message);
+  return (
+    error instanceof Error && /only be called from within a Server Action/i.test(error.message)
+  );
 }
 
 function isNoRequestContextError(error: unknown): boolean {
@@ -86,10 +88,14 @@ function applyNow(tagList: readonly string[], mode: InvalidationMode | undefined
  * revalidateTag ("background"); by default a job uses revalidateTag and
  * anything else tries updateTag first.
  */
-export function invalidate(tagList: readonly string[], options?: { mode?: InvalidationMode }): void {
+export function invalidate(
+  tagList: readonly string[],
+  options?: { mode?: InvalidationMode },
+): void {
   const unique = [...new Set(tagList)];
   for (const tag of unique) {
-    if (!isOrgTag(tag)) throw new TypeError(`invalidate: ${tag} is not built by src/server/cache/tags.ts`);
+    if (!isOrgTag(tag))
+      throw new TypeError(`invalidate: ${tag} is not built by src/server/cache/tags.ts`);
   }
   if (unique.length === 0) return;
 

@@ -44,7 +44,12 @@ function leadLabel(days: number): string {
 const GROUPS: NotificationGroup[] = ["tasks", "events", "org"];
 const TYPES_BY_GROUP = GROUPS.map((group) => ({
   group,
-  types: (Object.entries(NOTIFICATION_TYPE_META) as [NotificationType, (typeof NOTIFICATION_TYPE_META)[keyof typeof NOTIFICATION_TYPE_META]][])
+  types: (
+    Object.entries(NOTIFICATION_TYPE_META) as [
+      NotificationType,
+      (typeof NOTIFICATION_TYPE_META)[keyof typeof NOTIFICATION_TYPE_META],
+    ][]
+  )
     .filter(([, meta]) => meta.group === group)
     .map(([type, meta]) => ({ type, ...meta })),
 }));
@@ -111,7 +116,10 @@ export function NotificationPreferencesForm({
           <legend className="mb-2 text-sm font-medium">{NOTIFICATION_GROUP_LABELS[group]}</legend>
           {types.map(({ type, label, audience }) => (
             <div key={type} className="flex items-center justify-between gap-4">
-              <Label htmlFor={`pref-${type}`} className="flex flex-col items-start gap-0.5 font-normal">
+              <Label
+                htmlFor={`pref-${type}`}
+                className="flex flex-col items-start gap-0.5 font-normal"
+              >
                 <span>{label}</span>
                 {audience && <span className="text-muted-foreground text-xs">{audience}</span>}
               </Label>
@@ -189,7 +197,9 @@ export function NotificationPreferencesForm({
 
         <p className="text-muted-foreground text-xs">
           Times are in {timeZoneLabel(effectiveTimezone)}
-          {followsOrg ? " (your organization's timezone; change yours under Details)" : " (your timezone)"}
+          {followsOrg
+            ? " (your organization's timezone; change yours under Details)"
+            : " (your timezone)"}
           .
         </p>
       </fieldset>

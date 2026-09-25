@@ -1,6 +1,11 @@
 import type { TxClient } from "@/server/db/context";
 
-import { definitionLabels, optionsOf, readDefinition, type QuestionType } from "./ballot-definitions";
+import {
+  definitionLabels,
+  optionsOf,
+  readDefinition,
+  type QuestionType,
+} from "./ballot-definitions";
 import type { Tier } from "./types";
 
 /**
@@ -56,7 +61,15 @@ export async function listPolls(db: TxClient, organizationId: string): Promise<P
   return db.ballotDefinition.findMany({
     where: { organizationId },
     orderBy: [{ opensAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-    select: { id: true, slug: true, title: true, isTest: true, opensAt: true, closesAt: true, linkedEventId: true },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      isTest: true,
+      opensAt: true,
+      closesAt: true,
+      linkedEventId: true,
+    },
   });
 }
 
@@ -81,7 +94,10 @@ export async function loadPollResults(
       where: { organizationId },
       select: { ballotMinCellSize: true, ballotResultsVisibleToMembers: true },
     }),
-    await db.ballotDefinition.findFirst({ where: { id: poll.id, organizationId }, select: { definition: true } }),
+    await db.ballotDefinition.findFirst({
+      where: { id: poll.id, organizationId },
+      select: { definition: true },
+    }),
     await db.$queryRaw<TallyRow[]>`
       SELECT question_key, choice_key, votes, first_choice, borda, ballots, suppressed
         FROM app.ballot_tally(${organizationId}, ${poll.id}, ${tier})`,
@@ -122,12 +138,26 @@ export async function loadPollResults(
     if (q) {
       for (const o of optionsOf(q)) {
         if (!seen.has(o.key)) {
-          cells.push({ key: o.key, label: o.label, votes: 0, firstChoice: q.type === "slots" ? 0 : null, borda: q.type === "slots" ? 0 : null, suppressed: false, share: 0 });
+          cells.push({
+            key: o.key,
+            label: o.label,
+            votes: 0,
+            firstChoice: q.type === "slots" ? 0 : null,
+            borda: q.type === "slots" ? 0 : null,
+            suppressed: false,
+            share: 0,
+          });
         }
       }
     }
     if (q?.type === "slots") cells.sort((a, b) => (b.borda ?? -1) - (a.borda ?? -1));
-    questions.push({ key, label: labels.question(key), type: q?.type ?? null, ballots, options: cells });
+    questions.push({
+      key,
+      label: labels.question(key),
+      type: q?.type ?? null,
+      ballots,
+      options: cells,
+    });
   }
 
   const hidden = tier === "MEMBER" && settings?.ballotResultsVisibleToMembers === false;

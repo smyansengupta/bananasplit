@@ -16,11 +16,21 @@ export function KindBadge({ kind, className }: { kind: EventKind; className?: st
   );
 }
 
-export function VisibilityBadge({ visibility, className }: { visibility: EventVisibility; className?: string }) {
+export function VisibilityBadge({
+  visibility,
+  className,
+}: {
+  visibility: EventVisibility;
+  className?: string;
+}) {
   const meta = VISIBILITY_META[visibility];
   const Icon = visibility === "PUBLIC" ? Globe : Lock;
   return (
-    <Badge variant={visibility === "PUBLIC" ? "secondary" : "outline"} className={cn("gap-1", className)} title={meta.hint}>
+    <Badge
+      variant={visibility === "PUBLIC" ? "secondary" : "outline"}
+      className={cn("gap-1", className)}
+      title={meta.hint}
+    >
       <Icon aria-hidden className="size-3" />
       {meta.label}
     </Badge>
@@ -38,7 +48,8 @@ export function SyncBadge({
   href?: string | null;
 }) {
   const meta = SYNC_META[state];
-  const Icon = state === "SYNCED" ? CalendarCheck2 : state === "FAILED" ? CalendarX2 : CalendarClock;
+  const Icon =
+    state === "SYNCED" ? CalendarCheck2 : state === "FAILED" ? CalendarX2 : CalendarClock;
   const badge = (
     <Badge
       variant={state === "FAILED" ? "destructive" : "outline"}

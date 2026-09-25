@@ -104,7 +104,10 @@ export async function signUpAction(
     try {
       await enqueueVerificationEmail(user.id);
     } catch (error) {
-      console.error("[sign-up] could not queue the verification email", error instanceof Error ? error.message : error);
+      console.error(
+        "[sign-up] could not queue the verification email",
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 
@@ -116,7 +119,9 @@ export async function signUpAction(
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      return mustVerify ? { checkEmail: parsed.data.email } : { error: "Could not sign you in. Try signing in with your new password." };
+      return mustVerify
+        ? { checkEmail: parsed.data.email }
+        : { error: "Could not sign you in. Try signing in with your new password." };
     }
     throw error;
   }

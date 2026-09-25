@@ -38,7 +38,11 @@ const BULLET_PREFIX = /^(?:[-*•·◦▪–—]+|\d+[.)])\s+/;
  * clamped, empty items dropped and duplicates (case- and space-insensitive)
  * removed, at most `maxItems` kept.
  */
-export function cleanBullets(items: readonly string[], maxItems: number, maxLength: number): string[] {
+export function cleanBullets(
+  items: readonly string[],
+  maxItems: number,
+  maxLength: number,
+): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of items) {
@@ -55,10 +59,7 @@ export function cleanBullets(items: readonly string[], maxItems: number, maxLeng
 
 /** Lowercase ASCII-ish fold for comparisons: NFKD, diacritics removed. */
 export function foldCase(input: string): string {
-  return input
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
+  return input.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
 /**

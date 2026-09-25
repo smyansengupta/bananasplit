@@ -123,7 +123,11 @@ function filterValue(filter: DbViewFilter): string {
     return value ? "true" : "false";
   }
   if (op === "in") {
-    const list = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+    const list = Array.isArray(value)
+      ? value
+      : value === undefined || value === null
+        ? []
+        : [value];
     const items = (list as DbFilterScalar[]).map(scalarToString);
     if (items.length === 0) throw new DbViewParamError("in needs at least one value");
     if (items.some((v) => v.includes(","))) {

@@ -29,10 +29,22 @@ const poll: PollSource = {
   finalizedEventId: "event_secret",
   slots,
   responses: [
-    { slotId: "slot_1", userId: "user_member_1", guestName: null, guestKeyHash: null, availability: "YES" },
+    {
+      slotId: "slot_1",
+      userId: "user_member_1",
+      guestName: null,
+      guestKeyHash: null,
+      availability: "YES",
+    },
     { slotId: "slot_1", userId: null, guestName: "Alex", guestKeyHash: hashA, availability: "YES" },
     { slotId: "slot_2", userId: null, guestName: "Alex", guestKeyHash: hashA, availability: "NO" },
-    { slotId: "slot_1", userId: null, guestName: "alex", guestKeyHash: hashB, availability: "IF_NEEDED" },
+    {
+      slotId: "slot_1",
+      userId: null,
+      guestName: "alex",
+      guestKeyHash: hashB,
+      availability: "IF_NEEDED",
+    },
     // A guest row from before 0A: no key, read-only.
     { slotId: "slot_2", userId: null, guestName: "Sam", guestKeyHash: null, availability: "YES" },
   ],

@@ -8,7 +8,13 @@ import { withSystemOrgTx } from "@/server/db/context";
 import { sanitize } from "@/server/jobs/sanitize";
 import { PermanentJobError, type JobHandler, type JobRun } from "@/server/jobs/types";
 
-import { createCalendarClient, GoogleApiError, type CalendarClient, type GoogleEvent, type GoogleEventBody } from "./client";
+import {
+  createCalendarClient,
+  GoogleApiError,
+  type CalendarClient,
+  type GoogleEvent,
+  type GoogleEventBody,
+} from "./client";
 import { loadGoogleIntegration, targetCalendarFor } from "./config";
 import { toGoogleEvent } from "./mapping";
 import { markNeedsReauth, REAUTH_MESSAGE } from "./reauth";
@@ -96,7 +102,11 @@ function linkOf(calendarId: string, g: GoogleEvent): MirrorLink {
   return { calendarId, eventId: g.id, etag: g.etag ?? null, htmlLink: g.htmlLink ?? null };
 }
 
-async function insertOrAdopt(client: CalendarClient, calendarId: string, body: GoogleEventBody): Promise<GoogleEvent> {
+async function insertOrAdopt(
+  client: CalendarClient,
+  calendarId: string,
+  body: GoogleEventBody,
+): Promise<GoogleEvent> {
   try {
     return await client.insertEvent(calendarId, body);
   } catch (error) {
@@ -160,9 +170,15 @@ interface Snapshot {
 
 async function readSnapshot(organizationId: string, eventId: string): Promise<Snapshot | null> {
   return withSystemOrgTx(organizationId, async ({ db }) => {
-    const event = await db.event.findFirst({ where: { id: eventId, organizationId }, select: SYNC_SELECT });
+    const event = await db.event.findFirst({
+      where: { id: eventId, organizationId },
+      select: SYNC_SELECT,
+    });
     if (!event) return null;
-    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { timezone: true },
+    });
     const integration = await loadGoogleIntegration(db, organizationId);
     return { event, timeZone: org?.timezone ?? "UTC", integration };
   });
@@ -193,7 +209,8 @@ export async function recordOutcome(
       where: { id: event.id, organizationId, syncVersion: event.syncVersion },
       data: {
         ...linkageData(outcome),
-        googleSyncState: outcome.kind === "mirrored" ? CalendarSyncState.SYNCED : CalendarSyncState.NOT_APPLICABLE,
+        googleSyncState:
+          outcome.kind === "mirrored" ? CalendarSyncState.SYNCED : CalendarSyncState.NOT_APPLICABLE,
         googleSyncedAt: new Date(),
         googleSyncError: null,
         googleSyncAttempts: 0,
@@ -274,7 +291,10 @@ export const gcalJob: JobHandler<{ eventId: string }> = async (run) => {
     return;
   }
   if (integration.status === IntegrationStatus.NEEDS_REAUTH) {
-    await recordFailure(organizationId, event, REAUTH_MESSAGE, { final: true, attempt: run.attempt });
+    await recordFailure(organizationId, event, REAUTH_MESSAGE, {
+      final: true,
+      attempt: run.attempt,
+    });
     return { status: "CANCELLED", error: "Google Calendar needs to be reconnected" };
   }
 
@@ -292,7 +312,10 @@ export const gcalJob: JobHandler<{ eventId: string }> = async (run) => {
   } catch (error) {
     if (error instanceof GoogleReauthError) {
       await markNeedsReauth(organizationId, error.message);
-      await recordFailure(organizationId, event, REAUTH_MESSAGE, { final: true, attempt: run.attempt });
+      await recordFailure(organizationId, event, REAUTH_MESSAGE, {
+        final: true,
+        attempt: run.attempt,
+      });
       return { status: "CANCELLED", error: "Google Calendar needs to be reconnected" };
     }
     if (error instanceof GoogleApiError && error.status === 401) clearAccessToken(organizationId);
@@ -302,7 +325,8 @@ export const gcalJob: JobHandler<{ eventId: string }> = async (run) => {
       final: permanent || run.attempt >= run.maxAttempts,
       attempt: run.attempt,
     });
-    if (permanent && !(error instanceof PermanentJobError)) throw new PermanentJobError(sanitize(error, 300));
+    if (permanent && !(error instanceof PermanentJobError))
+      throw new PermanentJobError(sanitize(error, 300));
     throw error;
   }
 };

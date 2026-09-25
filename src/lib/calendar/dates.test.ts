@@ -42,10 +42,16 @@ describe("calendar dates in an org timezone", () => {
 
   it("handles DST: a skipped time moves forward, an ambiguous one takes the earlier instant", () => {
     // 2026-03-08 02:30 does not exist in New York.
-    expect(zonedTimeToInstant("2026-03-08", NY, 2, 30).toISOString()).toBe("2026-03-08T07:30:00.000Z");
+    expect(zonedTimeToInstant("2026-03-08", NY, 2, 30).toISOString()).toBe(
+      "2026-03-08T07:30:00.000Z",
+    );
     // 2026-11-01 01:30 happens twice in New York; the first is EDT (UTC-4).
-    expect(zonedTimeToInstant("2026-11-01", NY, 1, 30).toISOString()).toBe("2026-11-01T05:30:00.000Z");
-    expect(zonedTimeToInstant("2026-07-01", LA, 18, 0).toISOString()).toBe("2026-07-02T01:00:00.000Z");
+    expect(zonedTimeToInstant("2026-11-01", NY, 1, 30).toISOString()).toBe(
+      "2026-11-01T05:30:00.000Z",
+    );
+    expect(zonedTimeToInstant("2026-07-01", LA, 18, 0).toISOString()).toBe(
+      "2026-07-02T01:00:00.000Z",
+    );
   });
 
   it("reads all-day spans with exclusive and inclusive ends alike", () => {

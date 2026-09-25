@@ -72,9 +72,13 @@ export function loadKeyring(env: Env = process.env): Keyring {
   if (keys.size === 0) {
     throw new SecretsConfigError("no KEK configured: set SECRETS_KEK_V1 and SECRETS_KEK_CURRENT");
   }
-  const current = env.SECRETS_KEK_CURRENT ? Number(env.SECRETS_KEK_CURRENT) : Math.max(...keys.keys());
+  const current = env.SECRETS_KEK_CURRENT
+    ? Number(env.SECRETS_KEK_CURRENT)
+    : Math.max(...keys.keys());
   if (!Number.isInteger(current) || !keys.has(current)) {
-    throw new SecretsConfigError(`SECRETS_KEK_CURRENT=${env.SECRETS_KEK_CURRENT} names no configured KEK`);
+    throw new SecretsConfigError(
+      `SECRETS_KEK_CURRENT=${env.SECRETS_KEK_CURRENT} names no configured KEK`,
+    );
   }
   return { current, keys };
 }

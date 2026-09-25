@@ -403,5 +403,5 @@ describe.skipIf(!seeded)("ownership transfer and leaving, against the local data
 
 afterAll(async () => {
   await disconnectAll();
-    await disconnectOwnerDb();
+  await disconnectOwnerDb();
 });

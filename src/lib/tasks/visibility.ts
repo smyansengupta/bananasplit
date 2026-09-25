@@ -1,4 +1,4 @@
-import { TaskVisibility } from "@/generated/prisma/client";
+import { TaskVisibility } from "@/generated/prisma/enums";
 
 import type { TaskActor } from "./access";
 

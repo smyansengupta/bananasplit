@@ -10,7 +10,8 @@ import { parseStorageKey, STORAGE_KINDS, StorageKeyError } from "@/server/storag
  */
 export const dynamic = "force-dynamic";
 
-const NOT_FOUND = () => new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+const NOT_FOUND = () =>
+  new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
 
 export async function GET(_request: Request, { params }: { params: Promise<{ key: string[] }> }) {
   if (!isLocalStore("public")) return NOT_FOUND();

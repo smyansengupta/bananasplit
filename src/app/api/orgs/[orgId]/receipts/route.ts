@@ -127,7 +127,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     return json(404, { error: "Transaction not found." });
   }
   if (!target.canAttach) {
-    return json(403, { error: "You don't have permission to attach receipts to this transaction." });
+    return json(403, {
+      error: "You don't have permission to attach receipts to this transaction.",
+    });
   }
 
   const rateLimit = await checkRateLimit(

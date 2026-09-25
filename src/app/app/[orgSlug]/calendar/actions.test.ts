@@ -54,8 +54,9 @@ beforeEach(() => {
   ctx.role = "ADMIN";
   ctx.userId = "u_admin";
   db.organization.findUnique.mockResolvedValue({ slug: "cbc", timezone: "America/New_York" });
-  db.membership.count.mockImplementation(async ({ where }: { where: { userId: { in: string[] } } }) =>
-    where.userId.in.filter((id) => id.startsWith("u_")).length,
+  db.membership.count.mockImplementation(
+    async ({ where }: { where: { userId: { in: string[] } } }) =>
+      where.userId.in.filter((id) => id.startsWith("u_")).length,
   );
   db.event.findFirst.mockResolvedValue({
     title: "Board meeting",
@@ -80,9 +81,11 @@ beforeEach(() => {
     },
     tags: [],
   });
-  service.createEvent.mockImplementation(async (_c: unknown, input: Record<string, unknown>) => saved(input));
-  service.updateEvent.mockImplementation(async (_c: unknown, _id: string, patch: Record<string, unknown>) =>
-    saved(patch),
+  service.createEvent.mockImplementation(async (_c: unknown, input: Record<string, unknown>) =>
+    saved(input),
+  );
+  service.updateEvent.mockImplementation(
+    async (_c: unknown, _id: string, patch: Record<string, unknown>) => saved(patch),
   );
   service.deleteEvent.mockImplementation(async () => saved({}));
 });
@@ -92,7 +95,9 @@ describe("authorization: events are ADMIN+", () => {
     ctx.role = role;
     expect((await createEvent(ORG, timed)).error).toMatch(/permission/i);
     expect((await updateEvent(ORG, "evt_1", { title: "x" })).error).toMatch(/permission/i);
-    expect((await moveEvent(ORG, "evt_1", { allDay: false, ...timed })).error).toMatch(/permission/i);
+    expect((await moveEvent(ORG, "evt_1", { allDay: false, ...timed })).error).toMatch(
+      /permission/i,
+    );
     expect((await deleteEvent(ORG, "evt_1")).error).toMatch(/permission/i);
     expect(service.createEvent).not.toHaveBeenCalled();
     expect(service.updateEvent).not.toHaveBeenCalled();
@@ -101,7 +106,9 @@ describe("authorization: events are ADMIN+", () => {
 
   it("a MEMBER cannot create a PUBLIC event either", async () => {
     ctx.role = "MEMBER";
-    expect((await createEvent(ORG, { ...timed, visibility: "PUBLIC" })).error).toMatch(/permission/i);
+    expect((await createEvent(ORG, { ...timed, visibility: "PUBLIC" })).error).toMatch(
+      /permission/i,
+    );
   });
 
   it("an ADMIN creates a PUBLIC workshop through the service", async () => {
@@ -130,14 +137,23 @@ describe("authorization: events are ADMIN+", () => {
   });
 
   it("returns the service's validation message", async () => {
-    service.createEvent.mockRejectedValueOnce(new EventValidationError("Links must be http(s) URLs."));
-    expect(await createEvent(ORG, { ...timed, rsvpUrl: "ftp://x" })).toEqual({ error: "Links must be http(s) URLs." });
+    service.createEvent.mockRejectedValueOnce(
+      new EventValidationError("Links must be http(s) URLs."),
+    );
+    expect(await createEvent(ORG, { ...timed, rsvpUrl: "ftp://x" })).toEqual({
+      error: "Links must be http(s) URLs.",
+    });
   });
 });
 
 describe("times", () => {
   it("stores all-day events as org-timezone midnights with an exclusive end", async () => {
-    await createEvent(ORG, { title: "Hackathon", allDay: true, startsAt: "2026-10-10", endsAt: "2026-10-11" });
+    await createEvent(ORG, {
+      title: "Hackathon",
+      allDay: true,
+      startsAt: "2026-10-10",
+      endsAt: "2026-10-11",
+    });
     expect(service.createEvent).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -149,10 +165,19 @@ describe("times", () => {
   });
 
   it("refuses an end before the start", async () => {
-    expect((await createEvent(ORG, { ...timed, endsAt: "2026-10-05T21:00:00.000Z" })).error).toMatch(/after/);
-    expect((await createEvent(ORG, { title: "x", allDay: true, startsAt: "2026-10-10", endsAt: "2026-10-09" })).error).toMatch(
-      /last day/,
-    );
+    expect(
+      (await createEvent(ORG, { ...timed, endsAt: "2026-10-05T21:00:00.000Z" })).error,
+    ).toMatch(/after/);
+    expect(
+      (
+        await createEvent(ORG, {
+          title: "x",
+          allDay: true,
+          startsAt: "2026-10-10",
+          endsAt: "2026-10-09",
+        })
+      ).error,
+    ).toMatch(/last day/);
   });
 
   it("moves an all-day event by its first and last day", async () => {
@@ -177,7 +202,11 @@ describe("conference links (paste-only, per provider)", () => {
     ["ZOOM", "", /paste a meeting link/i],
     ["NONE", "https://meet.google.com/x", /remove the link/i],
   ])("%s with %s is refused", async (provider, url, message) => {
-    const result = await createEvent(ORG, { ...timed, conferenceProvider: provider as never, conferenceUrl: url });
+    const result = await createEvent(ORG, {
+      ...timed,
+      conferenceProvider: provider as never,
+      conferenceUrl: url,
+    });
     expect(result.error).toMatch(message);
     expect(service.createEvent).not.toHaveBeenCalled();
   });
@@ -194,7 +223,9 @@ describe("conference links (paste-only, per provider)", () => {
 
 describe("attendees", () => {
   it("invites members only, with the org id, and notifies everyone but the actor", async () => {
-    expect((await createEvent(ORG, { ...timed, attendeeIds: ["u_a", "outsider"] })).error).toMatch(/aren't members/);
+    expect((await createEvent(ORG, { ...timed, attendeeIds: ["u_a", "outsider"] })).error).toMatch(
+      /aren't members/,
+    );
     await createEvent(ORG, { ...timed, attendeeIds: ["u_a", "u_admin"] });
     expect(db.eventAttendee.createMany).toHaveBeenCalledWith({
       data: [
@@ -243,7 +274,12 @@ describe("attendees", () => {
   it("tells attendees about a cancellation", async () => {
     await deleteEvent(ORG, "evt_1");
     expect(service.deleteEvent).toHaveBeenCalledWith(expect.anything(), "evt_1");
-    expect(notifyUsers).toHaveBeenCalledWith(db, ORG, ["u_a"], expect.objectContaining({ type: "EVENT_CANCELLED" }));
+    expect(notifyUsers).toHaveBeenCalledWith(
+      db,
+      ORG,
+      ["u_a"],
+      expect.objectContaining({ type: "EVENT_CANCELLED" }),
+    );
   });
 });
 

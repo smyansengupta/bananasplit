@@ -61,11 +61,16 @@ export async function loadGoogleIntegration(
   organizationId: string,
 ): Promise<GoogleIntegration | null> {
   const row = await db.orgIntegration.findUnique({
-    where: { organizationId_provider: { organizationId, provider: IntegrationProvider.GOOGLE_CALENDAR } },
+    where: {
+      organizationId_provider: { organizationId, provider: IntegrationProvider.GOOGLE_CALENDAR },
+    },
     select: { id: true, status: true, config: true, connectedById: true, lastError: true },
   });
   if (!row) return null;
-  const rawConfig = (row.config && typeof row.config === "object" ? row.config : {}) as Record<string, unknown>;
+  const rawConfig = (row.config && typeof row.config === "object" ? row.config : {}) as Record<
+    string,
+    unknown
+  >;
   return {
     id: row.id,
     status: row.status,
@@ -82,9 +87,15 @@ export async function mergeIntegrationConfig(
   integrationId: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
-  const row = await db.orgIntegration.findUnique({ where: { id: integrationId }, select: { config: true } });
+  const row = await db.orgIntegration.findUnique({
+    where: { id: integrationId },
+    select: { config: true },
+  });
   if (!row) return;
-  const current = (row.config && typeof row.config === "object" ? row.config : {}) as Record<string, unknown>;
+  const current = (row.config && typeof row.config === "object" ? row.config : {}) as Record<
+    string,
+    unknown
+  >;
   await db.orgIntegration.update({
     where: { id: integrationId },
     data: { config: { ...current, ...patch } as Prisma.InputJsonObject },

@@ -92,7 +92,8 @@ export function ChartView({
         setEditError(null);
         startTransition(async () => {
           const result = await startDraftAction(orgId, "current");
-          if (result.ok && "versionId" in result) router.push(`/app/${orgSlug}/org-chart/drafts/${result.versionId}${suffix}`);
+          if (result.ok && "versionId" in result)
+            router.push(`/app/${orgSlug}/org-chart/drafts/${result.versionId}${suffix}`);
           else setEditError("error" in result ? result.error : "The draft could not be started.");
         });
       }
@@ -104,7 +105,9 @@ export function ChartView({
         <div className="max-w-3xl">{listFallback}</div>
       ) : (
         <div className="relative -mx-4 -mb-4 h-[calc(100dvh-11.5rem)] min-h-[420px] border-t md:-mx-6 md:-mb-6">
-          {!ready && <div className="absolute inset-0 overflow-auto p-4 md:p-6">{listFallback}</div>}
+          {!ready && (
+            <div className="absolute inset-0 overflow-auto p-4 md:p-6">{listFallback}</div>
+          )}
           <div className={cn("absolute inset-0", !ready && "invisible")}>
             <ChartCanvas
               nodes={nodes}

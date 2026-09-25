@@ -14,7 +14,9 @@ export default async function BudgetPage({ params }: PageProps<"/app/[orgSlug]/f
   const { periods, activePeriod, categories } = await withOrgTx(org.id, async ({ db }) => {
     const periods = await getOrgPeriods(db, org.id);
     const activePeriod = periods.find((p) => p.isActive) ?? null;
-    const categories = activePeriod ? await getCategoriesForPeriod(db, org.id, activePeriod.id) : [];
+    const categories = activePeriod
+      ? await getCategoriesForPeriod(db, org.id, activePeriod.id)
+      : [];
     return { periods, activePeriod, categories };
   }).catch(handleAuthErrorInPage);
 

@@ -28,12 +28,32 @@ describe("job-kind registry rules ('Background jobs' decision, item 7)", () => {
   );
 
   it("matches the decision table for the named kinds", () => {
-    expect(jobKind("notify-email")).toMatchObject({ maxRuntimeMs: 20_000, leaseSeconds: 60, afterEligible: true });
-    expect(jobKind("gcal")).toMatchObject({ maxRuntimeMs: 30_000, leaseSeconds: 90, afterEligible: true });
+    expect(jobKind("notify-email")).toMatchObject({
+      maxRuntimeMs: 20_000,
+      leaseSeconds: 60,
+      afterEligible: true,
+    });
+    expect(jobKind("gcal")).toMatchObject({
+      maxRuntimeMs: 30_000,
+      leaseSeconds: 90,
+      afterEligible: true,
+    });
     expect(jobKind("site-rebuild")).toMatchObject({ maxRuntimeMs: 30_000, afterEligible: false });
-    expect(jobKind("source-sync")).toMatchObject({ maxRuntimeMs: 150_000, leaseSeconds: 330, tier: "heavy" });
-    expect(jobKind("claude-parse")).toMatchObject({ maxRuntimeMs: 250_000, leaseSeconds: 360, tier: "heavy" });
-    expect(jobKind("org-export")).toMatchObject({ maxRuntimeMs: 240_000, leaseSeconds: 330, tier: "heavy" });
+    expect(jobKind("source-sync")).toMatchObject({
+      maxRuntimeMs: 150_000,
+      leaseSeconds: 330,
+      tier: "heavy",
+    });
+    expect(jobKind("claude-parse")).toMatchObject({
+      maxRuntimeMs: 250_000,
+      leaseSeconds: 360,
+      tier: "heavy",
+    });
+    expect(jobKind("org-export")).toMatchObject({
+      maxRuntimeMs: 240_000,
+      leaseSeconds: 330,
+      tier: "heavy",
+    });
     expect(jobKind("org-purge")).toMatchObject({ tier: "heavy" });
     expect(jobKind("google-import")).toMatchObject({ tier: "heavy" });
   });
@@ -45,7 +65,9 @@ describe("job-kind registry rules ('Background jobs' decision, item 7)", () => {
 
   it("payload schemas take ids only", () => {
     expect(jobKind("notify-email").payload.safeParse({ notificationId: "n_1" }).success).toBe(true);
-    expect(jobKind("notify-email").payload.safeParse({ notificationId: "a@b.co" }).success).toBe(false);
+    expect(jobKind("notify-email").payload.safeParse({ notificationId: "a@b.co" }).success).toBe(
+      false,
+    );
     expect(
       jobKind("notify-email").payload.safeParse({ notificationId: "n_1", email: "a@b.co" }).success,
     ).toBe(false);

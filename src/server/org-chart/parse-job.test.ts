@@ -4,8 +4,12 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { afterCallbacks } = vi.hoisted(() => ({ afterCallbacks: [] as Array<() => Promise<unknown>> }));
-vi.mock("next/server", () => ({ after: (fn: () => Promise<unknown>) => void afterCallbacks.push(fn) }));
+const { afterCallbacks } = vi.hoisted(() => ({
+  afterCallbacks: [] as Array<() => Promise<unknown>>,
+}));
+vi.mock("next/server", () => ({
+  after: (fn: () => Promise<unknown>) => void afterCallbacks.push(fn),
+}));
 vi.mock("@/server/db/context", () => ({
   assertNoTx: vi.fn(),
   withSystemOrgTx: vi.fn(),
@@ -23,7 +27,9 @@ import { chartToWrites } from "./parse-job";
 import { titlesFor } from "./service";
 
 const raw = OrgChartParseSchema.parse(
-  JSON.parse(readFileSync(path.resolve("src/lib/org-chart/__fixtures__/cbc-fall-2026.raw.json"), "utf8")),
+  JSON.parse(
+    readFileSync(path.resolve("src/lib/org-chart/__fixtures__/cbc-fall-2026.raw.json"), "utf8"),
+  ),
 );
 
 afterEach(() => {
@@ -81,10 +87,38 @@ describe("chartToWrites", () => {
 describe("titlesFor", () => {
   it("gives each confirmed member the title of their highest position", () => {
     const rows = [
-      { id: "p", userId: "u1", reportsToId: null, title: "President", rank: "a0", matchState: "CONFIRMED" as const },
-      { id: "t", userId: "u1", reportsToId: "p", title: "Treasurer", rank: "a1", matchState: "CONFIRMED" as const },
-      { id: "v", userId: "u2", reportsToId: "p", title: "VP", rank: "a2", matchState: "CONFIRMED" as const },
-      { id: "s", userId: "u3", reportsToId: "p", title: "Lead", rank: "a3", matchState: "SUGGESTED" as const },
+      {
+        id: "p",
+        userId: "u1",
+        reportsToId: null,
+        title: "President",
+        rank: "a0",
+        matchState: "CONFIRMED" as const,
+      },
+      {
+        id: "t",
+        userId: "u1",
+        reportsToId: "p",
+        title: "Treasurer",
+        rank: "a1",
+        matchState: "CONFIRMED" as const,
+      },
+      {
+        id: "v",
+        userId: "u2",
+        reportsToId: "p",
+        title: "VP",
+        rank: "a2",
+        matchState: "CONFIRMED" as const,
+      },
+      {
+        id: "s",
+        userId: "u3",
+        reportsToId: "p",
+        title: "Lead",
+        rank: "a3",
+        matchState: "SUGGESTED" as const,
+      },
     ];
     expect(Object.fromEntries(titlesFor(rows))).toEqual({ u1: "President", u2: "VP" });
   });

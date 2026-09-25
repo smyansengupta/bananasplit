@@ -58,7 +58,9 @@ export function PollPicker({
       value={current ?? ""}
       onChange={(e) =>
         view.update((p) => {
-          const rest = p.getAll("f").filter((f) => !/^(ballotDefinitionId|poll|definition|pollSlug|slug):/.test(f));
+          const rest = p
+            .getAll("f")
+            .filter((f) => !/^(ballotDefinitionId|poll|definition|pollSlug|slug):/.test(f));
           p.delete("f");
           for (const f of rest) p.append("f", f);
           if (e.target.value) p.append("f", `ballotDefinitionId:eq:${e.target.value}`);

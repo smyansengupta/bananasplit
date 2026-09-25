@@ -16,7 +16,14 @@ export const KIND_META: Record<EventKind, { label: string; color: string }> = {
   OTHER: { label: "Other", color: "oklch(0.52 0.04 90)" },
 };
 
-export const KIND_ORDER: EventKind[] = ["WORKSHOP", "INFO_SESSION", "HACKATHON", "SOCIAL", "BOARD_MEETING", "OTHER"];
+export const KIND_ORDER: EventKind[] = [
+  "WORKSHOP",
+  "INFO_SESSION",
+  "HACKATHON",
+  "SOCIAL",
+  "BOARD_MEETING",
+  "OTHER",
+];
 
 export const VISIBILITY_META: Record<EventVisibility, { label: string; hint: string }> = {
   PUBLIC: { label: "Public", hint: "On the website and the public Google Calendar" },

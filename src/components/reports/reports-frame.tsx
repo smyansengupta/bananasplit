@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, use, useTransition, type ReactNode, type TransitionStartFunction } from "react";
+import {
+  createContext,
+  use,
+  useTransition,
+  type ReactNode,
+  type TransitionStartFunction,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -32,7 +38,10 @@ export function useReportsFrame(): FrameState {
 export function ReportsBody({ children, className }: { children: ReactNode; className?: string }) {
   const { pending } = useReportsFrame();
   return (
-    <div aria-busy={pending} className={cn("transition-opacity duration-200", pending && "opacity-60", className)}>
+    <div
+      aria-busy={pending}
+      className={cn("transition-opacity duration-200", pending && "opacity-60", className)}
+    >
       {children}
     </div>
   );

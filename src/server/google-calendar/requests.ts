@@ -40,7 +40,11 @@ export async function enqueueGoogleBackfill(
   opts: { now?: Date; limit?: number } = {},
 ): Promise<number> {
   const since = new Date((opts.now ?? new Date()).getTime() - BACKFILL_LOOKBACK_DAYS * DAY);
-  const live = { deletedAt: null, mergedIntoId: null, endsAt: { gte: since } } satisfies Prisma.EventWhereInput;
+  const live = {
+    deletedAt: null,
+    mergedIntoId: null,
+    endsAt: { gte: since },
+  } satisfies Prisma.EventWhereInput;
   const or: Prisma.EventWhereInput[] = [
     {
       ...live,
@@ -56,7 +60,10 @@ export async function enqueueGoogleBackfill(
     or.push({
       ...live,
       visibility: EventVisibility.INTERNAL,
-      NOT: { googleSyncState: CalendarSyncState.SYNCED, googleCalendarId: config.internalCalendarId },
+      NOT: {
+        googleSyncState: CalendarSyncState.SYNCED,
+        googleCalendarId: config.internalCalendarId,
+      },
     });
   } else {
     or.push({ visibility: EventVisibility.INTERNAL, googleEventId: { not: null } });
@@ -74,7 +81,12 @@ export async function enqueueGoogleBackfill(
     UPDATE "Event" SET "googleSyncState" = 'PENDING'::"CalendarSyncState"
      WHERE "organizationId" = ${organizationId} AND "id" = ANY(${ids}::text[])`;
   for (const id of ids) {
-    await enqueueJob(db, { orgId: organizationId, kind: "gcal", key: id, payload: { eventId: id } });
+    await enqueueJob(db, {
+      orgId: organizationId,
+      kind: "gcal",
+      key: id,
+      payload: { eventId: id },
+    });
   }
   return ids.length;
 }
@@ -90,7 +102,8 @@ export type RequestResult = { ok: true; queued?: number } | { ok: false; error: 
 
 function usable(status: IntegrationStatus): string | null {
   if (status === IntegrationStatus.CONNECTED || status === IntegrationStatus.ERROR) return null;
-  if (status === IntegrationStatus.NEEDS_REAUTH) return "Reconnect Google Calendar in Settings > Integrations first.";
+  if (status === IntegrationStatus.NEEDS_REAUTH)
+    return "Reconnect Google Calendar in Settings > Integrations first.";
   return "Connect Google Calendar in Settings > Integrations first.";
 }
 
@@ -98,11 +111,14 @@ function usable(status: IntegrationStatus): string | null {
 export async function requestGoogleSync(ctx: RequestContext): Promise<RequestResult> {
   requirePermission(ctx, "integrations.write");
   const integration = await loadGoogleIntegration(ctx.db, ctx.organizationId);
-  if (!integration) return { ok: false, error: "Connect Google Calendar in Settings > Integrations first." };
+  if (!integration)
+    return { ok: false, error: "Connect Google Calendar in Settings > Integrations first." };
   const blocked = usable(integration.status);
   if (blocked) return { ok: false, error: blocked };
   const queued = await enqueueGoogleBackfill(ctx.db, ctx.organizationId, integration.config);
-  await mergeIntegrationConfig(ctx.db, integration.id, { lastSyncRequestAt: new Date().toISOString() });
+  await mergeIntegrationConfig(ctx.db, integration.id, {
+    lastSyncRequestAt: new Date().toISOString(),
+  });
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
     action: "calendar.google_sync_requested",
@@ -120,7 +136,8 @@ export async function requestGoogleImport(
 ): Promise<RequestResult> {
   requirePermission(ctx, "integrations.write");
   const integration = await loadGoogleIntegration(ctx.db, ctx.organizationId);
-  if (!integration) return { ok: false, error: "Connect Google Calendar in Settings > Integrations first." };
+  if (!integration)
+    return { ok: false, error: "Connect Google Calendar in Settings > Integrations first." };
   const blocked = usable(integration.status);
   if (blocked) return { ok: false, error: blocked };
   if (mode === "apply") {
@@ -178,12 +195,18 @@ export interface GoogleSyncStatus {
   } | null;
   counts: Record<CalendarSyncState, number>;
   failures: SyncFailure[];
-  buildHook: { status: IntegrationStatus; lastError: string | null; lastVerifiedAt: Date | null } | null;
+  buildHook: {
+    status: IntegrationStatus;
+    lastError: string | null;
+    lastVerifiedAt: Date | null;
+  } | null;
   publicEventsEnabled: boolean;
 }
 
 /** The Calendar > Sync page's data. ADMIN+ (integrations are admin-only under RLS too). */
-export async function getGoogleSyncStatus(ctx: Omit<RequestContext, "userId">): Promise<GoogleSyncStatus> {
+export async function getGoogleSyncStatus(
+  ctx: Omit<RequestContext, "userId">,
+): Promise<GoogleSyncStatus> {
   requirePermission(ctx, "integrations.view");
   const { db, organizationId } = ctx;
   const integration = await loadGoogleIntegration(db, organizationId);
@@ -206,7 +229,9 @@ export async function getGoogleSyncStatus(ctx: Omit<RequestContext, "userId">): 
     take: 20,
   });
   const hook = await db.orgIntegration.findUnique({
-    where: { organizationId_provider: { organizationId, provider: IntegrationProvider.NETLIFY_BUILD_HOOK } },
+    where: {
+      organizationId_provider: { organizationId, provider: IntegrationProvider.NETLIFY_BUILD_HOOK },
+    },
     select: { status: true, lastError: true, lastVerifiedAt: true },
   });
   const settings = await db.orgSettings.findUnique({
@@ -221,12 +246,19 @@ export async function getGoogleSyncStatus(ctx: Omit<RequestContext, "userId">): 
           publicCalendarId: integration.config.publicCalendarId,
           internalCalendarId: integration.config.internalCalendarId,
           lastSyncRequestAt:
-            typeof integration.rawConfig.lastSyncRequestAt === "string" ? integration.rawConfig.lastSyncRequestAt : null,
+            typeof integration.rawConfig.lastSyncRequestAt === "string"
+              ? integration.rawConfig.lastSyncRequestAt
+              : null,
           import: (integration.rawConfig.import as ImportState | undefined) ?? null,
         }
       : null,
     counts,
-    failures: failures.map((f) => ({ id: f.id, title: f.title, error: f.googleSyncError, startsAt: f.startsAt })),
+    failures: failures.map((f) => ({
+      id: f.id,
+      title: f.title,
+      error: f.googleSyncError,
+      startsAt: f.startsAt,
+    })),
     buildHook: hook,
     publicEventsEnabled: settings?.publicEventsEnabled === true,
   };

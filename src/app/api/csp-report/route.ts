@@ -63,7 +63,11 @@ function extract(body: unknown): Violation[] {
 
 export async function POST(request: Request) {
   const ip = clientIpFrom(request.headers);
-  const limited = await checkRateLimit(rateLimitKey("csp-report", ip), REPORT_LIMIT, REPORT_WINDOW_SEC);
+  const limited = await checkRateLimit(
+    rateLimitKey("csp-report", ip),
+    REPORT_LIMIT,
+    REPORT_WINDOW_SEC,
+  );
   if (!limited.allowed) {
     return new Response(null, { status: 429 });
   }

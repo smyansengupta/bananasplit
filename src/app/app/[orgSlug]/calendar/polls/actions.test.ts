@@ -58,23 +58,49 @@ describe("createPoll", () => {
     });
     expect(result).toEqual({ pollId: "poll_1" });
     expect(db.availabilityPoll.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ organizationId: ORG, createdById: "u_admin" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ organizationId: ORG, createdById: "u_admin" }),
+      }),
     );
     expect(db.pollSlot.createMany).toHaveBeenCalledWith({
       data: [
-        { organizationId: ORG, pollId: "poll_1", startsAt: new Date("2026-10-05T22:00:00.000Z"), endsAt: new Date("2026-10-05T22:30:00.000Z") },
-        { organizationId: ORG, pollId: "poll_1", startsAt: new Date("2026-10-05T22:30:00.000Z"), endsAt: new Date("2026-10-05T23:00:00.000Z") },
+        {
+          organizationId: ORG,
+          pollId: "poll_1",
+          startsAt: new Date("2026-10-05T22:00:00.000Z"),
+          endsAt: new Date("2026-10-05T22:30:00.000Z"),
+        },
+        {
+          organizationId: ORG,
+          pollId: "poll_1",
+          startsAt: new Date("2026-10-05T22:30:00.000Z"),
+          endsAt: new Date("2026-10-05T23:00:00.000Z"),
+        },
       ],
     });
   });
 
   it("rejects an unknown timezone and an empty window", async () => {
     const base = { title: "x", dates: ["2026-10-05"], granularityMinutes: 30, durationMinutes: 30 };
-    expect((await createPoll(ORG, { ...base, timezone: "Mars/Base", dailyStartMinutes: 0, dailyEndMinutes: 60 })).error).toMatch(
-      /timezone/i,
-    );
     expect(
-      (await createPoll(ORG, { ...base, timezone: "UTC", dailyStartMinutes: 60, dailyEndMinutes: 60 })).error,
+      (
+        await createPoll(ORG, {
+          ...base,
+          timezone: "Mars/Base",
+          dailyStartMinutes: 0,
+          dailyEndMinutes: 60,
+        })
+      ).error,
+    ).toMatch(/timezone/i);
+    expect(
+      (
+        await createPoll(ORG, {
+          ...base,
+          timezone: "UTC",
+          dailyStartMinutes: 60,
+          dailyEndMinutes: 60,
+        })
+      ).error,
     ).toMatch(/end must be after/);
   });
 
@@ -125,9 +151,27 @@ describe("finalizePoll", () => {
     slots: [{ id: "slot_1", startsAt: new Date("2026-10-05T22:00:00.000Z") }],
     responses: [
       { id: "r1", slotId: "slot_1", userId: "u_member", guestKeyHash: null, availability: "YES" },
-      { id: "r2", slotId: "slot_1", userId: "u_left_the_org", guestKeyHash: null, availability: "YES" },
-      { id: "r3", slotId: "slot_1", userId: "u_other_org", guestKeyHash: null, availability: "IF_NEEDED" },
-      { id: "r4", slotId: "slot_1", userId: null, guestKeyHash: "a".repeat(64), availability: "YES" },
+      {
+        id: "r2",
+        slotId: "slot_1",
+        userId: "u_left_the_org",
+        guestKeyHash: null,
+        availability: "YES",
+      },
+      {
+        id: "r3",
+        slotId: "slot_1",
+        userId: "u_other_org",
+        guestKeyHash: null,
+        availability: "IF_NEEDED",
+      },
+      {
+        id: "r4",
+        slotId: "slot_1",
+        userId: null,
+        guestKeyHash: "a".repeat(64),
+        availability: "YES",
+      },
       { id: "r5", slotId: "slot_1", userId: "u_no", guestKeyHash: null, availability: "NO" },
     ],
   };

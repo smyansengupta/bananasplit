@@ -18,13 +18,21 @@ import {
   type PanelContext,
 } from "@/components/databases/detail-panels";
 import { RowDrawer } from "@/components/databases/row-drawer";
-import { SessionFormDialog, type SessionFormInitial } from "@/components/databases/session-form-dialog";
+import {
+  SessionFormDialog,
+  type SessionFormInitial,
+} from "@/components/databases/session-form-dialog";
 import { PollPicker, ViewSwitch } from "@/components/databases/view-switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NotFoundError } from "@/lib/auth/errors";
 import { parseDbViewParams } from "@/lib/databases/href";
-import { listPolls, loadPollResults, type PollOption, type PollResults } from "@/server/databases/ballot-results";
+import {
+  listPolls,
+  loadPollResults,
+  type PollOption,
+  type PollResults,
+} from "@/server/databases/ballot-results";
 import {
   loadAttendanceDetail,
   loadBallotDetail,
@@ -76,7 +84,11 @@ function localInput(date: Date, timezone: string): string {
 
 function selectedPollId(sp: SearchParams, polls: PollOption[]): string | null {
   const params = parseDbViewParams(sp);
-  const f = params.filters.find((x) => ["ballotDefinitionId", "poll", "definition", "pollSlug", "slug"].includes(x.col) && x.op === "eq");
+  const f = params.filters.find(
+    (x) =>
+      ["ballotDefinitionId", "poll", "definition", "pollSlug", "slug"].includes(x.col) &&
+      x.op === "eq",
+  );
   if (f) {
     const hit = polls.find((p) => p.id === f.value || p.slug === f.value);
     if (hit) return hit.id;
@@ -106,16 +118,24 @@ export default async function DatabaseViewPage({
     after(() => syncIfStale(organization.id).catch(() => undefined));
   }
 
-  const { database, view, table, results, polls, pollId, drawer, admin, rowAccess, ballotView } = page;
+  const { database, view, table, results, polls, pollId, drawer, admin, rowAccess, ballotView } =
+    page;
   const exportHref = `/app/${orgSlug}/databases/${database.key}/export`;
   const toolbar: ReactNode[] = [];
   if (admin && database.canEdit) {
     if (database.kind === "SESSIONS") {
       toolbar.push(
         <Button key="dups" variant="outline" size="sm" asChild>
-          <Link href={`/app/${orgSlug}/databases/${database.key}/duplicates`}>Possible duplicates</Link>
+          <Link href={`/app/${orgSlug}/databases/${database.key}/duplicates`}>
+            Possible duplicates
+          </Link>
         </Button>,
-        <SessionFormDialog key="new" organizationId={organization.id} timezone={organization.timezone} members={admin.members} />,
+        <SessionFormDialog
+          key="new"
+          organizationId={organization.id}
+          timezone={organization.timezone}
+          members={admin.members}
+        />,
       );
     }
     if (database.kind === "ATTENDANCE") {
@@ -123,7 +143,11 @@ export default async function DatabaseViewPage({
         <Button key="import" variant="outline" size="sm" asChild>
           <Link href={`/app/${orgSlug}/databases/${database.key}/import`}>Import CSV</Link>
         </Button>,
-        <AddAttendanceDialog key="add" organizationId={organization.id} sessions={admin.sessions} />,
+        <AddAttendanceDialog
+          key="add"
+          organizationId={organization.id}
+          sessions={admin.sessions}
+        />,
       );
     }
     if (database.kind === "SIGNUPS") {
@@ -134,14 +158,19 @@ export default async function DatabaseViewPage({
         <AddSignupDialog
           key="add"
           organizationId={organization.id}
-          years={Object.entries(SIGNUP_LABELS.classYear).map(([value, label]) => ({ value, label }))}
+          years={Object.entries(SIGNUP_LABELS.classYear).map(([value, label]) => ({
+            value,
+            label,
+          }))}
         />,
       );
     }
     if (database.kind === "BALLOTS") {
       toolbar.push(
         <Button key="defs" variant="outline" size="sm" asChild>
-          <Link href={`/app/${orgSlug}/databases/${database.key}/definitions`}>Poll definitions</Link>
+          <Link href={`/app/${orgSlug}/databases/${database.key}/definitions`}>
+            Poll definitions
+          </Link>
         </Button>,
       );
     }
@@ -160,7 +189,15 @@ export default async function DatabaseViewPage({
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             {database.name}
-            {database.memberVisibility !== "MEMBERS" && <Badge variant="outline">{database.memberVisibility === "ADMINS" ? "Owners and admins" : database.memberVisibility === "OWNER" ? "Owners only" : "Hidden from members"}</Badge>}
+            {database.memberVisibility !== "MEMBERS" && (
+              <Badge variant="outline">
+                {database.memberVisibility === "ADMINS"
+                  ? "Owners and admins"
+                  : database.memberVisibility === "OWNER"
+                    ? "Owners only"
+                    : "Hidden from members"}
+              </Badge>
+            )}
           </h1>
         </div>
         {database.kind === "BALLOTS" && (
@@ -184,7 +221,8 @@ export default async function DatabaseViewPage({
 
       {database.kind === "BALLOTS" && !rowAccess && (
         <p className="text-muted-foreground text-sm">
-          Votes are anonymous. You see totals; individual ballots are visible only as Settings &gt; Privacy allows.
+          Votes are anonymous. You see totals; individual ballots are visible only as Settings &gt;
+          Privacy allows.
         </p>
       )}
 
@@ -195,7 +233,10 @@ export default async function DatabaseViewPage({
             <>
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" asChild>
-                  <a href={`${exportHref}?view=results&f=${encodeURIComponent(`ballotDefinitionId:eq:${results.poll.id}`)}`} download>
+                  <a
+                    href={`${exportHref}?view=results&f=${encodeURIComponent(`ballotDefinitionId:eq:${results.poll.id}`)}`}
+                    download
+                  >
                     Export results CSV
                   </a>
                 </Button>
@@ -276,7 +317,8 @@ async function loadPage(
   if (database.kind === "BALLOTS") {
     rowAccess = await canViewBallotRows(db, org.id, vctx.tier);
     const requested = typeof sp.view === "string" ? sp.view : "results";
-    ballotView = rowAccess && (requested === "rows" || requested === "ballots") ? requested : "results";
+    ballotView =
+      rowAccess && (requested === "rows" || requested === "ballots") ? requested : "results";
     // Test polls are for admins checking the pipeline, not results.
     polls = (await listPolls(db, org.id)).filter((p) => isAdmin || !p.isTest);
     pollId = selectedPollId(sp, polls);
@@ -356,7 +398,10 @@ async function loadPage(
               detail={detail}
               ctx={panelCtx}
               formInitial={initial}
-              mergeCandidates={nearby.map((n) => ({ id: n.id, label: `${n.title} · ${fmtDate(n.startsAt, vctx.timezone)}` }))}
+              mergeCandidates={nearby.map((n) => ({
+                id: n.id,
+                label: `${n.title} · ${fmtDate(n.startsAt, vctx.timezone)}`,
+              }))}
             />
           ),
         };
@@ -365,26 +410,48 @@ async function loadPage(
       case "ATTENDANCE": {
         const detail = await loadAttendanceDetail(db, vctx, rowId);
         if (!detail) throw new NotFoundError();
-        drawer = { kind: "other", title: "Check-in", description: detail.row.event.title, node: <AttendancePanel detail={detail} ctx={panelCtx} /> };
+        drawer = {
+          kind: "other",
+          title: "Check-in",
+          description: detail.row.event.title,
+          node: <AttendancePanel detail={detail} ctx={panelCtx} />,
+        };
         break;
       }
       case "SIGNUPS": {
         const detail = await loadSignupDetail(db, vctx, rowId);
         if (!detail) throw new NotFoundError();
-        drawer = { kind: "other", title: "Signup", node: <SignupPanel detail={detail} ctx={panelCtx} /> };
+        drawer = {
+          kind: "other",
+          title: "Signup",
+          node: <SignupPanel detail={detail} ctx={panelCtx} />,
+        };
         break;
       }
       case "PEOPLE": {
         const detail = await loadPersonDetail(db, vctx, rowId);
         if (!detail) throw new NotFoundError();
-        drawer = { kind: "other", title: "Person", node: <PersonPanel detail={detail} ctx={panelCtx} /> };
+        drawer = {
+          kind: "other",
+          title: "Person",
+          node: <PersonPanel detail={detail} ctx={panelCtx} />,
+        };
         break;
       }
       case "BALLOTS": {
         if (!rowAccess) throw new NotFoundError();
-        const detail = await loadBallotDetail(db, vctx, rowId, sourceView === "ballots" ? "ballots" : "choices");
+        const detail = await loadBallotDetail(
+          db,
+          vctx,
+          rowId,
+          sourceView === "ballots" ? "ballots" : "choices",
+        );
         if (!detail) throw new NotFoundError();
-        drawer = { kind: "other", title: "Ballot", node: <BallotPanel detail={detail} ctx={panelCtx} /> };
+        drawer = {
+          kind: "other",
+          title: "Ballot",
+          node: <BallotPanel detail={detail} ctx={panelCtx} />,
+        };
         break;
       }
       default:
@@ -397,7 +464,12 @@ async function loadPage(
     const sessions =
       database.kind === "ATTENDANCE"
         ? await db.event.findMany({
-            where: { organizationId: org.id, deletedAt: null, mergedIntoId: null, startsAt: { lte: new Date(Date.now() + 86400000) } },
+            where: {
+              organizationId: org.id,
+              deletedAt: null,
+              mergedIntoId: null,
+              startsAt: { lte: new Date(Date.now() + 86400000) },
+            },
             orderBy: { startsAt: "desc" },
             take: 60,
             select: { id: true, title: true, startsAt: true },
@@ -405,7 +477,10 @@ async function loadPage(
         : [];
     adminData = {
       members,
-      sessions: sessions.map((s) => ({ id: s.id, label: `${s.title} · ${fmtDate(s.startsAt, vctx.timezone)}` })),
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        label: `${s.title} · ${fmtDate(s.startsAt, vctx.timezone)}`,
+      })),
     };
   }
 

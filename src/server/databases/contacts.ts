@@ -26,7 +26,13 @@ import { afterDataChange } from "./rollups";
 
 export interface MergeContactsResult {
   survivorId: string;
-  moved: { emails: number; attendance: number; signups: number; ballots: number; duplicates: number };
+  moved: {
+    emails: number;
+    attendance: number;
+    signups: number;
+    ballots: number;
+    duplicates: number;
+  };
 }
 
 export async function mergeContacts(
@@ -37,8 +43,26 @@ export async function mergeContacts(
   const org = ctx.organizationId;
   if (survivorId === loserId) throw new DatabaseEditError("Pick two different people to merge.");
   const [survivor, loser] = [
-    await ctx.db.contact.findFirst({ where: { id: survivorId, organizationId: org }, select: { id: true, userId: true, displayName: true, unsubscribedAt: true, firstSeenAt: true } }),
-    await ctx.db.contact.findFirst({ where: { id: loserId, organizationId: org }, select: { id: true, userId: true, displayName: true, unsubscribedAt: true, firstSeenAt: true } }),
+    await ctx.db.contact.findFirst({
+      where: { id: survivorId, organizationId: org },
+      select: {
+        id: true,
+        userId: true,
+        displayName: true,
+        unsubscribedAt: true,
+        firstSeenAt: true,
+      },
+    }),
+    await ctx.db.contact.findFirst({
+      where: { id: loserId, organizationId: org },
+      select: {
+        id: true,
+        userId: true,
+        displayName: true,
+        unsubscribedAt: true,
+        firstSeenAt: true,
+      },
+    }),
   ];
   if (!survivor || !loser) throw new DatabaseEditError("One of these people no longer exists.");
   if (survivor.userId && loser.userId && survivor.userId !== loser.userId) {
@@ -52,7 +76,12 @@ export async function mergeContacts(
 
   // Check-ins.
   const survivorEvents = new Set(
-    (await ctx.db.attendance.findMany({ where: { organizationId: org, contactId: survivor.id }, select: { eventId: true } })).map((a) => a.eventId),
+    (
+      await ctx.db.attendance.findMany({
+        where: { organizationId: org, contactId: survivor.id },
+        select: { eventId: true },
+      })
+    ).map((a) => a.eventId),
   );
   const loserAttendance = await ctx.db.attendance.findMany({
     where: { organizationId: org, contactId: loser.id },
@@ -70,7 +99,10 @@ export async function mergeContacts(
   // resolves that website row's email to the survivor, who already has a
   // check-in for the session, and skips it.
   if (move.length) {
-    await ctx.db.attendance.updateMany({ where: { organizationId: org, id: { in: move } }, data: { contactId: survivor.id } });
+    await ctx.db.attendance.updateMany({
+      where: { organizationId: org, id: { in: move } },
+      data: { contactId: survivor.id },
+    });
   }
   if (remove.length) {
     await ctx.db.attendance.deleteMany({ where: { organizationId: org, id: { in: remove } } });
@@ -78,7 +110,12 @@ export async function mergeContacts(
 
   // Signups (one per contact and term).
   const survivorTerms = new Set(
-    (await ctx.db.signup.findMany({ where: { organizationId: org, contactId: survivor.id }, select: { term: true } })).map((s) => s.term ?? ""),
+    (
+      await ctx.db.signup.findMany({
+        where: { organizationId: org, contactId: survivor.id },
+        select: { term: true },
+      })
+    ).map((s) => s.term ?? ""),
   );
   const loserSignups = await ctx.db.signup.findMany({
     where: { organizationId: org, contactId: loser.id },
@@ -87,7 +124,10 @@ export async function mergeContacts(
   const moveSignups = loserSignups.filter((s) => !survivorTerms.has(s.term ?? "")).map((s) => s.id);
   const dropSignups = loserSignups.filter((s) => survivorTerms.has(s.term ?? "")).map((s) => s.id);
   if (moveSignups.length) {
-    await ctx.db.signup.updateMany({ where: { organizationId: org, id: { in: moveSignups } }, data: { contactId: survivor.id } });
+    await ctx.db.signup.updateMany({
+      where: { organizationId: org, id: { in: moveSignups } },
+      data: { contactId: survivor.id },
+    });
   }
   if (dropSignups.length) {
     await ctx.db.signup.deleteMany({ where: { organizationId: org, id: { in: dropSignups } } });
@@ -111,13 +151,21 @@ export async function mergeContacts(
     },
   });
   // Pick a primary address for the survivor if it has none.
-  const primary = await ctx.db.contactEmail.count({ where: { organizationId: org, contactId: survivor.id, isPrimary: true } });
+  const primary = await ctx.db.contactEmail.count({
+    where: { organizationId: org, contactId: survivor.id, isPrimary: true },
+  });
   if (primary === 0) {
-    const first = await ctx.db.contactEmail.findFirst({ where: { organizationId: org, contactId: survivor.id }, orderBy: { createdAt: "asc" } });
+    const first = await ctx.db.contactEmail.findFirst({
+      where: { organizationId: org, contactId: survivor.id },
+      orderBy: { createdAt: "asc" },
+    });
     if (first) {
       await ctx.db.contactEmail.update({ where: { id: first.id }, data: { isPrimary: true } });
       const masked = maskEmail(first.emailNormalized);
-      await ctx.db.contact.update({ where: { id: survivor.id }, data: { emailMasked: masked.masked, emailDomain: masked.domain } });
+      await ctx.db.contact.update({
+        where: { id: survivor.id },
+        data: { emailMasked: masked.masked, emailDomain: masked.domain },
+      });
     }
   }
   await ctx.db.contactTermStats.deleteMany({ where: { organizationId: org, contactId: loser.id } });
@@ -153,8 +201,11 @@ export async function splitContactEmail(
     select: { id: true, emailNormalized: true, isPrimary: true },
   });
   if (!email) throw new DatabaseEditError("That address is not on this person.");
-  const others = await ctx.db.contactEmail.count({ where: { organizationId: org, contactId, id: { not: email.id } } });
-  if (others === 0) throw new DatabaseEditError("This is the person's only address; there is nothing to split.");
+  const others = await ctx.db.contactEmail.count({
+    where: { organizationId: org, contactId, id: { not: email.id } },
+  });
+  if (others === 0)
+    throw new DatabaseEditError("This is the person's only address; there is nothing to split.");
   const masked = maskEmail(email.emailNormalized);
   const newContactId = newId("ct_");
   await ctx.db.contact.create({
@@ -166,13 +217,22 @@ export async function splitContactEmail(
       firstSeenAt: new Date(),
     },
   });
-  await ctx.db.contactEmail.update({ where: { id: email.id }, data: { contactId: newContactId, isPrimary: true } });
+  await ctx.db.contactEmail.update({
+    where: { id: email.id },
+    data: { contactId: newContactId, isPrimary: true },
+  });
   if (email.isPrimary) {
-    const next = await ctx.db.contactEmail.findFirst({ where: { organizationId: org, contactId }, orderBy: { createdAt: "asc" } });
+    const next = await ctx.db.contactEmail.findFirst({
+      where: { organizationId: org, contactId },
+      orderBy: { createdAt: "asc" },
+    });
     if (next) {
       await ctx.db.contactEmail.update({ where: { id: next.id }, data: { isPrimary: true } });
       const m = maskEmail(next.emailNormalized);
-      await ctx.db.contact.update({ where: { id: contactId }, data: { emailMasked: m.masked, emailDomain: m.domain } });
+      await ctx.db.contact.update({
+        where: { id: contactId },
+        data: { emailMasked: m.masked, emailDomain: m.domain },
+      });
     }
   }
   await writeOrgAuditLog(ctx.db, {

@@ -38,6 +38,8 @@ export function visibleReportIds(visibility: Partial<Record<DatabaseKind, boolea
  * established membership (getOrgContextBySlug) and derived the tier from it.
  */
 export async function getVisibleReports(orgId: string, tier: ReportTier): Promise<ReportId[]> {
-  const visibility = await withSystemOrgTx(orgId, ({ db }) => queryDatabaseVisibility(db, orgId, tier));
+  const visibility = await withSystemOrgTx(orgId, ({ db }) =>
+    queryDatabaseVisibility(db, orgId, tier),
+  );
   return visibleReportIds(visibility);
 }

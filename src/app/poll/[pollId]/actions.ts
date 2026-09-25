@@ -112,7 +112,9 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
     const guestKeyHash = hashGuestKey(guestKey);
     // Only this guest's own rows: legacy rows (NULL hash) and other guests'
     // rows never match, whatever name was typed.
-    await db.pollResponse.deleteMany({ where: { organizationId, pollId: poll.id, userId: null, guestKeyHash } });
+    await db.pollResponse.deleteMany({
+      where: { organizationId, pollId: poll.id, userId: null, guestKeyHash },
+    });
     if (data.entries.length > 0) {
       await db.pollResponse.createMany({
         data: data.entries.map((e) => ({

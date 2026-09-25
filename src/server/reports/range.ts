@@ -160,7 +160,11 @@ export function currentTermRange(tz: string, now: Date = new Date()): ReportRang
  * Resolves the page's search params to explicit dates. `now` is injectable
  * for tests; the page passes nothing.
  */
-export function resolveReportRange(params: RangeParams, tz: string, now: Date = new Date()): ReportRange {
+export function resolveReportRange(
+  params: RangeParams,
+  tz: string,
+  now: Date = new Date(),
+): ReportRange {
   const from = first(params.from);
   const to = first(params.to);
   if (isIsoDate(from) && isIsoDate(to) && from <= to && daysBetween(from, to) <= MAX_SPAN_DAYS) {
@@ -174,8 +178,11 @@ export function resolveReportRange(params: RangeParams, tz: string, now: Date = 
 }
 
 /** The search params that select `range` again (for links that keep it). */
-export function rangeQuery(range: Pick<ReportRange, "preset" | "from" | "to">): Record<string, string> {
-  if (range.preset === "custom" && range.from && range.to) return { from: range.from, to: range.to };
+export function rangeQuery(
+  range: Pick<ReportRange, "preset" | "from" | "to">,
+): Record<string, string> {
+  if (range.preset === "custom" && range.from && range.to)
+    return { from: range.from, to: range.to };
   if (range.preset === "all") return { range: "all" };
   if (range.preset === "30d") return { range: "30d" };
   return {};

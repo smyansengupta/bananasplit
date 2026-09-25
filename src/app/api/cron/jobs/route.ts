@@ -52,5 +52,8 @@ export async function POST(request: Request) {
       console.error("[jobs] kicked drain failed", sanitize(error));
     }
   });
-  return NextResponse.json({ accepted: true }, { status: 202, headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(
+    { accepted: true },
+    { status: 202, headers: { "Cache-Control": "no-store" } },
+  );
 }

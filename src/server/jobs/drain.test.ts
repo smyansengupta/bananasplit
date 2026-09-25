@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+  type MockInstance,
+} from "vitest";
 import { z } from "zod";
 
 const { serviceQuery, emailDelivery, handlers } = vi.hoisted(() => ({
@@ -18,12 +27,48 @@ vi.mock("@/server/email/config", () => ({ emailDelivery }));
 // A small registry with controllable handlers.
 vi.mock("./registry", () => {
   const defs: Record<string, Record<string, unknown>> = {
-    fast: { payload: z.object({ id: z.string() }), scope: "org", maxRuntimeMs: 1_000, leaseSeconds: 45, tier: "fast", afterEligible: true },
+    fast: {
+      payload: z.object({ id: z.string() }),
+      scope: "org",
+      maxRuntimeMs: 1_000,
+      leaseSeconds: 45,
+      tier: "fast",
+      afterEligible: true,
+    },
     // Like the real email kinds: 20s maxRuntime, 60s lease.
-    mail: { payload: z.object({ id: z.string() }), scope: "org", maxRuntimeMs: 20_000, leaseSeconds: 60, tier: "fast", afterEligible: true, sendsEmail: true },
-    scheduled: { payload: z.object({}), scope: "org", maxRuntimeMs: 1_000, leaseSeconds: 45, tier: "fast", afterEligible: false },
-    heavy: { payload: z.object({}), scope: "org", maxRuntimeMs: 100_000, leaseSeconds: 330, tier: "heavy", afterEligible: false },
-    slow: { payload: z.object({}), scope: "org", maxRuntimeMs: 50, leaseSeconds: 45, tier: "fast", afterEligible: true },
+    mail: {
+      payload: z.object({ id: z.string() }),
+      scope: "org",
+      maxRuntimeMs: 20_000,
+      leaseSeconds: 60,
+      tier: "fast",
+      afterEligible: true,
+      sendsEmail: true,
+    },
+    scheduled: {
+      payload: z.object({}),
+      scope: "org",
+      maxRuntimeMs: 1_000,
+      leaseSeconds: 45,
+      tier: "fast",
+      afterEligible: false,
+    },
+    heavy: {
+      payload: z.object({}),
+      scope: "org",
+      maxRuntimeMs: 100_000,
+      leaseSeconds: 330,
+      tier: "heavy",
+      afterEligible: false,
+    },
+    slow: {
+      payload: z.object({}),
+      scope: "org",
+      maxRuntimeMs: 50,
+      leaseSeconds: 45,
+      tier: "fast",
+      afterEligible: true,
+    },
   };
   for (const name of Object.keys(defs)) {
     defs[name]!.handler = async () => (run: unknown) => handlers[name]!(run);
@@ -66,9 +111,12 @@ let finish: MockInstance<typeof jobStore.finish>;
 
 beforeEach(() => {
   queue = [];
-  for (const k of ["fast", "mail", "scheduled", "heavy", "slow"]) handlers[k] = vi.fn(async () => undefined);
+  for (const k of ["fast", "mail", "scheduled", "heavy", "slow"])
+    handlers[k] = vi.fn(async () => undefined);
   claim = vi.spyOn(jobStore, "claim").mockImplementation(async (kinds, limit) => {
-    const picked = queue.filter((r) => (kinds as readonly string[]).includes(r.kind)).slice(0, limit);
+    const picked = queue
+      .filter((r) => (kinds as readonly string[]).includes(r.kind))
+      .slice(0, limit);
     queue = queue.filter((r) => !picked.includes(r));
     return picked;
   });
@@ -88,7 +136,9 @@ describe("drainJobs", () => {
     const summary = await drainJobs();
     expect(summary).toMatchObject({ claimed: 2, done: 2, lost: 0 });
     expect(handlers.fast).toHaveBeenCalledTimes(2);
-    expect(finish).toHaveBeenCalledWith(expect.stringMatching(/^job_fast/), "tok", { status: "DONE" });
+    expect(finish).toHaveBeenCalledWith(expect.stringMatching(/^job_fast/), "tok", {
+      status: "DONE",
+    });
   });
 
   it("maps a throw to RETRY with a sanitized error, and PermanentJobError to DEAD", async () => {
@@ -111,7 +161,10 @@ describe("drainJobs", () => {
     queue = [row("fast", { nope: true })];
     await drainJobs();
     expect(handlers.fast).not.toHaveBeenCalled();
-    expect(finish).toHaveBeenCalledWith(expect.any(String), "tok", { status: "DEAD", error: "invalid payload" });
+    expect(finish).toHaveBeenCalledWith(expect.any(String), "tok", {
+      status: "DEAD",
+      error: "invalid payload",
+    });
   });
 
   it("stops waiting at maxRuntime and retries", async () => {

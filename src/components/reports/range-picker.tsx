@@ -75,13 +75,23 @@ export function RangePicker({
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="outline" size="lg" className="max-w-full justify-start" aria-label={`Date range: ${label}`}>
+        <Button
+          variant="outline"
+          size="lg"
+          className="max-w-full justify-start"
+          aria-label={`Date range: ${label}`}
+        >
           <CalendarRange aria-hidden="true" />
           <span className="font-medium">{label}</span>
           {span && span !== label ? (
-            <span className="text-muted-foreground hidden truncate font-normal sm:inline">{span}</span>
+            <span className="text-muted-foreground hidden truncate font-normal sm:inline">
+              {span}
+            </span>
           ) : null}
-          <ChevronDown className={cn("text-muted-foreground", pending && "animate-pulse")} aria-hidden="true" />
+          <ChevronDown
+            className={cn("text-muted-foreground", pending && "animate-pulse")}
+            aria-hidden="true"
+          />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className={cn("p-1.5", custom ? "w-auto" : "w-60")}>
@@ -96,7 +106,9 @@ export function RangePicker({
                   className="hover:bg-muted/60 focus-visible:bg-muted flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm outline-none"
                 >
                   <span className={cn(selected && "font-medium")}>{p.label}</span>
-                  {selected ? <Check className="size-4" strokeWidth={2.5} aria-hidden="true" /> : null}
+                  {selected ? (
+                    <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
+                  ) : null}
                 </button>
               </li>
             );
@@ -110,7 +122,9 @@ export function RangePicker({
               className="hover:bg-muted/60 focus-visible:bg-muted flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm outline-none"
             >
               <span className={cn(preset === "custom" && "font-medium")}>Custom range…</span>
-              {preset === "custom" ? <Check className="size-4" strokeWidth={2.5} aria-hidden="true" /> : null}
+              {preset === "custom" ? (
+                <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
+              ) : null}
             </button>
           ) : (
             <div className="flex flex-col gap-2">
@@ -130,7 +144,8 @@ export function RangePicker({
                   size="sm"
                   disabled={!draft?.from || !draft?.to}
                   onClick={() => {
-                    if (draft?.from && draft?.to) go({ from: toIsoDate(draft.from), to: toIsoDate(draft.to) });
+                    if (draft?.from && draft?.to)
+                      go({ from: toIsoDate(draft.from), to: toIsoDate(draft.to) });
                   }}
                 >
                   Apply

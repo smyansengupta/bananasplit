@@ -24,10 +24,11 @@ import type { TaskItem } from "./types";
  * One task as a list row — the Week, the Team lanes and the request queue
  * all use this, so a task reads the same wherever you meet it.
  *
- * The row is one click target for opening the task, with the done checkbox
- * and the status select carved out of it. Metadata is ordered by how often
- * it is scanned: what it is, whether it is private, what is holding it up,
- * when it is due, who owns it.
+ * Labels and the above-level flag sit immediately after the title, because
+ * they describe the task and the eye is already there; only the things you
+ * scan DOWN a column for — due date, owner, status — are pushed to the right
+ * edge where they line up. On a phone the due date moves into the meta line
+ * rather than disappearing: it is the one fact you came for.
  */
 export function TaskRow({
   task,
@@ -47,6 +48,7 @@ export function TaskRow({
   const editable = canEditTask(actor, access);
   const done = task.status === "COMPLETED";
   const priv = isTaskPrivate(task);
+  const flagged = isTaskFlagged(task);
   const involvedOnly =
     showRole &&
     task.ownerId !== viewer.userId &&
@@ -56,7 +58,7 @@ export function TaskRow({
   return (
     <li
       className={cn(
-        "group hover:bg-muted/50 focus-within:bg-muted/50 relative flex items-center gap-3 px-3 py-2 transition-colors duration-150",
+        "group hover:bg-muted/50 focus-within:bg-muted/50 flex items-center gap-2.5 px-3 py-2 transition-colors duration-150 sm:gap-3",
         className,
       )}
     >
@@ -67,19 +69,39 @@ export function TaskRow({
         onClick={() => showTask(task)}
         className="focus-visible:ring-ring min-w-0 flex-1 rounded text-left focus-visible:ring-2 focus-visible:outline-none"
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          <PriorityDot priority={task.priority} />
-          {priv && <PrivateMark />}
-          <span className="min-w-0 flex-1 truncate text-sm">
-            {task.parentTask && (
-              <span className="text-muted-foreground">{task.parentTask.title} / </span>
-            )}
-            <span className={cn("font-medium", done && "text-muted-foreground line-through")}>
-              {task.title}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <PriorityDot priority={task.priority} />
+            {priv && <PrivateMark />}
+            <span className="min-w-0 truncate text-sm">
+              {task.parentTask && (
+                <span className="text-muted-foreground">{task.parentTask.title} / </span>
+              )}
+              <span className={cn("font-medium", done && "text-muted-foreground line-through")}>
+                {task.title}
+              </span>
             </span>
           </span>
+          {flagged && <FlagBadge />}
+          {task.labels.slice(0, 3).map(({ label }) => (
+            <Badge
+              key={label.id}
+              style={{ backgroundColor: label.color, color: "white" }}
+              className="border-0"
+            >
+              {label.name}
+            </Badge>
+          ))}
         </span>
+
         <span className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs">
+          {/* On a phone the right-hand cluster is gone, so the due date lives here. */}
+          <DueLabel
+            dueDate={task.dueDate}
+            todayKey={org.todayKey}
+            done={done}
+            className="sm:hidden"
+          />
           {priv && <span className="font-medium">Private</span>}
           {showProject && task.project && <span className="truncate">{task.project.name}</span>}
           {involvedOnly && <span>Involved</span>}
@@ -102,16 +124,6 @@ export function TaskRow({
       </button>
 
       <div className="flex shrink-0 items-center gap-2">
-        {isTaskFlagged(task) && <FlagBadge className="hidden sm:inline-flex" />}
-        {task.labels.slice(0, 2).map(({ label }) => (
-          <Badge
-            key={label.id}
-            style={{ backgroundColor: label.color, color: "white" }}
-            className="hidden border-0 lg:inline-flex"
-          >
-            {label.name}
-          </Badge>
-        ))}
         <DueLabel
           dueDate={task.dueDate}
           todayKey={org.todayKey}
@@ -129,7 +141,7 @@ export function TaskRow({
               ?
             </span>
           ))}
-        <QuickStatus task={task} disabled={!editable} className="hidden md:flex" />
+        <QuickStatus task={task} disabled={!editable} quiet className="hidden md:flex" />
       </div>
     </li>
   );

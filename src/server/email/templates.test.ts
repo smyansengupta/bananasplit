@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  emailConfigProblems,
-  emailDelivery,
-  fromMatchesAppDomain,
-} from "./config";
+import { emailConfigProblems, emailDelivery, fromMatchesAppDomain } from "./config";
 import { displayName, escapeHtml, safeHref, subjectLine } from "./escape";
 import {
   invitationEmail,
@@ -50,7 +46,11 @@ describe("templates", () => {
         pending: [{ description: XSS, amountFormatted: "$1.00", submitterName: XSS }],
         url: "https://p.org/app/x",
       }),
-      verifyEmailEmail({ name: XSS, verifyUrl: "https://p.org/verify-email/tok", expiresHours: 24 }),
+      verifyEmailEmail({
+        name: XSS,
+        verifyUrl: "https://p.org/verify-email/tok",
+        expiresHours: 24,
+      }),
     ];
     for (const email of rendered) {
       expect(email.html).not.toContain("<img");
@@ -98,21 +98,32 @@ describe("email configuration", () => {
     expect(emailDelivery({ EMAIL_SINK: "log", RESEND_API_KEY: "re_x" })).toBe("sink");
     expect(emailDelivery({ EMAIL_DELIVERY: "off" })).toBe("off");
     // Previews never deliver, whatever they are configured with.
-    expect(emailDelivery({ VERCEL_ENV: "preview", RESEND_API_KEY: "re_x", EMAIL_DELIVERY: "live" })).toBe(
-      "sink",
-    );
+    expect(
+      emailDelivery({ VERCEL_ENV: "preview", RESEND_API_KEY: "re_x", EMAIL_DELIVERY: "live" }),
+    ).toBe("sink");
     // Production without a key must fail loudly, not fall back to the sink.
     expect(emailDelivery({ VERCEL_ENV: "production" })).toBe("live");
   });
 
   it("checks the production sender against the app domain", () => {
-    expect(fromMatchesAppDomain("CBC <no-reply@mail.claudeneu.com>", "https://portal.claudeneu.com")).toBe(true);
-    expect(fromMatchesAppDomain("CBC <no-reply@claudeneu.com>", "https://portal.claudeneu.com")).toBe(true);
-    expect(fromMatchesAppDomain("CBC <no-reply@gmail.com>", "https://portal.claudeneu.com")).toBe(false);
-    expect(fromMatchesAppDomain("no-reply@portal.claudeneu.com", "https://portal.claudeneu.com")).toBe(true);
+    expect(
+      fromMatchesAppDomain("CBC <no-reply@mail.claudeneu.com>", "https://portal.claudeneu.com"),
+    ).toBe(true);
+    expect(
+      fromMatchesAppDomain("CBC <no-reply@claudeneu.com>", "https://portal.claudeneu.com"),
+    ).toBe(true);
+    expect(fromMatchesAppDomain("CBC <no-reply@gmail.com>", "https://portal.claudeneu.com")).toBe(
+      false,
+    );
+    expect(
+      fromMatchesAppDomain("no-reply@portal.claudeneu.com", "https://portal.claudeneu.com"),
+    ).toBe(true);
     expect(fromMatchesAppDomain("CBC <no-reply@example.com>", "https://example.com")).toBe(false);
     expect(
-      emailConfigProblems({ VERCEL_ENV: "production", NEXT_PUBLIC_APP_URL: "https://portal.claudeneu.com" }),
+      emailConfigProblems({
+        VERCEL_ENV: "production",
+        NEXT_PUBLIC_APP_URL: "https://portal.claudeneu.com",
+      }),
     ).toEqual(["RESEND_API_KEY is not set", "EMAIL_FROM is not set"]);
     expect(
       emailConfigProblems({

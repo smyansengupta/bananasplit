@@ -33,7 +33,10 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-export async function POST(request: Request, ctx: RouteContext<"/app/[orgSlug]/databases/[dbKey]/import/upload">) {
+export async function POST(
+  request: Request,
+  ctx: RouteContext<"/app/[orgSlug]/databases/[dbKey]/import/upload">,
+) {
   const { orgSlug, dbKey } = await ctx.params;
   let user;
   try {
@@ -41,8 +44,12 @@ export async function POST(request: Request, ctx: RouteContext<"/app/[orgSlug]/d
   } catch {
     return json({ error: "Sign in again." }, 401);
   }
-  const resolved = await withUserTx(user.id, ({ db }) =>
-    db.$queryRaw<{ organizationId: string }[]>`SELECT "organizationId" FROM app.resolve_org_slug(${orgSlug})`,
+  const resolved = await withUserTx(
+    user.id,
+    ({ db }) =>
+      db.$queryRaw<
+        { organizationId: string }[]
+      >`SELECT "organizationId" FROM app.resolve_org_slug(${orgSlug})`,
   );
   const orgId = resolved[0]?.organizationId;
   if (!orgId) return json({ error: "Not found" }, 404);
@@ -65,7 +72,10 @@ export async function POST(request: Request, ctx: RouteContext<"/app/[orgSlug]/d
       const database = await getDatabase(octx.db, orgId, octx.role, dbKey);
       if (database.kind !== "ATTENDANCE" && database.kind !== "SIGNUPS") throw new NotFoundError();
       await assertCanEdit(octx, database.kind);
-      const org = await octx.db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { timezone: true } });
+      const org = await octx.db.organization.findUniqueOrThrow({
+        where: { id: orgId },
+        select: { timezone: true },
+      });
       const tz = org.timezone || "UTC";
 
       if (database.kind === "ATTENDANCE") {
@@ -113,12 +123,16 @@ export async function POST(request: Request, ctx: RouteContext<"/app/[orgSlug]/d
     if (error instanceof ForbiddenError) return json({ error: error.message }, 403);
     if (error instanceof ConflictError) {
       return json(
-        { error: "Some addresses are already on file but hidden from your role (Settings > Privacy). Ask an owner to import." },
+        {
+          error:
+            "Some addresses are already on file but hidden from your role (Settings > Privacy). Ask an owner to import.",
+        },
         409,
       );
     }
     if (error instanceof AppError) return json({ error: error.message }, error.status);
-    if (error instanceof Error && error.name === "DatabaseEditError") return json({ error: error.message }, 400);
+    if (error instanceof Error && error.name === "DatabaseEditError")
+      return json({ error: error.message }, 400);
     console.error("[databases] import failed", error instanceof Error ? error.message : error);
     return json({ error: "The import failed. Nothing was saved." }, 500);
   }

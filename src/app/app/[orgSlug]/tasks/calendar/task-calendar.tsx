@@ -55,7 +55,8 @@ export function TaskCalendar({ tasks }: { tasks: TaskItem[] }) {
             droppable
             events={dated.map((t) => ({
               id: t.id,
-              title: `${isTaskPrivate(t) ? "🔒 " : ""}${t.parentTask ? `${t.parentTask.title} / ` : ""}${t.title}${t.owner?.name ? ` · ${t.owner.name.split(" ")[0]}` : ""}`,
+              title: `${t.parentTask ? `${t.parentTask.title} / ` : ""}${t.title}${t.owner?.name ? ` · ${t.owner.name.split(" ")[0]}` : ""}`,
+              extendedProps: { isPrivate: isTaskPrivate(t) },
               start: dueDateKey(t.dueDate!),
               allDay: true,
               classNames: [
@@ -63,6 +64,14 @@ export function TaskCalendar({ tasks }: { tasks: TaskItem[] }) {
                 ...(t.status === "BLOCKED" ? ["bg-destructive!", "border-destructive!"] : []),
               ],
             }))}
+            eventContent={(arg) => (
+              <div className="flex min-w-0 items-center gap-1 px-0.5">
+                {arg.event.extendedProps.isPrivate ? (
+                  <Lock className="size-3 shrink-0" aria-label="Private" />
+                ) : null}
+                <span className="truncate">{arg.event.title}</span>
+              </div>
+            )}
             eventClick={(info) => open(info.event.id)}
             eventDrop={(info) => {
               updateTask(org.id, info.event.id, { dueDate: info.event.startStr.slice(0, 10) })

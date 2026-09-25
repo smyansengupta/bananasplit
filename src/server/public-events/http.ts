@@ -105,7 +105,11 @@ export function feedResponse(request: Request, feed: FeedBody): Response {
   const bytes = Buffer.from(feed.body, "utf8");
   return new Response(request.method === "HEAD" ? null : bytes, {
     status: 200,
-    headers: { ...headers, "Content-Type": feed.contentType, "Content-Length": String(bytes.length) },
+    headers: {
+      ...headers,
+      "Content-Type": feed.contentType,
+      "Content-Length": String(bytes.length),
+    },
   });
 }
 
@@ -117,7 +121,8 @@ export function feedNotFound(format: "json" | "ics"): Response {
     headers: {
       ...CORS_HEADERS,
       "Cache-Control": NOT_FOUND_CACHE_CONTROL,
-      "Content-Type": format === "json" ? "application/json; charset=utf-8" : "text/plain; charset=utf-8",
+      "Content-Type":
+        format === "json" ? "application/json; charset=utf-8" : "text/plain; charset=utf-8",
     },
   });
 }
@@ -136,6 +141,10 @@ export function feedRedirect(request: Request, canonicalSlug: string, leaf: stri
 export function feedOptions(): Response {
   return new Response(null, {
     status: 204,
-    headers: { ...CORS_HEADERS, "Access-Control-Allow-Headers": "If-None-Match", "Access-Control-Max-Age": "86400" },
+    headers: {
+      ...CORS_HEADERS,
+      "Access-Control-Allow-Headers": "If-None-Match",
+      "Access-Control-Max-Age": "86400",
+    },
   });
 }

@@ -17,7 +17,12 @@ const k1 = randomBytes(32).toString("base64");
 const k2 = randomBytes(32).toString("base64");
 const ring1 = loadKeyring({ SECRETS_KEK_V1: k1, SECRETS_KEK_CURRENT: "1" });
 const ring12 = loadKeyring({ SECRETS_KEK_V1: k1, SECRETS_KEK_V2: k2, SECRETS_KEK_CURRENT: "2" });
-const loc: SecretLocator = { orgId: "org_A", integrationId: "int_1", provider: "CLAUDE", kind: "API_KEY" };
+const loc: SecretLocator = {
+  orgId: "org_A",
+  integrationId: "int_1",
+  provider: "CLAUDE",
+  kind: "API_KEY",
+};
 const SECRET = "sk-ant-api03-example-secret-value";
 
 describe("envelope encryption", () => {
@@ -38,9 +43,15 @@ describe("envelope encryption", () => {
       c[0] = c[0]! ^ 0xff;
       return c;
     };
-    expect(() => decryptSecret({ ...rec, ciphertext: flip(rec.ciphertext) }, loc, ring1)).toThrow(SecretDecryptError);
-    expect(() => decryptSecret({ ...rec, authTag: flip(rec.authTag) }, loc, ring1)).toThrow(SecretDecryptError);
-    expect(() => decryptSecret({ ...rec, wrappedDek: flip(rec.wrappedDek) }, loc, ring1)).toThrow(SecretDecryptError);
+    expect(() => decryptSecret({ ...rec, ciphertext: flip(rec.ciphertext) }, loc, ring1)).toThrow(
+      SecretDecryptError,
+    );
+    expect(() => decryptSecret({ ...rec, authTag: flip(rec.authTag) }, loc, ring1)).toThrow(
+      SecretDecryptError,
+    );
+    expect(() => decryptSecret({ ...rec, wrappedDek: flip(rec.wrappedDek) }, loc, ring1)).toThrow(
+      SecretDecryptError,
+    );
   });
 
   it("binds the ciphertext to its org, integration, provider and kind (AAD)", () => {
@@ -81,8 +92,12 @@ describe("keyring", () => {
   it("requires 32-byte keys and a configured current version", () => {
     expect(() => loadKeyring({})).toThrow(SecretsConfigError);
     // The base64 text itself is validated in keyring.test.ts.
-    expect(() => loadKeyring({ SECRETS_KEK_V1: Buffer.alloc(16).toString("base64") })).toThrow(/32 random bytes/);
-    expect(() => loadKeyring({ SECRETS_KEK_V1: k1, SECRETS_KEK_CURRENT: "2" })).toThrow(SecretsConfigError);
+    expect(() => loadKeyring({ SECRETS_KEK_V1: Buffer.alloc(16).toString("base64") })).toThrow(
+      /32 random bytes/,
+    );
+    expect(() => loadKeyring({ SECRETS_KEK_V1: k1, SECRETS_KEK_CURRENT: "2" })).toThrow(
+      SecretsConfigError,
+    );
     expect(loadKeyring({ SECRETS_KEK_V1: k1, SECRETS_KEK_V3: k2 }).current).toBe(3);
   });
 
@@ -109,7 +124,9 @@ describe("display metadata", () => {
   it("fingerprints with the platform HMAC key and shows last4 only for long secrets", () => {
     const env = { SECRETS_FINGERPRINT_KEY: "fp-key" };
     expect(secretFingerprint(SECRET, env)).toMatch(/^[0-9a-f]{32}$/);
-    expect(secretFingerprint(SECRET, env)).not.toBe(secretFingerprint(SECRET, { SECRETS_FINGERPRINT_KEY: "other" }));
+    expect(secretFingerprint(SECRET, env)).not.toBe(
+      secretFingerprint(SECRET, { SECRETS_FINGERPRINT_KEY: "other" }),
+    );
     expect(() => secretFingerprint(SECRET, {})).toThrow(SecretsConfigError);
     expect(secretLast4(SECRET)).toBe("alue");
     expect(secretLast4("short-pw")).toBeNull();

@@ -79,7 +79,11 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
       ["member2", "MEMBER"],
     ] as const) {
       people[key] = await authDb.user.create({
-        data: { email: `fin-${key}-${stamp}@example.edu`, name: `Fin ${key}`, emailVerified: new Date() },
+        data: {
+          email: `fin-${key}-${stamp}@example.edu`,
+          name: `Fin ${key}`,
+          emailVerified: new Date(),
+        },
         select: { id: true, email: true, name: true },
       });
       // Memberships are created on the service path by the joining user (D6).
@@ -131,7 +135,10 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     expect(created.error).toBeUndefined();
     periodId = created.periodId!;
     const categories = await withOrgTx(orgId, ({ db }) =>
-      db.budgetCategory.findMany({ where: { budgetPeriodId: periodId }, orderBy: { sortOrder: "asc" } }),
+      db.budgetCategory.findMany({
+        where: { budgetPeriodId: periodId },
+        orderBy: { sortOrder: "asc" },
+      }),
     );
     expect(categories.map((c) => c.name)).toEqual([
       "Food",
@@ -141,7 +148,9 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
       "Speaker Fees",
     ]);
 
-    expect(await createCategory(orgId, periodId, { name: "Swag", allocatedCents: 5000 })).toEqual({});
+    expect(await createCategory(orgId, periodId, { name: "Swag", allocatedCents: 5000 })).toEqual(
+      {},
+    );
     const swag = await withOrgTx(orgId, ({ db }) =>
       db.budgetCategory.findFirstOrThrow({ where: { budgetPeriodId: periodId, name: "Swag" } }),
     );
@@ -310,9 +319,15 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
       description: "Receipt delete test",
       occurredAt: "2026-09-04T00:00:00.000Z",
     });
-    const stored = await putBlob("receipts", orgId, [transactionId!, "itest.pdf"], Buffer.from("%PDF-1.4"), {
-      contentType: "application/pdf",
-    });
+    const stored = await putBlob(
+      "receipts",
+      orgId,
+      [transactionId!, "itest.pdf"],
+      Buffer.from("%PDF-1.4"),
+      {
+        contentType: "application/pdf",
+      },
+    );
     const receipt = await withOrgTx(orgId, ({ db, userId }) =>
       db.receipt.create({
         data: {
@@ -330,7 +345,9 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     expect(await getBlob(stored.key)).not.toBeNull();
 
     expect(await deleteReceiptAction(orgId, receipt.id)).toEqual({});
-    expect(await withOrgTx(orgId, ({ db }) => db.receipt.count({ where: { id: receipt.id } }))).toBe(0);
+    expect(
+      await withOrgTx(orgId, ({ db }) => db.receipt.count({ where: { id: receipt.id } })),
+    ).toBe(0);
     expect(await getBlob(stored.key)).toBeNull();
   });
 
@@ -366,8 +383,8 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
       db.transaction.count({ where: { organizationId: seed.id } }),
     );
     expect(foreign).toBe(0);
-    await expect(createCategory(seed.id, seed.periodId, { name: "x", allocatedCents: 0 })).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      createCategory(seed.id, seed.periodId, { name: "x", allocatedCents: 0 }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });

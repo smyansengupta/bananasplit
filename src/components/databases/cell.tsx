@@ -20,7 +20,10 @@ export function CellView({ cell }: { cell: Cell }) {
   switch (cell.t) {
     case "text":
       return (
-        <span className={cn("line-clamp-2", cell.muted && "text-muted-foreground")} title={cell.title}>
+        <span
+          className={cn("line-clamp-2", cell.muted && "text-muted-foreground")}
+          title={cell.title}
+        >
           {cell.v}
         </span>
       );

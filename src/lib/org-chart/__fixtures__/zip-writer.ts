@@ -83,7 +83,10 @@ function xmlEscape(text: string): string {
 }
 
 /** A minimal DOCX with one paragraph per line. */
-export function buildDocx(lines: readonly string[], options: { macroEnabled?: boolean } = {}): Buffer {
+export function buildDocx(
+  lines: readonly string[],
+  options: { macroEnabled?: boolean } = {},
+): Buffer {
   const body = lines
     .map((line) => `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r></w:p>`)
     .join("");

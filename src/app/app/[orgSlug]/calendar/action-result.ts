@@ -14,7 +14,10 @@ export function actionError(error: unknown): { error: string } {
   unstable_rethrow(error);
   if (error instanceof EventValidationError) return { error: error.message };
   if (error instanceof ForbiddenError) {
-    return { error: error.message === "Forbidden" ? "You don't have permission to do that." : error.message };
+    return {
+      error:
+        error.message === "Forbidden" ? "You don't have permission to do that." : error.message,
+    };
   }
   if (error instanceof NotFoundError) return { error: "That event no longer exists." };
   if (error instanceof AppError) return { error: error.message };

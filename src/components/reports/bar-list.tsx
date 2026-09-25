@@ -38,15 +38,21 @@ export function BarList({
   return (
     <ul aria-label={label} className={cn("flex flex-col gap-2.5", className)}>
       {items.map((item) => {
-        const width = item.value !== null && top > 0 ? Math.max(0, Math.min(1, item.value / top)) : 0;
+        const width =
+          item.value !== null && top > 0 ? Math.max(0, Math.min(1, item.value / top)) : 0;
         const row = (
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-1">
             <div className="min-w-0">
               <div className="truncate text-sm">{item.label}</div>
-              {item.detail ? <div className="text-muted-foreground truncate text-xs">{item.detail}</div> : null}
+              {item.detail ? (
+                <div className="text-muted-foreground truncate text-xs">{item.detail}</div>
+              ) : null}
             </div>
             <div className="text-sm font-medium tabular-nums">{item.display}</div>
-            <div className="bg-muted col-span-2 h-3 overflow-hidden rounded-r-[4px]" aria-hidden="true">
+            <div
+              className="bg-muted col-span-2 h-3 overflow-hidden rounded-r-[4px]"
+              aria-hidden="true"
+            >
               {width > 0 ? (
                 <div
                   className="h-full rounded-r-[4px]"

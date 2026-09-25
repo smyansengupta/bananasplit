@@ -91,7 +91,10 @@ export const notifyEmailJob: JobHandler<{ notificationId: string }> = async (run
     );
   } catch (error) {
     await withSystemOrgTx(orgId, ({ db }) =>
-      db.notification.updateMany({ where: { id, emailSentAt: stamp }, data: { emailSentAt: null } }),
+      db.notification.updateMany({
+        where: { id, emailSentAt: stamp },
+        data: { emailSentAt: null },
+      }),
     );
     throw error;
   }
@@ -209,7 +212,10 @@ async function sendTreasurerDigest(
   const data = await withSystemOrgTx(orgId, async ({ db }) => {
     const recipient = await db.membership.findFirst({
       where: { organizationId: orgId, userId, role: { in: [Role.OWNER, Role.TREASURER] } },
-      select: { user: { select: { email: true } }, organization: { select: { name: true, slug: true } } },
+      select: {
+        user: { select: { email: true } },
+        organization: { select: { name: true, slug: true } },
+      },
     });
     if (!recipient) return null; // no longer a treasurer or owner
     const pending = await db.transaction.findMany({

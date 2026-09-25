@@ -39,7 +39,12 @@ export function ContactSearch({
 
   return (
     <div className="space-y-1">
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Search people" />
+      <Input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={placeholder}
+        aria-label="Search people"
+      />
       {q.trim().length >= 2 && results.length > 0 && (
         <ul className="max-h-48 overflow-y-auto rounded-md border text-sm">
           {results.map((c) => (

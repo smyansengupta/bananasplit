@@ -17,12 +17,19 @@ import type { DatabaseSource, ViewContext } from "./types";
 export const EXPORT_PAGE_SIZE = 1000;
 export const EXPORT_MAX_ROWS = 50_000;
 
-export function exportColumns(columns: readonly ColumnConfig[], visible: readonly string[]): ColumnConfig[] {
+export function exportColumns(
+  columns: readonly ColumnConfig[],
+  visible: readonly string[],
+): ColumnConfig[] {
   const shown = new Set(visible);
   return columns.filter((c) => shown.has(c.key) && c.exportable);
 }
 
-export function exportHeader(source: DatabaseSource, columns: readonly ColumnConfig[], ctx: ViewContext): string[] {
+export function exportHeader(
+  source: DatabaseSource,
+  columns: readonly ColumnConfig[],
+  ctx: ViewContext,
+): string[] {
   return columns.map((c) => (source.csvHeader ? source.csvHeader(c, ctx) : c.label));
 }
 
@@ -46,7 +53,9 @@ export async function* csvLines(
   for (;;) {
     const take = Math.min(EXPORT_PAGE_SIZE, EXPORT_MAX_ROWS - written);
     if (take <= 0) {
-      yield csvRow([`Export stopped at ${EXPORT_MAX_ROWS} rows. Narrow the filters to export the rest.`]);
+      yield csvRow([
+        `Export stopped at ${EXPORT_MAX_ROWS} rows. Narrow the filters to export the rest.`,
+      ]);
       return;
     }
     const page = await runPage((db) =>
@@ -63,7 +72,18 @@ export async function* csvLines(
 
 /** The aggregate results as CSV (members' ballot export): no individual vote. */
 export function resultsCsv(results: readonly PollResults[]): string[] {
-  const lines = [csvRow(["Poll", "Question", "Option", "Votes", "Share of ballots", "First choice", "Borda", "Ballots"])];
+  const lines = [
+    csvRow([
+      "Poll",
+      "Question",
+      "Option",
+      "Votes",
+      "Share of ballots",
+      "First choice",
+      "Borda",
+      "Ballots",
+    ]),
+  ];
   for (const r of results) {
     for (const q of r.questions) {
       for (const o of q.options) {

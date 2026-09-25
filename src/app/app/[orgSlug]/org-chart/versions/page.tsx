@@ -5,20 +5,33 @@ import { notFound } from "next/navigation";
 
 import { RollbackButton } from "@/components/org-chart/rollback-button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listVersions, type VersionSummary } from "@/server/org-chart/service";
 
 export const metadata: Metadata = { title: "Org chart versions" };
 
-const SOURCE: Record<string, string> = { UPLOAD: "Imported", MANUAL: "Edited", ROLLBACK: "Restored", SEED: "Seed" };
+const SOURCE: Record<string, string> = {
+  UPLOAD: "Imported",
+  MANUAL: "Edited",
+  ROLLBACK: "Restored",
+  SEED: "Seed",
+};
 
 function statusBadge(v: VersionSummary) {
   if (v.isActive) return <Badge>Published</Badge>;
   if (v.status === "DRAFT") {
     if (v.parseStatus === "FAILED") return <Badge variant="destructive">Import failed</Badge>;
-    if (v.parseStatus && v.parseStatus !== "READY") return <Badge variant="secondary">Reading…</Badge>;
+    if (v.parseStatus && v.parseStatus !== "READY")
+      return <Badge variant="secondary">Reading…</Badge>;
     return <Badge variant="secondary">Draft</Badge>;
   }
   if (v.status === "DISCARDED") return <Badge variant="outline">Discarded</Badge>;
@@ -26,7 +39,9 @@ function statusBadge(v: VersionSummary) {
 }
 
 /** Every version of the chart (OWNER/ADMIN), newest first, with view, compare and restore. */
-export default async function VersionsPage({ params }: PageProps<"/app/[orgSlug]/org-chart/versions">) {
+export default async function VersionsPage({
+  params,
+}: PageProps<"/app/[orgSlug]/org-chart/versions">) {
   const { orgSlug } = await params;
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "orgchart.write")) notFound();
@@ -48,14 +63,17 @@ export default async function VersionsPage({ params }: PageProps<"/app/[orgSlug]
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <Link href={base} className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm">
+        <Link
+          href={base}
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
+        >
           <ChevronLeft className="size-4" aria-hidden="true" />
           Org Chart
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Version history</h1>
         <p className="text-muted-foreground text-sm">
-          Every import and edit is a numbered version. Restoring copies an old version forward and publishes it; nothing is
-          deleted.
+          Every import and edit is a numbered version. Restoring copies an old version forward and
+          publishes it; nothing is deleted.
         </p>
       </div>
 
@@ -86,29 +104,46 @@ export default async function VersionsPage({ params }: PageProps<"/app/[orgSlug]
                   )}
                 </TableCell>
                 <TableCell>{statusBadge(v)}</TableCell>
-                <TableCell className="hidden md:table-cell">{SOURCE[v.source] ?? v.source}</TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {SOURCE[v.source] ?? v.source}
+                </TableCell>
                 <TableCell className="hidden sm:table-cell">{v.positions}</TableCell>
                 <TableCell className="hidden text-sm lg:table-cell">
                   {fmt(v.createdAt)}
-                  {v.createdBy && <span className="text-muted-foreground block text-xs">{v.createdBy}</span>}
+                  {v.createdBy && (
+                    <span className="text-muted-foreground block text-xs">{v.createdBy}</span>
+                  )}
                 </TableCell>
                 <TableCell className="hidden text-sm lg:table-cell">
                   {fmt(v.publishedAt)}
-                  {v.publishedBy && <span className="text-muted-foreground block text-xs">{v.publishedBy}</span>}
+                  {v.publishedBy && (
+                    <span className="text-muted-foreground block text-xs">{v.publishedBy}</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap justify-end gap-2">
                     {v.status === "DRAFT" ? (
-                      <Link href={`${base}/drafts/${v.id}`} className="text-primary text-sm underline-offset-4 hover:underline">
+                      <Link
+                        href={`${base}/drafts/${v.id}`}
+                        className="text-primary text-sm underline-offset-4 hover:underline"
+                      >
                         Open draft
                       </Link>
                     ) : (
-                      <Link href={`${base}/versions/${v.id}`} className="text-primary text-sm underline-offset-4 hover:underline">
+                      <Link
+                        href={`${base}/versions/${v.id}`}
+                        className="text-primary text-sm underline-offset-4 hover:underline"
+                      >
                         View{!v.isActive && v.status !== "DISCARDED" ? " and compare" : ""}
                       </Link>
                     )}
                     {!v.isActive && (v.status === "ARCHIVED" || v.status === "PUBLISHED") && (
-                      <RollbackButton orgId={organization.id} orgSlug={orgSlug} versionId={v.id} number={v.number} />
+                      <RollbackButton
+                        orgId={organization.id}
+                        orgSlug={orgSlug}
+                        versionId={v.id}
+                        number={v.number}
+                      />
                     )}
                   </div>
                 </TableCell>

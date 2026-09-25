@@ -6,7 +6,13 @@ import { useEffect, useState } from "react";
 
 import { loadOpenTasksAction } from "@/app/app/[orgSlug]/org-chart/actions";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { nodeVariant, personLabel, type ChartNodeDTO } from "@/lib/org-chart/types";
@@ -63,11 +69,19 @@ export function PositionPanel(props: PositionPanelProps) {
   return (
     // Non-modal on desktop: the chart stays visible and clickable beside the
     // panel (clicking another node switches the panel; Escape or X closes).
-    <Sheet open={node !== null} onOpenChange={(open) => !open && onClose()} modal={side === "bottom"}>
+    <Sheet
+      open={node !== null}
+      onOpenChange={(open) => !open && onClose()}
+      modal={side === "bottom"}
+    >
       <SheetContent
         side={side}
         onInteractOutside={side === "right" ? (event) => event.preventDefault() : undefined}
-        className={side === "bottom" ? "max-h-[85dvh] overflow-y-auto rounded-t-xl" : "w-full overflow-y-auto sm:max-w-md"}
+        className={
+          side === "bottom"
+            ? "max-h-[85dvh] overflow-y-auto rounded-t-xl"
+            : "w-full overflow-y-auto sm:max-w-md"
+        }
       >
         {node && <PanelBody key={node.id} {...props} node={node} />}
       </SheetContent>
@@ -101,7 +115,9 @@ function PanelBody({
     };
   }, [orgId, userId]);
 
-  const tasksHref = userId ? `/app/${orgSlug}/tasks?view=table&owner=${encodeURIComponent(userId)}&status=open` : null;
+  const tasksHref = userId
+    ? `/app/${orgSlug}/tasks?view=table&owner=${encodeURIComponent(userId)}&status=open`
+    : null;
 
   return (
     <div className="flex flex-col gap-5 px-4 pb-6">
@@ -191,12 +207,18 @@ function PanelBody({
               <Skeleton className="h-5 w-4/5" />
             </div>
           )}
-          {tasks.state === "error" && <p className="text-muted-foreground text-sm">Tasks couldn&apos;t be loaded.</p>}
+          {tasks.state === "error" && (
+            <p className="text-muted-foreground text-sm">Tasks couldn&apos;t be loaded.</p>
+          )}
           {tasks.state === "ready" && (
             <div className="space-y-3">
               <TaskList title="Owns" items={tasks.owned} total={tasks.ownedCount} />
               {tasks.involvedCount > 0 && (
-                <TaskList title="Also involved in" items={tasks.involved} total={tasks.involvedCount} />
+                <TaskList
+                  title="Also involved in"
+                  items={tasks.involved}
+                  total={tasks.involvedCount}
+                />
               )}
               {tasksHref && (
                 <Link
@@ -227,7 +249,9 @@ function PanelBody({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
-      <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{title}</h3>
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+        {title}
+      </h3>
       {children}
     </section>
   );
@@ -244,7 +268,13 @@ function Bullets({ items, empty }: { items: string[]; empty: string }) {
   );
 }
 
-function PersonLink({ node, onNavigate }: { node: ChartNodeDTO; onNavigate: (node: ChartNodeDTO) => void }) {
+function PersonLink({
+  node,
+  onNavigate,
+}: {
+  node: ChartNodeDTO;
+  onNavigate: (node: ChartNodeDTO) => void;
+}) {
   return (
     <button
       type="button"
@@ -254,7 +284,10 @@ function PersonLink({ node, onNavigate }: { node: ChartNodeDTO; onNavigate: (nod
       {node.user ? (
         <UserAvatar user={node.user} size="sm" />
       ) : (
-        <span aria-hidden="true" className="bg-muted size-6 shrink-0 rounded-full border border-dashed" />
+        <span
+          aria-hidden="true"
+          className="bg-muted size-6 shrink-0 rounded-full border border-dashed"
+        />
       )}
       <span className="min-w-0 text-sm">
         <span className="font-medium">{personLabel(node)}</span>
@@ -279,13 +312,17 @@ function TaskList({ title, items, total }: { title: string; items: OpenTask[]; t
               <span className="min-w-0 truncate">{t.title}</span>
               <span className="text-muted-foreground shrink-0 text-xs">
                 {STATUS_LABEL[t.status] ?? t.status}
-                {t.dueDate ? ` · due ${new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                {t.dueDate
+                  ? ` · due ${new Date(t.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                  : ""}
               </span>
             </li>
           ))}
         </ul>
       )}
-      {total > items.length && <p className="text-muted-foreground text-xs">and {total - items.length} more</p>}
+      {total > items.length && (
+        <p className="text-muted-foreground text-xs">and {total - items.length} more</p>
+      )}
     </div>
   );
 }

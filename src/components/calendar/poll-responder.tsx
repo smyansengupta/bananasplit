@@ -225,8 +225,8 @@ export function PollResponder({
       )}
 
       <p id="poll-grid-instructions" className="sr-only">
-        Availability grid. Tab to a time slot and press Enter or Space to mark it with the
-        currently selected availability.
+        Availability grid. Tab to a time slot and press Enter or Space to mark it with the currently
+        selected availability.
       </p>
       <div className="overflow-x-auto">
         <table

@@ -157,7 +157,7 @@ export function WeekView({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* The whole week in one line, each number a filter. */}
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 text-sm">
         <span className="text-muted-foreground">
@@ -218,8 +218,10 @@ export function WeekView({
           key={bucket.key}
           id={`bucket-${bucket.key}`}
           aria-labelledby={`bucket-${bucket.key}-title`}
+          className="scroll-mt-4"
         >
-          <div className="mb-1.5 flex items-baseline gap-2">
+          {/* More space above a heading than below it. */}
+          <div className="mb-2 flex items-baseline gap-2">
             <h2
               id={`bucket-${bucket.key}-title`}
               className={cn(

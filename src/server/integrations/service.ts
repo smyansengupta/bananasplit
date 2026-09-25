@@ -491,7 +491,9 @@ export async function disconnectGoogle(orgId: string, actor: OrgActor): Promise<
     if (token) await revokeGoogleToken(token, AbortSignal.timeout(10_000));
     revoked = true;
   } catch (error) {
-    console.warn(`[integrations] inline Google revoke failed (the job retries): ${sanitize(error)}`);
+    console.warn(
+      `[integrations] inline Google revoke failed (the job retries): ${sanitize(error)}`,
+    );
   }
 
   const done = await withSystemOrgTx(orgId, { userId: actor.userId }, async ({ db }) => {
@@ -529,7 +531,10 @@ export async function disconnectGoogle(orgId: string, actor: OrgActor): Promise<
 
   if (revoked && can(actor, "integrations.remove")) {
     await removeSecret({ orgId, actor, provider: "GOOGLE_CALENDAR", kind: "REFRESH_TOKEN" });
-    return { ok: true, message: "Disconnected. Access was revoked at Google and the token deleted." };
+    return {
+      ok: true,
+      message: "Disconnected. Access was revoked at Google and the token deleted.",
+    };
   }
   return {
     ok: true,

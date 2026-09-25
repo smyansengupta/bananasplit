@@ -62,7 +62,9 @@ export function TimezoneSelect({
           className="w-full justify-between font-normal"
         >
           <span className="min-w-0 truncate">
-            {value ? timeZoneLabel(value) : `Organization's timezone (${timeZoneLabel(orgTimezone)})`}
+            {value
+              ? timeZoneLabel(value)
+              : `Organization's timezone (${timeZoneLabel(orgTimezone)})`}
           </span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
@@ -73,12 +75,18 @@ export function TimezoneSelect({
           <CommandList>
             <CommandEmpty>No timezone found.</CommandEmpty>
             <CommandGroup>
-              <CommandItem value={`${FOLLOW_ORG} organization default`} onSelect={() => choose(null)}>
+              <CommandItem
+                value={`${FOLLOW_ORG} organization default`}
+                onSelect={() => choose(null)}
+              >
                 <Check className={cn("size-4", value === null ? "opacity-100" : "opacity-0")} />
                 Organization&apos;s timezone ({timeZoneLabel(orgTimezone)})
               </CommandItem>
               {detected && detected !== value && (
-                <CommandItem value={`__detected__ ${detected} this device`} onSelect={() => choose(detected)}>
+                <CommandItem
+                  value={`__detected__ ${detected} this device`}
+                  onSelect={() => choose(detected)}
+                >
                   <LocateFixed className="size-4" aria-hidden="true" />
                   This device ({timeZoneLabel(detected)})
                 </CommandItem>

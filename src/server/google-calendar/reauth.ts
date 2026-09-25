@@ -23,7 +23,10 @@ export const REAUTH_MESSAGE =
  *
  * Returns true when this call started the streak (and sent the alert).
  */
-export async function markNeedsReauth(organizationId: string, detail: unknown = REAUTH_MESSAGE): Promise<boolean> {
+export async function markNeedsReauth(
+  organizationId: string,
+  detail: unknown = REAUTH_MESSAGE,
+): Promise<boolean> {
   clearAccessToken(organizationId);
   return withSystemOrgTx(organizationId, async ({ db }) => {
     const moved = await db.orgIntegration.updateMany({
@@ -37,13 +40,18 @@ export async function markNeedsReauth(organizationId: string, detail: unknown = 
     if (moved.count === 0) return false;
 
     // Sequential: one connection per transaction.
-    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { slug: true } });
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { slug: true },
+    });
     const managers = await db.membership.findMany({
       where: { organizationId, role: { in: [Role.OWNER, Role.ADMIN] } },
       select: { userId: true },
     });
     const integration = await db.orgIntegration.findUnique({
-      where: { organizationId_provider: { organizationId, provider: IntegrationProvider.GOOGLE_CALENDAR } },
+      where: {
+        organizationId_provider: { organizationId, provider: IntegrationProvider.GOOGLE_CALENDAR },
+      },
       select: { id: true },
     });
     await notifyUsers(

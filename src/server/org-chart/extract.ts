@@ -59,7 +59,8 @@ const DOCX: SniffedSource = {
 const MARKDOWN: SniffedSource = { kind: "markdown", mimeType: "text/markdown", extension: "md" };
 const TEXT: SniffedSource = { kind: "text", mimeType: "text/plain", extension: "txt" };
 
-const SUPPORTED = "Upload a PDF, a Word document (.docx), a Google Doc downloaded as .docx or PDF, or a Markdown or text file.";
+const SUPPORTED =
+  "Upload a PDF, a Word document (.docx), a Google Doc downloaded as .docx or PDF, or a Markdown or text file.";
 
 function startsWith(bytes: Buffer, text: string): boolean {
   return bytes.subarray(0, text.length).toString("latin1") === text;
@@ -82,7 +83,8 @@ export interface ZipEntry {
 
 /** Reads the central directory, enforcing the entry, size, ratio and feature limits. */
 export function readZipDirectory(bytes: Buffer): ZipEntry[] {
-  const bad = (why: string) => new SourceRejectedError(`This Word document can't be read (${why}).`, 422);
+  const bad = (why: string) =>
+    new SourceRejectedError(`This Word document can't be read (${why}).`, 422);
   // End of central directory: the last 22+ bytes (a comment can follow, up to 64 KiB).
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 0xffff); i--) {
@@ -116,10 +118,12 @@ export function readZipDirectory(bytes: Buffer): ZipEntry[] {
     p += 46 + nameLength + extraLength + commentLength;
 
     if (flags & 0x1) throw bad("it is password-protected");
-    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff) throw bad("ZIP64 archives are not supported");
+    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff)
+      throw bad("ZIP64 archives are not supported");
     if (method !== 0 && method !== 8) throw bad("unsupported compression");
     if (uncompressedSize > MAX_ZIP_UNCOMPRESSED) throw bad("a part is too large");
-    if (uncompressedSize > 1024 && uncompressedSize > compressedSize * MAX_ZIP_RATIO) throw bad("suspicious compression");
+    if (uncompressedSize > 1024 && uncompressedSize > compressedSize * MAX_ZIP_RATIO)
+      throw bad("suspicious compression");
     total += uncompressedSize;
     if (total > MAX_ZIP_UNCOMPRESSED) throw bad("it expands to more than 20 MB");
     entries.push({ name, method, flags, compressedSize, uncompressedSize, localHeaderOffset });
@@ -133,11 +137,13 @@ export function readZipDirectory(bytes: Buffer): ZipEntry[] {
  * Returns the actual total size.
  */
 export function verifyZipEntries(bytes: Buffer, entries: readonly ZipEntry[]): number {
-  const bad = (why: string) => new SourceRejectedError(`This Word document can't be read (${why}).`, 422);
+  const bad = (why: string) =>
+    new SourceRejectedError(`This Word document can't be read (${why}).`, 422);
   let total = 0;
   for (const entry of entries) {
     const at = entry.localHeaderOffset;
-    if (at + 30 > bytes.length || bytes.readUInt32LE(at) !== 0x04034b50) throw bad("damaged archive");
+    if (at + 30 > bytes.length || bytes.readUInt32LE(at) !== 0x04034b50)
+      throw bad("damaged archive");
     const start = at + 30 + bytes.readUInt16LE(at + 26) + bytes.readUInt16LE(at + 28);
     const end = start + entry.compressedSize;
     if (end > bytes.length) throw bad("damaged archive");
@@ -147,7 +153,9 @@ export function verifyZipEntries(bytes: Buffer, entries: readonly ZipEntry[]): n
       size = data.length;
     } else {
       try {
-        size = inflateRawSync(data, { maxOutputLength: Math.max(1, entry.uncompressedSize) }).length;
+        size = inflateRawSync(data, {
+          maxOutputLength: Math.max(1, entry.uncompressedSize),
+        }).length;
       } catch {
         throw bad("a part expands beyond its declared size");
       }
@@ -161,9 +169,15 @@ export function verifyZipEntries(bytes: Buffer, entries: readonly ZipEntry[]): n
 
 function readZipText(bytes: Buffer, entry: ZipEntry): string {
   const start =
-    entry.localHeaderOffset + 30 + bytes.readUInt16LE(entry.localHeaderOffset + 26) + bytes.readUInt16LE(entry.localHeaderOffset + 28);
+    entry.localHeaderOffset +
+    30 +
+    bytes.readUInt16LE(entry.localHeaderOffset + 26) +
+    bytes.readUInt16LE(entry.localHeaderOffset + 28);
   const data = bytes.subarray(start, start + entry.compressedSize);
-  const raw = entry.method === 0 ? data : inflateRawSync(data, { maxOutputLength: entry.uncompressedSize || 1 });
+  const raw =
+    entry.method === 0
+      ? data
+      : inflateRawSync(data, { maxOutputLength: entry.uncompressedSize || 1 });
   return raw.toString("utf8");
 }
 
@@ -182,7 +196,9 @@ function sniffZip(bytes: Buffer): SniffedSource {
   }
   const types = readZipText(bytes, contentTypes);
   if (/macroEnabled/i.test(types) || [...names].some((n) => /vbaProject\.bin$/i.test(n))) {
-    throw new SourceRejectedError("Macro-enabled Word documents (.docm) aren't accepted. Save it as .docx first.");
+    throw new SourceRejectedError(
+      "Macro-enabled Word documents (.docm) aren't accepted. Save it as .docx first.",
+    );
   }
   return DOCX;
 }
@@ -207,9 +223,12 @@ export function sniffSource(bytes: Buffer, filename: string): SniffedSource {
     throw new SourceRejectedError(`RTF files aren't supported. ${SUPPORTED}`);
   }
   if (hasPrefix(bytes, [0xd0, 0xcf, 0x11, 0xe0])) {
-    throw new SourceRejectedError(`Old Word documents (.doc) aren't supported. Save it as .docx or PDF.`);
+    throw new SourceRejectedError(
+      `Old Word documents (.doc) aren't supported. Save it as .docx or PDF.`,
+    );
   }
-  if (decodeUtf8(bytes) === null) throw new SourceRejectedError(`That file type isn't supported. ${SUPPORTED}`);
+  if (decodeUtf8(bytes) === null)
+    throw new SourceRejectedError(`That file type isn't supported. ${SUPPORTED}`);
   return /\.(md|markdown|mdown)$/i.test(filename) ? MARKDOWN : TEXT;
 }
 
@@ -267,11 +286,17 @@ function checkPdf(bytes: Buffer): number | null {
   const tail = bytes.subarray(Math.max(0, bytes.length - 4096)).toString("latin1");
   const head = bytes.subarray(0, Math.min(bytes.length, 64 * 1024)).toString("latin1");
   if (/\/Encrypt\b/.test(tail) || /\/Encrypt\s+\d+\s+\d+\s+R/.test(head)) {
-    throw new SourceRejectedError("Password-protected PDFs can't be read. Remove the password and upload it again.", 422);
+    throw new SourceRejectedError(
+      "Password-protected PDFs can't be read. Remove the password and upload it again.",
+      422,
+    );
   }
   const pages = countPdfPages(bytes);
   if (pages !== null && pages > MAX_PDF_PAGES) {
-    throw new SourceRejectedError(`PDFs are limited to ${MAX_PDF_PAGES} pages (this one has ${pages}).`, 422);
+    throw new SourceRejectedError(
+      `PDFs are limited to ${MAX_PDF_PAGES} pages (this one has ${pages}).`,
+      422,
+    );
   }
   return pages;
 }
@@ -308,7 +333,10 @@ export function preflightSource(bytes: Buffer, sniffed: SniffedSource): void {
 }
 
 /** The document in the form Claude receives it. */
-export async function extractSource(bytes: Buffer, sniffed: SniffedSource): Promise<ExtractedSource> {
+export async function extractSource(
+  bytes: Buffer,
+  sniffed: SniffedSource,
+): Promise<ExtractedSource> {
   switch (sniffed.kind) {
     case "pdf": {
       const pages = checkPdf(bytes);
@@ -320,7 +348,10 @@ export async function extractSource(bytes: Buffer, sniffed: SniffedSource): Prom
       try {
         ({ value } = await mammoth.extractRawText({ buffer: bytes }));
       } catch {
-        throw new SourceRejectedError("This Word document can't be read. Try saving it again or exporting a PDF.", 422);
+        throw new SourceRejectedError(
+          "This Word document can't be read. Try saving it again or exporting a PDF.",
+          422,
+        );
       }
       return { type: "text", text: checkText(value), format: "docx" };
     }

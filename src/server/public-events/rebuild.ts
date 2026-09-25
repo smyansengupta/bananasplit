@@ -57,7 +57,12 @@ export const siteRebuildJob: JobHandler<Record<string, never>> = async (run) => 
 
   const integration = await withSystemOrgTx(organizationId, async ({ db }) =>
     db.orgIntegration.findUnique({
-      where: { organizationId_provider: { organizationId, provider: IntegrationProvider.NETLIFY_BUILD_HOOK } },
+      where: {
+        organizationId_provider: {
+          organizationId,
+          provider: IntegrationProvider.NETLIFY_BUILD_HOOK,
+        },
+      },
       select: { id: true, status: true },
     }),
   );
@@ -73,7 +78,8 @@ export const siteRebuildJob: JobHandler<Record<string, never>> = async (run) => 
   if (!hook) {
     await recordHookState(organizationId, {
       status: IntegrationStatus.ERROR,
-      lastError: "The saved build hook is not a Netlify build hook URL (https://api.netlify.com/build_hooks/...).",
+      lastError:
+        "The saved build hook is not a Netlify build hook URL (https://api.netlify.com/build_hooks/...).",
       verified: false,
     });
     throw new PermanentJobError("the saved build hook is not a Netlify build hook URL");
@@ -92,7 +98,11 @@ export const siteRebuildJob: JobHandler<Record<string, never>> = async (run) => 
   });
   if (res.ok) {
     if (integration.status !== IntegrationStatus.CONNECTED) {
-      await recordHookState(organizationId, { status: IntegrationStatus.CONNECTED, lastError: null, verified: true });
+      await recordHookState(organizationId, {
+        status: IntegrationStatus.CONNECTED,
+        lastError: null,
+        verified: true,
+      });
     }
     return;
   }
@@ -100,7 +110,10 @@ export const siteRebuildJob: JobHandler<Record<string, never>> = async (run) => 
   if (res.status === 404 || res.status === 410) {
     await recordHookState(organizationId, {
       status: IntegrationStatus.ERROR,
-      lastError: sanitize(`${message}: the hook no longer exists. Save a new one in Settings > Integrations.`, 300),
+      lastError: sanitize(
+        `${message}: the hook no longer exists. Save a new one in Settings > Integrations.`,
+        300,
+      ),
       verified: false,
     });
     throw new PermanentJobError(message);

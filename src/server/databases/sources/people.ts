@@ -27,16 +27,64 @@ import { CONTACT_ALIASES, contactFields, contactSearch, contactSelect } from "./
  */
 
 export const peopleColumns = defineColumns([
-  { key: "person", label: "Person", type: "person", sortable: true, filterable: true, searchable: true },
+  {
+    key: "person",
+    label: "Person",
+    type: "person",
+    sortable: true,
+    filterable: true,
+    searchable: true,
+  },
   { key: "email", label: "Email", type: "email", pii: true, hiddenByDefault: true },
   { key: "term", label: "Term", type: "text", sortable: true, filterable: true },
-  { key: "sessionsAttended", label: "Sessions", type: "number", sortable: true, filterable: true, align: "right" },
-  { key: "stampCount", label: "Stamps", type: "number", sortable: true, filterable: true, align: "right" },
-  { key: "firstCheckInAt", label: "First check-in", type: "datetime", sortable: true, filterable: true },
-  { key: "lastCheckInAt", label: "Last check-in", type: "datetime", sortable: true, filterable: true },
+  {
+    key: "sessionsAttended",
+    label: "Sessions",
+    type: "number",
+    sortable: true,
+    filterable: true,
+    align: "right",
+  },
+  {
+    key: "stampCount",
+    label: "Stamps",
+    type: "number",
+    sortable: true,
+    filterable: true,
+    align: "right",
+  },
+  {
+    key: "firstCheckInAt",
+    label: "First check-in",
+    type: "datetime",
+    sortable: true,
+    filterable: true,
+  },
+  {
+    key: "lastCheckInAt",
+    label: "Last check-in",
+    type: "datetime",
+    sortable: true,
+    filterable: true,
+  },
   { key: "lapsed", label: "Lapsed", type: "boolean", sortable: true, filterable: true },
-  { key: "lapsedSince", label: "Lapsed since", type: "date", sortable: true, filterable: true, hiddenByDefault: true },
-  { key: "allTimeSessions", label: "All-time sessions", type: "number", sortable: true, filterable: true, align: "right", hiddenByDefault: true },
+  {
+    key: "lapsedSince",
+    label: "Lapsed since",
+    type: "date",
+    sortable: true,
+    filterable: true,
+    hiddenByDefault: true,
+  },
+  {
+    key: "allTimeSessions",
+    label: "All-time sessions",
+    type: "number",
+    sortable: true,
+    filterable: true,
+    align: "right",
+    hiddenByDefault: true,
+  },
   { key: "linked", label: "Member account", type: "boolean", filterable: true },
 ]);
 
@@ -45,10 +93,27 @@ function querySpec(ctx: ViewContext): QuerySpec {
     fields: {
       ...contactFields(["contact"]),
       term: { path: ["term"], kind: "string", sortable: true, filterable: true },
-      sessionsAttended: { path: ["sessionsAttended"], kind: "int", sortable: true, filterable: true },
+      sessionsAttended: {
+        path: ["sessionsAttended"],
+        kind: "int",
+        sortable: true,
+        filterable: true,
+      },
       stampCount: { path: ["stampCount"], kind: "int", sortable: true, filterable: true },
-      firstCheckInAt: { path: ["firstCheckInAt"], kind: "datetime", nullable: true, sortable: true, filterable: true },
-      lastCheckInAt: { path: ["lastCheckInAt"], kind: "datetime", nullable: true, sortable: true, filterable: true },
+      firstCheckInAt: {
+        path: ["firstCheckInAt"],
+        kind: "datetime",
+        nullable: true,
+        sortable: true,
+        filterable: true,
+      },
+      lastCheckInAt: {
+        path: ["lastCheckInAt"],
+        kind: "datetime",
+        nullable: true,
+        sortable: true,
+        filterable: true,
+      },
       lapsed: {
         path: ["contact", "lapsedSince"],
         kind: "boolean",
@@ -56,10 +121,23 @@ function querySpec(ctx: ViewContext): QuerySpec {
         filterable: true,
         ops: ["eq"],
         where: (_op, v) => ({ contact: { lapsedSince: v === true ? { not: null } : null } }),
-        orderBy: (dir) => [{ contact: { lapsedSince: { sort: dir, nulls: dir === "asc" ? "first" : "last" } } }],
+        orderBy: (dir) => [
+          { contact: { lapsedSince: { sort: dir, nulls: dir === "asc" ? "first" : "last" } } },
+        ],
       },
-      lapsedSince: { path: ["contact", "lapsedSince"], kind: "datetime", nullable: true, sortable: true, filterable: true },
-      allTimeSessions: { path: ["contact", "sessionsAttended"], kind: "int", sortable: true, filterable: true },
+      lapsedSince: {
+        path: ["contact", "lapsedSince"],
+        kind: "datetime",
+        nullable: true,
+        sortable: true,
+        filterable: true,
+      },
+      allTimeSessions: {
+        path: ["contact", "sessionsAttended"],
+        kind: "int",
+        sortable: true,
+        filterable: true,
+      },
     },
     aliases: {
       ...CONTACT_ALIASES,
@@ -75,7 +153,9 @@ function querySpec(ctx: ViewContext): QuerySpec {
     tiebreak: (dir) => [{ contactId: dir }, { term: dir }],
     // The current term, unless the URL states its own filters (report deep
     // links such as "stopped showing up" span terms).
-    defaultFilters: [{ col: "term", op: "eq", value: termOf(ctx.now, ctx.timezone), onlyUnfiltered: true }],
+    defaultFilters: [
+      { col: "term", op: "eq", value: termOf(ctx.now, ctx.timezone), onlyUnfiltered: true },
+    ],
   };
 }
 
@@ -102,7 +182,11 @@ function map(p: Row, ctx: ViewContext): MappedRow {
   return {
     id: peopleRowId(p.contactId, p.term),
     cursor: {
-      organizationId_contactId_term: { organizationId: ctx.organizationId, contactId: p.contactId, term: p.term },
+      organizationId_contactId_term: {
+        organizationId: ctx.organizationId,
+        contactId: p.contactId,
+        term: p.term,
+      },
     },
     cells: {
       person: personCell(p.contact),
@@ -144,12 +228,15 @@ export const peopleSource: DatabaseSource = {
       orderBy: args.orderBy as Prisma.ContactTermStatsOrderByWithRelationInput[],
       skip: args.skip,
       take: args.take,
-      ...(args.cursor ? { cursor: args.cursor as Prisma.ContactTermStatsWhereUniqueInput, skip: 1 } : {}),
+      ...(args.cursor
+        ? { cursor: args.cursor as Prisma.ContactTermStatsWhereUniqueInput, skip: 1 }
+        : {}),
       select,
     });
     return rows.map((r) => map(r, ctx));
   },
-  count: (db, where) => db.contactTermStats.count({ where: where as Prisma.ContactTermStatsWhereInput }),
+  count: (db, where) =>
+    db.contactTermStats.count({ where: where as Prisma.ContactTermStatsWhereInput }),
   csvHeader: (c, ctx) =>
     c.type === "datetime" || c.type === "date" ? `${c.label} (${ctx.timezone})` : c.label,
 };

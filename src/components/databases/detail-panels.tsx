@@ -1,7 +1,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { deleteAttendanceAction, deleteSessionAction, deleteSignupAction, dismissReviewAction, setAttendanceSuppressedAction, setBallotSuppressedAction, setSignupsAddedAction, setSignupSuppressedAction } from "@/app/app/[orgSlug]/databases/actions";
+import {
+  deleteAttendanceAction,
+  deleteSessionAction,
+  deleteSignupAction,
+  dismissReviewAction,
+  setAttendanceSuppressedAction,
+  setBallotSuppressedAction,
+  setSignupsAddedAction,
+  setSignupSuppressedAction,
+} from "@/app/app/[orgSlug]/databases/actions";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { exclusionLabel } from "@/server/databases/ballot-definitions";
@@ -89,7 +98,8 @@ export function StampStrip({
   strip: { slot: number; title: string; startsAt: Date; stamped: boolean }[];
   timezone: string;
 }) {
-  if (strip.length === 0) return <p className="text-muted-foreground text-sm">No sessions this term yet.</p>;
+  if (strip.length === 0)
+    return <p className="text-muted-foreground text-sm">No sessions this term yet.</p>;
   return (
     <ol className="flex flex-wrap gap-2" aria-label="Stamp card">
       {strip.map((s, i) => (
@@ -111,11 +121,15 @@ export function StampStrip({
 }
 
 function History({ panel, ctx }: { panel: ContactPanel; ctx: PanelContext }) {
-  if (panel.history.length === 0) return <p className="text-muted-foreground text-sm">No check-ins visible to you.</p>;
+  if (panel.history.length === 0)
+    return <p className="text-muted-foreground text-sm">No check-ins visible to you.</p>;
   return (
     <ul className="divide-y rounded-md border text-sm">
       {panel.history.map((h) => (
-        <li key={h.id} className={`flex items-center justify-between gap-2 px-3 py-1.5 ${h.suppressed ? "opacity-60" : ""}`}>
+        <li
+          key={h.id}
+          className={`flex items-center justify-between gap-2 px-3 py-1.5 ${h.suppressed ? "opacity-60" : ""}`}
+        >
           <Link
             className="min-w-0 truncate underline-offset-4 hover:underline"
             href={`/app/${ctx.orgSlug}/databases/sessions?row=${encodeURIComponent(h.eventId)}`}
@@ -194,48 +208,73 @@ export function SessionPanel({
             e.hostName
           )}
         </Field>
-        <Field label="Visibility">{e.visibility === "PUBLIC" ? "Public (website)" : "Internal"}</Field>
+        <Field label="Visibility">
+          {e.visibility === "PUBLIC" ? "Public (website)" : "Internal"}
+        </Field>
         <Field label="Term">{termLabel(e.term)}</Field>
         <Field label="Stamp slot">{e.stampSlot}</Field>
         <Field label="RSVP">
           {e.rsvpUrl && (
-            <a href={e.rsvpUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-4 hover:underline">
+            <a
+              href={e.rsvpUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline-offset-4 hover:underline"
+            >
               {e.rsvpUrl}
             </a>
           )}
         </Field>
         <Field label="Calendar event">
-          <Link className="text-primary underline-offset-4 hover:underline" href={`/app/${ctx.orgSlug}/calendar/${e.id}`}>
+          <Link
+            className="text-primary underline-offset-4 hover:underline"
+            href={`/app/${ctx.orgSlug}/calendar/${e.id}`}
+          >
             Open in Calendar
           </Link>
           {e.googleHtmlLink && (
             <>
               {" · "}
-              <a href={e.googleHtmlLink} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-4 hover:underline">
+              <a
+                href={e.googleHtmlLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline-offset-4 hover:underline"
+              >
                 Google Calendar
               </a>
             </>
           )}
         </Field>
-        <Field label="Website session">{e.sourceSessionId ? "Linked (synced)" : "Not linked"}</Field>
+        <Field label="Website session">
+          {e.sourceSessionId ? "Linked (synced)" : "Not linked"}
+        </Field>
         {e.description && <Field label="Description">{e.description}</Field>}
       </dl>
       {e.needsReview && (
         <p className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
-          The website sync found more than one possible match for this session. Merge it into the right one, or mark it
-          as not a duplicate.
+          The website sync found more than one possible match for this session. Merge it into the
+          right one, or mark it as not a duplicate.
         </p>
       )}
       {ctx.canEdit && (
         <div className="flex flex-wrap gap-2">
-          <SessionFormDialog organizationId={ctx.organizationId} timezone={ctx.timezone} members={ctx.members} initial={formInitial} />
+          <SessionFormDialog
+            organizationId={ctx.organizationId}
+            timezone={ctx.timezone}
+            members={ctx.members}
+            initial={formInitial}
+          />
           {e.needsReview && (
-            <ActionButton action={dismissReviewAction} args={[ctx.organizationId, e.id]}>Not a duplicate</ActionButton>
+            <ActionButton action={dismissReviewAction} args={[ctx.organizationId, e.id]}>
+              Not a duplicate
+            </ActionButton>
           )}
           <ActionButton
             variant="destructive"
             confirm="Delete this session? It also disappears from the calendar. Check-ins stay attached."
-            action={deleteSessionAction} args={[ctx.organizationId, e.id]}
+            action={deleteSessionAction}
+            args={[ctx.organizationId, e.id]}
           >
             Delete
           </ActionButton>
@@ -255,9 +294,17 @@ export function SessionPanel({
         ) : (
           <ul className="divide-y rounded-md border text-sm">
             {detail.attendees.map((a) => {
-              const name = a.nameOverride ?? a.contact.user?.name ?? a.contact.displayName ?? a.contact.emailMasked ?? "Unknown";
+              const name =
+                a.nameOverride ??
+                a.contact.user?.name ??
+                a.contact.displayName ??
+                a.contact.emailMasked ??
+                "Unknown";
               return (
-                <li key={a.id} className={`flex items-center justify-between gap-2 px-3 py-1.5 ${a.suppressedAt ? "opacity-60" : ""}`}>
+                <li
+                  key={a.id}
+                  className={`flex items-center justify-between gap-2 px-3 py-1.5 ${a.suppressedAt ? "opacity-60" : ""}`}
+                >
                   <Link
                     href={`/app/${ctx.orgSlug}/databases/attendance?row=${encodeURIComponent(a.id)}`}
                     className="flex min-w-0 items-center gap-2 underline-offset-4 hover:underline"
@@ -266,7 +313,8 @@ export function SessionPanel({
                     <span className="truncate">{name}</span>
                   </Link>
                   <span className="text-muted-foreground shrink-0 text-xs">
-                    {fmtDateTime(a.checkedInAt, ctx.timezone)} · {METHOD_LABELS[a.method] ?? a.method}
+                    {fmtDateTime(a.checkedInAt, ctx.timezone)} ·{" "}
+                    {METHOD_LABELS[a.method] ?? a.method}
                     {a.stampNumber ? ` · stamp ${a.stampNumber}` : ""}
                   </span>
                 </li>
@@ -281,7 +329,8 @@ export function SessionPanel({
             {detail.links.map((l) => (
               <li key={l.id}>
                 {l.source} · {l.method}
-                {l.score !== null ? ` (score ${l.score})` : ""} · {fmtDateTime(l.createdAt, ctx.timezone)}
+                {l.score !== null ? ` (score ${l.score})` : ""} ·{" "}
+                {fmtDateTime(l.createdAt, ctx.timezone)}
               </li>
             ))}
           </ul>
@@ -301,7 +350,10 @@ export function AttendancePanel({ detail, ctx }: { detail: AttendanceDetail; ctx
       <PersonHeader panel={detail.panel} />
       <dl className="space-y-1.5">
         <Field label="Session">
-          <Link className="text-primary underline-offset-4 hover:underline" href={`/app/${ctx.orgSlug}/databases/sessions?row=${encodeURIComponent(r.event.id)}`}>
+          <Link
+            className="text-primary underline-offset-4 hover:underline"
+            href={`/app/${ctx.orgSlug}/databases/sessions?row=${encodeURIComponent(r.event.id)}`}
+          >
             {r.event.title}
           </Link>{" "}
           <span className="text-muted-foreground">({fmtDate(r.event.startsAt, ctx.timezone)})</span>
@@ -309,25 +361,33 @@ export function AttendancePanel({ detail, ctx }: { detail: AttendanceDetail; ctx
         <Field label="Checked in">{fmtDateTime(r.checkedInAt, ctx.timezone)}</Field>
         <Field label="Method">{METHOD_LABELS[r.method] ?? r.method}</Field>
         <Field label="Stamp">
-          {r.stampNumber ? `#${r.stampNumber} of ${r.termStampTotal} in ${termLabel(r.term)}` : "No stamp (suppressed)"}
+          {r.stampNumber
+            ? `#${r.stampNumber} of ${r.termStampTotal} in ${termLabel(r.term)}`
+            : "No stamp (suppressed)"}
           {r.isFirstVisit && <Badge className="ml-2">First visit</Badge>}
         </Field>
         <Field label="Name as entered">{r.nameAsEntered}</Field>
         {r.nameOverride && <Field label="Name override">{r.nameOverride}</Field>}
         <Field label="Source">{SOURCE_LABELS[r.source] ?? r.source}</Field>
-        {r.suppressedAt && <Field label="Suppressed">{fmtDateTime(r.suppressedAt, ctx.timezone)}</Field>}
+        {r.suppressedAt && (
+          <Field label="Suppressed">{fmtDateTime(r.suppressedAt, ctx.timezone)}</Field>
+        )}
       </dl>
       {ctx.canEdit && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <ActionButton action={setAttendanceSuppressedAction} args={[ctx.organizationId, r.id, !r.suppressedAt]}>
+            <ActionButton
+              action={setAttendanceSuppressedAction}
+              args={[ctx.organizationId, r.id, !r.suppressedAt]}
+            >
               {r.suppressedAt ? "Restore" : "Suppress"}
             </ActionButton>
             {!synced && (
               <ActionButton
                 variant="destructive"
                 confirm="Delete this check-in?"
-                action={deleteAttendanceAction} args={[ctx.organizationId, r.id]}
+                action={deleteAttendanceAction}
+                args={[ctx.organizationId, r.id]}
               >
                 Delete
               </ActionButton>
@@ -335,11 +395,15 @@ export function AttendancePanel({ detail, ctx }: { detail: AttendanceDetail; ctx
           </div>
           {synced && (
             <p className="text-muted-foreground text-xs">
-              This check-in came from the website. It can be suppressed (kept, but not counted) but not deleted, and
-              nothing here changes the website.
+              This check-in came from the website. It can be suppressed (kept, but not counted) but
+              not deleted, and nothing here changes the website.
             </p>
           )}
-          <NameOverrideForm organizationId={ctx.organizationId} attendanceId={r.id} current={r.nameOverride} />
+          <NameOverrideForm
+            organizationId={ctx.organizationId}
+            attendanceId={r.id}
+            current={r.nameOverride}
+          />
         </div>
       )}
       <Section title={`Stamp card, ${termLabel(r.term)}`}>
@@ -357,7 +421,8 @@ export function AttendancePanel({ detail, ctx }: { detail: AttendanceDetail; ctx
 // ---- Signups -----------------------------------------------------------------------------------
 
 function answerList(answers: unknown, key: "colleges" | "meet_days" | "interests"): string {
-  const v = answers && typeof answers === "object" ? (answers as Record<string, unknown>)[key] : undefined;
+  const v =
+    answers && typeof answers === "object" ? (answers as Record<string, unknown>)[key] : undefined;
   if (!Array.isArray(v) || v.length === 0) return "—";
   return v.map((x) => signupLabel(key, String(x))).join(", ");
 }
@@ -378,27 +443,42 @@ export function SignupPanel({ detail, ctx }: { detail: SignupDetail; ctx: PanelC
         <Field label="Meet days">{answerList(s.answers, "meet_days")}</Field>
         <Field label="Interests">{answerList(s.answers, "interests")}</Field>
         <Field label="Submissions">{s.submissions}</Field>
-        <Field label="Added to list">{s.addedToListAt ? fmtDate(s.addedToListAt, ctx.timezone) : "Not yet"}</Field>
+        <Field label="Added to list">
+          {s.addedToListAt ? fmtDate(s.addedToListAt, ctx.timezone) : "Not yet"}
+        </Field>
         <Field label="First attended">
           {s.firstAttendedAt
             ? `${fmtDate(s.firstAttendedAt, ctx.timezone)} (${s.daysToFirstAttendance ?? 0} days after signing up)`
             : "Not yet"}
         </Field>
         <Field label="Unsubscribed">
-          {detail.panel.contact.unsubscribedAt ? fmtDate(detail.panel.contact.unsubscribedAt, ctx.timezone) : "No"}
+          {detail.panel.contact.unsubscribedAt
+            ? fmtDate(detail.panel.contact.unsubscribedAt, ctx.timezone)
+            : "No"}
         </Field>
         <Field label="Record">{SOURCE_LABELS[s.recordSource] ?? s.recordSource}</Field>
       </dl>
       {ctx.canEdit && (
         <div className="flex flex-wrap gap-2">
-          <ActionButton action={setSignupsAddedAction} args={[ctx.organizationId, [s.id], !s.addedToListAt]}>
+          <ActionButton
+            action={setSignupsAddedAction}
+            args={[ctx.organizationId, [s.id], !s.addedToListAt]}
+          >
             {s.addedToListAt ? "Mark not on the list" : "Mark added to list"}
           </ActionButton>
-          <ActionButton action={setSignupSuppressedAction} args={[ctx.organizationId, s.id, !s.suppressedAt]}>
+          <ActionButton
+            action={setSignupSuppressedAction}
+            args={[ctx.organizationId, s.id, !s.suppressedAt]}
+          >
             {s.suppressedAt ? "Restore" : "Suppress"}
           </ActionButton>
           {!synced && (
-            <ActionButton variant="destructive" confirm="Delete this signup?" action={deleteSignupAction} args={[ctx.organizationId, s.id]}>
+            <ActionButton
+              variant="destructive"
+              confirm="Delete this signup?"
+              action={deleteSignupAction}
+              args={[ctx.organizationId, s.id]}
+            >
               Delete
             </ActionButton>
           )}
@@ -423,10 +503,14 @@ export function PersonPanel({ detail, ctx }: { detail: PersonDetail; ctx: PanelC
         <Field label="Term">{termLabel(detail.stats.term)}</Field>
         <Field label="Sessions">{detail.stats.sessionsAttended}</Field>
         <Field label="Stamps">{detail.stats.stampCount}</Field>
-        <Field label="First check-in">{fmtDateTime(detail.stats.firstCheckInAt, ctx.timezone)}</Field>
+        <Field label="First check-in">
+          {fmtDateTime(detail.stats.firstCheckInAt, ctx.timezone)}
+        </Field>
         <Field label="Last check-in">{fmtDateTime(detail.stats.lastCheckInAt, ctx.timezone)}</Field>
         <Field label="Lapsed">
-          {detail.panel.contact.lapsedSince ? `Since ${fmtDate(detail.panel.contact.lapsedSince, ctx.timezone)}` : "No"}
+          {detail.panel.contact.lapsedSince
+            ? `Since ${fmtDate(detail.panel.contact.lapsedSince, ctx.timezone)}`
+            : "No"}
         </Field>
         <Field label="All-time sessions">{detail.panel.contact.sessionsAttended}</Field>
       </dl>
@@ -446,15 +530,20 @@ export function PersonPanel({ detail, ctx }: { detail: PersonDetail; ctx: PanelC
 
 export function BallotPanel({ detail, ctx }: { detail: BallotDetail; ctx: PanelContext }) {
   const b = detail.ballot;
-  const voter = b.voter ? (b.voter.user?.name ?? b.voter.displayName ?? b.voter.emailMasked ?? "Unknown") : "Anonymous";
+  const voter = b.voter
+    ? (b.voter.user?.name ?? b.voter.displayName ?? b.voter.emailMasked ?? "Unknown")
+    : "Anonymous";
   return (
     <>
       <p className="text-muted-foreground rounded-md border p-3 text-xs">
-        You can see individual votes under Settings &gt; Privacy. Opening this ballot was recorded in the audit log.
+        You can see individual votes under Settings &gt; Privacy. Opening this ballot was recorded
+        in the audit log.
       </p>
       <dl className="space-y-1.5">
         <Field label="Poll">{b.ballotDefinition?.title ?? b.pollSlug}</Field>
-        <Field label="Cast at">{fmtDateTime(b.castAt, ctx.timezone)} (rounded to the hour at the source)</Field>
+        <Field label="Cast at">
+          {fmtDateTime(b.castAt, ctx.timezone)} (rounded to the hour at the source)
+        </Field>
         <Field label="Voter">{voter}</Field>
         <Field label="Source">{SOURCE_LABELS[b.source] ?? b.source}</Field>
         {b.excludedReason && <Field label="Not counted">{exclusionLabel(b.excludedReason)}</Field>}
@@ -466,7 +555,9 @@ export function BallotPanel({ detail, ctx }: { detail: BallotDetail; ctx: PanelC
               <dt className="font-medium">{q.label}</dt>
               <dd className="text-muted-foreground">
                 {q.answers
-                  .map((a) => (a.freeText ? `“${a.label}”` : a.rank ? `${a.rank}. ${a.label}` : a.label))
+                  .map((a) =>
+                    a.freeText ? `“${a.label}”` : a.rank ? `${a.rank}. ${a.label}` : a.label,
+                  )
                   .join(q.answers.some((a) => a.rank) ? "  " : ", ")}
               </dd>
             </div>
@@ -475,8 +566,13 @@ export function BallotPanel({ detail, ctx }: { detail: BallotDetail; ctx: PanelC
       </Section>
       {ctx.canEdit && (
         <div className="flex flex-wrap gap-2">
-          <ActionButton action={setBallotSuppressedAction} args={[ctx.organizationId, b.id, b.excludedReason !== "suppressed"]}>
-            {b.excludedReason === "suppressed" ? "Count this ballot again" : "Don't count this ballot"}
+          <ActionButton
+            action={setBallotSuppressedAction}
+            args={[ctx.organizationId, b.id, b.excludedReason !== "suppressed"]}
+          >
+            {b.excludedReason === "suppressed"
+              ? "Count this ballot again"
+              : "Don't count this ballot"}
           </ActionButton>
         </div>
       )}

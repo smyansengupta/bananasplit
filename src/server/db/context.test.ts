@@ -27,34 +27,41 @@ const { makeClient, requireUserMock } = vi.hoisted(() => {
       failStarts: 0,
       $transaction: vi.fn(),
     };
-    c.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>, opts: unknown) => {
-      if (c.failStarts > 0) {
-        c.failStarts--;
-        throw Object.assign(new Error("Unable to start a transaction in the given time."), { code: "P2028" });
-      }
-      c.log.push(`${name}:BEGIN ${JSON.stringify(opts)}`);
-      const tx = {
-        name,
-        $queryRaw: vi.fn(async (_strings: TemplateStringsArray, user: string, org: string) => {
-          c.log.push(`${name}:set_context(${user},${org})`);
-          return [{ role: c.role(user, org) }];
-        }),
-      };
-      try {
-        const result = await fn(tx);
-        c.log.push(`${name}:COMMIT`);
-        return result;
-      } catch (error) {
-        c.log.push(`${name}:ROLLBACK`);
-        throw error;
-      }
-    });
+    c.$transaction.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>, opts: unknown) => {
+        if (c.failStarts > 0) {
+          c.failStarts--;
+          throw Object.assign(new Error("Unable to start a transaction in the given time."), {
+            code: "P2028",
+          });
+        }
+        c.log.push(`${name}:BEGIN ${JSON.stringify(opts)}`);
+        const tx = {
+          name,
+          $queryRaw: vi.fn(async (_strings: TemplateStringsArray, user: string, org: string) => {
+            c.log.push(`${name}:set_context(${user},${org})`);
+            return [{ role: c.role(user, org) }];
+          }),
+        };
+        try {
+          const result = await fn(tx);
+          c.log.push(`${name}:COMMIT`);
+          return result;
+        } catch (error) {
+          c.log.push(`${name}:ROLLBACK`);
+          throw error;
+        }
+      },
+    );
     return c;
   };
   return { makeClient, requireUserMock: vi.fn() };
 });
 
-const { app, service } = vi.hoisted(() => ({ app: makeClient("app"), service: makeClient("service") }));
+const { app, service } = vi.hoisted(() => ({
+  app: makeClient("app"),
+  service: makeClient("service"),
+}));
 
 vi.mock("./clients", () => ({ appDb: app, serviceDb: service }));
 vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock }));
@@ -138,13 +145,18 @@ describe("withOrgAction", () => {
   });
 
   it("commits a returned { error }", async () => {
-    await expect(withOrgAction(async () => ({ error: "nope" }))("org1")).resolves.toEqual({ error: "nope" });
+    await expect(withOrgAction(async () => ({ error: "nope" }))("org1")).resolves.toEqual({
+      error: "nope",
+    });
     expect(app.log.at(-1)).toBe("app:COMMIT");
   });
 
   it("maps database errors that escape the handler to generic AppErrors", async () => {
     const action = withOrgAction(async () => {
-      throw Object.assign(new Error('duplicate key value violates unique constraint "Label_pkey"'), { code: "23505" });
+      throw Object.assign(
+        new Error('duplicate key value violates unique constraint "Label_pkey"'),
+        { code: "23505" },
+      );
     });
     const error = await action("org1").catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ConflictError);
@@ -189,11 +201,9 @@ describe("withOrgTx and withUserTx", () => {
 
   it("withUserTx sets the user with no org and does not require membership", async () => {
     app.role = () => null;
-    await expect(withUserTx("u9", async (ctx) => [ctx.userId, ctx.organizationId, ctx.role])).resolves.toEqual([
-      "u9",
-      null,
-      null,
-    ]);
+    await expect(
+      withUserTx("u9", async (ctx) => [ctx.userId, ctx.organizationId, ctx.role]),
+    ).resolves.toEqual(["u9", null, null]);
     expect(app.log).toContain("app:set_context(u9,)");
   });
 });
@@ -201,10 +211,9 @@ describe("withOrgTx and withUserTx", () => {
 describe("withSystemOrgTx", () => {
   it("accepts (orgId, fn) and (orgId, options, fn)", async () => {
     service.role = () => null;
-    await expect(withSystemOrgTx("org1", async (ctx) => [ctx.organizationId, ctx.userId])).resolves.toEqual([
-      "org1",
-      null,
-    ]);
+    await expect(
+      withSystemOrgTx("org1", async (ctx) => [ctx.organizationId, ctx.userId]),
+    ).resolves.toEqual(["org1", null]);
     await expect(
       withSystemOrgTx("org2", { userId: "u5" }, async (ctx) => [ctx.organizationId, ctx.userId]),
     ).resolves.toEqual(["org2", "u5"]);

@@ -32,7 +32,10 @@ export function ChartList({
       <li className="space-y-1">
         <Row node={node} hrefFor={hrefFor} selected={node.key === selectedKey} />
         {advisors.length > 0 && (
-          <ul aria-label={`Advisors to ${node.title}`} className="border-muted ml-5 space-y-1 border-l border-dashed pl-4">
+          <ul
+            aria-label={`Advisors to ${node.title}`}
+            className="border-muted ml-5 space-y-1 border-l border-dashed pl-4"
+          >
             {advisors.map((a) => (
               <li key={a.id}>
                 <Row node={a} hrefFor={hrefFor} selected={a.key === selectedKey} />
@@ -98,7 +101,12 @@ function Row({
     hrefFor && "hover:bg-muted focus-visible:ring-ring outline-none focus-visible:ring-2",
   );
   return hrefFor ? (
-    <Link href={hrefFor(node.key)} scroll={false} className={cls} aria-current={selected ? "true" : undefined}>
+    <Link
+      href={hrefFor(node.key)}
+      scroll={false}
+      className={cls}
+      aria-current={selected ? "true" : undefined}
+    >
       {body}
     </Link>
   ) : (

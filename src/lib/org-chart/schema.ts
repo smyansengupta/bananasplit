@@ -20,7 +20,9 @@ export const RawPositionSchema = z.object({
   person_name: z
     .string()
     .nullable()
-    .describe("The full name of the person in the position, or null when the document names nobody."),
+    .describe(
+      "The full name of the person in the position, or null when the document names nobody.",
+    ),
   reports_to: z
     .string()
     .nullable()
@@ -31,7 +33,9 @@ export const RawPositionSchema = z.object({
   responsibilities: z.array(z.string()).describe("One short bullet per responsibility."),
   decides_alone: z
     .array(z.string())
-    .describe("Decisions this position makes without asking anyone (the document's 'decides alone')."),
+    .describe(
+      "Decisions this position makes without asking anyone (the document's 'decides alone').",
+    ),
   is_open: z.boolean().describe("True when the position is vacant or an open hire."),
   is_advisor: z
     .boolean()
@@ -50,7 +54,9 @@ export const OrgChartParseSchema = z.object({
   positions: z.array(RawPositionSchema),
   open_items: z
     .array(RawOpenItemSchema)
-    .describe("Questions the document leaves open, including anything ambiguous about the structure."),
+    .describe(
+      "Questions the document leaves open, including anything ambiguous about the structure.",
+    ),
 });
 
 export type RawPosition = z.infer<typeof RawPositionSchema>;

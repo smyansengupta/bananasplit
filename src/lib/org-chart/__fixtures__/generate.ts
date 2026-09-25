@@ -63,7 +63,9 @@ export function buildPdf(lines: readonly string[]): Buffer {
   };
   const catalog = add(""); // placeholder, filled below
   const pagesObj = add("");
-  const font = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  const font = add(
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+  );
   const pageIds: number[] = [];
   for (const pageLines of pages) {
     const parts: Buffer[] = [Buffer.from("BT /F1 10 Tf 12 TL 50 800 Td\n", "latin1")];
@@ -127,11 +129,19 @@ function main() {
   writeFileSync(path.join(here, "cbc-fall-2026.docx"), buildDocx(lines));
   writeFileSync(path.join(here, "cbc-fall-2026.pdf"), buildPdf(lines));
 
-  const raw = OrgChartParseSchema.parse(JSON.parse(readFileSync(path.join(here, "cbc-fall-2026.raw.json"), "utf8")));
-  writeFileSync(path.join(here, "expected.json"), `${JSON.stringify(normalizeOrgChart(raw), null, 2)}\n`);
+  const raw = OrgChartParseSchema.parse(
+    JSON.parse(readFileSync(path.join(here, "cbc-fall-2026.raw.json"), "utf8")),
+  );
+  writeFileSync(
+    path.join(here, "expected.json"),
+    `${JSON.stringify(normalizeOrgChart(raw), null, 2)}\n`,
+  );
   console.log("fixtures written to", here);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]).endsWith(path.join("__fixtures__", "generate.ts"))) {
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]).endsWith(path.join("__fixtures__", "generate.ts"))
+) {
   main();
 }

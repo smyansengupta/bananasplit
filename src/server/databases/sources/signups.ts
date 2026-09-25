@@ -1,5 +1,11 @@
 import { defineColumns } from "@/components/databases/column-config";
-import { DatabaseKind, RecordSource, SignupSource, SignupStatus, type Prisma } from "@/generated/prisma/client";
+import {
+  DatabaseKind,
+  RecordSource,
+  SignupSource,
+  SignupStatus,
+  type Prisma,
+} from "@/generated/prisma/client";
 import { SIGNUP_LABELS, signupLabel } from "@/server/sync/supabase-map";
 
 import {
@@ -31,23 +37,118 @@ import { CONTACT_ALIASES, contactFields, contactSearch, contactSelect } from "./
 const YEAR_OPTIONS = options(SIGNUP_LABELS.classYear);
 
 export const signupColumns = defineColumns([
-  { key: "person", label: "Name", type: "person", sortable: true, filterable: true, searchable: true },
+  {
+    key: "person",
+    label: "Name",
+    type: "person",
+    sortable: true,
+    filterable: true,
+    searchable: true,
+  },
   { key: "email", label: "Email", type: "email", pii: true },
-  { key: "classYear", label: "Year", type: "select", sortable: true, filterable: true, options: YEAR_OPTIONS },
-  { key: "colleges", label: "Colleges", type: "multiselect", filterable: true, options: options(SIGNUP_LABELS.colleges) },
-  { key: "meetDays", label: "Meet days", type: "multiselect", filterable: true, hiddenByDefault: true, options: options(SIGNUP_LABELS.meet_days) },
-  { key: "interests", label: "Interests", type: "multiselect", filterable: true, options: options(SIGNUP_LABELS.interests) },
-  { key: "channel", label: "Source", type: "select", sortable: true, filterable: true, options: options(CHANNEL_LABELS) },
+  {
+    key: "classYear",
+    label: "Year",
+    type: "select",
+    sortable: true,
+    filterable: true,
+    options: YEAR_OPTIONS,
+  },
+  {
+    key: "colleges",
+    label: "Colleges",
+    type: "multiselect",
+    filterable: true,
+    options: options(SIGNUP_LABELS.colleges),
+  },
+  {
+    key: "meetDays",
+    label: "Meet days",
+    type: "multiselect",
+    filterable: true,
+    hiddenByDefault: true,
+    options: options(SIGNUP_LABELS.meet_days),
+  },
+  {
+    key: "interests",
+    label: "Interests",
+    type: "multiselect",
+    filterable: true,
+    options: options(SIGNUP_LABELS.interests),
+  },
+  {
+    key: "channel",
+    label: "Source",
+    type: "select",
+    sortable: true,
+    filterable: true,
+    options: options(CHANNEL_LABELS),
+  },
   { key: "signedUpAt", label: "Signup date", type: "datetime", sortable: true, filterable: true },
-  { key: "status", label: "Status", type: "select", sortable: true, filterable: true, options: options(STATUS_LABELS) },
-  { key: "firstAttendedAt", label: "First attended", type: "date", sortable: true, filterable: true },
-  { key: "daysToFirstAttendance", label: "Days to first visit", type: "number", sortable: true, filterable: true, align: "right", hiddenByDefault: true },
-  { key: "addedToListAt", label: "Added to list", type: "date", sortable: true, filterable: true, hiddenByDefault: true },
-  { key: "submissions", label: "Submissions", type: "number", sortable: true, filterable: true, align: "right", hiddenByDefault: true },
+  {
+    key: "status",
+    label: "Status",
+    type: "select",
+    sortable: true,
+    filterable: true,
+    options: options(STATUS_LABELS),
+  },
+  {
+    key: "firstAttendedAt",
+    label: "First attended",
+    type: "date",
+    sortable: true,
+    filterable: true,
+  },
+  {
+    key: "daysToFirstAttendance",
+    label: "Days to first visit",
+    type: "number",
+    sortable: true,
+    filterable: true,
+    align: "right",
+    hiddenByDefault: true,
+  },
+  {
+    key: "addedToListAt",
+    label: "Added to list",
+    type: "date",
+    sortable: true,
+    filterable: true,
+    hiddenByDefault: true,
+  },
+  {
+    key: "submissions",
+    label: "Submissions",
+    type: "number",
+    sortable: true,
+    filterable: true,
+    align: "right",
+    hiddenByDefault: true,
+  },
   { key: "term", label: "Term", type: "text", sortable: true, filterable: true },
-  { key: "recordSource", label: "Record source", type: "select", filterable: true, hiddenByDefault: true, options: options(SOURCE_LABELS) },
-  { key: "suppressed", label: "Suppressed", type: "boolean", filterable: true, hiddenByDefault: true },
-  { key: "suppressedAt", label: "Suppressed at", type: "datetime", filterable: true, hiddenByDefault: true },
+  {
+    key: "recordSource",
+    label: "Record source",
+    type: "select",
+    filterable: true,
+    hiddenByDefault: true,
+    options: options(SOURCE_LABELS),
+  },
+  {
+    key: "suppressed",
+    label: "Suppressed",
+    type: "boolean",
+    filterable: true,
+    hiddenByDefault: true,
+  },
+  {
+    key: "suppressedAt",
+    label: "Suppressed at",
+    type: "datetime",
+    filterable: true,
+    hiddenByDefault: true,
+  },
 ]);
 
 function querySpec(): QuerySpec {
@@ -55,19 +156,65 @@ function querySpec(): QuerySpec {
     fields: {
       id: { path: ["id"], kind: "string", filterable: true, ops: ["eq", "in"] },
       ...contactFields(["contact"]),
-      classYear: { path: ["classYear"], kind: "string", nullable: true, sortable: true, filterable: true },
+      classYear: {
+        path: ["classYear"],
+        kind: "string",
+        nullable: true,
+        sortable: true,
+        filterable: true,
+      },
       colleges: { path: ["answers"], jsonPath: ["colleges"], kind: "jsonArray", filterable: true },
       meetDays: { path: ["answers"], jsonPath: ["meet_days"], kind: "jsonArray", filterable: true },
-      interests: { path: ["answers"], jsonPath: ["interests"], kind: "jsonArray", filterable: true },
-      channel: { path: ["channel"], kind: "enum", enumValues: Object.values(SignupSource), sortable: true, filterable: true },
+      interests: {
+        path: ["answers"],
+        jsonPath: ["interests"],
+        kind: "jsonArray",
+        filterable: true,
+      },
+      channel: {
+        path: ["channel"],
+        kind: "enum",
+        enumValues: Object.values(SignupSource),
+        sortable: true,
+        filterable: true,
+      },
       signedUpAt: { path: ["signedUpAt"], kind: "datetime", sortable: true, filterable: true },
-      status: { path: ["status"], kind: "enum", enumValues: Object.values(SignupStatus), sortable: true, filterable: true },
-      firstAttendedAt: { path: ["firstAttendedAt"], kind: "datetime", nullable: true, sortable: true, filterable: true },
-      daysToFirstAttendance: { path: ["daysToFirstAttendance"], kind: "int", nullable: true, sortable: true, filterable: true },
-      addedToListAt: { path: ["addedToListAt"], kind: "datetime", nullable: true, sortable: true, filterable: true },
+      status: {
+        path: ["status"],
+        kind: "enum",
+        enumValues: Object.values(SignupStatus),
+        sortable: true,
+        filterable: true,
+      },
+      firstAttendedAt: {
+        path: ["firstAttendedAt"],
+        kind: "datetime",
+        nullable: true,
+        sortable: true,
+        filterable: true,
+      },
+      daysToFirstAttendance: {
+        path: ["daysToFirstAttendance"],
+        kind: "int",
+        nullable: true,
+        sortable: true,
+        filterable: true,
+      },
+      addedToListAt: {
+        path: ["addedToListAt"],
+        kind: "datetime",
+        nullable: true,
+        sortable: true,
+        filterable: true,
+      },
       submissions: { path: ["submissions"], kind: "int", sortable: true, filterable: true },
       term: { path: ["term"], kind: "string", nullable: true, sortable: true, filterable: true },
-      recordSource: { path: ["recordSource"], kind: "enum", enumValues: Object.values(RecordSource), filterable: true },
+      recordSource: {
+        path: ["recordSource"],
+        kind: "enum",
+        enumValues: Object.values(RecordSource),
+        filterable: true,
+      },
       suppressed: {
         path: ["suppressedAt"],
         kind: "boolean",
@@ -115,7 +262,8 @@ const select = {
 type Row = Prisma.SignupGetPayload<{ select: typeof select }>;
 
 function list(answers: unknown, key: "colleges" | "meet_days" | "interests"): string[] {
-  const v = answers && typeof answers === "object" ? (answers as Record<string, unknown>)[key] : undefined;
+  const v =
+    answers && typeof answers === "object" ? (answers as Record<string, unknown>)[key] : undefined;
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
@@ -144,14 +292,24 @@ function map(s: Row, ctx: ViewContext): MappedRow {
       interests: { t: "badges", v: interests },
       channel: { t: "badge", v: CHANNEL_LABELS[s.channel] ?? s.channel, tone: "outline" },
       signedUpAt: dateTimeCell(s.signedUpAt, ctx.timezone),
-      status: { t: "badge", v: STATUS_LABELS[s.status] ?? s.status, tone: STATUS_TONE[s.status] ?? "outline" },
+      status: {
+        t: "badge",
+        v: STATUS_LABELS[s.status] ?? s.status,
+        tone: STATUS_TONE[s.status] ?? "outline",
+      },
       firstAttendedAt: dateCell(s.firstAttendedAt, ctx.timezone),
       daysToFirstAttendance: num(s.daysToFirstAttendance),
       addedToListAt: dateCell(s.addedToListAt, ctx.timezone),
       submissions: num(s.submissions),
       term: text(termLabel(s.term)),
-      recordSource: { t: "badge", v: SOURCE_LABELS[s.recordSource] ?? s.recordSource, tone: "secondary" },
-      suppressed: s.suppressedAt ? { t: "badge", v: "Suppressed", tone: "warning" } : { t: "bool", v: false },
+      recordSource: {
+        t: "badge",
+        v: SOURCE_LABELS[s.recordSource] ?? s.recordSource,
+        tone: "secondary",
+      },
+      suppressed: s.suppressedAt
+        ? { t: "badge", v: "Suppressed", tone: "warning" }
+        : { t: "bool", v: false },
       suppressedAt: dateTimeCell(s.suppressedAt, ctx.timezone),
     },
     csv: {

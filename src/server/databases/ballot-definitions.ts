@@ -89,7 +89,9 @@ const websiteQuestion = z.object({
   pool: z.array(websiteOption).optional(),
 });
 const websitePoll = z.object({
-  slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,99}$/, "The poll slug is lowercase letters, digits and dashes."),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,99}$/, "The poll slug is lowercase letters, digits and dashes."),
   title: z.string().min(1).max(300),
   opensAt: z.string().optional().nullable(),
   closesAt: z.string().optional().nullable(),

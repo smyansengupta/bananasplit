@@ -22,8 +22,16 @@ export function pollSlots(input: PollWindow): { startsAt: Date; endsAt: Date }[]
       cursor + input.granularityMinutes <= input.dailyEndMinutes;
       cursor += input.granularityMinutes
     ) {
-      const startsAt = zonedTimeToInstant(date, input.timezone, Math.floor(cursor / 60), cursor % 60);
-      slots.push({ startsAt, endsAt: new Date(startsAt.getTime() + input.granularityMinutes * 60_000) });
+      const startsAt = zonedTimeToInstant(
+        date,
+        input.timezone,
+        Math.floor(cursor / 60),
+        cursor % 60,
+      );
+      slots.push({
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + input.granularityMinutes * 60_000),
+      });
     }
   }
   return slots;

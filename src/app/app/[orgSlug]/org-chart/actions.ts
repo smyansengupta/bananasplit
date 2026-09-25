@@ -50,13 +50,19 @@ export async function startDraftAction(organizationId: string, from: "blank" | "
   return rescue(startDraftTx)(organizationId, from);
 }
 
-const saveDraftTx = withOrgAction((ctx, input: unknown): Promise<SaveDraftResult> => saveDraft(ctx, input));
+const saveDraftTx = withOrgAction((ctx, input: unknown): Promise<SaveDraftResult> =>
+  saveDraft(ctx, input),
+);
 export async function saveDraftAction(organizationId: string, input: unknown) {
   return rescue(saveDraftTx)(organizationId, input);
 }
 
 const publishTx = withOrgAction(
-  (ctx, versionId: string, options: { setTitles?: boolean; expectedEditVersion?: number }): Promise<PublishResult> =>
+  (
+    ctx,
+    versionId: string,
+    options: { setTitles?: boolean; expectedEditVersion?: number },
+  ): Promise<PublishResult> =>
     publishDraft(ctx, id.parse(versionId), {
       setTitles: options?.setTitles === true,
       expectedEditVersion:
@@ -79,7 +85,9 @@ export async function discardDraftAction(organizationId: string, versionId: stri
   return rescue(discardTx)(organizationId, versionId);
 }
 
-const rollbackTx = withOrgAction((ctx, versionId: string) => rollbackToVersion(ctx, id.parse(versionId)));
+const rollbackTx = withOrgAction((ctx, versionId: string) =>
+  rollbackToVersion(ctx, id.parse(versionId)),
+);
 export async function rollbackAction(organizationId: string, versionId: string) {
   return rescue(rollbackTx)(organizationId, versionId);
 }

@@ -36,29 +36,27 @@ const sponsorInputSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
-export const createSponsor = withOrgAction(
-  async (ctx, input: unknown): Promise<ActionResult> => {
-    requirePermission(ctx, "finance.manage");
+export const createSponsor = withOrgAction(async (ctx, input: unknown): Promise<ActionResult> => {
+  requirePermission(ctx, "finance.manage");
 
-    const parsed = sponsorInputSchema.safeParse(input);
-    if (!parsed.success) {
-      return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-    }
-    const data = parsed.data;
+  const parsed = sponsorInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const data = parsed.data;
 
-    const sponsor = await ctx.db.sponsor.create({
-      data: {
-        organizationId: ctx.organizationId,
-        name: data.name,
-        contactName: data.contactName || null,
-        contactEmail: data.contactEmail || null,
-        notes: data.notes || null,
-      },
-      select: { id: true },
-    });
-    return { sponsorId: sponsor.id };
-  },
-);
+  const sponsor = await ctx.db.sponsor.create({
+    data: {
+      organizationId: ctx.organizationId,
+      name: data.name,
+      contactName: data.contactName || null,
+      contactEmail: data.contactEmail || null,
+      notes: data.notes || null,
+    },
+    select: { id: true },
+  });
+  return { sponsorId: sponsor.id };
+});
 
 const SPONSORSHIP_STATUS_VALUES = Object.values(SponsorshipStatus) as [
   SponsorshipStatus,

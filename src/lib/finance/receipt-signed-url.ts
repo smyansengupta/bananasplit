@@ -25,7 +25,11 @@ export function signReceiptToken(receiptId: string, organizationId: string): str
   return `${expires}.${mac(receiptId, organizationId, expires)}`;
 }
 
-export function verifyReceiptToken(receiptId: string, organizationId: string, token: string): boolean {
+export function verifyReceiptToken(
+  receiptId: string,
+  organizationId: string,
+  token: string,
+): boolean {
   const dotIndex = token.indexOf(".");
   if (dotIndex === -1) return false;
 

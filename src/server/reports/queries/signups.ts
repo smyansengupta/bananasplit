@@ -21,7 +21,9 @@ export const MAX_SIGNUP_WEEKS = 260;
 export const querySignups: ReportQuery<SignupsReport> = async (db, args) => {
   const signedUp = Prisma.sql`s."signedUpAt"`;
   const toWeek =
-    args.to === null ? Prisma.sql`NULL::date` : Prisma.sql`date_trunc('week', (${args.to}::date)::timestamp)::date`;
+    args.to === null
+      ? Prisma.sql`NULL::date`
+      : Prisma.sql`date_trunc('week', (${args.to}::date)::timestamp)::date`;
   const thisWeek = Prisma.sql`date_trunc('week', ${localTime(nowUtc(args.asOf), args.tz)})::date`;
 
   const weeks = await db.$queryRaw<{ week: string; signups: number; converted: number }[]>`
@@ -72,13 +74,21 @@ export const querySignups: ReportQuery<SignupsReport> = async (db, args) => {
   const converted = num(totalRow?.converted);
   const median = numOrNull(totalRow?.median_days);
   return {
-    weeks: weeks.map((w) => ({ week: w.week, signups: num(w.signups), converted: num(w.converted) })),
+    weeks: weeks.map((w) => ({
+      week: w.week,
+      signups: num(w.signups),
+      converted: num(w.converted),
+    })),
     total,
     converted,
     conversionPct: pct(converted, total),
     medianDaysToFirst: median === null ? null : round1(median),
     byChannel: channels
       .filter((r) => r.channel !== null)
-      .map((r) => ({ channel: r.channel as string, signups: num(r.signups), converted: num(r.converted) })),
+      .map((r) => ({
+        channel: r.channel as string,
+        signups: num(r.signups),
+        converted: num(r.converted),
+      })),
   };
 };

@@ -36,10 +36,13 @@ interface QuickTask {
 export function QuickStatus({
   task,
   disabled,
+  quiet,
   className,
 }: {
   task: QuickTask;
   disabled?: boolean;
+  /** Borderless, for list rows where a column of boxes would shout. */
+  quiet?: boolean;
   className?: string;
 }) {
   const { org, announce } = useTasks();
@@ -74,6 +77,8 @@ export function QuickStatus({
           aria-label={`Status of ${task.title}`}
           className={cn(
             "h-7 w-[8.5rem] text-xs",
+            quiet &&
+              "text-muted-foreground hover:text-foreground hover:bg-muted data-[state=open]:bg-muted border-transparent bg-transparent shadow-none transition-colors duration-150",
             status === TaskStatus.BLOCKED && "text-destructive",
             className,
           )}

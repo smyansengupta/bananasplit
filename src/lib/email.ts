@@ -72,7 +72,11 @@ export async function sendReimbursementStatusEmail(params: {
   orgName?: string;
   url?: string;
 }): Promise<void> {
-  if (params.status !== "APPROVED" && params.status !== "REJECTED" && params.status !== "REIMBURSED") {
+  if (
+    params.status !== "APPROVED" &&
+    params.status !== "REJECTED" &&
+    params.status !== "REIMBURSED"
+  ) {
     return;
   }
   await getPlatformMailer().send({

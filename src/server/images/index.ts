@@ -42,7 +42,9 @@ export class ImageRejectedError extends Error {
 /** The image type from magic bytes, or null when it is not JPEG, PNG or WebP. */
 export function sniffImageType(bytes: Buffer): AllowedImageType | null {
   const type = sniffMimeType(bytes);
-  return (ALLOWED_IMAGE_TYPES as readonly string[]).includes(type ?? "") ? (type as AllowedImageType) : null;
+  return (ALLOWED_IMAGE_TYPES as readonly string[]).includes(type ?? "")
+    ? (type as AllowedImageType)
+    : null;
 }
 
 export interface ProcessedImage {
