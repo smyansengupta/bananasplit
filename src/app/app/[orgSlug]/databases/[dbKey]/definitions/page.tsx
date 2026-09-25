@@ -56,21 +56,15 @@ export default async function BallotDefinitionsPage({
   }
 
   const tz = organization.timezone;
-  const local = (d: Date | null) =>
-    d ? format(new TZDate(d.getTime(), tz), "yyyy-MM-dd'T'HH:mm") : "";
-  const sessions = data.sessions.map((s) => ({
-    id: s.id,
-    label: `${s.title} · ${fmtDate(s.startsAt, tz)}`,
-  }));
+  const local = (d: Date | null) => (d ? format(new TZDate(d.getTime(), tz), "yyyy-MM-dd'T'HH:mm") : "");
+  const sessions = data.sessions.map((s) => ({ id: s.id, label: `${s.title} · ${fmtDate(s.startsAt, tz)}` }));
   const bySlug = new Map<string, { reason: string | null; n: number }[]>();
   for (const r of data.reasons) {
     const list = bySlug.get(r.pollSlug) ?? [];
     list.push({ reason: r.excludedReason, n: r._count._all });
     bySlug.set(r.pollSlug, list);
   }
-  const unknown = [...bySlug.keys()].filter(
-    (slug) => !data.definitions.some((d) => d.slug === slug),
-  );
+  const unknown = [...bySlug.keys()].filter((slug) => !data.definitions.some((d) => d.slug === slug));
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -84,9 +78,8 @@ export default async function BallotDefinitionsPage({
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Poll definitions</h1>
         <p className="text-muted-foreground text-sm">
-          Labels, question types and voting windows for each poll. Ballots cast outside the window,
-          test polls, load and smoke tests, and ballots naming options a poll no longer has are kept
-          but not counted.
+          Labels, question types and voting windows for each poll. Ballots cast outside the window, test polls,
+          load and smoke tests, and ballots naming options a poll no longer has are kept but not counted.
         </p>
       </div>
 
@@ -94,8 +87,7 @@ export default async function BallotDefinitionsPage({
 
       {unknown.length > 0 && (
         <p className="border-warning/40 bg-warning/10 rounded-md border p-3 text-sm">
-          Ballots are waiting for a definition: {unknown.join(", ")}. Import the poll file to count
-          them.
+          Ballots are waiting for a definition: {unknown.join(", ")}. Import the poll file to count them.
         </p>
       )}
 

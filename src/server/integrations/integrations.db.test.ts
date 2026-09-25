@@ -417,14 +417,8 @@ describe.skipIf(!dbReady)("integrations against the local database", () => {
       ok: true,
       message: expect.stringMatching(/token deleted/),
     });
-    expect(
-      revoke.mock.calls.some((c) =>
-        String(c[0]).startsWith("https://oauth2.googleapis.com/revoke"),
-      ),
-    ).toBe(true);
-    expect(
-      await getSecret({ orgId, provider: "GOOGLE_CALENDAR", kind: "REFRESH_TOKEN" }),
-    ).toBeNull();
+    expect(revoke.mock.calls.some((c) => String(c[0]).startsWith("https://oauth2.googleapis.com/revoke"))).toBe(true);
+    expect(await getSecret({ orgId, provider: "GOOGLE_CALENDAR", kind: "REFRESH_TOKEN" })).toBeNull();
     expect(await requestGoogleImportDryRun(orgId)).toMatchObject({ ok: false });
   });
 });

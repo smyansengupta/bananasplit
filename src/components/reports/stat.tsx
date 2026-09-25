@@ -35,7 +35,7 @@ export function Stat({
         href={href}
         className={cn(
           base,
-          "hover:bg-muted focus-visible:ring-ring/50 transition-colors outline-none focus-visible:ring-3",
+          "hover:bg-muted focus-visible:ring-ring/50 outline-none transition-colors focus-visible:ring-3",
           className,
         )}
       >

@@ -47,19 +47,14 @@ function toSearchParams(url: URL): SearchParams {
 
 async function resolveOrg(slug: string) {
   const user = await requireUser();
-  const rows = await withUserTx(
-    user.id,
-    ({ db }) =>
-      db.$queryRaw<{ organizationId: string; canonicalSlug: string }[]>`
+  const rows = await withUserTx(user.id, ({ db }) =>
+    db.$queryRaw<{ organizationId: string; canonicalSlug: string }[]>`
       SELECT "organizationId", "canonicalSlug" FROM app.resolve_org_slug(${slug})`,
   );
   return rows[0] ? { ...rows[0], userId: user.id } : null;
 }
 
-export async function GET(
-  request: Request,
-  ctx: RouteContext<"/app/[orgSlug]/databases/[dbKey]/export">,
-) {
+export async function GET(request: Request, ctx: RouteContext<"/app/[orgSlug]/databases/[dbKey]/export">) {
   const { orgSlug, dbKey } = await ctx.params;
   const url = new URL(request.url);
   const sp = toSearchParams(url);
@@ -95,12 +90,7 @@ export async function GET(
       if (database.kind === "BALLOTS") {
         const rowAccess = await canViewBallotRows(db, orgId, vctx.tier);
         const requested = typeof sp.view === "string" ? sp.view : "results";
-        sourceView =
-          rowAccess && (requested === "rows" || requested === "ballots")
-            ? requested === "ballots"
-              ? "ballots"
-              : "choices"
-            : undefined;
+        sourceView = rowAccess && (requested === "rows" || requested === "ballots") ? (requested === "ballots" ? "ballots" : "choices") : undefined;
       }
       await writeOrgAuditLog(db, {
         organizationId: orgId,
@@ -135,21 +125,14 @@ export async function GET(
     const lines = await withOrgTx(orgId, async ({ db }) => {
       const polls = await listPolls(db, orgId);
       const params = parseDbViewParams(sp);
-      const f = params.filters.find(
-        (x) => ["ballotDefinitionId", "poll", "pollSlug", "slug"].includes(x.col) && x.op === "eq",
-      );
-      const chosen = f
-        ? polls.filter((p) => p.id === f.value || p.slug === f.value)
-        : polls.filter((p) => !p.isTest);
+      const f = params.filters.find((x) => ["ballotDefinitionId", "poll", "pollSlug", "slug"].includes(x.col) && x.op === "eq");
+      const chosen = f ? polls.filter((p) => p.id === f.value || p.slug === f.value) : polls.filter((p) => !p.isTest);
       const results = [];
       for (const poll of chosen) results.push(await loadPollResults(db, orgId, poll, vctx.tier));
       return resultsCsv(results);
     });
     return new NextResponse(`${BOM}${lines.join("\r\n")}\r\n`, {
-      headers: {
-        ...headers,
-        "Content-Disposition": csvContentDisposition(`${database.key}-results-${stamp}.csv`),
-      },
+      headers: { ...headers, "Content-Disposition": csvContentDisposition(`${database.key}-results-${stamp}.csv`) },
     });
   }
 
@@ -183,9 +166,6 @@ export async function GET(
     }
   })();
   return new NextResponse(readable, {
-    headers: {
-      ...headers,
-      "Content-Disposition": csvContentDisposition(`${database.key}-${stamp}.csv`),
-    },
+    headers: { ...headers, "Content-Disposition": csvContentDisposition(`${database.key}-${stamp}.csv`) },
   });
 }

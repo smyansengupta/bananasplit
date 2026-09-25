@@ -45,7 +45,8 @@ export interface PollView {
 
 /** Who is looking: a member of the poll's org, or anyone else (a guest). */
 export type PollViewer =
-  { kind: "member"; userId: string } | { kind: "guest"; guestKeyHash: string | null };
+  | { kind: "member"; userId: string }
+  | { kind: "guest"; guestKeyHash: string | null };
 
 /** The stored poll, as loaded server-side (responses oldest first). */
 export interface PollSource {

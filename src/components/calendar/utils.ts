@@ -12,19 +12,10 @@ export function toDateInputValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-export function formatEventTimeRange(
-  startsAt: Date,
-  endsAt: Date,
-  allDay: boolean,
-  timeZone?: string,
-): string {
+export function formatEventTimeRange(startsAt: Date, endsAt: Date, allDay: boolean, timeZone?: string): string {
   if (allDay) {
     // Whole days in the org timezone, printed as dates (no clock shift).
-    const span = allDaySpan(
-      startsAt,
-      endsAt,
-      timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-    );
+    const span = allDaySpan(startsAt, endsAt, timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
     const fmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" });
     const first = fmt.format(new Date(`${span.start}T00:00:00Z`));
     if (span.lastDay === span.start) return `${first} (all day)`;

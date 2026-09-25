@@ -205,9 +205,7 @@ async function runAndFinish(row: ClaimedJobRow, summary: DrainSummary): Promise<
   else if (outcome.status === "DEAD") summary.dead += 1;
   else summary.cancelled += 1;
   if (outcome.status !== "DONE") {
-    console.warn(
-      `[jobs] ${row.kind} ${row.id} -> ${outcome.status}: ${"error" in outcome ? outcome.error : ""}`,
-    );
+    console.warn(`[jobs] ${row.kind} ${row.id} -> ${outcome.status}: ${"error" in outcome ? outcome.error : ""}`);
   }
 }
 

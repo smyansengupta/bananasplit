@@ -87,16 +87,8 @@ export function channelLabel(channel: string): string {
 export function asOfLabel(iso: string, tz: string, now: Date = new Date()): string {
   const at = new Date(iso);
   const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
-  const time = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(at);
+  const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(at);
   if (day(at) === day(now)) return `as of ${time}`;
-  const date = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    month: "short",
-    day: "numeric",
-  }).format(at);
+  const date = new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric" }).format(at);
   return `as of ${date}, ${time}`;
 }

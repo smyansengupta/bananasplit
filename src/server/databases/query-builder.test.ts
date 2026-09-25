@@ -7,22 +7,8 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: vi.fn(), getSession: vi.fn()
 
 import { dbViewQuery, parseDbViewParams } from "@/lib/databases/href";
 
-import {
-  buildQuery,
-  DbQueryError,
-  localDay,
-  MAX_PAGE_SIZE,
-  parseKeyList,
-  parseSize,
-  type QuerySpec,
-} from "./query-builder";
-import {
-  attendanceSource,
-  ballotChoicesSource,
-  peopleSource,
-  sessionsSource,
-  signupsSource,
-} from "./sources";
+import { buildQuery, DbQueryError, localDay, MAX_PAGE_SIZE, parseKeyList, parseSize, type QuerySpec } from "./query-builder";
+import { attendanceSource, ballotChoicesSource, peopleSource, sessionsSource, signupsSource } from "./sources";
 import type { ViewContext } from "./types";
 
 const ctx: ViewContext = {
@@ -53,9 +39,7 @@ describe("buildQuery: allowlist", () => {
   });
 
   it("throws on an unknown column in strict mode", () => {
-    expect(() => buildQuery(sessions, params("f=secret:eq:1"), { ...TZ, strict: true })).toThrow(
-      DbQueryError,
-    );
+    expect(() => buildQuery(sessions, params("f=secret:eq:1"), { ...TZ, strict: true })).toThrow(DbQueryError);
   });
 
   it("rejects operators a column does not take and display-only sorts", () => {
@@ -65,12 +49,8 @@ describe("buildQuery: allowlist", () => {
   });
 
   it("binds injection attempts as values (no identifier comes from the URL)", () => {
-    const evil = 'x\'); DROP TABLE "Event"; --';
-    const q = buildQuery(
-      sessions,
-      params(dbViewQuery({ filters: [{ col: "title", op: "contains", value: evil }] })),
-      TZ,
-    );
+    const evil = "x'); DROP TABLE \"Event\"; --";
+    const q = buildQuery(sessions, params(dbViewQuery({ filters: [{ col: "title", op: "contains", value: evil }] })), TZ);
     expect(q.where).toEqual({ AND: [{ title: { contains: evil, mode: "insensitive" } }] });
     const bad = buildQuery(sessions, params('f=title");--:eq:1'), TZ);
     expect(bad.where).toEqual({});
@@ -79,9 +59,7 @@ describe("buildQuery: allowlist", () => {
   it("rejects enum values outside the enum", () => {
     const q = buildQuery(sessions, params("f=kind:eq:ROOT"), TZ);
     expect(q.rejected[0]?.reason).toBe("invalid value");
-    expect(buildQuery(sessions, params("f=kind:eq:workshop"), TZ).where).toEqual({
-      AND: [{ kind: { equals: "WORKSHOP" } }],
-    });
+    expect(buildQuery(sessions, params("f=kind:eq:workshop"), TZ).where).toEqual({ AND: [{ kind: { equals: "WORKSHOP" } }] });
   });
 
   it("caps the page size at 100 and computes the offset", () => {
@@ -113,9 +91,7 @@ describe("buildQuery: every sortable and filterable Sessions column", () => {
   it("filters host by member id, term, kind in, attendance > 0 and linked", () => {
     const q = buildQuery(
       sessions,
-      params(
-        "f=hostUserId:eq:u1&f=term:eq:fall-2026&f=kind:in:WORKSHOP,SOCIAL&f=attendanceCount:gt:0&f=linked:eq:true",
-      ),
+      params("f=hostUserId:eq:u1&f=term:eq:fall-2026&f=kind:in:WORKSHOP,SOCIAL&f=attendanceCount:gt:0&f=linked:eq:true"),
       TZ,
     );
     expect(q.rejected).toEqual([]);
@@ -159,11 +135,7 @@ describe("dates are org-local days", () => {
   });
 
   it("gt/lte on a day mean after / through that local day", () => {
-    const q = buildQuery(
-      sessions,
-      params("f=startsAt:gt:2026-09-10&f=startsAt:lte:2026-09-20"),
-      TZ,
-    );
+    const q = buildQuery(sessions, params("f=startsAt:gt:2026-09-10&f=startsAt:lte:2026-09-20"), TZ);
     expect(q.where).toEqual({
       AND: [
         { startsAt: { gte: new Date("2026-09-11T04:00:00.000Z") } },
@@ -176,9 +148,7 @@ describe("dates are org-local days", () => {
 describe("default filters and the Reports deep links", () => {
   it("hides suppressed check-ins by default and lets an explicit suppression filter replace it", () => {
     const def = buildQuery(attendance, params(""), TZ);
-    expect(def.filters).toEqual([
-      { col: "suppressedAt", op: "isnull", value: "true", isDefault: true },
-    ]);
+    expect(def.filters).toEqual([{ col: "suppressedAt", op: "isnull", value: "true", isDefault: true }]);
     const report = buildQuery(attendance, params("f=eventId:eq:e1&f=suppressedAt:isnull:true"), TZ);
     expect(report.filters.filter((f) => f.isDefault)).toEqual([]);
     expect(report.where).toEqual({ AND: [{ eventId: { equals: "e1" } }, { suppressedAt: null }] });
@@ -187,48 +157,26 @@ describe("default filters and the Reports deep links", () => {
   });
 
   it("takes the Reports keys: stampNumber, isFirstVisit, checkedInAt", () => {
-    const q = buildQuery(
-      attendance,
-      params("f=stampNumber:eq:3&f=isFirstVisit:eq:false&sort=checkedInAt:asc"),
-      TZ,
-    );
+    const q = buildQuery(attendance, params("f=stampNumber:eq:3&f=isFirstVisit:eq:false&sort=checkedInAt:asc"), TZ);
     expect(q.rejected).toEqual([]);
     expect(q.where).toEqual({
-      AND: [
-        { stampNumber: { equals: 3 } },
-        { isFirstVisit: { equals: false } },
-        { suppressedAt: null },
-      ],
+      AND: [{ stampNumber: { equals: 3 } }, { isFirstVisit: { equals: false } }, { suppressedAt: null }],
     });
   });
 
   it("People defaults to the current term only when the URL states no filter", () => {
     const people = peopleSource.query(ctx);
-    expect(buildQuery(people, params(""), TZ).where).toEqual({
-      AND: [{ term: { equals: "fall-2026" } }],
-    });
-    const lapsed = buildQuery(
-      people,
-      params("f=lapsedSince:isnull:false&sort=lapsedSince:desc"),
-      TZ,
-    );
+    expect(buildQuery(people, params(""), TZ).where).toEqual({ AND: [{ term: { equals: "fall-2026" } }] });
+    const lapsed = buildQuery(people, params("f=lapsedSince:isnull:false&sort=lapsedSince:desc"), TZ);
     expect(lapsed.where).toEqual({ AND: [{ contact: { lapsedSince: { not: null } } }] });
-    expect(lapsed.orderBy[0]).toEqual({
-      contact: { lapsedSince: { sort: "desc", nulls: "last" } },
-    });
+    expect(lapsed.orderBy[0]).toEqual({ contact: { lapsedSince: { sort: "desc", nulls: "last" } } });
     const regulars = buildQuery(people, params("f=term:eq:fall-2026&f=sessionsAttended:gte:3"), TZ);
-    expect(regulars.where).toEqual({
-      AND: [{ term: { equals: "fall-2026" } }, { sessionsAttended: { gte: 3 } }],
-    });
+    expect(regulars.where).toEqual({ AND: [{ term: { equals: "fall-2026" } }, { sessionsAttended: { gte: 3 } }] });
     expect(buildQuery(people, params(""), { ...TZ, noDefaults: ["term"] }).where).toEqual({});
   });
 
   it("Signups take suppressedAt and firstAttendedAt isnull", () => {
-    const q = buildQuery(
-      signupsSource.query(ctx),
-      params("f=firstAttendedAt:isnull:false&f=suppressedAt:isnull:true"),
-      TZ,
-    );
+    const q = buildQuery(signupsSource.query(ctx), params("f=firstAttendedAt:isnull:false&f=suppressedAt:isnull:true"), TZ);
     expect(q.where).toEqual({ AND: [{ firstAttendedAt: { not: null } }, { suppressedAt: null }] });
   });
 
@@ -237,19 +185,12 @@ describe("default filters and the Reports deep links", () => {
     const q = buildQuery(spec, params("f=colleges:contains:khoury&sort=colleges:asc"), TZ);
     expect(q.rejected).toEqual([{ part: "sort=colleges", reason: "this column cannot be sorted" }]);
     expect(q.where).toEqual({
-      AND: [
-        { answers: { path: ["colleges"], array_contains: ["khoury"] } },
-        { suppressedAt: null },
-      ],
+      AND: [{ answers: { path: ["colleges"], array_contains: ["khoury"] } }, { suppressedAt: null }],
     });
   });
 
   it("Ballots take ballotDefinitionId (id or slug) and hide excluded ballots by default", () => {
-    const q = buildQuery(
-      ballotChoicesSource.query(ctx),
-      params("f=ballotDefinitionId:eq:bd_1"),
-      TZ,
-    );
+    const q = buildQuery(ballotChoicesSource.query(ctx), params("f=ballotDefinitionId:eq:bd_1"), TZ);
     expect(q.where).toEqual({
       AND: [
         { OR: [{ ballotDefinitionId: "bd_1" }, { ballot: { pollSlug: "bd_1" } }] },
@@ -268,13 +209,7 @@ describe("search", () => {
   });
 
   it("every search field of every source is a text field", () => {
-    for (const source of [
-      sessionsSource,
-      attendanceSource,
-      signupsSource,
-      peopleSource,
-      ballotChoicesSource,
-    ]) {
+    for (const source of [sessionsSource, attendanceSource, signupsSource, peopleSource, ballotChoicesSource]) {
       const spec: QuerySpec = source.query(ctx);
       for (const key of spec.search ?? []) {
         expect(["string", "text"]).toContain(spec.fields[key].kind);

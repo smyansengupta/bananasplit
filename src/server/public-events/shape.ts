@@ -86,9 +86,7 @@ function httpUrlOrNull(value: string | null): string | null {
 }
 
 /** Deterministic order: start time, then id (plain code-unit order, no collation). */
-export function sortPublicEvents<T extends { startsAt: string; id: string }>(
-  rows: readonly T[],
-): T[] {
+export function sortPublicEvents<T extends { startsAt: string; id: string }>(rows: readonly T[]): T[] {
   return [...rows].sort((a, b) => {
     const d = Date.parse(a.startsAt) - Date.parse(b.startsAt);
     if (d !== 0) return d;
@@ -135,10 +133,7 @@ export function toClubEvent(row: PublicEventRow, options: ShapeOptions): ClubEve
 }
 
 /** The JSON body: a compact array in feed order. */
-export function publicEventsJson(
-  feed: PublicEventsFeed,
-  options: Omit<ShapeOptions, "timeZone"> = {},
-): string {
+export function publicEventsJson(feed: PublicEventsFeed, options: Omit<ShapeOptions, "timeZone"> = {}): string {
   const events = sortPublicEvents(feed.events).map((row) =>
     toClubEvent(row, { timeZone: feed.timeZone, uidHost: options.uidHost }),
   );

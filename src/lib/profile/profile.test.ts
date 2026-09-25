@@ -12,14 +12,8 @@ import { effectiveTimezone, isValidTimeZone, listTimeZones } from "./timezone";
 
 describe("profile links", () => {
   it("normalizes a bare address and keeps http(s) URLs", () => {
-    expect(normalizeLinkUrl("github", "github.com/ada")).toEqual({
-      ok: true,
-      url: "https://github.com/ada",
-    });
-    expect(normalizeLinkUrl("website", "  http://ada.dev/  ")).toEqual({
-      ok: true,
-      url: "http://ada.dev/",
-    });
+    expect(normalizeLinkUrl("github", "github.com/ada")).toEqual({ ok: true, url: "https://github.com/ada" });
+    expect(normalizeLinkUrl("website", "  http://ada.dev/  ")).toEqual({ ok: true, url: "http://ada.dev/" });
     expect(normalizeLinkUrl("linkedin", "https://www.linkedin.com/in/ada")).toEqual({
       ok: true,
       url: "https://www.linkedin.com/in/ada",
@@ -72,19 +66,14 @@ describe("profile links", () => {
     ).toEqual([{ kind: "github", url: "https://github.com/ada" }]);
     expect(parseStoredLinks({})).toEqual([]);
     expect(parseStoredLinks(null)).toEqual([]);
-    const many = Array.from({ length: 12 }, (_, i) => ({
-      kind: "website",
-      url: `https://site${i}.dev`,
-    }));
+    const many = Array.from({ length: 12 }, (_, i) => ({ kind: "website", url: `https://site${i}.dev` }));
     expect(parseStoredLinks(many)).toHaveLength(MAX_LINKS);
   });
 
   it("labels links by network, or by host for websites", () => {
     expect(linkDisplayText({ kind: "github", url: "https://github.com/ada" })).toBe("GitHub");
     expect(linkDisplayText({ kind: "website", url: "https://www.ada.dev/" })).toBe("ada.dev");
-    expect(linkDisplayText({ kind: "other", url: "https://blog.ada.dev/posts" })).toBe(
-      "blog.ada.dev/posts",
-    );
+    expect(linkDisplayText({ kind: "other", url: "https://blog.ada.dev/posts" })).toBe("blog.ada.dev/posts");
   });
 });
 
@@ -108,22 +97,8 @@ describe("profile form schemas", () => {
       timezone: "America/New_York",
     });
     expect(
-      profileDetailsSchema.parse({
-        name: "Ada",
-        pronouns: "  ",
-        major: "",
-        bio: "",
-        gradYear: null,
-        timezone: "",
-      }),
-    ).toEqual({
-      name: "Ada",
-      pronouns: null,
-      major: null,
-      gradYear: null,
-      bio: null,
-      timezone: null,
-    });
+      profileDetailsSchema.parse({ name: "Ada", pronouns: "  ", major: "", bio: "", gradYear: null, timezone: "" }),
+    ).toEqual({ name: "Ada", pronouns: null, major: null, gradYear: null, bio: null, timezone: null });
   });
 
   it("enforces the limits", () => {
@@ -146,12 +121,7 @@ describe("profile form schemas", () => {
   });
 
   it("refuses fields a user may not set on their profile", () => {
-    for (const extra of [
-      { email: "x@example.edu" },
-      { emailVerified: new Date() },
-      { title: "President" },
-      { avatar: {} },
-    ]) {
+    for (const extra of [{ email: "x@example.edu" }, { emailVerified: new Date() }, { title: "President" }, { avatar: {} }]) {
       expect(profileInputSchema.safeParse({ ...valid, ...extra }).success).toBe(false);
     }
   });
@@ -170,16 +140,11 @@ describe("profile form schemas", () => {
     expect(bad.success).toBe(false);
     if (!bad.success) expect(profileFieldErrors(bad.error)).toHaveProperty("links.1.url");
 
-    const kind = profileLinksSchema.safeParse({
-      links: [{ kind: "myspace", url: "https://myspace.com/a" }],
-    });
+    const kind = profileLinksSchema.safeParse({ links: [{ kind: "myspace", url: "https://myspace.com/a" }] });
     expect(kind.success).toBe(false);
 
     const tooMany = profileLinksSchema.safeParse({
-      links: Array.from({ length: MAX_LINKS + 1 }, () => ({
-        kind: "website",
-        url: "https://ada.dev",
-      })),
+      links: Array.from({ length: MAX_LINKS + 1 }, () => ({ kind: "website", url: "https://ada.dev" })),
     });
     expect(tooMany.success).toBe(false);
     expect(profileLinksSchema.parse({})).toEqual({ links: [] });

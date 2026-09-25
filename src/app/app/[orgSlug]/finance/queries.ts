@@ -25,11 +25,7 @@ export function getOrgPeriods(db: TxClient, organizationId: string) {
   });
 }
 
-export function getCategoriesForPeriod(
-  db: TxClient,
-  organizationId: string,
-  budgetPeriodId: string,
-) {
+export function getCategoriesForPeriod(db: TxClient, organizationId: string, budgetPeriodId: string) {
   return db.budgetCategory.findMany({
     where: { organizationId, budgetPeriodId },
     orderBy: { sortOrder: "asc" },
@@ -109,11 +105,7 @@ export function buildTransactionWhere(
   };
 }
 
-export function getTransactions(
-  db: TxClient,
-  organizationId: string,
-  filters: TransactionFilters = {},
-) {
+export function getTransactions(db: TxClient, organizationId: string, filters: TransactionFilters = {}) {
   return db.transaction.findMany({
     where: buildTransactionWhere(organizationId, filters),
     include: transactionInclude,
@@ -157,10 +149,7 @@ export interface DashboardData {
   unreconciledOver60DaysCount: number;
 }
 
-export async function getDashboardData(
-  db: TxClient,
-  organizationId: string,
-): Promise<DashboardData> {
+export async function getDashboardData(db: TxClient, organizationId: string): Promise<DashboardData> {
   const period = await getActivePeriod(db, organizationId);
   if (!period) {
     return {
@@ -261,11 +250,7 @@ export async function getDashboardData(
   };
 }
 
-export async function getMoneyOwedToUser(
-  db: TxClient,
-  organizationId: string,
-  userId: string,
-): Promise<number> {
+export async function getMoneyOwedToUser(db: TxClient, organizationId: string, userId: string): Promise<number> {
   const result = await db.transaction.aggregate({
     where: {
       organizationId,

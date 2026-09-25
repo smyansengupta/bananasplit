@@ -61,30 +61,22 @@ describe("loadKeyring KEK validation", () => {
     // of its bits, so it does not re-encode to itself.
     const sloppy = `${KEY_1.slice(0, 42)}a=`;
     expect(Buffer.from(sloppy, "base64")).toHaveLength(32);
-    expect(rejected({ SECRETS_KEK_V1: sloppy, SECRETS_KEK_CURRENT: "1" })).toMatch(
-      /32 random bytes/,
-    );
+    expect(rejected({ SECRETS_KEK_V1: sloppy, SECRETS_KEK_CURRENT: "1" })).toMatch(/32 random bytes/);
   });
 
   it("refuses the wrong key size and names the variable", () => {
-    expect(
-      rejected({ SECRETS_KEK_V2: randomBytes(16).toString("base64"), SECRETS_KEK_CURRENT: "2" }),
-    ).toMatch(/^SECRETS_KEK_V2 must be/);
+    expect(rejected({ SECRETS_KEK_V2: randomBytes(16).toString("base64"), SECRETS_KEK_CURRENT: "2" })).toMatch(
+      /^SECRETS_KEK_V2 must be/,
+    );
   });
 
   it("still reports a missing keyring and a SECRETS_KEK_CURRENT that names no key", () => {
     expect(rejected({})).toMatch(/no KEK configured/);
-    expect(rejected({ SECRETS_KEK_V1: KEY_1, SECRETS_KEK_CURRENT: "3" })).toMatch(
-      /names no configured KEK/,
-    );
+    expect(rejected({ SECRETS_KEK_V1: KEY_1, SECRETS_KEK_CURRENT: "3" })).toMatch(/names no configured KEK/);
   });
 
   it("loads several versions and fingerprints only the current one", () => {
-    const ring = loadKeyring({
-      SECRETS_KEK_V1: KEY_1,
-      SECRETS_KEK_V2: KEY_2,
-      SECRETS_KEK_CURRENT: "2",
-    });
+    const ring = loadKeyring({ SECRETS_KEK_V1: KEY_1, SECRETS_KEK_V2: KEY_2, SECRETS_KEK_CURRENT: "2" });
     expect([...ring.keys.keys()].toSorted()).toEqual([1, 2]);
     expect(ring.current).toBe(2);
     expect(kekFingerprint(ring)).toHaveLength(16);

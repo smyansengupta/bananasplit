@@ -91,10 +91,7 @@ export function defineColumns(columns: ColumnConfigInput[]): ColumnConfig[] {
  * overrides applied by key. Overrides for unknown keys and malformed entries
  * are ignored (a stale override never breaks the page).
  */
-export function resolveColumns(
-  builtin: readonly ColumnConfig[],
-  overrides: unknown,
-): ColumnConfig[] {
+export function resolveColumns(builtin: readonly ColumnConfig[], overrides: unknown): ColumnConfig[] {
   const list = Array.isArray(overrides) ? overrides : [];
   const byKey = new Map<string, z.infer<typeof columnOverrideSchema>>();
   for (const raw of list) {
@@ -133,18 +130,9 @@ export type Cell =
   | { t: "text"; v: string; title?: string; muted?: boolean }
   | { t: "number"; v: number | null; text?: string }
   | { t: "bool"; v: boolean | null }
-  | {
-      t: "badge";
-      v: string;
-      tone?: "default" | "secondary" | "outline" | "destructive" | "success" | "warning";
-    }
+  | { t: "badge"; v: string; tone?: "default" | "secondary" | "outline" | "destructive" | "success" | "warning" }
   | { t: "badges"; v: string[] }
-  | {
-      t: "person";
-      name: string;
-      user?: { name: string | null; image: string | null; avatar: unknown } | null;
-      sub?: string;
-    }
+  | { t: "person"; name: string; user?: { name: string | null; image: string | null; avatar: unknown } | null; sub?: string }
   | { t: "link"; href: string; label: string; external?: boolean };
 
 export interface RowView {

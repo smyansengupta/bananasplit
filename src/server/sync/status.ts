@@ -33,18 +33,13 @@ export interface SyncStatus {
 
 function detailOf(stream: Stream, watermark: unknown): string | null {
   const w = (watermark ?? {}) as Record<string, unknown>;
-  if (stream === "checkins" && Number(w.unmapped) > 0)
-    return `${w.unmapped} check-ins with an unknown source (shown as Form)`;
-  if (stream === "reconcile" && typeof w.lastAt === "string")
-    return `Removed ${Number(w.removed ?? 0)} rows deleted on the website`;
+  if (stream === "checkins" && Number(w.unmapped) > 0) return `${w.unmapped} check-ins with an unknown source (shown as Form)`;
+  if (stream === "reconcile" && typeof w.lastAt === "string") return `Removed ${Number(w.removed ?? 0)} rows deleted on the website`;
   if (typeof w.total === "number") return `${w.total} on the website`;
   return null;
 }
 
-export async function loadSyncStatus(
-  db: TxClient,
-  organizationId: string,
-): Promise<SyncStatus | null> {
+export async function loadSyncStatus(db: TxClient, organizationId: string): Promise<SyncStatus | null> {
   const integration = await db.orgIntegration.findFirst({
     where: { organizationId, provider: IntegrationProvider.SUPABASE_SOURCE },
     select: { id: true, status: true, lastError: true, config: true, secretFingerprint: true },
@@ -60,13 +55,7 @@ export async function loadSyncStatus(
   }
   const states = await db.dataSourceSyncState.findMany({
     where: { organizationId, integrationId: integration.id },
-    select: {
-      stream: true,
-      lastSyncedAt: true,
-      rowsUpserted: true,
-      lastError: true,
-      watermark: true,
-    },
+    select: { stream: true, lastSyncedAt: true, rowsUpserted: true, lastError: true, watermark: true },
   });
   const byStream = new Map(states.map((s) => [s.stream, s]));
   return {

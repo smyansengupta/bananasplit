@@ -38,22 +38,11 @@ describe("resolveReportRange", () => {
 
   it("resolves the last 30 days, today included", () => {
     const r = resolveReportRange({ range: "30d" }, NY, new Date("2026-09-23T16:00:00Z"));
-    expect(r).toMatchObject({
-      preset: "30d",
-      from: "2026-08-25",
-      to: "2026-09-23",
-      term: null,
-      label: "Last 30 days",
-    });
+    expect(r).toMatchObject({ preset: "30d", from: "2026-08-25", to: "2026-09-23", term: null, label: "Last 30 days" });
   });
 
   it("resolves all time to no bounds", () => {
-    expect(resolveReportRange({ range: "all" }, NY)).toMatchObject({
-      preset: "all",
-      from: null,
-      to: null,
-      span: null,
-    });
+    expect(resolveReportRange({ range: "all" }, NY)).toMatchObject({ preset: "all", from: null, to: null, span: null });
   });
 
   it("accepts a custom range and names it after a term when it is one", () => {
@@ -62,9 +51,7 @@ describe("resolveReportRange", () => {
       term: null,
       label: "Sep 1 – Sep 30, 2026",
     });
-    expect(
-      resolveReportRange({ from: "2026-07-01", to: "2026-12-31", range: "all" }, NY),
-    ).toMatchObject({
+    expect(resolveReportRange({ from: "2026-07-01", to: "2026-12-31", range: "all" }, NY)).toMatchObject({
       preset: "custom",
       term: "fall-2026",
       label: "Fall 2026",
@@ -86,12 +73,7 @@ describe("resolveReportRange", () => {
 
   it("round-trips through rangeQuery", () => {
     const now = new Date("2026-09-23T16:00:00Z");
-    for (const params of [
-      {},
-      { range: "30d" },
-      { range: "all" },
-      { from: "2026-09-01", to: "2026-09-15" },
-    ]) {
+    for (const params of [{}, { range: "30d" }, { range: "all" }, { from: "2026-09-01", to: "2026-09-15" }]) {
       const r = resolveReportRange(params, NY, now);
       expect(resolveReportRange(rangeQuery(r), NY, now)).toEqual(r);
     }

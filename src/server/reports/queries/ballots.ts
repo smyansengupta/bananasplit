@@ -1,12 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 
 import { inRange, isoText, localDateText, lowerBound, num, numOrNull, pct } from "../sql";
-import type {
-  BallotOptionResult,
-  BallotQuestionResult,
-  BallotResult,
-  BallotsReport,
-} from "../types";
+import type { BallotOptionResult, BallotQuestionResult, BallotResult, BallotsReport } from "../types";
 import type { ReportQuery } from "./common";
 
 /** At most this many ballots per range (newest first). */
@@ -30,9 +25,7 @@ export const MAX_BALLOTS = 12;
  * at the linked session, or n/a without one.
  */
 export const queryBallots: ReportQuery<BallotsReport> = async (db, args) => {
-  const settings = await db.$queryRaw<
-    { k: number | null; members_see: boolean | null; full: boolean }[]
-  >`
+  const settings = await db.$queryRaw<{ k: number | null; members_see: boolean | null; full: boolean }[]>`
     SELECT st."ballotMinCellSize" AS k,
            st."ballotResultsVisibleToMembers" AS members_see,
            app.can_view_ballot_rows(${args.orgId}, ${args.tier}) AS full
@@ -127,12 +120,7 @@ export const queryBallots: ReportQuery<BallotsReport> = async (db, args) => {
       ballots: count,
       linkedSession:
         d.event_id && d.event_title && d.event_date
-          ? {
-              id: d.event_id,
-              title: d.event_title,
-              localDate: d.event_date,
-              checkIns: checkIns ?? 0,
-            }
+          ? { id: d.event_id, title: d.event_title, localDate: d.event_date, checkIns: checkIns ?? 0 }
           : null,
       turnoutPct: checkIns ? pct(count, checkIns) : null,
       questions,
@@ -211,14 +199,12 @@ export function buildQuestions(
   }
   const questions: ParsedQuestion[] = parsed.filter((q) => q.type !== "text");
   for (const key of byQuestion.keys()) {
-    if (!parsed.some((q) => q.key === key))
-      questions.push({ key, label: key, type: "single", options: [] });
+    if (!parsed.some((q) => q.key === key)) questions.push({ key, label: key, type: "single", options: [] });
   }
 
   return questions.map((q) => {
     const qCells = byQuestion.get(q.key) ?? [];
-    const ranked =
-      q.type === "slots" || qCells.some((c) => c.first_choice !== null || c.borda !== null);
+    const ranked = q.type === "slots" || qCells.some((c) => c.first_choice !== null || c.borda !== null);
     const known = new Map(q.options.map((o, i) => [o.key, { ...o, order: i }]));
     let foldedOther = false;
     for (const c of qCells) {
@@ -255,15 +241,7 @@ export function buildQuestions(
             suppressed: false,
             order: o.order,
           }
-        : {
-            key: o.key,
-            label: o.label,
-            votes: null,
-            firstChoice: null,
-            borda: null,
-            suppressed: true,
-            order: o.order,
-          };
+        : { key: o.key, label: o.label, votes: null, firstChoice: null, borda: null, suppressed: true, order: o.order };
     });
     if (foldedOther) {
       options.push({

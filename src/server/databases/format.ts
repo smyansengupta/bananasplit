@@ -43,10 +43,7 @@ export function termLabel(term: string | null | undefined): string {
   return m ? `${m[1] === "fall" ? "Fall" : "Spring"} ${m[2]}` : term;
 }
 
-export function text(
-  v: string | null | undefined,
-  opts: { muted?: boolean; title?: string } = {},
-): Cell {
+export function text(v: string | null | undefined, opts: { muted?: boolean; title?: string } = {}): Cell {
   return v ? { t: "text", v, ...opts } : null;
 }
 
@@ -71,20 +68,14 @@ export interface ContactLike {
 }
 
 /** The name to show for a contact: a linked member's name wins, then the display name. */
-export function contactName(
-  contact: ContactLike | null | undefined,
-  override?: string | null,
-): string {
+export function contactName(contact: ContactLike | null | undefined, override?: string | null): string {
   if (override) return override;
   if (!contact) return "Unknown";
   return contact.user?.name || contact.displayName || contact.emailMasked || "Unknown";
 }
 
 /** The person cell: UserAvatar and name when the contact is linked to a member, initials otherwise. */
-export function personCell(
-  contact: ContactLike | null | undefined,
-  override?: string | null,
-): Cell {
+export function personCell(contact: ContactLike | null | undefined, override?: string | null): Cell {
   if (!contact) return { t: "person", name: "Unknown", user: null };
   const user = contact.user
     ? { name: contact.user.name, image: contact.user.image, avatar: contact.user.avatar }
@@ -98,10 +89,7 @@ export function personCell(
 }
 
 /** The address the viewer may see: the full primary email (row-gated by RLS) or the masked one. */
-export function visibleEmail(contact: {
-  emailMasked: string | null;
-  emails?: { emailNormalized: string }[];
-}): string {
+export function visibleEmail(contact: { emailMasked: string | null; emails?: { emailNormalized: string }[] }): string {
   return contact.emails?.[0]?.emailNormalized ?? contact.emailMasked ?? "";
 }
 

@@ -42,27 +42,18 @@ describe("normalizeOrgChart on the CBC fixture", () => {
       isOpen: true,
       personName: null,
     });
-    const leaves = result.positions.filter(
-      (p) => p.manages.length === 0 && p.advisors.length === 0,
-    );
+    const leaves = result.positions.filter((p) => p.manages.length === 0 && p.advisors.length === 0);
     expect(leaves).toHaveLength(6);
     expect(result.positions.filter((p) => p.isAdvisor)).toHaveLength(1);
   });
 
   it("lists the advisor beside the President, not under 'manages' (the Mehr case)", () => {
-    expect(byKey.get("president")?.manages).toEqual([
-      "vp-ops-programs",
-      "vp-growth",
-      "head-of-finance",
-    ]);
+    expect(byKey.get("president")?.manages).toEqual(["vp-ops-programs", "vp-growth", "head-of-finance"]);
     expect(byKey.get("president")?.advisors).toEqual(["founder-advisor"]);
   });
 
   it("resolves 'manages' written as names ('Kristine', 'Designer') without warnings", () => {
-    expect(byKey.get("vp-growth")?.manages).toEqual([
-      "head-of-social-membership",
-      "graphic-designer",
-    ]);
+    expect(byKey.get("vp-growth")?.manages).toEqual(["head-of-social-membership", "graphic-designer"]);
   });
 });
 
@@ -155,14 +146,7 @@ describe("normalizeOrgChart rules", () => {
         P({
           id: "a",
           title: `  Head\u0000 of${String.fromCharCode(0x202e)}  Tech ${long}`,
-          responsibilities: [
-            "- Ships the site",
-            "• ships the  site",
-            "",
-            "1. Runs QA",
-            long,
-            ...Array(40).fill("y"),
-          ],
+          responsibilities: ["- Ships the site", "• ships the  site", "", "1. Runs QA", long, ...Array(40).fill("y")],
         }),
       ],
       [

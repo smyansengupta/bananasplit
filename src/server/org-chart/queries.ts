@@ -94,22 +94,15 @@ async function loadPublishedOrgChart(orgId: string): Promise<PublishedOrgChart |
 
 /** The org's published chart, or null when none is published. Cached; see the module comment. */
 export async function getPublishedOrgChart(orgId: string): Promise<PublishedOrgChart | null> {
-  const cached = unstable_cache(
-    () => loadPublishedOrgChart(orgId),
-    ["published-org-chart", orgId],
-    {
-      tags: [orgChart(orgId)],
-      revalidate: 3600,
-    },
-  );
+  const cached = unstable_cache(() => loadPublishedOrgChart(orgId), ["published-org-chart", orgId], {
+    tags: [orgChart(orgId)],
+    revalidate: 3600,
+  });
   try {
     return await cached();
   } catch (error) {
     // Outside a Next.js request (scripts, tests) there is no incremental cache.
-    if (
-      error instanceof Error &&
-      /incrementalCache missing|static generation store missing/i.test(error.message)
-    ) {
+    if (error instanceof Error && /incrementalCache missing|static generation store missing/i.test(error.message)) {
       return loadPublishedOrgChart(orgId);
     }
     throw error;
@@ -188,10 +181,7 @@ export function computeManagers(
 }
 
 /** Everyone below `userId` in the org's published chart. */
-export async function getReportingSubtree(
-  orgId: string,
-  userId: string,
-): Promise<ReportingSubtree> {
+export async function getReportingSubtree(orgId: string, userId: string): Promise<ReportingSubtree> {
   const chart = await getPublishedOrgChart(orgId);
   if (!chart) return { positionIds: [], userIds: [] };
   return computeReportingSubtree(chart.positions, userId);

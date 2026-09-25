@@ -60,8 +60,7 @@ function pointerY(event: DragMoveEvent | DragEndEvent): number | null {
   const start = event.activatorEvent;
   let y: number | null = null;
   if (typeof MouseEvent !== "undefined" && start instanceof MouseEvent) y = start.clientY;
-  else if (typeof TouchEvent !== "undefined" && start instanceof TouchEvent)
-    y = start.touches[0]?.clientY ?? null;
+  else if (typeof TouchEvent !== "undefined" && start instanceof TouchEvent) y = start.touches[0]?.clientY ?? null;
   return y === null ? null : y + event.delta.y;
 }
 
@@ -116,8 +115,7 @@ export function OutlineTree({
     setDragId(null);
     setDrop(null);
     lastDrop.current = "";
-    if (overId && zone && canDrop(positions, activeId, overId, zone))
-      onMove(activeId, overId, zone);
+    if (overId && zone && canDrop(positions, activeId, overId, zone)) onMove(activeId, overId, zone);
   };
   const onDragCancel = () => {
     setDragId(null);
@@ -199,12 +197,8 @@ function OutlineRow({
       style={{ paddingLeft: depth * 20 }}
       className={cn("relative", dragging && "opacity-40")}
     >
-      {drop === "before" && (
-        <span aria-hidden="true" className="bg-primary absolute inset-x-0 top-0 h-0.5 rounded" />
-      )}
-      {drop === "after" && (
-        <span aria-hidden="true" className="bg-primary absolute inset-x-0 bottom-0 h-0.5 rounded" />
-      )}
+      {drop === "before" && <span aria-hidden="true" className="bg-primary absolute inset-x-0 top-0 h-0.5 rounded" />}
+      {drop === "after" && <span aria-hidden="true" className="bg-primary absolute inset-x-0 bottom-0 h-0.5 rounded" />}
       <div
         className={cn(
           "flex items-center gap-1 rounded-md border border-transparent",
@@ -231,30 +225,19 @@ function OutlineRow({
           {member ? (
             <UserAvatar user={member} size="sm" />
           ) : (
-            <span
-              aria-hidden="true"
-              className="bg-muted size-6 shrink-0 rounded-full border border-dashed"
-            />
+            <span aria-hidden="true" className="bg-muted size-6 shrink-0 rounded-full border border-dashed" />
           )}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">
-              {position.title || "Untitled position"}
-            </span>
+            <span className="block truncate text-sm font-medium">{position.title || "Untitled position"}</span>
             <span className="text-muted-foreground block truncate text-xs">
               {person}
               {position.isAdvisor && " · Advisor"}
-              {!position.isOpen &&
-                !position.userId &&
-                position.matchState === "SUGGESTED" &&
-                " · Confirm match"}
+              {!position.isOpen && !position.userId && position.matchState === "SUGGESTED" && " · Confirm match"}
             </span>
           </span>
           {issue && (
             <span
-              className={cn(
-                "size-2 shrink-0 rounded-full",
-                issue === "error" ? "bg-destructive" : "bg-warning",
-              )}
+              className={cn("size-2 shrink-0 rounded-full", issue === "error" ? "bg-destructive" : "bg-warning")}
               aria-label={issue === "error" ? "Has a problem" : "Has a warning"}
               role="img"
             />

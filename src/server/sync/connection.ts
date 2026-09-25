@@ -40,12 +40,8 @@ export const STATEMENT_TIMEOUT_MS = 10_000;
 
 const remoteConfig = z.object({
   mode: z.literal("supabase").optional(),
-  projectRef: z
-    .string()
-    .regex(/^[a-z0-9]{20}$/, "The project ref is the 20-character id in the project URL."),
-  poolerRegion: z
-    .string()
-    .regex(/^[a-z]{2}-[a-z]+-\d$/, "Pick the project's region, e.g. us-east-1."),
+  projectRef: z.string().regex(/^[a-z0-9]{20}$/, "The project ref is the 20-character id in the project URL."),
+  poolerRegion: z.string().regex(/^[a-z]{2}-[a-z]+-\d$/, "Pick the project's region, e.g. us-east-1."),
   poolerPrefix: z.enum(["aws-0", "aws-1"]).default("aws-0"),
   roleName: z
     .string()
@@ -91,26 +87,18 @@ export function parseSourceConfig(
       throw new SourceConfigError("Local data sources are only allowed in local development.");
     }
     const parsed = localConfig.safeParse(obj);
-    if (!parsed.success)
-      throw new SourceConfigError(parsed.error.issues[0]?.message ?? "Invalid local source.");
+    if (!parsed.success) throw new SourceConfigError(parsed.error.issues[0]?.message ?? "Invalid local source.");
     return { kind: "local", ...parsed.data };
   }
   const parsed = remoteConfig.safeParse(obj);
   if (!parsed.success) {
-    throw new SourceConfigError(
-      parsed.error.issues[0]?.message ?? "The website data source is not set up.",
-    );
+    throw new SourceConfigError(parsed.error.issues[0]?.message ?? "The website data source is not set up.");
   }
   return { kind: "supabase", ...parsed.data };
 }
 
 /** The derived host and user (shown in Settings; never taken from input). */
-export function sourceEndpoint(cfg: SourceConfig): {
-  host: string;
-  port: number;
-  user: string;
-  database: string;
-} {
+export function sourceEndpoint(cfg: SourceConfig): { host: string; port: number; user: string; database: string } {
   if (cfg.kind === "local") {
     return { host: cfg.host, port: cfg.port, user: cfg.roleName, database: cfg.database };
   }
@@ -143,11 +131,7 @@ export function clientOptions(
     ssl:
       cfg.kind === "local"
         ? false
-        : {
-            rejectUnauthorized: true,
-            servername: ep.host,
-            ...(rootCa(env) ? { ca: rootCa(env) } : {}),
-          },
+        : { rejectUnauthorized: true, servername: ep.host, ...(rootCa(env) ? { ca: rootCa(env) } : {}) },
     statement_timeout: STATEMENT_TIMEOUT_MS,
     query_timeout: STATEMENT_TIMEOUT_MS + 5_000,
     connectionTimeoutMillis: 10_000,
@@ -196,10 +180,7 @@ export async function testSupabaseSource(input: {
     const r = await client.query<{ v: number }>("SELECT suite_export.contract_version() AS v");
     const version = Number(r.rows[0]?.v);
     if (!(SUPPORTED_CONTRACT_VERSIONS as readonly number[]).includes(version)) {
-      return {
-        ok: false,
-        reason: `The website export is version ${version}; this suite understands version 1.`,
-      };
+      return { ok: false, reason: `The website export is version ${version}; this suite understands version 1.` };
     }
     return { ok: true, config: { contractVersion: version } };
   } catch (error) {
@@ -219,12 +200,9 @@ export function describeConnectionError(error: unknown): string {
   if (code === "42883" || /suite_export/i.test(message)) {
     return "The website database has no suite export. Apply supabase/suite-export.sql first.";
   }
-  if (code === "42501")
-    return "The reader role is missing a grant. Re-apply supabase/suite-export.sql.";
-  if (code === "ENOTFOUND" || code === "EAI_AGAIN")
-    return "The pooler host was not found. Check the region and prefix.";
-  if (code === "ECONNREFUSED" || code === "ETIMEDOUT")
-    return "The website database did not answer.";
+  if (code === "42501") return "The reader role is missing a grant. Re-apply supabase/suite-export.sql.";
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "The pooler host was not found. Check the region and prefix.";
+  if (code === "ECONNREFUSED" || code === "ETIMEDOUT") return "The website database did not answer.";
   if (/certificate|self[- ]signed|TLS|SSL/i.test(message)) {
     return "The TLS certificate could not be verified. Set SUPABASE_ROOT_CA_PEM to the Supabase root CA.";
   }

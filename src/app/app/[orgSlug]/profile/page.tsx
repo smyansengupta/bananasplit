@@ -83,9 +83,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
         <Card>
           <CardHeader>
             <CardTitle id="details-title">Details</CardTitle>
-            <CardDescription>
-              Your name and a little about you. The same in every organization.
-            </CardDescription>
+            <CardDescription>Your name and a little about you. The same in every organization.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <DetailsForm
@@ -106,15 +104,10 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
               </p>
               <ul className="divide-y rounded-md border">
                 {titledOrgs.map((m) => (
-                  <li
-                    key={m.organizationId}
-                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
-                  >
+                  <li key={m.organizationId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
                     <span className="font-medium">{m.orgName}</span>
                     <span className="flex items-center gap-2">
-                      <span className={m.title ? "" : "text-muted-foreground"}>
-                        {m.title ?? "No title"}
-                      </span>
+                      <span className={m.title ? "" : "text-muted-foreground"}>{m.title ?? "No title"}</span>
                       <Badge variant="secondary">{roleLabel(m.role)}</Badge>
                     </span>
                   </li>
@@ -135,12 +128,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           </CardHeader>
           <CardContent>
             <AvatarEditor
-              user={{
-                name: profile.name,
-                email: profile.email,
-                image: profile.image,
-                avatar: profile.avatar,
-              }}
+              user={{ name: profile.name, email: profile.email, image: profile.image, avatar: profile.avatar }}
             />
           </CardContent>
         </Card>
@@ -179,9 +167,9 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           <CardHeader>
             <CardTitle id="calendar-title">Calendar feed</CardTitle>
             <CardDescription>
-              Subscribe from Google Calendar, Apple Calendar or Outlook to see the events
-              you&apos;re invited to. Those apps refresh on their own schedule, often hours apart,
-              so treat it as a mirror rather than a live view.
+              Subscribe from Google Calendar, Apple Calendar or Outlook to see the events you&apos;re
+              invited to. Those apps refresh on their own schedule, often hours apart, so treat it as
+              a mirror rather than a live view.
             </CardDescription>
           </CardHeader>
           <CardContent>

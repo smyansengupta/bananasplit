@@ -132,8 +132,7 @@ async function roleChecks(probes: HealthProbes): Promise<HealthCheck[]> {
         if (p.bypassRls) problems.push("has BYPASSRLS");
         if (p.ownedRelations > 0) problems.push(`owns ${p.ownedRelations} relation(s) in public`);
         if (!/^(UTC|Etc\/UTC)$/i.test(p.timezone)) problems.push(`timezone is ${p.timezone}`);
-        if (p.statementTimeout !== "15s")
-          problems.push(`statement_timeout is ${p.statementTimeout}`);
+        if (p.statementTimeout !== "15s") problems.push(`statement_timeout is ${p.statementTimeout}`);
         if (p.idleInTransactionTimeout !== "15s") {
           problems.push(`idle_in_transaction_session_timeout is ${p.idleInTransactionTimeout}`);
         }
@@ -151,9 +150,7 @@ async function manifestCheck(probes: HealthProbes): Promise<HealthCheck> {
     return {
       name: "security_manifest",
       ok: rows.length === 0,
-      detail: rows.length
-        ? `${rows.length} violation(s): ${rows.slice(0, 5).join(", ")}`
-        : undefined,
+      detail: rows.length ? `${rows.length} violation(s): ${rows.slice(0, 5).join(", ")}` : undefined,
     };
   } catch (error) {
     return { name: "security_manifest", ok: false, detail: describe(error) };
@@ -193,11 +190,7 @@ async function previewChecks(probes: HealthProbes, env: Env): Promise<HealthChec
     checks.push({
       name,
       ok: Boolean(expected) && storeId.toLowerCase() === expected?.toLowerCase(),
-      detail: expected
-        ? storeId.toLowerCase() === expected.toLowerCase()
-          ? undefined
-          : "store is not the preview store"
-        : `${expectedVar} is not set`,
+      detail: expected ? (storeId.toLowerCase() === expected.toLowerCase() ? undefined : "store is not the preview store") : `${expectedVar} is not set`,
     });
   }
 
@@ -208,11 +201,7 @@ async function previewChecks(probes: HealthProbes, env: Env): Promise<HealthChec
     if (env.SECRETS_KEK_ENV !== "preview") problems.push("SECRETS_KEK_ENV is not 'preview'");
     if (!expected) problems.push("PREVIEW_KEK_FINGERPRINT is not set");
     else if (expected !== fingerprint) problems.push("KEK is not the preview keyring");
-    checks.push({
-      name: "preview:kek",
-      ok: problems.length === 0,
-      detail: problems.join("; ") || undefined,
-    });
+    checks.push({ name: "preview:kek", ok: problems.length === 0, detail: problems.join("; ") || undefined });
   } catch (error) {
     checks.push({ name: "preview:kek", ok: false, detail: describe(error) });
   }
@@ -222,11 +211,7 @@ async function previewChecks(probes: HealthProbes, env: Env): Promise<HealthChec
 function productionChecks(env: Env): HealthCheck[] {
   const checks: HealthCheck[] = [];
   const email = emailConfigProblems(env);
-  checks.push({
-    name: "production:email",
-    ok: email.length === 0,
-    detail: email.join("; ") || undefined,
-  });
+  checks.push({ name: "production:email", ok: email.length === 0, detail: email.join("; ") || undefined });
   checks.push({
     name: "production:cron_secret",
     ok: Boolean(env.CRON_SECRET),

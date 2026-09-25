@@ -66,9 +66,9 @@ describe("checkRateLimit", () => {
 
 describe("clientIpFrom", () => {
   it("prefers x-real-ip and never trusts the first forwarded hop", () => {
-    expect(
-      clientIpFrom(new Headers({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "9.9.9.9" })),
-    ).toBe("1.2.3.4");
+    expect(clientIpFrom(new Headers({ "x-real-ip": "1.2.3.4", "x-forwarded-for": "9.9.9.9" }))).toBe(
+      "1.2.3.4",
+    );
     expect(clientIpFrom(new Headers({ "x-forwarded-for": "6.6.6.6, 10.0.0.1" }))).toBe("10.0.0.1");
     expect(clientIpFrom(new Headers())).toBe("unknown");
   });

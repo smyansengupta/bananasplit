@@ -53,11 +53,7 @@ const MAX_CLAUDE_TIMEOUT_MS = 200_000;
 
 class StaleAttempt extends Error {}
 
-async function advance(
-  orgId: string,
-  payload: ClaudeParsePayload,
-  to: OrgChartParseStatus,
-): Promise<void> {
+async function advance(orgId: string, payload: ClaudeParsePayload, to: OrgChartParseStatus): Promise<void> {
   const res = await withSystemOrgTx(orgId, ({ db }) =>
     db.orgChartVersion.updateMany({
       where: {
@@ -74,10 +70,7 @@ async function advance(
 }
 
 /** Positions to insert: the normalized chart plus match suggestions. */
-export function chartToWrites(
-  chart: NormalizedChart,
-  candidates: readonly MatchCandidate[],
-): PositionWrite[] {
+export function chartToWrites(chart: NormalizedChart, candidates: readonly MatchCandidate[]): PositionWrite[] {
   return chart.positions.map((p) => {
     const match = p.isOpen ? null : matchPerson(p.personName, candidates);
     return {
@@ -101,17 +94,11 @@ export function chartToWrites(
 
 function failureMessage(error: unknown): { message: string; permanent: boolean } {
   if (error instanceof SourceRejectedError) return { message: error.message, permanent: true };
-  if (error instanceof ClaudeParseError)
-    return { message: error.message, permanent: !error.retryable };
-  return {
-    message: "The document could not be processed. The parse will be retried.",
-    permanent: false,
-  };
+  if (error instanceof ClaudeParseError) return { message: error.message, permanent: !error.retryable };
+  return { message: "The document could not be processed. The parse will be retried.", permanent: false };
 }
 
-export const claudeParseJob: JobHandler<ClaudeParsePayload> = async (
-  run,
-): Promise<JobOutcome | void> => {
+export const claudeParseJob: JobHandler<ClaudeParsePayload> = async (run): Promise<JobOutcome | void> => {
   const orgId = run.organizationId;
   if (!orgId) return { status: "DEAD", error: "claude-parse needs an organization" };
   const payload = run.payload;
@@ -138,33 +125,20 @@ export const claudeParseJob: JobHandler<ClaudeParsePayload> = async (
 
   try {
     // 2. Read and extract (no transaction open).
-    if (!claimed.sourceBlobKey)
-      throw new SourceRejectedError("The uploaded file is missing. Upload it again.");
+    if (!claimed.sourceBlobKey) throw new SourceRejectedError("The uploaded file is missing. Upload it again.");
     const blob = await getBlob(claimed.sourceBlobKey);
     if (!blob) throw new SourceRejectedError("The uploaded file is missing. Upload it again.");
     const filename = claimed.sourceFilename ?? "";
     const source = await extractSource(blob.body, sniffSource(blob.body, filename));
     const config = await getClaudeConfig(orgId);
     if (!config) {
-      throw new ClaudeParseError(
-        "Add a Claude API key in Settings > Integrations, then retry the import.",
-        false,
-      );
+      throw new ClaudeParseError("Add a Claude API key in Settings > Integrations, then retry the import.", false);
     }
     await advance(orgId, payload, OrgChartParseStatus.PARSING);
 
     // 3. Claude.
-    const timeoutMs = Math.max(
-      30_000,
-      Math.min(MAX_CLAUDE_TIMEOUT_MS, run.deadline - Date.now() - WRITE_MARGIN_MS),
-    );
-    const result = await parseWithClaude({
-      config,
-      source,
-      filename,
-      timeoutMs,
-      signal: run.signal,
-    });
+    const timeoutMs = Math.max(30_000, Math.min(MAX_CLAUDE_TIMEOUT_MS, run.deadline - Date.now() - WRITE_MARGIN_MS));
+    const result = await parseWithClaude({ config, source, filename, timeoutMs, signal: run.signal });
     const chart = normalizeOrgChart(result.parse);
 
     // 4. Write back (compare-and-set).
@@ -198,16 +172,13 @@ export const claudeParseJob: JobHandler<ClaudeParsePayload> = async (
         },
       });
       if (done.count !== 1) return false;
-      await db.orgChartPosition.deleteMany({
-        where: { organizationId: orgId, versionId: payload.versionId },
-      });
+      await db.orgChartPosition.deleteMany({ where: { organizationId: orgId, versionId: payload.versionId } });
       await insertPositions(db, orgId, payload.versionId, chartToWrites(chart, candidates));
       return true;
     });
     if (!written) return { status: "CANCELLED", error: "superseded or discarded" };
   } catch (error) {
-    if (error instanceof StaleAttempt)
-      return { status: "CANCELLED", error: "superseded or discarded" };
+    if (error instanceof StaleAttempt) return { status: "CANCELLED", error: "superseded or discarded" };
     const { message, permanent } = failureMessage(error);
     const last = permanent || run.attempt >= run.maxAttempts;
     const stored = sanitize(last ? message.replace(" The parse will be retried.", "") : message);

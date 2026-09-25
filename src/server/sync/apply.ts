@@ -5,13 +5,7 @@ import type { SystemContext, TxClient } from "@/server/db/context";
 import { findEventMatch } from "@/server/events/match";
 import { createEvent, updateEvent } from "@/server/events/service";
 
-import type {
-  RemoteBallot,
-  RemoteCheckin,
-  RemoteSession,
-  RemoteSignup,
-  RemoteUnsubscribe,
-} from "./remote";
+import type { RemoteBallot, RemoteCheckin, RemoteSession, RemoteSignup, RemoteUnsubscribe } from "./remote";
 import {
   cleanName,
   isSourceId,
@@ -88,10 +82,7 @@ export async function resolveContacts(
 
   const existing = await db.contactEmail.findMany({
     where: { organizationId: org, emailNormalized: { in: emails } },
-    select: {
-      emailNormalized: true,
-      contact: { select: { id: true, displayName: true, userId: true } },
-    },
+    select: { emailNormalized: true, contact: { select: { id: true, displayName: true, userId: true } } },
   });
   for (const e of existing) {
     found.set(e.emailNormalized, e.contact.id);
@@ -100,8 +91,7 @@ export async function resolveContacts(
     if (!e.contact.displayName && seen?.name) patch.displayName = seen.name;
     const member = scope.memberEmails.get(e.emailNormalized);
     if (!e.contact.userId && member) patch.user = { connect: { id: member } };
-    if (Object.keys(patch).length)
-      await db.contact.update({ where: { id: e.contact.id }, data: patch });
+    if (Object.keys(patch).length) await db.contact.update({ where: { id: e.contact.id }, data: patch });
   }
 
   const missing = emails.filter((e) => !found.has(e));
@@ -121,13 +111,7 @@ export async function resolveContacts(
         userId: scope.memberEmails.get(email) ?? null,
         firstSeenAt: seen?.at ?? new Date(),
       });
-      contactEmails.push({
-        id: newId("ce_"),
-        organizationId: org,
-        contactId: id,
-        emailNormalized: email,
-        isPrimary: true,
-      });
+      contactEmails.push({ id: newId("ce_"), organizationId: org, contactId: id, emailNormalized: email, isPrimary: true });
       found.set(email, id);
     }
     await db.contact.createMany({ data: contacts });
@@ -166,23 +150,12 @@ export async function applySessions(
   const db = ctx.db;
   const org = scope.organizationId;
   const stats: SessionStats = { created: 0, linked: 0, updated: 0, ambiguous: 0, unlinked: 0 };
-  const svc = {
-    db,
-    organizationId: org,
-    userId: scope.creatorId,
-    role: null,
-    kind: "system" as const,
-  };
+  const svc = { db, organizationId: org, userId: scope.creatorId, role: null, kind: "system" as const };
 
   for (const s of sessions) {
     const startsAt = new Date(s.starts_at);
     const title = (cleanName(s.title) ?? "Session").slice(0, 200);
-    const match = await findEventMatch(
-      db,
-      org,
-      { source: "SUPABASE", externalId: s.id, title, startsAt },
-      scope.timezone,
-    );
+    const match = await findEventMatch(db, org, { source: "SUPABASE", externalId: s.id, title, startsAt }, scope.timezone);
 
     if (match.kind === "exact") {
       const event = await db.event.findFirst({
@@ -201,19 +174,12 @@ export async function applySessions(
       });
       if (!event || event.deletedAt) continue;
       if (event.term !== s.term || event.stampSlot !== s.slot) {
-        await db.event.update({
-          where: { id: event.id },
-          data: { term: s.term, stampSlot: s.slot },
-        });
+        await db.event.update({ where: { id: event.id }, data: { term: s.term, stampSlot: s.slot } });
         stats.updated += 1;
       }
       if (!event.suiteEditedAt) {
         const room = s.room ? s.room.slice(0, 300) : null;
-        if (
-          event.title !== title ||
-          !sameInstant(event.startsAt, startsAt) ||
-          event.location !== room
-        ) {
+        if (event.title !== title || !sameInstant(event.startsAt, startsAt) || event.location !== room) {
           const duration = Math.max(event.endsAt.getTime() - event.startsAt.getTime(), 0);
           await updateEvent(
             svc,
@@ -233,14 +199,7 @@ export async function applySessions(
         data: { sourceSessionId: s.id, term: s.term, stampSlot: s.slot },
       });
       await db.eventLinkLog.create({
-        data: {
-          organizationId: org,
-          eventId: match.eventId,
-          source: "SUPABASE",
-          externalId: s.id,
-          method: "MATCHED",
-          score: match.score,
-        },
+        data: { organizationId: org, eventId: match.eventId, source: "SUPABASE", externalId: s.id, method: "MATCHED", score: match.score },
       });
       stats.linked += 1;
       continue;
@@ -265,13 +224,7 @@ export async function applySessions(
       data: { sourceSessionId: s.id, needsReview: match.kind === "ambiguous" },
     });
     await db.eventLinkLog.create({
-      data: {
-        organizationId: org,
-        eventId: event.id,
-        source: "SUPABASE",
-        externalId: s.id,
-        method: "EXACT",
-      },
+      data: { organizationId: org, eventId: event.id, source: "SUPABASE", externalId: s.id, method: "EXACT" },
     });
     if (match.kind === "ambiguous") stats.ambiguous += 1;
     else stats.created += 1;
@@ -287,10 +240,7 @@ export async function applySessions(
     });
     for (const e of linked) {
       if (e.sourceSessionId && !ids.has(e.sourceSessionId)) {
-        await db.event.update({
-          where: { id: e.id },
-          data: { sourceSessionId: null, needsReview: true },
-        });
+        await db.event.update({ where: { id: e.id }, data: { sourceSessionId: null, needsReview: true } });
         stats.unlinked += 1;
       }
     }
@@ -309,20 +259,12 @@ export async function sessionEventMap(db: TxClient, organizationId: string, sess
 
 // ---- Check-ins -----------------------------------------------------------------
 
-export async function applyCheckins(
-  db: TxClient,
-  scope: SyncScope,
-  rows: RemoteCheckin[],
-): Promise<ApplyStats> {
+export async function applyCheckins(db: TxClient, scope: SyncScope, rows: RemoteCheckin[]): Promise<ApplyStats> {
   const org = scope.organizationId;
   const stats: ApplyStats = { upserted: 0, skipped: 0, unmapped: 0, contacts: [] };
   if (rows.length === 0) return stats;
 
-  const events = await sessionEventMap(
-    db,
-    org,
-    rows.map((r) => r.session_id),
-  );
+  const events = await sessionEventMap(db, org, rows.map((r) => r.session_id));
   const people: { email: string; name: string | null; at: Date }[] = [];
   for (const r of rows) {
     const email = normalizeEmail(r.email);
@@ -333,20 +275,8 @@ export async function applyCheckins(
   const existing = new Map(
     (
       await db.attendance.findMany({
-        where: {
-          organizationId: org,
-          source: RecordSource.SUPABASE_SYNC,
-          externalId: { in: rows.map((r) => r.id) },
-        },
-        select: {
-          id: true,
-          externalId: true,
-          contactId: true,
-          eventId: true,
-          method: true,
-          checkedInAt: true,
-          nameAsEntered: true,
-        },
+        where: { organizationId: org, source: RecordSource.SUPABASE_SYNC, externalId: { in: rows.map((r) => r.id) } },
+        select: { id: true, externalId: true, contactId: true, eventId: true, method: true, checkedInAt: true, nameAsEntered: true },
       })
     ).map((a) => [a.externalId as string, a]),
   );
@@ -388,9 +318,7 @@ export async function applyCheckins(
     if (prev.nameAsEntered !== name) patch.nameAsEntered = name;
     if (prev.contactId !== contactId) {
       // Re-attribution after a contact split: move only if it creates no duplicate.
-      const clash = await db.attendance.count({
-        where: { organizationId: org, eventId: prev.eventId, contactId },
-      });
+      const clash = await db.attendance.count({ where: { organizationId: org, eventId: prev.eventId, contactId } });
       if (clash === 0) {
         patch.contactId = contactId;
         touched.add(prev.contactId);
@@ -413,11 +341,7 @@ export async function applyCheckins(
 
 // ---- Signups -------------------------------------------------------------------
 
-export async function applySignups(
-  db: TxClient,
-  scope: SyncScope,
-  rows: RemoteSignup[],
-): Promise<ApplyStats> {
+export async function applySignups(db: TxClient, scope: SyncScope, rows: RemoteSignup[]): Promise<ApplyStats> {
   const org = scope.organizationId;
   const stats: ApplyStats = { upserted: 0, skipped: 0, contacts: [] };
   if (rows.length === 0) return stats;
@@ -430,11 +354,7 @@ export async function applySignups(
   const existing = new Map(
     (
       await db.signup.findMany({
-        where: {
-          organizationId: org,
-          recordSource: RecordSource.SUPABASE_SYNC,
-          externalId: { in: rows.map((r) => r.id) },
-        },
+        where: { organizationId: org, recordSource: RecordSource.SUPABASE_SYNC, externalId: { in: rows.map((r) => r.id) } },
         select: { id: true, externalId: true, contactId: true, term: true, addedToListAt: true },
       })
     ).map((s) => [s.externalId as string, s]),
@@ -481,13 +401,10 @@ export async function applySignups(
     }
     const data: Prisma.SignupUncheckedUpdateInput = {
       ...common,
-      addedToListAt:
-        prev.addedToListAt ?? (r.added_to_list_at ? new Date(r.added_to_list_at) : null),
+      addedToListAt: prev.addedToListAt ?? (r.added_to_list_at ? new Date(r.added_to_list_at) : null),
     };
     if (prev.contactId !== contactId) {
-      const clash = await db.signup.count({
-        where: { organizationId: org, contactId, term: r.term },
-      });
+      const clash = await db.signup.count({ where: { organizationId: org, contactId, term: r.term } });
       if (clash === 0) {
         data.contactId = contactId;
         touched.add(prev.contactId);
@@ -509,27 +426,14 @@ export async function applySignups(
  * stored, linked to its definition by slug, classified (test poll, before or
  * after the window, retired options) and exploded into BallotChoice rows.
  */
-export async function applyBallots(
-  db: TxClient,
-  scope: SyncScope,
-  rows: RemoteBallot[],
-): Promise<ApplyStats> {
+export async function applyBallots(db: TxClient, scope: SyncScope, rows: RemoteBallot[]): Promise<ApplyStats> {
   const org = scope.organizationId;
-  const stats: ApplyStats = {
-    upserted: 0,
-    skipped: 0,
-    contacts: [],
-    details: { testSlug: 0, excluded: 0 },
-  };
+  const stats: ApplyStats = { upserted: 0, skipped: 0, contacts: [], details: { testSlug: 0, excluded: 0 } };
   if (rows.length === 0) return stats;
   const known = new Set(
     (
       await db.ballot.findMany({
-        where: {
-          organizationId: org,
-          source: RecordSource.SUPABASE_SYNC,
-          externalId: { in: rows.map((r) => r.id) },
-        },
+        where: { organizationId: org, source: RecordSource.SUPABASE_SYNC, externalId: { in: rows.map((r) => r.id) } },
         select: { externalId: true },
       })
     ).map((b) => b.externalId as string),
@@ -552,14 +456,7 @@ export async function applyBallots(
     const answers = r.answers && typeof r.answers === "object" ? r.answers : {};
     const reason = classifyBallot(
       { pollSlug: r.poll_slug, castAt, answers },
-      def
-        ? {
-            isTest: def.isTest,
-            opensAt: def.opensAt,
-            closesAt: def.closesAt,
-            definition: def.parsed,
-          }
-        : null,
+      def ? { isTest: def.isTest, opensAt: def.opensAt, closesAt: def.closesAt, definition: def.parsed } : null,
     );
     if (reason) stats.details!.excluded += 1;
     creates.push({
@@ -590,11 +487,7 @@ export async function applyBallots(
  * Marks contacts whose address is on the website's unsubscribe list. Sticky:
  * the website has no "resubscribe" and the suite never clears it on its own.
  */
-export async function applyUnsubscribes(
-  db: TxClient,
-  scope: SyncScope,
-  rows: RemoteUnsubscribe[],
-): Promise<ApplyStats> {
+export async function applyUnsubscribes(db: TxClient, scope: SyncScope, rows: RemoteUnsubscribe[]): Promise<ApplyStats> {
   const org = scope.organizationId;
   const stats: ApplyStats = { upserted: 0, skipped: 0, contacts: [] };
   const byEmail = new Map<string, Date>();
@@ -604,18 +497,11 @@ export async function applyUnsubscribes(
   }
   if (byEmail.size === 0) return stats;
   const matches = await db.contactEmail.findMany({
-    where: {
-      organizationId: org,
-      emailNormalized: { in: [...byEmail.keys()] },
-      contact: { unsubscribedAt: null },
-    },
+    where: { organizationId: org, emailNormalized: { in: [...byEmail.keys()] }, contact: { unsubscribedAt: null } },
     select: { emailNormalized: true, contactId: true },
   });
   for (const m of matches) {
-    await db.contact.update({
-      where: { id: m.contactId },
-      data: { unsubscribedAt: byEmail.get(m.emailNormalized) },
-    });
+    await db.contact.update({ where: { id: m.contactId }, data: { unsubscribedAt: byEmail.get(m.emailNormalized) } });
     stats.contacts.push(m.contactId);
     stats.upserted += 1;
   }
@@ -645,10 +531,7 @@ export async function removeMissing(
       select: { id: true, externalId: true, contactId: true },
     });
     const gone = rows.filter((r) => isSourceId(r.externalId) && !seen.has(r.externalId));
-    if (gone.length)
-      await db.attendance.deleteMany({
-        where: { organizationId, id: { in: gone.map((g) => g.id) } },
-      });
+    if (gone.length) await db.attendance.deleteMany({ where: { organizationId, id: { in: gone.map((g) => g.id) } } });
     return { removed: gone.length, contacts: [...new Set(gone.map((g) => g.contactId))] };
   }
   if (stream === "signups") {
@@ -657,8 +540,7 @@ export async function removeMissing(
       select: { id: true, externalId: true, contactId: true },
     });
     const gone = rows.filter((r) => isSourceId(r.externalId) && !seen.has(r.externalId));
-    if (gone.length)
-      await db.signup.deleteMany({ where: { organizationId, id: { in: gone.map((g) => g.id) } } });
+    if (gone.length) await db.signup.deleteMany({ where: { organizationId, id: { in: gone.map((g) => g.id) } } });
     return { removed: gone.length, contacts: [...new Set(gone.map((g) => g.contactId))] };
   }
   const rows = await db.ballot.findMany({
@@ -666,7 +548,6 @@ export async function removeMissing(
     select: { id: true, externalId: true },
   });
   const gone = rows.filter((r) => isSourceId(r.externalId) && !seen.has(r.externalId));
-  if (gone.length)
-    await db.ballot.deleteMany({ where: { organizationId, id: { in: gone.map((g) => g.id) } } });
+  if (gone.length) await db.ballot.deleteMany({ where: { organizationId, id: { in: gone.map((g) => g.id) } } });
   return { removed: gone.length, contacts: [] };
 }

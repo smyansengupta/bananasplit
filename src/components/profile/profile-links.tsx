@@ -13,8 +13,7 @@ export function ProfileLinks({ links, className }: { links: ProfileLink[]; class
   return (
     <ul className={cn("flex flex-wrap gap-2", className)}>
       {links.map((link, index) => {
-        const Icon =
-          link.kind === "website" ? Globe : link.kind === "other" ? LinkIcon : ExternalLink;
+        const Icon = link.kind === "website" ? Globe : link.kind === "other" ? LinkIcon : ExternalLink;
         return (
           <li key={`${link.url}-${index}`}>
             <a

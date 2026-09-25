@@ -67,8 +67,7 @@ export function mirrorDescription(event: MirrorSource, calendar: "public" | "int
   if (prose) lines.push(prose);
   if (event.capacityFull) lines.push("This event is full.");
   if (event.publicNote?.trim()) lines.push(event.publicNote.trim());
-  if (calendar === "internal" && isHttpUrl(event.conferenceUrl))
-    lines.push(`Join: ${event.conferenceUrl}`);
+  if (calendar === "internal" && isHttpUrl(event.conferenceUrl)) lines.push(`Join: ${event.conferenceUrl}`);
   return lines.join("\n").slice(0, MAX_DESCRIPTION);
 }
 
@@ -85,8 +84,7 @@ export function toGoogleEvent(
     start = { date: span.start };
     end = { date: span.endExclusive };
   } else {
-    const endsAt =
-      event.endsAt.getTime() > event.startsAt.getTime() ? event.endsAt : event.startsAt;
+    const endsAt = event.endsAt.getTime() > event.startsAt.getTime() ? event.endsAt : event.startsAt;
     start = { dateTime: event.startsAt.toISOString(), timeZone };
     end = { dateTime: endsAt.toISOString(), timeZone };
   }
@@ -130,15 +128,11 @@ const tidy = (s: string) =>
     .trim();
 
 /** The website's parseDescription: the first link is the RSVP link, the rest is prose. */
-export function parseDescription(raw: string | null | undefined): {
-  description: string | null;
-  rsvpUrl: string | null;
-} {
+export function parseDescription(raw: string | null | undefined): { description: string | null; rsvpUrl: string | null } {
   if (!raw) return { description: null, rsvpUrl: null };
   const text = stripHtml(raw);
   const match = text.match(URL_RE);
-  if (!match || match.index === undefined)
-    return { description: tidy(text) || null, rsvpUrl: null };
+  if (!match || match.index === undefined) return { description: tidy(text) || null, rsvpUrl: null };
   const rsvpUrl = match[0].replace(/[.,;]+$/, "");
   const after = tidy(text.slice(match.index + match[0].length));
   if (after) return { description: after, rsvpUrl: isHttpUrl(rsvpUrl) ? rsvpUrl : null };
@@ -198,9 +192,7 @@ export function fromGoogleEvent(g: GoogleEvent, timeZone: string): ImportedEvent
     if (!g.start.date || !parseDateKey(g.start.date)) return null;
     startsAt = zonedMidnight(g.start.date, tz);
     const endKey = g.end?.date && parseDateKey(g.end.date) ? g.end.date : null;
-    endsAt = endKey
-      ? zonedMidnight(endKey, tz)
-      : new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
+    endsAt = endKey ? zonedMidnight(endKey, tz) : new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
   } else {
     startsAt = new Date(g.start.dateTime ?? "");
     endsAt = new Date(g.end?.dateTime ?? g.start.dateTime ?? "");
@@ -214,10 +206,7 @@ export function fromGoogleEvent(g: GoogleEvent, timeZone: string): ImportedEvent
     googleEventId: g.id,
     etag: g.etag ?? null,
     htmlLink: g.htmlLink ?? null,
-    mirrorOf:
-      priv?.suiteEventId && priv.orgId
-        ? { suiteEventId: priv.suiteEventId, orgId: priv.orgId }
-        : null,
+    mirrorOf: priv?.suiteEventId && priv.orgId ? { suiteEventId: priv.suiteEventId, orgId: priv.orgId } : null,
     title,
     description: description ? description.slice(0, 20_000) : null,
     location: placeOrNull(g.location)?.slice(0, 300) ?? null,

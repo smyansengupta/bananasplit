@@ -32,9 +32,7 @@ export function CsvImportForm({ uploadUrl, backHref }: { uploadUrl: string; back
       body.set("file", file);
       body.set("mode", mode);
       const res = await fetch(uploadUrl, { method: "POST", body });
-      const data = (await res
-        .json()
-        .catch(() => ({ error: "The server did not answer." }))) as PreviewResult;
+      const data = (await res.json().catch(() => ({ error: "The server did not answer." }))) as PreviewResult;
       setPreview(data);
       if (mode === "commit" && data.committed) router.refresh();
     } finally {
@@ -56,12 +54,7 @@ export function CsvImportForm({ uploadUrl, backHref }: { uploadUrl: string; back
           }}
           className="text-sm"
         />
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!file || busy}
-          onClick={() => send("preview")}
-        >
+        <Button size="sm" variant="outline" disabled={!file || busy} onClick={() => send("preview")}>
           Preview
         </Button>
         {preview && !preview.committed && !preview.error && (preview.valid ?? 0) > 0 && (
@@ -78,8 +71,7 @@ export function CsvImportForm({ uploadUrl, backHref }: { uploadUrl: string; back
       )}
       {preview?.committed && (
         <p className="text-success text-sm">
-          Imported {preview.committed.created} rows ({preview.committed.skipped} skipped as
-          duplicates or problems).{" "}
+          Imported {preview.committed.created} rows ({preview.committed.skipped} skipped as duplicates or problems).{" "}
           <a className="underline underline-offset-2" href={backHref}>
             Back to the table
           </a>

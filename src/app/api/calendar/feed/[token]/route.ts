@@ -29,9 +29,7 @@ export const feedReads = {
     const rows = await withUserTx(userId, ({ db }) =>
       db.membership.findMany({
         where: { userId },
-        select: {
-          organization: { select: { id: true, name: true, timezone: true, deletedAt: true } },
-        },
+        select: { organization: { select: { id: true, name: true, timezone: true, deletedAt: true } } },
       }),
     );
     return rows.map((r) => r.organization).filter((o) => o.deletedAt === null);
@@ -62,11 +60,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
 
   // Keyed on a hash of the token: the bucket table never holds the credential.
   const tokenHash = hashIcsToken(token);
-  const rateLimit = await checkRateLimit(
-    rateLimitKey("ics-feed", tokenHash),
-    FEED_RATE_LIMIT,
-    FEED_RATE_WINDOW_SEC,
-  );
+  const rateLimit = await checkRateLimit(rateLimitKey("ics-feed", tokenHash), FEED_RATE_LIMIT, FEED_RATE_WINDOW_SEC);
   if (!rateLimit.allowed) {
     return new NextResponse("Too many requests", { status: 429 });
   }

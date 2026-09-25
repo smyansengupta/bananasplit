@@ -2,13 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { z } from "zod";
 
-import {
-  AttendanceMethod,
-  DatabaseKind,
-  Prisma,
-  RecordSource,
-  SignupSource,
-} from "@/generated/prisma/client";
+import { AttendanceMethod, DatabaseKind, Prisma, RecordSource, SignupSource } from "@/generated/prisma/client";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { can } from "@/lib/auth/permissions";
 import { writeOrgAuditLog } from "@/server/audit";
@@ -43,8 +37,7 @@ export class DatabaseEditError extends Error {
 
 /** Throws unless the viewer may edit rows of a database of `kind`. */
 export async function assertCanEdit(ctx: OrgContext, kind: DatabaseKind): Promise<void> {
-  if (!can(ctx, "databases.write"))
-    throw new ForbiddenError("Only owners and admins can edit databases.");
+  if (!can(ctx, "databases.write")) throw new ForbiddenError("Only owners and admins can edit databases.");
   const def = await ctx.db.databaseDefinition.findFirst({
     where: { organizationId: ctx.organizationId, kind, archivedAt: null },
     orderBy: { sortOrder: "asc" },
@@ -132,10 +125,7 @@ export const manualAttendanceSchema = z
   })
   .refine((v) => v.contactId || v.name || v.email, "Pick a person or enter a name or email.");
 
-export async function addManualAttendance(
-  ctx: OrgContext,
-  input: z.input<typeof manualAttendanceSchema>,
-) {
+export async function addManualAttendance(ctx: OrgContext, input: z.input<typeof manualAttendanceSchema>) {
   await assertCanEdit(ctx, DatabaseKind.ATTENDANCE);
   const data = manualAttendanceSchema.parse(input);
   const org = ctx.organizationId;
@@ -146,10 +136,7 @@ export async function addManualAttendance(
   if (!event) throw new NotFoundError("That session no longer exists.");
   let contactId = data.contactId;
   if (contactId) {
-    const found = await ctx.db.contact.findFirst({
-      where: { id: contactId, organizationId: org },
-      select: { id: true },
-    });
+    const found = await ctx.db.contact.findFirst({ where: { id: contactId, organizationId: org }, select: { id: true } });
     if (!found) throw new NotFoundError("That person no longer exists.");
   } else {
     contactId = (await findOrCreateContact(ctx.db, org, { email: data.email, name: data.name })).id;
@@ -199,10 +186,7 @@ async function loadAttendance(ctx: OrgContext, id: string) {
 export async function setAttendanceSuppressed(ctx: OrgContext, id: string, suppressed: boolean) {
   await assertCanEdit(ctx, DatabaseKind.ATTENDANCE);
   const row = await loadAttendance(ctx, id);
-  await ctx.db.attendance.update({
-    where: { id: row.id },
-    data: { suppressedAt: suppressed ? new Date() : null },
-  });
+  await ctx.db.attendance.update({ where: { id: row.id }, data: { suppressedAt: suppressed ? new Date() : null } });
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
     action: suppressed ? "attendance.suppressed" : "attendance.restored",
@@ -220,9 +204,7 @@ export async function deleteAttendance(ctx: OrgContext, id: string) {
   if (row.source === RecordSource.SUPABASE_SYNC) {
     throw new DatabaseEditError("Check-ins from the website can be suppressed but not deleted.");
   }
-  const deleted = await ctx.db.attendance.deleteMany({
-    where: { id: row.id, organizationId: ctx.organizationId },
-  });
+  const deleted = await ctx.db.attendance.deleteMany({ where: { id: row.id, organizationId: ctx.organizationId } });
   if (deleted.count === 0) throw new DatabaseEditError("That check-in could not be deleted.");
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
@@ -237,10 +219,7 @@ export async function deleteAttendance(ctx: OrgContext, id: string) {
 export async function setAttendanceNameOverride(ctx: OrgContext, id: string, name: string | null) {
   await assertCanEdit(ctx, DatabaseKind.ATTENDANCE);
   const row = await loadAttendance(ctx, id);
-  await ctx.db.attendance.update({
-    where: { id: row.id },
-    data: { nameOverride: cleanName(name) },
-  });
+  await ctx.db.attendance.update({ where: { id: row.id }, data: { nameOverride: cleanName(name) } });
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
     action: "attendance.renamed",
@@ -265,21 +244,11 @@ export async function addManualSignup(ctx: OrgContext, input: z.input<typeof man
   await assertCanEdit(ctx, DatabaseKind.SIGNUPS);
   const data = manualSignupSchema.parse(input);
   const org = ctx.organizationId;
-  const orgRow = await ctx.db.organization.findUnique({
-    where: { id: org },
-    select: { timezone: true },
-  });
+  const orgRow = await ctx.db.organization.findUnique({ where: { id: org }, select: { timezone: true } });
   const at = data.signedUpAt ?? new Date();
   const term = termOf(at, orgRow?.timezone ?? "UTC");
-  const contact = await findOrCreateContact(ctx.db, org, {
-    email: data.email,
-    name: data.name,
-    at,
-  });
-  const dup = await ctx.db.signup.findFirst({
-    where: { organizationId: org, contactId: contact.id, term },
-    select: { id: true },
-  });
+  const contact = await findOrCreateContact(ctx.db, org, { email: data.email, name: data.name, at });
+  const dup = await ctx.db.signup.findFirst({ where: { organizationId: org, contactId: contact.id, term }, select: { id: true } });
   if (dup) throw new DatabaseEditError("This person already has a signup for that term.");
   const row = await ctx.db.signup.create({
     data: {
@@ -295,12 +264,7 @@ export async function addManualSignup(ctx: OrgContext, input: z.input<typeof man
     },
     select: { id: true },
   });
-  await writeOrgAuditLog(ctx.db, {
-    organizationId: org,
-    action: "signup.created",
-    targetType: "Signup",
-    targetId: row.id,
-  });
+  await writeOrgAuditLog(ctx.db, { organizationId: org, action: "signup.created", targetType: "Signup", targetId: row.id });
   await afterDataChange(ctx.db, org, [contact.id]);
   return row;
 }
@@ -334,21 +298,14 @@ export async function setSignupsAddedToList(ctx: OrgContext, ids: string[], adde
     targetId: rows.length === 1 ? rows[0].id : null,
     diff: { count: rows.length },
   });
-  await afterDataChange(
-    ctx.db,
-    ctx.organizationId,
-    rows.map((r) => r.contactId),
-  );
+  await afterDataChange(ctx.db, ctx.organizationId, rows.map((r) => r.contactId));
   return rows.length;
 }
 
 export async function setSignupSuppressed(ctx: OrgContext, id: string, suppressed: boolean) {
   await assertCanEdit(ctx, DatabaseKind.SIGNUPS);
   const row = await loadSignup(ctx, id);
-  await ctx.db.signup.update({
-    where: { id: row.id },
-    data: { suppressedAt: suppressed ? new Date() : null },
-  });
+  await ctx.db.signup.update({ where: { id: row.id }, data: { suppressedAt: suppressed ? new Date() : null } });
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
     action: suppressed ? "signup.suppressed" : "signup.restored",
@@ -364,16 +321,9 @@ export async function deleteSignup(ctx: OrgContext, id: string) {
   if (row.recordSource === RecordSource.SUPABASE_SYNC) {
     throw new DatabaseEditError("Signups from the website can be suppressed but not deleted.");
   }
-  const deleted = await ctx.db.signup.deleteMany({
-    where: { id: row.id, organizationId: ctx.organizationId },
-  });
+  const deleted = await ctx.db.signup.deleteMany({ where: { id: row.id, organizationId: ctx.organizationId } });
   if (deleted.count === 0) throw new DatabaseEditError("That signup could not be deleted.");
-  await writeOrgAuditLog(ctx.db, {
-    organizationId: ctx.organizationId,
-    action: "signup.deleted",
-    targetType: "Signup",
-    targetId: row.id,
-  });
+  await writeOrgAuditLog(ctx.db, { organizationId: ctx.organizationId, action: "signup.deleted", targetType: "Signup", targetId: row.id });
   await afterDataChange(ctx.db, ctx.organizationId, [row.contactId]);
 }
 
@@ -389,25 +339,14 @@ export async function renameContact(ctx: OrgContext, contactId: string, name: st
     data: { displayName: clean },
   });
   if (updated.count === 0) throw new NotFoundError();
-  await writeOrgAuditLog(ctx.db, {
-    organizationId: ctx.organizationId,
-    action: "contact.renamed",
-    targetType: "Contact",
-    targetId: contactId,
-  });
+  await writeOrgAuditLog(ctx.db, { organizationId: ctx.organizationId, action: "contact.renamed", targetType: "Contact", targetId: contactId });
 }
 
 /** Links a contact to a current member (the database checks membership), or unlinks it. */
-export async function linkContactToMember(
-  ctx: OrgContext,
-  contactId: string,
-  userId: string | null,
-) {
+export async function linkContactToMember(ctx: OrgContext, contactId: string, userId: string | null) {
   await assertCanEdit(ctx, DatabaseKind.ATTENDANCE);
   if (userId) {
-    const member = await ctx.db.membership.count({
-      where: { organizationId: ctx.organizationId, userId },
-    });
+    const member = await ctx.db.membership.count({ where: { organizationId: ctx.organizationId, userId } });
     if (member === 0) throw new DatabaseEditError("Pick a current member.");
   }
   const updated = await ctx.db.contact.updateMany({
@@ -434,10 +373,7 @@ export const definitionImportSchema = z.object({
 });
 
 /** Imports (or re-imports) a poll definition from the website's poll JSON. */
-export async function importBallotDefinition(
-  ctx: OrgContext,
-  input: z.input<typeof definitionImportSchema>,
-) {
+export async function importBallotDefinition(ctx: OrgContext, input: z.input<typeof definitionImportSchema>) {
   await assertCanEdit(ctx, DatabaseKind.BALLOTS);
   const data = definitionImportSchema.parse(input);
   let parsed: unknown;
@@ -450,14 +386,10 @@ export async function importBallotDefinition(
   try {
     imported = parseDefinitionImport(parsed);
   } catch (error) {
-    throw new DatabaseEditError(
-      error instanceof Error ? error.message.slice(0, 300) : "Invalid poll file.",
-    );
+    throw new DatabaseEditError(error instanceof Error ? error.message.slice(0, 300) : "Invalid poll file.");
   }
   if (data.linkedEventId) {
-    const event = await ctx.db.event.count({
-      where: { id: data.linkedEventId, organizationId: ctx.organizationId, deletedAt: null },
-    });
+    const event = await ctx.db.event.count({ where: { id: data.linkedEventId, organizationId: ctx.organizationId, deletedAt: null } });
     if (event === 0) throw new DatabaseEditError("That session no longer exists.");
   }
   const out = await upsertBallotDefinition(
@@ -498,17 +430,10 @@ export const definitionPatchSchema = z.object({
   isTest: z.boolean().optional(),
 });
 
-export async function updateBallotDefinition(
-  ctx: OrgContext,
-  id: string,
-  patch: z.input<typeof definitionPatchSchema>,
-) {
+export async function updateBallotDefinition(ctx: OrgContext, id: string, patch: z.input<typeof definitionPatchSchema>) {
   await assertCanEdit(ctx, DatabaseKind.BALLOTS);
   const data = definitionPatchSchema.parse(patch);
-  const def = await ctx.db.ballotDefinition.findFirst({
-    where: { id, organizationId: ctx.organizationId },
-    select: { id: true, slug: true },
-  });
+  const def = await ctx.db.ballotDefinition.findFirst({ where: { id, organizationId: ctx.organizationId }, select: { id: true, slug: true } });
   if (!def) throw new NotFoundError();
   if (data.opensAt && data.closesAt && data.closesAt <= data.opensAt) {
     throw new DatabaseEditError("The poll must close after it opens.");
@@ -533,10 +458,7 @@ export async function setBallotSuppressed(ctx: OrgContext, ballotId: string, sup
     select: { id: true, pollSlug: true },
   });
   if (!ballot) throw new NotFoundError();
-  await ctx.db.ballot.update({
-    where: { id: ballot.id },
-    data: { excludedReason: suppressed ? "suppressed" : null },
-  });
+  await ctx.db.ballot.update({ where: { id: ballot.id }, data: { excludedReason: suppressed ? "suppressed" : null } });
   if (!suppressed) await reevaluateBallots(ctx.db, ctx.organizationId, [ballot.pollSlug]);
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,

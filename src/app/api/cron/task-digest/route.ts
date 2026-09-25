@@ -26,12 +26,9 @@ export async function GET(request: Request) {
   const denied = assertCronAuth(request);
   if (denied) return denied;
 
-  const mode: TriggerMode =
-    new URL(request.url).searchParams.get("mode") === "daily" ? "daily" : "hourly";
+  const mode: TriggerMode = new URL(request.url).searchParams.get("mode") === "daily" ? "daily" : "hourly";
   const now = new Date();
-  const orgIds = await serviceDb.$queryRaw<
-    { id: string }[]
-  >`SELECT id FROM app.active_org_ids() AS id`;
+  const orgIds = await serviceDb.$queryRaw<{ id: string }[]>`SELECT id FROM app.active_org_ids() AS id`;
 
   let digests = 0;
   let weeklyReminders = 0;

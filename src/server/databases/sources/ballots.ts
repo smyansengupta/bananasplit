@@ -4,16 +4,7 @@ import type { DbFilterOp } from "@/lib/databases/href";
 import type { TxClient } from "@/server/db/context";
 
 import { definitionLabels, exclusionLabel, readDefinition } from "../ballot-definitions";
-import {
-  contactName,
-  csvDateTime,
-  dateTimeCell,
-  num,
-  options,
-  personCell,
-  SOURCE_LABELS,
-  text,
-} from "../format";
+import { contactName, csvDateTime, dateTimeCell, num, options, personCell, SOURCE_LABELS, text } from "../format";
 import type { ParsedValue, QuerySpec } from "../query-builder";
 import type { DatabaseSource, MappedRow, ViewContext } from "../types";
 import { contactSelect } from "./shared";
@@ -42,11 +33,7 @@ async function loadDefinitions(db: TxClient, organizationId: string) {
   });
   const byId = new Map<string, { title: string; slug: string; labels: Labels }>();
   for (const d of defs) {
-    byId.set(d.id, {
-      title: d.title,
-      slug: d.slug,
-      labels: definitionLabels(readDefinition(d.definition)),
-    });
+    byId.set(d.id, { title: d.title, slug: d.slug, labels: definitionLabels(readDefinition(d.definition)) });
   }
   return byId;
 }
@@ -82,14 +69,7 @@ const excludedField = {
 export const choiceColumns = defineColumns([
   { key: "poll", label: "Poll", type: "text", filterable: true, sortable: true },
   { key: "question", label: "Question", type: "text", sortable: true, filterable: true },
-  {
-    key: "choice",
-    label: "Choice",
-    type: "text",
-    sortable: true,
-    filterable: true,
-    searchable: true,
-  },
+  { key: "choice", label: "Choice", type: "text", sortable: true, filterable: true, searchable: true },
   { key: "rank", label: "Rank", type: "number", sortable: true, filterable: true, align: "right" },
   { key: "castAt", label: "Cast at", type: "datetime", sortable: true, filterable: true },
   { key: "voter", label: "Voter", type: "person" },
@@ -112,20 +92,8 @@ const choiceSpec: QuerySpec = {
       orderBy: (dir) => [{ ballot: { pollSlug: dir } }],
     },
     pollSlug: { path: ["ballot", "pollSlug"], kind: "string", filterable: true, ops: ["eq", "in"] },
-    question: {
-      path: ["questionKey"],
-      kind: "string",
-      sortable: true,
-      filterable: true,
-      ops: ["eq", "in"],
-    },
-    choice: {
-      path: ["choiceKey"],
-      kind: "string",
-      nullable: true,
-      sortable: true,
-      filterable: true,
-    },
+    question: { path: ["questionKey"], kind: "string", sortable: true, filterable: true, ops: ["eq", "in"] },
+    choice: { path: ["choiceKey"], kind: "string", nullable: true, sortable: true, filterable: true },
     rank: { path: ["rank"], kind: "int", nullable: true, sortable: true, filterable: true },
     castAt: { path: ["ballot", "castAt"], kind: "datetime", sortable: true, filterable: true },
     freeText: { path: ["isFreeText"], kind: "boolean", filterable: true },
@@ -186,11 +154,7 @@ function mapChoice(
   const def = c.ballotDefinitionId ? defs.get(c.ballotDefinitionId) : undefined;
   const poll = def?.title ?? c.ballot.pollSlug;
   const question = def ? def.labels.question(c.questionKey) : c.questionKey;
-  const choice = c.isFreeText
-    ? (c.choiceText ?? "")
-    : def
-      ? def.labels.choice(c.questionKey, c.choiceKey)
-      : (c.choiceKey ?? "");
+  const choice = c.isFreeText ? (c.choiceText ?? "") : def ? def.labels.choice(c.questionKey, c.choiceKey) : (c.choiceKey ?? "");
   const voter = c.ballot.voter ? contactName(c.ballot.voter) : "Anonymous";
   return {
     id: c.id,
@@ -199,19 +163,13 @@ function mapChoice(
     cells: {
       poll: text(poll),
       question: text(question, { title: c.questionKey }),
-      choice: c.isFreeText
-        ? { t: "text", v: choice, muted: false, title: "Free text" }
-        : text(choice, { title: c.choiceKey ?? undefined }),
+      choice: c.isFreeText ? { t: "text", v: choice, muted: false, title: "Free text" } : text(choice, { title: c.choiceKey ?? undefined }),
       rank: num(c.rank),
       castAt: dateTimeCell(c.ballot.castAt, ctx.timezone),
-      voter: c.ballot.voter
-        ? personCell(c.ballot.voter)
-        : { t: "text", v: "Anonymous", muted: true },
+      voter: c.ballot.voter ? personCell(c.ballot.voter) : { t: "text", v: "Anonymous", muted: true },
       freeText: { t: "bool", v: c.isFreeText },
       ballot: text(c.ballotId.slice(-8), { muted: true, title: c.ballotId }),
-      excluded: c.ballot.excludedReason
-        ? { t: "badge", v: exclusionLabel(c.ballot.excludedReason), tone: "warning" }
-        : null,
+      excluded: c.ballot.excludedReason ? { t: "badge", v: exclusionLabel(c.ballot.excludedReason), tone: "warning" } : null,
     },
     csv: {
       poll,
@@ -240,9 +198,7 @@ export const ballotChoicesSource: DatabaseSource = {
       orderBy: args.orderBy as Prisma.BallotChoiceOrderByWithRelationInput[],
       skip: args.skip,
       take: args.take,
-      ...(args.cursor
-        ? { cursor: args.cursor as Prisma.BallotChoiceWhereUniqueInput, skip: 1 }
-        : {}),
+      ...(args.cursor ? { cursor: args.cursor as Prisma.BallotChoiceWhereUniqueInput, skip: 1 } : {}),
       select: choiceSelect,
     });
     return rows.map((r) => mapChoice(r, ctx, defs));
@@ -258,14 +214,7 @@ export const ballotColumns = defineColumns([
   { key: "castAt", label: "Cast at", type: "datetime", sortable: true, filterable: true },
   { key: "summary", label: "Choices", type: "longtext" },
   { key: "voter", label: "Voter", type: "person" },
-  {
-    key: "source",
-    label: "Source",
-    type: "select",
-    filterable: true,
-    hiddenByDefault: true,
-    options: options(SOURCE_LABELS),
-  },
+  { key: "source", label: "Source", type: "select", filterable: true, hiddenByDefault: true, options: options(SOURCE_LABELS) },
   { key: "excluded", label: "Excluded", type: "text", filterable: true, hiddenByDefault: true },
 ]);
 
@@ -284,24 +233,13 @@ const ballotSpec: QuerySpec = {
     },
     pollSlug: { path: ["pollSlug"], kind: "string", filterable: true, ops: ["eq", "in"] },
     castAt: { path: ["castAt"], kind: "datetime", sortable: true, filterable: true },
-    source: {
-      path: ["source"],
-      kind: "enum",
-      enumValues: Object.values(RecordSource),
-      filterable: true,
-    },
+    source: { path: ["source"], kind: "enum", enumValues: Object.values(RecordSource), filterable: true },
     excluded: {
       path: ["excludedReason"],
       ...excludedField,
       where: (_op, v) => ({ excludedReason: v === true ? { not: null } : null }),
     },
-    excludedReason: {
-      path: ["excludedReason"],
-      kind: "string",
-      nullable: true,
-      filterable: true,
-      ops: ["eq", "in", "isnull"],
-    },
+    excludedReason: { path: ["excludedReason"], kind: "string", nullable: true, filterable: true, ops: ["eq", "in", "isnull"] },
   },
   aliases: { ballotDefinitionId: "poll", definition: "poll", date: "castAt", slug: "pollSlug" },
   searchExtra: (q) => [{ pollSlug: { contains: q, mode: "insensitive" } }],
@@ -360,9 +298,7 @@ function mapBallot(
       summary: text(summary),
       voter: b.voter ? personCell(b.voter) : { t: "text", v: "Anonymous", muted: true },
       source: { t: "badge", v: SOURCE_LABELS[b.source] ?? b.source, tone: "secondary" },
-      excluded: b.excludedReason
-        ? { t: "badge", v: exclusionLabel(b.excludedReason), tone: "warning" }
-        : null,
+      excluded: b.excludedReason ? { t: "badge", v: exclusionLabel(b.excludedReason), tone: "warning" } : null,
     },
     csv: {
       poll: def?.title ?? b.pollSlug,

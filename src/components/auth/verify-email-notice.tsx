@@ -24,8 +24,8 @@ export function VerifyEmailNotice({ email, action }: { email: string; action: st
         <div className="space-y-1">
           <p className="text-sm font-medium">Check your email</p>
           <p className="text-muted-foreground text-sm">
-            We sent a verification link to <span className="font-medium">{email}</span>. Verify your
-            address to {action}.
+            We sent a verification link to <span className="font-medium">{email}</span>. Verify
+            your address to {action}.
           </p>
         </div>
       </div>
@@ -33,9 +33,7 @@ export function VerifyEmailNotice({ email, action }: { email: string; action: st
         <Button type="submit" variant="outline" size="sm" disabled={isPending}>
           {isPending ? "Sending…" : "Resend link"}
         </Button>
-        {state.sent && (
-          <span className="text-muted-foreground text-xs">A new link is on its way.</span>
-        )}
+        {state.sent && <span className="text-muted-foreground text-xs">A new link is on its way.</span>}
         {state.error && <span className="text-destructive text-xs">{state.error}</span>}
       </form>
     </div>

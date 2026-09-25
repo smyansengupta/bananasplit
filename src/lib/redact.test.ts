@@ -18,9 +18,9 @@ describe("redactText", () => {
     expect(redactText("GET https://api.example.com/x?code=secret&state=1 failed")).toBe(
       "GET https://api.example.com/x?[redacted] failed",
     );
-    expect(
-      redactText("/invite/AbCdEf123_token and /verify-email/zzz and /api/calendar/feed/tok"),
-    ).toBe("/invite/[redacted] and /verify-email/[redacted] and /api/calendar/feed/[redacted]");
+    expect(redactText("/invite/AbCdEf123_token and /verify-email/zzz and /api/calendar/feed/tok")).toBe(
+      "/invite/[redacted] and /verify-email/[redacted] and /api/calendar/feed/[redacted]",
+    );
     expect(redactText("POST https://api.netlify.com/build_hooks/abc123def")).toContain(
       "build_hooks/[redacted]",
     );

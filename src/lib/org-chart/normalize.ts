@@ -172,9 +172,7 @@ export function normalizeOrgChart(raw: OrgChartParse): NormalizedChart {
     const nameHit = unique(items.filter((i) => i.personName && foldCase(i.personName) === folded));
     if (nameHit) return nameHit.index;
     if (!/\s/.test(folded)) {
-      const firstHit = unique(
-        items.filter((i) => i.personName && firstToken(i.personName) === folded),
-      );
+      const firstHit = unique(items.filter((i) => i.personName && firstToken(i.personName) === folded));
       if (firstHit) return firstHit.index;
     }
     // Last resort: a unique title containing the reference as whole words
@@ -183,13 +181,7 @@ export function normalizeOrgChart(raw: OrgChartParse): NormalizedChart {
     if (words.length >= 3) {
       const pattern = new RegExp(`(^|\\s)${words.replace(/\s+/g, "\\s+")}(\\s|$)`);
       const partial = unique(
-        items.filter((i) =>
-          pattern.test(
-            foldCase(i.title)
-              .replace(/[^a-z0-9]+/g, " ")
-              .trim(),
-          ),
-        ),
+        items.filter((i) => pattern.test(foldCase(i.title).replace(/[^a-z0-9]+/g, " ").trim())),
       );
       if (partial) return partial.index;
     }
@@ -262,11 +254,9 @@ export function normalizeOrgChart(raw: OrgChartParse): NormalizedChart {
   }
 
   // 5. Advisors report to someone and manage nobody.
-  for (let changed = true; changed;) {
+  for (let changed = true; changed; ) {
     changed = false;
-    const hasReports = new Set(
-      items.filter((i) => i.reportsTo !== null).map((i) => i.reportsTo as number),
-    );
+    const hasReports = new Set(items.filter((i) => i.reportsTo !== null).map((i) => i.reportsTo as number));
     for (const item of items) {
       if (!item.isAdvisor) continue;
       if (item.reportsTo === null) {
@@ -342,9 +332,7 @@ function findCycle(items: readonly Working[]): number[] | null {
 }
 
 /** Open items: cleaned, clamped, deduplicated, at most LIMITS.openItems. */
-export function normalizeOpenItems(
-  items: readonly { who: string; question: string }[],
-): OpenItem[] {
+export function normalizeOpenItems(items: readonly { who: string; question: string }[]): OpenItem[] {
   const seen = new Set<string>();
   const out: OpenItem[] = [];
   for (const item of items) {

@@ -56,10 +56,7 @@ export function effectiveParents(positions: readonly LayoutInput[]): Map<string,
   const byId = new Map(positions.map((p) => [p.id, p]));
   const parent = new Map<string, string | null>();
   for (const p of positions) {
-    parent.set(
-      p.id,
-      p.reportsToId && byId.has(p.reportsToId) && p.reportsToId !== p.id ? p.reportsToId : null,
-    );
+    parent.set(p.id, p.reportsToId && byId.has(p.reportsToId) && p.reportsToId !== p.id ? p.reportsToId : null);
   }
   // Break loops: walk up from each node; a revisit makes the first node on the loop a root.
   for (const p of positions) {
@@ -130,8 +127,7 @@ export function layoutOrgChart(positions: readonly LayoutInput[]): ChartLayout {
     // Symmetric (d3 calls it with either order): room for the advisors of whichever is on the left.
     .separation(
       (a, b) =>
-        (a.parent === b.parent ? 1 : 1.15) +
-        Math.max(advisorCount(a.data.id), advisorCount(b.data.id)),
+        (a.parent === b.parent ? 1 : 1.15) + Math.max(advisorCount(a.data.id), advisorCount(b.data.id)),
     )(root);
 
   const nodes: LaidOutNode[] = [];
@@ -142,21 +138,11 @@ export function layoutOrgChart(positions: readonly LayoutInput[]): ChartLayout {
     const y = (n.depth - 1) * (NODE_HEIGHT + V_GAP);
     nodes.push({ id: n.data.id, x, y, kind: "main" });
     if (n.parent && n.parent.data.id !== ROOT) {
-      edges.push({
-        id: `r:${n.parent.data.id}:${n.data.id}`,
-        source: n.parent.data.id,
-        target: n.data.id,
-        kind: "reports",
-      });
+      edges.push({ id: `r:${n.parent.data.id}:${n.data.id}`, source: n.parent.data.id, target: n.data.id, kind: "reports" });
     }
     (advisorsOf.get(n.data.id) ?? []).forEach((advisor, i) => {
       nodes.push({ id: advisor.id, x: x + (i + 1) * unit, y, kind: "advisor" });
-      edges.push({
-        id: `a:${n.data.id}:${advisor.id}`,
-        source: n.data.id,
-        target: advisor.id,
-        kind: "advisor",
-      });
+      edges.push({ id: `a:${n.data.id}:${advisor.id}`, source: n.data.id, target: advisor.id, kind: "advisor" });
     });
   });
 

@@ -25,19 +25,13 @@ describe("parseCsv", () => {
 
 describe("parseLocalDateTime", () => {
   it("reads a bare date or time as the org's local time", () => {
-    expect(parseLocalDateTime("2026-09-10 18:02", TZ)?.toISOString()).toBe(
-      "2026-09-10T22:02:00.000Z",
-    );
-    expect(parseLocalDateTime("2026-09-10T18:02", TZ)?.toISOString()).toBe(
-      "2026-09-10T22:02:00.000Z",
-    );
+    expect(parseLocalDateTime("2026-09-10 18:02", TZ)?.toISOString()).toBe("2026-09-10T22:02:00.000Z");
+    expect(parseLocalDateTime("2026-09-10T18:02", TZ)?.toISOString()).toBe("2026-09-10T22:02:00.000Z");
     expect(parseLocalDateTime("2026-09-10", TZ)?.toISOString()).toBe("2026-09-10T04:00:00.000Z");
   });
 
   it("honours an explicit offset", () => {
-    expect(parseLocalDateTime("2026-09-10T18:02:00Z", TZ)?.toISOString()).toBe(
-      "2026-09-10T18:02:00.000Z",
-    );
+    expect(parseLocalDateTime("2026-09-10T18:02:00Z", TZ)?.toISOString()).toBe("2026-09-10T18:02:00.000Z");
   });
 
   it("refuses anything else", () => {
@@ -73,8 +67,7 @@ describe("previewSignups", () => {
   });
 
   it("reports the bad rows by line and keeps the good ones", () => {
-    const csv =
-      "name,email,signed_up_at\nAda,ada@husky.example.edu,2026-09-05\n,nobody@x.edu,2026-09-05\nBo,not-an-email,2026-09-05\nCy,cy@x.edu,whenever\n";
+    const csv = "name,email,signed_up_at\nAda,ada@husky.example.edu,2026-09-05\n,nobody@x.edu,2026-09-05\nBo,not-an-email,2026-09-05\nCy,cy@x.edu,whenever\n";
     const preview = previewSignups(TZ, csv, now);
     expect(preview.rows.map((r) => r.name)).toEqual(["Ada"]);
     expect(preview.issues.map((i) => i.line)).toEqual([3, 4, 5]);
@@ -82,12 +75,8 @@ describe("previewSignups", () => {
   });
 
   it("accepts an explicit term and refuses a malformed one", () => {
-    expect(previewSignups(TZ, "name,term\nAda,spring-2027\n", now).rows[0].term).toBe(
-      "spring-2027",
-    );
-    expect(previewSignups(TZ, "name,term\nAda,summer\n", now).issues[0].message).toMatch(
-      /fall-YYYY/,
-    );
+    expect(previewSignups(TZ, "name,term\nAda,spring-2027\n", now).rows[0].term).toBe("spring-2027");
+    expect(previewSignups(TZ, "name,term\nAda,summer\n", now).issues[0].message).toMatch(/fall-YYYY/);
   });
 
   it("refuses a file above the row cap", () => {

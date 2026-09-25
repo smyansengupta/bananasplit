@@ -17,10 +17,7 @@ export function feedEventsWhere(userId: string): Prisma.EventWhereInput {
 }
 
 /** The same filter inside one org (the feed reads org by org on the service path). */
-export function feedEventsWhereInOrg(
-  userId: string,
-  organizationId: string,
-): Prisma.EventWhereInput {
+export function feedEventsWhereInOrg(userId: string, organizationId: string): Prisma.EventWhereInput {
   return { ...feedEventsWhere(userId), organizationId, mergedIntoId: null };
 }
 

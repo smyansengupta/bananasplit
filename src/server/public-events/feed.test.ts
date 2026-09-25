@@ -63,41 +63,15 @@ function row(partial: Partial<Row> & Pick<Row, "id" | "title">): Row {
 }
 
 const table: Row[] = [
-  row({
-    id: "e_pub_2",
-    title: "Workshop 2",
-    rsvpUrl: "https://lu.ma/w2",
-    startsAt: new Date(NOW.getTime() + 3 * DAY),
-    endsAt: new Date(NOW.getTime() + 3 * DAY + HOUR),
-  }),
+  row({ id: "e_pub_2", title: "Workshop 2", rsvpUrl: "https://lu.ma/w2", startsAt: new Date(NOW.getTime() + 3 * DAY), endsAt: new Date(NOW.getTime() + 3 * DAY + HOUR) }),
   row({ id: "e_pub_1", title: "Workshop 1", description: "Bring a laptop.", featured: true }),
   row({ id: "e_pub_1b", title: "Same start, later id" }),
-  row({
-    id: "e_internal",
-    title: "Board sync (INTERNAL)",
-    visibility: "INTERNAL",
-    kind: "BOARD_MEETING",
-  }),
+  row({ id: "e_internal", title: "Board sync (INTERNAL)", visibility: "INTERNAL", kind: "BOARD_MEETING" }),
   row({ id: "e_deleted", title: "Deleted workshop", deletedAt: new Date(NOW.getTime() - DAY) }),
   row({ id: "e_merged", title: "Merged duplicate", mergedIntoId: "e_pub_1" }),
-  row({
-    id: "e_old",
-    title: "Last week",
-    startsAt: new Date(NOW.getTime() - 8 * DAY),
-    endsAt: new Date(NOW.getTime() - 8 * DAY + HOUR),
-  }),
-  row({
-    id: "e_yesterday",
-    title: "Ended 20 hours ago",
-    startsAt: new Date(NOW.getTime() - 21 * HOUR),
-    endsAt: new Date(NOW.getTime() - 20 * HOUR),
-  }),
-  row({
-    id: "e_far",
-    title: "Too far out",
-    startsAt: new Date(NOW.getTime() + 500 * DAY),
-    endsAt: new Date(NOW.getTime() + 500 * DAY + HOUR),
-  }),
+  row({ id: "e_old", title: "Last week", startsAt: new Date(NOW.getTime() - 8 * DAY), endsAt: new Date(NOW.getTime() - 8 * DAY + HOUR) }),
+  row({ id: "e_yesterday", title: "Ended 20 hours ago", startsAt: new Date(NOW.getTime() - 21 * HOUR), endsAt: new Date(NOW.getTime() - 20 * HOUR) }),
+  row({ id: "e_far", title: "Too far out", startsAt: new Date(NOW.getTime() + 500 * DAY), endsAt: new Date(NOW.getTime() + 500 * DAY + HOUR) }),
   row({ id: "e_other_org", title: "Other org public", organizationId: "org_other" }),
   row({
     id: "e_hack",
@@ -152,32 +126,16 @@ vi.mock("@/server/db/context", () => ({
       },
       organization: {
         findUnique: async ({ where }: { where: { id: string } }) =>
-          where.id === orgId
-            ? { name: "Claude Builders Club", timezone: "America/New_York", deletedAt: null }
-            : null,
+          where.id === orgId ? { name: "Claude Builders Club", timezone: "America/New_York", deletedAt: null } : null,
       },
       event: {
-        findMany: async ({
-          where,
-          take,
-          select,
-        }: {
-          where: Where;
-          take: number;
-          select: Record<string, boolean>;
-        }) => {
+        findMany: async ({ where, take, select }: { where: Where; take: number; select: Record<string, boolean> }) => {
           // RLS: the service role only sees the GUC org's rows.
           const visible = table.filter((r) => r.organizationId === orgId && matches(r, where));
-          visible.sort(
-            (a, b) => a.startsAt.getTime() - b.startsAt.getTime() || (a.id < b.id ? -1 : 1),
+          visible.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime() || (a.id < b.id ? -1 : 1));
+          return visible.slice(0, take).map((r) =>
+            Object.fromEntries(Object.keys(select).map((k) => [k, (r as unknown as Record<string, unknown>)[k]])),
           );
-          return visible
-            .slice(0, take)
-            .map((r) =>
-              Object.fromEntries(
-                Object.keys(select).map((k) => [k, (r as unknown as Record<string, unknown>)[k]]),
-              ),
-            );
         },
       },
     };
@@ -201,24 +159,15 @@ const { matchesIfNoneMatch, PUBLIC_CACHE_CONTROL } = await import("./http");
 
 function get(path: string, slug: string, headers: Record<string, string> = {}, method = "GET") {
   const route = path.endsWith(".ics") ? icsRoute : jsonRoute;
-  const request = new Request(`http://localhost:3407/api/public/${slug}/${path}`, {
-    headers,
-    method,
-  });
+  const request = new Request(`http://localhost:3407/api/public/${slug}/${path}`, { headers, method });
   const handler = method === "HEAD" ? route.HEAD : route.GET;
   return handler(request, { params: Promise.resolve({ orgSlug: slug }) });
 }
 
 beforeEach(() => {
   state.slugs = new Map([
-    [
-      "claude-builders-club",
-      { organizationId: "org_cbc", canonicalSlug: "claude-builders-club", isRetired: false },
-    ],
-    [
-      "cbc-old",
-      { organizationId: "org_cbc", canonicalSlug: "claude-builders-club", isRetired: true },
-    ],
+    ["claude-builders-club", { organizationId: "org_cbc", canonicalSlug: "claude-builders-club", isRetired: false }],
+    ["cbc-old", { organizationId: "org_cbc", canonicalSlug: "claude-builders-club", isRetired: true }],
     ["quiet-club", { organizationId: "org_other", canonicalSlug: "quiet-club", isRetired: false }],
   ]);
   state.enabled = new Set(["org_cbc"]);
@@ -237,15 +186,7 @@ describe("GET /api/public/[orgSlug]/events", () => {
       "Hackathon",
     ]);
     const body = JSON.stringify(events);
-    for (const leaked of [
-      "INTERNAL",
-      "Board sync",
-      "Deleted",
-      "Merged",
-      "Last week",
-      "Too far",
-      "Other org",
-    ]) {
+    for (const leaked of ["INTERNAL", "Board sync", "Deleted", "Merged", "Last week", "Too far", "Other org"]) {
       expect(body).not.toContain(leaked);
     }
     // Field allowlist: nothing about people or meeting links.
@@ -297,9 +238,7 @@ describe("GET /api/public/[orgSlug]/events", () => {
 
   it("sets CDN caching, CORS and an ETag, and answers a matching If-None-Match with 304", async () => {
     const res = await get("events", "claude-builders-club");
-    expect(res.headers.get("cache-control")).toBe(
-      "public, s-maxage=300, stale-while-revalidate=86400",
-    );
+    expect(res.headers.get("cache-control")).toBe("public, s-maxage=300, stale-while-revalidate=86400");
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(res.headers.get("content-type")).toBe("application/json; charset=utf-8");
     const etag = res.headers.get("etag")!;
@@ -340,9 +279,7 @@ describe("GET /api/public/[orgSlug]/events", () => {
   it("redirects a retired slug (307, no-store) to the canonical feed", async () => {
     const res = await get("events", "cbc-old");
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(
-      "http://localhost:3407/api/public/claude-builders-club/events",
-    );
+    expect(res.headers.get("location")).toBe("http://localhost:3407/api/public/claude-builders-club/events");
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 

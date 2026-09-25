@@ -37,10 +37,7 @@ const importTx = withOrgAction(async (ctx, mode: "dry-run" | "apply"): Promise<R
 });
 
 /** "Import existing events": the dry run, then applying it. */
-export async function importGoogleEvents(
-  organizationId: string,
-  mode: "dry-run" | "apply",
-): Promise<Result> {
+export async function importGoogleEvents(organizationId: string, mode: "dry-run" | "apply"): Promise<Result> {
   try {
     return await importTx(organizationId, mode);
   } catch (error) {

@@ -26,10 +26,7 @@ export function syncKey(integrationId: string): string {
 }
 
 /** The backstop key and time for the hour after `now`. */
-export function backstop(
-  integrationId: string,
-  now: Date = new Date(),
-): { key: string; runAt: Date } {
+export function backstop(integrationId: string, now: Date = new Date()): { key: string; runAt: Date } {
   const runAt = new Date(now.getTime());
   runAt.setUTCMinutes(0, 0, 0);
   runAt.setUTCHours(runAt.getUTCHours() + 1);
@@ -62,19 +59,12 @@ const recentKicks = new Map<string, number>();
  * touches sync metadata. Throttled per org and process to one kick every
  * two minutes. Call it from after(), never before the page renders.
  */
-export async function syncIfStale(
-  organizationId: string,
-  now: Date = new Date(),
-): Promise<boolean> {
+export async function syncIfStale(organizationId: string, now: Date = new Date()): Promise<boolean> {
   const last = recentKicks.get(organizationId);
   if (last && now.getTime() - last < 2 * 60 * 1000) return false;
   const enqueued = await withSystemOrgTx(organizationId, async ({ db }) => {
     const integration = await db.orgIntegration.findFirst({
-      where: {
-        organizationId,
-        provider: IntegrationProvider.SUPABASE_SOURCE,
-        status: { in: ["CONNECTED", "ERROR"] },
-      },
+      where: { organizationId, provider: IntegrationProvider.SUPABASE_SOURCE, status: { in: ["CONNECTED", "ERROR"] } },
       select: { id: true },
     });
     if (!integration) return false;
@@ -82,15 +72,9 @@ export async function syncIfStale(
       where: { organizationId, integrationId: integration.id, stream: "checkins" },
       select: { lastSyncedAt: true },
     });
-    if (newest?.lastSyncedAt && now.getTime() - newest.lastSyncedAt.getTime() < STALE_AFTER_MS)
-      return false;
+    if (newest?.lastSyncedAt && now.getTime() - newest.lastSyncedAt.getTime() < STALE_AFTER_MS) return false;
     const pending = await db.job.count({
-      where: {
-        organizationId,
-        kind: "source-sync",
-        status: { in: ["PENDING", "RUNNING"] },
-        runAt: { lte: now },
-      },
+      where: { organizationId, kind: "source-sync", status: { in: ["PENDING", "RUNNING"] }, runAt: { lte: now } },
     });
     if (pending > 0) return false;
     await requestSync(db, organizationId, integration.id, { noKick: true });

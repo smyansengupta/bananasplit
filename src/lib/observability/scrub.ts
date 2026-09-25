@@ -18,8 +18,7 @@ import { redactText, redactValue } from "@/lib/redact";
 
 type Loose = Record<string, unknown>;
 
-const DROP_HEADERS =
-  /^(authorization|cookie|set-cookie|x-vercel-protection-bypass|proxy-authorization)$/i;
+const DROP_HEADERS = /^(authorization|cookie|set-cookie|x-vercel-protection-bypass|proxy-authorization)$/i;
 
 export function scrubSentryEvent<T>(event: T): T {
   if (!event || typeof event !== "object") return event;
@@ -65,9 +64,7 @@ function scrubArg(arg: unknown): unknown {
 }
 
 /** Whether the console scrubber should run in this process. */
-export function consoleScrubberEnabled(
-  env: Record<string, string | undefined> = process.env,
-): boolean {
+export function consoleScrubberEnabled(env: Record<string, string | undefined> = process.env): boolean {
   if (env.LOG_SCRUB === "off") return false;
   if (env.LOG_SCRUB === "on") return true;
   return env.NODE_ENV === "production";

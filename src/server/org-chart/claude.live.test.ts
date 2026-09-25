@@ -24,30 +24,29 @@ import { DEFAULT_MODEL, parseWithClaude } from "./claude";
 const live = process.env.RUN_LIVE_CLAUDE === "1" && Boolean(process.env.ANTHROPIC_API_KEY);
 
 describe.skipIf(!live)("live Claude parse of the CBC fixture", () => {
-  it("returns the CBC structure", async () => {
-    const text = readFileSync(
-      path.resolve("src/lib/org-chart/__fixtures__/cbc-fall-2026.md"),
-      "utf8",
-    );
-    const started = Date.now();
-    const result = await parseWithClaude({
-      config: {
-        apiKey: process.env.ANTHROPIC_API_KEY as string,
-        model: process.env.CLAUDE_MODEL ?? DEFAULT_MODEL,
-        fallbacks: true,
-      },
-      source: { type: "text", text, format: "markdown" },
-      filename: "cbc-fall-2026.md",
-      timeoutMs: 200_000,
-    });
-    console.info(`[live] ${result.model} in ${Date.now() - started} ms`, result.usage);
-    const chart = normalizeOrgChart(result.parse);
-    expect(chart.positions).toHaveLength(9);
-    expect(chart.positions.filter((p) => p.reportsTo === null && !p.isAdvisor)).toHaveLength(1);
-    expect(chart.positions.filter((p) => p.isAdvisor).map((p) => p.personName)).toEqual([
-      "Mehr Anand",
-    ]);
-    expect(chart.positions.filter((p) => p.isOpen)).toHaveLength(1);
-    expect(chart.warnings.filter((w) => w.code === "cycle" || w.code === "dangling")).toEqual([]);
-  }, 240_000);
+  it(
+    "returns the CBC structure",
+    async () => {
+      const text = readFileSync(path.resolve("src/lib/org-chart/__fixtures__/cbc-fall-2026.md"), "utf8");
+      const started = Date.now();
+      const result = await parseWithClaude({
+        config: {
+          apiKey: process.env.ANTHROPIC_API_KEY as string,
+          model: process.env.CLAUDE_MODEL ?? DEFAULT_MODEL,
+          fallbacks: true,
+        },
+        source: { type: "text", text, format: "markdown" },
+        filename: "cbc-fall-2026.md",
+        timeoutMs: 200_000,
+      });
+      console.info(`[live] ${result.model} in ${Date.now() - started} ms`, result.usage);
+      const chart = normalizeOrgChart(result.parse);
+      expect(chart.positions).toHaveLength(9);
+      expect(chart.positions.filter((p) => p.reportsTo === null && !p.isAdvisor)).toHaveLength(1);
+      expect(chart.positions.filter((p) => p.isAdvisor).map((p) => p.personName)).toEqual(["Mehr Anand"]);
+      expect(chart.positions.filter((p) => p.isOpen)).toHaveLength(1);
+      expect(chart.warnings.filter((w) => w.code === "cycle" || w.code === "dangling")).toEqual([]);
+    },
+    240_000,
+  );
 });

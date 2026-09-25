@@ -18,9 +18,7 @@ import { findDuplicatePairs } from "@/server/events/match";
  * sessions on the same local day, within 90 minutes, with matching titles.
  * Merging keeps the chosen session and moves everything from the other.
  */
-export default async function DuplicatesPage({
-  params,
-}: PageProps<"/app/[orgSlug]/databases/[dbKey]/duplicates">) {
+export default async function DuplicatesPage({ params }: PageProps<"/app/[orgSlug]/databases/[dbKey]/duplicates">) {
   const { orgSlug, dbKey } = await params;
   const { organization } = await getOrgContextBySlug(orgSlug);
   const tz = organization.timezone;
@@ -60,10 +58,7 @@ export default async function DuplicatesPage({
 
   const Row = ({ e }: { e: (typeof data.events)[number] }) => (
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      <Link
-        className="font-medium underline-offset-4 hover:underline"
-        href={`/app/${orgSlug}/databases/${dbKey}?row=${e.id}`}
-      >
+      <Link className="font-medium underline-offset-4 hover:underline" href={`/app/${orgSlug}/databases/${dbKey}?row=${e.id}`}>
         {e.title}
       </Link>
       <span className="text-muted-foreground">{fmtDateTime(e.startsAt, tz)}</span>
@@ -86,9 +81,9 @@ export default async function DuplicatesPage({
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Possible duplicates</h1>
         <p className="text-muted-foreground text-sm">
-          A session that exists twice (for example once from the website and once on the calendar)
-          splits its check-ins. Merge keeps one and moves check-ins, RSVPs, notes, expenses and the
-          website link to it. It cannot be undone; the audit log records what moved.
+          A session that exists twice (for example once from the website and once on the calendar) splits its
+          check-ins. Merge keeps one and moves check-ins, RSVPs, notes, expenses and the website link to it. It
+          cannot be undone; the audit log records what moved.
         </p>
       </div>
 
@@ -99,9 +94,7 @@ export default async function DuplicatesPage({
         ) : (
           flagged.map((e) => {
             const nearby = data.events.filter(
-              (o) =>
-                o.id !== e.id &&
-                Math.abs(o.startsAt.getTime() - e.startsAt.getTime()) <= 3 * 86400000,
+              (o) => o.id !== e.id && Math.abs(o.startsAt.getTime() - e.startsAt.getTime()) <= 3 * 86400000,
             );
             return (
               <div key={e.id} className="space-y-2 rounded-lg border p-4">
@@ -141,9 +134,7 @@ export default async function DuplicatesPage({
             const drop = keepA ? eb : ea;
             return (
               <div key={`${a}-${b}`} className="space-y-2 rounded-lg border p-4">
-                <p className="text-muted-foreground text-xs">
-                  Title similarity {Math.round(score * 100)}%
-                </p>
+                <p className="text-muted-foreground text-xs">Title similarity {Math.round(score * 100)}%</p>
                 <Row e={keep} />
                 <Row e={drop} />
                 <MergeSessionPicker

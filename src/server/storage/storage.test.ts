@@ -111,9 +111,7 @@ describe("storage kinds and keys", () => {
 
   it("uses the local driver without tokens, and refuses to on Vercel", () => {
     expect(driverFor("private", {}).name).toBe("local");
-    expect(driverFor("public", { BLOB_PUBLIC_READ_WRITE_TOKEN: "vercel_blob_rw_x_y" }).name).toBe(
-      "vercel-blob",
-    );
+    expect(driverFor("public", { BLOB_PUBLIC_READ_WRITE_TOKEN: "vercel_blob_rw_x_y" }).name).toBe("vercel-blob");
     expect(() => driverFor("private", { VERCEL: "1" })).toThrow(StorageConfigError);
   });
 });
@@ -151,9 +149,7 @@ describe("local driver", () => {
   });
 });
 
-function multipart(
-  parts: { name: string; filename?: string; type?: string; body: Buffer | string }[],
-) {
+function multipart(parts: { name: string; filename?: string; type?: string; body: Buffer | string }[]) {
   const boundary = "----cbc-test-boundary";
   const chunks: Buffer[] = [];
   for (const part of parts) {
@@ -175,11 +171,7 @@ describe("readUpload", () => {
       { name: "file", filename: "r.pdf", type: "application/pdf", body: "%PDF-1.7 hello" },
     ]);
     const upload = await readUpload(
-      new Request("http://x/upload", {
-        method: "POST",
-        body: mp.body,
-        headers: { "content-type": mp.type },
-      }),
+      new Request("http://x/upload", { method: "POST", body: mp.body, headers: { "content-type": mp.type } }),
     );
     expect(upload.fields).toEqual({ transactionId: "tx_1" });
     expect(upload.file.filename).toBe("r.pdf");
@@ -194,10 +186,7 @@ describe("readUpload", () => {
     const request = new Request("http://x/upload", {
       method: "POST",
       body,
-      headers: {
-        "content-type": "multipart/form-data; boundary=x",
-        "content-length": String(5 * 1024 * 1024),
-      },
+      headers: { "content-type": "multipart/form-data; boundary=x", "content-length": String(5 * 1024 * 1024) },
       duplex: "half",
     } as RequestInit);
     const error = await readUpload(request).catch((e: unknown) => e);
@@ -219,18 +208,10 @@ describe("readUpload", () => {
   });
 
   it("refuses a non-multipart body and a missing file", async () => {
-    const json = new Request("http://x", {
-      method: "POST",
-      body: "{}",
-      headers: { "content-type": "application/json" },
-    });
+    const json = new Request("http://x", { method: "POST", body: "{}", headers: { "content-type": "application/json" } });
     expect(((await readUpload(json).catch((e) => e)) as UploadError).status).toBe(415);
     const mp = multipart([{ name: "other", body: "x" }]);
-    const empty = new Request("http://x", {
-      method: "POST",
-      body: mp.body,
-      headers: { "content-type": mp.type },
-    });
+    const empty = new Request("http://x", { method: "POST", body: mp.body, headers: { "content-type": mp.type } });
     expect(((await readUpload(empty).catch((e) => e)) as UploadError).status).toBe(400);
   });
 });

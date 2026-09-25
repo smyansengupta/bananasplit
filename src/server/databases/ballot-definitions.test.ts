@@ -81,14 +81,7 @@ describe("importing the website's poll file", () => {
     const own = parseDefinitionImport({
       slug: "board-2027",
       title: "Board election",
-      questions: [
-        {
-          key: "president",
-          label: "President",
-          type: "single",
-          options: [{ key: "a", label: "A" }],
-        },
-      ],
+      questions: [{ key: "president", label: "President", type: "single", options: [{ key: "a", label: "A" }] }],
     });
     expect(own.definition.questions[0].key).toBe("president");
     expect(() => parseDefinitionImport({ nope: true })).toThrow(/poll file/i);
@@ -97,9 +90,7 @@ describe("importing the website's poll file", () => {
 
   it("labels questions and options, falling back to the raw key", () => {
     const labels = definitionLabels(imported.definition);
-    expect(labels.question("ballot.workshops")).toBe(
-      "Pick three workshops in the order you want them",
-    );
+    expect(labels.question("ballot.workshops")).toBe("Pick three workshops in the order you want them");
     expect(labels.choice("ballot.workshops", "tools")).toBe("Building tools with Claude");
     expect(labels.choice("ballot.workshops", "retired")).toBe("retired");
     expect(labels.question("gone.away")).toBe("gone.away");
@@ -121,11 +112,7 @@ describe("which ballots count", () => {
   const good = {
     pollSlug: "info-session-2026-09",
     castAt: new Date("2026-09-17T22:00:00Z"),
-    answers: {
-      "ballot.workshops": ["tools", "agents"],
-      "hackathon.theme": "money-moves",
-      "hackathon.notes": "more pizza",
-    },
+    answers: { "ballot.workshops": ["tools", "agents"], "hackathon.theme": "money-moves", "hackathon.notes": "more pizza" },
   };
 
   it("counts a ballot inside the window with current options", () => {
@@ -151,35 +138,23 @@ describe("which ballots count", () => {
   });
 
   it("excludes ballots outside the window, rounding the opening hour down", () => {
-    expect(classifyBallot({ ...good, castAt: new Date("2026-08-17T23:00:00Z") }, def)).toBe(
-      "before-window",
-    );
+    expect(classifyBallot({ ...good, castAt: new Date("2026-08-17T23:00:00Z") }, def)).toBe("before-window");
     // The website rounds castAt down to the hour, so the opening hour counts.
     expect(classifyBallot({ ...good, castAt: new Date("2026-08-18T04:00:00Z") }, def)).toBeNull();
-    expect(classifyBallot({ ...good, castAt: new Date("2026-09-18T02:00:00Z") }, def)).toBe(
-      "after-window",
-    );
+    expect(classifyBallot({ ...good, castAt: new Date("2026-09-18T02:00:00Z") }, def)).toBe("after-window");
   });
 
   it("excludes pre-launch ballots that name retired options or questions", () => {
-    expect(classifyBallot({ ...good, answers: { "ballot.workshops": ["claude-code"] } }, def)).toBe(
-      "retired-option",
-    );
-    expect(classifyBallot({ ...good, answers: { "ballot.prompting": "yes" } }, def)).toBe(
-      "retired-option",
-    );
+    expect(classifyBallot({ ...good, answers: { "ballot.workshops": ["claude-code"] } }, def)).toBe("retired-option");
+    expect(classifyBallot({ ...good, answers: { "ballot.prompting": "yes" } }, def)).toBe("retired-option");
   });
 
   it("accepts free text and yes/no shapes", () => {
     const yesno = {
       ...def,
-      definition: {
-        questions: [{ key: "first", label: "First?", type: "yesno" as const, options: [] }],
-      },
+      definition: { questions: [{ key: "first", label: "First?", type: "yesno" as const, options: [] }] },
     };
     expect(classifyBallot({ ...good, answers: { first: true } }, yesno)).toBeNull();
-    expect(classifyBallot({ ...good, answers: { first: "perhaps" } }, yesno)).toBe(
-      "retired-option",
-    );
+    expect(classifyBallot({ ...good, answers: { first: "perhaps" } }, yesno)).toBe("retired-option");
   });
 });

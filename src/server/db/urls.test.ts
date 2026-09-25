@@ -2,16 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { deriveRoleUrl, MissingDatabaseUrlError, runtimeDatabaseUrl, usernameOf } from "./urls";
 
-const BASE =
-  "postgresql://neondb_owner:ownerpw@ep-cool-1234-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require";
+const BASE = "postgresql://neondb_owner:ownerpw@ep-cool-1234-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require";
 
 describe("runtimeDatabaseUrl", () => {
   it("prefers the explicit per-role URL", () => {
-    const env = {
-      DATABASE_URL_APP: "postgresql://app_user:test@localhost:5432/x",
-      DATABASE_URL: BASE,
-      APP_DB_PASSWORD: "p",
-    };
+    const env = { DATABASE_URL_APP: "postgresql://app_user:test@localhost:5432/x", DATABASE_URL: BASE, APP_DB_PASSWORD: "p" };
     expect(runtimeDatabaseUrl("app", env)).toBe("postgresql://app_user:test@localhost:5432/x");
   });
 
@@ -33,9 +28,7 @@ describe("runtimeDatabaseUrl", () => {
   });
 
   it("never falls back to the owner URL when the role password is missing", () => {
-    expect(() => runtimeDatabaseUrl("service", { DATABASE_URL: BASE })).toThrow(
-      MissingDatabaseUrlError,
-    );
+    expect(() => runtimeDatabaseUrl("service", { DATABASE_URL: BASE })).toThrow(MissingDatabaseUrlError);
     expect(() => runtimeDatabaseUrl("app", {})).toThrow(/DATABASE_URL_APP/);
   });
 

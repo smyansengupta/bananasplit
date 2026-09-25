@@ -69,10 +69,7 @@ describe("emails", () => {
   });
 
   it("masks the local part only", () => {
-    expect(maskEmail("maya@husky.neu.edu")).toEqual({
-      masked: "m***@husky.neu.edu",
-      domain: "husky.neu.edu",
-    });
+    expect(maskEmail("maya@husky.neu.edu")).toEqual({ masked: "m***@husky.neu.edu", domain: "husky.neu.edu" });
   });
 });
 
@@ -93,11 +90,7 @@ describe("names and ids", () => {
 describe("signup answers", () => {
   it("keeps plain tokens, lower-cases them and drops the rest", () => {
     expect(
-      signupAnswers({
-        colleges: ["Khoury", "<script>", 7],
-        meet_days: ["tuesday"],
-        interests: null,
-      }),
+      signupAnswers({ colleges: ["Khoury", "<script>", 7], meet_days: ["tuesday"], interests: null }),
     ).toEqual({ colleges: ["khoury"], meet_days: ["tuesday"], interests: [] });
   });
 

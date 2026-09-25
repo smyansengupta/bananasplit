@@ -53,25 +53,15 @@ export default async function DatabasesPage({ params }: PageProps<"/app/[orgSlug
     const counts: Record<string, number> = {};
     for (const d of list) {
       if (d.kind === "SESSIONS") {
-        counts[d.key] = await db.event.count({
-          where: { organizationId: organization.id, deletedAt: null, mergedIntoId: null },
-        });
+        counts[d.key] = await db.event.count({ where: { organizationId: organization.id, deletedAt: null, mergedIntoId: null } });
       } else if (d.kind === "ATTENDANCE") {
-        counts[d.key] = await db.attendance.count({
-          where: { organizationId: organization.id, suppressedAt: null },
-        });
+        counts[d.key] = await db.attendance.count({ where: { organizationId: organization.id, suppressedAt: null } });
       } else if (d.kind === "SIGNUPS") {
-        counts[d.key] = await db.signup.count({
-          where: { organizationId: organization.id, suppressedAt: null },
-        });
+        counts[d.key] = await db.signup.count({ where: { organizationId: organization.id, suppressedAt: null } });
       } else if (d.kind === "PEOPLE") {
-        counts[d.key] = await db.contact.count({
-          where: { organizationId: organization.id, sessionsAttended: { gt: 0 } },
-        });
+        counts[d.key] = await db.contact.count({ where: { organizationId: organization.id, sessionsAttended: { gt: 0 } } });
       } else if (d.kind === "BALLOTS") {
-        counts[d.key] = await db.ballotDefinition.count({
-          where: { organizationId: organization.id, isTest: false },
-        });
+        counts[d.key] = await db.ballotDefinition.count({ where: { organizationId: organization.id, isTest: false } });
       }
     }
     const sync = isAdmin ? await loadSyncStatus(db, organization.id) : null;
@@ -83,17 +73,12 @@ export default async function DatabasesPage({ params }: PageProps<"/app/[orgSlug
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Databases</h1>
         <p className="text-muted-foreground text-sm">
-          {organization.name}&apos;s data, from the calendar, the website and what admins enter
-          here.
+          {organization.name}&apos;s data, from the calendar, the website and what admins enter here.
         </p>
       </div>
 
       {databases.length === 0 ? (
-        <EmptyState
-          icon={Database}
-          title="No databases are visible to you"
-          description="Ask an owner about Settings > Privacy."
-        />
+        <EmptyState icon={Database} title="No databases are visible to you" description="Ask an owner about Settings > Privacy." />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {databases.map((d) => {
@@ -117,9 +102,7 @@ export default async function DatabasesPage({ params }: PageProps<"/app/[orgSlug
                       </Badge>
                     )}
                   </span>
-                  <span className="text-muted-foreground text-sm">
-                    {DESCRIPTIONS[d.kind] ?? ""}
-                  </span>
+                  <span className="text-muted-foreground text-sm">{DESCRIPTIONS[d.kind] ?? ""}</span>
                   <span className="text-sm tabular-nums">
                     {(counts[d.key] ?? 0).toLocaleString()} {unit}
                   </span>
@@ -142,9 +125,7 @@ export default async function DatabasesPage({ params }: PageProps<"/app/[orgSlug
             streams={sync.streams.map((s) => ({
               stream: s.stream,
               label: s.label,
-              lastSynced: s.lastSyncedAt
-                ? fmtDateTime(s.lastSyncedAt, organization.timezone)
-                : null,
+              lastSynced: s.lastSyncedAt ? fmtDateTime(s.lastSyncedAt, organization.timezone) : null,
               rowsUpserted: s.rowsUpserted,
               lastError: s.lastError,
               detail: s.detail,
@@ -153,10 +134,7 @@ export default async function DatabasesPage({ params }: PageProps<"/app/[orgSlug
         ) : (
           <p className="text-muted-foreground rounded-lg border p-4 text-sm">
             To pull check-ins, signups and ballots from the club website, connect its database in{" "}
-            <Link
-              className="underline underline-offset-2"
-              href={`/app/${orgSlug}/settings/integrations`}
-            >
+            <Link className="underline underline-offset-2" href={`/app/${orgSlug}/settings/integrations`}>
               Settings &gt; Integrations
             </Link>
             . Without it, add rows here or import a CSV.

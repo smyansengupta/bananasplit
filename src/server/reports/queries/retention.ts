@@ -85,7 +85,6 @@ export const queryRetention: ReportQuery<RetentionReport> = async (db, args) => 
     regulars: num(t?.regulars),
     lapsedTotal: num(t?.lapsed_total),
     lapsedInRange: num(t?.lapsed_in_range),
-    lapsedAfterSessions:
-      t?.lapsed_after === null || t?.lapsed_after === undefined ? 3 : num(t.lapsed_after),
+    lapsedAfterSessions: t?.lapsed_after === null || t?.lapsed_after === undefined ? 3 : num(t.lapsed_after),
   };
 };

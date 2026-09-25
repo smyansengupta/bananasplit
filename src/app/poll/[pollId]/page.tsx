@@ -31,9 +31,7 @@ export default async function PublicPollPage({ params }: PageProps<"/poll/[pollI
   const userId = session?.user.id ?? null;
   const loaded = await withSystemOrgTx(organizationId, async ({ db }) => {
     const poll = await getPollSource(db, organizationId, pollId);
-    const isMember = userId
-      ? (await db.membership.count({ where: { organizationId, userId } })) > 0
-      : false;
+    const isMember = userId ? (await db.membership.count({ where: { organizationId, userId } })) > 0 : false;
     return { poll, isMember };
   });
   const { poll, isMember } = loaded;

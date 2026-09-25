@@ -17,9 +17,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const report = await runHealthChecks();
   if (!report.ok) {
-    const failed = report.checks
-      .filter((c) => !c.ok)
-      .map((c) => `${c.name}: ${c.detail ?? "failed"}`);
+    const failed = report.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail ?? "failed"}`);
     console.error(`[health] failing checks: ${failed.join(" | ")}`);
   }
   const body = hasCronAuth(request)

@@ -3,10 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import {
-  importDefinitionAction,
-  updateDefinitionAction,
-} from "@/app/app/[orgSlug]/databases/actions";
+import { importDefinitionAction, updateDefinitionAction } from "@/app/app/[orgSlug]/databases/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,12 +85,7 @@ export function DefinitionImportForm({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="grid gap-1">
           <Label htmlFor="def-session">Linked session</Label>
-          <select
-            id="def-session"
-            value={linked}
-            onChange={(e) => setLinked(e.target.value)}
-            className={selectClass}
-          >
+          <select id="def-session" value={linked} onChange={(e) => setLinked(e.target.value)} className={selectClass}>
             <option value="">None</option>
             {sessions.map((s) => (
               <option key={s.id} value={s.id}>
@@ -159,48 +151,26 @@ export function DefinitionEditForm({
             isTest: form.get("isTest") === "on",
           });
           if (r.error) return setError(r.error);
-          setNotice(
-            r.data ? `Saved. ${r.data.ballots} ballots, ${r.data.excluded} excluded.` : "Saved.",
-          );
+          setNotice(r.data ? `Saved. ${r.data.ballots} ballots, ${r.data.excluded} excluded.` : "Saved.");
           router.refresh();
         });
       }}
     >
       <div className="grid gap-1 sm:col-span-2">
         <Label htmlFor={`t-${definition.id}`}>Title</Label>
-        <Input
-          id={`t-${definition.id}`}
-          name="title"
-          defaultValue={definition.title}
-          maxLength={300}
-        />
+        <Input id={`t-${definition.id}`} name="title" defaultValue={definition.title} maxLength={300} />
       </div>
       <div className="grid gap-1">
         <Label htmlFor={`o-${definition.id}`}>Opens</Label>
-        <Input
-          id={`o-${definition.id}`}
-          name="opensAt"
-          type="datetime-local"
-          defaultValue={definition.opensAt}
-        />
+        <Input id={`o-${definition.id}`} name="opensAt" type="datetime-local" defaultValue={definition.opensAt} />
       </div>
       <div className="grid gap-1">
         <Label htmlFor={`c-${definition.id}`}>Closes</Label>
-        <Input
-          id={`c-${definition.id}`}
-          name="closesAt"
-          type="datetime-local"
-          defaultValue={definition.closesAt}
-        />
+        <Input id={`c-${definition.id}`} name="closesAt" type="datetime-local" defaultValue={definition.closesAt} />
       </div>
       <div className="grid gap-1">
         <Label htmlFor={`l-${definition.id}`}>Linked session</Label>
-        <select
-          id={`l-${definition.id}`}
-          name="linkedEventId"
-          defaultValue={definition.linkedEventId ?? ""}
-          className={selectClass}
-        >
+        <select id={`l-${definition.id}`} name="linkedEventId" defaultValue={definition.linkedEventId ?? ""} className={selectClass}>
           <option value="">None</option>
           {sessions.map((s) => (
             <option key={s.id} value={s.id}>

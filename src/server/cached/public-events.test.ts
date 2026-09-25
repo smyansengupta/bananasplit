@@ -8,19 +8,11 @@ import { describe, expect, it, vi } from "vitest";
  */
 
 const { cacheCalls } = vi.hoisted(() => ({
-  cacheCalls: [] as {
-    keyParts: string[];
-    tags: string[];
-    revalidate: number | false | undefined;
-  }[],
+  cacheCalls: [] as { keyParts: string[]; tags: string[]; revalidate: number | false | undefined }[],
 }));
 
 vi.mock("next/cache", () => ({
-  unstable_cache: (
-    fn: () => unknown,
-    keyParts: string[],
-    options: { tags: string[]; revalidate?: number },
-  ) => {
+  unstable_cache: (fn: () => unknown, keyParts: string[], options: { tags: string[]; revalidate?: number }) => {
     cacheCalls.push({ keyParts, tags: options.tags, revalidate: options.revalidate });
     return fn;
   },
@@ -29,9 +21,7 @@ vi.mock("@/server/db/context", () => ({
   withSystemOrgTx: async (_org: string, fn: (ctx: unknown) => unknown) =>
     fn({
       db: {
-        organization: {
-          findUnique: async () => ({ name: "CBC", timezone: "UTC", deletedAt: null }),
-        },
+        organization: { findUnique: async () => ({ name: "CBC", timezone: "UTC", deletedAt: null }) },
         event: { findMany: async () => [] },
       },
     }),
@@ -60,20 +50,10 @@ describe("getPublicEvents cache contract", () => {
       membership: { count: async () => 1 },
       orgIntegration: { findMany: async () => [] },
       event: {
-        create: async ({ data }: { data: Record<string, unknown> }) => ({
-          id: "e1",
-          googleEventId: null,
-          ...data,
-        }),
+        create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "e1", googleEventId: null, ...data }),
       },
     };
-    const ctx = {
-      db,
-      organizationId: "org_1",
-      userId: "u1",
-      role: "ADMIN",
-      kind: "action",
-    } as never;
+    const ctx = { db, organizationId: "org_1", userId: "u1", role: "ADMIN", kind: "action" } as never;
     const { tags: touched } = await createEvent(ctx, {
       title: "Public workshop",
       startsAt: "2026-10-01T22:00:00Z",

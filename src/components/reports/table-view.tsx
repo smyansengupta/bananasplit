@@ -25,11 +25,7 @@ export function TableView({
           <thead className="bg-muted/50 sticky top-0">
             <tr>
               {columns.map((c) => (
-                <th
-                  key={c.key}
-                  scope="col"
-                  className={`px-2 py-1.5 font-medium ${c.numeric ? "text-right" : ""}`}
-                >
+                <th key={c.key} scope="col" className={`px-2 py-1.5 font-medium ${c.numeric ? "text-right" : ""}`}>
                   {c.label}
                 </th>
               ))}
@@ -39,10 +35,7 @@ export function TableView({
             {rows.map((r) => (
               <tr key={r.key} className="border-t">
                 {columns.map((c) => (
-                  <td
-                    key={c.key}
-                    className={`px-2 py-1.5 ${c.numeric ? "text-right tabular-nums" : ""}`}
-                  >
+                  <td key={c.key} className={`px-2 py-1.5 ${c.numeric ? "text-right tabular-nums" : ""}`}>
                     {r.cells[c.key]}
                   </td>
                 ))}

@@ -112,10 +112,7 @@ const v1Input = objectMap.transform((flat): NotificationPreferences => {
     ...defaultNotificationPreferences(),
     types,
     // A v1 { TASK_DIGEST: true } counts as opting into the daily digest.
-    digest: {
-      enabled: types[NotificationType.TASK_DIGEST] === true,
-      hourLocal: DIGEST_HOUR_DEFAULT,
-    },
+    digest: { enabled: types[NotificationType.TASK_DIGEST] === true, hourLocal: DIGEST_HOUR_DEFAULT },
   };
 });
 
@@ -125,13 +122,15 @@ const v1Input = objectMap.transform((flat): NotificationPreferences => {
  */
 export const notificationPreferencesParser = z
   .union([v2Input, v1Input])
-  .transform((value): NotificationPreferences => ({
-    v: 2,
-    types: value.types,
-    digest: { enabled: value.digest.enabled, hourLocal: value.digest.hourLocal },
-    reminderLeadDays: value.reminderLeadDays,
-    collaboratorReminders: value.collaboratorReminders ?? false,
-  }))
+  .transform(
+    (value): NotificationPreferences => ({
+      v: 2,
+      types: value.types,
+      digest: { enabled: value.digest.enabled, hourLocal: value.digest.hourLocal },
+      reminderLeadDays: value.reminderLeadDays,
+      collaboratorReminders: value.collaboratorReminders ?? false,
+    }),
+  )
   .catch(() => defaultNotificationPreferences());
 
 /** Reads User.emailPreferences in any shape it has ever had. Never throws. */
@@ -144,10 +143,7 @@ export function parseNotificationPreferences(raw: unknown): NotificationPreferen
  * DEFAULT_OFF_TYPES stay off until the user opts in; everything else is
  * opt-out.
  */
-export function emailEnabledFor(
-  preferences: NotificationPreferences,
-  type: NotificationType,
-): boolean {
+export function emailEnabledFor(preferences: NotificationPreferences, type: NotificationType): boolean {
   if (type === NotificationType.TASK_DIGEST) {
     return preferences.digest.enabled && preferences.types[type] !== false;
   }

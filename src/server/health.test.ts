@@ -10,13 +10,11 @@ import { kekFingerprint, loadKeyring } from "./secrets/keyring";
 
 const ROLE_NAMES = { app: "app_user", service: "app_service", auth: "app_auth" } as const;
 
-function probes(
-  over: {
-    role?: (role: keyof typeof ROLE_NAMES) => Partial<RoleProbe>;
-    manifest?: string[];
-    fixtureOnly?: string | null;
-  } = {},
-): HealthProbes {
+function probes(over: {
+  role?: (role: keyof typeof ROLE_NAMES) => Partial<RoleProbe>;
+  manifest?: string[];
+  fixtureOnly?: string | null;
+} = {}): HealthProbes {
   return {
     async role(role) {
       return {
@@ -56,16 +54,12 @@ describe("health checks", () => {
 
   it("fails when a role default is missing", async () => {
     const report = await runHealthChecks(
-      probes({
-        role: (r) => (r === "auth" ? { timezone: "America/New_York", statementTimeout: "0" } : {}),
-      }),
+      probes({ role: (r) => (r === "auth" ? { timezone: "America/New_York", statementTimeout: "0" } : {}) }),
       {},
     );
     expect(report.ok).toBe(false);
     expect(failing(report)).toEqual(["role:app_auth"]);
-    expect(report.checks.find((c) => c.name === "role:app_auth")?.detail).toMatch(
-      /timezone.*statement_timeout/,
-    );
+    expect(report.checks.find((c) => c.name === "role:app_auth")?.detail).toMatch(/timezone.*statement_timeout/);
   });
 
   it("fails when a runtime URL connects as a superuser, a BYPASSRLS role, the owner or the wrong role", async () => {
@@ -98,9 +92,7 @@ describe("health checks", () => {
       SECRETS_KEK_V1: kek,
       SECRETS_KEK_CURRENT: "1",
       SECRETS_KEK_ENV: "preview",
-      PREVIEW_KEK_FINGERPRINT: kekFingerprint(
-        loadKeyring({ SECRETS_KEK_V1: kek, SECRETS_KEK_CURRENT: "1" }),
-      ),
+      PREVIEW_KEK_FINGERPRINT: kekFingerprint(loadKeyring({ SECRETS_KEK_V1: kek, SECRETS_KEK_CURRENT: "1" })),
       BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_PrevStore1_abc",
       PREVIEW_BLOB_STORE_ID: "PrevStore1",
     };
@@ -111,9 +103,7 @@ describe("health checks", () => {
     });
 
     it("fails without the fixture-only marker", async () => {
-      expect(failing(await runHealthChecks(probes({ fixtureOnly: null }), good))).toEqual([
-        "preview:fixture_only",
-      ]);
+      expect(failing(await runHealthChecks(probes({ fixtureOnly: null }), good))).toEqual(["preview:fixture_only"]);
     });
 
     it("fails with production's Blob store or KEK", async () => {

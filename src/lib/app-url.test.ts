@@ -41,9 +41,7 @@ describe("appBaseUrl — never from the Host header (0A Fix 7)", () => {
 
   it("joins paths with exactly one slash", () => {
     const e = env({ NEXT_PUBLIC_APP_URL: "https://p.example.org/" });
-    expect(absoluteAppUrl("/api/calendar/feed/", e)).toBe(
-      "https://p.example.org/api/calendar/feed/",
-    );
+    expect(absoluteAppUrl("/api/calendar/feed/", e)).toBe("https://p.example.org/api/calendar/feed/");
     expect(absoluteAppUrl("verify-email/x", e)).toBe("https://p.example.org/verify-email/x");
   });
 });

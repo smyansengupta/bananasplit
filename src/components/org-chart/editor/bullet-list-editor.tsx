@@ -27,8 +27,7 @@ export function BulletListEditor({
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const focus = (i: number) => requestAnimationFrame(() => refs.current[i]?.focus());
 
-  const update = (i: number, value: string) =>
-    onChange(items.map((item, j) => (j === i ? value : item)));
+  const update = (i: number, value: string) => onChange(items.map((item, j) => (j === i ? value : item)));
   const insert = (i: number) => {
     if (items.length >= max) return;
     onChange([...items.slice(0, i), "", ...items.slice(i)]);
@@ -73,14 +72,7 @@ export function BulletListEditor({
                 }
               }}
             />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => move(i, -1)}
-              disabled={i === 0}
-              aria-label={`Move ${label.toLowerCase()} ${i + 1} up`}
-            >
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${label.toLowerCase()} ${i + 1} up`}>
               <ArrowUp />
             </Button>
             <Button
@@ -93,25 +85,13 @@ export function BulletListEditor({
             >
               <ArrowDown />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => remove(i)}
-              aria-label={`Remove ${label.toLowerCase()} ${i + 1}`}
-            >
+            <Button type="button" variant="ghost" size="icon-sm" onClick={() => remove(i)} aria-label={`Remove ${label.toLowerCase()} ${i + 1}`}>
               <X />
             </Button>
           </li>
         ))}
       </ul>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => insert(items.length)}
-        disabled={items.length >= max}
-      >
+      <Button type="button" variant="outline" size="sm" onClick={() => insert(items.length)} disabled={items.length >= max}>
         <Plus className="size-4" aria-hidden="true" />
         Add
       </Button>

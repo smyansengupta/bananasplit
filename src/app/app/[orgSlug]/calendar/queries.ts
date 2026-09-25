@@ -99,9 +99,7 @@ export async function getEventById(
   viewerId: string,
 ): Promise<EventWithRelations | null> {
   const include = eventInclude(viewerId);
-  const event = await db.event.findFirst({
-    where: { id: eventId, organizationId, deletedAt: null },
-  });
+  const event = await db.event.findFirst({ where: { id: eventId, organizationId, deletedAt: null } });
   if (!event) return null;
   const attendees = await db.eventAttendee.findMany({
     where: { organizationId, eventId },

@@ -4,11 +4,7 @@ import { Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import {
-  createSessionAction,
-  updateSessionAction,
-  type SessionForm,
-} from "@/app/app/[orgSlug]/databases/actions";
+import { createSessionAction, updateSessionAction, type SessionForm } from "@/app/app/[orgSlug]/databases/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -72,9 +68,7 @@ export function SessionFormDialog({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [hostMode, setHostMode] = useState(
-    initial?.hostUserId ? "member" : initial?.hostName ? "guest" : "none",
-  );
+  const [hostMode, setHostMode] = useState(initial?.hostUserId ? "member" : initial?.hostName ? "guest" : "none");
 
   const submit = (form: FormData) => {
     const get = (k: string) => String(form.get(k) ?? "");
@@ -102,8 +96,7 @@ export function SessionFormDialog({
         return;
       }
       setOpen(false);
-      if (!initial && result.data)
-        view.update((p) => p.set("row", String(result.data)), { push: true });
+      if (!initial && result.data) view.update((p) => p.set("row", String(result.data)), { push: true });
       router.refresh();
     });
   };
@@ -133,13 +126,7 @@ export function SessionFormDialog({
         <form action={submit} className="grid gap-3">
           <div className="grid gap-1">
             <Label htmlFor="s-title">Title</Label>
-            <Input
-              id="s-title"
-              name="title"
-              required
-              maxLength={200}
-              defaultValue={initial?.title ?? ""}
-            />
+            <Input id="s-title" name="title" required maxLength={200} defaultValue={initial?.title ?? ""} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1">
@@ -173,33 +160,16 @@ export function SessionFormDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1">
               <Label htmlFor="s-start">Starts</Label>
-              <Input
-                id="s-start"
-                name="startsAt"
-                type="datetime-local"
-                required
-                defaultValue={initial?.startsAt ?? ""}
-              />
+              <Input id="s-start" name="startsAt" type="datetime-local" required defaultValue={initial?.startsAt ?? ""} />
             </div>
             <div className="grid gap-1">
               <Label htmlFor="s-end">Ends</Label>
-              <Input
-                id="s-end"
-                name="endsAt"
-                type="datetime-local"
-                required
-                defaultValue={initial?.endsAt ?? ""}
-              />
+              <Input id="s-end" name="endsAt" type="datetime-local" required defaultValue={initial?.endsAt ?? ""} />
             </div>
           </div>
           <div className="grid gap-1">
             <Label htmlFor="s-loc">Location</Label>
-            <Input
-              id="s-loc"
-              name="location"
-              maxLength={300}
-              defaultValue={initial?.location ?? ""}
-            />
+            <Input id="s-loc" name="location" maxLength={300} defaultValue={initial?.location ?? ""} />
           </div>
           <div className="grid gap-1">
             <Label htmlFor="s-host-mode">Host</Label>
@@ -229,56 +199,27 @@ export function SessionFormDialog({
                 </select>
               )}
               {hostMode === "guest" && (
-                <Input
-                  name="hostName"
-                  aria-label="Guest host name"
-                  maxLength={120}
-                  defaultValue={initial?.hostName ?? ""}
-                />
+                <Input name="hostName" aria-label="Guest host name" maxLength={120} defaultValue={initial?.hostName ?? ""} />
               )}
             </div>
           </div>
           <div className="grid gap-1">
             <Label htmlFor="s-rsvp">RSVP link</Label>
-            <Input
-              id="s-rsvp"
-              name="rsvpUrl"
-              type="url"
-              placeholder="https://"
-              defaultValue={initial?.rsvpUrl ?? ""}
-            />
+            <Input id="s-rsvp" name="rsvpUrl" type="url" placeholder="https://" defaultValue={initial?.rsvpUrl ?? ""} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1">
               <Label htmlFor="s-term">Term</Label>
-              <Input
-                id="s-term"
-                name="term"
-                placeholder="From the date"
-                pattern="(fall|spring)-\d{4}"
-                defaultValue={initial?.term ?? ""}
-              />
+              <Input id="s-term" name="term" placeholder="From the date" pattern="(fall|spring)-\d{4}" defaultValue={initial?.term ?? ""} />
             </div>
             <div className="grid gap-1">
               <Label htmlFor="s-slot">Stamp slot</Label>
-              <Input
-                id="s-slot"
-                name="stampSlot"
-                type="number"
-                min={1}
-                max={12}
-                defaultValue={initial?.stampSlot ?? ""}
-              />
+              <Input id="s-slot" name="stampSlot" type="number" min={1} max={12} defaultValue={initial?.stampSlot ?? ""} />
             </div>
           </div>
           <div className="grid gap-1">
             <Label htmlFor="s-desc">Description</Label>
-            <Textarea
-              id="s-desc"
-              name="description"
-              rows={3}
-              defaultValue={initial?.description ?? ""}
-            />
+            <Textarea id="s-desc" name="description" rows={3} defaultValue={initial?.description ?? ""} />
           </div>
           {error && (
             <p role="alert" className="text-destructive text-sm">

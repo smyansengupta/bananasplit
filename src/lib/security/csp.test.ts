@@ -107,9 +107,7 @@ describe("mode and headers", () => {
     for (const nodeEnv of ["production", "development", "test"]) {
       expect(cspMode(env({ NODE_ENV: nodeEnv })), nodeEnv).toBe("enforce");
       expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "enforce" })), nodeEnv).toBe("enforce");
-      expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "report-only" })), nodeEnv).toBe(
-        "report-only",
-      );
+      expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "report-only" })), nodeEnv).toBe("report-only");
       // Anything else is not an opt-out.
       expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "" })), nodeEnv).toBe("enforce");
       expect(cspMode(env({ NODE_ENV: nodeEnv, CSP_MODE: "Report-Only" })), nodeEnv).toBe("enforce");

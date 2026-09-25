@@ -28,13 +28,9 @@ export function conferenceUrlError(
     case ConferenceProvider.MEET:
       return parsed.hostname === "meet.google.com" ? null : "Expected a meet.google.com link.";
     case ConferenceProvider.ZOOM:
-      return parsed.hostname === "zoom.us" || parsed.hostname.endsWith(".zoom.us")
-        ? null
-        : "Expected a zoom.us link.";
+      return parsed.hostname === "zoom.us" || parsed.hostname.endsWith(".zoom.us") ? null : "Expected a zoom.us link.";
     case ConferenceProvider.TEAMS:
-      return parsed.hostname === "teams.microsoft.com"
-        ? null
-        : "Expected a teams.microsoft.com link.";
+      return parsed.hostname === "teams.microsoft.com" ? null : "Expected a teams.microsoft.com link.";
     default:
       return null;
   }
@@ -56,8 +52,8 @@ export function resolveTimes(
   }
   const start = new Date(startsAt);
   const end = new Date(endsAt);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()))
-    return { error: "Enter a valid start and end time." };
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return { error: "Enter a valid start and end time." };
   if (end < start) return { error: "End time must be after the start time." };
   return { startsAt: start, endsAt: end, allDay: false };
 }
+

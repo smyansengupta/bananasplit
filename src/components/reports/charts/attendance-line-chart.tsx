@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipContentProps,
-} from "recharts";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 import { formatCount, kindLabel, longDate, shortDate } from "../format";
@@ -53,9 +44,7 @@ export function AttendanceLineChart({ points }: { points: AttendancePoint[] }) {
           <Tooltip
             cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
             content={(props: TooltipContentProps<ValueType, NameType>) => {
-              const p = props.active
-                ? (props.payload?.[0]?.payload as AttendancePoint | undefined)
-                : undefined;
+              const p = props.active ? (props.payload?.[0]?.payload as AttendancePoint | undefined) : undefined;
               if (!p) return null;
               return (
                 <TooltipCard
@@ -77,12 +66,7 @@ export function AttendanceLineChart({ points }: { points: AttendancePoint[] }) {
             dot={{ r: 4, fill: SERIES[0], stroke: SURFACE, strokeWidth: 2 }}
             activeDot={{ r: 6, fill: SERIES[0], stroke: SURFACE, strokeWidth: 2 }}
             isAnimationActive={false}
-            label={(props: {
-              index?: number;
-              x?: number | string;
-              y?: number | string;
-              value?: unknown;
-            }) => {
+            label={(props: { index?: number; x?: number | string; y?: number | string; value?: unknown }) => {
               if (props.index !== lastIndex) return <g />;
               return (
                 <text

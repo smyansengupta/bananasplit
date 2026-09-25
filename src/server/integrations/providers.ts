@@ -34,9 +34,7 @@ export const clients = {
  * and signature as the org chart's claudeConnectionTest
  * (src/server/org-chart/claude.ts), which the integration may point at.
  */
-export async function claudeConnectionTest(
-  ctx: IntegrationTestContext,
-): Promise<IntegrationTestResult> {
+export async function claudeConnectionTest(ctx: IntegrationTestContext): Promise<IntegrationTestResult> {
   assertNoTx("claude test");
   if (!ctx.secret) return { ok: false, reason: "Add an API key first." };
   const client = clients.anthropic(ctx.secret);

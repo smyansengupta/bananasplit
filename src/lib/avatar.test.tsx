@@ -14,12 +14,7 @@ const avatar = {
 
 describe("avatar helpers", () => {
   it("parses only usable variant URLs", () => {
-    expect(
-      parseAvatarVariants({
-        s64: "javascript:alert(1)",
-        s128: "/api/dev/blob/avatars/u/k/s128.webp",
-      }),
-    ).toEqual({
+    expect(parseAvatarVariants({ s64: "javascript:alert(1)", s128: "/api/dev/blob/avatars/u/k/s128.webp" })).toEqual({
       s128: "/api/dev/blob/avatars/u/k/s128.webp",
     });
     expect(parseAvatarVariants(null)).toEqual({});
@@ -39,9 +34,7 @@ describe("avatar helpers", () => {
       src: avatar.s128,
       srcSet: `${avatar.s128} 1x, ${avatar.s256} 2x`,
     });
-    expect(
-      avatarSource({ avatar: null, image: "https://lh3.googleusercontent.com/a" }, 32),
-    ).toEqual({
+    expect(avatarSource({ avatar: null, image: "https://lh3.googleusercontent.com/a" }, 32)).toEqual({
       src: "https://lh3.googleusercontent.com/a",
     });
     expect(avatarSource({ avatar: null, image: null }, 32)).toBeNull();

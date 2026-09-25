@@ -42,17 +42,15 @@ export interface ShellUserRecord {
  * every request (not from the JWT), so a name or picture change shows at
  * once without signing in again. Deduped per request.
  */
-export const getShellUser = cache(
-  async (userId: string, fallbackEmail: string): Promise<ShellUserRecord> => {
-    const row = await withUserTx(userId, ({ db }) =>
-      db.user.findUnique({
-        where: { id: userId },
-        select: { name: true, email: true, image: true, avatar: true },
-      }),
-    );
-    return row ?? { name: null, email: fallbackEmail, image: null, avatar: null };
-  },
-);
+export const getShellUser = cache(async (userId: string, fallbackEmail: string): Promise<ShellUserRecord> => {
+  const row = await withUserTx(userId, ({ db }) =>
+    db.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true, image: true, avatar: true },
+    }),
+  );
+  return row ?? { name: null, email: fallbackEmail, image: null, avatar: null };
+});
 
 // ---------------------------------------------------------------- own profile
 
@@ -221,10 +219,7 @@ export interface PersonProfile extends PersonSummary {
  * page turns null into notFound(), so a person page never confirms that a
  * user exists outside the org.
  */
-export async function getOrgPerson(
-  organizationId: string,
-  userId: string,
-): Promise<PersonProfile | null> {
+export async function getOrgPerson(organizationId: string, userId: string): Promise<PersonProfile | null> {
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(userId)) return null;
   return withOrgTx(organizationId, async ({ db }) => {
     const membership = await db.membership.findUnique({

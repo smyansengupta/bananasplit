@@ -19,10 +19,7 @@ describe("sqlStateOf", () => {
   it("reads the driver adapter's originalCode nested in cause or meta", () => {
     expect(sqlStateOf({ code: "P2010", cause: { originalCode: "23514" } })).toBe("23514");
     expect(
-      sqlStateOf({
-        code: "P2010",
-        meta: { driverAdapterError: { cause: { originalCode: "23503", kind: "postgres" } } },
-      }),
+      sqlStateOf({ code: "P2010", meta: { driverAdapterError: { cause: { originalCode: "23503", kind: "postgres" } } } }),
     ).toBe("23503");
   });
 
@@ -40,22 +37,16 @@ describe("sqlStateOf", () => {
 
 describe("mapDbError", () => {
   it("maps each constraint class to a generic AppError that keeps the cause", () => {
-    const fk = {
-      code: "23503",
-      message: "invalid reference: Task.projectId (Key (id)=(p_secret))",
-    };
+    const fk = { code: "23503", message: 'invalid reference: Task.projectId (Key (id)=(p_secret))' };
     const mapped = mapDbError(fk);
     expect(mapped).toBeInstanceOf(InvalidReferenceError);
     expect((mapped as Error).message).not.toContain("p_secret");
     expect((mapped as Error).cause).toBe(fk);
     expect(mapDbError({ code: "23505" })).toBeInstanceOf(ConflictError);
     expect(mapDbError({ code: "23514" })).toBeInstanceOf(RuleViolationError);
-    expect(
-      mapDbError({
-        code: "42501",
-        message: 'new row violates row-level security policy for table "Task"',
-      }),
-    ).toBeInstanceOf(ForbiddenError);
+    expect(mapDbError({ code: "42501", message: 'new row violates row-level security policy for table "Task"' })).toBeInstanceOf(
+      ForbiddenError,
+    );
   });
 
   it("passes application errors and unknown errors through", () => {

@@ -89,12 +89,8 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("event service", () => {
   it("is ADMIN+ for user contexts and open to the service path", async () => {
-    await expect(createEvent(makeCtx({ role: "MEMBER" }).ctx, base)).rejects.toBeInstanceOf(
-      ForbiddenError,
-    );
-    await expect(
-      createEvent(makeCtx({ role: null, kind: "system" }).ctx, base),
-    ).resolves.toBeTruthy();
+    await expect(createEvent(makeCtx({ role: "MEMBER" }).ctx, base)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(createEvent(makeCtx({ role: null, kind: "system" }).ctx, base)).resolves.toBeTruthy();
   });
 
   it("creates INTERNAL by default, bumps syncVersion and invalidates reports only", async () => {
@@ -112,29 +108,16 @@ describe("event service", () => {
     expect(touched).toEqual([tags.reports(ORG)]);
     expect(invalidate).toHaveBeenCalledWith([tags.reports(ORG)]);
     expect(enqueueJob).not.toHaveBeenCalled();
-    expect(writeOrgAuditLog).toHaveBeenCalledWith(
-      ctx.db,
-      expect.objectContaining({ action: "event.created" }),
-    );
+    expect(writeOrgAuditLog).toHaveBeenCalledWith(ctx.db, expect.objectContaining({ action: "event.created" }));
   });
 
   it("a PUBLIC event with Google and a build hook enqueues gcal and a delayed site rebuild", async () => {
     const { ctx, saved } = makeCtx({
-      integrations: [
-        { provider: "GOOGLE_CALENDAR", config: {} },
-        { provider: "NETLIFY_BUILD_HOOK" },
-      ],
+      integrations: [{ provider: "GOOGLE_CALENDAR", config: {} }, { provider: "NETLIFY_BUILD_HOOK" }],
     });
-    const { tags: touched } = await createEvent(ctx, {
-      ...base,
-      visibility: "PUBLIC",
-      kind: "WORKSHOP",
-    });
+    const { tags: touched } = await createEvent(ctx, { ...base, visibility: "PUBLIC", kind: "WORKSHOP" });
     expect(saved[0]).toMatchObject({ googleSyncState: "PENDING" });
-    expect(enqueueJob).toHaveBeenCalledWith(
-      ctx.db,
-      expect.objectContaining({ kind: "gcal", key: "evt_1" }),
-    );
+    expect(enqueueJob).toHaveBeenCalledWith(ctx.db, expect.objectContaining({ kind: "gcal", key: "evt_1" }));
     const rebuild = enqueueJob.mock.calls.find((c) => c[1].kind === "site-rebuild");
     expect(rebuild).toBeTruthy();
     expect(rebuild![1].runAt!.getTime()).toBeGreaterThan(Date.now() + 50_000);
@@ -149,29 +132,20 @@ describe("event service", () => {
       integrations: [{ provider: "GOOGLE_CALENDAR", config: { internalCalendarId: "cal_int" } }],
     });
     await createEvent(internal.ctx, base);
-    expect(enqueueJob).toHaveBeenCalledWith(
-      internal.ctx.db,
-      expect.objectContaining({ kind: "gcal" }),
-    );
+    expect(enqueueJob).toHaveBeenCalledWith(internal.ctx.db, expect.objectContaining({ kind: "gcal" }));
   });
 
   it("validates times, links, the RSVP URL and the host", async () => {
     const { ctx } = makeCtx({});
-    await expect(
-      createEvent(ctx, { ...base, endsAt: "2026-10-01T21:00:00.000Z" }),
-    ).rejects.toBeInstanceOf(EventValidationError);
-    await expect(
-      createEvent(ctx, { ...base, rsvpUrl: "javascript:alert(1)" }),
-    ).rejects.toBeInstanceOf(EventValidationError);
-    await expect(createEvent(ctx, { ...base, conferenceProvider: "ZOOM" })).rejects.toThrow(
-      /meeting link/,
+    await expect(createEvent(ctx, { ...base, endsAt: "2026-10-01T21:00:00.000Z" })).rejects.toBeInstanceOf(
+      EventValidationError,
     );
+    await expect(createEvent(ctx, { ...base, rsvpUrl: "javascript:alert(1)" })).rejects.toBeInstanceOf(
+      EventValidationError,
+    );
+    await expect(createEvent(ctx, { ...base, conferenceProvider: "ZOOM" })).rejects.toThrow(/meeting link/);
     await expect(
-      createEvent(ctx, {
-        ...base,
-        conferenceProvider: "OTHER",
-        conferenceUrl: "http://insecure.example",
-      }),
+      createEvent(ctx, { ...base, conferenceProvider: "OTHER", conferenceUrl: "http://insecure.example" }),
     ).rejects.toThrow(/https/);
     await expect(
       createEvent(makeCtx({ hostIsMember: false }).ctx, { ...base, hostUserId: "u_outsider" }),
@@ -179,15 +153,12 @@ describe("event service", () => {
   });
 
   it("updates: 404 for a missing event, re-mirrors an existing Google event, rebuilds on a visibility flip", async () => {
-    await expect(
-      updateEvent(makeCtx({ existing: null }).ctx, "nope", { title: "x" }),
-    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(updateEvent(makeCtx({ existing: null }).ctx, "nope", { title: "x" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
     const { ctx, saved } = makeCtx({
       existing: { ...existing, visibility: "PUBLIC", googleEventId: "g1" },
-      integrations: [
-        { provider: "GOOGLE_CALENDAR", config: {} },
-        { provider: "NETLIFY_BUILD_HOOK" },
-      ],
+      integrations: [{ provider: "GOOGLE_CALENDAR", config: {} }, { provider: "NETLIFY_BUILD_HOOK" }],
     });
     const result = await updateEvent(ctx, "evt_1", { visibility: "INTERNAL" });
     expect(saved[0]).toMatchObject({ syncVersion: { increment: 1 }, googleSyncState: "PENDING" });

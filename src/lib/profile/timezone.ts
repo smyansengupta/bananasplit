@@ -54,8 +54,7 @@ const FALLBACK_ZONES = [
 /** Every IANA zone the runtime supports, sorted (a short list on old runtimes). */
 export function listTimeZones(): string[] {
   const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
-  const zones =
-    typeof intl.supportedValuesOf === "function" ? intl.supportedValuesOf("timeZone") : [];
+  const zones = typeof intl.supportedValuesOf === "function" ? intl.supportedValuesOf("timeZone") : [];
   const all = new Set([...(zones.length > 0 ? zones : FALLBACK_ZONES), "UTC"]);
   return [...all].sort((a, b) => a.localeCompare(b));
 }

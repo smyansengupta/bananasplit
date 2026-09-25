@@ -22,13 +22,7 @@ describe("scrubSentryEvent", () => {
       extra: { apiKey: "sk-ant-api03-zzzzzzzzzzzz", note: "ok" },
     }) as unknown as {
       message: string;
-      request: {
-        url: string;
-        headers: unknown;
-        cookies?: unknown;
-        data?: unknown;
-        query_string?: string;
-      };
+      request: { url: string; headers: unknown; cookies?: unknown; data?: unknown; query_string?: string };
       user: unknown;
       extra: unknown;
     };
@@ -60,13 +54,7 @@ describe("console scrubber", () => {
 
   it("redacts string, error and object arguments, once", () => {
     const sink = vi.fn();
-    const fake = {
-      error: sink,
-      warn: sink,
-      info: sink,
-      log: sink,
-      debug: sink,
-    } as unknown as Console;
+    const fake = { error: sink, warn: sink, info: sink, log: sink, debug: sink } as unknown as Console;
     installConsoleScrubber(fake);
     installConsoleScrubber(fake);
     fake.error("mail to a@b.co failed", new Error("key re_1234567890ab"), { token: "t" });

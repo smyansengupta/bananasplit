@@ -7,13 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/user-avatar";
 import { confirmMember, toTree, unlinkMember, type DraftPosition } from "@/lib/org-chart/draft";
@@ -120,14 +114,7 @@ export function PositionEditor({
             onCheckedChange={(checked) =>
               onChange(
                 checked
-                  ? {
-                      ...position,
-                      isOpen: true,
-                      userId: null,
-                      matchState: "UNMATCHED",
-                      suggestedUserIds: [],
-                      matchScore: null,
-                    }
+                  ? { ...position, isOpen: true, userId: null, matchState: "UNMATCHED", suggestedUserIds: [], matchScore: null }
                   : { ...position, isOpen: false },
               )
             }
@@ -153,16 +140,9 @@ export function PositionEditor({
                 <UserAvatar user={linked} size="md" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{linked.name}</p>
-                  <p className="text-muted-foreground text-xs">
-                    Linked member · shows their picture and profile
-                  </p>
+                  <p className="text-muted-foreground text-xs">Linked member · shows their picture and profile</p>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onChange(unlinkMember(position))}
-                >
+                <Button type="button" variant="ghost" size="sm" onClick={() => onChange(unlinkMember(position))}>
                   <Unlink className="size-4" aria-hidden="true" />
                   Unlink
                 </Button>
@@ -172,8 +152,8 @@ export function PositionEditor({
                 {suggestions.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-muted-foreground text-xs">
-                      Suggested match{suggestions.length > 1 ? "es" : ""} for “{position.personName}
-                      ”. Nothing is linked until you confirm.
+                      Suggested match{suggestions.length > 1 ? "es" : ""} for “{position.personName}”. Nothing is linked
+                      until you confirm.
                     </p>
                     <ul className="space-y-1">
                       {suggestions.map((m, i) => (
@@ -253,8 +233,7 @@ export function PositionEditor({
         <div>
           <Label htmlFor={`${uid}-advisor`}>Advisor</Label>
           <p className="text-muted-foreground text-xs">
-            Shown beside their manager, outside the main hierarchy. An advisor has a manager and no
-            reports.
+            Shown beside their manager, outside the main hierarchy. An advisor has a manager and no reports.
           </p>
         </div>
         <Switch
@@ -280,9 +259,7 @@ export function PositionEditor({
 
       {position.sourceQuote.length > 0 && (
         <details className="text-sm">
-          <summary className="text-muted-foreground cursor-pointer">
-            Where the import read this from
-          </summary>
+          <summary className="text-muted-foreground cursor-pointer">Where the import read this from</summary>
           <ul className="text-muted-foreground mt-2 space-y-1 border-l pl-3">
             {position.sourceQuote.map((q, i) => (
               <li key={i} className="font-mono text-xs break-words whitespace-pre-wrap">
@@ -294,13 +271,7 @@ export function PositionEditor({
       )}
 
       <div className="flex flex-wrap gap-2 border-t pt-4">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onAddReport}
-          disabled={position.isAdvisor}
-        >
+        <Button type="button" variant="outline" size="sm" onClick={onAddReport} disabled={position.isAdvisor}>
           <Plus className="size-4" aria-hidden="true" />
           Add a report
         </Button>

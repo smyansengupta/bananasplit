@@ -38,11 +38,7 @@ export interface BlobDriver {
   put(store: StoreName, key: string, body: Buffer, options: PutOptions): Promise<StoredBlob>;
   get(store: StoreName, key: string): Promise<{ body: Buffer; contentType: string } | null>;
   delete(store: StoreName, keys: readonly string[]): Promise<void>;
-  list(
-    store: StoreName,
-    prefix: string,
-    cursor?: string,
-  ): Promise<{ keys: string[]; cursor?: string }>;
+  list(store: StoreName, prefix: string, cursor?: string): Promise<{ keys: string[]; cursor?: string }>;
 }
 
 export class StorageConfigError extends Error {
@@ -91,10 +87,7 @@ export function vercelBlobDriver(env: Env = process.env): BlobDriver {
     },
     async get(store, key) {
       const { get } = await import("@vercel/blob");
-      const result = await get(key, {
-        access: store === "public" ? "public" : "private",
-        token: token(store),
-      });
+      const result = await get(key, { access: store === "public" ? "public" : "private", token: token(store) });
       if (!result || result.statusCode !== 200 || !result.stream) return null;
       const chunks: Buffer[] = [];
       for await (const chunk of result.stream as unknown as AsyncIterable<Uint8Array>) {
@@ -112,10 +105,7 @@ export function vercelBlobDriver(env: Env = process.env): BlobDriver {
     async list(store, prefix, cursor) {
       const { list } = await import("@vercel/blob");
       const result = await list({ prefix, cursor, limit: 1000, token: token(store) });
-      return {
-        keys: result.blobs.map((b) => b.pathname),
-        cursor: result.hasMore ? result.cursor : undefined,
-      };
+      return { keys: result.blobs.map((b) => b.pathname), cursor: result.hasMore ? result.cursor : undefined };
     },
   };
 }
@@ -163,11 +153,7 @@ export function localDriver(root: string = LOCAL_BLOB_ROOT): BlobDriver {
       }
       await mkdir(path.dirname(file), { recursive: true });
       await writeFile(file, body);
-      await writeFile(
-        `${file}.meta.json`,
-        JSON.stringify({ contentType: options.contentType }),
-        "utf8",
-      );
+      await writeFile(`${file}.meta.json`, JSON.stringify({ contentType: options.contentType }), "utf8");
       return { key, url: store === "public" ? `${LOCAL_PUBLIC_PREFIX}${key}` : null };
     },
     async get(store, key) {
@@ -177,8 +163,7 @@ export function localDriver(root: string = LOCAL_BLOB_ROOT): BlobDriver {
           readFile(file),
           readFile(`${file}.meta.json`, "utf8").catch(() => "{}"),
         ]);
-        const contentType =
-          (JSON.parse(meta) as { contentType?: string }).contentType ?? "application/octet-stream";
+        const contentType = (JSON.parse(meta) as { contentType?: string }).contentType ?? "application/octet-stream";
         return { body, contentType };
       } catch {
         return null;

@@ -30,11 +30,4 @@ export function hasSource(kind: DatabaseKind): boolean {
   return Boolean(SOURCES[kind]);
 }
 
-export {
-  attendanceSource,
-  ballotChoicesSource,
-  ballotsSource,
-  peopleSource,
-  sessionsSource,
-  signupsSource,
-};
+export { attendanceSource, ballotChoicesSource, ballotsSource, peopleSource, sessionsSource, signupsSource };

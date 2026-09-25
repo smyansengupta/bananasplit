@@ -14,12 +14,7 @@ import {
   type DraftPosition,
 } from "./draft";
 
-const P = (
-  id: string,
-  reportsTo: string | null,
-  rank: string,
-  over: Partial<DraftPosition> = {},
-): DraftPosition => ({
+const P = (id: string, reportsTo: string | null, rank: string, over: Partial<DraftPosition> = {}): DraftPosition => ({
   id,
   key: id,
   title: id,
@@ -46,8 +41,7 @@ const chart = [
   P("tech", "ops", "a0"),
   P("prog", "ops", "a1"),
 ];
-const order = (list: DraftPosition[], parent: string | null) =>
-  siblingsOf(list, parent).map((p) => p.id);
+const order = (list: DraftPosition[], parent: string | null) => siblingsOf(list, parent).map((p) => p.id);
 
 describe("draft operations", () => {
   it("reparents by dropping inside a row, as its last report", () => {
@@ -72,9 +66,7 @@ describe("draft operations", () => {
   });
 
   it("sets a manager from the picker and refuses a loop", () => {
-    expect(setManager(chart, "prog", "growth")!.find((p) => p.id === "prog")?.reportsTo).toBe(
-      "growth",
-    );
+    expect(setManager(chart, "prog", "growth")!.find((p) => p.id === "prog")?.reportsTo).toBe("growth");
     expect(setManager(chart, "ops", "tech")).toBeNull();
     expect(setManager(chart, "tech", null)!.find((p) => p.id === "tech")?.reportsTo).toBeNull();
   });
@@ -95,18 +87,8 @@ describe("draft operations", () => {
 
   it("confirms exact matches only, and unlinking keeps the placeholder name", () => {
     const list = [
-      P("a", null, "a0", {
-        personName: "Jackson Lamoureux",
-        matchState: "SUGGESTED",
-        matchScore: 1,
-        suggestedUserIds: ["u1"],
-      }),
-      P("b", "a", "a0", {
-        personName: "Oliver",
-        matchState: "SUGGESTED",
-        matchScore: 0.85,
-        suggestedUserIds: ["u2"],
-      }),
+      P("a", null, "a0", { personName: "Jackson Lamoureux", matchState: "SUGGESTED", matchScore: 1, suggestedUserIds: ["u1"] }),
+      P("b", "a", "a0", { personName: "Oliver", matchState: "SUGGESTED", matchScore: 0.85, suggestedUserIds: ["u2"] }),
     ];
     expect(exactMatches(list).map((p) => p.id)).toEqual(["a"]);
     const confirmed = confirmAllExact(list, new Map([["u1", "Jackson Lamoureux"]]));

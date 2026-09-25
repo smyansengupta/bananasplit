@@ -45,9 +45,7 @@ export function MemberPicker({
 }) {
   const [open, setOpen] = useState(false);
   const byId = new Map(members.map((m) => [m.id, m]));
-  const suggested = suggestedIds
-    .map((id) => byId.get(id))
-    .filter((m): m is EditorMember => Boolean(m));
+  const suggested = suggestedIds.map((id) => byId.get(id)).filter((m): m is EditorMember => Boolean(m));
   const others = members.filter((m) => !suggestedIds.includes(m.id));
   const selected = value ? byId.get(value) : undefined;
 
@@ -60,10 +58,7 @@ export function MemberPicker({
         setOpen(false);
       }}
     >
-      <Check
-        className={cn("size-4", value === m.id ? "opacity-100" : "opacity-0")}
-        aria-hidden="true"
-      />
+      <Check className={cn("size-4", value === m.id ? "opacity-100" : "opacity-0")} aria-hidden="true" />
       <UserAvatar user={m} size="xs" />
       <span className="truncate">{m.name ?? "Unnamed member"}</span>
       {m.title && <span className="text-muted-foreground ml-auto truncate text-xs">{m.title}</span>}

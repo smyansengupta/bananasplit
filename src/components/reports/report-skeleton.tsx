@@ -15,11 +15,7 @@ export function ReportSkeleton({
   className?: string;
 }) {
   return (
-    <Card
-      className={cn("min-w-0 flex-1", className)}
-      aria-busy="true"
-      aria-label={`${title} loading`}
-    >
+    <Card className={cn("min-w-0 flex-1", className)} aria-busy="true" aria-label={`${title} loading`}>
       <CardHeader>
         <div className="font-heading text-base font-medium">{title}</div>
         <Skeleton className="h-4 w-2/3" />

@@ -27,8 +27,7 @@ const { db, cookieJar, getSessionMock, txCalls } = vi.hoisted(() => {
 vi.mock("next/headers", () => ({
   headers: async () => new Headers({ "x-forwarded-for": "203.0.113.9" }),
   cookies: async () => ({
-    get: (name: string) =>
-      cookieJar.jar.has(name) ? { name, value: cookieJar.jar.get(name)! } : undefined,
+    get: (name: string) => (cookieJar.jar.has(name) ? { name, value: cookieJar.jar.get(name)! } : undefined),
     set: cookieJar.set,
   }),
 }));
@@ -37,9 +36,7 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: async () => ({ allowed: true }),
   rateLimitKey: (...parts: string[]) => parts.join(":"),
 }));
-vi.mock("./poll-org", () => ({
-  pollOrgId: async (id: string) => (id === "poll_1" ? "org_1" : null),
-}));
+vi.mock("./poll-org", () => ({ pollOrgId: async (id: string) => (id === "poll_1" ? "org_1" : null) }));
 vi.mock("@/server/db/context", () => ({
   withSystemOrgTx: async (
     orgId: string | null,
@@ -79,9 +76,7 @@ describe("submitPollResponse", () => {
     expect(db.availabilityPoll.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "poll_1", organizationId: "org_1" } }),
     );
-    expect((await submitPollResponse({ pollId: "nope", guestName: "Ada", entries })).error).toMatch(
-      /not found/,
-    );
+    expect((await submitPollResponse({ pollId: "nope", guestName: "Ada", entries })).error).toMatch(/not found/);
   });
 
   it("gives a new guest an httpOnly key cookie and stores only its hash", async () => {
@@ -94,11 +89,7 @@ describe("submitPollResponse", () => {
     );
     const key = cookieJar.jar.get("poll_guest_poll_1")!;
     const rows = db.pollResponse.createMany.mock.calls[0][0].data;
-    expect(rows[0]).toMatchObject({
-      organizationId: "org_1",
-      guestName: "Ada",
-      guestKeyHash: hashGuestKey(key),
-    });
+    expect(rows[0]).toMatchObject({ organizationId: "org_1", guestName: "Ada", guestKeyHash: hashGuestKey(key) });
     expect(JSON.stringify(rows)).not.toContain(key);
   });
 
@@ -132,67 +123,35 @@ describe("submitPollResponse", () => {
   });
 
   it("a signed-in NON-member answers as a guest, never as themselves", async () => {
-    getSessionMock.mockResolvedValue({
-      user: { id: "u_outsider", email: "o@example.edu", name: "O" },
-    });
+    getSessionMock.mockResolvedValue({ user: { id: "u_outsider", email: "o@example.edu", name: "O" } });
     const result = await submitPollResponse({ pollId: "poll_1", guestName: "Olly", entries });
     expect(result).toEqual({});
     expect(db.pollResponse.upsert).not.toHaveBeenCalled();
     expect(db.pollResponse.createMany.mock.calls[0][0].data[0]).not.toHaveProperty("userId");
-    expect(db.membership.count).toHaveBeenCalledWith({
-      where: { organizationId: "org_1", userId: "u_outsider" },
-    });
+    expect(db.membership.count).toHaveBeenCalledWith({ where: { organizationId: "org_1", userId: "u_outsider" } });
   });
 
   it("a signed-in member answers as themselves", async () => {
-    getSessionMock.mockResolvedValue({
-      user: { id: "u_member", email: "m@example.edu", name: "M" },
-    });
+    getSessionMock.mockResolvedValue({ user: { id: "u_member", email: "m@example.edu", name: "M" } });
     db.membership.count.mockResolvedValue(1);
     await submitPollResponse({ pollId: "poll_1", entries });
     expect(txCalls).toEqual([{ orgId: "org_1", userId: "u_member" }]);
     expect(db.pollResponse.upsert).toHaveBeenCalledWith({
       where: { slotId_userId: { slotId: "slot_1", userId: "u_member" } },
       update: { availability: "YES" },
-      create: {
-        organizationId: "org_1",
-        pollId: "poll_1",
-        slotId: "slot_1",
-        userId: "u_member",
-        availability: "YES",
-      },
+      create: { organizationId: "org_1", pollId: "poll_1", slotId: "slot_1", userId: "u_member", availability: "YES" },
     });
     expect(cookieJar.set).not.toHaveBeenCalled();
   });
 
   it("rejects a slot from another poll, a closed poll and a finalized poll", async () => {
-    expect(
-      (
-        await submitPollResponse({
-          pollId: "poll_1",
-          guestName: "A",
-          entries: [{ slotId: "slot_x", availability: "YES" }],
-        })
-      ).error,
-    ).toMatch(/isn't part/);
-    db.availabilityPoll.findFirst.mockResolvedValueOnce({
-      id: "poll_1",
-      finalizedEventId: null,
-      closesAt: new Date(0),
-      slots: [],
-    });
-    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries })).error).toMatch(
-      /closed/,
+    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries: [{ slotId: "slot_x", availability: "YES" }] })).error).toMatch(
+      /isn't part/,
     );
-    db.availabilityPoll.findFirst.mockResolvedValueOnce({
-      id: "poll_1",
-      finalizedEventId: "e",
-      closesAt: null,
-      slots: [],
-    });
-    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries })).error).toMatch(
-      /finalized/,
-    );
+    db.availabilityPoll.findFirst.mockResolvedValueOnce({ id: "poll_1", finalizedEventId: null, closesAt: new Date(0), slots: [] });
+    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries })).error).toMatch(/closed/);
+    db.availabilityPoll.findFirst.mockResolvedValueOnce({ id: "poll_1", finalizedEventId: "e", closesAt: null, slots: [] });
+    expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries })).error).toMatch(/finalized/);
     expect(db.pollResponse.createMany).not.toHaveBeenCalled();
   });
 

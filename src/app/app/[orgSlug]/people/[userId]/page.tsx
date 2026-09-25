@@ -37,16 +37,14 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
         People
       </Link>
 
-      <article className="bg-card ring-foreground/10 space-y-6 rounded-xl p-6 ring-1">
+      <article className="bg-card space-y-6 rounded-xl p-6 ring-1 ring-foreground/10">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <UserAvatar user={person} size="2xl" decorative={false} />
           <div className="min-w-0 flex-1 space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight break-words">
               {displayName}
               {person.pronouns && (
-                <span className="text-muted-foreground ml-2 text-base font-normal">
-                  {person.pronouns}
-                </span>
+                <span className="text-muted-foreground ml-2 text-base font-normal">{person.pronouns}</span>
               )}
             </h1>
             <div className="flex flex-wrap items-center gap-2">
@@ -65,10 +63,7 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
           isSelf && (
             <p className="text-muted-foreground text-sm">
               You haven&apos;t written a bio yet.{" "}
-              <Link
-                href={profileHref(orgSlug, "details")}
-                className="text-primary underline-offset-4 hover:underline"
-              >
+              <Link href={profileHref(orgSlug, "details")} className="text-primary underline-offset-4 hover:underline">
                 Add one
               </Link>
               .
@@ -99,11 +94,7 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
           )}
           <span className="text-muted-foreground ml-auto text-xs">
             Member since{" "}
-            {person.joinedAt.toLocaleDateString("en-US", {
-              month: "long",
-              year: "numeric",
-              timeZone: organization.timezone,
-            })}
+            {person.joinedAt.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: organization.timezone })}
           </span>
         </footer>
       </article>

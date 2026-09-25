@@ -25,9 +25,7 @@ describe("proxy — per-request nonce CSP (0A Fix 13)", () => {
       headers: { "x-pathname": "https://evil.example" },
     });
     const response = proxy(request);
-    expect(response.headers.get("x-middleware-request-x-pathname")).toBe(
-      "/app/cbc/tasks/t1?view=mine",
-    );
+    expect(response.headers.get("x-middleware-request-x-pathname")).toBe("/app/cbc/tasks/t1?view=mine");
   });
 
   it("uses a new nonce for every request", () => {

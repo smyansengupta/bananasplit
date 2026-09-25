@@ -26,11 +26,7 @@ export function safeCallbackUrl(value: unknown): string | null {
     return null;
   }
   if (url.origin !== BASE) return null;
-  if (
-    BLOCKED_PREFIXES.some(
-      (p) => url.pathname === p || url.pathname.startsWith(p.endsWith("/") ? p : `${p}/`),
-    )
-  ) {
+  if (BLOCKED_PREFIXES.some((p) => url.pathname === p || url.pathname.startsWith(p.endsWith("/") ? p : `${p}/`))) {
     return null;
   }
   return `${url.pathname}${url.search}${url.hash}`;

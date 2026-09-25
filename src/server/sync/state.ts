@@ -8,14 +8,7 @@ import type { TxClient } from "@/server/db/context";
  * backwards or skip rows another run already took.
  */
 
-export const STREAMS = [
-  "sessions",
-  "signups",
-  "checkins",
-  "ballots",
-  "unsubscribes",
-  "reconcile",
-] as const;
+export const STREAMS = ["sessions", "signups", "checkins", "ballots", "unsubscribes", "reconcile"] as const;
 export type Stream = (typeof STREAMS)[number];
 
 export const STREAM_LABELS: Record<Stream, string> = {
@@ -96,22 +89,10 @@ export async function markStream(
 ): Promise<void> {
   await db.dataSourceSyncState.update({
     where: { id: state.id },
-    data: {
-      watermark,
-      lastSyncedAt: new Date(),
-      lastError: null,
-      rowsUpserted: { increment: rows },
-    },
+    data: { watermark, lastSyncedAt: new Date(), lastError: null, rowsUpserted: { increment: rows } },
   });
 }
 
-export async function recordStreamError(
-  db: TxClient,
-  state: StateRow,
-  error: string,
-): Promise<void> {
-  await db.dataSourceSyncState.update({
-    where: { id: state.id },
-    data: { lastError: error.slice(0, 500) },
-  });
+export async function recordStreamError(db: TxClient, state: StateRow, error: string): Promise<void> {
+  await db.dataSourceSyncState.update({ where: { id: state.id }, data: { lastError: error.slice(0, 500) } });
 }

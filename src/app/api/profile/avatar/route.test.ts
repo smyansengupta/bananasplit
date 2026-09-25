@@ -44,11 +44,7 @@ function formRequest(
   headers: Record<string, string> = {},
 ): Request {
   const form = new FormData();
-  if (file)
-    form.set(
-      "file",
-      new File([file.bytes], file.name ?? "avatar.png", { type: file.type ?? "image/png" }),
-    );
+  if (file) form.set("file", new File([file.bytes], file.name ?? "avatar.png", { type: file.type ?? "image/png" }));
   return new Request(URL_, { method: "POST", body: form, headers });
 }
 
@@ -69,10 +65,7 @@ function headerOnlyRequest(length: number): { request: Request; wasRead: () => b
   const request = new Request(URL_, {
     method: "POST",
     body,
-    headers: {
-      "content-type": "multipart/form-data; boundary=x",
-      "content-length": String(length),
-    },
+    headers: { "content-type": "multipart/form-data; boundary=x", "content-length": String(length) },
     duplex: "half",
   } as RequestInit);
   return { request, wasRead: () => read };
@@ -159,17 +152,13 @@ describe("POST /api/profile/avatar", () => {
     const script = new TextEncoder().encode("<svg onload=alert(1)>") as Uint8Array<ArrayBuffer>;
     const response = await POST(formRequest({ bytes: script, name: "a.png", type: "image/png" }));
     expect(response.status).toBe(415);
-    const gif = new Uint8Array([
-      0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0,
-    ]) as Uint8Array<ArrayBuffer>;
+    const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0]) as Uint8Array<ArrayBuffer>;
     expect((await POST(formRequest({ bytes: gif, type: "image/png" }))).status).toBe(415);
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
   it("maps an image the pipeline cannot read to 422", async () => {
-    replaceMock.mockRejectedValueOnce(
-      new ImageRejectedError("corrupt", "That image could not be read."),
-    );
+    replaceMock.mockRejectedValueOnce(new ImageRejectedError("corrupt", "That image could not be read."));
     const response = await POST(formRequest({ bytes: png(1024) }));
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "That image could not be read." });
@@ -191,9 +180,7 @@ describe("POST /api/profile/avatar", () => {
   });
 
   it("refuses a cross-site request", async () => {
-    const response = await POST(
-      formRequest({ bytes: png(1024) }, { origin: "https://evil.example" }),
-    );
+    const response = await POST(formRequest({ bytes: png(1024) }, { origin: "https://evil.example" }));
     expect(response.status).toBe(403);
     expect(getSessionMock).not.toHaveBeenCalled();
   });
@@ -227,11 +214,7 @@ describe("DELETE /api/profile/avatar", () => {
     getSessionMock.mockResolvedValueOnce(null);
     expect((await DELETE(new Request(URL_, { method: "DELETE" }))).status).toBe(401);
     expect(
-      (
-        await DELETE(
-          new Request(URL_, { method: "DELETE", headers: { origin: "https://evil.example" } }),
-        )
-      ).status,
+      (await DELETE(new Request(URL_, { method: "DELETE", headers: { origin: "https://evil.example" } }))).status,
     ).toBe(403);
     expect(removeMock).not.toHaveBeenCalled();
   });

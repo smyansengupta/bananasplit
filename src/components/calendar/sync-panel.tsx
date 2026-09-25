@@ -21,11 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
 function StatusBadge({ status }: { status: string | null }) {
   if (!status) return <Badge variant="outline">Not connected</Badge>;
   const bad = status === "ERROR" || status === "NEEDS_REAUTH";
-  return (
-    <Badge variant={bad ? "destructive" : status === "CONNECTED" ? "secondary" : "outline"}>
-      {STATUS_LABEL[status] ?? status}
-    </Badge>
-  );
+  return <Badge variant={bad ? "destructive" : status === "CONNECTED" ? "secondary" : "outline"}>{STATUS_LABEL[status] ?? status}</Badge>;
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -56,9 +52,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 function when(iso: string | Date | null | undefined): string {
   if (!iso) return "never";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(iso),
-  );
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 }
 
 export function SyncPanel({
@@ -81,18 +75,11 @@ export function SyncPanel({
   const usable = google && (google.status === "CONNECTED" || google.status === "ERROR");
   const imp = google?.import ?? null;
 
-  function run(
-    action: () => Promise<{ error?: string; queued?: number }>,
-    ok: (queued?: number) => string,
-  ) {
+  function run(action: () => Promise<{ error?: string; queued?: number }>, ok: (queued?: number) => string) {
     setMessage(null);
     startTransition(async () => {
       const result = await action();
-      setMessage(
-        result.error
-          ? { tone: "error", text: result.error }
-          : { tone: "ok", text: ok(result.queued) },
-      );
+      setMessage(result.error ? { tone: "error", text: result.error } : { tone: "ok", text: ok(result.queued) });
       router.refresh();
     });
   }
@@ -100,10 +87,7 @@ export function SyncPanel({
   return (
     <div className="space-y-4">
       {message && (
-        <p
-          role="status"
-          className={message.tone === "error" ? "text-destructive text-sm" : "text-sm"}
-        >
+        <p role="status" className={message.tone === "error" ? "text-destructive text-sm" : "text-sm"}>
           {message.text}
         </p>
       )}
@@ -117,8 +101,8 @@ export function SyncPanel({
             </Badge>
           </CardTitle>
           <CardDescription>
-            Upcoming public events as JSON (what the club website reads at build time) and as a
-            calendar feed anyone can subscribe to. Cached for five minutes at the CDN.
+            Upcoming public events as JSON (what the club website reads at build time) and as a calendar feed anyone
+            can subscribe to. Cached for five minutes at the CDN.
             {!status.publicEventsEnabled && (
               <>
                 {" "}
@@ -144,8 +128,8 @@ export function SyncPanel({
             <StatusBadge status={google?.status ?? null} />
           </CardTitle>
           <CardDescription>
-            Every save in the suite is copied to Google within about a minute. Changes made directly
-            in Google are overwritten by the next save here.
+            Every save in the suite is copied to Google within about a minute. Changes made directly in Google are
+            overwritten by the next save here.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -155,20 +139,15 @@ export function SyncPanel({
                 <dt className="text-muted-foreground">Public calendar</dt>
                 <dd className="truncate">{google.publicCalendarId}</dd>
                 <dt className="text-muted-foreground">Internal calendar</dt>
-                <dd className="truncate">
-                  {google.internalCalendarId ?? "None: internal events stay off Google"}
-                </dd>
+                <dd className="truncate">{google.internalCalendarId ?? "None: internal events stay off Google"}</dd>
                 <dt className="text-muted-foreground">Events</dt>
                 <dd>
-                  {status.counts.SYNCED} on Google · {status.counts.PENDING} syncing ·{" "}
-                  {status.counts.FAILED} failed
+                  {status.counts.SYNCED} on Google · {status.counts.PENDING} syncing · {status.counts.FAILED} failed
                 </dd>
                 <dt className="text-muted-foreground">Last Sync now</dt>
                 <dd>{when(google.lastSyncRequestAt)}</dd>
               </dl>
-              {google.lastError && (
-                <p className="text-destructive">Last error: {google.lastError}</p>
-              )}
+              {google.lastError && <p className="text-destructive">Last error: {google.lastError}</p>}
               {status.failures.length > 0 && (
                 <ul className="space-y-1">
                   {status.failures.map((f) => (
@@ -185,12 +164,7 @@ export function SyncPanel({
                 <Button
                   type="button"
                   disabled={isPending || !usable}
-                  onClick={() =>
-                    run(
-                      () => syncGoogleNow(orgId),
-                      (n) => `Queued ${n ?? 0} event(s) for Google.`,
-                    )
-                  }
+                  onClick={() => run(() => syncGoogleNow(orgId), (n) => `Queued ${n ?? 0} event(s) for Google.`)}
                 >
                   Sync now
                 </Button>
@@ -213,9 +187,8 @@ export function SyncPanel({
           <CardHeader>
             <CardTitle className="text-base">Import existing Google events</CardTitle>
             <CardDescription>
-              Once, after connecting: events already on the public Google Calendar are matched to
-              the suite&apos;s events so nothing is duplicated. Run the dry run, check the numbers,
-              then apply.
+              Once, after connecting: events already on the public Google Calendar are matched to the suite&apos;s
+              events so nothing is duplicated. Run the dry run, check the numbers, then apply.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -234,9 +207,7 @@ export function SyncPanel({
                   </p>
                 )}
                 {imp.samples && imp.samples.ambiguous.length > 0 && (
-                  <p className="text-muted-foreground">
-                    Ambiguous: {imp.samples.ambiguous.join("; ")}
-                  </p>
+                  <p className="text-muted-foreground">Ambiguous: {imp.samples.ambiguous.join("; ")}</p>
                 )}
                 {imp.samples && imp.samples.created.length > 0 && (
                   <p className="text-muted-foreground">New: {imp.samples.created.join("; ")}</p>
@@ -256,34 +227,21 @@ export function SyncPanel({
                   type="button"
                   variant="outline"
                   disabled={isPending || !usable}
-                  onClick={() =>
-                    run(
-                      () => importGoogleEvents(orgId, "dry-run"),
-                      () => "Dry run queued.",
-                    )
-                  }
+                  onClick={() => run(() => importGoogleEvents(orgId, "dry-run"), () => "Dry run queued.")}
                 >
                   Dry run
                 </Button>
                 <Button
                   type="button"
-                  disabled={
-                    isPending || !usable || imp?.mode !== "dry-run" || imp.status === "failed"
-                  }
-                  onClick={() =>
-                    run(
-                      () => importGoogleEvents(orgId, "apply"),
-                      () => "Import queued.",
-                    )
-                  }
+                  disabled={isPending || !usable || imp?.mode !== "dry-run" || imp.status === "failed"}
+                  onClick={() => run(() => importGoogleEvents(orgId, "apply"), () => "Import queued.")}
                 >
                   Apply import
                 </Button>
               </div>
             )}
             <p className="text-muted-foreground text-xs">
-              Ambiguous events are imported flagged as possible duplicates; merge them in Databases
-              &gt; Sessions.
+              Ambiguous events are imported flagged as possible duplicates; merge them in Databases &gt; Sessions.
             </p>
           </CardContent>
         </Card>
@@ -296,19 +254,14 @@ export function SyncPanel({
             <StatusBadge status={status.buildHook?.status ?? null} />
           </CardTitle>
           <CardDescription>
-            When a public event changes, the suite waits a minute (so a burst of edits is one
-            deploy) and then asks Netlify to rebuild the website. The hook URL is saved in Settings
-            &gt; Integrations.
+            When a public event changes, the suite waits a minute (so a burst of edits is one deploy) and then asks
+            Netlify to rebuild the website. The hook URL is saved in Settings &gt; Integrations.
           </CardDescription>
         </CardHeader>
         {status.buildHook && (
           <CardContent className="space-y-1 text-sm">
-            <p className="text-muted-foreground">
-              Last successful rebuild request: {when(status.buildHook.lastVerifiedAt)}
-            </p>
-            {status.buildHook.lastError && (
-              <p className="text-destructive">{status.buildHook.lastError}</p>
-            )}
+            <p className="text-muted-foreground">Last successful rebuild request: {when(status.buildHook.lastVerifiedAt)}</p>
+            {status.buildHook.lastError && <p className="text-destructive">{status.buildHook.lastError}</p>}
           </CardContent>
         )}
       </Card>

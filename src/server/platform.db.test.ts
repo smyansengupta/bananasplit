@@ -54,14 +54,8 @@ let seeded: Seeded | null = null;
 try {
   const [cbc, jackson, kristine] = await Promise.all([
     orgBySlug("claude-builders-club"),
-    authDb.user.findUnique({
-      where: { email: "jackson@example.edu" },
-      select: { id: true, email: true, name: true },
-    }),
-    authDb.user.findUnique({
-      where: { email: "kristine@example.edu" },
-      select: { id: true, email: true, name: true },
-    }),
+    authDb.user.findUnique({ where: { email: "jackson@example.edu" }, select: { id: true, email: true, name: true } }),
+    authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
   ]);
   if (cbc && jackson && kristine) seeded = { cbcId: cbc.id, jackson, kristine };
 } catch {
@@ -113,10 +107,7 @@ describe.skipIf(!seeded)("platform services against the local database (seeded C
     expect(summary.refused).toBeUndefined();
     const after = await withSystemOrgTx(s.cbcId, async ({ db }) => ({
       n: await db.notification.findUnique({ where: { id }, select: { emailSentAt: true } }),
-      job: await db.job.findFirst({
-        where: { dedupeKey: `notify-email:${id}` },
-        select: { status: true },
-      }),
+      job: await db.job.findFirst({ where: { dedupeKey: `notify-email:${id}` }, select: { status: true } }),
     }));
     expect(after.n?.emailSentAt).toBeInstanceOf(Date);
     expect(after.job?.status).toBe("DONE");
@@ -165,32 +156,20 @@ describe.skipIf(!seeded)("platform services against the local database (seeded C
       value,
     });
     expect(saved.last4).toBe("efgh");
-    await expect(
-      getSecret({ orgId: s.cbcId, provider: "NETLIFY_BUILD_HOOK", kind: "HOOK_URL" }),
-    ).resolves.toBe(value);
+    await expect(getSecret({ orgId: s.cbcId, provider: "NETLIFY_BUILD_HOOK", kind: "HOOK_URL" })).resolves.toBe(value);
 
     // The accessor is service-only: under the member path (app_user, even OWNER) it is refused.
-    const viaMemberPath = withOrgTx(
-      s.cbcId,
-      ({ db }) =>
-        db.$queryRaw`SELECT * FROM app.secret_read(${s.cbcId}, ${saved.integrationId}, 'HOOK_URL')`,
+    const viaMemberPath = withOrgTx(s.cbcId, ({ db }) =>
+      db.$queryRaw`SELECT * FROM app.secret_read(${s.cbcId}, ${saved.integrationId}, 'HOOK_URL')`,
     );
     await expect(viaMemberPath).rejects.toBeInstanceOf(ForbiddenError);
 
     // Only an OWNER removes.
     await expect(
-      removeSecret({
-        orgId: s.cbcId,
-        actor: { userId: s.jackson.id, role: "ADMIN" },
-        provider: "NETLIFY_BUILD_HOOK",
-      }),
+      removeSecret({ orgId: s.cbcId, actor: { userId: s.jackson.id, role: "ADMIN" }, provider: "NETLIFY_BUILD_HOOK" }),
     ).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(
-      removeSecret({ orgId: s.cbcId, actor, provider: "NETLIFY_BUILD_HOOK" }),
-    ).resolves.toBe(true);
-    await expect(
-      getSecret({ orgId: s.cbcId, provider: "NETLIFY_BUILD_HOOK", kind: "HOOK_URL" }),
-    ).resolves.toBeNull();
+    await expect(removeSecret({ orgId: s.cbcId, actor, provider: "NETLIFY_BUILD_HOOK" })).resolves.toBe(true);
+    await expect(getSecret({ orgId: s.cbcId, provider: "NETLIFY_BUILD_HOOK", kind: "HOOK_URL" })).resolves.toBeNull();
 
     const audit = await withSystemOrgTx(s.cbcId, ({ db }) =>
       db.orgAuditLog.findMany({
@@ -249,17 +228,8 @@ describe.skipIf(!seeded)("platform services against the local database (seeded C
     requireUserMock.mockResolvedValue(s.kristine);
     const members = await getOrgMembersForPicker(s.cbcId);
     expect(members.length).toBeGreaterThanOrEqual(8);
-    expect(Object.keys(members[0]!).sort()).toEqual([
-      "avatar",
-      "id",
-      "image",
-      "name",
-      "role",
-      "title",
-    ]);
+    expect(Object.keys(members[0]!).sort()).toEqual(["avatar", "id", "image", "name", "role", "title"]);
     const names = members.map((m) => m.name ?? "");
-    expect(
-      [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
-    ).toEqual(names);
+    expect([...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))).toEqual(names);
   });
 });

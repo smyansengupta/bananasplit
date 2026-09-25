@@ -52,13 +52,11 @@ export const VERIFIED_EMAIL_MARKER = "googleVerifiedEmail";
  * The Google provider's profile(): Auth.js's default OIDC mapping plus the
  * verified address (normalized), or null when Google did not verify it.
  */
-export function googleProfile(
-  profile: GoogleProfile & {
-    sub?: string;
-    name?: string | null;
-    picture?: string | null;
-  },
-) {
+export function googleProfile(profile: GoogleProfile & {
+  sub?: string;
+  name?: string | null;
+  picture?: string | null;
+}) {
   return {
     id: profile.sub ?? crypto.randomUUID(),
     name: profile.name ?? null,
@@ -121,9 +119,7 @@ export function withNormalizedEmails(adapter: Adapter): Adapter {
   const normalizeUser = <T extends Partial<AdapterUser>>(user: T): T => {
     const { [VERIFIED_EMAIL_MARKER]: _marker, ...rest } = user as T & Record<string, unknown>;
     const clean = rest as T;
-    return typeof clean.email === "string"
-      ? { ...clean, email: normalizeEmail(clean.email) }
-      : clean;
+    return typeof clean.email === "string" ? { ...clean, email: normalizeEmail(clean.email) } : clean;
   };
   return {
     ...adapter,
@@ -140,6 +136,8 @@ export function withNormalizedEmails(adapter: Adapter): Adapter {
     getUserByEmail: adapter.getUserByEmail
       ? (email) => adapter.getUserByEmail!(normalizeEmail(email))
       : undefined,
-    updateUser: adapter.updateUser ? (user) => adapter.updateUser!(normalizeUser(user)) : undefined,
+    updateUser: adapter.updateUser
+      ? (user) => adapter.updateUser!(normalizeUser(user))
+      : undefined,
   };
 }

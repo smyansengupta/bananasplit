@@ -14,10 +14,7 @@ export interface ViewParamsApi {
   params: URLSearchParams;
   pending: boolean;
   /** Applies a change and navigates. Anything but a row/page change resets to page 1. */
-  update: (
-    change: (p: URLSearchParams) => void,
-    options?: { keepPage?: boolean; push?: boolean },
-  ) => void;
+  update: (change: (p: URLSearchParams) => void, options?: { keepPage?: boolean; push?: boolean }) => void;
   href: (change: (p: URLSearchParams) => void) => string;
 }
 
@@ -39,10 +36,7 @@ export function useViewParams(): ViewParamsApi {
   );
 
   const update = useCallback(
-    (
-      change: (p: URLSearchParams) => void,
-      options: { keepPage?: boolean; push?: boolean } = {},
-    ) => {
+    (change: (p: URLSearchParams) => void, options: { keepPage?: boolean; push?: boolean } = {}) => {
       const url = build(change, options.keepPage);
       start(() => {
         if (options.push) router.push(url, { scroll: false });

@@ -43,8 +43,7 @@ export const googleRevokeJob: JobHandler<{ integrationId: string }> = async (run
     try {
       await revokeGrant(token, { signal: run.signal });
     } catch (error) {
-      if (error instanceof GoogleApiError && !error.retryable)
-        throw new PermanentJobError(error.message);
+      if (error instanceof GoogleApiError && !error.retryable) throw new PermanentJobError(error.message);
       throw error;
     }
   }

@@ -1,11 +1,6 @@
 import { TZDate } from "@date-fns/tz";
 
-import {
-  AttendanceMethod,
-  RecordSource,
-  SignupSource,
-  type Prisma,
-} from "@/generated/prisma/client";
+import { AttendanceMethod, RecordSource, SignupSource, type Prisma } from "@/generated/prisma/client";
 import { writeOrgAuditLog } from "@/server/audit";
 import type { TxClient } from "@/server/db/context";
 import { cleanName, normalizeEmail } from "@/server/sync/supabase-map";
@@ -69,14 +64,7 @@ function clean(value: string | undefined): string {
 
 function header(rows: string[][]): Map<string, number> {
   const map = new Map<string, number>();
-  (rows[0] ?? []).forEach((h, i) =>
-    map.set(
-      clean(h)
-        .toLowerCase()
-        .replace(/[\s-]+/g, "_"),
-      i,
-    ),
-  );
+  (rows[0] ?? []).forEach((h, i) => map.set(clean(h).toLowerCase().replace(/[\s-]+/g, "_"), i));
   return map;
 }
 
@@ -98,14 +86,7 @@ export function parseLocalDateTime(value: string, timezone: string): Date | null
   }
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2}))?/.exec(v);
   if (!m) return null;
-  const d = new TZDate(
-    Number(m[1]),
-    Number(m[2]) - 1,
-    Number(m[3]),
-    Number(m[4] ?? 0),
-    Number(m[5] ?? 0),
-    timezone || "UTC",
-  );
+  const d = new TZDate(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] ?? 0), Number(m[5] ?? 0), timezone || "UTC");
   return Number.isNaN(d.getTime()) ? null : new Date(d.getTime());
 }
 
@@ -138,15 +119,12 @@ async function contactsFor(
   });
   const memberEmails = new Map<string, string>();
   for (const m of members) {
-    if (m.user.emailVerified && m.user.email)
-      memberEmails.set(m.user.email.trim().toLowerCase(), m.userId);
+    if (m.user.emailVerified && m.user.email) memberEmails.set(m.user.email.trim().toLowerCase(), m.userId);
   }
   const byEmail = await resolveContacts(
     db,
     { organizationId, timezone, creatorId: "", memberEmails },
-    people
-      .filter((p) => p.email)
-      .map((p) => ({ email: p.email as string, name: p.name, at: p.at })),
+    people.filter((p) => p.email).map((p) => ({ email: p.email as string, name: p.name, at: p.at })),
   );
   const nameOnly: Prisma.ContactCreateManyInput[] = [];
   const ids = people.map((p) => {
@@ -195,19 +173,11 @@ export async function previewAttendance(
   const cols = header(rows);
   const issues: ImportIssue[] = [];
   if (!cols.has("session") && !cols.has("session_id") && !cols.has("event_id")) {
-    return {
-      rows: [],
-      total: 0,
-      issues: [{ line: 1, message: "Add a session column (the session's id or exact title)." }],
-    };
+    return { rows: [], total: 0, issues: [{ line: 1, message: "Add a session column (the session's id or exact title)." }] };
   }
   const body = rows.slice(1);
   if (body.length > MAX_IMPORT_ROWS) {
-    return {
-      rows: [],
-      total: body.length,
-      issues: [{ line: 1, message: `At most ${MAX_IMPORT_ROWS} rows per file.` }],
-    };
+    return { rows: [], total: body.length, issues: [{ line: 1, message: `At most ${MAX_IMPORT_ROWS} rows per file.` }] };
   }
   const events = await db.event.findMany({
     where: { organizationId, deletedAt: null, mergedIntoId: null },
@@ -223,11 +193,7 @@ export async function previewAttendance(
   body.forEach((row, idx) => {
     const line = idx + 2;
     const sessionRef = pick(row, cols, "session_id", "event_id", "session");
-    const event =
-      byId.get(sessionRef) ??
-      (byTitle.get(sessionRef.toLowerCase())?.length === 1
-        ? byTitle.get(sessionRef.toLowerCase())![0]
-        : undefined);
+    const event = byId.get(sessionRef) ?? (byTitle.get(sessionRef.toLowerCase())?.length === 1 ? byTitle.get(sessionRef.toLowerCase())![0] : undefined);
     if (!event) {
       issues.push({
         line,
@@ -256,10 +222,7 @@ export async function previewAttendance(
     }
     const methodRaw = pick(row, cols, "method", "source").toLowerCase();
     if (methodRaw && !METHODS[methodRaw]) {
-      issues.push({
-        line,
-        message: `Method is qr, form or manual (got "${methodRaw.slice(0, 20)}").`,
-      });
+      issues.push({ line, message: `Method is qr, form or manual (got "${methodRaw.slice(0, 20)}").` });
       return;
     }
     out.push({
@@ -294,11 +257,7 @@ export async function commitAttendance(
     db,
     organizationId,
     timezone,
-    preview.rows.map((r) => ({
-      email: r.email,
-      name: r.name,
-      at: r.checkedInAt ?? events.get(r.eventId)?.startsAt ?? new Date(),
-    })),
+    preview.rows.map((r) => ({ email: r.email, name: r.name, at: r.checkedInAt ?? events.get(r.eventId)?.startsAt ?? new Date() })),
   );
   const contacts: string[] = [];
   const data: Prisma.AttendanceCreateManyInput[] = [];
@@ -325,9 +284,7 @@ export async function commitAttendance(
       createdById: userId,
     });
   });
-  const created = data.length
-    ? (await db.attendance.createMany({ data, skipDuplicates: true })).count
-    : 0;
+  const created = data.length ? (await db.attendance.createMany({ data, skipDuplicates: true })).count : 0;
   await writeOrgAuditLog(db, {
     organizationId,
     action: "attendance.imported",
@@ -363,11 +320,7 @@ function list(value: string): string[] {
  * term follows from it unless a term column says fall-YYYY/spring-YYYY),
  * colleges, meet_days and interests (separated by ; or |).
  */
-export function previewSignups(
-  timezone: string,
-  text: string,
-  now = new Date(),
-): ImportPreview<SignupImportRow> {
+export function previewSignups(timezone: string, text: string, now = new Date()): ImportPreview<SignupImportRow> {
   const rows = parseCsv(text);
   const cols = header(rows);
   const issues: ImportIssue[] = [];
@@ -376,11 +329,7 @@ export function previewSignups(
   }
   const body = rows.slice(1);
   if (body.length > MAX_IMPORT_ROWS) {
-    return {
-      rows: [],
-      total: body.length,
-      issues: [{ line: 1, message: `At most ${MAX_IMPORT_ROWS} rows per file.` }],
-    };
+    return { rows: [], total: body.length, issues: [{ line: 1, message: `At most ${MAX_IMPORT_ROWS} rows per file.` }] };
   }
   const out: SignupImportRow[] = [];
   body.forEach((row, idx) => {
@@ -459,9 +408,7 @@ export async function commitSignups(
       recordSource: RecordSource.CSV,
     });
   });
-  const created = data.length
-    ? (await db.signup.createMany({ data, skipDuplicates: true })).count
-    : 0;
+  const created = data.length ? (await db.signup.createMany({ data, skipDuplicates: true })).count : 0;
   await writeOrgAuditLog(db, {
     organizationId,
     action: "signup.imported",

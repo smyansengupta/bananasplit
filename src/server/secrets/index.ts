@@ -87,8 +87,7 @@ function toRecord(row: SecretRow): EncryptedSecret {
 }
 
 function checkKind(kind: string): asserts kind is SecretKind {
-  if (!(SECRET_KINDS as readonly string[]).includes(kind))
-    throw new TypeError(`unknown secret kind ${kind}`);
+  if (!(SECRET_KINDS as readonly string[]).includes(kind)) throw new TypeError(`unknown secret kind ${kind}`);
 }
 
 async function readSecretRow(
@@ -141,8 +140,7 @@ export async function setSecret(
   checkKind(input.kind);
   const value = input.value.trim();
   if (!value) throw new TypeError("secret value is empty");
-  if (Buffer.byteLength(value, "utf8") > MAX_SECRET_BYTES)
-    throw new TypeError("secret value is too large");
+  if (Buffer.byteLength(value, "utf8") > MAX_SECRET_BYTES) throw new TypeError("secret value is too large");
 
   const ring = keyring();
   const last4 = secretLast4(value);
@@ -227,8 +225,7 @@ export interface GetSecretInput {
  */
 export async function getSecret(input: GetSecretInput): Promise<string | null> {
   checkKind(input.kind);
-  if (!input.provider && !input.integrationId)
-    throw new TypeError("getSecret needs provider or integrationId");
+  if (!input.provider && !input.integrationId) throw new TypeError("getSecret needs provider or integrationId");
   assertNoTx("getSecret");
   const found = await withSystemOrgTx(input.orgId, async ({ db }) => {
     const integration = await db.orgIntegration.findFirst({
@@ -313,7 +310,8 @@ export interface IntegrationTestContext {
 }
 
 export type IntegrationTestResult =
-  { ok: true; config?: Record<string, unknown> } | { ok: false; reason: string };
+  | { ok: true; config?: Record<string, unknown> }
+  | { ok: false; reason: string };
 
 export interface TestIntegrationInput {
   orgId: string;
@@ -338,39 +336,25 @@ export async function testIntegration(input: TestIntegrationInput): Promise<Inte
   const kind = input.kind ?? "API_KEY";
   checkKind(kind);
 
-  const loaded = await withSystemOrgTx(
-    input.orgId,
-    { userId: input.actor.userId },
-    async ({ db }) => {
-      const integration = await db.orgIntegration.findUnique({
-        where: {
-          organizationId_provider: { organizationId: input.orgId, provider: input.provider },
-        },
-        select: { id: true, provider: true, config: true, status: true },
-      });
-      if (!integration) return null;
-      const record = await readSecretRow(db, input.orgId, integration.id, kind);
-      return { integration, record };
-    },
-  );
+  const loaded = await withSystemOrgTx(input.orgId, { userId: input.actor.userId }, async ({ db }) => {
+    const integration = await db.orgIntegration.findUnique({
+      where: { organizationId_provider: { organizationId: input.orgId, provider: input.provider } },
+      select: { id: true, provider: true, config: true, status: true },
+    });
+    if (!integration) return null;
+    const record = await readSecretRow(db, input.orgId, integration.id, kind);
+    return { integration, record };
+  });
   if (!loaded) return { ok: false, reason: "This integration is not set up yet." };
 
   let result: IntegrationTestResult;
   const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(new Error("timed out")),
-    input.timeoutMs ?? 10_000,
-  );
+  const timer = setTimeout(() => controller.abort(new Error("timed out")), input.timeoutMs ?? 10_000);
   try {
     const secret = loaded.record
       ? decryptSecret(
           loaded.record,
-          {
-            orgId: input.orgId,
-            integrationId: loaded.integration.id,
-            provider: loaded.integration.provider,
-            kind,
-          },
+          { orgId: input.orgId, integrationId: loaded.integration.id, provider: loaded.integration.provider, kind },
           keyring(),
         )
       : null;
@@ -399,9 +383,7 @@ export async function testIntegration(input: TestIntegrationInput): Promise<Inte
             status: IntegrationStatus.CONNECTED,
             lastVerifiedAt: new Date(),
             lastError: null,
-            ...(result.config
-              ? { config: { ...current, ...result.config } as Prisma.InputJsonObject }
-              : {}),
+            ...(result.config ? { config: { ...current, ...result.config } as Prisma.InputJsonObject } : {}),
           }
         : { status: IntegrationStatus.ERROR, lastError: result.reason },
     });

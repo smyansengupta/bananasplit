@@ -13,9 +13,7 @@ describe("title matching", () => {
   });
 
   it("matches when one title contains the other", () => {
-    expect(titlesMatch("Prompting office hours", "CBC Prompting Office Hours (Fall)").match).toBe(
-      true,
-    );
+    expect(titlesMatch("Prompting office hours", "CBC Prompting Office Hours (Fall)").match).toBe(true);
   });
 
   it("does not match two different sessions", () => {
@@ -27,59 +25,31 @@ describe("pickMatch", () => {
   const session = { title: "Workshop 3: Tool Use", startsAt: at("2026-09-10T22:03:00Z") };
 
   it("links the single candidate on the same local day within 90 minutes", () => {
-    const result = pickMatch(
-      session,
-      [
-        {
-          id: "e1",
-          title: "Workshop 3: Tool Use and Function Calling",
-          startsAt: at("2026-09-10T22:00:00Z"),
-        },
-      ],
-      TZ,
-    );
+    const result = pickMatch(session, [{ id: "e1", title: "Workshop 3: Tool Use and Function Calling", startsAt: at("2026-09-10T22:00:00Z") }], TZ);
     expect(result).toMatchObject({ kind: "matched", eventId: "e1" });
   });
 
   it("flags several candidates for review instead of guessing", () => {
-    const result = pickMatch(
-      session,
-      [
-        { id: "e1", title: "Workshop 3: Tool Use", startsAt: at("2026-09-10T22:00:00Z") },
-        { id: "e2", title: "Workshop 3: Tool Use", startsAt: at("2026-09-10T23:00:00Z") },
-      ],
-      TZ,
-    );
+    const result = pickMatch(session, [
+      { id: "e1", title: "Workshop 3: Tool Use", startsAt: at("2026-09-10T22:00:00Z") },
+      { id: "e2", title: "Workshop 3: Tool Use", startsAt: at("2026-09-10T23:00:00Z") },
+    ], TZ);
     expect(result.kind).toBe("ambiguous");
     expect(result.kind === "ambiguous" && result.candidates).toHaveLength(2);
   });
 
   it("does not match outside the 90-minute window or across the local day", () => {
-    expect(
-      pickMatch(
-        session,
-        [{ id: "e1", title: "Workshop 3: Tool Use", startsAt: at("2026-09-11T02:00:00Z") }],
-        TZ,
-      ).kind,
-    ).toBe("none");
+    expect(pickMatch(session, [{ id: "e1", title: "Workshop 3: Tool Use", startsAt: at("2026-09-11T02:00:00Z") }], TZ).kind).toBe("none");
     // 2026-09-11T02:00Z is 22:00 on Sep 10 in New York but more than 90 minutes away.
-    expect(
-      pickMatch(
-        { title: "Late Session", startsAt: at("2026-09-11T03:30:00Z") },
-        [{ id: "e1", title: "Late Session", startsAt: at("2026-09-11T04:30:00Z") }],
-        TZ,
-      ).kind,
-    ).toBe("none");
+    expect(pickMatch(
+      { title: "Late Session", startsAt: at("2026-09-11T03:30:00Z") },
+      [{ id: "e1", title: "Late Session", startsAt: at("2026-09-11T04:30:00Z") }],
+      TZ,
+    ).kind).toBe("none");
   });
 
   it("returns none when nothing matches", () => {
-    expect(
-      pickMatch(
-        session,
-        [{ id: "e1", title: "Board meeting", startsAt: at("2026-09-10T22:00:00Z") }],
-        TZ,
-      ).kind,
-    ).toBe("none");
+    expect(pickMatch(session, [{ id: "e1", title: "Board meeting", startsAt: at("2026-09-10T22:00:00Z") }], TZ).kind).toBe("none");
   });
 });
 

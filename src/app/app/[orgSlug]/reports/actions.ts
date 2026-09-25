@@ -30,8 +30,7 @@ export async function refreshReports(organizationId: string): Promise<RefreshRep
     REFRESH_LIMIT,
     REFRESH_WINDOW_SECONDS,
   );
-  if (!limit.allowed)
-    return { ok: false, error: `Too many refreshes. Try again ${retryAfterText(limit)}.` };
+  if (!limit.allowed) return { ok: false, error: `Too many refreshes. Try again ${retryAfterText(limit)}.` };
 
   try {
     await withOrgAction(async (ctx) => {

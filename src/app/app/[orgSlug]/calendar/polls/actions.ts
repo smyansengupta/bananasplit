@@ -52,10 +52,8 @@ const createPollTx = withOrgAction(async (ctx, input: unknown): Promise<ActionRe
     return { error: "The daily window's end must be after its start." };
   }
   const slots = pollSlots(data);
-  if (slots.length === 0)
-    return { error: "That daily window doesn't fit any slots at this granularity." };
-  if (slots.length > 2000)
-    return { error: "That is too many slots. Pick fewer dates or a coarser grid." };
+  if (slots.length === 0) return { error: "That daily window doesn't fit any slots at this granularity." };
+  if (slots.length > 2000) return { error: "That is too many slots. Pick fewer dates or a coarser grid." };
   const closesAt = data.closesAt ? new Date(data.closesAt) : null;
   if (closesAt && Number.isNaN(closesAt.getTime())) return { error: "Enter a valid closing time." };
 
@@ -124,9 +122,7 @@ const finalizePollTx = withOrgAction(
         closesAt: true,
         finalizedEventId: true,
         slots: { select: { id: true, startsAt: true } },
-        responses: {
-          select: { id: true, slotId: true, userId: true, guestKeyHash: true, availability: true },
-        },
+        responses: { select: { id: true, slotId: true, userId: true, guestKeyHash: true, availability: true } },
       },
     });
     if (!poll) return { error: "Poll not found." };
@@ -140,9 +136,7 @@ const finalizePollTx = withOrgAction(
         (r.availability === PollAvailability.YES || r.availability === PollAvailability.IF_NEEDED),
     );
     // Only CURRENT members of this org become attendees (0A Fix 6).
-    const respondentUserIds = [
-      ...new Set(respondents.flatMap((r) => (r.userId ? [r.userId] : []))),
-    ];
+    const respondentUserIds = [...new Set(respondents.flatMap((r) => (r.userId ? [r.userId] : [])))];
     const members = respondentUserIds.length
       ? await ctx.db.membership.findMany({
           where: { organizationId: ctx.organizationId, userId: { in: respondentUserIds } },
@@ -163,11 +157,7 @@ const finalizePollTx = withOrgAction(
     });
     if (attendeeIds.length > 0) {
       await ctx.db.eventAttendee.createMany({
-        data: attendeeIds.map((userId) => ({
-          organizationId: ctx.organizationId,
-          eventId: event.id,
-          userId,
-        })),
+        data: attendeeIds.map((userId) => ({ organizationId: ctx.organizationId, eventId: event.id, userId })),
         skipDuplicates: true,
       });
     }
@@ -180,11 +170,7 @@ const finalizePollTx = withOrgAction(
 );
 
 /** Turns the chosen slot into an INTERNAL event with the members who can make it (ADMIN+). */
-export async function finalizePoll(
-  organizationId: string,
-  pollId: string,
-  slotId: string,
-): Promise<FinalizeResult> {
+export async function finalizePoll(organizationId: string, pollId: string, slotId: string): Promise<FinalizeResult> {
   try {
     return await finalizePollTx(organizationId, pollId, slotId);
   } catch (error) {

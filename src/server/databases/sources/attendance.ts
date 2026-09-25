@@ -1,10 +1,5 @@
 import { defineColumns } from "@/components/databases/column-config";
-import {
-  AttendanceMethod,
-  DatabaseKind,
-  RecordSource,
-  type Prisma,
-} from "@/generated/prisma/client";
+import { AttendanceMethod, DatabaseKind, RecordSource, type Prisma } from "@/generated/prisma/client";
 
 import {
   contactName,
@@ -32,86 +27,19 @@ import { CONTACT_ALIASES, contactFields, contactSearch, contactSelect } from "./
  */
 
 export const attendanceColumns = defineColumns([
-  {
-    key: "person",
-    label: "Member",
-    type: "person",
-    sortable: true,
-    filterable: true,
-    searchable: true,
-  },
+  { key: "person", label: "Member", type: "person", sortable: true, filterable: true, searchable: true },
   { key: "email", label: "Email", type: "email", pii: true, hiddenByDefault: true },
-  {
-    key: "session",
-    label: "Session",
-    type: "relation",
-    target: "sessions",
-    sortable: true,
-    filterable: true,
-  },
-  {
-    key: "checkedInAt",
-    label: "Check-in time",
-    type: "datetime",
-    sortable: true,
-    filterable: true,
-  },
-  {
-    key: "method",
-    label: "Method",
-    type: "select",
-    sortable: true,
-    filterable: true,
-    options: options(METHOD_LABELS),
-  },
-  {
-    key: "stampNumber",
-    label: "Stamp #",
-    type: "number",
-    sortable: true,
-    filterable: true,
-    align: "right",
-  },
-  {
-    key: "termStampTotal",
-    label: "Term stamps",
-    type: "number",
-    sortable: true,
-    filterable: true,
-    align: "right",
-  },
+  { key: "session", label: "Session", type: "relation", target: "sessions", sortable: true, filterable: true },
+  { key: "checkedInAt", label: "Check-in time", type: "datetime", sortable: true, filterable: true },
+  { key: "method", label: "Method", type: "select", sortable: true, filterable: true, options: options(METHOD_LABELS) },
+  { key: "stampNumber", label: "Stamp #", type: "number", sortable: true, filterable: true, align: "right" },
+  { key: "termStampTotal", label: "Term stamps", type: "number", sortable: true, filterable: true, align: "right" },
   { key: "isFirstVisit", label: "First visit", type: "boolean", sortable: true, filterable: true },
   { key: "term", label: "Term", type: "text", sortable: true, filterable: true },
-  {
-    key: "source",
-    label: "Source",
-    type: "select",
-    filterable: true,
-    hiddenByDefault: true,
-    options: options(SOURCE_LABELS),
-  },
-  {
-    key: "suppressed",
-    label: "Suppressed",
-    type: "boolean",
-    filterable: true,
-    hiddenByDefault: true,
-  },
-  {
-    key: "suppressedAt",
-    label: "Suppressed at",
-    type: "datetime",
-    filterable: true,
-    hiddenByDefault: true,
-  },
-  {
-    key: "nameAsEntered",
-    label: "Name as entered",
-    type: "text",
-    filterable: true,
-    hiddenByDefault: true,
-    pii: true,
-  },
+  { key: "source", label: "Source", type: "select", filterable: true, hiddenByDefault: true, options: options(SOURCE_LABELS) },
+  { key: "suppressed", label: "Suppressed", type: "boolean", filterable: true, hiddenByDefault: true },
+  { key: "suppressedAt", label: "Suppressed at", type: "datetime", filterable: true, hiddenByDefault: true },
+  { key: "nameAsEntered", label: "Name as entered", type: "text", filterable: true, hiddenByDefault: true, pii: true },
 ]);
 
 function querySpec(): QuerySpec {
@@ -119,50 +47,16 @@ function querySpec(): QuerySpec {
     fields: {
       id: { path: ["id"], kind: "string", filterable: true, ops: ["eq", "in"] },
       ...contactFields(["contact"]),
-      session: {
-        path: ["eventId"],
-        kind: "string",
-        filterable: true,
-        ops: ["eq", "in"],
-        orderBy: (dir) => [{ event: { startsAt: dir } }],
-        sortable: true,
-      },
-      sessionDate: {
-        path: ["event", "startsAt"],
-        kind: "datetime",
-        sortable: true,
-        filterable: true,
-      },
-      sessionKind: {
-        path: ["event", "kind"],
-        kind: "enum",
-        enumValues: ["WORKSHOP", "SOCIAL", "HACKATHON", "INFO_SESSION", "BOARD_MEETING", "OTHER"],
-        filterable: true,
-      },
+      session: { path: ["eventId"], kind: "string", filterable: true, ops: ["eq", "in"], orderBy: (dir) => [{ event: { startsAt: dir } }], sortable: true },
+      sessionDate: { path: ["event", "startsAt"], kind: "datetime", sortable: true, filterable: true },
+      sessionKind: { path: ["event", "kind"], kind: "enum", enumValues: ["WORKSHOP", "SOCIAL", "HACKATHON", "INFO_SESSION", "BOARD_MEETING", "OTHER"], filterable: true },
       checkedInAt: { path: ["checkedInAt"], kind: "datetime", sortable: true, filterable: true },
-      method: {
-        path: ["method"],
-        kind: "enum",
-        enumValues: Object.values(AttendanceMethod),
-        sortable: true,
-        filterable: true,
-      },
-      stampNumber: {
-        path: ["stampNumber"],
-        kind: "int",
-        nullable: true,
-        sortable: true,
-        filterable: true,
-      },
+      method: { path: ["method"], kind: "enum", enumValues: Object.values(AttendanceMethod), sortable: true, filterable: true },
+      stampNumber: { path: ["stampNumber"], kind: "int", nullable: true, sortable: true, filterable: true },
       termStampTotal: { path: ["termStampTotal"], kind: "int", sortable: true, filterable: true },
       isFirstVisit: { path: ["isFirstVisit"], kind: "boolean", sortable: true, filterable: true },
       term: { path: ["term"], kind: "string", sortable: true, filterable: true },
-      source: {
-        path: ["source"],
-        kind: "enum",
-        enumValues: Object.values(RecordSource),
-        filterable: true,
-      },
+      source: { path: ["source"], kind: "enum", enumValues: Object.values(RecordSource), filterable: true },
       suppressed: {
         path: ["suppressedAt"],
         kind: "boolean",
@@ -236,9 +130,7 @@ function map(a: Row, ctx: ViewContext): MappedRow {
       isFirstVisit: { t: "bool", v: a.isFirstVisit },
       term: text(termLabel(a.term)),
       source: { t: "badge", v: SOURCE_LABELS[a.source] ?? a.source, tone: "secondary" },
-      suppressed: a.suppressedAt
-        ? { t: "badge", v: "Suppressed", tone: "warning" }
-        : { t: "bool", v: false },
+      suppressed: a.suppressedAt ? { t: "badge", v: "Suppressed", tone: "warning" } : { t: "bool", v: false },
       suppressedAt: dateTimeCell(a.suppressedAt, ctx.timezone),
       nameAsEntered: text(a.nameAsEntered),
     },

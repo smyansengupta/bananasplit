@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isExactMatch,
-  jaroWinkler,
-  matchPerson,
-  normalizeName,
-  type MatchCandidate,
-} from "./match";
+import { isExactMatch, jaroWinkler, matchPerson, normalizeName, type MatchCandidate } from "./match";
 
 const members: MatchCandidate[] = [
   { userId: "jackson", name: "Jackson Lamoureux", emailLocal: "jackson" },
@@ -52,25 +46,11 @@ describe("matchPerson", () => {
       userId: "jackson",
       reason: "token-set",
     });
-    expect(matchPerson("J. Lamoureux", members).suggestions[0]).toMatchObject({
-      userId: "jackson",
-      reason: "initials",
-    });
-    expect(matchPerson("Kristine M.", members).suggestions[0]).toMatchObject({
-      userId: "kristine",
-      reason: "initials",
-    });
-    expect(matchPerson("Smyan Séngupta", members).suggestions[0]).toMatchObject({
-      userId: "smyan",
-      reason: "exact",
-    });
-    expect(matchPerson("Lucas Salzberger", members).suggestions[0]).toMatchObject({
-      userId: "lucas",
-      reason: "fuzzy",
-    });
-    const byEmail = matchPerson("jdoe", [
-      { userId: "u1", name: "Someone Else", emailLocal: "jdoe" },
-    ]);
+    expect(matchPerson("J. Lamoureux", members).suggestions[0]).toMatchObject({ userId: "jackson", reason: "initials" });
+    expect(matchPerson("Kristine M.", members).suggestions[0]).toMatchObject({ userId: "kristine", reason: "initials" });
+    expect(matchPerson("Smyan Séngupta", members).suggestions[0]).toMatchObject({ userId: "smyan", reason: "exact" });
+    expect(matchPerson("Lucas Salzberger", members).suggestions[0]).toMatchObject({ userId: "lucas", reason: "fuzzy" });
+    const byEmail = matchPerson("jdoe", [{ userId: "u1", name: "Someone Else", emailLocal: "jdoe" }]);
     expect(byEmail.suggestions[0]).toMatchObject({ userId: "u1", reason: "email" });
   });
 

@@ -81,10 +81,12 @@ beforeEach(() => {
   getSessionMock.mockResolvedValue({ user: { id: "member_1", email: "m@example.edu", name: "M" } });
   db.transaction.findFirst.mockResolvedValue({ id: "txn_1", submittedById: "member_1" });
   db.receipt.create.mockResolvedValue({ id: "receipt_1" });
-  putBlobMock.mockImplementation(async (kind: string, scopeId: string, segments: string[]) => ({
-    key: [kind, scopeId, ...segments].join("/"),
-    url: null,
-  }));
+  putBlobMock.mockImplementation(
+    async (kind: string, scopeId: string, segments: string[]) => ({
+      key: [kind, scopeId, ...segments].join("/"),
+      url: null,
+    }),
+  );
 });
 
 describe("POST /api/orgs/[orgId]/receipts (0A Fix 15, 0C wrappers)", () => {

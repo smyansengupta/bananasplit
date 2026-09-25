@@ -80,9 +80,7 @@ describe("parseNotificationPreferences (v2 upgrade parser)", () => {
       { v: 2, types: [], digest: 5, reminderLeadDays: 99 },
       { v: 3, TASK_ASSIGNED: false },
     ]) {
-      expect(
-        notificationPreferencesSchema.safeParse(parseNotificationPreferences(raw)).success,
-      ).toBe(true);
+      expect(notificationPreferencesSchema.safeParse(parseNotificationPreferences(raw)).success).toBe(true);
     }
   });
 });
@@ -94,10 +92,7 @@ describe("emailEnabledFor and isEmailEnabled", () => {
     expect(emailEnabledFor(prefs, "TASK_MENTIONED")).toBe(true);
     expect(emailEnabledFor(prefs, "TASK_DIGEST")).toBe(false);
     expect(
-      emailEnabledFor(
-        parseNotificationPreferences({ v: 2, digest: { enabled: true, hourLocal: 7 } }),
-        "TASK_DIGEST",
-      ),
+      emailEnabledFor(parseNotificationPreferences({ v: 2, digest: { enabled: true, hourLocal: 7 } }), "TASK_DIGEST"),
     ).toBe(true);
   });
 

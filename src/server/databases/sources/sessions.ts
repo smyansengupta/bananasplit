@@ -22,14 +22,7 @@ import type { DatabaseSource, MappedRow, ViewContext } from "../types";
 const VISIBILITY_LABELS: Record<string, string> = { PUBLIC: "Public", INTERNAL: "Internal" };
 
 export const sessionColumns = defineColumns([
-  {
-    key: "title",
-    label: "Title",
-    type: "text",
-    sortable: true,
-    filterable: true,
-    searchable: true,
-  },
+  { key: "title", label: "Title", type: "text", sortable: true, filterable: true, searchable: true },
   {
     key: "kind",
     label: "Type",
@@ -39,23 +32,9 @@ export const sessionColumns = defineColumns([
     options: options(EVENT_KIND_LABELS),
   },
   { key: "startsAt", label: "Date", type: "datetime", sortable: true, filterable: true },
-  {
-    key: "location",
-    label: "Location",
-    type: "text",
-    sortable: true,
-    filterable: true,
-    searchable: true,
-  },
+  { key: "location", label: "Location", type: "text", sortable: true, filterable: true, searchable: true },
   { key: "host", label: "Host", type: "person", filterable: true },
-  {
-    key: "attendanceCount",
-    label: "Attendance",
-    type: "number",
-    sortable: true,
-    filterable: true,
-    align: "right",
-  },
+  { key: "attendanceCount", label: "Attendance", type: "number", sortable: true, filterable: true, align: "right" },
   {
     key: "visibility",
     label: "Visibility",
@@ -66,38 +45,10 @@ export const sessionColumns = defineColumns([
   },
   { key: "term", label: "Term", type: "text", sortable: true, filterable: true },
   { key: "calendar", label: "Calendar event", type: "link", exportable: false },
-  {
-    key: "stampSlot",
-    label: "Stamp slot",
-    type: "number",
-    sortable: true,
-    filterable: true,
-    hiddenByDefault: true,
-    align: "right",
-  },
-  {
-    key: "endsAt",
-    label: "Ends",
-    type: "datetime",
-    sortable: true,
-    filterable: true,
-    hiddenByDefault: true,
-  },
-  {
-    key: "linked",
-    label: "Website session",
-    type: "boolean",
-    filterable: true,
-    hiddenByDefault: true,
-  },
-  {
-    key: "needsReview",
-    label: "Needs review",
-    type: "boolean",
-    filterable: true,
-    hiddenByDefault: true,
-    memberVisible: false,
-  },
+  { key: "stampSlot", label: "Stamp slot", type: "number", sortable: true, filterable: true, hiddenByDefault: true, align: "right" },
+  { key: "endsAt", label: "Ends", type: "datetime", sortable: true, filterable: true, hiddenByDefault: true },
+  { key: "linked", label: "Website session", type: "boolean", filterable: true, hiddenByDefault: true },
+  { key: "needsReview", label: "Needs review", type: "boolean", filterable: true, hiddenByDefault: true, memberVisible: false },
   { key: "rsvpUrl", label: "RSVP link", type: "url", hiddenByDefault: true },
 ]);
 
@@ -105,29 +56,11 @@ const querySpec: QuerySpec = {
   fields: {
     id: { path: ["id"], kind: "string", filterable: true, ops: ["eq", "in"] },
     title: { path: ["title"], kind: "text", sortable: true, filterable: true },
-    kind: {
-      path: ["kind"],
-      kind: "enum",
-      enumValues: Object.values(EventKind),
-      sortable: true,
-      filterable: true,
-    },
+    kind: { path: ["kind"], kind: "enum", enumValues: Object.values(EventKind), sortable: true, filterable: true },
     startsAt: { path: ["startsAt"], kind: "datetime", sortable: true, filterable: true },
     endsAt: { path: ["endsAt"], kind: "datetime", sortable: true, filterable: true },
-    location: {
-      path: ["location"],
-      kind: "text",
-      nullable: true,
-      sortable: true,
-      filterable: true,
-    },
-    host: {
-      path: ["hostUserId"],
-      kind: "string",
-      nullable: true,
-      filterable: true,
-      ops: ["eq", "in", "isnull"],
-    },
+    location: { path: ["location"], kind: "text", nullable: true, sortable: true, filterable: true },
+    host: { path: ["hostUserId"], kind: "string", nullable: true, filterable: true, ops: ["eq", "in", "isnull"] },
     attendanceCount: { path: ["attendanceCount"], kind: "int", sortable: true, filterable: true },
     visibility: {
       path: ["visibility"],
@@ -137,13 +70,7 @@ const querySpec: QuerySpec = {
       filterable: true,
     },
     term: { path: ["term"], kind: "string", nullable: true, sortable: true, filterable: true },
-    stampSlot: {
-      path: ["stampSlot"],
-      kind: "int",
-      nullable: true,
-      sortable: true,
-      filterable: true,
-    },
+    stampSlot: { path: ["stampSlot"], kind: "int", nullable: true, sortable: true, filterable: true },
     linked: {
       path: ["sourceSessionId"],
       kind: "boolean",
@@ -202,11 +129,7 @@ function map(e: Record_, ctx: ViewContext): MappedRow {
       endsAt: dateTimeCell(e.endsAt, ctx.timezone),
       location: text(e.location),
       host: e.host
-        ? {
-            t: "person",
-            name: e.host.name ?? "Member",
-            user: { name: e.host.name, image: e.host.image, avatar: e.host.avatar },
-          }
+        ? { t: "person", name: e.host.name ?? "Member", user: { name: e.host.name, image: e.host.image, avatar: e.host.avatar } }
         : e.hostName
           ? { t: "person", name: e.hostName, user: null, sub: "Guest" }
           : null,
@@ -260,5 +183,7 @@ export const sessionsSource: DatabaseSource = {
     return rows.map((r) => map(r, ctx));
   },
   count: (db, where) => db.event.count({ where: where as Prisma.EventWhereInput }),
-  csvHeader: (c, ctx) => (c.type === "datetime" ? `${c.label} (${ctx.timezone})` : c.label),
+  csvHeader: (c, ctx) =>
+    c.type === "datetime" ? `${c.label} (${ctx.timezone})` : c.label,
 };
+

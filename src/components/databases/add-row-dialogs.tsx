@@ -65,9 +65,7 @@ export function AddAttendanceDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add a check-in</DialogTitle>
-          <DialogDescription>
-            For someone who attended but did not check in on the website.
-          </DialogDescription>
+          <DialogDescription>For someone who attended but did not check in on the website.</DialogDescription>
         </DialogHeader>
         <form action={submit} className="grid gap-3">
           <div className="grid gap-1">
@@ -85,8 +83,7 @@ export function AddAttendanceDialog({
             {person ? (
               <div className="flex items-center justify-between rounded-md border px-2 py-1 text-sm">
                 <span>
-                  {person.displayName ?? "Unnamed"}{" "}
-                  <span className="text-muted-foreground">{person.emailMasked}</span>
+                  {person.displayName ?? "Unnamed"} <span className="text-muted-foreground">{person.emailMasked}</span>
                 </span>
                 <Button type="button" size="xs" variant="ghost" onClick={() => setPerson(null)}>
                   Change
@@ -94,24 +91,10 @@ export function AddAttendanceDialog({
               </div>
             ) : (
               <>
-                <ContactSearch
-                  organizationId={organizationId}
-                  onPick={setPerson}
-                  placeholder="Find someone already on file…"
-                />
+                <ContactSearch organizationId={organizationId} onPick={setPerson} placeholder="Find someone already on file…" />
                 <p className="text-muted-foreground text-xs">…or add someone new:</p>
-                <Input
-                  name="name"
-                  placeholder="Name"
-                  maxLength={120}
-                  aria-label="New person's name"
-                />
-                <Input
-                  name="email"
-                  type="email"
-                  placeholder="Email (optional)"
-                  aria-label="New person's email"
-                />
+                <Input name="name" placeholder="Name" maxLength={120} aria-label="New person's name" />
+                <Input name="email" type="email" placeholder="Email (optional)" aria-label="New person's email" />
               </>
             )}
           </div>
@@ -178,9 +161,7 @@ export function AddSignupDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add a signup</DialogTitle>
-          <DialogDescription>
-            For interest collected in person. The term comes from today&apos;s date.
-          </DialogDescription>
+          <DialogDescription>For interest collected in person. The term comes from today&apos;s date.</DialogDescription>
         </DialogHeader>
         <form action={submit} className="grid gap-3">
           <div className="grid gap-1">

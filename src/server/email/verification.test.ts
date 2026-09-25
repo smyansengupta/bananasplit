@@ -43,9 +43,7 @@ const authDb = vi.hoisted(() => {
   };
   const user = {
     async findUnique({ where }: { where: { id?: string; email?: string } }) {
-      return (
-        store.users.find((u) => (where.id ? u.id === where.id : u.email === where.email)) ?? null
-      );
+      return store.users.find((u) => (where.id ? u.id === where.id : u.email === where.email)) ?? null;
     },
     async updateMany({
       where,

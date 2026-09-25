@@ -38,11 +38,7 @@ function byRank(a: DraftPosition, b: DraftPosition): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-export function siblingsOf(
-  positions: readonly DraftPosition[],
-  parent: string | null,
-  exceptId?: string,
-): DraftPosition[] {
+export function siblingsOf(positions: readonly DraftPosition[], parent: string | null, exceptId?: string): DraftPosition[] {
   return positions.filter((p) => p.reportsTo === parent && p.id !== exceptId).sort(byRank);
 }
 
@@ -56,12 +52,7 @@ function safeKeyBetween(a: string | null, b: string | null): string {
 }
 
 /** Whether `dragId` may be dropped on `targetId` in `zone`. */
-export function canDrop(
-  positions: readonly DraftPosition[],
-  dragId: string,
-  targetId: string,
-  zone: DropZone,
-): boolean {
+export function canDrop(positions: readonly DraftPosition[], dragId: string, targetId: string, zone: DropZone): boolean {
   if (dragId === targetId) return false;
   const target = positions.find((p) => p.id === targetId);
   if (!target) return false;
@@ -97,11 +88,7 @@ export function moveDraft(
 }
 
 /** Sets a new manager (the "Reports to" picker), appending at the end of its reports. */
-export function setManager(
-  positions: readonly DraftPosition[],
-  id: string,
-  managerId: string | null,
-): DraftPosition[] | null {
+export function setManager(positions: readonly DraftPosition[], id: string, managerId: string | null): DraftPosition[] | null {
   if (managerId === null) {
     const last = siblingsOf(positions, null, id).at(-1);
     const rank = safeKeyBetween(last?.rank ?? null, null);
@@ -114,11 +101,7 @@ export function setManager(
 }
 
 /** Moves a position one place up or down among its siblings. */
-export function moveSibling(
-  positions: readonly DraftPosition[],
-  id: string,
-  direction: -1 | 1,
-): DraftPosition[] {
+export function moveSibling(positions: readonly DraftPosition[], id: string, direction: -1 | 1): DraftPosition[] {
   const self = positions.find((p) => p.id === id);
   if (!self) return [...positions];
   const siblings = siblingsOf(positions, self.reportsTo);
@@ -174,11 +157,7 @@ export function removePosition(positions: readonly DraftPosition[], id: string):
 }
 
 /** Links a member (an admin's confirmation). */
-export function confirmMember(
-  p: DraftPosition,
-  userId: string,
-  memberName: string | null,
-): DraftPosition {
+export function confirmMember(p: DraftPosition, userId: string, memberName: string | null): DraftPosition {
   return {
     ...p,
     userId,
@@ -190,22 +169,13 @@ export function confirmMember(
 
 /** Unlinks the member; the name stays as a placeholder. */
 export function unlinkMember(p: DraftPosition): DraftPosition {
-  return {
-    ...p,
-    userId: null,
-    matchState: p.suggestedUserIds.length > 0 ? "SUGGESTED" : "UNMATCHED",
-  };
+  return { ...p, userId: null, matchState: p.suggestedUserIds.length > 0 ? "SUGGESTED" : "UNMATCHED" };
 }
 
 /** Positions whose best suggestion is an exact name match and not yet confirmed. */
 export function exactMatches(positions: readonly DraftPosition[]): DraftPosition[] {
   return positions.filter(
-    (p) =>
-      !p.userId &&
-      !p.isOpen &&
-      p.matchState === "SUGGESTED" &&
-      p.matchScore === 1 &&
-      p.suggestedUserIds[0],
+    (p) => !p.userId && !p.isOpen && p.matchState === "SUGGESTED" && p.matchScore === 1 && p.suggestedUserIds[0],
   );
 }
 
@@ -215,20 +185,12 @@ export function confirmAllExact(
 ): DraftPosition[] {
   const exact = new Set(exactMatches(positions).map((p) => p.id));
   return positions.map((p) =>
-    exact.has(p.id)
-      ? confirmMember(p, p.suggestedUserIds[0], names.get(p.suggestedUserIds[0]) ?? null)
-      : p,
+    exact.has(p.id) ? confirmMember(p, p.suggestedUserIds[0], names.get(p.suggestedUserIds[0]) ?? null) : p,
   );
 }
 
 export function toTree(positions: readonly DraftPosition[]) {
-  return positions.map((p) => ({
-    id: p.id,
-    key: p.key || p.id,
-    reportsToId: p.reportsTo,
-    isAdvisor: p.isAdvisor,
-    rank: p.rank,
-  }));
+  return positions.map((p) => ({ id: p.id, key: p.key || p.id, reportsToId: p.reportsTo, isAdvisor: p.isAdvisor, rank: p.rank }));
 }
 
 export function toValidationNodes(positions: readonly DraftPosition[]): ValidationNode[] {

@@ -51,10 +51,7 @@ export interface ValidateOptions {
   memberIds?: ReadonlySet<string>;
 }
 
-export function validateChart(
-  nodes: readonly ValidationNode[],
-  options: ValidateOptions = {},
-): ValidationIssue[] {
+export function validateChart(nodes: readonly ValidationNode[], options: ValidateOptions = {}): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const error = (code: IssueCode, message: string, positionId?: string) =>
     issues.push({ level: "error", code, message, positionId });
@@ -76,11 +73,7 @@ export function validateChart(
     if (seen) error("duplicate-key", `${label(n)} has the same key as another position.`, n.id);
     else keys.set(n.key, n.id);
     if (n.reportsTo !== null && !byId.has(n.reportsTo)) {
-      error(
-        "unknown-manager",
-        `${label(n)} reports to a position that is not in this chart.`,
-        n.id,
-      );
+      error("unknown-manager", `${label(n)} reports to a position that is not in this chart.`, n.id);
     }
     if (n.isOpen && n.userId) {
       error("open-with-member", `${label(n)} is an open hire but is linked to a member.`, n.id);
@@ -117,11 +110,7 @@ export function validateChart(
   for (const n of nodes) {
     if (!n.isAdvisor) continue;
     if (n.reportsTo === null) {
-      error(
-        "advisor-no-manager",
-        `${label(n)} is an advisor, so it needs someone it advises.`,
-        n.id,
-      );
+      error("advisor-no-manager", `${label(n)} is an advisor, so it needs someone it advises.`, n.id);
     } else if (byId.get(n.reportsTo)?.isAdvisor) {
       error("advisor-of-advisor", `${label(n)} advises another advisor.`, n.id);
     }
@@ -141,17 +130,9 @@ export function validateChart(
   for (const n of nodes) {
     if (n.isOpen || n.userId) continue;
     if (n.matchState === "SUGGESTED") {
-      warning(
-        "unconfirmed",
-        `${label(n)}: confirm who ${n.personName ?? "this"} is, or it shows as a placeholder.`,
-        n.id,
-      );
+      warning("unconfirmed", `${label(n)}: confirm who ${n.personName ?? "this"} is, or it shows as a placeholder.`, n.id);
     } else if (n.personName) {
-      warning(
-        "placeholder",
-        `${label(n)}: ${n.personName} is not linked to a member and shows as a placeholder.`,
-        n.id,
-      );
+      warning("placeholder", `${label(n)}: ${n.personName} is not linked to a member and shows as a placeholder.`, n.id);
     }
   }
 

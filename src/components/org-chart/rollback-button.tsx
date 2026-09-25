@@ -46,9 +46,8 @@ export function RollbackButton({
         <DialogHeader>
           <DialogTitle>Restore version {number}?</DialogTitle>
           <DialogDescription>
-            Version {number} is copied forward as a new version and published. The current chart
-            stays in the history, so you can switch back. Members who have left since show as
-            placeholders.
+            Version {number} is copied forward as a new version and published. The current chart stays in the history, so
+            you can switch back. Members who have left since show as placeholders.
           </DialogDescription>
         </DialogHeader>
         {error && (

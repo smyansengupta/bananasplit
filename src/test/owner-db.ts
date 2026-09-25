@@ -33,9 +33,7 @@ export const ownerDb: PrismaClient = new Proxy({} as PrismaClient, {
   get(_target, prop) {
     const target = real() as unknown as Record<PropertyKey, unknown>;
     const value = target[prop];
-    return typeof value === "function"
-      ? (value as (...a: unknown[]) => unknown).bind(target)
-      : value;
+    return typeof value === "function" ? (value as (...a: unknown[]) => unknown).bind(target) : value;
   },
   has(_target, prop) {
     return prop in (real() as object);

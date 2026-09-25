@@ -23,7 +23,14 @@ import type { MatchState } from "./types";
  */
 
 export type MatchReason =
-  "exact" | "token-set" | "subset" | "initials" | "first-name" | "fuzzy" | "email" | "monogram";
+  | "exact"
+  | "token-set"
+  | "subset"
+  | "initials"
+  | "first-name"
+  | "fuzzy"
+  | "email"
+  | "monogram";
 
 export interface MatchCandidate {
   userId: string;
@@ -154,16 +161,11 @@ function scoreCandidate(
     }
   }
 
-  return best.score >= MIN_SUGGESTION_SCORE
-    ? { ...best, score: Math.round(best.score * 1000) / 1000 }
-    : null;
+  return best.score >= MIN_SUGGESTION_SCORE ? { ...best, score: Math.round(best.score * 1000) / 1000 } : null;
 }
 
 /** Suggestions for one person name among `candidates`. */
-export function matchPerson(
-  personName: string | null | undefined,
-  candidates: readonly MatchCandidate[],
-): PersonMatch {
+export function matchPerson(personName: string | null | undefined, candidates: readonly MatchCandidate[]): PersonMatch {
   const person = personName ? tokens(personName) : [];
   if (person.length === 0) return { state: "UNMATCHED", score: null, suggestions: [] };
   const personNorm = person.join(" ");

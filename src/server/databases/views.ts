@@ -6,14 +6,7 @@ import { can } from "@/lib/auth/permissions";
 import { parseDbViewParams } from "@/lib/databases/href";
 import type { TxClient } from "@/server/db/context";
 
-import {
-  allowedOps,
-  buildQuery,
-  parseKeyList,
-  parseSize,
-  resolveKey,
-  type BuiltQuery,
-} from "./query-builder";
+import { allowedOps, buildQuery, parseKeyList, parseSize, resolveKey, type BuiltQuery } from "./query-builder";
 import { hasSource } from "./sources";
 import { tierOf, type DatabaseSource, type Tier, type ViewContext } from "./types";
 
@@ -39,23 +32,14 @@ export interface DatabaseSummary {
 }
 
 /** app.can_view_rows for the viewer's tier (the same function the RLS policies call). */
-export async function canViewKind(
-  db: TxClient,
-  organizationId: string,
-  kind: string,
-  tier: Tier,
-): Promise<boolean> {
+export async function canViewKind(db: TxClient, organizationId: string, kind: string, tier: Tier): Promise<boolean> {
   const rows = await db.$queryRaw<{ ok: boolean }[]>`
     SELECT app.can_view_rows(${organizationId}, ${kind}, ${tier}) AS ok`;
   return rows[0]?.ok === true;
 }
 
 /** app.can_view_ballot_rows for the viewer's tier: may they see individual votes? */
-export async function canViewBallotRows(
-  db: TxClient,
-  organizationId: string,
-  tier: Tier,
-): Promise<boolean> {
+export async function canViewBallotRows(db: TxClient, organizationId: string, tier: Tier): Promise<boolean> {
   const rows = await db.$queryRaw<{ ok: boolean }[]>`
     SELECT app.can_view_ballot_rows(${organizationId}, ${tier}) AS ok`;
   return rows[0]?.ok === true;
@@ -130,22 +114,13 @@ export function viewContextFor(
 }
 
 /** The columns this viewer may see (memberVisible=false columns are dropped for MEMBER tier). */
-export function viewerColumns(
-  source: DatabaseSource,
-  overrides: unknown,
-  tier: Tier,
-): ColumnConfig[] {
-  return resolveColumns(source.columns, overrides).filter(
-    (c) => tier !== "MEMBER" || c.memberVisible,
-  );
+export function viewerColumns(source: DatabaseSource, overrides: unknown, tier: Tier): ColumnConfig[] {
+  return resolveColumns(source.columns, overrides).filter((c) => tier !== "MEMBER" || c.memberVisible);
 }
 
 /** The visible column keys: cols= when given (and valid), otherwise the defaults. */
 export function visibleColumnKeys(columns: readonly ColumnConfig[], sp: SearchParams): string[] {
-  const listed = parseKeyList(
-    sp.cols,
-    columns.map((c) => c.key),
-  );
+  const listed = parseKeyList(sp.cols, columns.map((c) => c.key));
   if (listed && listed.length > 0) return listed;
   return columns.filter((c) => !c.hiddenByDefault).map((c) => c.key);
 }
@@ -183,12 +158,7 @@ export interface LoadedView {
 }
 
 /** The query for a view from its search params (shared by the page and the export). */
-export function queryFor(
-  source: DatabaseSource,
-  ctx: ViewContext,
-  sp: SearchParams,
-  options: { size?: number } = {},
-) {
+export function queryFor(source: DatabaseSource, ctx: ViewContext, sp: SearchParams, options: { size?: number } = {}) {
   const params = parseDbViewParams(sp);
   const spec = source.query(ctx);
   const noDefaults = parseKeyList(sp.nd, Object.keys(spec.fields)) ?? [];
@@ -211,11 +181,7 @@ export async function loadView(
 ): Promise<LoadedView> {
   const { built, where } = queryFor(source, ctx, sp);
   const [rows, total] = [
-    await source.list(
-      db,
-      { where, orderBy: built.orderBy, skip: built.skip, take: built.take },
-      ctx,
-    ),
+    await source.list(db, { where, orderBy: built.orderBy, skip: built.skip, take: built.take }, ctx),
     await source.count(db, where, ctx),
   ];
   const visible = visibleColumnKeys(columns, sp);

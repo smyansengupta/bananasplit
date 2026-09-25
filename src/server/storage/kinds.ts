@@ -75,8 +75,7 @@ export const STORAGE_KINDS = {
     scope: "user",
     maxUploadBytes: MAX_UPLOAD_BYTES,
     contentTypes: IMAGE_TYPES,
-    description:
-      "Profile pictures, re-encoded WebP variants: avatars/{userId}/{randomId}/s{size}.webp",
+    description: "Profile pictures, re-encoded WebP variants: avatars/{userId}/{randomId}/s{size}.webp",
   },
 } as const satisfies Record<string, StorageKind>;
 

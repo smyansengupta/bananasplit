@@ -21,8 +21,8 @@ export function SignUpForm() {
         <p className="text-sm font-medium">Check your email</p>
         <p className="text-muted-foreground text-sm">
           We sent a verification link to <span className="font-medium">{state.checkEmail}</span>.
-          Open it to verify your address, then sign in. You need a verified email to create or join
-          an organization.
+          Open it to verify your address, then sign in. You need a verified email to create or
+          join an organization.
         </p>
         <Button asChild variant="outline" className="w-full">
           <Link href="/sign-in">Go to sign in</Link>

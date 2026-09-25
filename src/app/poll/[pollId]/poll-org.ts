@@ -11,9 +11,7 @@ const POLL_ID = /^[A-Za-z0-9_-]{1,100}$/;
 export async function pollOrgId(pollId: string): Promise<string | null> {
   if (!POLL_ID.test(pollId)) return null;
   return withSystemOrgTx(null, async ({ db }) => {
-    const rows = await db.$queryRaw<
-      { id: string | null }[]
-    >`SELECT app.poll_org_id(${pollId}) AS id`;
+    const rows = await db.$queryRaw<{ id: string | null }[]>`SELECT app.poll_org_id(${pollId}) AS id`;
     return rows[0]?.id ?? null;
   });
 }

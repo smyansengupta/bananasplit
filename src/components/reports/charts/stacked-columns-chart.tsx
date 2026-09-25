@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipContentProps,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 import { formatCount } from "../format";
@@ -58,11 +49,7 @@ export function StackedColumnsChart({
       />
       <div role="img" aria-label={label}>
         <ResponsiveContainer width="100%" height={STACKED_CHART_HEIGHT}>
-          <BarChart
-            data={data}
-            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
-            barCategoryGap="20%"
-          >
+          <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="20%">
             <CartesianGrid {...gridProps} />
             <XAxis
               dataKey="key"
@@ -75,9 +62,7 @@ export function StackedColumnsChart({
             <Tooltip
               cursor={{ fill: "var(--muted)", opacity: 0.6 }}
               content={(props: TooltipContentProps<ValueType, NameType>) => {
-                const d = props.active
-                  ? (props.payload?.[0]?.payload as (typeof data)[number] | undefined)
-                  : undefined;
+                const d = props.active ? (props.payload?.[0]?.payload as (typeof data)[number] | undefined) : undefined;
                 if (!d) return null;
                 return (
                   <TooltipCard

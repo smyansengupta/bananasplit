@@ -25,12 +25,7 @@ function pngHeaderOnly(width: number, height: number): Buffer {
   ihdr[9] = 2; // RGB
   // A tiny (empty) zlib stream: the file is a few bytes, the header claims 400MP.
   const idat = Buffer.from([0x78, 0x9c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01]);
-  return Buffer.concat([
-    signature,
-    chunk("IHDR", ihdr),
-    chunk("IDAT", idat),
-    chunk("IEND", Buffer.alloc(0)),
-  ]);
+  return Buffer.concat([signature, chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", Buffer.alloc(0))]);
 }
 
 describe("image pipeline", () => {
@@ -41,12 +36,7 @@ describe("image pipeline", () => {
       .jpeg()
       .withExif({
         IFD0: { Copyright: "someone" },
-        IFD3: {
-          GPSLatitudeRef: "N",
-          GPSLatitude: "42/1 20/1 0/1",
-          GPSLongitudeRef: "W",
-          GPSLongitude: "71/1 5/1 0/1",
-        },
+        IFD3: { GPSLatitudeRef: "N", GPSLatitude: "42/1 20/1 0/1", GPSLongitudeRef: "W", GPSLongitude: "71/1 5/1 0/1" },
       })
       .toBuffer();
     expect((await sharp(withGps).metadata()).exif).toBeDefined();
@@ -63,9 +53,7 @@ describe("image pipeline", () => {
   });
 
   it("applies the EXIF orientation before dropping it (logos keep their aspect ratio)", async () => {
-    const rotated = await sharp({
-      create: { width: 200, height: 100, channels: 3, background: "#000" },
-    })
+    const rotated = await sharp({ create: { width: 200, height: 100, channels: 3, background: "#000" } })
       .jpeg()
       .withMetadata({ orientation: 6 })
       .toBuffer();
@@ -86,22 +74,16 @@ describe("image pipeline", () => {
   });
 
   it("refuses SVG, GIF and anything that is not JPEG, PNG or WebP by its bytes", async () => {
-    const svg = Buffer.from(
-      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
-    );
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
     const gif = Buffer.from("GIF89a\x01\x00\x01\x00\x00\x00\x00;", "binary");
     for (const bytes of [svg, gif, Buffer.from("%PDF-1.7")]) {
       const error = await processImage(bytes, "avatar").catch((e: unknown) => e);
       expect(error).toBeInstanceOf(ImageRejectedError);
       expect((error as ImageRejectedError).reason).toBe("type");
     }
-    expect(
-      sniffImageType(
-        await sharp({ create: { width: 2, height: 2, channels: 3, background: "#fff" } })
-          .png()
-          .toBuffer(),
-      ),
-    ).toBe("image/png");
+    expect(sniffImageType(await sharp({ create: { width: 2, height: 2, channels: 3, background: "#fff" } }).png().toBuffer())).toBe(
+      "image/png",
+    );
   });
 
   it("refuses a corrupt image with a valid signature", async () => {

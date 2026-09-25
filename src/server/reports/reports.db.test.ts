@@ -34,13 +34,7 @@ import { querySessionTypes } from "./queries/session-types";
 import { querySignups } from "./queries/signups";
 import { queryStamps } from "./queries/stamps";
 import { addDays } from "./range";
-import {
-  createReportFixture,
-  FIXTURE_AS_OF,
-  FIXTURE_TZ,
-  ownerClient,
-  type ReportFixture,
-} from "./testing/fixture";
+import { createReportFixture, FIXTURE_AS_OF, FIXTURE_TZ, ownerClient, type ReportFixture } from "./testing/fixture";
 import type { ReportTier } from "./types";
 import { queryDatabaseVisibility, visibleReportIds } from "./visibility";
 
@@ -73,10 +67,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
     await disconnectAll();
   });
 
-  const args = (
-    range: { from: string | null; to: string | null },
-    tier: ReportTier = "OWNER",
-  ): ReportQueryArgs => ({
+  const args = (range: { from: string | null; to: string | null }, tier: ReportTier = "OWNER"): ReportQueryArgs => ({
     orgId: fx.orgId,
     tier,
     tz: FIXTURE_TZ,
@@ -126,9 +117,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
     });
 
     it("is empty for a range without sessions", async () => {
-      const r = await service((db) =>
-        queryLastSession(db, args({ from: "2026-12-01", to: "2026-12-31" })),
-      );
+      const r = await service((db) => queryLastSession(db, args({ from: "2026-12-01", to: "2026-12-31" })));
       expect(r).toEqual({ current: null, previous: null, delta: null, deltaPct: null });
     });
   });
@@ -192,13 +181,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
 
     it("counts only the lapses that began in a shorter range", async () => {
       const r = await service((db) => queryRetention(db, args(SEPTEMBER)));
-      expect(r).toMatchObject({
-        attendees: 5,
-        newAttendees: 3,
-        returning: 2,
-        regulars: 1,
-        lapsedInRange: 2,
-      });
+      expect(r).toMatchObject({ attendees: 5, newAttendees: 3, returning: 2, regulars: 1, lapsedInRange: 2 });
     });
   });
 
@@ -226,9 +209,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
     });
 
     it("stops the weekly series at the current week", async () => {
-      const r = await service((db) =>
-        querySignups(db, { ...args(FALL), asOf: "2026-10-28T12:00:00Z" }),
-      );
+      const r = await service((db) => querySignups(db, { ...args(FALL), asOf: "2026-10-28T12:00:00Z" }));
       expect(r.weeks.at(-1)?.week).toBe("2026-10-26");
       expect(r.total).toBe(8);
     });
@@ -248,19 +229,13 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
       expect(r.ballots.map((b) => b.id)).toEqual([fx.ballots.topics]);
       const [b] = r.ballots;
       expect(b.ballots).toBe(5);
-      expect(b.linkedSession).toMatchObject({
-        id: fx.events.e2,
-        checkIns: 4,
-        localDate: "2026-09-02",
-      });
+      expect(b.linkedSession).toMatchObject({ id: fx.events.e2, checkIns: 4, localDate: "2026-09-02" });
       expect(b.turnoutPct).toBe(125);
       expect(b.freeTextQuestions).toBe(1);
       const topics = b.questions.find((q) => q.key === "topics")!;
       expect(topics.type).toBe("slots");
       expect(topics.ballots).toBe(5);
-      expect(
-        topics.options.map((o) => [o.key, o.votes, o.firstChoice, o.borda, o.suppressed]),
-      ).toEqual([
+      expect(topics.options.map((o) => [o.key, o.votes, o.firstChoice, o.borda, o.suppressed])).toEqual([
         ["a", 5, 3, 9, false],
         ["b", 3, 1, 5, false],
         ["c", 3, 1, 5, false],
@@ -364,9 +339,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
         ],
         stampHolders: 6,
       });
-      const early = await service((db) =>
-        queryStamps(db, args({ from: "2026-09-01", to: "2026-10-31" })),
-      );
+      const early = await service((db) => queryStamps(db, args({ from: "2026-09-01", to: "2026-10-31" })));
       expect(early.milestones.map((m) => m.reached)).toEqual([3, 2, 0]);
       expect(early.stampHolders).toBe(5);
     });
@@ -396,9 +369,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
           (db) => queryAttendance(db, args({ from: "2026-11-01", to: "2026-11-01" })),
           sessionTz,
         );
-        expect(nov1.sessions.map((s) => [s.id, s.localDate])).toEqual([
-          [fx.events.e6, "2026-11-01"],
-        ]);
+        expect(nov1.sessions.map((s) => [s.id, s.localDate])).toEqual([[fx.events.e6, "2026-11-01"]]);
         const oct31 = await service(
           (db) => queryLastSession(db, args({ from: "2026-10-31", to: "2026-10-31" })),
           sessionTz,
@@ -448,14 +419,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
     it("computes on its own service transaction from explicit arguments", async () => {
       const result = await getReport(
         "last-session",
-        {
-          orgId: fx.orgId,
-          tier: "MEMBER",
-          ...FALL,
-          tz: FIXTURE_TZ,
-          dataVersion: 0,
-          settingsStamp: "",
-        },
+        { orgId: fx.orgId, tier: "MEMBER", ...FALL, tz: FIXTURE_TZ, dataVersion: 0, settingsStamp: "" },
         300,
       );
       expect(result.id).toBe("last-session");
@@ -466,22 +430,13 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
 
   describe("invalidation after commit", () => {
     it("a rolled-back edit neither bumps the data version nor invalidates", async () => {
-      requireUserMock.mockResolvedValue({
-        id: fx.userId,
-        email: `${fx.slug}@example.test`,
-        name: "Owner",
-      });
+      requireUserMock.mockResolvedValue({ id: fx.userId, email: `${fx.slug}@example.test`, name: "Owner" });
       const updateTag = vi.spyOn(nextCache, "updateTag").mockImplementation(() => undefined);
-      const revalidateTag = vi
-        .spyOn(nextCache, "revalidateTag")
-        .mockImplementation(() => undefined);
+      const revalidateTag = vi.spyOn(nextCache, "revalidateTag").mockImplementation(() => undefined);
       try {
         const version = () =>
           owner!.orgSettings
-            .findUniqueOrThrow({
-              where: { organizationId: fx.orgId },
-              select: { reportsDataVersion: true },
-            })
+            .findUniqueOrThrow({ where: { organizationId: fx.orgId }, select: { reportsDataVersion: true } })
             .then((s) => s.reportsDataVersion);
         const start = await version();
 
@@ -525,11 +480,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
       for (const f of view.filters) {
         if (f.op === "isnull") where[f.col] = f.value === "true" ? null : { not: null };
         else if (f.op === "eq")
-          where[f.col] = BOOLEAN.has(f.col)
-            ? f.value === "true"
-            : NUMERIC.has(f.col)
-              ? Number(f.value)
-              : f.value;
+          where[f.col] = BOOLEAN.has(f.col) ? f.value === "true" : NUMERIC.has(f.col) ? Number(f.value) : f.value;
         else throw new Error(`unexpected op ${f.op}`);
       }
       const range: Record<string, Date> = {};
@@ -555,9 +506,7 @@ describe.skipIf(!reachable)("report SQL on the fixture org", () => {
       for (const m of stamps.milestones) {
         expect(await count(reportLinks.stampMilestone(fx.slug, fall, m.milestone))).toBe(m.reached);
       }
-      expect(await count(reportLinks.sessionCheckIns(fx.slug, last.current!.id))).toBe(
-        last.current!.checkIns,
-      );
+      expect(await count(reportLinks.sessionCheckIns(fx.slug, last.current!.id))).toBe(last.current!.checkIns);
     });
 
     it("signup links count exactly what the card counts", async () => {

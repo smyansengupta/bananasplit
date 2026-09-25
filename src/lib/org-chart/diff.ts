@@ -47,10 +47,7 @@ function listDiff(before: readonly string[], after: readonly string[]) {
   };
 }
 
-export function diffCharts(
-  before: readonly DiffPosition[],
-  after: readonly DiffPosition[],
-): DiffChange[] {
+export function diffCharts(before: readonly DiffPosition[], after: readonly DiffPosition[]): DiffChange[] {
   const beforeByKey = new Map(before.map((p) => [p.key, p]));
   const afterByKey = new Map(after.map((p) => [p.key, p]));
 
@@ -85,8 +82,7 @@ export function diffCharts(
 
   const changes: DiffChange[] = [];
   for (const [p, q] of pairs) {
-    if (p.title !== q.title)
-      changes.push({ type: "retitled", key: q.key, from: p.title, to: q.title });
+    if (p.title !== q.title) changes.push({ type: "retitled", key: q.key, from: p.title, to: q.title });
     const fromManager = p.reportsToKey ? (renamed.get(p.reportsToKey) ?? p.reportsToKey) : null;
     if (fromManager !== q.reportsToKey) {
       changes.push({
@@ -98,13 +94,7 @@ export function diffCharts(
       });
     }
     if (p.userId !== q.userId || p.personLabel !== q.personLabel || p.isOpen !== q.isOpen) {
-      changes.push({
-        type: "person",
-        key: q.key,
-        title: q.title,
-        from: p.personLabel,
-        to: q.personLabel,
-      });
+      changes.push({ type: "person", key: q.key, title: q.title, from: p.personLabel, to: q.personLabel });
     }
     if (p.isAdvisor !== q.isAdvisor) {
       changes.push({ type: "advisor", key: q.key, title: q.title, value: q.isAdvisor });
@@ -116,10 +106,8 @@ export function diffCharts(
       }
     }
   }
-  for (const p of removed)
-    changes.push({ type: "removed", key: p.key, title: p.title, person: p.personLabel });
-  for (const p of added)
-    changes.push({ type: "added", key: p.key, title: p.title, person: p.personLabel });
+  for (const p of removed) changes.push({ type: "removed", key: p.key, title: p.title, person: p.personLabel });
+  for (const p of added) changes.push({ type: "added", key: p.key, title: p.title, person: p.personLabel });
 
   const order: Record<DiffChange["type"], number> = {
     added: 0,

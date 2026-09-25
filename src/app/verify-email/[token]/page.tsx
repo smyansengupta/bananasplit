@@ -25,8 +25,7 @@ const RESULTS = {
   },
   invalid: {
     title: "This link doesn't work",
-    description:
-      "It may have been used already. If your email isn't confirmed yet, ask for a new link.",
+    description: "It may have been used already. If your email isn't confirmed yet, ask for a new link.",
   },
   resent: {
     title: "Check your inbox",

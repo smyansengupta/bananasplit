@@ -27,10 +27,7 @@ import { deleteStoredImage, storeImage, type StoredImage } from "@/server/images
 
 /** The orgs whose cached people data shows this user. */
 async function ownOrgIds(db: TxClient, userId: string): Promise<string[]> {
-  const rows = await db.membership.findMany({
-    where: { userId },
-    select: { organizationId: true },
-  });
+  const rows = await db.membership.findMany({ where: { userId }, select: { organizationId: true } });
   return rows.map((r) => r.organizationId);
 }
 
@@ -43,10 +40,7 @@ function invalidatePeopleCaches(orgIds: readonly string[]): void {
  * src/lib/profile/schema.ts (the Details or the Links section, or both).
  * Fields left undefined are not touched.
  */
-export async function updateOwnProfile(
-  userId: string,
-  values: Partial<ProfileValues>,
-): Promise<void> {
+export async function updateOwnProfile(userId: string, values: Partial<ProfileValues>): Promise<void> {
   const data: Prisma.UserUpdateInput = {};
   if (values.name !== undefined) data.name = values.name;
   if (values.pronouns !== undefined) data.pronouns = values.pronouns;
@@ -106,9 +100,7 @@ export interface NewFeedLink {
 export async function rotateOwnIcsToken(userId: string): Promise<NewFeedLink> {
   const token = generateIcsToken();
   const createdAt = await withUserTx(userId, async ({ db }) => {
-    const rows = await db.$queryRaw<
-      { t: Date }[]
-    >`SELECT app.set_ics_token_hash(${hashIcsToken(token)}) AS t`;
+    const rows = await db.$queryRaw<{ t: Date }[]>`SELECT app.set_ics_token_hash(${hashIcsToken(token)}) AS t`;
     return rows[0].t;
   });
   return { token, createdAt };
@@ -117,9 +109,7 @@ export async function rotateOwnIcsToken(userId: string): Promise<NewFeedLink> {
 /** Clears the user's feed token: the link stops working. True if there was one. */
 export async function turnOffOwnIcsFeed(userId: string): Promise<boolean> {
   return withUserTx(userId, async ({ db }) => {
-    const rows = await db.$queryRaw<
-      { cleared: boolean }[]
-    >`SELECT app.clear_ics_token_hash() AS cleared`;
+    const rows = await db.$queryRaw<{ cleared: boolean }[]>`SELECT app.clear_ics_token_hash() AS cleared`;
     return rows[0]?.cleared ?? false;
   });
 }
@@ -130,11 +120,7 @@ export async function turnOffOwnIcsFeed(userId: string): Promise<boolean> {
 export function isOwnAvatar(image: unknown, userId: string): image is StoredImage {
   if (!image || typeof image !== "object") return false;
   const key = (image as { key?: unknown }).key;
-  return (
-    typeof key === "string" &&
-    /^avatars\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/.test(key) &&
-    key.startsWith(`avatars/${userId}/`)
-  );
+  return typeof key === "string" && /^avatars\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/.test(key) && key.startsWith(`avatars/${userId}/`);
 }
 
 async function setAvatar(userId: string, avatar: StoredImage | null): Promise<void> {

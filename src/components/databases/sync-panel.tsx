@@ -44,22 +44,12 @@ export function SyncPanel({
         <div>
           <h2 id="sync-heading" className="flex items-center gap-2 text-sm font-semibold">
             Website data sync
-            <Badge
-              variant={
-                status === "CONNECTED"
-                  ? "default"
-                  : status === "ERROR"
-                    ? "destructive"
-                    : "secondary"
-              }
-            >
+            <Badge variant={status === "CONNECTED" ? "default" : status === "ERROR" ? "destructive" : "secondary"}>
               {status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, " ")}
             </Badge>
           </h2>
           <p className="text-muted-foreground text-xs">
-            {endpoint
-              ? `Reads ${endpoint} through the suite export.`
-              : (configError ?? "Not configured.")}{" "}
+            {endpoint ? `Reads ${endpoint} through the suite export.` : (configError ?? "Not configured.")}{" "}
             <a className="underline underline-offset-2" href={settingsHref}>
               Settings
             </a>
@@ -72,8 +62,7 @@ export function SyncPanel({
           </ActionButton>
           <ActionButton
             variant="ghost"
-            action={syncNowAction}
-            args={[organizationId, true]}
+            action={syncNowAction} args={[organizationId, true]}
             confirm="Re-read everything from the website and remove rows it no longer has?"
           >
             Full reconcile
@@ -101,11 +90,7 @@ export function SyncPanel({
               <td className="py-1.5">{s.lastSynced ?? "Never"}</td>
               <td className="py-1.5 text-right tabular-nums">{s.rowsUpserted.toLocaleString()}</td>
               <td className="py-1.5 pl-3">
-                {s.lastError ? (
-                  <span className="text-destructive">{s.lastError}</span>
-                ) : (
-                  (s.detail ?? "")
-                )}
+                {s.lastError ? <span className="text-destructive">{s.lastError}</span> : (s.detail ?? "")}
               </td>
             </tr>
           ))}

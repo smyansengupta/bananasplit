@@ -65,14 +65,7 @@ function Canvas({
   const flow = useReactFlow();
   const layout = useMemo(
     () =>
-      layoutOrgChart(
-        nodes.map((n) => ({
-          id: n.id,
-          reportsToId: n.reportsToId,
-          isAdvisor: n.isAdvisor,
-          rank: n.rank,
-        })),
-      ),
+      layoutOrgChart(nodes.map((n) => ({ id: n.id, reportsToId: n.reportsToId, isAdvisor: n.isAdvisor, rank: n.rank }))),
     [nodes],
   );
 
@@ -141,19 +134,12 @@ function Canvas({
   const initialized = useNodesInitialized();
   useEffect(() => {
     if (!refitOnChange || !initialized) return;
-    const id = window.setTimeout(
-      () => void flow.fitView({ padding: 0.15, maxZoom: 1.1, duration: 200 }),
-      30,
-    );
+    const id = window.setTimeout(() => void flow.fitView({ padding: 0.15, maxZoom: 1.1, duration: 200 }), 30);
     return () => window.clearTimeout(id);
   }, [layout, refitOnChange, initialized, flow]);
 
   return (
-    <div
-      className={cn("org-chart-flow h-full w-full", className)}
-      role="region"
-      aria-label={ariaLabel}
-    >
+    <div className={cn("org-chart-flow h-full w-full", className)} role="region" aria-label={ariaLabel}>
       <ReactFlow
         nodes={flowNodes}
         edges={edges}
@@ -178,13 +164,7 @@ function Canvas({
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
         <Controls showInteractive={false} position="bottom-left" />
         {showMiniMap && (
-          <MiniMap
-            pannable
-            zoomable
-            position="bottom-right"
-            className="hidden md:block"
-            ariaLabel="Chart overview"
-          />
+          <MiniMap pannable zoomable position="bottom-right" className="hidden md:block" ariaLabel="Chart overview" />
         )}
       </ReactFlow>
     </div>

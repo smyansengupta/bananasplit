@@ -34,18 +34,9 @@ interface Person {
 let seeded: { cbcId: string; oliver: Person; kristine: Person } | null = null;
 try {
   const [cbc, oliver, kristine] = await Promise.all([
-    ownerDb.organization.findUnique({
-      where: { slug: "claude-builders-club" },
-      select: { id: true },
-    }),
-    authDb.user.findUnique({
-      where: { email: "oliver@example.edu" },
-      select: { id: true, email: true, name: true },
-    }),
-    authDb.user.findUnique({
-      where: { email: "kristine@example.edu" },
-      select: { id: true, email: true, name: true },
-    }),
+    ownerDb.organization.findUnique({ where: { slug: "claude-builders-club" }, select: { id: true } }),
+    authDb.user.findUnique({ where: { email: "oliver@example.edu" }, select: { id: true, email: true, name: true } }),
+    authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
   ]);
   if (cbc && oliver && kristine) seeded = { cbcId: cbc.id, oliver, kristine };
 } catch {
@@ -73,11 +64,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
     await withSystemOrgTx(s.cbcId, async ({ db }) => {
       if (created.length) await db.event.deleteMany({ where: { id: { in: created } } });
       await db.orgIntegration.deleteMany({
-        where: {
-          organizationId: s.cbcId,
-          provider: "GOOGLE_CALENDAR",
-          config: { path: ["b7Test"], equals: true },
-        },
+        where: { organizationId: s.cbcId, provider: "GOOGLE_CALENDAR", config: { path: ["b7Test"], equals: true } },
       });
     });
     await disconnectAll();
@@ -90,19 +77,12 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
     expect(feed!.events.length).toBeGreaterThan(0);
     const ids = feed!.events.map((e) => e.id);
     const rows = await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.event.findMany({
-        where: { id: { in: ids } },
-        select: { visibility: true, deletedAt: true, mergedIntoId: true },
-      }),
+      db.event.findMany({ where: { id: { in: ids } }, select: { visibility: true, deletedAt: true, mergedIntoId: true } }),
     );
     expect(rows).toHaveLength(ids.length);
-    expect(rows.every((r) => r.visibility === "PUBLIC" && !r.deletedAt && !r.mergedIntoId)).toBe(
-      true,
-    );
+    expect(rows.every((r) => r.visibility === "PUBLIC" && !r.deletedAt && !r.mergedIntoId)).toBe(true);
     expect(feed!.events.some((e) => /exec sync/i.test(e.title))).toBe(false);
-    const sorted = [...feed!.events].sort(
-      (a, b) => a.startsAt.localeCompare(b.startsAt) || (a.id < b.id ? -1 : 1),
-    );
+    const sorted = [...feed!.events].sort((a, b) => a.startsAt.localeCompare(b.startsAt) || (a.id < b.id ? -1 : 1));
     expect(feed!.events.map((e) => e.id)).toEqual(sorted.map((e) => e.id));
   });
 
@@ -115,11 +95,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
       visibility: "PUBLIC",
       rsvpUrl: "https://lu.ma/b7-test",
     });
-    const internal = await asAdmin(s.cbcId, {
-      title: "B7 test board sync",
-      startsAt: soon,
-      endsAt: later,
-    });
+    const internal = await asAdmin(s.cbcId, { title: "B7 test board sync", startsAt: soon, endsAt: later });
     let titles = (await loadPublicEvents(s.cbcId))!.events.map((e) => e.title);
     expect(titles).toContain("B7 test public workshop");
     expect(titles).not.toContain("B7 test board sync");
@@ -133,9 +109,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
   it("a MEMBER can create no event through the service, and no PUBLIC one even directly", async () => {
     requireUserMock.mockResolvedValue(s.kristine);
     await expect(
-      withOrgAction(async (ctx) =>
-        createEvent(ctx, { title: "nope", startsAt: soon, endsAt: later }),
-      )(s.cbcId),
+      withOrgAction(async (ctx) => createEvent(ctx, { title: "nope", startsAt: soon, endsAt: later }))(s.cbcId),
     ).rejects.toBeInstanceOf(ForbiddenError);
     await expect(
       withOrgAction(async (ctx) =>
@@ -164,9 +138,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
     // Connect Google only now, so the create above queued no job.
     await withSystemOrgTx(s.cbcId, async ({ db }) => {
       await db.orgIntegration.upsert({
-        where: {
-          organizationId_provider: { organizationId: s.cbcId, provider: "GOOGLE_CALENDAR" },
-        },
+        where: { organizationId_provider: { organizationId: s.cbcId, provider: "GOOGLE_CALENDAR" } },
         create: {
           organizationId: s.cbcId,
           provider: "GOOGLE_CALENDAR",
@@ -175,10 +147,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
         },
         update: {},
       });
-      await db.event.update({
-        where: { id: event.id },
-        data: { googleSyncState: "PENDING", updatedAt: event.updatedAt },
-      });
+      await db.event.update({ where: { id: event.id }, data: { googleSyncState: "PENDING", updatedAt: event.updatedAt } });
     });
     const inserted: unknown[] = [];
     vi.stubGlobal(
@@ -186,17 +155,10 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
       vi.fn(async (_url: URL, init: RequestInit) => {
         const body = JSON.parse(String(init.body));
         inserted.push(body);
-        return new Response(
-          JSON.stringify({
-            ...body,
-            etag: '"1"',
-            htmlLink: "https://www.google.com/calendar/event?eid=x",
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          },
-        );
+        return new Response(JSON.stringify({ ...body, etag: '"1"', htmlLink: "https://www.google.com/calendar/event?eid=x" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }),
     );
     const original = syncDeps.getAccessToken;
@@ -221,13 +183,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
     const row = await withSystemOrgTx(s.cbcId, ({ db }) =>
       db.event.findUniqueOrThrow({
         where: { id: event.id },
-        select: {
-          googleSyncState: true,
-          googleEventId: true,
-          googleEtag: true,
-          googleHtmlLink: true,
-          updatedAt: true,
-        },
+        select: { googleSyncState: true, googleEventId: true, googleEtag: true, googleHtmlLink: true, updatedAt: true },
       }),
     );
     expect(row).toMatchObject({

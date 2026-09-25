@@ -181,11 +181,7 @@ describe("transaction links and categories stay inside the org (0A Fix 2)", () =
     db.event.findFirst.mockImplementation(orgScopedFindFirst(new Set(["event_1"])));
     db.task.findFirst.mockImplementation(orgScopedFindFirst(new Set(["task_1"])));
     db.budgetCategory.findFirst.mockImplementation(
-      async ({
-        where,
-      }: {
-        where: { id: string; organizationId?: string; budgetPeriodId: string };
-      }) => {
+      async ({ where }: { where: { id: string; organizationId?: string; budgetPeriodId: string } }) => {
         if (!where.organizationId) throw new Error("category lookup is missing organizationId");
         return where.id === "cat_1" && where.budgetPeriodId === "period_1" ? { id: "cat_1" } : null;
       },

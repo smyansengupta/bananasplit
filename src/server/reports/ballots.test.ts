@@ -19,12 +19,7 @@ const definition = {
   ],
 };
 
-const cell = (
-  question_key: string,
-  choice_key: string,
-  votes: number | null,
-  suppressed = false,
-) => ({
+const cell = (question_key: string, choice_key: string, votes: number | null, suppressed = false) => ({
   question_key,
   choice_key,
   votes,
@@ -47,11 +42,7 @@ describe("ballot result shaping", () => {
   });
 
   it("never tallies free text and sorts options by votes", () => {
-    const q = buildQuestions(
-      parseDefinition(definition),
-      [cell("theme", "open", 7), cell("theme", "climate", 3)],
-      true,
-    );
+    const q = buildQuestions(parseDefinition(definition), [cell("theme", "open", 7), cell("theme", "climate", 3)], true);
     expect(q.map((x) => x.key)).toEqual(["theme", "first"]);
     expect(q[0].options.map((o) => [o.label, o.votes])).toEqual([
       ["Open track", 7],
@@ -70,24 +61,11 @@ describe("ballot result shaping", () => {
   });
 
   it("folds rare answers outside the definition into one suppressed row", () => {
-    const cells = [
-      cell("theme", "open", 7),
-      cell("theme", "my secret idea", null, true),
-      cell("theme", "space", 4),
-    ];
+    const cells = [cell("theme", "open", 7), cell("theme", "my secret idea", null, true), cell("theme", "space", 4)];
     const suppressed = buildQuestions(parseDefinition(definition), cells, false)[0];
-    expect(suppressed.options.map((o) => o.key)).toEqual([
-      "open",
-      "space",
-      "climate",
-      OTHER_ANSWERS,
-    ]);
+    expect(suppressed.options.map((o) => o.key)).toEqual(["open", "space", "climate", OTHER_ANSWERS]);
     expect(JSON.stringify(suppressed)).not.toContain("my secret idea");
-    const full = buildQuestions(
-      parseDefinition(definition),
-      [cell("theme", "my secret idea", 1)],
-      true,
-    )[0];
+    const full = buildQuestions(parseDefinition(definition), [cell("theme", "my secret idea", 1)], true)[0];
     expect(full.options.map((o) => o.key)).toContain("my secret idea");
   });
 });

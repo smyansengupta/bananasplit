@@ -2,15 +2,7 @@ import { reportLinks } from "@/server/reports/links";
 
 import { BarList } from "../bar-list";
 import { LazyStackedColumnsChart } from "../charts/lazy";
-import {
-  channelLabel,
-  formatCount,
-  formatDecimal,
-  formatPct,
-  longDate,
-  shortDate,
-  weekLabel,
-} from "../format";
+import { channelLabel, formatCount, formatDecimal, formatPct, longDate, shortDate, weekLabel } from "../format";
 import { ReportCard, ReportEmpty, ReportError } from "../report-card";
 import { Stat, StatRow } from "../stat";
 import { TableView } from "../table-view";
@@ -119,11 +111,7 @@ export async function SignupsSection({ ctx }: { ctx: ReportViewContext }) {
       tz={ctx.tz}
     >
       <StatRow>
-        <Stat
-          label="Signups"
-          value={formatCount(r.total)}
-          href={reportLinks.signups(ctx.slug, ctx.link)}
-        />
+        <Stat label="Signups" value={formatCount(r.total)} href={reportLinks.signups(ctx.slug, ctx.link)} />
         <Stat
           label="Came to a session"
           value={r.conversionPct === null ? "–" : formatPct(r.conversionPct)}
@@ -174,11 +162,7 @@ export async function SignupsSection({ ctx }: { ctx: ReportViewContext }) {
               .filter((w) => w.signups > 0)
               .map((w) => ({
                 key: w.week,
-                cells: {
-                  week: shortDate(w.week),
-                  signups: formatCount(w.signups),
-                  converted: formatCount(w.converted),
-                },
+                cells: { week: shortDate(w.week), signups: formatCount(w.signups), converted: formatCount(w.converted) },
               }))}
           />
         </>
@@ -219,10 +203,7 @@ export async function StampsSection({ ctx }: { ctx: ReportViewContext }) {
             label: `${m.milestone} ${m.milestone === 1 ? "stamp" : "stamps"}`,
             value: m.reached,
             display: formatCount(m.reached),
-            detail:
-              r.stampHolders > 0
-                ? `${formatDecimal((m.reached / r.stampHolders) * 100)}% of stamp holders`
-                : undefined,
+            detail: r.stampHolders > 0 ? `${formatDecimal((m.reached / r.stampHolders) * 100)}% of stamp holders` : undefined,
             href: reportLinks.stampMilestone(ctx.slug, ctx.link, m.milestone),
           }))}
         />

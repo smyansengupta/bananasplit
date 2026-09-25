@@ -64,9 +64,7 @@ describe("layoutOrgChart", () => {
     const pos = new Map(l.nodes.map((n) => [n.id, n]));
     expect(l.nodes).toHaveLength(5);
     expect(pos.get("a")!.x).toBeLessThan(pos.get("b")!.x);
-    expect(
-      effectiveParents([{ id: "z", reportsToId: "ghost", isAdvisor: false, rank: "a" }]).get("z"),
-    ).toBeNull();
+    expect(effectiveParents([{ id: "z", reportsToId: "ghost", isAdvisor: false, rank: "a" }]).get("z")).toBeNull();
   });
 
   it("handles an empty chart", () => {
@@ -131,11 +129,7 @@ describe("validateChart", () => {
       V({ id: "b", personName: "Sam", matchState: "SUGGESTED" }),
       V({ id: "c", reportsTo: "a", personName: "Pat" }),
     ]);
-    expect(issues.map((i) => i.code).sort()).toEqual([
-      "multiple-roots",
-      "placeholder",
-      "unconfirmed",
-    ]);
+    expect(issues.map((i) => i.code).sort()).toEqual(["multiple-roots", "placeholder", "unconfirmed"]);
     expect(hasErrors(issues)).toBe(false);
   });
 
@@ -164,37 +158,14 @@ describe("diffCharts", () => {
       D({ key: "vp", title: "VP", reportsToKey: "president", userId: "o", personLabel: "Oliver" }),
       D({ key: "lead", title: "Lead", reportsToKey: "vp", responsibilities: ["Ships"] }),
       D({ key: "old", title: "Old role", reportsToKey: "president" }),
-      D({
-        key: "designer",
-        title: "Designer",
-        reportsToKey: "vp",
-        isOpen: true,
-        personLabel: "Open hire",
-      }),
+      D({ key: "designer", title: "Designer", reportsToKey: "vp", isOpen: true, personLabel: "Open hire" }),
     ];
     const after = [
       D({ key: "president", title: "President", userId: "j", personLabel: "Jackson" }),
-      D({
-        key: "vp",
-        title: "VP Ops",
-        reportsToKey: "president",
-        userId: "o",
-        personLabel: "Oliver",
-      }),
-      D({
-        key: "lead",
-        title: "Lead",
-        reportsToKey: "president",
-        responsibilities: ["Ships", "Tests"],
-      }),
+      D({ key: "vp", title: "VP Ops", reportsToKey: "president", userId: "o", personLabel: "Oliver" }),
+      D({ key: "lead", title: "Lead", reportsToKey: "president", responsibilities: ["Ships", "Tests"] }),
       D({ key: "new", title: "New role", reportsToKey: "president" }),
-      D({
-        key: "designer",
-        title: "Designer",
-        reportsToKey: "vp",
-        userId: "k",
-        personLabel: "Kim",
-      }),
+      D({ key: "designer", title: "Designer", reportsToKey: "vp", userId: "k", personLabel: "Kim" }),
     ];
     const changes = diffCharts(before, after);
     expect(changes).toEqual([
@@ -203,14 +174,7 @@ describe("diffCharts", () => {
       { type: "retitled", key: "vp", from: "VP", to: "VP Ops" },
       { type: "reparented", key: "lead", title: "Lead", from: "VP", to: "President" },
       { type: "person", key: "designer", title: "Designer", from: "Open hire", to: "Kim" },
-      {
-        type: "content",
-        key: "lead",
-        title: "Lead",
-        field: "responsibilities",
-        added: ["Tests"],
-        removed: [],
-      },
+      { type: "content", key: "lead", title: "Lead", field: "responsibilities", added: ["Tests"], removed: [] },
     ]);
   });
 
@@ -219,9 +183,7 @@ describe("diffCharts", () => {
       [D({ key: "vp-ops", title: "VP Ops", userId: "o", personLabel: "Oliver" })],
       [D({ key: "vp-operations", title: "VP Operations", userId: "o", personLabel: "Oliver" })],
     );
-    expect(changes).toEqual([
-      { type: "retitled", key: "vp-operations", from: "VP Ops", to: "VP Operations" },
-    ]);
+    expect(changes).toEqual([{ type: "retitled", key: "vp-operations", from: "VP Ops", to: "VP Operations" }]);
   });
 
   it("is empty for identical charts", () => {

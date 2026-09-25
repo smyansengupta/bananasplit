@@ -133,19 +133,10 @@ describe("Google sign-in sets emailVerified at creation (0A Fix 4(b))", () => {
   it("the Google profile() marks the verified address, and only a verified one", async () => {
     const { googleProfile, VERIFIED_EMAIL_MARKER } = await import("./google-linking");
     expect(googleProviderOptions.profile).toBe(googleProfile);
-    const verified = googleProfile({
-      sub: "g1",
-      email: "New@Example.edu",
-      email_verified: true,
-      name: "N",
-    });
+    const verified = googleProfile({ sub: "g1", email: "New@Example.edu", email_verified: true, name: "N" });
     expect(verified).toMatchObject({ id: "g1", email: "New@Example.edu", name: "N" });
     expect(verified[VERIFIED_EMAIL_MARKER]).toBe("new@example.edu");
-    expect(
-      googleProfile({ sub: "g2", email: "x@example.edu", email_verified: false })[
-        VERIFIED_EMAIL_MARKER
-      ],
-    ).toBeNull();
+    expect(googleProfile({ sub: "g2", email: "x@example.edu", email_verified: false })[VERIFIED_EMAIL_MARKER]).toBeNull();
   });
 
   it("the adapter creates a verified Google user verified, and strips the marker", async () => {

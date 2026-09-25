@@ -29,7 +29,8 @@ const PRODUCT = "CBC Portal";
 
 export function layout(input: LayoutInput): RenderedEmail {
   const subject = subjectLine(input.subject);
-  const footer = input.footer ?? `You're receiving this because of your account on ${PRODUCT}.`;
+  const footer =
+    input.footer ?? `You're receiving this because of your account on ${PRODUCT}.`;
   const cta = input.cta
     ? `<p style="margin:24px 0"><a href="${safeHref(input.cta.url)}" style="display:inline-block;background:#18181b;color:#ffffff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600">${escapeHtml(input.cta.label)}</a></p>
 <p style="margin:0 0 16px;font-size:12px;color:#71717a">Or paste this link into your browser:<br><span style="word-break:break-all">${escapeHtml(input.cta.url)}</span></p>`
@@ -49,12 +50,7 @@ ${eyebrow}${input.bodyHtml}${cta}
 </td></tr></table>
 </body></html>`;
 
-  const textParts = [
-    input.eyebrow,
-    input.bodyText,
-    input.cta ? `${input.cta.label}: ${input.cta.url}` : undefined,
-    footer,
-  ];
+  const textParts = [input.eyebrow, input.bodyText, input.cta ? `${input.cta.label}: ${input.cta.url}` : undefined, footer];
   return { subject, html, text: textParts.filter(Boolean).join("\n\n") };
 }
 
@@ -93,9 +89,7 @@ export function invitationEmail(input: {
     eyebrow: input.orgName,
     bodyHtml:
       `<p style="margin:0 0 12px">${escapeHtml(input.inviterName)} invited you to join <strong>${escapeHtml(input.orgName)}</strong> as ${escapeHtml(role)}.</p>` +
-      paragraph(
-        `This invitation expires ${expires}. Sign in with this email address to accept it.`,
-      ),
+      paragraph(`This invitation expires ${expires}. Sign in with this email address to accept it.`),
     bodyText: `${input.inviterName} invited you to join ${input.orgName} as ${role}.\n\nThis invitation expires ${expires}. Sign in with this email address to accept it.`,
     cta: { label: "Accept invitation", url: input.acceptUrl },
     footer: "If you weren't expecting this invitation, you can ignore this email.",
@@ -116,8 +110,7 @@ export function reimbursementStatusEmail(input: {
   url: string;
 }): RenderedEmail {
   const summary = STATUS_COPY[input.status] ?? "was updated";
-  const reason =
-    input.status === "REJECTED" && input.rejectionReason ? input.rejectionReason : null;
+  const reason = input.status === "REJECTED" && input.rejectionReason ? input.rejectionReason : null;
   return layout({
     subject: `Your expense "${input.description}" ${summary}`,
     eyebrow: input.orgName,
@@ -169,8 +162,7 @@ export function verifyEmailEmail(input: {
       ),
     bodyText: `${greeting}\n\nConfirm this address to finish setting up your ${PRODUCT} account. The link expires in ${input.expiresHours} hours.`,
     cta: { label: "Confirm email", url: input.verifyUrl },
-    footer:
-      "If you didn't create an account, you can ignore this email; the account is removed after 72 hours.",
+    footer: "If you didn't create an account, you can ignore this email; the account is removed after 72 hours.",
   });
 }
 

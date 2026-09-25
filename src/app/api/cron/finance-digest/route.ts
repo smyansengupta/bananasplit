@@ -25,9 +25,7 @@ export async function GET(request: Request) {
   if (denied) return denied;
 
   const day = new Date().toISOString().slice(0, 10);
-  const orgIds = await serviceDb.$queryRaw<
-    { id: string }[]
-  >`SELECT id FROM app.active_org_ids() AS id`;
+  const orgIds = await serviceDb.$queryRaw<{ id: string }[]>`SELECT id FROM app.active_org_ids() AS id`;
 
   let orgsWithPending = 0;
   let digestsQueued = 0;

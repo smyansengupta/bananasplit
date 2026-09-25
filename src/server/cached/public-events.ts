@@ -46,10 +46,7 @@ const PUBLIC_EVENT_SELECT = {
 } satisfies Prisma.EventSelect;
 
 /** The uncached read. Exported for tests and scripts. */
-export async function loadPublicEvents(
-  orgId: string,
-  now: Date = new Date(),
-): Promise<PublicEventsFeed | null> {
+export async function loadPublicEvents(orgId: string, now: Date = new Date()): Promise<PublicEventsFeed | null> {
   return withSystemOrgTx(orgId, async ({ db }) => {
     const org = await db.organization.findUnique({
       where: { id: orgId },
