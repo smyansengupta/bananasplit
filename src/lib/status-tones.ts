@@ -1,11 +1,7 @@
 /**
- * Status colors for the Settings, onboarding and org-creation pages, in one
- * place.
- *
- * TODO(themes merge): switch to the theme tokens once the themes branch is
- * merged: SUCCESS_TEXT -> "text-success", WARNING_BOX -> "border-warning/40
- * bg-warning/10". They are literal palette colors here only because those
- * tokens do not exist on this branch yet.
+ * Status colors for the Settings, guided setup and org-creation pages, in
+ * one place, on the theme's own tokens (--success / --warning, defined for
+ * light and dark in globals.css and overridable per org).
  */
-export const SUCCESS_TEXT = "text-green-700 dark:text-green-500";
-export const WARNING_BOX = "border border-amber-500/40 bg-amber-500/10";
+export const SUCCESS_TEXT = "text-success";
+export const WARNING_BOX = "border border-warning/40 bg-warning/10";

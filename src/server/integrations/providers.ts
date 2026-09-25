@@ -1,11 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
-import pg from "pg";
 import { Resend } from "resend";
 
 import { assertNoTx } from "@/server/db/context";
 import type { IntegrationTestContext, IntegrationTestResult } from "@/server/secrets";
 
-import { NETLIFY_HOOK_PATTERN, supabaseConfigSchema } from "./catalog";
+import { NETLIFY_HOOK_PATTERN } from "./catalog";
 
 /**
  * The network checks behind "Test" for each integration. Each runs inside
@@ -14,15 +13,13 @@ import { NETLIFY_HOOK_PATTERN, supabaseConfigSchema } from "./catalog";
  * only ok or a short reason (sanitized again before it is stored). Every
  * host is fixed or derived: no free-form URLs (SSRF).
  *
- * `clients` is the test seam for the three SDK/driver clients.
+ * `clients` is the test seam for the SDK clients and fetch.
  */
 
 export const clients = {
   anthropic: (apiKey: string) =>
     new Anthropic({ apiKey, maxRetries: 0, timeout: 10_000 }) as Pick<Anthropic, "models">,
   resend: (apiKey: string) => new Resend(apiKey) as Pick<Resend, "domains">,
-  pg: (config: pg.ClientConfig) =>
-    new pg.Client(config) as Pick<pg.Client, "connect" | "query" | "end">,
   fetch: (url: string, init: RequestInit) => fetch(url, init),
 };
 
@@ -34,7 +31,9 @@ export const clients = {
  * and signature as the org chart's claudeConnectionTest
  * (src/server/org-chart/claude.ts), which the integration may point at.
  */
-export async function claudeConnectionTest(ctx: IntegrationTestContext): Promise<IntegrationTestResult> {
+export async function claudeConnectionTest(
+  ctx: IntegrationTestContext,
+): Promise<IntegrationTestResult> {
   assertNoTx("claude test");
   if (!ctx.secret) return { ok: false, reason: "Add an API key first." };
   const client = clients.anthropic(ctx.secret);
@@ -113,85 +112,14 @@ export async function testResendDomain(
 }
 
 // ---------------------------------------------------------------- Supabase
-
-/** The pooler host and user are derived from structured fields; free-form hosts are never accepted. */
-export function supabaseConnection(
-  config: unknown,
-  password: string,
-  env: Record<string, string | undefined> = process.env,
-): pg.ClientConfig {
-  const c = supabaseConfigSchema.parse(config);
-  const host = `${c.poolerPrefix}-${c.poolerRegion}.pooler.supabase.com`;
-  const ca = env.SUPABASE_ROOT_CA?.replace(/\\n/g, "\n").trim();
-  return {
-    host,
-    port: 5432, // session mode
-    database: "postgres",
-    user: `${c.roleName}.${c.projectRef}`,
-    password,
-    // verify-full: the certificate must chain to the Supabase root CA (or the
-    // system store when SUPABASE_ROOT_CA is unset) and match the host.
-    ssl: { rejectUnauthorized: true, servername: host, ...(ca ? { ca } : {}) },
-    connectionTimeoutMillis: 8_000,
-    statement_timeout: 8_000,
-    query_timeout: 9_000,
-    application_name: "cbc-portal-settings-test",
-  };
-}
-
-/** Connects read-only and asks the website export contract for its version. */
-export async function testSupabase(ctx: IntegrationTestContext): Promise<IntegrationTestResult> {
-  assertNoTx("supabase test");
-  if (!ctx.secret) return { ok: false, reason: "Add the database password first." };
-  let config: pg.ClientConfig;
-  try {
-    config = supabaseConnection(ctx.config, ctx.secret);
-  } catch {
-    return { ok: false, reason: "Fill in the project ref, pooler region, prefix and role first." };
-  }
-  const client = clients.pg(config);
-  try {
-    await client.connect();
-    await client.query("SET default_transaction_read_only = on");
-    const res = await client.query("SELECT suite_export.contract_version() AS v");
-    const version = res.rows?.[0]?.v;
-    return {
-      ok: true,
-      config: { contractVersion: version === undefined ? null : String(version).slice(0, 40) },
-    };
-  } catch (error) {
-    const code = (error as { code?: string }).code;
-    if (code === "28P01" || code === "28000")
-      return { ok: false, reason: "The database refused the role name or password." };
-    if (code === "3F000" || code === "42883") {
-      return {
-        ok: false,
-        reason:
-          "Connected, but suite_export.contract_version() is missing. Apply supabase/suite-export.sql in the website project.",
-      };
-    }
-    if (code === "42501")
-      return {
-        ok: false,
-        reason: "Connected, but the role may not run suite_export.contract_version().",
-      };
-    if (code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "ETIMEDOUT") {
-      return {
-        ok: false,
-        reason: "Could not reach the Supabase pooler. Check the region and the aws-0/aws-1 prefix.",
-      };
-    }
-    if (error instanceof Error && /certificate|self[- ]signed|SSL/i.test(error.message)) {
-      return {
-        ok: false,
-        reason: "The TLS certificate could not be verified (set SUPABASE_ROOT_CA on the platform).",
-      };
-    }
-    return { ok: false, reason: error instanceof Error ? error.message : "The connection failed." };
-  } finally {
-    await client.end().catch(() => undefined);
-  }
-}
+//
+// The website data source's connection test lives with the sync that uses
+// it: testSupabaseSource in src/server/sync/connection.ts. It derives the
+// same fixed host from the same structured fields (no free-form host ever
+// reaches a socket), and additionally understands the local stand-in
+// config and refuses an export contract version this suite cannot read.
+// Settings and the guided setup both call that one, so they cannot
+// disagree about whether the website is reachable.
 
 // ---------------------------------------------------------------- Netlify
 

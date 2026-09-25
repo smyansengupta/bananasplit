@@ -74,6 +74,11 @@ and never shown again; pages show only the status and the last four characters. 
 admins can save, replace and test; only owners can remove. Every change is recorded in the
 audit log and every owner gets a security notification.
 
+New organizations should use **Setup** (`/app/<your-url>/setup`) instead of the pages
+below: it walks through all four integrations in order, with the click path for each
+credential and a test that says what to change when it fails (onboarding.md). These
+pages stay for changing one integration later.
+
 ### Email sender (Resend)
 
 1. In [Resend](https://resend.com), add a sending domain, for example `mail.yourclub.org`.
@@ -162,7 +167,7 @@ listed in the organization switcher and on `/onboarding`). Its URL is never reus
 | Org creation | `PLATFORM_ADMIN_EMAILS`, `PLATFORM_ORG_CREATION_ENABLED`, `ORG_CREATION_MODE` (below) |
 | Secrets keyring | `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT`, `SECRETS_FINGERPRINT_KEY` |
 | Google Calendar | `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` |
-| Supabase TLS | `SUPABASE_ROOT_CA` (optional) |
+| Supabase TLS | `SUPABASE_ROOT_CA_PEM` (optional) |
 | Platform sender | `RESEND_API_KEY`, `EMAIL_FROM` (see platform-services.md) |
 | Jobs | `/api/cron/jobs` with `CRON_SECRET`; locally `pnpm jobs:drain --watch` |
 

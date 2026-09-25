@@ -1152,6 +1152,14 @@ model OrgSettings {
   reminderLeadDaysDefault       Int              @default(1)
   bootstrapTemplate             String?
   bootstrappedAt                DateTime?
+  // Phase C1 (guided setup). Progress itself is DERIVED from the
+  // OrgIntegration rows, never stored: only the org's two choices live here.
+  /// Setup step ids the org chose to skip ("data", "calendar", "email",
+  /// "claude"). Cleared for a step as soon as it connects.
+  setupSkipped                  String[]         @default([])
+  /// When someone finished (or dismissed) the guided setup. Only hides the
+  /// prompt; the flow and the connection status stay reachable.
+  setupCompletedAt              DateTime?
   updatedById                   String?
   updatedAt                     DateTime         @default(now()) @updatedAt
 
