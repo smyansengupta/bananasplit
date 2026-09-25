@@ -32,9 +32,12 @@ interface PendingComment {
 export function TaskComments({
   taskId,
   initial,
+  audience,
 }: {
   taskId: string;
   initial?: { comments: TaskCommentItem[]; hasMore: boolean };
+  /** C4: on a private task, who may be mentioned in a comment. */
+  audience?: readonly string[] | null;
 }) {
   const { org, viewer, memberById, announce } = useTasks();
   const [comments, setComments] = useState<TaskCommentItem[]>(initial?.comments ?? []);
@@ -190,6 +193,7 @@ export function TaskComments({
                       rows={3}
                       onChange={(v) => setEditing({ id: c.id, body: v })}
                       onSubmitShortcut={saveEdit}
+                      audience={audience}
                     />
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
@@ -233,6 +237,7 @@ export function TaskComments({
           rows={2}
           onChange={setBody}
           onSubmitShortcut={submit}
+          audience={audience}
         />
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground text-xs">Markdown works. Ctrl+Enter to send.</span>

@@ -15,6 +15,13 @@ import { useTasks } from "./tasks-context";
  * picking someone inserts the token @[Name](user:id), which the server
  * validates against membership and renders as a chip. Arrow keys move,
  * Enter or Tab picks, Escape closes. Focus stays in the textarea.
+ *
+ * C4: on a private task the list is the task's audience, and the popover
+ * says so. Offering somebody who cannot see the task would be offering to
+ * send them a notification carrying its title; the server drops such a
+ * mention anyway, and a picker that silently did nothing would be worse
+ * than one that explains itself. Adding them as a collaborator is the way
+ * in, which is what the line underneath tells you.
  */
 
 const TRIGGER = /(?:^|[\s(])@([\p{L}\p{N}._'-]{0,30})$/u;
@@ -24,6 +31,7 @@ export function MentionTextarea({
   value,
   onChange,
   onSubmitShortcut,
+  audience,
   className,
   ...props
 }: Omit<React.ComponentProps<typeof Textarea>, "value" | "onChange"> & {
@@ -31,8 +39,14 @@ export function MentionTextarea({
   onChange: (value: string) => void;
   /** Ctrl/Cmd+Enter. */
   onSubmitShortcut?: () => void;
+  /** C4: on a private task, the only people who may be mentioned. */
+  audience?: readonly string[] | null;
 }) {
   const { members } = useTasks();
+  const mentionable = useMemo(
+    () => (audience ? members.filter((m) => audience.includes(m.id)) : members),
+    [members, audience],
+  );
   const ref = useRef<HTMLTextAreaElement>(null);
   const [trigger, setTrigger] = useState<{ query: string; start: number; end: number } | null>(
     null,
@@ -42,7 +56,7 @@ export function MentionTextarea({
   const options = useMemo(() => {
     if (!trigger) return [];
     const q = trigger.query.toLowerCase();
-    return members
+    return mentionable
       .filter(
         (m) =>
           (m.name ?? "")
@@ -51,7 +65,7 @@ export function MentionTextarea({
             .some((part) => part.startsWith(q)) || (m.name ?? "").toLowerCase().includes(q),
       )
       .slice(0, MAX_OPTIONS);
-  }, [members, trigger]);
+  }, [mentionable, trigger]);
 
   function detect(text: string, caret: number) {
     const match = TRIGGER.exec(text.slice(0, caret));
@@ -64,7 +78,7 @@ export function MentionTextarea({
   }
 
   function insert(memberId: string) {
-    const member = members.find((m) => m.id === memberId);
+    const member = mentionable.find((m) => m.id === memberId);
     if (!member || !trigger) return;
     const token = `${mentionToken(member.name ?? "member", member.id)} `;
     const next = value.slice(0, trigger.start) + token + value.slice(trigger.end);
@@ -134,7 +148,7 @@ export function MentionTextarea({
       >
         <Command shouldFilter={false} value={options[highlight]?.id ?? ""}>
           <CommandList>
-            <CommandGroup heading="Mention a member">
+            <CommandGroup heading={audience ? "Mention someone on this task" : "Mention a member"}>
               {options.map((m, i) => (
                 <CommandItem
                   key={m.id}
@@ -154,6 +168,11 @@ export function MentionTextarea({
               ))}
             </CommandGroup>
           </CommandList>
+          {audience && (
+            <p className="text-muted-foreground border-t px-3 py-2 text-xs">
+              Only people who can see this private task. Add a collaborator to include someone else.
+            </p>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

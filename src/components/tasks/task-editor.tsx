@@ -89,7 +89,8 @@ export function TaskEditor({
   mode?: "dialog" | "page";
   initialComments?: React.ComponentProps<typeof TaskComments>["initial"];
 }) {
-  const { org, viewer, actor, labels, projects, projectById, memberById, announce } = useTasks();
+  const { org, viewer, actor, labels, projects, projectById, memberById, members, announce } =
+    useTasks();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
@@ -160,6 +161,14 @@ export function TaskEditor({
     createdById: task?.createdById ?? viewer.userId,
     assigneeIds,
   });
+  // Owners and admins are a standing audience of every private task, so
+  // they stay mentionable on one even when nobody put them on it.
+  const mentionAudience = [
+    ...new Set([
+      ...audience,
+      ...members.filter((m) => m.role === "OWNER" || m.role === "ADMIN").map((m) => m.id),
+    ]),
+  ];
   const ownerRequired = org.requireOwner && isTopLevel && !intake;
   const dueRequired = org.requireDueDate && isTopLevel;
 
@@ -394,6 +403,7 @@ export function TaskEditor({
             <TabsContent value="write">
               <MentionTextarea
                 id="task-description"
+                audience={visibility === TaskVisibility.PRIVATE ? mentionAudience : null}
                 value={description}
                 onChange={setDescription}
                 rows={5}
@@ -609,7 +619,11 @@ export function TaskEditor({
       {task && (
         <div className="space-y-2 border-t pt-4">
           <h3 className="text-sm font-medium">Comments</h3>
-          <TaskComments taskId={task.id} initial={initialComments} />
+          <TaskComments
+            taskId={task.id}
+            initial={initialComments}
+            audience={visibility === TaskVisibility.PRIVATE ? mentionAudience : null}
+          />
         </div>
       )}
 
