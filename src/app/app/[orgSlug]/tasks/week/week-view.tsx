@@ -108,7 +108,13 @@ export function WeekView({
   ).length;
 
   const mine = ws.query.scope === "mine";
-  const whose = mine ? "You" : ws.query.scope === "team" ? "Your team" : "The club";
+  // The verb agrees with the subject, not with the number of tasks: "You
+  // have 1 open", "The club has 22 open".
+  const [whose, verb] = mine
+    ? (["You", "have"] as const)
+    : ws.query.scope === "team"
+      ? (["Your team", "has"] as const)
+      : (["The club", "has"] as const);
 
   if (open.length === 0 && completed.length === 0) {
     return (
@@ -161,7 +167,7 @@ export function WeekView({
       {/* The whole week in one line, each number a filter. */}
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 text-sm">
         <span className="text-muted-foreground">
-          {whose} {open.length === 1 ? "has" : "have"}
+          {whose} {verb}
         </span>
         <strong className="font-semibold">{open.length} open</strong>
         {overdue > 0 && (

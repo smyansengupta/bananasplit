@@ -57,6 +57,30 @@ import { bulkAssign, bulkDelete, bulkUpdateStatus } from "../actions";
 
 type SortKey = "title" | "dueDate" | "priority" | "status";
 const PRIORITY_RANK: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+
+/**
+ * The table is the one layout that cannot shed columns on a phone and stay
+ * itself — sorting, bulk-select and the column chooser are the point of it.
+ * So it scrolls sideways, and the checkbox and the title stay pinned to the
+ * left edge while it does: you can always see which row you are changing,
+ * and the pinned edge is the cue that there is more to the right.
+ *
+ * `PINNED_*` keep the header, the body and the subtask rows on the same two
+ * offsets. `w-10` on the checkbox column is where `left-10` comes from.
+ */
+const PINNED_CELL = "bg-background sticky z-20 group-hover:bg-muted/50";
+const PINNED_HEAD = "bg-background sticky z-30";
+/** 3rem, and `left-12` on the title is that same 3rem. */
+const PINNED_CHECKBOX = "left-0 w-12 min-w-12";
+const PINNED_TITLE = "left-12 w-[min(58vw,28rem)] max-w-[min(58vw,28rem)] border-r";
+/**
+ * Chrome will not paint a `position: sticky` cell reliably above a table
+ * that collapses its borders — the scrolled cells bleed through it. So this
+ * one table separates them and draws the row rules on the cells instead.
+ */
+const PINNABLE_TABLE =
+  "border-separate border-spacing-0 [&_td]:border-b [&_th]:border-b " +
+  "[&_tbody_tr:last-child_td]:border-b-0";
 const COLUMN_KEYS = [
   "owner",
   "involved",
@@ -254,11 +278,11 @@ export function TaskTable({
         </DropdownMenu>
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
-        <Table>
+      <div className="rounded-md border">
+        <Table className={PINNABLE_TABLE}>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">
+              <TableHead className={cn(PINNED_HEAD, PINNED_CHECKBOX)}>
                 <Checkbox
                   checked={selected.size > 0 && selected.size === tasks.length}
                   onCheckedChange={() =>
@@ -275,6 +299,7 @@ export function TaskTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={toggleSort}
+                className={cn(PINNED_HEAD, PINNED_TITLE)}
               />
               <SortableHead
                 label="Status"
@@ -352,18 +377,21 @@ export function TaskTable({
               return (
                 <FragmentRows key={task.id}>
                   <TableRow
-                    className="hover:bg-muted/50 cursor-pointer"
+                    className="hover:bg-muted/50 group cursor-pointer"
                     onClick={() => showTask(task)}
                   >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell
+                      className={cn(PINNED_CELL, PINNED_CHECKBOX)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Checkbox
                         checked={selected.has(task.id)}
                         onCheckedChange={() => toggleSelected(task.id)}
                         aria-label={`Select ${task.title}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-md">
-                      <div className="flex items-center gap-1">
+                    <TableCell className={cn(PINNED_CELL, PINNED_TITLE)}>
+                      <div className="flex min-w-0 items-center gap-1">
                         {task.subtasks.length > 0 ? (
                           <button
                             type="button"
@@ -376,7 +404,7 @@ export function TaskTable({
                                 return next;
                               });
                             }}
-                            className="text-muted-foreground"
+                            className="text-muted-foreground shrink-0"
                             aria-label={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
                           >
                             {isExpanded ? (
@@ -386,16 +414,16 @@ export function TaskTable({
                             )}
                           </button>
                         ) : (
-                          <span className="w-4" />
+                          <span className="w-4 shrink-0" />
                         )}
                         {isTaskPrivate(task) && <PrivateMark />}
                         <span className="truncate">{task.title}</span>
                         {task.subtasks.length > 0 && (
-                          <span className="text-muted-foreground text-xs">
+                          <span className="text-muted-foreground shrink-0 text-xs">
                             ({doneSubtasks}/{task.subtasks.length})
                           </span>
                         )}
-                        {isTaskFlagged(task) && <FlagBadge className="ml-1" />}
+                        {isTaskFlagged(task) && <FlagBadge className="ml-1 shrink-0" />}
                       </div>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -473,18 +501,26 @@ export function TaskTable({
                   </TableRow>
                   {isExpanded &&
                     task.subtasks.map((s) => (
+                      // Three cells, not two, so a subtask lines up with the
+                      // pinned columns above it: nothing, its title, then its
+                      // details across the rest.
                       <TableRow key={s.id} className="bg-muted/30">
-                        <TableCell />
-                        <TableCell colSpan={colSpan - 1}>
-                          <div className="flex items-center gap-2 pl-6 text-sm">
+                        <TableCell className={cn("bg-muted/30 sticky z-20", PINNED_CHECKBOX)} />
+                        <TableCell className={cn("bg-muted/30 sticky z-20", PINNED_TITLE)}>
+                          <div className="flex min-w-0 items-center gap-1 pl-6 text-sm">
                             <span
                               className={cn(
+                                "truncate",
                                 s.status === TaskStatus.COMPLETED &&
                                   "text-muted-foreground line-through",
                               )}
                             >
                               {s.title}
                             </span>
+                          </div>
+                        </TableCell>
+                        <TableCell colSpan={colSpan - 2}>
+                          <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">
                               {STATUS_LABELS[s.status]}
                             </span>
@@ -553,15 +589,17 @@ function SortableHead({
   active,
   dir,
   onClick,
+  className,
 }: {
   label: string;
   sortKey: SortKey;
   active: SortKey | null;
   dir: "asc" | "desc";
   onClick: (key: SortKey) => void;
+  className?: string;
 }) {
   return (
-    <TableHead>
+    <TableHead className={className}>
       <button
         type="button"
         onClick={() => onClick(sortKey)}
