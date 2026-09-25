@@ -123,11 +123,11 @@ function fakeAnthropic(): Anthropic {
   } as unknown as Anthropic;
 }
 
-function uploadRequest(orgId: string, name: string, bytes: Buffer, type: string) {
+function uploadRequest(orgId: string, name: string, bytes: Buffer, type: string, headers?: Record<string, string>) {
   const form = new FormData();
   form.append("file", new File([new Uint8Array(bytes)], name, { type }));
   return uploadRoute(
-    new Request(`http://localhost:3403/api/orgs/${orgId}/org-chart/imports`, { method: "POST", body: form }),
+    new Request(`http://localhost:3403/api/orgs/${orgId}/org-chart/imports`, { method: "POST", body: form, headers }),
     { params: Promise.resolve({ orgId }) },
   );
 }
@@ -221,6 +221,29 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     if (body.versionId) createdVersions.push(body.versionId);
     return { status: res.status, body };
   }
+
+  it("accepts an upload from the host the browser asked for, and still refuses another site", async () => {
+    // Next rebuilds request.url from the host the server is bound to, so the
+    // same-site check reads the Host header the browser sent. An org reached
+    // on its own hostname (or through a proxy) must still be able to import.
+    const sameSite = await track(
+      await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown", {
+        host: "chart.localhost:3602",
+        origin: "http://chart.localhost:3602",
+      }),
+    );
+    expect(sameSite.status).toBe(201);
+    await discard(sameSite.body.versionId!);
+
+    const crossSite = await track(
+      await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown", {
+        host: "chart.localhost:3602",
+        origin: "https://evil.example.com",
+      }),
+    );
+    expect(crossSite.status).toBe(403);
+    expect(crossSite.body.error).toBe("Forbidden.");
+  });
 
   it("a MEMBER cannot upload; an unsupported file is refused before anything is stored", async () => {
     sessionUser.current = s.kristine;

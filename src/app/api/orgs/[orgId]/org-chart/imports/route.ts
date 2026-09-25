@@ -58,12 +58,23 @@ function json(status: number, body: Record<string, unknown>) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-/** Route handlers get no built-in CSRF check: refuse another site's browser request. */
+/**
+ * Route handlers get no built-in CSRF check: refuse another site's browser
+ * request.
+ *
+ * The comparison is against the Host header the browser sent, not against
+ * request.url: Next rebuilds request.url from the host the server is bound
+ * to, so on any hostname other than that one (a dev alias, or a deployment
+ * reached through a proxy) an honest same-origin upload would be refused.
+ * A cross-site page cannot set either header, so Origin == Host is exactly
+ * the check that is wanted.
+ */
 function isCrossSite(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return false;
   try {
-    return new URL(origin).host !== new URL(request.url).host;
+    const host = request.headers.get("host") ?? new URL(request.url).host;
+    return new URL(origin).host !== host;
   } catch {
     return true;
   }
