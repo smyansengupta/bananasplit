@@ -584,6 +584,22 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       await discard(res.body.versionId!);
     });
 
+    it("says why a PDF's draft is empty rather than leaving the admin guessing", async () => {
+      // There is no local PDF text extraction, so the parser reads nothing.
+      // The draft still has to explain itself and offer a way forward.
+      const res = await track(await uploadRequest(s.cbcId, "chart.pdf", read("cbc-fall-2026.pdf"), "application/pdf"));
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
+      expect(claudeCalls).toEqual([]);
+      const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
+      expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
+      expect(draft?.positions).toEqual([]);
+      expect(draft?.version.parseReport).toMatchObject({ shape: "none", positions: 0 });
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/no text the portal can read/);
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/Claude API key|club template/);
+      await discard(res.body.versionId!);
+    });
+
     it("lands an unreadable document in the editor rather than refusing it", async () => {
       const res = await track(await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"));
       expect(res.status).toBe(201);

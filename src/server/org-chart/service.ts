@@ -75,6 +75,21 @@ export class OrgChartError extends Error {
   }
 }
 
+/** The report for a file the built-in parser never got any text out of. */
+const EMPTY_REPORT: ParseReport = {
+  shape: "none",
+  confidence: 0,
+  positions: 0,
+  identified: 0,
+  linked: 0,
+  roots: 0,
+  linesConsidered: 0,
+  linesUsed: 0,
+  orphanCount: 0,
+  orphanLines: [],
+  notes: [],
+};
+
 export function newAttemptId(): string {
   return randomBytes(12).toString("hex");
 }
@@ -130,18 +145,28 @@ export async function hasClaudeKey(db: Db, organizationId: string): Promise<bool
   return Boolean(row?.secretFingerprint);
 }
 
-/** The DB quota: 20 imports per org per rolling day, one active parse at a time. */
+/**
+ * The DB quota: 20 documents sent to Claude per org per rolling day, one
+ * active parse at a time.
+ *
+ * Only uploads that were actually handed to Claude count, which is exactly
+ * the ones carrying a parseAttemptId. A document the built-in parser read
+ * costs the org nothing and is not rationed, so a club that imports a dozen
+ * drafts for free still has its whole Claude allowance when it meets a
+ * document the parser cannot read.
+ */
 export async function assertUploadAllowed(db: Db, organizationId: string, exceptVersionId?: string): Promise<void> {
   const uploads = await db.orgChartVersion.count({
     where: {
       organizationId,
       source: OrgChartSource.UPLOAD,
+      parseAttemptId: { not: null },
       createdAt: { gte: new Date(Date.now() - 24 * 60 * 60_000) },
     },
   });
   if (!exceptVersionId && uploads >= UPLOADS_PER_DAY) {
     throw new OrgChartError(
-      `Your org has used its ${UPLOADS_PER_DAY} document imports for today. Try again tomorrow, or edit the chart by hand.`,
+      `Your org has sent its ${UPLOADS_PER_DAY} documents to Claude for today. Try again tomorrow, or edit the chart by hand.`,
       429,
     );
   }
@@ -240,7 +265,10 @@ export async function createUploadVersion(ctx: Ctx, input: UploadVersionInput): 
       parseAttemptId,
       parseMethod: useClaude ? null : OrgChartParseMethod.BUILTIN,
       parseConfidence: report?.confidence ?? null,
-      parseReport: (report ? { ...report, notes } : null) as unknown as Prisma.InputJsonValue,
+      // A file with no readable text (a PDF) has no reading to report, but it
+      // still needs the note saying why the draft is empty: without a report
+      // the draft page would show an empty editor and no reason for it.
+      parseReport: { ...(report ?? EMPTY_REPORT), notes } as unknown as Prisma.InputJsonValue,
       openItems: [],
       warnings: (input.builtin?.chart.warnings ?? []) as unknown as Prisma.InputJsonValue,
       createdById: ctx.userId,
