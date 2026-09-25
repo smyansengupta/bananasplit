@@ -184,12 +184,21 @@ changes nothing you have already entered.
   `src/server/sync/connection.ts` — the same one the sync job uses — so
   "Test connection" and "will the sync work" can never disagree. Settings >
   Integrations calls the same one.
+- One row of the failure table above is still unproven, and the connection
+  spike in `databases.md` should settle it. Supabase resolves every
+  `aws-{0,1}-{region}.pooler.supabase.com` name, including regions a project
+  is not in, so `ENOTFOUND` — the only thing that produces "the pooler host
+  was not found" — may never actually fire for a wrong region or prefix.
+  A club that picks the wrong one probably sees the password or TLS message
+  instead, whose fix text sends them somewhere else. If the spike confirms
+  that, the region and prefix rules in `diagnose.ts` need to match on
+  whatever the pooler really answers with.
 
 ### Locally
 
 Google needs a real OAuth client, so its Connect button is disabled; the rest
 of the flow works. For the website data source, build the stand-in and set
-`SOURCE_SYNC_ALLOW_LOCAL=1`:
+`SOURCE_SYNC_ALLOW_LOCAL=1` in `.env`:
 
 ```
 pnpm exec tsx --tsconfig tsconfig.scripts.json scripts/source-sync-standin.ts \
@@ -197,5 +206,29 @@ pnpm exec tsx --tsconfig tsconfig.scripts.json scripts/source-sync-standin.ts \
 pnpm jobs:drain --watch
 ```
 
-Then press **Test connection** on step 1: it connects to the stand-in, and
-the first sync runs in the drain. Mail goes to `.data/mail/`.
+The `--website` checkout has to be one that already has
+`supabase/suite-export.sql` in it; the script applies that file to the
+stand-in, and fails without it.
+
+The script does not just build the database — it also **saves the org's data
+source** pointing at it (config `mode: "local"`, the password through the
+secrets accessor). So step 1 opens on its connected result screen, not on the
+form. **Test connection** there proves the stand-in, and **Sync now** on
+`setup/status` (or the hourly job) runs the sync in the drain; the result
+screen watches that job and turns into the row counts when it lands. Until a
+sync has run, the status page correctly reports the source as connected but
+with nothing pulled yet.
+
+To walk the *form* instead — the path a real club takes — disconnect the data
+source first, or open `?step=data&edit=1`. Note that submitting that form
+writes a remote (`mode: "supabase"`) config, which replaces the stand-in's
+local one; re-run the script to get it back.
+
+Mail goes to `.data/mail/`.
+
+The remote Supabase path cannot be exercised locally without a real project:
+`clientOptions` pins `rejectUnauthorized: true` and never honours
+`NODE_TLS_REJECT_UNAUTHORIZED`, so behind a TLS-intercepting proxy every
+remote test ends in the certificate branch. The Claude and Resend steps do
+reach their real APIs, so a deliberately wrong key there exercises the
+genuine failure copy.
