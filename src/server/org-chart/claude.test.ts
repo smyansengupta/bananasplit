@@ -21,6 +21,7 @@ import {
   parseWithClaude,
   readClaudeSettings,
   SYSTEM_PROMPT,
+  THINKING_BUDGET_TOKENS,
 } from "./claude";
 import type { ExtractedSource } from "./extract";
 
@@ -103,26 +104,66 @@ describe("buildParseRequest", () => {
 });
 
 describe("parseWithClaude", () => {
-  it("counts tokens, then asks for the strict schema with adaptive thinking and default fallbacks", async () => {
+  it("counts tokens, then asks Haiku for the strict schema with a thinking budget and no effort", async () => {
     const fake = fakeClient([message({ text: rawJson })]);
     installClient(fake);
     const result = await parseWithClaude({ config, source: textSource, filename: "cbc.md", timeoutMs: 120_000 });
 
+    expect(DEFAULT_MODEL).toBe("claude-haiku-4-5-20251001");
     expect(result.parse).toEqual(OrgChartParseSchema.parse(JSON.parse(rawJson)));
     expect(result.usage).toMatchObject({ inputTokens: 2100, outputTokens: 1800, fallbackUsed: false });
+    // 2,100 input and 1,800 output tokens on Haiku 4.5 ($1/$5 per MTok).
+    expect(result.usage.costUsd).toBeCloseTo(0.0021 + 0.009, 6);
     expect(factory).toHaveBeenCalledWith(config.apiKey, 120_000);
     expect(fake.countTokens).toHaveBeenCalledTimes(1);
     const [body, options] = fake.create.mock.calls[0];
     expect(body).toMatchObject({
       model: DEFAULT_MODEL,
       max_tokens: 16_000,
+      // Haiku 4.5 takes a budget, and rejects output_config.effort.
+      thinking: { type: "enabled", budget_tokens: THINKING_BUDGET_TOKENS },
+      output_config: { format: { type: "json_schema" } },
+    });
+    expect(body.output_config).not.toHaveProperty("effort");
+    expect(body).not.toHaveProperty("betas");
+    expect(body).not.toHaveProperty("fallbacks");
+    expect(body).not.toHaveProperty("tools");
+    expect(options).toMatchObject({ timeout: 120_000 });
+  });
+
+  it("asks a 4.6-family model for adaptive thinking, effort high and server-side fallbacks", async () => {
+    const fake = fakeClient([message({ text: rawJson, model: "claude-opus-5" })]);
+    installClient(fake);
+    const result = await parseWithClaude({
+      config: { ...config, model: "claude-opus-5" },
+      source: textSource,
+      filename: "cbc.md",
+      timeoutMs: 1000,
+    });
+    const [body] = fake.create.mock.calls[0];
+    expect(body).toMatchObject({
+      model: "claude-opus-5",
       thinking: { type: "adaptive" },
       output_config: { effort: "high", format: { type: "json_schema" } },
       betas: [FALLBACK_BETA],
       fallbacks: "default",
     });
-    expect(body).not.toHaveProperty("tools");
-    expect(options).toMatchObject({ timeout: 120_000 });
+    // 2,100 input and 1,800 output tokens on Opus 5 ($5/$25 per MTok):
+    // about five times what the same parse costs on Haiku.
+    expect(result.usage.costUsd).toBeCloseTo(0.0105 + 0.045, 6);
+  });
+
+  it("never sends fallbacks to a model that does not take them", async () => {
+    const fake = fakeClient([message({ text: rawJson })]);
+    installClient(fake);
+    await parseWithClaude({
+      config: { ...config, model: "claude-sonnet-5", fallbacks: true },
+      source: textSource,
+      filename: null,
+      timeoutMs: 1000,
+    });
+    expect(fake.create).toHaveBeenCalledTimes(1);
+    expect(fake.create.mock.calls[0][0]).not.toHaveProperty("fallbacks");
   });
 
   it("refuses a document over the token budget without calling the model", async () => {
@@ -164,10 +205,16 @@ describe("parseWithClaude", () => {
       "fallbacks: not supported",
       new Headers(),
     );
-    const fake = fakeClient([rejection, message({ text: rawJson })]);
+    const fake = fakeClient([rejection, message({ text: rawJson, model: "claude-opus-5" })]);
     installClient(fake);
-    await parseWithClaude({ config, source: textSource, filename: null, timeoutMs: 1000 });
+    await parseWithClaude({
+      config: { ...config, model: "claude-opus-5" },
+      source: textSource,
+      filename: null,
+      timeoutMs: 1000,
+    });
     expect(fake.create).toHaveBeenCalledTimes(2);
+    expect(fake.create.mock.calls[0][0]).toHaveProperty("fallbacks");
     expect(fake.create.mock.calls[1][0]).not.toHaveProperty("fallbacks");
   });
 

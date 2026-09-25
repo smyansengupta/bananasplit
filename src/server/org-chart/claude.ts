@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 
+import { claudeCostUsd, claudeModel, DEFAULT_CLAUDE_MODEL } from "@/lib/org-chart/models";
 import { OrgChartParseSchema, type OrgChartParse } from "@/lib/org-chart/schema";
 import { assertNoTx, withSystemOrgTx } from "@/server/db/context";
 import { getSecret, type IntegrationTestContext, type IntegrationTestResult } from "@/server/secrets";
@@ -9,7 +10,9 @@ import type { ExtractedSource } from "./extract";
 
 /**
  * The Claude call behind the claude-parse job (decision 'Org chart parsing
- * with Claude').
+ * with Claude'). It is the *backup* reader: the built-in parser in
+ * ./parse/ handles most documents with no key and no cost, and only a
+ * document it could not understand gets here.
  *
  * - The org's own key, decrypted by getSecret inside the job step that uses
  *   it, outside any transaction; never logged, never returned.
@@ -18,23 +21,29 @@ import type { ExtractedSource } from "./extract";
  *   data, and the request has no tools. The output is schema-bound
  *   (structured outputs with the zod schema) and validated again here.
  * - countTokens preflight (at most 60k input tokens), then one
- *   non-streaming request: max_tokens 16000, adaptive thinking, effort
- *   high, SDK maxRetries 0 (the job runner retries) and a timeout below the
- *   kind's maxRuntime.
+ *   non-streaming request: max_tokens 16000, SDK maxRetries 0 (the job
+ *   runner retries) and a timeout below the kind's maxRuntime.
+ * - Thinking is per model (src/lib/org-chart/models.ts). The default,
+ *   Claude Haiku 4.5, takes `thinking: {type: "enabled", budget_tokens}`
+ *   and rejects `output_config.effort`; the 4.6 family and later take
+ *   adaptive thinking with effort high.
  * - Server-side fallbacks ('default', beta server-side-fallback-2026-07-01)
  *   re-run a declined request on Anthropic's recommended fallback model.
- *   If the API rejects the fallback parameter, the request is sent once
- *   more without it. The stop reason is checked before the content is read:
- *   refusal and max_tokens fail the parse with a clear message.
+ *   They are sent only to a model that supports them, and if the API
+ *   rejects the parameter anyway the request is sent once more without it.
+ *   The stop reason is checked before the content is read: refusal and
+ *   max_tokens fail the parse with a clear message.
  *
  * messages.create is used with the zod output format (rather than
  * messages.parse) so the stop reason can be checked before parsing: parse()
  * throws on a refusal's empty text before the caller can see why.
  */
 
-export const DEFAULT_MODEL = "claude-opus-5";
+export const DEFAULT_MODEL = DEFAULT_CLAUDE_MODEL;
 export const MAX_INPUT_TOKENS = 60_000;
 export const MAX_OUTPUT_TOKENS = 16_000;
+/** Thinking budget for a model that takes one (must stay under max_tokens). */
+export const THINKING_BUDGET_TOKENS = 4_000;
 export const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 const MODEL_PATTERN = /^claude-[a-z0-9.-]{1,60}$/;
@@ -162,6 +171,8 @@ export interface ClaudeUsage {
   /** The model that answered (differs from the requested one after a fallback). */
   servedBy: string;
   fallbackUsed: boolean;
+  /** What this parse cost at list price, in US dollars, or null for an unknown model. */
+  costUsd: number | null;
 }
 
 export interface ClaudeParseResult {
@@ -223,14 +234,26 @@ export async function parseWithClaude(input: ClaudeParseInput): Promise<ClaudePa
       );
     }
 
+    // Haiku 4.5 takes a thinking budget and rejects output_config.effort;
+    // the 4.6 family and later take adaptive thinking with effort.
+    const model = claudeModel(config.model);
+    const adaptive = model?.adaptiveThinking ?? true;
     const body = {
       model: config.model,
       max_tokens: MAX_OUTPUT_TOKENS,
       system: request.system,
       messages: request.messages,
-      thinking: { type: "adaptive" as const },
-      output_config: { effort: "high" as const, format: OUTPUT_FORMAT },
+      ...(adaptive
+        ? {
+            thinking: { type: "adaptive" as const },
+            output_config: { effort: "high" as const, format: OUTPUT_FORMAT },
+          }
+        : {
+            thinking: { type: "enabled" as const, budget_tokens: THINKING_BUDGET_TOKENS },
+            output_config: { format: OUTPUT_FORMAT },
+          }),
     };
+    const wantsFallbacks = config.fallbacks && (model?.serverFallbacks ?? false);
     const send = (withFallbacks: boolean) =>
       client.beta.messages.create(
         withFallbacks ? { ...body, betas: [FALLBACK_BETA], fallbacks: "default" as const } : body,
@@ -238,9 +261,9 @@ export async function parseWithClaude(input: ClaudeParseInput): Promise<ClaudePa
       );
     let response: Anthropic.Beta.BetaMessage;
     try {
-      response = await send(config.fallbacks);
+      response = await send(wantsFallbacks);
     } catch (error) {
-      if (!config.fallbacks || !isFallbackRejection(error)) throw error;
+      if (!wantsFallbacks || !isFallbackRejection(error)) throw error;
       response = await send(false);
     }
 
@@ -279,6 +302,7 @@ export async function parseWithClaude(input: ClaudeParseInput): Promise<ClaudePa
         durationMs: Date.now() - started,
         servedBy: response.model,
         fallbackUsed: response.model !== config.model,
+        costUsd: claudeCostUsd(response.model, { input: usage.input_tokens, output: usage.output_tokens }),
       },
     };
   } catch (error) {

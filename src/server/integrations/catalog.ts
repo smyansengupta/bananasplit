@@ -10,24 +10,22 @@ import type { IntegrationProvider, IntegrationStatus } from "@/generated/prisma/
  * never a secret, a fingerprint or ciphertext.
  */
 
-export const CLAUDE_MODELS = [
-  { id: "claude-opus-5", label: "Claude Opus 5 (recommended)" },
-  { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
-  { id: "claude-opus-4-8", label: "Claude Opus 4.8" },
-] as const;
+// The model list, prices and per-model request rules live with the org
+// chart, which is the only feature that calls Claude (B3 owns
+// src/lib/org-chart/**). Haiku 4.5 is the default: the built-in parser
+// reads most documents, so Claude only has to handle the awkward ones.
+export { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL } from "@/lib/org-chart/models";
 
-export const DEFAULT_CLAUDE_MODEL = "claude-opus-5";
+import { CLAUDE_MODELS as MODELS, DEFAULT_CLAUDE_MODEL as DEFAULT_MODEL } from "@/lib/org-chart/models";
 
 /**
  * OrgIntegration.config for CLAUDE: { model, fallbacks }, the keys the org
  * chart parser reads (src/server/org-chart/claude.ts readClaudeSettings).
- * fallbacks: send Anthropic's server-side refusal fallbacks (default on).
+ * fallbacks: send Anthropic's server-side refusal fallbacks (default on,
+ * and only sent to a model that supports them).
  */
 export const claudeConfigSchema = z.object({
-  model: z
-    .enum(CLAUDE_MODELS.map((m) => m.id) as [string, ...string[]])
-    .default(DEFAULT_CLAUDE_MODEL),
+  model: z.enum(MODELS.map((m) => m.id) as [string, ...string[]]).default(DEFAULT_MODEL),
   fallbacks: z.boolean().default(true),
 });
 

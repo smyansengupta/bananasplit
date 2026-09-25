@@ -32,6 +32,34 @@ export interface ChartWarning {
   positionKey?: string | null;
 }
 
+/** Which reader produced a draft. Mirrors the OrgChartParseMethod enum. */
+export type ParseMethod = "BUILTIN" | "CLAUDE" | "TEMPLATE" | "MANUAL";
+
+/** The document shape the built-in parser recognized. */
+export type ParseShape = "sections" | "table" | "outline" | "diagram" | "none";
+
+/**
+ * What the built-in parser understood, shown to the admin on the draft so
+ * they know what to check. Stored on OrgChartVersion.parseReport.
+ */
+export interface ParseReport {
+  shape: ParseShape;
+  /** 0 to 1: how much of the document the parser understood. */
+  confidence: number;
+  positions: number;
+  /** Positions whose person is named, or that are explicitly open. */
+  identified: number;
+  /** Positions with a manager, plus the one position that needs none. */
+  linked: number;
+  roots: number;
+  linesConsidered: number;
+  linesUsed: number;
+  orphanCount: number;
+  /** A sample of the lines the parser could not place, for the admin. */
+  orphanLines: string[];
+  notes: string[];
+}
+
 /** The public shape of a person on the chart (userPublicSelect; never an email). */
 export interface ChartPersonDTO {
   id: string;

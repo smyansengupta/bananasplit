@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import {
+  OrgChartParseMethod,
   OrgChartParseStatus,
   OrgChartSource,
   OrgChartVersionStatus,
@@ -10,9 +11,10 @@ import {
   type Prisma,
 } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
-import { LIMITS, normalizeOpenItems } from "@/lib/org-chart/normalize";
+import { LIMITS, normalizeOpenItems, type NormalizedChart } from "@/lib/org-chart/normalize";
+import { starterChart } from "@/lib/org-chart/starter";
 import { clamp, cleanBullets, cleanLine, positionKeyFromTitle, uniqueKey } from "@/lib/org-chart/text";
-import type { ChartWarning, MatchState, OpenItem } from "@/lib/org-chart/types";
+import type { ChartWarning, MatchState, OpenItem, ParseReport } from "@/lib/org-chart/types";
 import { hasErrors, validateChart, type ValidationIssue } from "@/lib/org-chart/validate";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
@@ -21,7 +23,16 @@ import type { OrgContext } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { userPublicSelect, type UserPublic } from "@/server/members";
 
-import { insertPositions, positionSelect, rowsToWrites, type PositionRow, type PositionWrite } from "./positions";
+import { BUILTIN_CONFIDENCE_THRESHOLD } from "./parse";
+import {
+  chartToWrites,
+  insertPositions,
+  memberCandidates,
+  positionSelect,
+  rowsToWrites,
+  type PositionRow,
+  type PositionWrite,
+} from "./positions";
 
 /**
  * Org chart writes and admin reads, all on the caller's app_user transaction
@@ -158,19 +169,60 @@ export interface UploadVersionInput {
   sizeBytes: number;
   sha256: string;
   blobKey: string;
+  /**
+   * The built-in parser's reading of the document, when the file could be
+   * read as text at all (a PDF cannot be, locally). Null means only Claude
+   * can read this file.
+   */
+  builtin: { chart: NormalizedChart; report: ParseReport } | null;
+  /** Whether the built-in reading is good enough to be the draft. */
+  accepted: boolean;
+  /** Whether the org has a Claude key, checked before the transaction. */
+  claudeAvailable: boolean;
 }
 
-/** Creates the DRAFT (parseStatus PENDING) for a stored upload and enqueues claude-parse. */
-export async function createUploadVersion(ctx: Ctx, input: UploadVersionInput): Promise<{ versionId: string; number: number }> {
+export interface UploadVersionResult {
+  versionId: string;
+  number: number;
+  /** True when the draft is ready to review now; false while Claude reads it. */
+  ready: boolean;
+  method: OrgChartParseMethod;
+}
+
+/**
+ * Creates the version for a stored upload. The built-in parser has already
+ * run (in the request, with no network I/O), so:
+ *
+ *  - a reading the parser is confident about becomes a READY draft straight
+ *    away: no job, no API key, no cost;
+ *  - a reading it is not confident about goes to Claude when the org has a
+ *    key (parseStatus PENDING, claude-parse enqueued), keeping the built-in
+ *    reading so the job can fall back to it;
+ *  - with no key, the uncertain reading becomes the draft anyway, with a
+ *    note about what was not understood. An org is never left with nothing.
+ */
+export async function createUploadVersion(ctx: Ctx, input: UploadVersionInput): Promise<UploadVersionResult> {
   requirePermission(ctx, "orgchart.write");
   const { db, organizationId } = ctx;
   await lockCharts(db, organizationId);
-  if (!(await hasClaudeKey(db, organizationId))) {
-    throw new OrgChartError("Add a Claude API key in Settings > Integrations before importing a document.", 409);
-  }
-  await assertUploadAllowed(db, organizationId);
+  const useClaude = !input.accepted && input.claudeAvailable;
+  if (useClaude) await assertUploadAllowed(db, organizationId);
   const number = await nextNumber(db, organizationId);
-  const parseAttemptId = newAttemptId();
+  const parseAttemptId = useClaude ? newAttemptId() : null;
+  const report = input.builtin?.report ?? null;
+  const notes = [...(report?.notes ?? [])];
+  if (!input.builtin) {
+    notes.push(
+      input.claudeAvailable
+        ? "This file has no text the portal can read on its own, so Claude is reading it."
+        : "This file has no text the portal can read on its own. Add a Claude API key in Settings > Integrations and import it again, or start from the club template.",
+    );
+  } else if (!input.accepted && !input.claudeAvailable) {
+    notes.push(
+      "Only part of this document was understood, and the org has no Claude API key. Fix the positions below, or start again from the club template.",
+    );
+  }
+
   await db.orgChartVersion.create({
     data: {
       id: input.versionId,
@@ -184,43 +236,79 @@ export async function createUploadVersion(ctx: Ctx, input: UploadVersionInput): 
       sourceSizeBytes: input.sizeBytes,
       sourceSha256: input.sha256,
       sourceBlobKey: input.blobKey,
-      parseStatus: OrgChartParseStatus.PENDING,
+      parseStatus: useClaude ? OrgChartParseStatus.PENDING : OrgChartParseStatus.READY,
       parseAttemptId,
+      parseMethod: useClaude ? null : OrgChartParseMethod.BUILTIN,
+      parseConfidence: report?.confidence ?? null,
+      parseReport: (report ? { ...report, notes } : null) as unknown as Prisma.InputJsonValue,
+      openItems: [],
+      warnings: (input.builtin?.chart.warnings ?? []) as unknown as Prisma.InputJsonValue,
       createdById: ctx.userId,
     },
   });
-  await enqueueJob(db, {
-    orgId: organizationId,
-    kind: "claude-parse",
-    key: `${input.versionId}.${parseAttemptId}`,
-    payload: { versionId: input.versionId, parseAttemptId },
-    maxAttempts: PARSE_MAX_ATTEMPTS,
-  });
+
+  if (useClaude && parseAttemptId) {
+    await enqueueJob(db, {
+      orgId: organizationId,
+      kind: "claude-parse",
+      key: `${input.versionId}.${parseAttemptId}`,
+      payload: { versionId: input.versionId, parseAttemptId },
+      maxAttempts: PARSE_MAX_ATTEMPTS,
+    });
+  } else if (input.builtin) {
+    await insertPositions(
+      db,
+      organizationId,
+      input.versionId,
+      chartToWrites(input.builtin.chart, await memberCandidates(db, organizationId)),
+    );
+  }
+
   await writeOrgAuditLog(db, {
     organizationId,
     action: "orgchart.upload",
     targetType: "OrgChartVersion",
     targetId: input.versionId,
-    diff: { number, mimeType: input.mimeType, sizeBytes: input.sizeBytes },
+    diff: {
+      number,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+      reader: useClaude ? "claude" : "builtin",
+      confidence: report?.confidence ?? null,
+    },
   });
-  return { versionId: input.versionId, number };
+  return {
+    versionId: input.versionId,
+    number,
+    ready: !useClaude,
+    method: useClaude ? OrgChartParseMethod.CLAUDE : OrgChartParseMethod.BUILTIN,
+  };
 }
 
-/** Runs the parse again for a FAILED (or stuck) upload draft. */
+/**
+ * Asks Claude to read the document again: for a FAILED or stuck parse, and
+ * for a draft the built-in parser only half understood (so an org that adds
+ * a key afterwards can get a better reading without re-uploading).
+ */
 export async function retryParse(ctx: Ctx, versionId: string): Promise<void> {
   requirePermission(ctx, "orgchart.write");
   const { db, organizationId } = ctx;
   await lockCharts(db, organizationId);
   const version = await db.orgChartVersion.findFirst({
     where: { id: versionId, organizationId, status: OrgChartVersionStatus.DRAFT, source: OrgChartSource.UPLOAD },
-    select: { parseStatus: true, updatedAt: true },
+    select: { parseStatus: true, updatedAt: true, parseMethod: true, parseConfidence: true, sourceBlobKey: true },
   });
   if (!version) throw new OrgChartError("That draft no longer exists.", 404);
   const stuck =
     version.parseStatus !== null &&
     (ACTIVE_PARSE_STATUSES as readonly string[]).includes(version.parseStatus) &&
     Date.now() - version.updatedAt.getTime() > STALE_PARSE_MS;
-  if (version.parseStatus !== OrgChartParseStatus.FAILED && !stuck) {
+  const halfRead =
+    version.parseStatus === OrgChartParseStatus.READY &&
+    version.parseMethod === OrgChartParseMethod.BUILTIN &&
+    (version.parseConfidence ?? 0) < BUILTIN_CONFIDENCE_THRESHOLD &&
+    version.sourceBlobKey !== null;
+  if (version.parseStatus !== OrgChartParseStatus.FAILED && !stuck && !halfRead) {
     throw new OrgChartError("This draft is not waiting for a retry.", 409);
   }
   if (!(await hasClaudeKey(db, organizationId))) {
@@ -243,8 +331,18 @@ export async function retryParse(ctx: Ctx, versionId: string): Promise<void> {
 
 // ------------------------------------------------------------------ drafts
 
-/** A new MANUAL draft: empty, or a copy of the published chart. Works with no Claude key. */
-export async function startDraft(ctx: Ctx, from: "blank" | "current"): Promise<string> {
+export const DRAFT_SOURCES = ["blank", "current", "starter"] as const;
+export type DraftSource = (typeof DRAFT_SOURCES)[number];
+
+/**
+ * A new MANUAL draft. Works with no Claude key, and never calls anything:
+ *   blank    an empty chart to build up by hand;
+ *   current  a copy of the published chart, to edit;
+ *   starter  the common club roles already laid out and written up
+ *            (src/lib/org-chart/starter.ts), with nobody in them - what an
+ *            org uses when it has no document to import.
+ */
+export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
   requirePermission(ctx, "orgchart.write");
   const { db, organizationId } = ctx;
   await lockCharts(db, organizationId);
@@ -252,6 +350,7 @@ export async function startDraft(ctx: Ctx, from: "blank" | "current"): Promise<s
   const versionId = newVersionId();
   let writes: PositionWrite[] = [];
   let openItems: Prisma.InputJsonValue = [];
+  let warnings: Prisma.InputJsonValue = [];
   if (from === "current") {
     if (!active) throw new OrgChartError("There is no published chart to edit yet. Start a blank draft instead.", 409);
     const source = await db.orgChartVersion.findFirst({
@@ -262,6 +361,11 @@ export async function startDraft(ctx: Ctx, from: "blank" | "current"): Promise<s
     const members = await memberIndex(db, organizationId);
     writes = rowsToWrites(source.positions, { memberIds: members.ids, userNames: members.names });
     openItems = source.openItems as Prisma.InputJsonValue;
+  } else if (from === "starter") {
+    const chart = starterChart();
+    writes = chartToWrites(chart, await memberCandidates(db, organizationId));
+    openItems = chart.openItems as unknown as Prisma.InputJsonValue;
+    warnings = chart.warnings as unknown as Prisma.InputJsonValue;
   }
   await db.orgChartVersion.create({
     data: {
@@ -271,7 +375,9 @@ export async function startDraft(ctx: Ctx, from: "blank" | "current"): Promise<s
       status: OrgChartVersionStatus.DRAFT,
       source: OrgChartSource.MANUAL,
       basedOnVersionId: from === "current" ? active : null,
+      parseMethod: from === "starter" ? OrgChartParseMethod.TEMPLATE : OrgChartParseMethod.MANUAL,
       openItems,
+      warnings,
       createdById: ctx.userId,
     },
   });
@@ -616,6 +722,8 @@ export interface VersionSummary {
   source: OrgChartSource;
   parseStatus: OrgChartParseStatus | null;
   parseError: string | null;
+  parseMethod: OrgChartParseMethod | null;
+  parseConfidence: number | null;
   sourceFilename: string | null;
   basedOnVersionId: string | null;
   createdAt: Date;
@@ -640,6 +748,8 @@ export async function listVersions(ctx: Ctx): Promise<VersionSummary[]> {
       source: true,
       parseStatus: true,
       parseError: true,
+      parseMethod: true,
+      parseConfidence: true,
       sourceFilename: true,
       basedOnVersionId: true,
       createdAt: true,
@@ -656,6 +766,8 @@ export async function listVersions(ctx: Ctx): Promise<VersionSummary[]> {
     source: r.source,
     parseStatus: r.parseStatus,
     parseError: r.parseError,
+    parseMethod: r.parseMethod,
+    parseConfidence: r.parseConfidence,
     sourceFilename: r.sourceFilename,
     basedOnVersionId: r.basedOnVersionId,
     createdAt: r.createdAt,
@@ -676,6 +788,10 @@ export interface VersionDetail {
     parseStatus: OrgChartParseStatus | null;
     parseError: string | null;
     parseModel: string | null;
+    parseMethod: OrgChartParseMethod | null;
+    parseConfidence: number | null;
+    parseReport: ParseReport | null;
+    parseCostUsd: number | null;
     sourceFilename: string | null;
     sourceBlobKey: string | null;
     editVersion: number;
@@ -701,6 +817,10 @@ export async function loadVersion(ctx: Ctx, versionId: string): Promise<VersionD
       parseStatus: true,
       parseError: true,
       parseModel: true,
+      parseMethod: true,
+      parseConfidence: true,
+      parseReport: true,
+      parseUsage: true,
       sourceFilename: true,
       sourceBlobKey: true,
       editVersion: true,
@@ -717,12 +837,15 @@ export async function loadVersion(ctx: Ctx, versionId: string): Promise<VersionD
   });
   if (!row) return null;
   const active = await activeVersionId(db, organizationId);
-  const { positions, openItems, warnings, ...version } = row;
+  const { positions, openItems, warnings, parseReport, parseUsage, ...version } = row;
+  const usage = (parseUsage ?? null) as { costUsd?: number | null } | null;
   return {
     version: {
       ...version,
       openItems: Array.isArray(openItems) ? (openItems as unknown as OpenItem[]) : [],
       warnings: Array.isArray(warnings) ? (warnings as unknown as ChartWarning[]) : [],
+      parseReport: parseReport && typeof parseReport === "object" ? (parseReport as unknown as ParseReport) : null,
+      parseCostUsd: typeof usage?.costUsd === "number" ? usage.costUsd : null,
       isActive: row.id === active,
     },
     positions,

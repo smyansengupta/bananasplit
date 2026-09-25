@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { generateNKeysBetween } from "fractional-indexing";
 
 import { Prisma } from "@/generated/prisma/client";
+import { matchPerson, type MatchCandidate } from "@/lib/org-chart/match";
+import type { NormalizedChart } from "@/lib/org-chart/normalize";
 import type { MatchState } from "@/lib/org-chart/types";
 
 /**
@@ -101,6 +103,47 @@ export async function insertPositions(
          AND p."organizationId" = ${organizationId}`;
   }
   return ids;
+}
+
+/**
+ * A parsed chart as positions to insert, with local match suggestions. Used
+ * by both readers (the built-in parser in the upload request, and Claude in
+ * the claude-parse job): member emails never leave the server, and nobody
+ * is linked until an admin confirms the suggestion.
+ */
+export function chartToWrites(chart: NormalizedChart, candidates: readonly MatchCandidate[]): PositionWrite[] {
+  return chart.positions.map((p) => {
+    const match = p.isOpen ? null : matchPerson(p.personName, candidates);
+    return {
+      ref: p.key,
+      key: p.key,
+      title: p.title,
+      personName: p.personName,
+      userId: null,
+      matchState: match?.state ?? "UNMATCHED",
+      matchScore: match?.score ?? null,
+      suggestedUserIds: match?.suggestions.map((s) => s.userId) ?? [],
+      reportsToRef: p.reportsTo,
+      isOpen: p.isOpen,
+      isAdvisor: p.isAdvisor,
+      responsibilities: p.responsibilities,
+      decidesAlone: p.decidesAlone,
+      sourceQuote: p.sourceQuote,
+    };
+  });
+}
+
+/** The org's members as match candidates (name and email local part only). */
+export async function memberCandidates(db: Db, organizationId: string): Promise<MatchCandidate[]> {
+  const members = await db.membership.findMany({
+    where: { organizationId },
+    select: { user: { select: { id: true, name: true, email: true } } },
+  });
+  return members.map((m) => ({
+    userId: m.user.id,
+    name: m.user.name,
+    emailLocal: m.user.email.split("@")[0] ?? null,
+  }));
 }
 
 /** The columns every copy and editor read needs. */

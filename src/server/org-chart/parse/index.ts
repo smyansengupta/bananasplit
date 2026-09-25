@@ -1,5 +1,6 @@
 import type { OrgChartParse, RawPosition } from "@/lib/org-chart/schema";
 import { clamp, cleanLine, foldCase } from "@/lib/org-chart/text";
+import type { ParseReport, ParseShape } from "@/lib/org-chart/types";
 
 import { readDiagram } from "./diagram";
 import { blocksOfKind, isTableDivider, readDocument, tableCells, type DocLine } from "./document";
@@ -41,25 +42,7 @@ import {
  * could not place instead, which is what an admin can actually act on.
  */
 
-export type ParseShape = "sections" | "table" | "outline" | "diagram" | "none";
-
-export interface ParseReport {
-  shape: ParseShape;
-  /** 0 to 1: how much of the document the parser understood. */
-  confidence: number;
-  positions: number;
-  /** Positions whose person is named, or that are explicitly open. */
-  identified: number;
-  /** Positions with a manager, plus the one position that needs none. */
-  linked: number;
-  roots: number;
-  linesConsidered: number;
-  linesUsed: number;
-  orphanCount: number;
-  /** A sample of the lines the parser could not place, for the admin. */
-  orphanLines: string[];
-  notes: string[];
-}
+export type { ParseReport, ParseShape } from "@/lib/org-chart/types";
 
 export interface BuiltinParse {
   parse: OrgChartParse;
