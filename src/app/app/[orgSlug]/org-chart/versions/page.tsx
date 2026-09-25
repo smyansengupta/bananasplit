@@ -14,6 +14,14 @@ export const metadata: Metadata = { title: "Org chart versions" };
 
 const SOURCE: Record<string, string> = { UPLOAD: "Imported", MANUAL: "Edited", ROLLBACK: "Restored", SEED: "Seed" };
 
+/** Which reader produced the version, shown next to its source. */
+const READER: Record<string, string> = {
+  BUILTIN: "read here",
+  CLAUDE: "read by Claude",
+  TEMPLATE: "club template",
+  MANUAL: "by hand",
+};
+
 function statusBadge(v: VersionSummary) {
   if (v.isActive) return <Badge>Published</Badge>;
   if (v.status === "DRAFT") {
@@ -86,7 +94,17 @@ export default async function VersionsPage({ params }: PageProps<"/app/[orgSlug]
                   )}
                 </TableCell>
                 <TableCell>{statusBadge(v)}</TableCell>
-                <TableCell className="hidden md:table-cell">{SOURCE[v.source] ?? v.source}</TableCell>
+                <TableCell className="hidden md:table-cell">
+                  {SOURCE[v.source] ?? v.source}
+                  {v.parseMethod && (
+                    <span className="text-muted-foreground block text-xs">
+                      {READER[v.parseMethod] ?? v.parseMethod}
+                      {v.parseMethod === "BUILTIN" && v.parseConfidence !== null
+                        ? `, ${Math.round(v.parseConfidence * 100)}% understood`
+                        : ""}
+                    </span>
+                  )}
+                </TableCell>
                 <TableCell className="hidden sm:table-cell">{v.positions}</TableCell>
                 <TableCell className="hidden text-sm lg:table-cell">
                   {fmt(v.createdAt)}

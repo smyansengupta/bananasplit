@@ -138,7 +138,7 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
           title="No org chart yet"
           description={
             canEdit
-              ? "Import your org chart document (PDF, Word, Google Doc export, Markdown or text) and review it before publishing, or build it by hand."
+              ? "Import your org chart document (Word, Google Doc export, Markdown, text or PDF) and review it before publishing, start from the club template, or build it by hand."
               : `${organization.name}'s reporting lines, roles and responsibilities will appear here once an admin publishes the chart.`
           }
           action={
@@ -155,9 +155,14 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
                     <Link href={draftHref}>Continue draft v{openDraft?.number}</Link>
                   </Button>
                 ) : (
-                  <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="blank">
-                    Start from scratch
-                  </StartDraftButton>
+                  <>
+                    <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="starter">
+                      Start from the club template
+                    </StartDraftButton>
+                    <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="blank" variant="ghost">
+                      Start from scratch
+                    </StartDraftButton>
+                  </>
                 )}
               </div>
             ) : undefined

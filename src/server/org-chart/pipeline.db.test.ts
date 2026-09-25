@@ -561,6 +561,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     });
 
     it("offers the starter structure, laid out and ready to fill in", async () => {
+      const restoreTo = (await getPublishedOrgChart(s.cbcId))?.versionId as string;
       const versionId = await withOrgAction(async (ctx) => {
         const { startDraft } = await import("./service");
         return startDraft(ctx, "starter");
@@ -585,10 +586,18 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       expect(draft?.positions.find((p) => p.key === "faculty-advisor")?.isAdvisor).toBe(true);
       expect(draft?.positions.filter((p) => p.reportsToId === null)).toHaveLength(1);
       expect(draft?.positions.find((p) => p.key === "president")?.responsibilities.length).toBeGreaterThan(2);
-      // And it publishes as it stands.
+      // And it publishes as it stands. Put the club's own chart back straight
+      // away: other suites read this org's published chart too.
       const published = await withOrgAction((ctx) => publishDraft(ctx, versionId))(s.cbcId);
       expect(published).toMatchObject({ ok: true });
-      expect((await getPublishedOrgChart(s.cbcId))?.positions).toHaveLength(9);
+      const live = await getPublishedOrgChart(s.cbcId);
+      expect(live?.versionId).toBe(versionId);
+      expect(live?.positions).toHaveLength(9);
+      await withSystemOrgTx(s.cbcId, async ({ db }) => {
+        await db.orgChartVersion.update({ where: { id: versionId }, data: { status: "DISCARDED" } });
+        await db.orgChartVersion.update({ where: { id: restoreTo }, data: { status: "PUBLISHED" } });
+        await db.organization.update({ where: { id: s.cbcId }, data: { activeOrgChartVersionId: restoreTo } });
+      });
     });
   });
 });

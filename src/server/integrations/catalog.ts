@@ -128,7 +128,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     provider: "CLAUDE",
     segment: "claude",
     label: "Claude API",
-    description: "Reads uploaded org charts with your org's own Claude key.",
+    description: "Optional backup reader for org-chart imports the portal cannot parse itself.",
     secretKind: "API_KEY",
     configKeys: ["model", "fallbacks"],
   },

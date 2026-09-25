@@ -6,7 +6,10 @@ import { useState, useTransition } from "react";
 import { startDraftAction } from "@/app/app/[orgSlug]/org-chart/actions";
 import { Button } from "@/components/ui/button";
 
-/** "Edit the chart" / "Start from scratch": creates a MANUAL draft and opens it. */
+/**
+ * "Edit the chart", "Start from scratch" and "Start from the club template":
+ * creates a MANUAL draft and opens it. Never calls Claude.
+ */
 export function StartDraftButton({
   orgId,
   orgSlug,
@@ -17,7 +20,7 @@ export function StartDraftButton({
 }: {
   orgId: string;
   orgSlug: string;
-  from: "blank" | "current";
+  from: "blank" | "current" | "starter";
   children: React.ReactNode;
   variant?: "default" | "outline" | "secondary" | "ghost";
   size?: "default" | "sm";

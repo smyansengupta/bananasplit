@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { claudeModel, estimateParseCostUsd, formatUsd } from "@/lib/org-chart/models";
 import {
   CLAUDE_MODELS,
   DEFAULT_CLAUDE_MODEL,
@@ -64,6 +65,8 @@ export function ClaudeForm({
   const [model, setModel] = useState(str(dto.config.model) || DEFAULT_CLAUDE_MODEL);
   const [fallbacks, setFallbacks] = useState(dto.config.fallbacks !== false);
   const { feedback, isPending, submit } = useSubmit();
+  const selected = claudeModel(model);
+  const perImport = estimateParseCostUsd(model);
   return (
     <form
       className="space-y-4 rounded-lg border p-4"
@@ -86,30 +89,42 @@ export function ClaudeForm({
         help="Create one at console.anthropic.com under API keys, in a workspace your club pays for."
       />
       <div className="grid gap-1.5">
-        <Label htmlFor="claude-model">Default model</Label>
+        <Label htmlFor="claude-model">Model</Label>
         <select
           id="claude-model"
           className={selectClass}
           value={model}
           onChange={(e) => setModel(e.target.value)}
         >
-          {CLAUDE_MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
+          {CLAUDE_MODELS.map((m) => {
+            const cost = estimateParseCostUsd(m.id);
+            return (
+              <option key={m.id} value={m.id}>
+                {m.label}
+                {m.id === DEFAULT_CLAUDE_MODEL ? " (default)" : ""}
+                {cost !== null ? ` — about ${formatUsd(cost)} per import` : ""}
+              </option>
+            );
+          })}
         </select>
-        <p className="text-muted-foreground text-xs">Used to read uploaded org charts.</p>
+        <p className="text-muted-foreground text-xs">
+          {selected?.note} About {perImport !== null ? formatUsd(perImport) : "—"} per import of a chart the size
+          of a club board&apos;s ({selected ? `$${selected.inputPerMTok} in / $${selected.outputPerMTok} out per million
+          tokens` : "list price"}), billed to your Anthropic account. Most documents never reach Claude at all: the
+          portal reads them itself, for nothing.
+        </p>
       </div>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Label htmlFor="claude-fallbacks">Retry declined requests on a fallback model</Label>
-          <p className="text-muted-foreground text-xs">
-            If Claude declines a document, Anthropic re-runs it on its recommended fallback model.
-          </p>
+      {selected?.serverFallbacks && (
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Label htmlFor="claude-fallbacks">Retry declined requests on a fallback model</Label>
+            <p className="text-muted-foreground text-xs">
+              If Claude declines a document, Anthropic re-runs it on its recommended fallback model.
+            </p>
+          </div>
+          <Switch id="claude-fallbacks" checked={fallbacks} onCheckedChange={setFallbacks} />
         </div>
-        <Switch id="claude-fallbacks" checked={fallbacks} onCheckedChange={setFallbacks} />
-      </div>
+      )}
       {canWrite && (
         <Button type="submit" disabled={isPending}>
           {isPending ? "Saving and testing…" : dto.hasSecret ? "Save" : "Save and test"}
