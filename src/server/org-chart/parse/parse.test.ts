@@ -7,10 +7,11 @@ import { describe, expect, it } from "vitest";
 import expected from "@/lib/org-chart/__fixtures__/expected.json";
 import { normalizeOrgChart, type NormalizedPosition } from "@/lib/org-chart/normalize";
 
+import { extractSource, sniffSource } from "../extract";
 import { BUILTIN_CONFIDENCE_THRESHOLD, parseOrgChartText, scoreConfidence } from ".";
 
 /**
- * The built-in parser against the Claude Builders Club chart written five
+ * The built-in parser against the Claude Builders Club chart written seven
  * different ways, plus the messy documents a real club hands in. Every
  * shape has to normalize to the chart in expected.json, which is also what
  * the seed publishes as version 1.
@@ -42,6 +43,26 @@ function asWritten(position: Expected): Expected {
   if (position.key !== "president") return position;
   return { ...position, decidesAlone: position.decidesAlone.map((d) => (d === PARAPHRASED ? VERBATIM : d)) };
 }
+
+/**
+ * The drawn chart at the top of the CBC document, exactly as the spec's seed
+ * section writes it: boxes side by side, "+---+---+" bars and "|--" sibling
+ * lists, with the short titles the drawing uses rather than the full ones
+ * from the sections below it.
+ */
+const SPEC_DIAGRAM = [
+  "                     President (Jackson)",
+  "                     + Partnerships",
+  "                            |",
+  "                            |-- Advisor (Mehr)",
+  "                            |",
+  "        +-------------------+-------------------+",
+  "  VP Ops & Programs    Head of Finance       VP Growth",
+  "     (Oliver)            (Anthony)            (Lucas)",
+  "        |                                      |",
+  "  |-- Programs (Alex)                   |-- Social & Membership (Kristine)",
+  "  |-- Tech (Smyan)                      |-- Graphic Designer [OPEN HIRE]",
+].join("\n");
 
 const COMPARED = [
   "title",
@@ -117,28 +138,57 @@ describe("the built-in parser on the CBC chart", () => {
     const chart = normalizeOrgChart(parseOrgChartText(read("cbc-fall-2026.md")).parse);
     expect(chart.positions.map((p) => p.key)).toEqual(EXPECTED.map((p) => p.key));
   });
+
+  it("reads the Word export of the same document, extraction and all", async () => {
+    // The .docx a club actually uploads from Google Docs: mammoth's text,
+    // not the markdown, through the same parser and to the same chart.
+    const bytes = readFileSync(path.join(dir, "cbc-fall-2026.docx"));
+    const source = await extractSource(bytes, sniffSource(bytes, "cbc-fall-2026.docx"));
+    if (source.type !== "text") throw new Error("expected text from the .docx");
+    const { parse, report } = parseOrgChartText(source.text);
+    expect(report.shape).toBe("sections");
+    expect(report.positions).toBe(9);
+    expect(report.confidence).toBeGreaterThanOrEqual(BUILTIN_CONFIDENCE_THRESHOLD);
+    const chart = normalizeOrgChart(parse);
+    expect(chart.warnings).toEqual([]);
+    compare(chart.positions, EXPECTED.map(asWritten));
+  });
+});
+
+describe("the confidence each shape scores", () => {
+  /**
+   * The figures docs/features/org-chart.md quotes. They are asserted here so
+   * the documentation cannot drift away from the parser, and so a change
+   * that quietly makes a shape less certain shows up as a failing test.
+   */
+  const SCORES: Array<[string, number]> = [
+    ["cbc-fall-2026.md", 0.967],
+    ["cbc-fall-2026.txt", 0.967],
+    ["cbc-table.md", 0.967],
+    ["cbc-headings.md", 0.993],
+    ["cbc-outline.txt", 0.993],
+    ["cbc-tree.txt", 0.993],
+    ["cbc-bullets.md", 0.993],
+  ];
+
+  for (const [file, score] of SCORES) {
+    it(`scores ${file} at ${score}`, () => {
+      expect(parseOrgChartText(read(file)).report.confidence).toBeCloseTo(score, 3);
+    });
+  }
+
+  it("scores the bare drawn diagram at 1", () => {
+    expect(parseOrgChartText(SPEC_DIAGRAM).report.confidence).toBe(1);
+  });
+
+  it("scores prose at zero, so it always goes to Claude", () => {
+    expect(parseOrgChartText(read("cbc-narrative.md")).report.confidence).toBe(0);
+  });
 });
 
 describe("the drawn diagram from the spec's seed section", () => {
-  // The exact block at the top of the CBC document: boxes side by side,
-  // "+---+---+" bars and "|--" sibling lists, with the short titles the
-  // drawing uses rather than the full ones from the sections below it.
-  const diagram = [
-    "                     President (Jackson)",
-    "                     + Partnerships",
-    "                            |",
-    "                            |-- Advisor (Mehr)",
-    "                            |",
-    "        +-------------------+-------------------+",
-    "  VP Ops & Programs    Head of Finance       VP Growth",
-    "     (Oliver)            (Anthony)            (Lucas)",
-    "        |                                      |",
-    "  |-- Programs (Alex)                   |-- Social & Membership (Kristine)",
-    "  |-- Tech (Smyan)                      |-- Graphic Designer [OPEN HIRE]",
-  ].join("\n");
-
   it("reads every box, its person and who it hangs from", () => {
-    const { parse, report } = parseOrgChartText(diagram);
+    const { parse, report } = parseOrgChartText(SPEC_DIAGRAM);
     expect(report.shape).toBe("diagram");
     expect(report.orphanCount).toBe(0);
     const chart = normalizeOrgChart(parse);
