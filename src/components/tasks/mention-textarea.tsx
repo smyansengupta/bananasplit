@@ -34,14 +34,22 @@ export function MentionTextarea({
 }) {
   const { members } = useTasks();
   const ref = useRef<HTMLTextAreaElement>(null);
-  const [trigger, setTrigger] = useState<{ query: string; start: number; end: number } | null>(null);
+  const [trigger, setTrigger] = useState<{ query: string; start: number; end: number } | null>(
+    null,
+  );
   const [highlight, setHighlight] = useState(0);
 
   const options = useMemo(() => {
     if (!trigger) return [];
     const q = trigger.query.toLowerCase();
     return members
-      .filter((m) => (m.name ?? "").toLowerCase().split(/\s+/).some((part) => part.startsWith(q)) || (m.name ?? "").toLowerCase().includes(q))
+      .filter(
+        (m) =>
+          (m.name ?? "")
+            .toLowerCase()
+            .split(/\s+/)
+            .some((part) => part.startsWith(q)) || (m.name ?? "").toLowerCase().includes(q),
+      )
       .slice(0, MAX_OPTIONS);
   }, [members, trigger]);
 
@@ -137,7 +145,11 @@ export function MentionTextarea({
                 >
                   <UserAvatar user={m} size="xs" />
                   <span className="truncate">{m.name ?? "Member"}</span>
-                  {m.title && <span className="text-muted-foreground ml-auto truncate text-xs">{m.title}</span>}
+                  {m.title && (
+                    <span className="text-muted-foreground ml-auto truncate text-xs">
+                      {m.title}
+                    </span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -9,7 +9,6 @@ import { OwnerPicker } from "@/components/tasks/member-picker";
 import { useConfirmFlagged } from "@/components/tasks/prompts";
 import { QuickPriority, QuickStatus } from "@/components/tasks/quick-controls";
 import { BlockedNote, DueLabel, FlagBadge, isTaskFlagged } from "@/components/tasks/task-badges";
-import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import { accessSubjectOf, useTasks } from "@/components/tasks/tasks-context";
 import type { ProjectOption, TaskItem } from "@/components/tasks/types";
 import { Button } from "@/components/ui/button";
@@ -52,14 +51,12 @@ export function IntakeView({
   intakeProjects: ProjectOption[];
   tasks: TaskItem[];
 }) {
-  const { org, viewer, actor, memberById, announce } = useTasks();
-  const [dialog, setDialog] = useState<{ open: boolean; taskId: string | null }>({ open: false, taskId: null });
+  const { org, viewer, actor, memberById, announce, showTask, newTask } = useTasks();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
   const [, startTransition] = useTransition();
   const router = useRouter();
   const pathname = usePathname();
-  const openTask = dialog.taskId ? (tasks.find((t) => t.id === dialog.taskId) ?? null) : null;
 
   if (!project) {
     return (
@@ -76,13 +73,17 @@ export function IntakeView({
             ) : undefined
           }
         />
-        {viewer.isAdmin && <QueueSettings open={settingsOpen} onOpenChange={setSettingsOpen} project={null} />}
+        {viewer.isAdmin && (
+          <QueueSettings open={settingsOpen} onOpenChange={setSettingsOpen} project={null} />
+        )}
       </>
     );
   }
 
   const triage = canTriage(actor, { isIntake: true, triageUserId: project.triageUserId });
-  const triageName = project.triageUserId ? (memberById.get(project.triageUserId)?.name ?? "the triage owner") : "an admin";
+  const triageName = project.triageUserId
+    ? (memberById.get(project.triageUserId)?.name ?? "the triage owner")
+    : "an admin";
   const untriaged = tasks.filter((t) => t.status !== "COMPLETED" && !t.ownerId);
   const active = tasks.filter((t) => t.status !== "COMPLETED" && t.ownerId);
   const done = tasks.filter((t) => t.status === "COMPLETED");
@@ -106,16 +107,31 @@ export function IntakeView({
     const editable = canEditTask(actor, access);
     return (
       <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-        <button type="button" className="min-w-0 flex-1 basis-56 text-left" onClick={() => setDialog({ open: true, taskId: t.id })}>
+        <button
+          type="button"
+          className="min-w-0 flex-1 basis-56 text-left"
+          onClick={() => showTask(t)}
+        >
           <span className="block truncate text-sm font-medium">{t.title}</span>
           <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-            Filed by <UserAvatar user={t.createdBy} size="xs" /> {t.createdBy.name ?? "a former member"}
+            Filed by <UserAvatar user={t.createdBy} size="xs" />{" "}
+            {t.createdBy.name ?? "a former member"}
             {t.status === "BLOCKED" && <BlockedNote reason={t.blockedReason} className="ml-2" />}
           </span>
         </button>
         {isTaskFlagged(t) && <FlagBadge />}
-        <DueLabel dueDate={t.dueDate} todayKey={org.todayKey} done={t.status === "COMPLETED"} className="text-muted-foreground w-24 text-xs" />
-        <OwnerPicker value={t.ownerId} onChange={(id) => assign(t, id)} disabled={!triage} compact />
+        <DueLabel
+          dueDate={t.dueDate}
+          todayKey={org.todayKey}
+          done={t.status === "COMPLETED"}
+          className="text-muted-foreground w-24 text-xs"
+        />
+        <OwnerPicker
+          value={t.ownerId}
+          onChange={(id) => assign(t, id)}
+          disabled={!triage}
+          compact
+        />
         <QuickPriority task={t} disabled={!triage} />
         <QuickStatus task={t} disabled={!editable} />
       </li>
@@ -127,7 +143,10 @@ export function IntakeView({
       {confirmElement}
       <div className="flex flex-wrap items-center gap-3">
         {intakeProjects.length > 1 && (
-          <Select value={project.id} onValueChange={(v) => router.push(`${pathname}?view=intake&project=${v}`)}>
+          <Select
+            value={project.id}
+            onValueChange={(v) => router.push(`${pathname}?view=intake&project=${v}`)}
+          >
             <SelectTrigger className="w-56" aria-label="Queue">
               <SelectValue />
             </SelectTrigger>
@@ -141,31 +160,36 @@ export function IntakeView({
           </Select>
         )}
         <p className="text-muted-foreground min-w-0 flex-1 text-sm">
-          <span className="text-foreground font-medium">{project.name}</span>: anyone files a request
-          {project.defaultDueInDays ? `, due in ${project.defaultDueInDays} days by default` : ""}. {triage ? "You" : triageName}{" "}
-          {triage ? "set" : "sets"} priority and owner.
+          <span className="text-foreground font-medium">{project.name}</span>: anyone files a
+          request
+          {project.defaultDueInDays
+            ? `, due in ${project.defaultDueInDays} days by default`
+            : ""}. {triage ? "You" : triageName} {triage ? "set" : "sets"} priority and owner.
         </p>
         {viewer.isAdmin && (
           <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
             <Settings2 className="size-4" /> Queue settings
           </Button>
         )}
-        <Button size="sm" onClick={() => setDialog({ open: true, taskId: null })}>
+        <Button size="sm" onClick={() => newTask({ projectId: project.id })}>
           <Plus className="size-4" /> New request
         </Button>
       </div>
 
-      <Section title="Needs triage" tasks={untriaged} render={row} empty="Every request has an owner." />
-      <Section title="In progress" tasks={active} render={row} empty="No requests in progress." />
-      {done.length > 0 && <Section title="Done in the last 14 days" tasks={done} render={row} empty="" />}
-
-      <TaskDetailDialog
-        open={dialog.open}
-        onOpenChange={(o) => setDialog((s) => ({ ...s, open: o }))}
-        task={openTask}
-        defaults={{ projectId: project.id }}
+      <Section
+        title="Needs triage"
+        tasks={untriaged}
+        render={row}
+        empty="Every request has an owner."
       />
-      {viewer.isAdmin && <QueueSettings open={settingsOpen} onOpenChange={setSettingsOpen} project={project} />}
+      <Section title="In progress" tasks={active} render={row} empty="No requests in progress." />
+      {done.length > 0 && (
+        <Section title="Done in the last 14 days" tasks={done} render={row} empty="" />
+      )}
+
+      {viewer.isAdmin && (
+        <QueueSettings open={settingsOpen} onOpenChange={setSettingsOpen} project={project} />
+      )}
     </div>
   );
 }
@@ -206,7 +230,9 @@ function QueueSettings({
   project: ProjectOption | null;
 }) {
   const { org, projects, announce } = useTasks();
-  const [projectId, setProjectId] = useState(project?.id ?? projects.find((p) => !p.isIntake)?.id ?? "");
+  const [projectId, setProjectId] = useState(
+    project?.id ?? projects.find((p) => !p.isIntake)?.id ?? "",
+  );
   const selected = projects.find((p) => p.id === projectId);
   const [isIntake, setIsIntake] = useState(selected?.isIntake ?? true);
   const [triageUserId, setTriageUserId] = useState<string | null>(selected?.triageUserId ?? null);
@@ -243,7 +269,9 @@ function QueueSettings({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Intake queue settings</DialogTitle>
-          <DialogDescription>Requests in an intake queue are triaged by one owner, who sets their priority and owner.</DialogDescription>
+          <DialogDescription>
+            Requests in an intake queue are triaged by one owner, who sets their priority and owner.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid gap-1.5">
@@ -261,7 +289,9 @@ function QueueSettings({
               </SelectContent>
             </Select>
             {projects.length === 0 && (
-              <p className="text-muted-foreground text-xs">Create a project first with New project.</p>
+              <p className="text-muted-foreground text-xs">
+                Create a project first with New project.
+              </p>
             )}
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -276,7 +306,15 @@ function QueueSettings({
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="intake-days">Default due in (days)</Label>
-                <Input id="intake-days" type="number" min={1} max={60} value={days} onChange={(e) => setDays(e.target.value)} className="w-28" />
+                <Input
+                  id="intake-days"
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={days}
+                  onChange={(e) => setDays(e.target.value)}
+                  className="w-28"
+                />
               </div>
             </>
           )}

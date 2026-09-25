@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { Prisma, Role, TaskStatus } from "@/generated/prisma/client";
+import { Prisma, Role, TaskStatus, TaskVisibility } from "@/generated/prisma/client";
 import {
   addDaysToKey,
   dueDateKey,
@@ -33,12 +33,22 @@ export type { WeeklyItem, WeeklySummary };
  * 'Post update' snapshots the three lists (as lines of text) into a
  * WeeklyUpdate with an optional note. OWNER/ADMIN, and whoever holds the top
  * of the chart, see who hasn't posted yet.
+ *
+ * C4 and private tasks. Reading somebody else's week needs no filter here:
+ * these queries run on the request path under RLS, so a private task the
+ * viewer is not on is simply absent. Posting is the case that does need one.
+ * A posted update is stored as text and read by the whole organization, so a
+ * private item would be republished into the open the moment its owner hit
+ * Post. Private items therefore stay in the draft — it is your week, and you
+ * can see them — but summaryLines() drops them from what is stored, and the
+ * composer says how many were held back.
  */
 
 const weeklyItemSelect = {
   id: true,
   title: true,
   status: true,
+  visibility: true,
   dueDate: true,
   completedAt: true,
   blockedReason: true,
@@ -58,6 +68,7 @@ function toItem(
     blockedReason: t.blockedReason,
     role: t.ownerId === userId ? "owner" : "collaborator",
     parentTitle: t.parentTask?.title ?? null,
+    ...(t.visibility === TaskVisibility.PRIVATE ? { isPrivate: true } : {}),
   };
 }
 
@@ -145,7 +156,10 @@ export async function expectedPosters(
     ids = [...new Set(positions.map((p) => p.userId as string))];
   }
   const members = await db.membership.findMany({
-    where: ids.length > 0 ? { organizationId, userId: { in: ids } } : { organizationId, title: { not: null } },
+    where:
+      ids.length > 0
+        ? { organizationId, userId: { in: ids } }
+        : { organizationId, title: { not: null } },
     select: { userId: true, title: true, user: { select: { name: true } } },
   });
   return members
@@ -210,7 +224,14 @@ export async function postWeeklyUpdate(env: TaskEnv, input: unknown): Promise<{ 
   const tz = env.org.timezone;
   const today = localDateKey(env.now, tz);
   if (weekStart > today) throw new TaskError("You can't post an update for a future week.");
-  const summary = await getWeeklySummary(db, organizationId, env.actor.userId, weekStart, tz, env.now);
+  const summary = await getWeeklySummary(
+    db,
+    organizationId,
+    env.actor.userId,
+    weekStart,
+    tz,
+    env.now,
+  );
   const lines = summaryLines(summary, today);
   const data = {
     done: lines.done,
@@ -227,7 +248,12 @@ export async function postWeeklyUpdate(env: TaskEnv, input: unknown): Promise<{ 
         weekStart: fromDateKey(weekStart),
       },
     },
-    create: { organizationId, userId: env.actor.userId, weekStart: fromDateKey(weekStart), ...data },
+    create: {
+      organizationId,
+      userId: env.actor.userId,
+      weekStart: fromDateKey(weekStart),
+      ...data,
+    },
     update: data,
   });
   return {};
@@ -237,6 +263,12 @@ export async function postWeeklyUpdate(env: TaskEnv, input: unknown): Promise<{ 
 export function storedLines(value: Prisma.JsonValue): string[] {
   if (!Array.isArray(value)) return [];
   return value
-    .map((v) => (typeof v === "string" ? v : v && typeof v === "object" && "title" in v ? String(v.title) : null))
+    .map((v) =>
+      typeof v === "string"
+        ? v
+        : v && typeof v === "object" && "title" in v
+          ? String(v.title)
+          : null,
+    )
     .filter((v): v is string => Boolean(v));
 }

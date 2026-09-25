@@ -44,7 +44,11 @@ const components: Components = {
 export function TaskMarkdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={cn("prose prose-sm dark:prose-invert max-w-none break-words", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlTransform} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        urlTransform={urlTransform}
+        components={components}
+      >
         {children}
       </ReactMarkdown>
     </div>

@@ -45,20 +45,34 @@ export default async function TaskPage({ params }: PageProps<"/app/[orgSlug]/tas
         requireOwner: settings?.taskRequireOwner ?? false,
         requireDueDate: settings?.taskRequireDueDate ?? false,
       }}
-      viewer={{ userId: user.id, name: user.name, isAdmin: can({ role }, "tasks.manageAll"), chart }}
+      viewer={{
+        userId: user.id,
+        name: user.name,
+        isAdmin: can({ role }, "tasks.manageAll"),
+        chart,
+      }}
       members={members}
       labels={data.labels}
       projects={data.projects}
     >
       <div className="mx-auto max-w-3xl space-y-4">
-        <nav aria-label="Breadcrumb" className="text-muted-foreground flex flex-wrap items-center gap-1 text-sm">
-          <Link href={`/app/${org.slug}/tasks`} className="hover:text-foreground inline-flex items-center gap-1">
+        <nav
+          aria-label="Breadcrumb"
+          className="text-muted-foreground flex flex-wrap items-center gap-1 text-sm"
+        >
+          <Link
+            href={`/app/${org.slug}/tasks`}
+            className="hover:text-foreground inline-flex items-center gap-1"
+          >
             <ChevronLeft className="size-4" aria-hidden="true" /> Tasks
           </Link>
           {task.project && (
             <>
               <span aria-hidden="true">/</span>
-              <Link href={`/app/${org.slug}/tasks?project=${task.project.id}`} className="hover:text-foreground">
+              <Link
+                href={`/app/${org.slug}/tasks?project=${task.project.id}`}
+                className="hover:text-foreground"
+              >
                 {task.project.name}
               </Link>
             </>
@@ -66,7 +80,10 @@ export default async function TaskPage({ params }: PageProps<"/app/[orgSlug]/tas
           {task.parentTask && (
             <>
               <span aria-hidden="true">/</span>
-              <Link href={`/app/${org.slug}/tasks/${task.parentTask.id}`} className="hover:text-foreground">
+              <Link
+                href={`/app/${org.slug}/tasks/${task.parentTask.id}`}
+                className="hover:text-foreground"
+              >
                 {task.parentTask.title}
               </Link>
             </>

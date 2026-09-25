@@ -44,7 +44,9 @@ function RelationHint({ userId }: { userId: string }) {
         relation === "ABOVE" ? "text-warning" : "text-muted-foreground",
       )}
     >
-      {relation === "ABOVE" && <TriangleAlert className="mr-0.5 inline size-3" aria-hidden="true" />}
+      {relation === "ABOVE" && (
+        <TriangleAlert className="mr-0.5 inline size-3" aria-hidden="true" />
+      )}
       {hint}
     </span>
   );
@@ -68,8 +70,14 @@ function MemberOptionsList({
         <CommandEmpty>No members found.</CommandEmpty>
         <CommandGroup>
           {members.map((m) => (
-            <CommandItem key={m.id} value={`${m.name ?? ""} ${m.title ?? ""} ${m.id}`} onSelect={() => onSelect(m.id)}>
-              <Check className={cn("size-4 shrink-0", isSelected(m.id) ? "opacity-100" : "opacity-0")} />
+            <CommandItem
+              key={m.id}
+              value={`${m.name ?? ""} ${m.title ?? ""} ${m.id}`}
+              onSelect={() => onSelect(m.id)}
+            >
+              <Check
+                className={cn("size-4 shrink-0", isSelected(m.id) ? "opacity-100" : "opacity-0")}
+              />
               <UserAvatar user={m} size="xs" />
               <span className="min-w-0 truncate">
                 {m.name ?? "Member"}
@@ -113,7 +121,10 @@ export function OwnerPicker({
           aria-expanded={open}
           aria-label={compact ? `Owner: ${selected?.name ?? "none"}` : undefined}
           disabled={disabled}
-          className={cn("justify-between font-normal", compact ? "h-8 w-auto gap-1 px-2" : "w-full")}
+          className={cn(
+            "justify-between font-normal",
+            compact ? "h-8 w-auto gap-1 px-2" : "w-full",
+          )}
         >
           <span className="flex min-w-0 items-center gap-2">
             {selected ? (
@@ -195,7 +206,10 @@ export function CollaboratorsPicker({
           <span className="flex flex-wrap items-center gap-1">
             {selected.length === 0 && <span className="text-muted-foreground">Nobody else</span>}
             {selected.map((m) => (
-              <span key={m.id} className="bg-muted inline-flex items-center gap-1 rounded-full py-0.5 pr-2 pl-0.5 text-xs">
+              <span
+                key={m.id}
+                className="bg-muted inline-flex items-center gap-1 rounded-full py-0.5 pr-2 pl-0.5 text-xs"
+              >
                 <UserAvatar user={m} size="xs" />
                 {m.name ?? "Member"}
               </span>

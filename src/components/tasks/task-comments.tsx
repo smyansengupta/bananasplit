@@ -41,7 +41,10 @@ export function TaskComments({
   const [hasMore, setHasMore] = useState(initial?.hasMore ?? false);
   const [loaded, setLoaded] = useState(Boolean(initial));
   const [body, setBody] = useState("");
-  const [pending, addPending] = useOptimistic<PendingComment[], PendingComment>([], (state, c) => [...state, c]);
+  const [pending, addPending] = useOptimistic<PendingComment[], PendingComment>([], (state, c) => [
+    ...state,
+    c,
+  ]);
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -127,7 +130,13 @@ export function TaskComments({
   return (
     <section className="space-y-3" aria-label="Comments">
       {hasMore && (
-        <Button variant="link" size="sm" className="h-auto p-0" onClick={loadEarlier} disabled={isPending}>
+        <Button
+          variant="link"
+          size="sm"
+          className="h-auto p-0"
+          onClick={loadEarlier}
+          disabled={isPending}
+        >
           Load earlier comments
         </Button>
       )}
@@ -145,7 +154,10 @@ export function TaskComments({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
                   <span className="text-foreground font-medium">{c.author.name ?? "Member"}</span>
-                  <time className="text-muted-foreground" dateTime={new Date(c.createdAt).toISOString()}>
+                  <time
+                    className="text-muted-foreground"
+                    dateTime={new Date(c.createdAt).toISOString()}
+                  >
                     {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
                   </time>
                   {c.editedAt && <span className="text-muted-foreground">(edited)</span>}
@@ -183,7 +195,11 @@ export function TaskComments({
                       <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={saveEdit} disabled={!editing.body.trim() || isPending}>
+                      <Button
+                        size="sm"
+                        onClick={saveEdit}
+                        disabled={!editing.body.trim() || isPending}
+                      >
                         Save comment
                       </Button>
                     </div>

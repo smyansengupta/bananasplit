@@ -19,7 +19,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { addDaysToKey, formatDueKey } from "@/lib/tasks/dates";
-import { formatWeeklyText, summaryLines, type WeeklyItem, type WeeklySummary } from "@/lib/tasks/weekly-text";
+import {
+  formatWeeklyText,
+  summaryLines,
+  type WeeklyItem,
+  type WeeklySummary,
+} from "@/lib/tasks/weekly-text";
 import { cn } from "@/lib/utils";
 
 import { postWeeklyUpdate } from "../actions";
@@ -107,7 +112,10 @@ export function UpdatesView({
     <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={personId} onValueChange={(v) => navigate({ person: v === viewer.userId ? null : v })}>
+          <Select
+            value={personId}
+            onValueChange={(v) => navigate({ person: v === viewer.userId ? null : v })}
+          >
             <SelectTrigger className="w-56" aria-label="Person">
               <SelectValue />
             </SelectTrigger>
@@ -237,11 +245,18 @@ export function UpdatesView({
                       <button
                         type="button"
                         className="min-w-0 flex-1 truncate text-left hover:underline"
-                        onClick={() => navigate({ person: e.userId === viewer.userId ? null : e.userId })}
+                        onClick={() =>
+                          navigate({ person: e.userId === viewer.userId ? null : e.userId })
+                        }
                       >
                         {e.name ?? "Member"}
                       </button>
-                      <span className={cn("text-xs", done ? "text-muted-foreground" : "text-destructive font-medium")}>
+                      <span
+                        className={cn(
+                          "text-xs",
+                          done ? "text-muted-foreground" : "text-destructive font-medium",
+                        )}
+                      >
                         {done ? "Posted" : "Not yet"}
                       </span>
                     </li>
@@ -252,14 +267,23 @@ export function UpdatesView({
           </section>
         )}
         <p className="text-muted-foreground text-xs">
-          Weeks run Monday to Sunday in {org.timezone}. Leads who haven&apos;t posted get a reminder Sunday at 6pm.
+          Weeks run Monday to Sunday in {org.timezone}. Leads who haven&apos;t posted get a reminder
+          Sunday at 6pm.
         </p>
       </aside>
     </div>
   );
 }
 
-function Column({ title, items, kind }: { title: string; items: WeeklyItem[]; kind: "done" | "next" | "blocked" }) {
+function Column({
+  title,
+  items,
+  kind,
+}: {
+  title: string;
+  items: WeeklyItem[];
+  kind: "done" | "next" | "blocked";
+}) {
   const { org } = useTasks();
   return (
     <section className="rounded-lg border" aria-label={title}>
@@ -283,7 +307,8 @@ function Column({ title, items, kind }: { title: string; items: WeeklyItem[]; ki
               </Link>
               <div className="text-muted-foreground text-xs">
                 {kind === "blocked" && i.blockedReason}
-                {kind === "next" && (i.dueKey ? `Due ${formatDueKey(i.dueKey, org.todayKey)}` : "In progress")}
+                {kind === "next" &&
+                  (i.dueKey ? `Due ${formatDueKey(i.dueKey, org.todayKey)}` : "In progress")}
                 {i.role === "collaborator" && " · involved"}
               </div>
             </li>

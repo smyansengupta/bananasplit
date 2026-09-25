@@ -1,11 +1,18 @@
 import { NotificationType, Prisma, TaskStatus } from "@/generated/prisma/client";
 import { appUrl } from "@/lib/app-url";
-import { addDaysToKey, dueDateKey, formatDueKey, fromDateKey, mondayOfKey } from "@/lib/tasks/dates";
+import {
+  addDaysToKey,
+  dueDateKey,
+  formatDueKey,
+  fromDateKey,
+  mondayOfKey,
+} from "@/lib/tasks/dates";
 import type { TxClient } from "@/server/db/context";
 import { computeReportingSubtree } from "@/server/org-chart/queries";
 
 import { loadChartNodes } from "./assignment-policy";
 import type { DigestItem, DigestSections } from "./email-templates";
+import { isOrgAdmin, visibleTaskWhere } from "./visibility";
 
 /**
  * The daily digest's content for one member, computed in SQL at send time
@@ -73,17 +80,31 @@ export async function loadDigest(
       userId,
       createdAt: { gte: since },
       taskId: { not: null },
-      type: { in: [NotificationType.TASK_ASSIGNED, NotificationType.TASK_FLAGGED, NotificationType.TASK_MENTIONED] },
+      type: {
+        in: [
+          NotificationType.TASK_ASSIGNED,
+          NotificationType.TASK_FLAGGED,
+          NotificationType.TASK_MENTIONED,
+        ],
+      },
     },
     select: { type: true, taskId: true },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
   const assignedIds = [
-    ...new Set(recent.filter((r) => r.type !== NotificationType.TASK_MENTIONED).map((r) => r.taskId as string)),
+    ...new Set(
+      recent
+        .filter((r) => r.type !== NotificationType.TASK_MENTIONED)
+        .map((r) => r.taskId as string),
+    ),
   ];
   const mentionedIds = [
-    ...new Set(recent.filter((r) => r.type === NotificationType.TASK_MENTIONED).map((r) => r.taskId as string)),
+    ...new Set(
+      recent
+        .filter((r) => r.type === NotificationType.TASK_MENTIONED)
+        .map((r) => r.taskId as string),
+    ),
   ];
   const recentTasks = await db.task.findMany({
     where: {
@@ -97,14 +118,25 @@ export async function loadDigest(
   const byId = new Map(recentTasks.map((t) => [t.id, t]));
 
   // Blocked items they own, plus (6b) blocked items owned by their reports.
+  //
+  // This is the one digest section that reaches past the reader's own tasks,
+  // so it is also the one that needs the C4 visibility filter in code: the
+  // digest runs on the service path (withSystemOrgTx), where RLS shows the
+  // whole org. A report's PRIVATE blocker is not their manager's business
+  // unless the manager is on it, or is an OWNER/ADMIN.
   const chart = await loadChartNodes(db, organizationId);
   const reports = chart ? computeReportingSubtree(chart, userId).userIds : [];
   const blocked = await db.task.findMany({
     where: {
-      organizationId,
-      deletedAt: null,
-      status: TaskStatus.BLOCKED,
-      ownerId: { in: [userId, ...reports] },
+      AND: [
+        {
+          organizationId,
+          deletedAt: null,
+          status: TaskStatus.BLOCKED,
+          ownerId: { in: [userId, ...reports] },
+        },
+        visibleTaskWhere(userId, await isOrgAdmin(db, organizationId, userId)),
+      ],
     },
     select: digestSelect,
     orderBy: { blockedAt: "asc" },
@@ -118,7 +150,12 @@ export async function loadDigest(
     newlyAssigned: assignedIds.flatMap((id) => (byId.has(id) ? [item(byId.get(id)!)] : [])),
     mentioned: mentionedIds.flatMap((id) => (byId.has(id) ? [item(byId.get(id)!)] : [])),
     blocked: blocked.map((t) =>
-      item(t, [t.blockedReason, t.owner?.name && reports.length > 0 ? `owner: ${t.owner.name}` : null].filter(Boolean).join(" · ")),
+      item(
+        t,
+        [t.blockedReason, t.owner?.name && reports.length > 0 ? `owner: ${t.owner.name}` : null]
+          .filter(Boolean)
+          .join(" · "),
+      ),
     ),
   };
 }

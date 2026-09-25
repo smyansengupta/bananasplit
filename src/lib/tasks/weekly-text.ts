@@ -13,6 +13,12 @@ export interface WeeklyItem {
   blockedReason: string | null;
   role: "owner" | "collaborator";
   parentTitle: string | null;
+  /**
+   * C4: a private task. It appears in your own draft — it is your week —
+   * but posting publishes the lines to the whole org, so private items are
+   * dropped from what is posted and the composer says so.
+   */
+  isPrivate?: boolean;
 }
 
 export interface WeeklySummary {
@@ -31,16 +37,28 @@ export interface WeeklyLines {
 function itemLine(item: WeeklyItem, todayKey: string, kind: keyof WeeklyLines): string {
   const parent = item.parentTitle ? ` (${item.parentTitle})` : "";
   if (kind === "blocked") return `${item.title}${parent}: ${item.blockedReason ?? "blocked"}`;
-  if (kind === "next" && item.dueKey) return `${item.title}${parent} (due ${formatDueKey(item.dueKey, todayKey)})`;
+  if (kind === "next" && item.dueKey)
+    return `${item.title}${parent} (due ${formatDueKey(item.dueKey, todayKey)})`;
   return `${item.title}${parent}`;
 }
 
+/**
+ * The lines that get published. Private tasks are left out: a posted update
+ * is readable by the whole organization, and a title that was deliberately
+ * kept off the open board must not arrive there through the Sunday post.
+ */
 export function summaryLines(summary: WeeklySummary, todayKey: string): WeeklyLines {
+  const shared = (items: WeeklyItem[]) => items.filter((i) => !i.isPrivate);
   return {
-    done: summary.done.map((i) => itemLine(i, todayKey, "done")),
-    next: summary.next.map((i) => itemLine(i, todayKey, "next")),
-    blocked: summary.blocked.map((i) => itemLine(i, todayKey, "blocked")),
+    done: shared(summary.done).map((i) => itemLine(i, todayKey, "done")),
+    next: shared(summary.next).map((i) => itemLine(i, todayKey, "next")),
+    blocked: shared(summary.blocked).map((i) => itemLine(i, todayKey, "blocked")),
   };
+}
+
+/** How many of the week's items are being held back because they are private. */
+export function privateItemCount(summary: WeeklySummary): number {
+  return [...summary.done, ...summary.next, ...summary.blocked].filter((i) => i.isPrivate).length;
 }
 
 /** The plain-text update for 'Copy as text'. */

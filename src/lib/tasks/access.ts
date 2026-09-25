@@ -52,8 +52,15 @@ export function canEditTask(actor: TaskActor, task: TaskAccessSubject): boolean 
 }
 
 /** Priority and owner of an intake request: the triage user or OWNER/ADMIN. */
-export function canTriage(actor: TaskActor, task: Pick<TaskAccessSubject, "isIntake" | "triageUserId">): boolean {
-  return !task.isIntake || actor.isAdmin || (task.triageUserId !== null && task.triageUserId === actor.userId);
+export function canTriage(
+  actor: TaskActor,
+  task: Pick<TaskAccessSubject, "isIntake" | "triageUserId">,
+): boolean {
+  return (
+    !task.isIntake ||
+    actor.isAdmin ||
+    (task.triageUserId !== null && task.triageUserId === actor.userId)
+  );
 }
 
 export interface AssignmentChange {

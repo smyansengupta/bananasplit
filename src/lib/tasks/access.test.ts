@@ -52,7 +52,11 @@ describe("the self-assign carve-out", () => {
       selfAssignOnly: true,
     });
     expect(
-      checkAssignmentChange(stranger, { ...task, assigneeIds: ["stranger"] }, { removeAssigneeIds: ["stranger"] }),
+      checkAssignmentChange(
+        stranger,
+        { ...task, assigneeIds: ["stranger"] },
+        { removeAssigneeIds: ["stranger"] },
+      ),
     ).toMatchObject({ ok: true });
   });
 
@@ -90,12 +94,17 @@ describe("intake triage", () => {
   };
 
   it("only the triage user or OWNER/ADMIN can claim or set the owner", () => {
-    expect(checkAssignmentChange(member("kristine"), intake, { ownerId: "designer" }).ok).toBe(false);
-    expect(checkAssignmentChange(member("designer"), intake, { ownerId: "designer" }).ok).toBe(false);
-    expect(checkAssignmentChange(member("lucas"), intake, { ownerId: "designer" }).ok).toBe(true);
-    expect(checkAssignmentChange(member("jackson", { isAdmin: true }), intake, { ownerId: "designer" }).ok).toBe(
-      true,
+    expect(checkAssignmentChange(member("kristine"), intake, { ownerId: "designer" }).ok).toBe(
+      false,
     );
+    expect(checkAssignmentChange(member("designer"), intake, { ownerId: "designer" }).ok).toBe(
+      false,
+    );
+    expect(checkAssignmentChange(member("lucas"), intake, { ownerId: "designer" }).ok).toBe(true);
+    expect(
+      checkAssignmentChange(member("jackson", { isAdmin: true }), intake, { ownerId: "designer" })
+        .ok,
+    ).toBe(true);
   });
 
   it("only the triage user or OWNER/ADMIN can set the priority", () => {
@@ -103,11 +112,15 @@ describe("intake triage", () => {
     expect(checkFieldEdit(member("kristine"), intake, {}).ok).toBe(true);
     expect(checkFieldEdit(member("lucas"), intake, { priority: true }).ok).toBe(true);
     expect(canEditTask(member("lucas"), intake)).toBe(true); // the triage user manages the queue
-    expect(checkFieldEdit(member("admin", { isAdmin: true }), intake, { priority: true }).ok).toBe(true);
+    expect(checkFieldEdit(member("admin", { isAdmin: true }), intake, { priority: true }).ok).toBe(
+      true,
+    );
   });
 
   it("still lets anyone join a request as a collaborator", () => {
-    expect(checkAssignmentChange(member("smyan"), intake, { addAssigneeIds: ["smyan"] }).ok).toBe(true);
+    expect(checkAssignmentChange(member("smyan"), intake, { addAssigneeIds: ["smyan"] }).ok).toBe(
+      true,
+    );
   });
 });
 

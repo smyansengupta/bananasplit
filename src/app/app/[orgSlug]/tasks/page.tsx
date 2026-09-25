@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 
 import { QueryProvider } from "@/components/providers/query-provider";
 import { TasksProvider } from "@/components/tasks/tasks-context";
-import { TaskStatus } from "@/generated/prisma/client";
+import { WorkspaceProvider } from "@/components/tasks/workspace-context";
 import { can } from "@/lib/auth/permissions";
 import {
   effectiveTimezone,
@@ -18,14 +18,14 @@ import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-pol
 import {
   TABLE_PAGE_SIZE,
   countOlderCompleted,
+  getAgendaTasks,
   getBoardTasks,
   getCalendarTasks,
   getIntakeTasks,
-  getMyTasks,
   getOrgLabels,
   getOrgProjects,
   getTableTasks,
-  type TableFilters,
+  type TaskFilters,
 } from "@/server/tasks/queries";
 import { getTeamView } from "@/server/tasks/team";
 import {
@@ -39,14 +39,12 @@ import {
 import { TaskCalendar } from "./calendar/task-calendar";
 import { IntakeView } from "./intake/intake-view";
 import { KanbanBoard } from "./kanban/kanban-board";
-import { MyTasksView } from "./my-tasks/my-tasks-view";
-import { NewTaskButton, ProjectSelect } from "./project-select";
 import { TaskTable } from "./table/task-table";
-import { TaskTableFilters } from "./table/task-table-filters";
 import { TeamView } from "./team/team-view";
 import { UpdatesView, type PostedUpdate } from "./updates/updates-view";
-import { ViewSwitcher } from "./view-switcher";
-import { DEFAULT_TASK_VIEW, TASKS_VIEW_COOKIE, parseTaskView } from "./views";
+import { WeekView } from "./week/week-view";
+import { WorkspaceHeader } from "./workspace-header";
+import { parseWorkspaceQuery, TASKS_VIEW_COOKIE, type WorkspaceQuery } from "./views";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -58,15 +56,24 @@ function dateParam(value: string | undefined): Date | undefined {
   return value && isDateKey(value) ? fromDateKey(value) : undefined;
 }
 
-export default async function TasksPage({ params, searchParams }: PageProps<"/app/[orgSlug]/tasks">) {
+/**
+ * The task workspace (C4).
+ *
+ * One page, one toolbar, five layouts of the same filtered question, plus
+ * two destinations (Requests and the Sunday update) that are pieces of work
+ * rather than ways of drawing tasks. See ./views.ts for the URL grammar and
+ * the reasoning; every link other sections publish still resolves here.
+ */
+export default async function TasksPage({
+  params,
+  searchParams,
+}: PageProps<"/app/[orgSlug]/tasks">) {
   const { orgSlug } = await params;
   const query = await searchParams;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
 
   const cookieStore = await cookies();
-  const view =
-    parseTaskView(param(query.view)) ?? parseTaskView(cookieStore.get(TASKS_VIEW_COOKIE)?.value) ?? DEFAULT_TASK_VIEW;
-  const projectId = param(query.project);
+  const ws = parseWorkspaceQuery(query, cookieStore.get(TASKS_VIEW_COOKIE)?.value);
   const isAdmin = can({ role }, "tasks.manageAll");
   const now = new Date();
 
@@ -81,145 +88,70 @@ export default async function TasksPage({ params, searchParams }: PageProps<"/ap
     return { tz: effectiveTimezone(me, org), labels, projects };
   });
   const todayKey = localDateKey(now, base.tz);
+  const today = fromDateKey(todayKey);
   const intakeProjects = base.projects.filter((p) => p.isIntake);
 
-  let content: React.ReactNode;
-  switch (view) {
-    case "mine": {
-      const limit = Math.min(Math.max(Number.parseInt(param(query.limit) ?? "100", 10) || 100, 20), 1000);
-      const mine = await withOrgTx(org.id, ({ db }) =>
-        getMyTasks(db, org.id, user.id, { completedSince: new Date(now.getTime() - 7 * DAY_MS), limit, projectId }),
-      );
-      const more = new URLSearchParams({ view: "mine", limit: String(limit + 100) });
-      if (projectId) more.set("project", projectId);
-      content = <MyTasksView open={mine.open} completed={mine.completed} hasMore={mine.hasMore} moreHref={`?${more}`} />;
-      break;
-    }
-    case "table": {
-      const statusParam = param(query.status);
-      const filters: TableFilters = {
-        projectId,
-        status:
-          statusParam === "open"
-            ? "open"
-            : statusParam && (Object.values(TaskStatus) as string[]).includes(statusParam)
-              ? (statusParam as TaskStatus)
-              : undefined,
-        ownerId: param(query.owner),
-        assigneeId: param(query.assignee),
-        labelId: param(query.label),
-        q: param(query.q)?.slice(0, 200),
-        dueFrom: dateParam(param(query.dueFrom)),
-        dueTo: dateParam(param(query.dueTo)),
-        flagged: param(query.flagged) === "1",
-        blockers: param(query.blockers) === "1",
-      };
-      const page = Math.max(1, Number.parseInt(param(query.page) ?? "1", 10) || 1);
-      const { tasks, total } = await withOrgTx(org.id, ({ db }) =>
-        getTableTasks(db, org.id, filters, page, fromDateKey(todayKey)),
-      );
-      content = (
-        <div className="space-y-4">
-          <TaskTableFilters />
-          <TaskTable tasks={tasks} total={total} page={page} pageSize={TABLE_PAGE_SIZE} />
-        </div>
-      );
-      break;
-    }
-    case "calendar": {
-      const tasks = await withOrgTx(org.id, ({ db }) =>
-        getCalendarTasks(db, org.id, { projectId, ownerId: param(query.owner) }),
-      );
-      content = <TaskCalendar tasks={tasks} />;
-      break;
-    }
-    case "team": {
-      const data = await withOrgTx(org.id, ({ db }) =>
-        getTeamView(db, {
+  // Header badges: what is waiting in the queue, and whether this person
+  // still owes the club a Sunday update.
+  const currentWeek = weekStartKey(now, org.timezone);
+  const header = await withOrgTx(org.id, async ({ db }) => ({
+    intakeCount:
+      intakeProjects.length > 0
+        ? await db.task.count({
+            where: {
+              organizationId: org.id,
+              deletedAt: null,
+              parentTaskId: null,
+              projectId: { in: intakeProjects.map((p) => p.id) },
+              ownerId: null,
+              status: { not: "COMPLETED" },
+            },
+          })
+        : 0,
+    posted:
+      (await db.weeklyUpdate.count({
+        where: {
           organizationId: org.id,
-          viewerId: user.id,
-          isAdmin,
-          positions,
-          members,
-          requestedScope: param(query.position) ?? null,
-        }),
-      );
-      content = <TeamView data={data} />;
-      break;
-    }
-    case "updates": {
-      // Weeks are org-time (Monday to Sunday), the same for everyone.
-      const currentWeek = weekStartKey(now, org.timezone);
-      const requestedWeek = param(query.week);
-      const weekStart =
-        requestedWeek && isDateKey(requestedWeek) && requestedWeek <= currentWeek ? mondayOfKey(requestedWeek) : currentWeek;
-      const requestedPerson = param(query.person);
-      const person = members.find((m) => m.id === requestedPerson) ?? members.find((m) => m.id === user.id);
-      const personId = person?.id ?? user.id;
-      const data = await withOrgTx(org.id, async ({ db }) => {
-        const summary = await getWeeklySummary(db, org.id, personId, weekStart, org.timezone, now);
-        const updates = await getWeekUpdates(db, org.id, weekStart);
-        const seeAll = await canSeeWhoPosted(db, org.id, user.id, role);
-        const expected = seeAll ? await expectedPosters(db, org.id) : [];
-        return { summary, updates, seeAll, expected };
-      });
-      const toPosted = (u: (typeof data.updates)[number]): PostedUpdate => ({
-        userId: u.userId,
-        postedAt: u.postedAt ? u.postedAt.toISOString() : null,
-        note: u.note,
-        done: storedLines(u.done),
-        next: storedLines(u.next),
-        blocked: storedLines(u.blocked),
-      });
-      const posted = data.updates.find((u) => u.userId === personId);
-      content = (
-        <UpdatesView
-          key={`${personId}-${weekStart}`}
-          personId={personId}
-          personName={person?.name ?? "Member"}
-          weekStart={weekStart}
-          currentWeekStart={currentWeek}
-          summary={data.summary}
-          posted={posted ? toPosted(posted) : null}
-          expected={data.expected}
-          weekUpdates={data.updates.map(toPosted)}
-          canSeeWhoPosted={data.seeAll}
-        />
-      );
-      break;
-    }
-    case "intake": {
-      const project = intakeProjects.find((p) => p.id === projectId) ?? intakeProjects[0] ?? null;
-      const tasks = project
-        ? await withOrgTx(org.id, ({ db }) => getIntakeTasks(db, org.id, project.id, new Date(now.getTime() - 14 * DAY_MS)))
-        : [];
-      content = <IntakeView project={project} intakeProjects={intakeProjects} tasks={tasks} />;
-      break;
-    }
-    default: {
-      const showAll = param(query.done) === "all";
-      const completedSince = showAll ? null : new Date(now.getTime() - 14 * DAY_MS);
-      const ownerId = param(query.owner);
-      const { tasks, older } = await withOrgTx(org.id, async ({ db }) => ({
-        tasks: await getBoardTasks(db, org.id, { projectId, ownerId, completedSince }),
-        older: completedSince
-          ? await countOlderCompleted(db, org.id, { projectId, ownerId, completedBefore: completedSince })
-          : 0,
-      }));
-      const showAllParams = new URLSearchParams({ view: "board", done: "all" });
-      if (projectId) showAllParams.set("project", projectId);
-      content = (
-        <QueryProvider>
-          <KanbanBoard
-            initialTasks={tasks}
-            queryKey={["tasks", org.id, projectId ?? null, ownerId ?? null, showAll]}
-            olderCompleted={older}
-            showAllHref={showAll ? null : `?${showAllParams}`}
-          />
-        </QueryProvider>
-      );
-    }
-  }
+          userId: user.id,
+          weekStart: fromDateKey(currentWeek),
+          postedAt: { not: null },
+        },
+      })) > 0,
+  }));
+
+  // The scope chip resolves to a set of people; everything else is literal.
+  const peopleIds =
+    ws.scope === "mine" ? [user.id] : ws.scope === "team" ? [user.id, ...chart.subtree] : undefined;
+  const filters: TaskFilters = {
+    projectId: ws.projectId,
+    status: ws.status,
+    ownerId: ws.ownerId,
+    assigneeId: ws.assigneeId,
+    peopleIds: peopleIds && peopleIds.length > 0 ? peopleIds : undefined,
+    labelId: ws.labelId,
+    q: ws.q,
+    dueFrom: dateParam(ws.dueFrom),
+    dueTo: dateParam(ws.dueTo),
+    flagged: ws.flagged,
+    blockers: ws.blockers,
+    visibility: ws.visibility,
+  };
+
+  const content = await renderView({
+    ws,
+    filters,
+    org,
+    userId: user.id,
+    role,
+    isAdmin,
+    now,
+    today,
+    todayKey,
+    query,
+    members,
+    positions,
+    intakeProjects,
+  });
 
   return (
     <TasksProvider
@@ -236,17 +168,167 @@ export default async function TasksPage({ params, searchParams }: PageProps<"/ap
       labels={base.labels}
       projects={base.projects}
     >
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
-          <div className="flex flex-wrap items-center gap-2">
-            {view !== "updates" && view !== "team" && view !== "intake" && <ProjectSelect />}
-            <NewTaskButton />
-          </div>
-        </div>
-        <ViewSwitcher current={view} showIntake={intakeProjects.length > 0 || isAdmin} />
+      <WorkspaceProvider query={ws} hasReports={chart.subtree.length > 0}>
+        <WorkspaceHeader
+          intakeCount={header.intakeCount}
+          showIntake={intakeProjects.length > 0 || isAdmin}
+          posted={header.posted}
+        />
         {content}
-      </div>
+      </WorkspaceProvider>
     </TasksProvider>
   );
+}
+
+type Query = Record<string, string | string[] | undefined>;
+
+async function renderView(input: {
+  ws: WorkspaceQuery;
+  filters: TaskFilters;
+  org: { id: string; slug: string; timezone: string };
+  userId: string;
+  role: Parameters<typeof canSeeWhoPosted>[3];
+  isAdmin: boolean;
+  now: Date;
+  today: Date;
+  todayKey: string;
+  query: Query;
+  members: Awaited<ReturnType<typeof getOrgMembersForPicker>>;
+  positions: Awaited<ReturnType<typeof getChartForPage>>;
+  intakeProjects: Awaited<ReturnType<typeof getOrgProjects>>;
+}): Promise<React.ReactNode> {
+  const { ws, filters, org, userId, isAdmin, now, today, todayKey, query, members, positions } =
+    input;
+
+  switch (ws.view) {
+    case "week": {
+      const limit = Math.min(
+        Math.max(Number.parseInt(param(query.limit) ?? "100", 10) || 100, 20),
+        1000,
+      );
+      const agenda = await withOrgTx(org.id, ({ db }) =>
+        getAgendaTasks(db, org.id, filters, {
+          completedSince: new Date(now.getTime() - 7 * DAY_MS),
+          limit,
+          today,
+        }),
+      );
+      return (
+        <WeekView
+          open={agenda.open}
+          completed={agenda.completed}
+          hasMore={agenda.hasMore}
+          moreLimit={limit + 100}
+        />
+      );
+    }
+
+    case "table": {
+      const page = Math.max(1, Number.parseInt(param(query.page) ?? "1", 10) || 1);
+      const { tasks, total } = await withOrgTx(org.id, ({ db }) =>
+        getTableTasks(db, org.id, filters, page, today),
+      );
+      return <TaskTable tasks={tasks} total={total} page={page} pageSize={TABLE_PAGE_SIZE} />;
+    }
+
+    case "calendar": {
+      const tasks = await withOrgTx(org.id, ({ db }) =>
+        getCalendarTasks(db, org.id, filters, today),
+      );
+      return <TaskCalendar tasks={tasks} />;
+    }
+
+    case "team": {
+      const data = await withOrgTx(org.id, ({ db }) =>
+        getTeamView(db, {
+          organizationId: org.id,
+          viewerId: userId,
+          isAdmin,
+          positions,
+          members,
+          requestedScope: param(query.position) ?? null,
+          filters,
+          today,
+        }),
+      );
+      return <TeamView data={data} />;
+    }
+
+    case "updates": {
+      // Weeks are org-time (Monday to Sunday), the same for everyone.
+      const currentWeek = weekStartKey(now, org.timezone);
+      const requestedWeek = param(query.week);
+      const weekStart =
+        requestedWeek && isDateKey(requestedWeek) && requestedWeek <= currentWeek
+          ? mondayOfKey(requestedWeek)
+          : currentWeek;
+      const requestedPerson = param(query.person);
+      const person =
+        members.find((m) => m.id === requestedPerson) ?? members.find((m) => m.id === userId);
+      const personId = person?.id ?? userId;
+      const data = await withOrgTx(org.id, async ({ db }) => {
+        const summary = await getWeeklySummary(db, org.id, personId, weekStart, org.timezone, now);
+        const updates = await getWeekUpdates(db, org.id, weekStart);
+        const seeAll = await canSeeWhoPosted(db, org.id, userId, input.role);
+        const expected = seeAll ? await expectedPosters(db, org.id) : [];
+        return { summary, updates, seeAll, expected };
+      });
+      const toPosted = (u: (typeof data.updates)[number]): PostedUpdate => ({
+        userId: u.userId,
+        postedAt: u.postedAt ? u.postedAt.toISOString() : null,
+        note: u.note,
+        done: storedLines(u.done),
+        next: storedLines(u.next),
+        blocked: storedLines(u.blocked),
+      });
+      const posted = data.updates.find((u) => u.userId === personId);
+      return (
+        <UpdatesView
+          key={`${personId}-${weekStart}`}
+          personId={personId}
+          personName={person?.name ?? "Member"}
+          weekStart={weekStart}
+          currentWeekStart={currentWeek}
+          summary={data.summary}
+          posted={posted ? toPosted(posted) : null}
+          expected={data.expected}
+          weekUpdates={data.updates.map(toPosted)}
+          canSeeWhoPosted={data.seeAll}
+        />
+      );
+    }
+
+    case "intake": {
+      const project =
+        input.intakeProjects.find((p) => p.id === ws.projectId) ?? input.intakeProjects[0] ?? null;
+      const tasks = project
+        ? await withOrgTx(org.id, ({ db }) =>
+            getIntakeTasks(db, org.id, project.id, new Date(now.getTime() - 14 * DAY_MS)),
+          )
+        : [];
+      return <IntakeView project={project} intakeProjects={input.intakeProjects} tasks={tasks} />;
+    }
+
+    default: {
+      const showAll = param(query.done) === "all";
+      const completedSince = showAll ? null : new Date(now.getTime() - 14 * DAY_MS);
+      const { tasks, older } = await withOrgTx(org.id, async ({ db }) => ({
+        tasks: await getBoardTasks(db, org.id, filters, { completedSince, today }),
+        older: completedSince
+          ? await countOlderCompleted(db, org.id, filters, completedSince, today)
+          : 0,
+      }));
+      return (
+        <QueryProvider>
+          <KanbanBoard
+            initialTasks={tasks}
+            queryKey={["tasks", org.id, JSON.stringify(filters), showAll]}
+            olderCompleted={older}
+            showAll={showAll}
+            todayKey={todayKey}
+          />
+        </QueryProvider>
+      );
+    }
+  }
 }

@@ -3,19 +3,12 @@
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, { Draggable } from "@fullcalendar/interaction";
 import FullCalendar from "@fullcalendar/react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Lock } from "lucide-react";
+import { useEffect, useRef } from "react";
 
-import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import { isTaskPrivate } from "@/components/tasks/task-badges";
 import { useTasks } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { dueDateKey } from "@/lib/tasks/dates";
 
 import { updateTask } from "../actions";
@@ -26,13 +19,13 @@ import { updateTask } from "../actions";
  * day to give it one.
  */
 export function TaskCalendar({ tasks }: { tasks: TaskItem[] }) {
-  const { org, members, announce } = useTasks();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { org, announce, showTask } = useTasks();
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const openTask = openTaskId ? (tasks.find((t) => t.id === openTaskId) ?? null) : null;
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const open = (taskId: string) => {
+    const found = byId.get(taskId);
+    if (found) showTask(found);
+  };
 
   const dated = tasks.filter((t) => t.dueDate);
   const undated = tasks.filter((t) => !t.dueDate && t.status !== "COMPLETED");
@@ -45,40 +38,24 @@ export function TaskCalendar({ tasks }: { tasks: TaskItem[] }) {
     return () => draggable.destroy();
   }, []);
 
-  function setOwner(value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value === "all") params.delete("owner");
-    else params.set("owner", value);
-    router.replace(`${pathname}?${params.toString()}`);
-  }
-
   return (
     <div className="space-y-3">
-      <Select value={searchParams.get("owner") ?? "all"} onValueChange={setOwner}>
-        <SelectTrigger className="w-48" aria-label="Owner filter">
-          <SelectValue placeholder="Owner" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Everyone&apos;s tasks</SelectItem>
-          {members.map((m) => (
-            <SelectItem key={m.id} value={m.id}>
-              {m.name ?? "Member"}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
       <div className="flex flex-col gap-4 lg:flex-row">
         <div className="min-w-0 flex-1">
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
-            headerToolbar={{ left: "prev,next today", center: "title", right: "dayGridMonth,dayGridWeek" }}
+            headerToolbar={{
+              left: "prev,next today",
+              center: "title",
+              right: "dayGridMonth,dayGridWeek",
+            }}
             height="auto"
             editable
             droppable
             events={dated.map((t) => ({
               id: t.id,
-              title: `${t.parentTask ? `${t.parentTask.title} / ` : ""}${t.title}${t.owner?.name ? ` · ${t.owner.name.split(" ")[0]}` : ""}`,
+              title: `${isTaskPrivate(t) ? "🔒 " : ""}${t.parentTask ? `${t.parentTask.title} / ` : ""}${t.title}${t.owner?.name ? ` · ${t.owner.name.split(" ")[0]}` : ""}`,
               start: dueDateKey(t.dueDate!),
               allDay: true,
               classNames: [
@@ -86,7 +63,7 @@ export function TaskCalendar({ tasks }: { tasks: TaskItem[] }) {
                 ...(t.status === "BLOCKED" ? ["bg-destructive!", "border-destructive!"] : []),
               ],
             }))}
-            eventClick={(info) => setOpenTaskId(info.event.id)}
+            eventClick={(info) => open(info.event.id)}
             eventDrop={(info) => {
               updateTask(org.id, info.event.id, { dueDate: info.event.startStr.slice(0, 10) })
                 .then((result) => {
@@ -111,24 +88,32 @@ export function TaskCalendar({ tasks }: { tasks: TaskItem[] }) {
           <h2 className="text-sm font-medium">Undated tasks</h2>
           <p className="text-muted-foreground text-xs">Drag onto a day to set a due date.</p>
           <div ref={sidebarRef} className="space-y-2">
-            {undated.length === 0 && <p className="text-muted-foreground text-sm">Nothing undated.</p>}
+            {undated.length === 0 && (
+              <p className="text-muted-foreground text-sm">Nothing undated.</p>
+            )}
             {undated.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 data-task-id={t.id}
-                onClick={() => setOpenTaskId(t.id)}
-                className="draggable-task bg-card hover:bg-accent/50 w-full cursor-grab rounded-md border p-2 text-left text-sm active:cursor-grabbing"
+                onClick={() => open(t.id)}
+                className={`draggable-task bg-card hover:bg-accent/50 w-full cursor-grab rounded-md border p-2 text-left text-sm transition-colors active:cursor-grabbing${isTaskPrivate(t) ? "border-dashed" : ""}`}
               >
-                {t.parentTask && <span className="text-muted-foreground">{t.parentTask.title} / </span>}
+                {isTaskPrivate(t) && (
+                  <Lock
+                    className="text-muted-foreground me-1 inline size-3 align-[-1px]"
+                    aria-label="Private"
+                  />
+                )}
+                {t.parentTask && (
+                  <span className="text-muted-foreground">{t.parentTask.title} / </span>
+                )}
                 {t.title}
               </button>
             ))}
           </div>
         </div>
       </div>
-
-      <TaskDetailDialog open={openTaskId !== null} onOpenChange={(o) => !o && setOpenTaskId(null)} task={openTask} />
     </div>
   );
 }

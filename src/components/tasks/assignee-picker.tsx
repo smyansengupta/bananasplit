@@ -88,7 +88,10 @@ export function AssigneePicker({
                       selectedIds.includes(m.userId) ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  <UserAvatar user={{ name: m.name, email: m.email, image: m.image, avatar: m.avatar }} size="xs" />
+                  <UserAvatar
+                    user={{ name: m.name, email: m.email, image: m.image, avatar: m.avatar }}
+                    size="xs"
+                  />
                   {m.name ?? m.email}
                 </CommandItem>
               ))}

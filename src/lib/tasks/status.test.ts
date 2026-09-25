@@ -38,8 +38,15 @@ describe("statusTransitionData", () => {
     expect(() => statusTransitionData(open, TaskStatus.BLOCKED, { now })).toThrow(
       BlockedReasonRequiredError,
     );
-    expect(() => statusTransitionData(open, TaskStatus.BLOCKED, { blockedReason: "  ", now })).toThrow();
-    expect(statusTransitionData(open, TaskStatus.BLOCKED, { blockedReason: " Room office closed ", now })).toEqual({
+    expect(() =>
+      statusTransitionData(open, TaskStatus.BLOCKED, { blockedReason: "  ", now }),
+    ).toThrow();
+    expect(
+      statusTransitionData(open, TaskStatus.BLOCKED, {
+        blockedReason: " Room office closed ",
+        now,
+      }),
+    ).toEqual({
       status: TaskStatus.BLOCKED,
       completedAt: null,
       blockedAt: now,
@@ -48,18 +55,29 @@ describe("statusTransitionData", () => {
   });
 
   it("keeps blockedAt and the reason while it stays blocked", () => {
-    const blocked = { ...open, status: TaskStatus.BLOCKED, blockedAt: earlier, blockedReason: "Waiting" };
+    const blocked = {
+      ...open,
+      status: TaskStatus.BLOCKED,
+      blockedAt: earlier,
+      blockedReason: "Waiting",
+    };
     expect(statusTransitionData(blocked, TaskStatus.BLOCKED, { now })).toMatchObject({
       blockedAt: earlier,
       blockedReason: "Waiting",
     });
     expect(
-      statusTransitionData(blocked, TaskStatus.BLOCKED, { blockedReason: "New reason", now }).blockedReason,
+      statusTransitionData(blocked, TaskStatus.BLOCKED, { blockedReason: "New reason", now })
+        .blockedReason,
     ).toBe("New reason");
   });
 
   it("clears the block when it moves on", () => {
-    const blocked = { ...open, status: TaskStatus.BLOCKED, blockedAt: earlier, blockedReason: "Waiting" };
+    const blocked = {
+      ...open,
+      status: TaskStatus.BLOCKED,
+      blockedAt: earlier,
+      blockedReason: "Waiting",
+    };
     expect(statusTransitionData(blocked, TaskStatus.IN_PROGRESS, { now })).toEqual({
       status: TaskStatus.IN_PROGRESS,
       completedAt: null,

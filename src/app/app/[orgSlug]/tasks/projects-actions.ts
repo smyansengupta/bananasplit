@@ -31,7 +31,11 @@ const projectSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
 });
 
-const id = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
+const id = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[A-Za-z0-9_-]+$/);
 
 const createProjectTx = withOrgAction(async (ctx, input: unknown) => {
   if (!can(ctx, "tasks.manageAll")) return { error: DENIED };
@@ -80,7 +84,8 @@ const intakeSchema = z.object({
 });
 
 const setIntakeTx = withOrgAction(async (ctx, input: unknown) => {
-  if (!can(ctx, "tasks.manageAll")) return { error: "Only an owner or admin can set up an intake queue." };
+  if (!can(ctx, "tasks.manageAll"))
+    return { error: "Only an owner or admin can set up an intake queue." };
   const parsed = intakeSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   const d = parsed.data;
@@ -106,7 +111,12 @@ const setIntakeTx = withOrgAction(async (ctx, input: unknown) => {
 /** OWNER/ADMIN: make a project an intake queue (or back into a plain project). */
 export async function setProjectIntake(
   orgId: string,
-  input: { projectId: string; isIntake: boolean; triageUserId: string | null; defaultDueInDays: number | null },
+  input: {
+    projectId: string;
+    isIntake: boolean;
+    triageUserId: string | null;
+    defaultDueInDays: number | null;
+  },
 ) {
   const result = await setIntakeTx(orgId, input);
   if (!result.error) refresh();

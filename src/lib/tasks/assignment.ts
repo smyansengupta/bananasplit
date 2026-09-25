@@ -18,7 +18,13 @@
  * Only ABOVE is flagged (the plan's default).
  */
 
-export const ASSIGNMENT_RELATIONS = ["SELF", "DOWN_LINE", "PEER", "ABOVE", "OUTSIDE_CHART"] as const;
+export const ASSIGNMENT_RELATIONS = [
+  "SELF",
+  "DOWN_LINE",
+  "PEER",
+  "ABOVE",
+  "OUTSIDE_CHART",
+] as const;
 
 export type AssignmentRelationValue = (typeof ASSIGNMENT_RELATIONS)[number];
 

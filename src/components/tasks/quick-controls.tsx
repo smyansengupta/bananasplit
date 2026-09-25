@@ -64,11 +64,19 @@ export function QuickStatus({
   return (
     <>
       {prompt}
-      <Select value={status} onValueChange={(v) => void change(v as TaskStatus)} disabled={disabled}>
+      <Select
+        value={status}
+        onValueChange={(v) => void change(v as TaskStatus)}
+        disabled={disabled}
+      >
         <SelectTrigger
           size="sm"
           aria-label={`Status of ${task.title}`}
-          className={cn("h-7 w-[8.5rem] text-xs", status === TaskStatus.BLOCKED && "text-destructive", className)}
+          className={cn(
+            "h-7 w-[8.5rem] text-xs",
+            status === TaskStatus.BLOCKED && "text-destructive",
+            className,
+          )}
           onClick={(e) => e.stopPropagation()}
         >
           <SelectValue />

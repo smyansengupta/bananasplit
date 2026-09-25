@@ -28,7 +28,10 @@ import {
  * (computeReportingSubtree) and computeManagers.
  */
 
-export function buildViewerChart(positions: readonly ChartNode[] | null, userId: string): ViewerChart {
+export function buildViewerChart(
+  positions: readonly ChartNode[] | null,
+  userId: string,
+): ViewerChart {
   if (!positions || positions.length === 0) return emptyViewerChart(userId);
   return {
     viewerId: userId,
@@ -40,7 +43,10 @@ export function buildViewerChart(positions: readonly ChartNode[] | null, userId:
 }
 
 /** The published chart's positions, read in the caller's transaction. */
-export async function loadChartNodes(db: TxClient, organizationId: string): Promise<ChartNode[] | null> {
+export async function loadChartNodes(
+  db: TxClient,
+  organizationId: string,
+): Promise<ChartNode[] | null> {
   const org = await db.organization.findUnique({
     where: { id: organizationId },
     select: { activeOrgChartVersionId: true },
@@ -74,7 +80,10 @@ export interface ClassifiedAssignment {
 }
 
 /** Classifies assigning each of `userIds` from the chart's viewer. */
-export function classifyAll(chart: ViewerChart, userIds: readonly string[]): ClassifiedAssignment[] {
+export function classifyAll(
+  chart: ViewerChart,
+  userIds: readonly string[],
+): ClassifiedAssignment[] {
   return userIds.map((userId) => {
     const relation = relationFor(chart, userId);
     return { userId, relation, flagged: relation === "ABOVE" };

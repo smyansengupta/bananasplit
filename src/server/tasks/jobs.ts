@@ -39,7 +39,10 @@ function cancelled(reason: string): JobOutcome {
 }
 
 async function isMember(db: TxClient, organizationId: string, userId: string): Promise<boolean> {
-  const m = await db.membership.findFirst({ where: { organizationId, userId }, select: { id: true } });
+  const m = await db.membership.findFirst({
+    where: { organizationId, userId },
+    select: { id: true },
+  });
   return m !== null;
 }
 
@@ -49,7 +52,11 @@ async function isMember(db: TxClient, organizationId: string, userId: string): P
  * still its owner (or an assignee who opted in). The user path never cancels
  * a reminder; a superseded one ends here as CANCELLED.
  */
-export const taskReminderJob: JobHandler<{ taskId: string; userId: string; dueDate: string }> = async (run) => {
+export const taskReminderJob: JobHandler<{
+  taskId: string;
+  userId: string;
+  dueDate: string;
+}> = async (run) => {
   const orgId = requireOrg(run.organizationId);
   const { taskId, userId, dueDate } = run.payload;
   return withSystemOrgTx(orgId, async ({ db }) => {
@@ -108,14 +115,21 @@ export const taskDigestJob: JobHandler<{ userId: string; localDate: string }> = 
       select: { timezone: true, emailPreferences: true },
     });
     if (!user || !(await isMember(db, orgId, userId))) return cancelled("no longer a member");
-    if (!parseNotificationPrefs(user.emailPreferences).digest.enabled) return cancelled("digest turned off");
+    if (!parseNotificationPrefs(user.emailPreferences).digest.enabled)
+      return cancelled("digest turned off");
     const org = await db.organization.findUniqueOrThrow({
       where: { id: orgId },
       select: { slug: true, timezone: true },
     });
     const now = new Date();
     const todayKey = localDateKey(now, effectiveTimezone(user, org));
-    const sections = await loadDigest(db, { organizationId: orgId, orgSlug: org.slug, userId, now, todayKey });
+    const sections = await loadDigest(db, {
+      organizationId: orgId,
+      orgSlug: org.slug,
+      userId,
+      now,
+      todayKey,
+    });
     if (digestItemCount(sections) === 0) return; // nothing to report today
 
     const id = randomUUID();
@@ -149,18 +163,28 @@ export const taskDigestJob: JobHandler<{ userId: string; localDate: string }> = 
  * weekly-update-reminder:{userId}:{weekStart} (once=true). Sunday evening,
  * to a lead who hasn't posted this week's update.
  */
-export const weeklyUpdateReminderJob: JobHandler<{ userId: string; weekStart: string }> = async (run) => {
+export const weeklyUpdateReminderJob: JobHandler<{ userId: string; weekStart: string }> = async (
+  run,
+) => {
   const orgId = requireOrg(run.organizationId);
   const { userId, weekStart } = run.payload;
   return withSystemOrgTx(orgId, async ({ db }) => {
     const posted = await db.weeklyUpdate.findFirst({
-      where: { organizationId: orgId, userId, weekStart: fromDateKey(weekStart), postedAt: { not: null } },
+      where: {
+        organizationId: orgId,
+        userId,
+        weekStart: fromDateKey(weekStart),
+        postedAt: { not: null },
+      },
       select: { id: true },
     });
     if (posted) return cancelled("already posted");
     const leads = await expectedPosters(db, orgId);
     if (!leads.some((l) => l.userId === userId)) return cancelled("not expected to post");
-    const org = await db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { slug: true } });
+    const org = await db.organization.findUniqueOrThrow({
+      where: { id: orgId },
+      select: { slug: true },
+    });
     await notifyUsers(db, orgId, [userId], {
       type: NotificationType.WEEKLY_UPDATE_REMINDER,
       title: "Post your Sunday update",

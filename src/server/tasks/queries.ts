@@ -1,4 +1,4 @@
-import { Prisma, TaskStatus } from "@/generated/prisma/client";
+import { Prisma, TaskStatus, TaskVisibility } from "@/generated/prisma/client";
 import { OPEN_STATUSES } from "@/lib/tasks/status";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
@@ -7,6 +7,13 @@ import { userPublicSelect } from "@/server/members";
  * Task reads for the tasks pages. Every function takes the page's ctx.db
  * (withOrgTx), so RLS scopes them to the viewer's org, and still filters on
  * organizationId explicitly. People are always userPublicSelect (no emails).
+ *
+ * C4 visibility needs NO filter in this file. These queries run as app_user,
+ * where the SELECT policy on Task already hides a private task the viewer is
+ * not on — and hides its comments, mentions, activity, collaborators and
+ * labels with it, including through a relation (an invisible parent comes
+ * back as `parentTask: null`, so a subtask's breadcrumb cannot leak a title).
+ * `TableFilters.visibility` below is a user-facing filter, not a guard.
  */
 
 export const taskListSelect = {
@@ -15,6 +22,7 @@ export const taskListSelect = {
   title: true,
   description: true,
   status: true,
+  visibility: true,
   priority: true,
   dueDate: true,
   rank: true,
@@ -50,6 +58,7 @@ export const taskListSelect = {
       id: true,
       title: true,
       status: true,
+      visibility: true,
       dueDate: true,
       ownerId: true,
       version: true,
@@ -70,7 +79,8 @@ const live = (organizationId: string) => ({ organizationId, deletedAt: null });
 export function getBoardTasks(
   db: TxClient,
   organizationId: string,
-  opts: { projectId?: string; ownerId?: string; completedSince?: Date | null },
+  filters: TaskFilters,
+  opts: { completedSince?: Date | null; today?: Date } = {},
 ) {
   const openOrRecent: Prisma.TaskWhereInput = opts.completedSince
     ? {
@@ -81,13 +91,7 @@ export function getBoardTasks(
       }
     : {};
   return db.task.findMany({
-    where: {
-      ...live(organizationId),
-      parentTaskId: null,
-      ...(opts.projectId ? { projectId: opts.projectId } : {}),
-      ...(opts.ownerId ? { ownerId: opts.ownerId } : {}),
-      ...openOrRecent,
-    },
+    where: { AND: [tableWhere(organizationId, filters, opts.today), openOrRecent] },
     select: taskListSelect,
     // Rank is a fractional-index sequence per status column: group by status first.
     orderBy: [{ status: "asc" }, { rank: "asc" }],
@@ -98,46 +102,46 @@ export function getBoardTasks(
 export function countOlderCompleted(
   db: TxClient,
   organizationId: string,
-  opts: { projectId?: string; ownerId?: string; completedBefore: Date },
+  filters: TaskFilters,
+  completedBefore: Date,
+  today?: Date,
 ) {
   return db.task.count({
     where: {
-      ...live(organizationId),
-      parentTaskId: null,
-      status: TaskStatus.COMPLETED,
-      ...(opts.projectId ? { projectId: opts.projectId } : {}),
-      ...(opts.ownerId ? { ownerId: opts.ownerId } : {}),
-      OR: [{ completedAt: { lt: opts.completedBefore } }, { completedAt: null }],
+      AND: [
+        tableWhere(organizationId, filters, today),
+        { status: TaskStatus.COMPLETED },
+        { OR: [{ completedAt: { lt: completedBefore } }, { completedAt: null }] },
+      ],
     },
   });
 }
 
-/** Tasks the user owns or is involved in (subtasks included). */
-function mineWhere(organizationId: string, userId: string): Prisma.TaskWhereInput {
-  return {
-    ...live(organizationId),
-    OR: [{ ownerId: userId }, { assignees: { some: { userId } } }],
-  };
-}
-
-/** My Tasks: open tasks (owned or involved), plus completions since `completedSince`. */
-export async function getMyTasks(
+/**
+ * The Week agenda: open tasks (subtasks included, so a handed-down piece of
+ * work shows up in the week of whoever owns it), plus what was finished
+ * since `completedSince`. The caller groups them by due date.
+ */
+export async function getAgendaTasks(
   db: TxClient,
   organizationId: string,
-  userId: string,
-  opts: { completedSince: Date; limit: number; projectId?: string },
+  filters: TaskFilters,
+  opts: { completedSince: Date; limit: number; today?: Date },
 ) {
-  const base = mineWhere(organizationId, userId);
-  const project = opts.projectId ? { projectId: opts.projectId } : {};
+  const base = taskFilterWhere(organizationId, filters, opts.today);
   const open = await db.task.findMany({
-    where: { AND: [base, project, { status: { in: [...OPEN_STATUSES] } }] },
+    where: { AND: [base, { status: { in: [...OPEN_STATUSES] } }] },
     select: taskListSelect,
-    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { priority: "desc" }, { createdAt: "asc" }],
+    orderBy: [
+      { dueDate: { sort: "asc", nulls: "last" } },
+      { priority: "desc" },
+      { createdAt: "asc" },
+    ],
     take: opts.limit + 1,
   });
   const completed = await db.task.findMany({
     where: {
-      AND: [base, project, { status: TaskStatus.COMPLETED, completedAt: { gte: opts.completedSince } }],
+      AND: [base, { status: TaskStatus.COMPLETED, completedAt: { gte: opts.completedSince } }],
     },
     select: taskListSelect,
     orderBy: { completedAt: "desc" },
@@ -150,55 +154,121 @@ export async function getMyTasks(
   };
 }
 
-export interface TableFilters {
+/**
+ * One filter set for every layout (C4). Week, Board, Table, Calendar and
+ * Team all read the same toolbar, so the same `where` builds all five and
+ * switching layout never silently changes what you are looking at.
+ */
+export interface TaskFilters {
   projectId?: string;
   status?: TaskStatus | "open";
+  /** Owned by exactly this person (the org-chart panel links ?owner=). */
   ownerId?: string;
+  /** Owned by OR involving this person (the People pages link ?assignee=). */
   assigneeId?: string;
+  /** Owned by or involving any of these — the Mine / My team scope. */
+  peopleIds?: readonly string[];
   labelId?: string;
   q?: string;
   dueFrom?: Date;
   dueTo?: Date;
   flagged?: boolean;
   blockers?: boolean;
+  /** C4: narrow to private tasks, or to the open ones. */
+  visibility?: TaskVisibility;
 }
+
+/** Kept as the old name for the table's call sites. */
+export type TableFilters = TaskFilters;
 
 export const TABLE_PAGE_SIZE = 50;
 
-export function tableWhere(organizationId: string, f: TableFilters, today?: Date): Prisma.TaskWhereInput {
-  const and: Prisma.TaskWhereInput[] = [{ ...live(organizationId), parentTaskId: null }];
+/** Owned by, or a collaborator on. */
+function involving(userIds: readonly string[]): Prisma.TaskWhereInput {
+  return userIds.length === 1
+    ? { OR: [{ ownerId: userIds[0] }, { assignees: { some: { userId: userIds[0] } } }] }
+    : {
+        OR: [
+          { ownerId: { in: [...userIds] } },
+          { assignees: { some: { userId: { in: [...userIds] } } } },
+        ],
+      };
+}
+
+/** The toolbar's filters, without any structural constraint of its own. */
+export function taskFilterWhere(
+  organizationId: string,
+  f: TaskFilters,
+  today?: Date,
+): Prisma.TaskWhereInput {
+  const and: Prisma.TaskWhereInput[] = [live(organizationId)];
   if (f.projectId) and.push({ projectId: f.projectId });
   if (f.status === "open") and.push({ status: { in: [...OPEN_STATUSES] } });
   else if (f.status) and.push({ status: f.status });
   if (f.ownerId) and.push({ ownerId: f.ownerId });
-  // "Involving": the owner or a collaborator (the People page links ?assignee=).
-  if (f.assigneeId) {
-    and.push({ OR: [{ ownerId: f.assigneeId }, { assignees: { some: { userId: f.assigneeId } } }] });
-  }
+  if (f.assigneeId) and.push(involving([f.assigneeId]));
+  if (f.peopleIds && f.peopleIds.length > 0) and.push(involving(f.peopleIds));
+  if (f.visibility) and.push({ visibility: f.visibility });
   if (f.labelId) and.push({ labels: { some: { labelId: f.labelId } } });
   if (f.q) and.push({ title: { contains: f.q, mode: "insensitive" } });
   if (f.dueFrom || f.dueTo) {
-    and.push({ dueDate: { ...(f.dueFrom ? { gte: f.dueFrom } : {}), ...(f.dueTo ? { lte: f.dueTo } : {}) } });
+    and.push({
+      dueDate: { ...(f.dueFrom ? { gte: f.dueFrom } : {}), ...(f.dueTo ? { lte: f.dueTo } : {}) },
+    });
   }
   if (f.flagged) {
-    and.push({ OR: [{ ownerFlagged: true }, { assignees: { some: { flagged: true, flagAcknowledgedAt: null } } }] });
+    and.push({
+      OR: [
+        { ownerFlagged: true },
+        { assignees: { some: { flagged: true, flagAcknowledgedAt: null } } },
+      ],
+    });
   }
   if (f.blockers && today) {
     // The exec-sync agenda: blocked, or open and overdue.
     and.push({
       OR: [
         { status: TaskStatus.BLOCKED },
-        { status: { in: [TaskStatus.NOT_STARTED, TaskStatus.IN_PROGRESS] }, dueDate: { lt: today } },
+        {
+          status: { in: [TaskStatus.NOT_STARTED, TaskStatus.IN_PROGRESS] },
+          dueDate: { lt: today },
+        },
       ],
     });
   }
   return { AND: and };
 }
 
+/** The table and the board show top-level tasks only. */
+export function tableWhere(
+  organizationId: string,
+  f: TaskFilters,
+  today?: Date,
+): Prisma.TaskWhereInput {
+  return { AND: [taskFilterWhere(organizationId, f, today), { parentTaskId: null }] };
+}
+
+/** True when anything beyond the project picker is narrowing the view. */
+export function hasActiveFilters(f: TaskFilters): boolean {
+  return Boolean(
+    f.status ||
+    f.ownerId ||
+    f.assigneeId ||
+    (f.peopleIds && f.peopleIds.length > 0) ||
+    f.labelId ||
+    f.q ||
+    f.dueFrom ||
+    f.dueTo ||
+    f.flagged ||
+    f.blockers ||
+    f.visibility,
+  );
+}
+
 export async function getTableTasks(
   db: TxClient,
   organizationId: string,
-  filters: TableFilters,
+  filters: TaskFilters,
   page: number,
   today: Date,
 ) {
@@ -218,14 +288,11 @@ export async function getTableTasks(
 export function getCalendarTasks(
   db: TxClient,
   organizationId: string,
-  opts: { projectId?: string; ownerId?: string },
+  filters: TaskFilters,
+  today?: Date,
 ) {
   return db.task.findMany({
-    where: {
-      ...live(organizationId),
-      ...(opts.projectId ? { projectId: opts.projectId } : {}),
-      ...(opts.ownerId ? { ownerId: opts.ownerId } : {}),
-    },
+    where: taskFilterWhere(organizationId, filters, today),
     select: taskListSelect,
     orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { rank: "asc" }],
     take: 1000,
@@ -237,15 +304,30 @@ export function getOpenTasksByOwners(
   db: TxClient,
   organizationId: string,
   ownerIds: readonly string[],
-  opts: { includeUnowned?: boolean; excludeOwners?: readonly string[] } = {},
+  opts: {
+    includeUnowned?: boolean;
+    excludeOwners?: readonly string[];
+    filters?: TaskFilters;
+    today?: Date;
+  } = {},
 ) {
   const or: Prisma.TaskWhereInput[] = [];
   if (ownerIds.length > 0) or.push({ ownerId: { in: [...ownerIds] } });
   if (opts.excludeOwners) or.push({ ownerId: { notIn: [...opts.excludeOwners] } });
   if (opts.includeUnowned) or.push({ ownerId: null });
   if (or.length === 0) return Promise.resolve([]);
+  // The lanes are the structure, so the toolbar's own owner/scope filters are
+  // dropped here; everything else (project, status, label, search, due,
+  // flagged, blockers, visibility) still applies.
+  const { ownerId: _o, assigneeId: _a, peopleIds: _p, ...rest } = opts.filters ?? {};
   return db.task.findMany({
-    where: { ...live(organizationId), status: { in: [...OPEN_STATUSES] }, OR: or },
+    where: {
+      AND: [
+        taskFilterWhere(organizationId, rest, opts.today),
+        { status: { in: [...OPEN_STATUSES] } },
+        { OR: or },
+      ],
+    },
     select: taskListSelect,
     orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { priority: "desc" }],
     take: 1000,
@@ -253,7 +335,12 @@ export function getOpenTasksByOwners(
 }
 
 /** An intake queue: its open requests and those done since `completedSince`. */
-export function getIntakeTasks(db: TxClient, organizationId: string, projectId: string, completedSince: Date) {
+export function getIntakeTasks(
+  db: TxClient,
+  organizationId: string,
+  projectId: string,
+  completedSince: Date,
+) {
   return db.task.findMany({
     where: {
       ...live(organizationId),

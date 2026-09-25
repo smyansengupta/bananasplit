@@ -2,7 +2,7 @@ import type { TxClient } from "@/server/db/context";
 import type { OrgMemberOption, UserPublic } from "@/server/members";
 import type { ChartPosition } from "@/server/org-chart/queries";
 
-import { getOpenTasksByOwners, type TaskListItem } from "./queries";
+import { getOpenTasksByOwners, type TaskFilters, type TaskListItem } from "./queries";
 
 /**
  * The Team view: swimlanes by reporting line. The viewer sees the positions
@@ -46,12 +46,21 @@ export async function getTeamView(
     positions: ChartPosition[] | null;
     members: OrgMemberOption[];
     requestedScope: string | null;
+    /** The shared toolbar filters (C4); the lanes supply the owner axis. */
+    filters?: TaskFilters;
+    today?: Date;
   },
 ): Promise<TeamView> {
   const { organizationId, viewerId, isAdmin, positions, members } = input;
+  const scoped = { filters: input.filters, today: input.today };
 
   if (!positions || positions.length === 0) {
-    const tasks = await getOpenTasksByOwners(db, organizationId, members.map((m) => m.id));
+    const tasks = await getOpenTasksByOwners(
+      db,
+      organizationId,
+      members.map((m) => m.id),
+      scoped,
+    );
     const byOwner = groupByOwner(tasks);
     return {
       hasChart: false,
@@ -79,7 +88,8 @@ export async function getTeamView(
     const parent = p.reportsToId && byId.has(p.reportsToId) ? p.reportsToId : null;
     children.set(parent, [...(children.get(parent) ?? []), p]);
   }
-  for (const list of children.values()) list.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0));
+  for (const list of children.values())
+    list.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0));
 
   const mine = positions.filter((p) => p.userId === viewerId && !p.isAdvisor);
   const scopeOptions = isAdmin
@@ -87,12 +97,19 @@ export async function getTeamView(
         { id: "all", label: "Whole chart" },
         ...positions
           .filter((p) => !p.isAdvisor)
-          .map((p) => ({ id: p.id, label: `${p.title}${p.user?.name ? ` (${p.user.name})` : p.personName ? ` (${p.personName})` : ""}` })),
+          .map((p) => ({
+            id: p.id,
+            label: `${p.title}${p.user?.name ? ` (${p.user.name})` : p.personName ? ` (${p.personName})` : ""}`,
+          })),
       ]
     : [];
 
   let scope = "all";
-  if (input.requestedScope && isAdmin && (input.requestedScope === "all" || byId.has(input.requestedScope))) {
+  if (
+    input.requestedScope &&
+    isAdmin &&
+    (input.requestedScope === "all" || byId.has(input.requestedScope))
+  ) {
     scope = input.requestedScope;
   } else if (mine.length > 0) {
     scope = mine[0]!.id;
@@ -113,7 +130,9 @@ export async function getTeamView(
   else if (scope !== "none") walk(byId.get(scope)!, 0);
 
   const inScope = new Set(ordered.map((o) => o.position.id));
-  const advisorPositions = positions.filter((p) => p.isAdvisor && p.reportsToId && inScope.has(p.reportsToId));
+  const advisorPositions = positions.filter(
+    (p) => p.isAdvisor && p.reportsToId && inScope.has(p.reportsToId),
+  );
 
   const ownerIds = [
     ...new Set(
@@ -124,7 +143,7 @@ export async function getTeamView(
   ];
   const positioned = new Set(positions.map((p) => p.userId).filter((u): u is string => Boolean(u)));
 
-  const tasks = await getOpenTasksByOwners(db, organizationId, ownerIds);
+  const tasks = await getOpenTasksByOwners(db, organizationId, ownerIds, scoped);
   const byOwner = groupByOwner(tasks);
 
   const lane = (p: ChartPosition, depth: number): TeamLane => ({
@@ -140,6 +159,7 @@ export async function getTeamView(
   let unpositioned: TaskListItem[] | null = null;
   if (scope === "all") {
     unpositioned = await getOpenTasksByOwners(db, organizationId, [], {
+      ...scoped,
       includeUnowned: true,
       excludeOwners: [...positioned],
     });
