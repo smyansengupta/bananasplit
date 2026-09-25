@@ -17,7 +17,10 @@
   --cal-cell-height: clamp(5.5rem, 7.6vw, 7.75rem);
   --cal-hour-height: 3.25rem;
   --cal-line: var(--border);
-  --cal-tint: color-mix(in oklab, var(--muted) 55%, transparent);
+  /* Mixed toward the foreground rather than toward --muted, so the step is
+     the same size in light and dark. A muted-based tint is nearly
+     invisible on a dark card. */
+  --cal-tint: color-mix(in oklab, var(--foreground) 4.5%, var(--card));
   --cal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -637,12 +640,16 @@
   background: color-mix(in oklab, var(--muted) 22%, transparent);
 }
 
-/* A timed event in the hour column. */
+/*
+ * A timed event in the hour column. The border is one weight all the way
+ * round: a thick coloured edge on one side only is a generated-UI tell,
+ * and the tinted fill already carries the type. Internal events dash the
+ * whole outline, which is the same rule the month chips follow.
+ */
 .cal-slot {
   position: absolute;
   padding: 0.1875rem 0.375rem;
-  border: 1px solid color-mix(in oklab, var(--kind) 45%, transparent);
-  border-left: 3px solid var(--kind);
+  border: 1px solid color-mix(in oklab, var(--kind) 58%, transparent);
   border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--kind) 16%, var(--card));
   color: var(--foreground);
@@ -661,9 +668,7 @@
 }
 
 .cal-slot[data-internal="true"] {
-  border-top-style: dashed;
-  border-right-style: dashed;
-  border-bottom-style: dashed;
+  border-style: dashed;
 }
 
 .cal-slot__time {
@@ -691,6 +696,11 @@
   gap: 0.3125rem;
   padding-top: 0;
   padding-bottom: 0;
+}
+
+.cal-slot[data-compact="true"] .cal-slot__time {
+  flex: none;
+  white-space: nowrap;
 }
 
 .cal-slot[data-compact="true"] .cal-slot__title {
