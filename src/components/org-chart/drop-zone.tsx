@@ -10,7 +10,9 @@ import { cn } from "@/lib/utils";
 /**
  * The import drop zone: a native HTML5 drop target with a file input
  * fallback. Posts the file to the upload route (4 MB cap, the server sniffs
- * the real type) and opens the new draft, which shows the parse progress.
+ * the real type) and opens the new draft. The portal's own parser runs
+ * inside that request, so a document it understands is ready to review by
+ * the time the draft opens; anything it cannot read shows its progress.
  */
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -90,7 +92,9 @@ export function DropZone({ orgId, orgSlug, disabled }: { orgId: string; orgSlug:
             <FileUp className="text-muted-foreground size-8" aria-hidden="true" />
             <div className="space-y-1">
               <p className="text-sm font-medium">Drop your org chart document here</p>
-              <p className="text-muted-foreground text-xs">PDF, Word (.docx), Google Doc export, Markdown or text, up to 4 MB</p>
+              <p className="text-muted-foreground text-xs">
+                Word (.docx), Google Doc export, Markdown, text or PDF, up to 4 MB. No API key needed.
+              </p>
             </div>
             <input
               ref={input}

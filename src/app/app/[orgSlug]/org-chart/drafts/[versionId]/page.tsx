@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { DraftEditor } from "@/components/org-chart/editor/draft-editor";
+import { ParseReportPanel } from "@/components/org-chart/editor/parse-report";
 import { ParseStatus } from "@/components/org-chart/editor/parse-status";
 import { EmptyState } from "@/components/empty-state";
 import { can } from "@/lib/auth/permissions";
@@ -47,7 +48,7 @@ export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/or
             ) : (
               version.sourceFilename
             )}
-            {version.parseModel ? ` by ${version.parseModel}` : ""}. Check every position before publishing.
+. Check every position before publishing.
           </>
         ) : (
           "Edit the positions, then publish when the chart is right."
@@ -112,6 +113,13 @@ export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/or
   return (
     <div className="space-y-4">
       {header}
+      <ParseReportPanel
+        method={version.parseMethod}
+        report={version.parseReport}
+        model={version.parseModel}
+        costUsd={version.parseCostUsd}
+        confidence={version.parseConfidence}
+      />
       <Suspense>
         <DraftEditor
           key={version.editVersion}

@@ -1293,6 +1293,15 @@ enum OrgChartParseStatus {
   FAILED
 }
 
+/// Which reader produced a draft: the built-in parser, Claude, the starter
+/// template, or the admin typing it in.
+enum OrgChartParseMethod {
+  BUILTIN
+  CLAUDE
+  TEMPLATE
+  MANUAL
+}
+
 enum PositionMatchState {
   UNMATCHED
   SUGGESTED
@@ -1320,6 +1329,12 @@ model OrgChartVersion {
   parseError       String?
   parseModel       String?
   parseUsage       Json?
+  /// Which reader produced this draft (built-in parser, Claude, template, by hand).
+  parseMethod      OrgChartParseMethod?
+  /// 0 to 1: how much of the document the built-in parser understood.
+  parseConfidence  Float?
+  /// The coverage report shown to the admin: counts, and the lines not placed.
+  parseReport      Json?
   /// Admin-only; never sent to members.
   rawParse         Json?
   openItems        Json                  @default("[]")

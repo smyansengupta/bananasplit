@@ -5,9 +5,12 @@ import { NextResponse } from "next/server";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { can } from "@/lib/auth/permissions";
 import { getSession } from "@/lib/auth/session";
+import { normalizeOrgChart, type NormalizedChart } from "@/lib/org-chart/normalize";
+import type { ParseReport } from "@/lib/org-chart/types";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { withOrgAction, withOrgTx } from "@/server/db/context";
-import { preflightSource, sniffSource, SourceRejectedError } from "@/server/org-chart/extract";
+import { extractSource, preflightSource, sniffSource, SourceRejectedError } from "@/server/org-chart/extract";
+import { BUILTIN_CONFIDENCE_THRESHOLD, parseOrgChartText } from "@/server/org-chart/parse";
 import {
   assertUploadAllowed,
   createUploadVersion,
@@ -29,15 +32,21 @@ import { readUpload, UploadError } from "@/server/storage/upload";
  *   2. read the body; sniff the type from the bytes (PDF, DOCX, MD, TXT;
  *      .docm, ODT and RTF refused) and run the cheap preflight (DOCX
  *      zip-bomb guards, PDF page cap, text length);
- *   3. a read transaction checks the Claude key and the quota, so a refused
- *      upload stores nothing;
- *   4. the original goes to the PRIVATE store at
+ *   3. extract the text and run the BUILT-IN parser here, in the request:
+ *      it is pure computation, needs no API key and costs nothing, so a
+ *      document it understands is ready to review the moment the upload
+ *      finishes. A PDF has no text to read locally, so it has no built-in
+ *      reading;
+ *   4. a read transaction checks the quota (only when Claude will be asked)
+ *      so a refused upload stores nothing;
+ *   5. the original goes to the PRIVATE store at
  *      org-chart/{orgId}/{versionId}/{random}.{ext}, outside any transaction;
- *   5. a short transaction creates the DRAFT version (parseStatus PENDING),
- *      re-checks the quota under the org lock and enqueues claude-parse; if
- *      it fails the blob is deleted again.
+ *   6. a short transaction creates the version under the org lock: READY
+ *      with the built-in positions, or PENDING plus a claude-parse job when
+ *      the reading was not good enough and the org has a key. If it fails
+ *      the blob is deleted again.
  * After commit, enqueueJob's after() only kicks /api/cron/jobs for the heavy
- * kind; the parse never runs inside this request.
+ * kind; Claude is never called inside this request.
  */
 export const maxDuration = 60;
 
@@ -49,12 +58,23 @@ function json(status: number, body: Record<string, unknown>) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-/** Route handlers get no built-in CSRF check: refuse another site's browser request. */
+/**
+ * Route handlers get no built-in CSRF check: refuse another site's browser
+ * request.
+ *
+ * The comparison is against the Host header the browser sent, not against
+ * request.url: Next rebuilds request.url from the host the server is bound
+ * to, so on any hostname other than that one (a dev alias, or a deployment
+ * reached through a proxy) an honest same-origin upload would be refused.
+ * A cross-site page cannot set either header, so Origin == Host is exactly
+ * the check that is wanted.
+ */
 function isCrossSite(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return false;
   try {
-    return new URL(origin).host !== new URL(request.url).host;
+    const host = request.headers.get("host") ?? new URL(request.url).host;
+    return new URL(origin).host !== host;
   } catch {
     return true;
   }
@@ -110,13 +130,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     throw error;
   }
 
-  // Refuse before storing anything when there is no key or no quota left.
+  // The built-in parser, here in the request: no key, no network, no cost.
+  let builtin: { chart: NormalizedChart; report: ParseReport } | null = null;
   try {
-    await withOrgTx(orgId, async (ctx) => {
-      if (!(await hasClaudeKey(ctx.db, orgId))) {
-        throw new OrgChartError("Add a Claude API key in Settings > Integrations before importing a document.", 409);
-      }
-      await assertUploadAllowed(ctx.db, orgId);
+    const source = await extractSource(bytes, sniffed);
+    if (source.type === "text") {
+      const result = parseOrgChartText(source.text);
+      builtin = { chart: normalizeOrgChart(result.parse), report: result.report };
+    }
+  } catch (error) {
+    if (error instanceof SourceRejectedError) return json(error.status, { error: error.message });
+    throw error;
+  }
+  const accepted = (builtin?.report.confidence ?? 0) >= BUILTIN_CONFIDENCE_THRESHOLD;
+
+  // Claude is only asked about a document the parser could not read well.
+  // Its quota is checked before anything is stored, so a refusal is clean.
+  let claudeAvailable = false;
+  try {
+    claudeAvailable = await withOrgTx(orgId, async (ctx) => {
+      const hasKey = await hasClaudeKey(ctx.db, orgId);
+      if (!accepted && hasKey) await assertUploadAllowed(ctx.db, orgId);
+      return hasKey;
     });
   } catch (error) {
     if (error instanceof OrgChartError) return json(error.status, { error: error.message });
@@ -136,8 +171,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
       sizeBytes: size,
       sha256: createHash("sha256").update(bytes).digest("hex"),
       blobKey: stored.key,
+      builtin,
+      accepted,
+      claudeAvailable,
     });
-    return json(201, { versionId: created.versionId, number: created.number });
+    return json(201, {
+      versionId: created.versionId,
+      number: created.number,
+      ready: created.ready,
+      reader: created.method.toLowerCase(),
+    });
   } catch (error) {
     await deleteBlobs([stored.key]).catch(() => undefined);
     if (error instanceof OrgChartError) return json(error.status, { error: error.message });

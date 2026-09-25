@@ -26,6 +26,12 @@ const STEPS: Record<string, string> = {
   PARSING: "Claude is reading the chart…",
 };
 
+/**
+ * Shown only on the Claude path: the portal's own parser could not make
+ * sense of this document, so it was handed to Claude. A document the parser
+ * did read never reaches this screen.
+ */
+
 /** A draft whose document is still being parsed, or whose parse failed. */
 export function ParseStatus({
   orgId,
@@ -121,9 +127,14 @@ export function ParseStatus({
           {failed ? "Discard" : "Cancel and discard"}
         </Button>
         {failed && (
-          <StartDraftButton orgId={orgId} orgSlug={orgSlug} from="blank" variant="ghost">
-            Build it by hand instead
-          </StartDraftButton>
+          <>
+            <StartDraftButton orgId={orgId} orgSlug={orgSlug} from="starter" variant="outline">
+              Start from the club template
+            </StartDraftButton>
+            <StartDraftButton orgId={orgId} orgSlug={orgSlug} from="blank" variant="ghost">
+              Build it by hand instead
+            </StartDraftButton>
+          </>
         )}
       </div>
     </div>

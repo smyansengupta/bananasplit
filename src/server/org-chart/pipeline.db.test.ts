@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The org chart pipeline against the local database (real roles and RLS)
@@ -123,11 +123,11 @@ function fakeAnthropic(): Anthropic {
   } as unknown as Anthropic;
 }
 
-function uploadRequest(orgId: string, name: string, bytes: Buffer, type: string) {
+function uploadRequest(orgId: string, name: string, bytes: Buffer, type: string, headers?: Record<string, string>) {
   const form = new FormData();
   form.append("file", new File([new Uint8Array(bytes)], name, { type }));
   return uploadRoute(
-    new Request(`http://localhost:3403/api/orgs/${orgId}/org-chart/imports`, { method: "POST", body: form }),
+    new Request(`http://localhost:3403/api/orgs/${orgId}/org-chart/imports`, { method: "POST", body: form, headers }),
     { params: Promise.resolve({ orgId }) },
   );
 }
@@ -168,10 +168,12 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       });
       return true;
     });
-    // Leftovers from an interrupted run must not block the one-active-parse rule.
+    // Leftovers from an interrupted run must not block the one-active-parse
+    // rule. Only this suite's own kind of leftover is cleared: other suites
+    // run against the same seeded org and keep drafts of their own.
     await withSystemOrgTx(s.cbcId, ({ db }) =>
       db.orgChartVersion.updateMany({
-        where: { organizationId: s.cbcId, status: "DRAFT" },
+        where: { organizationId: s.cbcId, status: "DRAFT", source: "UPLOAD" },
         data: { status: "DISCARDED" },
       }),
     );
@@ -207,11 +209,41 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     await disconnectOwnerDb();
   });
 
+  /** Puts a version this suite created back out of the way. */
+  async function discard(versionId: string) {
+    await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.orgChartVersion.updateMany({ where: { id: versionId, status: "DRAFT" }, data: { status: "DISCARDED" } }),
+    );
+  }
+
   async function track(res: Response) {
     const body = (await res.json()) as { versionId?: string; error?: string };
     if (body.versionId) createdVersions.push(body.versionId);
     return { status: res.status, body };
   }
+
+  it("accepts an upload from the host the browser asked for, and still refuses another site", async () => {
+    // Next rebuilds request.url from the host the server is bound to, so the
+    // same-site check reads the Host header the browser sent. An org reached
+    // on its own hostname (or through a proxy) must still be able to import.
+    const sameSite = await track(
+      await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown", {
+        host: "chart.localhost:3602",
+        origin: "http://chart.localhost:3602",
+      }),
+    );
+    expect(sameSite.status).toBe(201);
+    await discard(sameSite.body.versionId!);
+
+    const crossSite = await track(
+      await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown", {
+        host: "chart.localhost:3602",
+        origin: "https://evil.example.com",
+      }),
+    );
+    expect(crossSite.status).toBe(403);
+    expect(crossSite.body.error).toBe("Forbidden.");
+  });
 
   it("a MEMBER cannot upload; an unsupported file is refused before anything is stored", async () => {
     sessionUser.current = s.kristine;
@@ -222,27 +254,32 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(rtf.status).toBe(415);
   });
 
-  it("upload -> claude-parse through the runner -> a READY draft matching expected.json", async () => {
+  it("reads the CBC document with the built-in parser, in the upload, with no Claude call", async () => {
+    claudeCalls.length = 0;
     const res = await track(await uploadRequest(s.cbcId, "cbc-fall-2026.md", read("cbc-fall-2026.md"), "text/plain"));
     expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
     firstDraft = res.body.versionId as string;
 
-    // One active parse per org: a second upload waits.
-    const second = await track(await uploadRequest(s.cbcId, "again.txt", read("cbc-fall-2026.txt"), "text/plain"));
-    expect(second.status).toBe(409);
-
-    const pending = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, firstDraft));
-    expect(pending?.version).toMatchObject({ status: "DRAFT", source: "UPLOAD", parseStatus: "PENDING" });
-    expect(pending?.version.sourceBlobKey).toMatch(new RegExp(`^org-chart/${s.cbcId}/${firstDraft}/`));
-
-    const summary = await drainJobs({ kinds: ["claude-parse"], budgetMs: 290_000 });
-    expect(summary.refused).toBeUndefined();
-    expect(summary.done).toBe(1);
-    expect(claudeCalls.length).toBeGreaterThan(0);
-    expect(claudeCalls.every((c) => !c.tx)).toBe(true);
+    // The whole point: no job, no API call, nothing billed.
+    expect(claudeCalls).toEqual([]);
+    const summary = await drainJobs({ kinds: ["claude-parse"], budgetMs: 30_000 });
+    expect(summary.done).toBe(0);
+    expect(claudeCalls).toEqual([]);
 
     const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, firstDraft));
-    expect(draft?.version).toMatchObject({ parseStatus: "READY", parseModel: "claude-opus-5", warnings: [] });
+    expect(draft?.version).toMatchObject({
+      status: "DRAFT",
+      source: "UPLOAD",
+      parseStatus: "READY",
+      parseMethod: "BUILTIN",
+      parseModel: null,
+      parseCostUsd: null,
+      warnings: [],
+    });
+    expect(draft?.version.sourceBlobKey).toMatch(new RegExp(`^org-chart/${s.cbcId}/${firstDraft}/`));
+    expect(draft?.version.parseConfidence).toBeGreaterThanOrEqual(0.9);
+    expect(draft?.version.parseReport).toMatchObject({ shape: "sections", positions: 9 });
     const expected = JSON.parse(read("expected.json").toString("utf8")) as {
       positions: { key: string; reportsTo: string | null; isOpen: boolean; isAdvisor: boolean }[];
     };
@@ -269,6 +306,75 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       matchState: "UNMATCHED",
       personName: null,
     });
+  });
+
+  it("falls back to Claude Haiku for a document the parser cannot read", async () => {
+    claudeCalls.length = 0;
+    const res = await track(await uploadRequest(s.cbcId, "who-does-what.md", read("cbc-narrative.md"), "text/markdown"));
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ready: false, reader: "claude" });
+    const versionId = res.body.versionId as string;
+
+    // One active parse per org: a second document that also needs Claude waits.
+    const second = await track(await uploadRequest(s.cbcId, "again.md", read("cbc-narrative.md"), "text/markdown"));
+    expect(second.status).toBe(409);
+
+    const pending = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, versionId));
+    expect(pending?.version).toMatchObject({ parseStatus: "PENDING", parseMethod: null });
+    expect(pending?.version.parseReport).toMatchObject({ shape: "none", positions: 0 });
+
+    const summary = await drainJobs({ kinds: ["claude-parse"], budgetMs: 290_000 });
+    expect(summary.refused).toBeUndefined();
+    expect(summary.done).toBe(1);
+    expect(claudeCalls.length).toBeGreaterThan(0);
+    expect(claudeCalls.every((c) => !c.tx)).toBe(true);
+
+    const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, versionId));
+    expect(draft?.version).toMatchObject({
+      parseStatus: "READY",
+      parseMethod: "CLAUDE",
+      parseModel: "claude-haiku-4-5-20251001",
+    });
+    // 2,500 input and 2,000 output tokens on Haiku 4.5 ($1/$5 per MTok).
+    expect(draft?.version.parseCostUsd).toBeCloseTo(0.0125, 6);
+    expect(draft?.positions).toHaveLength(9);
+
+    await discard(versionId);
+  });
+
+  it("keeps the parser's reading when Claude cannot finish", async () => {
+    claudeCalls.length = 0;
+    // A document the parser only half understands: two roles it can read and
+    // a paragraph it cannot place.
+    const partial = Buffer.from(
+      [
+        "Board notes, fall semester",
+        "",
+        "President — Jackson Lamoureux",
+        "Head of Tech — Smyan Sengupta",
+        "",
+        "Everything else is still being worked out. We had a long conversation about",
+        "whether the design work should sit under growth or under programs, and we did",
+        "not settle it. Anthony is handling money for now. Kristine is doing social.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    answers.push({ stop_reason: "refusal", text: "" });
+    const res = await track(await uploadRequest(s.cbcId, "notes.md", partial, "text/markdown"));
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ ready: false, reader: "claude" });
+
+    const summary = await drainJobs({ kinds: ["claude-parse"], budgetMs: 290_000 });
+    expect(summary.dead).toBe(1);
+    const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
+    // Not FAILED: the admin gets the two positions the portal did read, plus
+    // the reason Claude could not help.
+    expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
+    expect(draft?.positions.map((p) => p.key).sort()).toEqual(["head-of-tech", "president"]);
+    expect(JSON.stringify(draft?.version.parseReport)).toMatch(/Claude could not read this document/);
+
+    await discard(res.body.versionId!);
   });
 
   it("a stale attempt is cancelled by the compare-and-set and changes nothing", async () => {
@@ -374,11 +480,20 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(copy?.version).toMatchObject({ status: "PUBLISHED", source: "ROLLBACK", basedOnVersionId: s.originalActive });
     expect(copy?.positions.find((p) => p.key === "vp-growth")?.title).toBe("VP Growth");
     expect((await getPublishedOrgChart(s.cbcId))?.versionId).toBe(copyId);
+
+    // Publishing swaps this org's chart for one with new position ids, and
+    // other suites hold ids from the seeded chart. Put it back as soon as
+    // the publish and rollback assertions are done, rather than in afterAll.
+    await withSystemOrgTx(s.cbcId, async ({ db }) => {
+      await db.orgChartVersion.update({ where: { id: copyId }, data: { status: "DISCARDED" } });
+      await db.orgChartVersion.update({ where: { id: s.originalActive }, data: { status: "PUBLISHED" } });
+      await db.organization.update({ where: { id: s.cbcId }, data: { activeOrgChartVersionId: s.originalActive } });
+    });
   });
 
-  it("a refusal fails the draft with a clear message and no positions", async () => {
+  it("a refusal fails a draft the parser read nothing from, with a clear message", async () => {
     answers.push({ stop_reason: "refusal", text: "" });
-    const res = await track(await uploadRequest(s.cbcId, "cbc.txt", read("cbc-fall-2026.txt"), "text/plain"));
+    const res = await track(await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"));
     expect(res.status).toBe(201);
     const summary = await drainJobs({ kinds: ["claude-parse"], budgetMs: 290_000 });
     expect(summary.dead).toBe(1);
@@ -386,9 +501,26 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(failed?.version.parseStatus).toBe("FAILED");
     expect(failed?.version.parseError).toMatch(/declined/);
     expect(failed?.positions).toEqual([]);
+    await discard(res.body.versionId!);
   });
 
-  it("the injection fixture yields a schema-valid draft and no side effects", async () => {
+  it("the injection fixture is read by the parser, which executes nothing and calls nothing", async () => {
+    claudeCalls.length = 0;
+    const res = await track(await uploadRequest(s.cbcId, "board.md", read("cbc-injection.md"), "text/markdown"));
+    expect(res.status).toBe(201);
+    expect(claudeCalls).toEqual([]);
+    const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
+    expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
+    expect(draft?.positions.map((p) => p.key).sort()).toEqual(["head-of-security", "president", "vp-ops-programs"]);
+    expect(draft?.positions.every((p) => p.userId === null)).toBe(true);
+    // The injected instructions are data: reported as lines nobody could
+    // place, never followed.
+    const report = draft?.version.parseReport;
+    expect(JSON.stringify(report?.orphanLines)).toMatch(/IMPORTANT INSTRUCTIONS/);
+    await discard(res.body.versionId!);
+  });
+
+  it("the injection fixture through Claude yields a schema-valid draft and no side effects", async () => {
     const counts = () =>
       withSystemOrgTx(s.cbcId, async ({ db }) => ({
         owners: await db.membership.count({ where: { organizationId: s.cbcId, role: "OWNER" } }),
@@ -399,42 +531,125 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         }),
       }));
     const before = await counts();
+    // The narrative document forces the Claude path; the double answers with
+    // the injection fixture's output, which must still be schema-bound data.
     answers.push({ text: INJECTION_RAW });
-    const res = await track(await uploadRequest(s.cbcId, "board.md", read("cbc-injection.md"), "text/markdown"));
+    const res = await track(await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"));
     expect(res.status).toBe(201);
     await drainJobs({ kinds: ["claude-parse"], budgetMs: 290_000 });
     const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
-    expect(draft?.version.parseStatus).toBe("READY");
+    expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "CLAUDE" });
     expect(draft?.positions.map((p) => p.key).sort()).toEqual(["head-of-security", "president", "vp-ops-programs"]);
     expect(draft?.positions.every((p) => p.userId === null)).toBe(true);
     expect(draft?.version.openItems[0]?.question).toMatch(/ignored/);
     expect(await counts()).toEqual(before);
+    await discard(res.body.versionId!);
   });
 
-  it("without a key the upload is refused before anything is stored", async () => {
-    await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgChartVersion.updateMany({
-        where: { organizationId: s.cbcId, status: "DRAFT", id: { in: createdVersions } },
-        data: { status: "DISCARDED" },
-      }),
-    );
-    await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgIntegration.updateMany({
-        where: { organizationId: s.cbcId, provider: "CLAUDE" },
-        data: { secretFingerprint: null, secretLast4: null },
-      }),
-    );
-    try {
-      const res = await track(await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown"));
-      expect(res.status).toBe(409);
-      expect(res.body.error).toMatch(/Claude API key/);
-    } finally {
+  describe("an org with no Claude API key at all", () => {
+    beforeEach(async () => {
+      await withSystemOrgTx(s.cbcId, ({ db }) =>
+        db.orgChartVersion.updateMany({
+          where: { organizationId: s.cbcId, status: "DRAFT", id: { in: createdVersions } },
+          data: { status: "DISCARDED" },
+        }),
+      );
+      await withSystemOrgTx(s.cbcId, ({ db }) =>
+        db.orgIntegration.updateMany({
+          where: { organizationId: s.cbcId, provider: "CLAUDE" },
+          data: { secretFingerprint: null, secretLast4: null },
+        }),
+      );
+      secretValue.current = null;
+      claudeCalls.length = 0;
+    });
+
+    afterEach(async () => {
       await withSystemOrgTx(s.cbcId, ({ db }) =>
         db.orgIntegration.updateMany({
           where: { organizationId: s.cbcId, provider: "CLAUDE" },
           data: KEY_MARKER,
         }),
       );
-    }
+    });
+
+    it("still imports the CBC document end to end", async () => {
+      const res = await track(await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown"));
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
+      expect(claudeCalls).toEqual([]);
+      const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
+      expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
+      expect(draft?.positions).toHaveLength(9);
+      await discard(res.body.versionId!);
+    });
+
+    it("says why a PDF's draft is empty rather than leaving the admin guessing", async () => {
+      // There is no local PDF text extraction, so the parser reads nothing.
+      // The draft still has to explain itself and offer a way forward.
+      const res = await track(await uploadRequest(s.cbcId, "chart.pdf", read("cbc-fall-2026.pdf"), "application/pdf"));
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
+      expect(claudeCalls).toEqual([]);
+      const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
+      expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
+      expect(draft?.positions).toEqual([]);
+      expect(draft?.version.parseReport).toMatchObject({ shape: "none", positions: 0 });
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/no text the portal can read/);
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/Claude API key|club template/);
+      await discard(res.body.versionId!);
+    });
+
+    it("lands an unreadable document in the editor rather than refusing it", async () => {
+      const res = await track(await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"));
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
+      expect(claudeCalls).toEqual([]);
+      const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
+      expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
+      expect(draft?.positions).toEqual([]);
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/club template/);
+      await discard(res.body.versionId!);
+    });
+
+    it("offers the starter structure, laid out and ready to fill in", async () => {
+      const restoreTo = (await getPublishedOrgChart(s.cbcId))?.versionId as string;
+      const versionId = await withOrgAction(async (ctx) => {
+        const { startDraft } = await import("./service");
+        return startDraft(ctx, "starter");
+      })(s.cbcId);
+      createdVersions.push(versionId);
+      const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, versionId));
+      expect(draft?.version).toMatchObject({ source: "MANUAL", parseMethod: "TEMPLATE" });
+      expect(draft?.positions.map((p) => p.title).sort()).toEqual([
+        "Faculty Advisor",
+        "Graphic Designer",
+        "Head of Finance",
+        "Head of Programs",
+        "Head of Social & Membership",
+        "Head of Tech",
+        "President",
+        "VP Growth",
+        "VP Operations",
+      ]);
+      // Roles and reporting lines are filled in; the people are not.
+      expect(draft?.positions.every((p) => p.personName === null && p.userId === null)).toBe(true);
+      expect(draft?.positions.find((p) => p.key === "graphic-designer")?.isOpen).toBe(true);
+      expect(draft?.positions.find((p) => p.key === "faculty-advisor")?.isAdvisor).toBe(true);
+      expect(draft?.positions.filter((p) => p.reportsToId === null)).toHaveLength(1);
+      expect(draft?.positions.find((p) => p.key === "president")?.responsibilities.length).toBeGreaterThan(2);
+      // And it publishes as it stands. Put the club's own chart back straight
+      // away: other suites read this org's published chart too.
+      const published = await withOrgAction((ctx) => publishDraft(ctx, versionId))(s.cbcId);
+      expect(published).toMatchObject({ ok: true });
+      const live = await getPublishedOrgChart(s.cbcId);
+      expect(live?.versionId).toBe(versionId);
+      expect(live?.positions).toHaveLength(9);
+      await withSystemOrgTx(s.cbcId, async ({ db }) => {
+        await db.orgChartVersion.update({ where: { id: versionId }, data: { status: "DISCARDED" } });
+        await db.orgChartVersion.update({ where: { id: restoreTo }, data: { status: "PUBLISHED" } });
+        await db.organization.update({ where: { id: s.cbcId }, data: { activeOrgChartVersionId: restoreTo } });
+      });
+    });
   });
 });

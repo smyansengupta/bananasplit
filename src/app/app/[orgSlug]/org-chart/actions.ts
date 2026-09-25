@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { withOrgAction } from "@/server/db/context";
 import {
   discardDraft,
+  DRAFT_SOURCES,
   getOpenTasks,
   OrgChartError,
   publishDraft,
@@ -13,6 +14,7 @@ import {
   rollbackToVersion,
   saveDraft,
   startDraft,
+  type DraftSource,
   type OpenTasks,
   type PublishResult,
   type SaveDraftResult,
@@ -42,11 +44,11 @@ function rescue<Args extends unknown[], R>(
 
 const id = z.string().min(1).max(100);
 
-const startDraftTx = withOrgAction(async (ctx, from: "blank" | "current") => {
-  const versionId = await startDraft(ctx, z.enum(["blank", "current"]).parse(from));
+const startDraftTx = withOrgAction(async (ctx, from: DraftSource) => {
+  const versionId = await startDraft(ctx, z.enum(DRAFT_SOURCES).parse(from));
   return { ok: true as const, versionId };
 });
-export async function startDraftAction(organizationId: string, from: "blank" | "current") {
+export async function startDraftAction(organizationId: string, from: DraftSource) {
   return rescue(startDraftTx)(organizationId, from);
 }
 
