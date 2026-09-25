@@ -23,7 +23,7 @@ export function SortableTaskCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={
-        "focus-visible:ring-ring rounded-md focus-visible:ring-2 focus-visible:outline-none" +
+        "group focus-visible:ring-ring cursor-grab rounded-lg focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing" +
         (isDragging ? " opacity-40" : "")
       }
       onClick={() => onOpen(task.id)}

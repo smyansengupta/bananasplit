@@ -13,7 +13,8 @@ import {
 
 describe("parseMentions", () => {
   it("finds tokens and dedupes them in order", () => {
-    const md = "Hey @[Alex Green](user:u_alex) and @[Oliver Ward](user:u_oliver), @[Alex](user:u_alex) again";
+    const md =
+      "Hey @[Alex Green](user:u_alex) and @[Oliver Ward](user:u_oliver), @[Alex](user:u_alex) again";
     expect(parseMentionIds(md)).toEqual(["u_alex", "u_oliver"]);
     expect(parseMentions(md)[0]).toEqual({ userId: "u_alex", name: "Alex Green" });
   });
@@ -34,7 +35,9 @@ describe("parseMentions", () => {
   });
 
   it("ignores malformed and hand-typed look-alikes", () => {
-    expect(parseMentionIds("@alex, @[Alex](mailto:x), @[Alex](user:bad id), @[](user:u1)")).toEqual([]);
+    expect(parseMentionIds("@alex, @[Alex](mailto:x), @[Alex](user:bad id), @[](user:u1)")).toEqual(
+      [],
+    );
     expect(parseMentionIds(null)).toEqual([]);
   });
 

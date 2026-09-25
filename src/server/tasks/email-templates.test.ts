@@ -17,7 +17,11 @@ describe("task email templates", () => {
       orgName: "Claude Builders Club",
       actorName: "Oliver <b>Ward</b>",
       role: "owner",
-      task: { title: `Book rooms <script>alert("x")</script>`, dueLabel: "Fri, Oct 2", priority: "High" },
+      task: {
+        title: `Book rooms <script>alert("x")</script>`,
+        dueLabel: "Fri, Oct 2",
+        priority: "High",
+      },
       flagged: false,
       url,
     });

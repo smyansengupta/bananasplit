@@ -1724,6 +1724,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "assert_org_member",
         "assert_same_org",
         "ballot_tally",
+        // C4: reads "Task"/"TaskAssignee" without RLS so the task-visibility
+        // policies cannot recurse into themselves. Answers only about
+        // app.user_id().
+        "can_read_task",
         "can_view_ballot_rows",
         "can_view_rows",
         "cancel_job",
@@ -1835,7 +1839,13 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       ).rows.map((r) => r.v),
     {
       // Members legitimately write all of these; Label and Project:INSERT
-      // /DELETE left the list in 20260924130000_b9_tenant_write_backstop.
+      // /DELETE left the list in 20260924130000_b9_tenant_write_backstop,
+      // and Task:UPDATE / Task:DELETE left it in
+      // 20260924140000_c4_task_visibility: their USING clauses now carry the
+      // task-visibility predicate, which names is_org_admin, so a member can
+      // no longer target a private task they cannot read. Task:INSERT stays
+      // tenant-only (it pins createdById and a new task is always readable
+      // by its creator).
       value: [
         "AvailabilityPoll:DELETE",
         "AvailabilityPoll:INSERT",
@@ -1853,9 +1863,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "PollSlot:INSERT",
         "PollSlot:UPDATE",
         "Project:UPDATE",
-        "Task:DELETE",
         "Task:INSERT",
-        "Task:UPDATE",
         "TaskActivity:INSERT",
         "TaskAssignee:DELETE",
         "TaskAssignee:INSERT",
@@ -1973,6 +1981,11 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       prune_jobs: "s",
       // B2 profiles: the calendar card's "Turn off feed" (own row only)
       clear_ics_token_hash: "u",
+      // C4 task visibility: the policy predicate, and the trigger that keeps
+      // a subtask's flag equal to its parent's (trigger functions get no
+      // grant; only the table owner fires them).
+      can_read_task: "us",
+      task_visibility_inherit: "",
     };
     await tcase(
       "T27f",

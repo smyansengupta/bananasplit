@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Check, ChevronLeft, ChevronRight, ClipboardCopy, Send } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ClipboardCopy, Lock, Send } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -19,7 +19,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { addDaysToKey, formatDueKey } from "@/lib/tasks/dates";
-import { formatWeeklyText, summaryLines, type WeeklyItem, type WeeklySummary } from "@/lib/tasks/weekly-text";
+import {
+  formatWeeklyText,
+  privateItemCount,
+  summaryLines,
+  type WeeklyItem,
+  type WeeklySummary,
+} from "@/lib/tasks/weekly-text";
 import { cn } from "@/lib/utils";
 
 import { postWeeklyUpdate } from "../actions";
@@ -70,6 +76,10 @@ export function UpdatesView({
   const [isPending, startTransition] = useTransition();
   const isMe = personId === viewer.userId;
   const lines = summaryLines(summary, org.todayKey);
+  // C4: a posted update is readable by the whole org, so private tasks are
+  // drafted for the person but never published. Saying so here is the whole
+  // point — a silent omission would be worse than either choice.
+  const heldBack = privateItemCount(summary);
 
   function navigate(params: Record<string, string | null>) {
     const next = new URLSearchParams(searchParams.toString());
@@ -107,7 +117,10 @@ export function UpdatesView({
     <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={personId} onValueChange={(v) => navigate({ person: v === viewer.userId ? null : v })}>
+          <Select
+            value={personId}
+            onValueChange={(v) => navigate({ person: v === viewer.userId ? null : v })}
+          >
             <SelectTrigger className="w-56" aria-label="Person">
               <SelectValue />
             </SelectTrigger>
@@ -154,6 +167,17 @@ export function UpdatesView({
           <Column title="What's next" items={summary.next} kind="next" />
           <Column title="Blocked" items={summary.blocked} kind="blocked" />
         </div>
+
+        {heldBack > 0 && (
+          <p className="text-muted-foreground flex items-start gap-2 text-sm">
+            <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {heldBack === 1 ? "One private task is" : `${heldBack} private tasks are`} in this
+              week but will not be posted. A posted update is readable by the whole club, so private
+              titles stay out of it — put them in the note yourself if you want to.
+            </span>
+          </p>
+        )}
 
         {isMe ? (
           <div className="space-y-3 rounded-lg border p-4">
@@ -237,11 +261,18 @@ export function UpdatesView({
                       <button
                         type="button"
                         className="min-w-0 flex-1 truncate text-left hover:underline"
-                        onClick={() => navigate({ person: e.userId === viewer.userId ? null : e.userId })}
+                        onClick={() =>
+                          navigate({ person: e.userId === viewer.userId ? null : e.userId })
+                        }
                       >
                         {e.name ?? "Member"}
                       </button>
-                      <span className={cn("text-xs", done ? "text-muted-foreground" : "text-destructive font-medium")}>
+                      <span
+                        className={cn(
+                          "text-xs",
+                          done ? "text-muted-foreground" : "text-destructive font-medium",
+                        )}
+                      >
                         {done ? "Posted" : "Not yet"}
                       </span>
                     </li>
@@ -252,14 +283,23 @@ export function UpdatesView({
           </section>
         )}
         <p className="text-muted-foreground text-xs">
-          Weeks run Monday to Sunday in {org.timezone}. Leads who haven&apos;t posted get a reminder Sunday at 6pm.
+          Weeks run Monday to Sunday in {org.timezone}. Leads who haven&apos;t posted get a reminder
+          Sunday at 6pm.
         </p>
       </aside>
     </div>
   );
 }
 
-function Column({ title, items, kind }: { title: string; items: WeeklyItem[]; kind: "done" | "next" | "blocked" }) {
+function Column({
+  title,
+  items,
+  kind,
+}: {
+  title: string;
+  items: WeeklyItem[];
+  kind: "done" | "next" | "blocked";
+}) {
   const { org } = useTasks();
   return (
     <section className="rounded-lg border" aria-label={title}>
@@ -278,13 +318,21 @@ function Column({ title, items, kind }: { title: string; items: WeeklyItem[]; ki
           {items.map((i) => (
             <li key={i.id} className="px-3 py-2 text-sm">
               <Link href={`/app/${org.slug}/tasks/${i.id}`} className="hover:underline">
+                {i.isPrivate && (
+                  <Lock
+                    className="text-muted-foreground me-1 inline size-3 align-[-1px]"
+                    aria-label="Private"
+                  />
+                )}
                 {i.parentTitle && <span className="text-muted-foreground">{i.parentTitle} / </span>}
                 {i.title}
               </Link>
               <div className="text-muted-foreground text-xs">
                 {kind === "blocked" && i.blockedReason}
-                {kind === "next" && (i.dueKey ? `Due ${formatDueKey(i.dueKey, org.todayKey)}` : "In progress")}
+                {kind === "next" &&
+                  (i.dueKey ? `Due ${formatDueKey(i.dueKey, org.todayKey)}` : "In progress")}
                 {i.role === "collaborator" && " · involved"}
+                {i.isPrivate && " · private, not posted"}
               </div>
             </li>
           ))}

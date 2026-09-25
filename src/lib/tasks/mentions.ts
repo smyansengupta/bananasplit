@@ -85,7 +85,11 @@ export function mentionsToNotify(
 
 /** The token for a member, with characters that would break it removed. */
 export function mentionToken(name: string, userId: string): string {
-  const clean = name.replace(/[[\]()\n\r]/g, "").trim().slice(0, 80) || "member";
+  const clean =
+    name
+      .replace(/[[\]()\n\r]/g, "")
+      .trim()
+      .slice(0, 80) || "member";
   return `@[${clean}](user:${userId})`;
 }
 

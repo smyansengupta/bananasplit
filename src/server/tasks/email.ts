@@ -1,4 +1,4 @@
-import { NotificationType, TaskStatus } from "@/generated/prisma/client";
+import { NotificationType, TaskStatus, type TaskVisibility } from "@/generated/prisma/client";
 import { appUrl } from "@/lib/app-url";
 import {
   daysBetweenKeys,
@@ -8,6 +8,7 @@ import {
   isDateKey,
   localDateKey,
 } from "@/lib/tasks/dates";
+import { canSeeTask } from "@/lib/tasks/visibility";
 import { withSystemOrgTx } from "@/server/db/context";
 import type { RenderedEmail } from "@/server/email/templates";
 
@@ -24,6 +25,7 @@ import {
   weeklyUpdateReminderEmail,
   type TaskFacts,
 } from "./email-templates";
+import { isOrgAdmin } from "./visibility";
 import { getWeeklySummary } from "./weekly";
 
 /**
@@ -89,17 +91,27 @@ export async function renderTaskNotificationEmail(
       where: { id: organizationId },
       select: { name: true, slug: true, timezone: true },
     });
-    const recipient = await db.user.findUnique({ where: { id: n.userId }, select: { timezone: true } });
+    const recipient = await db.user.findUnique({
+      where: { id: n.userId },
+      select: { timezone: true },
+    });
     if (!org || !recipient) return "skip";
     const tz = effectiveTimezone(recipient, org);
     const todayKey = localDateKey(now, tz);
     const actorName = n.actorId
-      ? ((await db.user.findUnique({ where: { id: n.actorId }, select: { name: true } }))?.name ?? "A teammate")
+      ? ((await db.user.findUnique({ where: { id: n.actorId }, select: { name: true } }))?.name ??
+        "A teammate")
       : "A teammate";
     const url = appUrl(n.linkUrl ?? `/app/${org.slug}/tasks?view=mine`);
 
     if (n.type === NotificationType.TASK_DIGEST) {
-      const sections = await loadDigest(db, { organizationId, orgSlug: org.slug, userId: n.userId, now, todayKey });
+      const sections = await loadDigest(db, {
+        organizationId,
+        orgSlug: org.slug,
+        userId: n.userId,
+        now,
+        todayKey,
+      });
       if (digestItemCount(sections) === 0) return "skip";
       return taskDigestEmail({
         orgName: org.name,
@@ -110,13 +122,19 @@ export async function renderTaskNotificationEmail(
     }
 
     if (n.type === NotificationType.WEEKLY_UPDATE_REMINDER) {
-      const weekStart = n.dedupeKey?.startsWith("weekly:") ? n.dedupeKey.slice("weekly:".length) : null;
+      const weekStart = n.dedupeKey?.startsWith("weekly:")
+        ? n.dedupeKey.slice("weekly:".length)
+        : null;
       if (!weekStart || !isDateKey(weekStart)) return "skip";
       const summary = await getWeeklySummary(db, organizationId, n.userId, weekStart, tz, now);
       return weeklyUpdateReminderEmail({
         orgName: org.name,
         weekLabel: formatDueKey(weekStart, todayKey),
-        counts: { done: summary.done.length, next: summary.next.length, blocked: summary.blocked.length },
+        counts: {
+          done: summary.done.length,
+          next: summary.next.length,
+          blocked: summary.blocked.length,
+        },
         url: appUrl(`/app/${org.slug}/tasks?view=updates`),
       });
     }
@@ -127,7 +145,10 @@ export async function renderTaskNotificationEmail(
         return taskBulkAssignedEmail({
           orgName: org.name,
           actorName,
-          items: (n.body ?? "").split("\n").map((l) => l.trim()).filter(Boolean),
+          items: (n.body ?? "")
+            .split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean),
           flagged: n.type === NotificationType.TASK_FLAGGED,
           url,
         });
@@ -140,23 +161,63 @@ export async function renderTaskNotificationEmail(
       select: {
         title: true,
         status: true,
+        visibility: true,
         priority: true,
         dueDate: true,
         deletedAt: true,
         blockedReason: true,
         ownerId: true,
+        createdById: true,
+        assignees: { select: { userId: true } },
         project: { select: { name: true } },
-        parentTask: { select: { title: true } },
+        parentTask: {
+          select: {
+            title: true,
+            visibility: true,
+            ownerId: true,
+            createdById: true,
+            assignees: { select: { userId: true } },
+          },
+        },
       },
     });
     if (!task || task.deletedAt) return "skip";
+
+    // C4. This runs on the service path, where RLS shows the whole org, and
+    // it is the LAST gate before a title leaves the building. The
+    // notification was written to somebody in the audience, but the task may
+    // have been made private (or the person taken off it) between then and
+    // this drain, so re-check before sending.
+    const recipientActor = {
+      userId: n.userId,
+      isAdmin: await isOrgAdmin(db, organizationId, n.userId),
+      subtree: [] as string[],
+    };
+    const asSubject = (t: {
+      visibility: TaskVisibility;
+      ownerId: string | null;
+      createdById: string;
+      assignees: { userId: string }[];
+    }) => ({
+      visibility: t.visibility,
+      ownerId: t.ownerId,
+      createdById: t.createdById,
+      assigneeIds: t.assignees.map((a) => a.userId),
+    });
+    if (!canSeeTask(recipientActor, asSubject(task))) return "skip";
+
     const dueKey = task.dueDate ? dueDateKey(task.dueDate) : null;
     const facts: TaskFacts = {
       title: task.title,
       dueLabel: dueKey ? formatDueKey(dueKey, todayKey) : null,
       priority: PRIORITY_LABELS[task.priority] ?? task.priority,
       projectName: task.project?.name ?? null,
-      parentTitle: task.parentTask?.title ?? null,
+      // A subtask's breadcrumb is dropped when the parent is out of reach:
+      // somebody handed a piece of a private task must not learn its title.
+      parentTitle:
+        task.parentTask && canSeeTask(recipientActor, asSubject(task.parentTask))
+          ? task.parentTask.title
+          : null,
     };
 
     switch (n.type) {
@@ -184,7 +245,13 @@ export async function renderTaskNotificationEmail(
           url,
         });
       case NotificationType.TASK_COMMENTED:
-        return taskCommentedEmail({ orgName: org.name, actorName, excerpt: n.body, task: facts, url });
+        return taskCommentedEmail({
+          orgName: org.name,
+          actorName,
+          excerpt: n.body,
+          task: facts,
+          url,
+        });
       case NotificationType.TASK_DUE_REMINDER: {
         if (task.status === TaskStatus.COMPLETED || !dueKey) return "skip";
         return taskReminderEmail({

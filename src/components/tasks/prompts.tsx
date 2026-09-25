@@ -23,7 +23,10 @@ import { MAX_BLOCKED_REASON } from "@/lib/tasks/status";
  *   chart is allowed but flagged; confirm first.
  */
 
-export function useBlockedReason(): [React.ReactNode, (taskTitle?: string) => Promise<string | null>] {
+export function useBlockedReason(): [
+  React.ReactNode,
+  (taskTitle?: string) => Promise<string | null>,
+] {
   const [state, setState] = useState<{ title?: string } | null>(null);
   const [reason, setReason] = useState("");
   const resolver = useRef<((value: string | null) => void) | null>(null);
@@ -110,9 +113,9 @@ export function useConfirmFlagged(): [React.ReactNode, (names: string[]) => Prom
             Assign above your level?
           </DialogTitle>
           <DialogDescription>
-            {list} {names && names.length > 1 ? "are" : "is"} above you in the org chart. That&apos;s allowed,
-            but the assignment is flagged on the task and they&apos;re notified. They or an admin can
-            acknowledge it.
+            {list} {names && names.length > 1 ? "are" : "is"} above you in the org chart.
+            That&apos;s allowed, but the assignment is flagged on the task and they&apos;re
+            notified. They or an admin can acknowledge it.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

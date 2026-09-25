@@ -120,6 +120,41 @@ const NEW_TENANT_TABLES = [
   "Receipt",
 ];
 
+/**
+ * C4 task visibility: one private task in org_A, built inside the calling
+ * case's transaction (so the shared fixture counts never move). The caller
+ * must already be u_memberA, who becomes its creator and owner; u_bothAB is
+ * its collaborator; every child row a task can carry is attached, and a
+ * notification pointing at it is addressed to the uninvolved u_treasA.
+ */
+async function seedPrivateTask(q) {
+  await q(`INSERT INTO "Task" ("id","organizationId","title","rank","createdById","ownerId","visibility","updatedAt")
+           VALUES ('t_priv','org_A','Private task','z0','u_memberA','u_memberA','PRIVATE',now())`);
+  // Asks for ORG on purpose: the inheritance trigger must overrule it.
+  await q(`INSERT INTO "Task" ("id","organizationId","title","rank","createdById","parentTaskId","visibility","updatedAt")
+           VALUES ('t_priv_sub','org_A','Private subtask','z1','u_memberA','t_priv','ORG',now())`);
+  await q(`INSERT INTO "TaskAssignee" ("organizationId","taskId","userId") VALUES ('org_A','t_priv','u_bothAB')`);
+  await q(`INSERT INTO "TaskLabel" ("organizationId","taskId","labelId") VALUES ('org_A','t_priv','l_A')`);
+  await q(`INSERT INTO "TaskComment" ("id","organizationId","taskId","authorId","body")
+           VALUES ('tc_priv','org_A','t_priv','u_memberA','secret')`);
+  await q(`INSERT INTO "TaskMention" ("id","organizationId","taskId","sourceKey","mentionedUserId","mentionedById")
+           VALUES ('tm_priv','org_A','t_priv','desc','u_bothAB','u_memberA')`);
+  await q(`INSERT INTO "TaskActivity" ("id","organizationId","taskId","actorId","type")
+           VALUES ('ta_priv','org_A','t_priv','u_memberA','CREATED')`);
+  await q(`INSERT INTO "Notification" ("id","organizationId","userId","type","title","taskId")
+           VALUES ('n_priv','org_A','u_treasA','TASK_MENTIONED','Private task','t_priv')`);
+}
+
+/** What the current identity can read of the private task. */
+async function readPrivate(q) {
+  return {
+    task: await count(q, `SELECT count(*) n FROM "Task" WHERE "id" = 't_priv'`),
+    comment: await count(q, `SELECT count(*) n FROM "TaskComment" WHERE "taskId" = 't_priv'`),
+    activity: await count(q, `SELECT count(*) n FROM "TaskActivity" WHERE "taskId" = 't_priv'`),
+    collaborator: await count(q, `SELECT count(*) n FROM "TaskAssignee" WHERE "taskId" = 't_priv'`),
+  };
+}
+
 runSuite("rls-phases", async ({ tcase, clients }) => {
   // ======================= Catalog =======================
   await tcase(
@@ -1588,7 +1623,11 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         delete_admins: 0,
         reassign: "42501",
         admin_moderates: 1,
-        foreign_task: "23503",
+        // C4: the INSERT policy now also asks app.can_read_task(), which is
+        // false for another org's task, so the refusal is a policy error
+        // rather than the FK's. A task that does not exist answers the same
+        // way (A-N4 still holds: foreign and missing are indistinguishable).
+        foreign_task: "42501",
       },
     },
   );
@@ -1709,6 +1748,170 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       ),
     }),
     { value: { first: 1, duplicate: "23505" } },
+  );
+
+  // ======================= C4: task visibility =======================
+  //
+  // An open board with private opt-in. u_memberA owns and created the
+  // private task, u_bothAB is a collaborator on it, u_treasA is the
+  // uninvolved member (TREASURER is not an admin tier for tasks), and
+  // u_adminA / u_ownerA are the admin tiers. Every case builds its own rows
+  // inside its transaction, so the shared fixture counts other suites assert
+  // are untouched.
+  await tcase(
+    "PC4-01",
+    "a member cannot read another person's private task, nor its comments, mentions, activity, collaborators, labels or notifications",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      await seedPrivateTask(q);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      return {
+        task: await count(q, `SELECT count(*) n FROM "Task" WHERE "id" = 't_priv'`),
+        by_title: await count(q, `SELECT count(*) n FROM "Task" WHERE "title" = 'Private task'`),
+        subtask: await count(q, `SELECT count(*) n FROM "Task" WHERE "id" = 't_priv_sub'`),
+        comment: await count(q, `SELECT count(*) n FROM "TaskComment" WHERE "taskId" = 't_priv'`),
+        mention: await count(q, `SELECT count(*) n FROM "TaskMention" WHERE "taskId" = 't_priv'`),
+        activity: await count(q, `SELECT count(*) n FROM "TaskActivity" WHERE "taskId" = 't_priv'`),
+        collaborator: await count(q, `SELECT count(*) n FROM "TaskAssignee" WHERE "taskId" = 't_priv'`),
+        label: await count(q, `SELECT count(*) n FROM "TaskLabel" WHERE "taskId" = 't_priv'`),
+        // A notification addressed to this very member still hides the title.
+        notification: await count(q, `SELECT count(*) n FROM "Notification" WHERE "id" = 'n_priv'`),
+        // The open board is unaffected: the org's ORG tasks still read.
+        org_tasks: await count(q, `SELECT count(*) n FROM "Task" WHERE "visibility" = 'ORG'`),
+      };
+    },
+    {
+      value: {
+        task: 0,
+        by_title: 0,
+        subtask: 0,
+        comment: 0,
+        mention: 0,
+        activity: 0,
+        collaborator: 0,
+        label: 0,
+        notification: 0,
+        org_tasks: 2,
+      },
+    },
+  );
+
+  await tcase(
+    "PC4-02",
+    "the owner, a collaborator, the creator and OWNER/ADMIN all read a private task and its children",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      await seedPrivateTask(q);
+      // u_memberA is the owner and the creator.
+      const s = { owner_and_creator: await readPrivate(q) };
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.collaborator = await readPrivate(q);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin = await readPrivate(q);
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_role = await readPrivate(q);
+      // The creator still reads it once it is neither owned by nor shared
+      // with them: hand the task to the collaborator.
+      await q(`UPDATE "Task" SET "ownerId" = 'u_bothAB' WHERE "id" = 't_priv'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.creator_only = await readPrivate(q);
+      // ... and the member who was dropped no longer does.
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.uninvolved = await readPrivate(q);
+      return s;
+    },
+    {
+      value: {
+        owner_and_creator: { task: 1, comment: 1, activity: 1, collaborator: 1 },
+        collaborator: { task: 1, comment: 1, activity: 1, collaborator: 1 },
+        admin: { task: 1, comment: 1, activity: 1, collaborator: 1 },
+        owner_role: { task: 1, comment: 1, activity: 1, collaborator: 1 },
+        creator_only: { task: 1, comment: 1, activity: 1, collaborator: 1 },
+        uninvolved: { task: 0, comment: 0, activity: 0, collaborator: 0 },
+      },
+    },
+  );
+
+  await tcase(
+    "PC4-03",
+    "a subtask always carries its parent's visibility, on insert and when the parent's flag moves",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      await seedPrivateTask(q);
+      const vis = async (id) =>
+        (await q(`SELECT "visibility" v FROM "Task" WHERE "id" = $1`, [id])).rows[0]?.v ?? null;
+      const s = {};
+      // seedPrivateTask inserts the subtask asking for ORG; the trigger wins.
+      s.inserted_asking_for_org = await vis("t_priv_sub");
+      // The parent opens up: the subtask follows.
+      await q(`UPDATE "Task" SET "visibility" = 'ORG' WHERE "id" = 't_priv'`);
+      s.after_parent_opened = await vis("t_priv_sub");
+      // And closes again.
+      await q(`UPDATE "Task" SET "visibility" = 'PRIVATE' WHERE "id" = 't_priv'`);
+      s.after_parent_closed = await vis("t_priv_sub");
+      // A subtask cannot be opened on its own.
+      await q(`UPDATE "Task" SET "visibility" = 'ORG' WHERE "id" = 't_priv_sub'`);
+      s.after_subtask_opened_alone = await vis("t_priv_sub");
+      // Re-parenting an ORG task under a private one makes it private.
+      await q(
+        `INSERT INTO "Task" ("id","organizationId","title","rank","createdById","visibility","updatedAt")
+         VALUES ('t_adopted','org_A','Adopted','b0','u_memberA','ORG',now())`,
+      );
+      await q(`UPDATE "Task" SET "parentTaskId" = 't_priv' WHERE "id" = 't_adopted'`);
+      s.after_reparenting = await vis("t_adopted");
+      return s;
+    },
+    {
+      value: {
+        inserted_asking_for_org: "PRIVATE",
+        after_parent_opened: "ORG",
+        after_parent_closed: "PRIVATE",
+        after_subtask_opened_alone: "PRIVATE",
+        after_reparenting: "PRIVATE",
+      },
+    },
+  );
+
+  await tcase(
+    "PC4-04",
+    "a member outside a private task cannot blind-write it by id, but the open board still writes",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      await seedPrivateTask(q);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      return {
+        update_private: await rc(q, `UPDATE "Task" SET "title" = 'x' WHERE "id" = 't_priv'`),
+        delete_private: await rc(q, `DELETE FROM "Task" WHERE "id" = 't_priv'`),
+        comment_on_private: await tryq(
+          q,
+          `INSERT INTO "TaskComment" ("id","organizationId","taskId","authorId","body") VALUES ('c_priv','org_A','t_priv','u_treasA','x')`,
+        ),
+        collaborator_on_private: await tryq(
+          q,
+          `INSERT INTO "TaskAssignee" ("organizationId","taskId","userId") VALUES ('org_A','t_priv','u_treasA')`,
+        ),
+        // The open board is untouched: the same statements work on an ORG task.
+        update_org_task: await rc(q, `UPDATE "Task" SET "title" = 'x' WHERE "id" = 't_A'`),
+        comment_on_org_task: await tryq(
+          q,
+          `INSERT INTO "TaskComment" ("id","organizationId","taskId","authorId","body") VALUES ('c_org','org_A','t_A','u_treasA','x')`,
+        ),
+      };
+    },
+    {
+      value: {
+        update_private: 0,
+        delete_private: 0,
+        comment_on_private: "42501",
+        collaborator_on_private: "42501",
+        update_org_task: 1,
+        comment_on_org_task: 1,
+      },
+    },
   );
 
   // ======================= Phase 7: calendar children =======================

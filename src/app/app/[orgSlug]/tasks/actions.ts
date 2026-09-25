@@ -30,7 +30,8 @@ export type { TaskActionResult, ReorderInput, SelfAssignAction } from "@/server/
 
 function refusal(error: unknown): string | null {
   if (error instanceof svc.TaskError) return error.message;
-  if (error instanceof ForbiddenError) return error.message || "You don't have permission to do that.";
+  if (error instanceof ForbiddenError)
+    return error.message || "You don't have permission to do that.";
   if (error instanceof NotFoundError) return "Not found.";
   if (error instanceof AppError) return error.message;
   return null;
@@ -146,7 +147,10 @@ export async function deleteTaskComment(orgId: string, commentId: string) {
   return run(() => deleteCommentTx(orgId, commentId));
 }
 
-export async function postWeeklyUpdate(orgId: string, input: { weekStart: string; note?: string | null }) {
+export async function postWeeklyUpdate(
+  orgId: string,
+  input: { weekStart: string; note?: string | null },
+) {
   return run(() => postWeeklyTx(orgId, input));
 }
 

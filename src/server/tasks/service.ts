@@ -6,6 +6,7 @@ import {
   Prisma,
   TaskPriority,
   TaskStatus,
+  TaskVisibility,
 } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import {
@@ -39,8 +40,17 @@ import {
   statusTransitionData,
   type StatusFields,
 } from "@/lib/tasks/status";
+import {
+  canChangeVisibility,
+  isPrivate,
+  namedAudienceIds,
+  VISIBILITY_DENIED,
+  type TaskVisibilitySubject,
+} from "@/lib/tasks/visibility";
 import type { OrgContext } from "@/server/db/context";
 import { notifyUsers } from "@/server/notifications";
+
+import { orgAdminIds } from "./visibility";
 
 import {
   buildViewerChart,
@@ -89,19 +99,35 @@ export interface TaskActionResult {
   version?: number;
   /** Above-level assignments awaiting the actor's confirmation; nothing was saved. */
   confirm?: FlagConfirmation;
+  /**
+   * C4: members named with @ in the description who are outside a private
+   * task's audience, so they were not mentioned and were not told. The UI
+   * says so and offers to add them.
+   */
+  droppedMentions?: string[];
 }
 
-export const CONFLICT_MESSAGE = "Someone else changed this task. Reload to see the latest, then try again.";
+export const CONFLICT_MESSAGE =
+  "Someone else changed this task. Reload to see the latest, then try again.";
 
 // ---- Input -----------------------------------------------------------------
 
-const idSchema = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/, "Invalid id");
+const idSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .regex(/^[A-Za-z0-9_-]+$/, "Invalid id");
 const dateKeySchema = z.string().refine(isDateKey, "Pick a valid date.");
 const STATUS_VALUES = Object.values(TaskStatus) as [TaskStatus, ...TaskStatus[]];
 const PRIORITY_VALUES = Object.values(TaskPriority) as [TaskPriority, ...TaskPriority[]];
+const VISIBILITY_VALUES = Object.values(TaskVisibility) as [TaskVisibility, ...TaskVisibility[]];
 
 const baseFields = {
-  title: z.string().trim().min(1, "Title is required").max(200, "Keep the title under 200 characters"),
+  title: z
+    .string()
+    .trim()
+    .min(1, "Title is required")
+    .max(200, "Keep the title under 200 characters"),
   description: z.string().max(20000).nullable().optional(),
   status: z.enum(STATUS_VALUES).optional(),
   blockedReason: z.string().trim().max(MAX_BLOCKED_REASON).nullable().optional(),
@@ -112,6 +138,8 @@ const baseFields = {
   ownerId: idSchema.nullable().optional(),
   assigneeIds: z.array(idSchema).max(50).optional(),
   labelIds: z.array(idSchema).max(50).optional(),
+  /** C4: ORG (the open board) or PRIVATE. A subtask follows its parent. */
+  visibility: z.enum(VISIBILITY_VALUES).optional(),
   /** The actor confirmed an above-level (flagged) assignment. */
   confirmFlagged: z.boolean().optional(),
 };
@@ -133,7 +161,7 @@ function parse<T>(schema: z.ZodType<T>, input: unknown): T {
   return parsed.data;
 }
 
-const uniq = <T,>(xs: readonly T[]): T[] => [...new Set(xs)];
+const uniq = <T>(xs: readonly T[]): T[] => [...new Set(xs)];
 
 // ---- Environment -------------------------------------------------------------
 
@@ -148,6 +176,8 @@ export interface TaskEnv {
     taskRequireDueDate: boolean;
   };
   memberIds: ReadonlySet<string>;
+  /** OWNER/ADMIN: the standing audience of every private task (C4). */
+  adminIds: readonly string[];
   now: Date;
 }
 
@@ -168,6 +198,7 @@ export async function loadTaskEnv(ctx: OrgContext, now: Date = new Date()): Prom
     where: { organizationId: ctx.organizationId },
     select: { userId: true },
   });
+  const adminIds = await orgAdminIds(ctx.db, ctx.organizationId);
   const chart = buildViewerChart(await loadChartNodes(ctx.db, ctx.organizationId), ctx.userId);
   return {
     ctx,
@@ -183,6 +214,7 @@ export async function loadTaskEnv(ctx: OrgContext, now: Date = new Date()): Prom
       reminderLeadDaysDefault: org.settings?.reminderLeadDaysDefault ?? 1,
     },
     memberIds: new Set(members.map((m) => m.userId)),
+    adminIds,
     now,
   };
 }
@@ -198,6 +230,7 @@ const subjectSelect = {
   title: true,
   description: true,
   status: true,
+  visibility: true,
   priority: true,
   dueDate: true,
   projectId: true,
@@ -240,6 +273,15 @@ function accessOf(s: Subject): TaskAccessSubject {
   };
 }
 
+function visibilityOf(s: Subject): TaskVisibilitySubject {
+  return {
+    visibility: s.visibility,
+    ownerId: s.ownerId,
+    createdById: s.createdById,
+    assigneeIds: s.assignees.map((a) => a.userId),
+  };
+}
+
 function statusFieldsOf(s: Subject): StatusFields {
   return {
     status: s.status,
@@ -249,7 +291,12 @@ function statusFieldsOf(s: Subject): StatusFields {
   };
 }
 
-function transition(prev: StatusFields, next: TaskStatus, blockedReason?: string | null, now?: Date) {
+function transition(
+  prev: StatusFields,
+  next: TaskStatus,
+  blockedReason?: string | null,
+  now?: Date,
+) {
   try {
     return statusTransitionData(prev, next, { blockedReason, now });
   } catch (error) {
@@ -261,7 +308,11 @@ function transition(prev: StatusFields, next: TaskStatus, blockedReason?: string
 // ---- The one checked assignment path ---------------------------------------------
 
 export interface AssignmentPlan {
-  ownerChange: { ownerId: string | null; previousOwnerId: string | null; classified: ClassifiedAssignment | null } | null;
+  ownerChange: {
+    ownerId: string | null;
+    previousOwnerId: string | null;
+    classified: ClassifiedAssignment | null;
+  } | null;
   add: ClassifiedAssignment[];
   remove: string[];
 }
@@ -287,12 +338,15 @@ export function planAssignment(
   change: AssignmentChange,
 ): AssignmentPlan {
   const adds = uniq(change.addAssigneeIds ?? []).filter((id) => !subject.assigneeIds.includes(id));
-  const removes = uniq(change.removeAssigneeIds ?? []).filter((id) => subject.assigneeIds.includes(id));
+  const removes = uniq(change.removeAssigneeIds ?? []).filter((id) =>
+    subject.assigneeIds.includes(id),
+  );
   const ownerChanging = change.ownerId !== undefined && change.ownerId !== subject.ownerId;
   const newOwner = ownerChanging ? (change.ownerId ?? null) : subject.ownerId;
 
   for (const userId of [...adds, ...(ownerChanging && newOwner ? [newOwner] : [])]) {
-    if (!env.memberIds.has(userId)) throw new TaskError("That person isn't a member of this organization.");
+    if (!env.memberIds.has(userId))
+      throw new TaskError("That person isn't a member of this organization.");
   }
 
   const check = checkAssignmentChange(env.actor, subject, {
@@ -328,17 +382,25 @@ export function flaggedAssignments(plan: AssignmentPlan | null): ClassifiedAssig
   return [...(owner?.flagged ? [owner] : []), ...plan.add.filter((a) => a.flagged)];
 }
 
-async function confirmationFor(env: TaskEnv, flagged: ClassifiedAssignment[]): Promise<TaskActionResult> {
+async function confirmationFor(
+  env: TaskEnv,
+  flagged: ClassifiedAssignment[],
+): Promise<TaskActionResult> {
   const ids = uniq(flagged.map((f) => f.userId));
   const users = await env.ctx.db.user.findMany({
     where: { id: { in: ids } },
     select: { id: true, name: true },
   });
   const names = new Map(users.map((u) => [u.id, u.name]));
-  return { confirm: { flagged: ids.map((userId) => ({ userId, name: names.get(userId) ?? null })) } };
+  return {
+    confirm: { flagged: ids.map((userId) => ({ userId, name: names.get(userId) ?? null })) },
+  };
 }
 
-function ownerUpdateData(env: TaskEnv, plan: AssignmentPlan | null): Prisma.TaskUncheckedUpdateManyInput {
+function ownerUpdateData(
+  env: TaskEnv,
+  plan: AssignmentPlan | null,
+): Prisma.TaskUncheckedUpdateManyInput {
   if (!plan?.ownerChange) return {};
   const c = plan.ownerChange.classified;
   return {
@@ -349,11 +411,17 @@ function ownerUpdateData(env: TaskEnv, plan: AssignmentPlan | null): Prisma.Task
   };
 }
 
-async function writeAssignees(env: TaskEnv, taskId: string, plan: AssignmentPlan | null): Promise<void> {
+async function writeAssignees(
+  env: TaskEnv,
+  taskId: string,
+  plan: AssignmentPlan | null,
+): Promise<void> {
   if (!plan) return;
   const { db, organizationId } = env.ctx;
   if (plan.remove.length > 0) {
-    await db.taskAssignee.deleteMany({ where: { organizationId, taskId, userId: { in: plan.remove } } });
+    await db.taskAssignee.deleteMany({
+      where: { organizationId, taskId, userId: { in: plan.remove } },
+    });
   }
   if (plan.add.length > 0) {
     await db.taskAssignee.createMany({
@@ -380,18 +448,33 @@ function assignmentActivity(plan: AssignmentPlan | null): ActivityRow[] {
     if (oc.ownerId) {
       rows.push({
         type: "ASSIGNED",
-        diffJson: { role: "owner", userId: oc.ownerId, from: oc.previousOwnerId, relation: oc.classified?.relation ?? null },
+        diffJson: {
+          role: "owner",
+          userId: oc.ownerId,
+          from: oc.previousOwnerId,
+          relation: oc.classified?.relation ?? null,
+        },
       });
       if (oc.classified?.flagged) {
-        rows.push({ type: "FLAGGED", diffJson: { role: "owner", userId: oc.ownerId, relation: "ABOVE" } });
+        rows.push({
+          type: "FLAGGED",
+          diffJson: { role: "owner", userId: oc.ownerId, relation: "ABOVE" },
+        });
       }
     } else if (oc.previousOwnerId) {
       rows.push({ type: "UNASSIGNED", diffJson: { role: "owner", userId: oc.previousOwnerId } });
     }
   }
   for (const a of plan.add) {
-    rows.push({ type: "ASSIGNED", diffJson: { role: "collaborator", userId: a.userId, relation: a.relation } });
-    if (a.flagged) rows.push({ type: "FLAGGED", diffJson: { role: "collaborator", userId: a.userId, relation: "ABOVE" } });
+    rows.push({
+      type: "ASSIGNED",
+      diffJson: { role: "collaborator", userId: a.userId, relation: a.relation },
+    });
+    if (a.flagged)
+      rows.push({
+        type: "FLAGGED",
+        diffJson: { role: "collaborator", userId: a.userId, relation: "ABOVE" },
+      });
   }
   for (const userId of plan.remove) {
     rows.push({ type: "UNASSIGNED", diffJson: { role: "collaborator", userId } });
@@ -420,7 +503,11 @@ function quoted(title: string): string {
   return `"${title.length > 120 ? `${title.slice(0, 119)}…` : title}"`;
 }
 
-function assignmentBody(env: TaskEnv, task: { dueDate: Date | null; priority: TaskPriority }, flagged: boolean) {
+function assignmentBody(
+  env: TaskEnv,
+  task: { dueDate: Date | null; priority: TaskPriority },
+  flagged: boolean,
+) {
   const today = localDateKey(env.now, env.org.timezone);
   const due = task.dueDate ? `Due ${formatDueKey(dueDateKey(task.dueDate), today)}` : "No due date";
   const parts = [due, `${task.priority.charAt(0)}${task.priority.slice(1).toLowerCase()} priority`];
@@ -462,18 +549,42 @@ async function notifyAssignment(
 }
 
 /**
+ * Who may be mentioned on this task, or null when anyone in the org may
+ * (C4). On a PRIVATE task a mention would otherwise put the title in front
+ * of somebody outside the audience — in the bell, in the email and in the
+ * digest — so the set is the audience itself. To mention somebody else you
+ * add them to the task first.
+ */
+function mentionAudience(env: TaskEnv, task: TaskVisibilitySubject): ReadonlySet<string> | null {
+  if (!isPrivate(task)) return null;
+  return new Set([...namedAudienceIds(task), ...env.adminIds]);
+}
+
+export interface MentionSync {
+  /** Newly mentioned people who were notified. */
+  notified: string[];
+  /** Members named in the text but outside a private task's audience. */
+  dropped: string[];
+}
+
+/**
  * Stores the @mentions in one source ('desc' or a comment id), diffed
  * against what is already stored, and notifies the newly mentioned members
- * (never the actor). Hand-typed tokens for non-members are ignored.
+ * (never the actor). Hand-typed tokens for non-members are ignored, and on a
+ * private task so is anybody outside its audience: no row, no notification,
+ * no email, and the token stays plain text in the body.
  */
 async function syncMentions(
   env: TaskEnv,
-  task: { id: string; title: string },
+  task: { id: string; title: string } & TaskVisibilitySubject,
   sourceKey: string,
   markdown: string | null,
-): Promise<string[]> {
+): Promise<MentionSync> {
   const { db, organizationId } = env.ctx;
-  const next = parseMentionIds(markdown).filter((id) => env.memberIds.has(id));
+  const audience = mentionAudience(env, task);
+  const named = parseMentionIds(markdown).filter((id) => env.memberIds.has(id));
+  const next = audience ? named.filter((id) => audience.has(id)) : named;
+  const dropped = audience ? named.filter((id) => !audience.has(id)) : [];
   const existing = (
     await db.taskMention.findMany({
       where: { organizationId, taskId: task.id, sourceKey },
@@ -500,7 +611,9 @@ async function syncMentions(
   }
   const notify = mentionsToNotify(existing, next, env.actor.userId);
   if (notify.length > 0) {
-    const excerpt = markdown ? mentionsToPlainText(markdown).replace(/\s+/g, " ").trim().slice(0, 280) : null;
+    const excerpt = markdown
+      ? mentionsToPlainText(markdown).replace(/\s+/g, " ").trim().slice(0, 280)
+      : null;
     await notifyUsers(db, organizationId, notify, {
       type: NotificationType.TASK_MENTIONED,
       title: `${actorName(env)} mentioned you on ${quoted(task.title)}`,
@@ -511,7 +624,7 @@ async function syncMentions(
       dedupeKey: `mention:${task.id}:${sourceKey}`,
     });
   }
-  return notify;
+  return { notified: notify, dropped };
 }
 
 // ---- Validation helpers ----------------------------------------------------------
@@ -530,7 +643,8 @@ async function assertLabels(env: TaskEnv, labelIds: readonly string[]): Promise<
   const count = await env.ctx.db.label.count({
     where: { organizationId: env.ctx.organizationId, id: { in: [...labelIds] } },
   });
-  if (count !== labelIds.length) throw new TaskError("One or more labels don't belong to this organization.");
+  if (count !== labelIds.length)
+    throw new TaskError("One or more labels don't belong to this organization.");
 }
 
 /** One level of nesting: the parent must be top-level and editable by the actor. */
@@ -547,7 +661,8 @@ async function loadParent(env: TaskEnv, parentTaskId: string, childId?: string):
     const children = await env.ctx.db.task.count({
       where: { organizationId: env.ctx.organizationId, parentTaskId: childId, deletedAt: null },
     });
-    if (children > 0) throw new TaskError("This task has subtasks of its own and can't become a subtask.");
+    if (children > 0)
+      throw new TaskError("This task has subtasks of its own and can't become a subtask.");
   }
   return parent;
 }
@@ -620,9 +735,19 @@ export async function createTask(env: TaskEnv, input: unknown): Promise<TaskActi
     d.blockedReason,
     env.now,
   );
-  const rank = parent ? await nextSubtaskRank(env, parent.id) : await nextRankForStatus(env, status);
+  const rank = parent
+    ? await nextSubtaskRank(env, parent.id)
+    : await nextRankForStatus(env, status);
   const priority = isIntake && !triage ? TaskPriority.MEDIUM : (d.priority ?? TaskPriority.MEDIUM);
   const oc = plan.ownerChange;
+  // C4: a subtask takes its parent's visibility (the database trigger
+  // enforces it too); a request filed into an intake queue is always open,
+  // because a queue nobody can see is not a queue.
+  const visibility = parent
+    ? parent.visibility
+    : isIntake
+      ? TaskVisibility.ORG
+      : (d.visibility ?? TaskVisibility.ORG);
 
   const task = await db.task.create({
     data: {
@@ -630,6 +755,7 @@ export async function createTask(env: TaskEnv, input: unknown): Promise<TaskActi
       title: d.title,
       description: d.description?.trim() ? d.description : null,
       ...statusData,
+      visibility,
       priority,
       dueDate: dueKey ? fromDateKey(dueKey) : null,
       projectId: project?.id ?? null,
@@ -641,8 +767,22 @@ export async function createTask(env: TaskEnv, input: unknown): Promise<TaskActi
       ownerFlagged: oc?.classified?.flagged ?? false,
       ownerAssignedById: oc?.ownerId ? env.actor.userId : null,
     },
-    select: { id: true, version: true, title: true, dueDate: true, priority: true, status: true },
+    select: {
+      id: true,
+      version: true,
+      title: true,
+      dueDate: true,
+      priority: true,
+      status: true,
+      visibility: true,
+    },
   });
+  const created: TaskVisibilitySubject = {
+    visibility: task.visibility,
+    ownerId: oc?.ownerId ?? null,
+    createdById: env.actor.userId,
+    assigneeIds: plan.add.map((a) => a.userId),
+  };
 
   if (labelIds.length > 0) {
     await db.taskLabel.createMany({
@@ -653,14 +793,28 @@ export async function createTask(env: TaskEnv, input: unknown): Promise<TaskActi
   await writeActivity(env, task.id, [
     {
       type: "CREATED",
-      diffJson: { title: task.title, ...(parent ? { parentTaskId: parent.id } : {}), ...(isIntake ? { intake: true } : {}) },
+      diffJson: {
+        title: task.title,
+        ...(parent ? { parentTaskId: parent.id } : {}),
+        ...(isIntake ? { intake: true } : {}),
+      },
     },
-    ...(status === TaskStatus.BLOCKED ? [{ type: "BLOCKED", diffJson: { reason: statusData.blockedReason } }] : []),
+    ...(status === TaskStatus.BLOCKED
+      ? [{ type: "BLOCKED", diffJson: { reason: statusData.blockedReason } }]
+      : []),
+    ...(visibility === TaskVisibility.PRIVATE
+      ? [{ type: "VISIBILITY_CHANGED", diffJson: { to: TaskVisibility.PRIVATE } }]
+      : []),
     ...assignmentActivity(plan),
   ]);
-  await syncMentions(env, task, "desc", d.description ?? null);
+  const mentions = await syncMentions(env, { ...task, ...created }, "desc", d.description ?? null);
   await notifyAssignment(env, task, plan);
-  if (isIntake && !plan.ownerChange?.ownerId && subject.triageUserId && subject.triageUserId !== env.actor.userId) {
+  if (
+    isIntake &&
+    !plan.ownerChange?.ownerId &&
+    subject.triageUserId &&
+    subject.triageUserId !== env.actor.userId
+  ) {
     // A new request lands in the triage owner's queue.
     await notifyUsers(db, organizationId, [subject.triageUserId], {
       type: NotificationType.TASK_ASSIGNED,
@@ -676,15 +830,26 @@ export async function createTask(env: TaskEnv, input: unknown): Promise<TaskActi
     db,
     env.org,
     task,
-    [...(plan.ownerChange?.ownerId ? [plan.ownerChange.ownerId] : []), ...plan.add.map((a) => a.userId)],
+    [
+      ...(plan.ownerChange?.ownerId ? [plan.ownerChange.ownerId] : []),
+      ...plan.add.map((a) => a.userId),
+    ],
     env.now,
   );
-  return { taskId: task.id, version: task.version };
+  return {
+    taskId: task.id,
+    version: task.version,
+    ...(mentions.dropped.length > 0 ? { droppedMentions: mentions.dropped } : {}),
+  };
 }
 
 // ---- Update ----------------------------------------------------------------------
 
-export async function updateTask(env: TaskEnv, taskId: string, input: unknown): Promise<TaskActionResult> {
+export async function updateTask(
+  env: TaskEnv,
+  taskId: string,
+  input: unknown,
+): Promise<TaskActionResult> {
   const d = parse(updateTaskSchema, input);
   const s = await loadSubject(env, taskId);
   return applyUpdate(env, s, d);
@@ -706,7 +871,8 @@ async function applyUpdate(
     data.title = d.title;
     fieldEdit = true;
   }
-  const nextDescription = d.description === undefined ? undefined : d.description?.trim() ? d.description : null;
+  const nextDescription =
+    d.description === undefined ? undefined : d.description?.trim() ? d.description : null;
   const descriptionChanged = nextDescription !== undefined && nextDescription !== s.description;
   if (descriptionChanged) {
     data.description = nextDescription;
@@ -716,6 +882,23 @@ async function applyUpdate(
     data.priority = d.priority;
     fieldEdit = true;
     priorityEdit = true;
+  }
+
+  // C4: visibility is not an ordinary field edit. A collaborator may edit a
+  // private task but must not be able to publish it, so only the owner, the
+  // creator or an OWNER/ADMIN flips the flag — and a subtask never flips on
+  // its own (the parent decides for the whole tree).
+  let nextVisibility = s.visibility;
+  if (d.visibility !== undefined && d.visibility !== s.visibility) {
+    if (s.parentTaskId) throw new TaskError("A subtask shares its parent task's visibility.");
+    if (!canChangeVisibility(env.actor, visibilityOf(s))) throw new TaskError(VISIBILITY_DENIED);
+    data.visibility = d.visibility;
+    nextVisibility = d.visibility;
+    activity.push({
+      type: "VISIBILITY_CHANGED",
+      diffJson: { from: s.visibility, to: d.visibility },
+    });
+    fieldEdit = true;
   }
 
   const prevDueKey = s.dueDate ? dueDateKey(s.dueDate) : null;
@@ -728,10 +911,14 @@ async function applyUpdate(
 
   const wantsStatus = d.status !== undefined ? d.status : undefined;
   const reasonChanged =
-    d.blockedReason !== undefined && (d.blockedReason?.trim() || null) !== (s.blockedReason ?? null);
+    d.blockedReason !== undefined &&
+    (d.blockedReason?.trim() || null) !== (s.blockedReason ?? null);
   let reopened = false;
   let nextStatus = s.status;
-  if ((wantsStatus !== undefined && wantsStatus !== s.status) || (reasonChanged && (wantsStatus ?? s.status) === TaskStatus.BLOCKED)) {
+  if (
+    (wantsStatus !== undefined && wantsStatus !== s.status) ||
+    (reasonChanged && (wantsStatus ?? s.status) === TaskStatus.BLOCKED)
+  ) {
     const target = wantsStatus ?? s.status;
     const sf = transition(statusFieldsOf(s), target, d.blockedReason, env.now);
     Object.assign(data, sf);
@@ -741,7 +928,8 @@ async function applyUpdate(
       activity.push({ type: "STATUS_CHANGED", diffJson: { from: s.status, to: target } });
       reopened = s.status === TaskStatus.COMPLETED;
     }
-    if (target === TaskStatus.BLOCKED) activity.push({ type: "BLOCKED", diffJson: { reason: sf.blockedReason } });
+    if (target === TaskStatus.BLOCKED)
+      activity.push({ type: "BLOCKED", diffJson: { reason: sf.blockedReason } });
   }
 
   let nextProject = s.project;
@@ -756,6 +944,10 @@ async function applyUpdate(
     if (d.parentTaskId) {
       const parent = await loadParent(env, d.parentTaskId, s.id);
       data.rank = await nextSubtaskRank(env, parent.id);
+      // The trigger would do this anyway; setting it here keeps the mention
+      // audience below in step with what is about to be written.
+      nextVisibility = parent.visibility;
+      if (parent.visibility !== s.visibility) data.visibility = parent.visibility;
     } else {
       data.rank = await nextRankForStatus(env, nextStatus);
     }
@@ -797,7 +989,13 @@ async function applyUpdate(
 
   const topLevel = nextParentId === null;
   const intake = nextProject?.isIntake ?? false;
-  if (topLevel && env.org.taskRequireOwner && !intake && plan?.ownerChange && !plan.ownerChange.ownerId) {
+  if (
+    topLevel &&
+    env.org.taskRequireOwner &&
+    !intake &&
+    plan?.ownerChange &&
+    !plan.ownerChange.ownerId
+  ) {
     throw new TaskError("Every task needs an owner.");
   }
   if (topLevel && env.org.taskRequireDueDate && dueChanged && !d.dueDate) {
@@ -829,6 +1027,7 @@ async function applyUpdate(
   await writeActivity(env, s.id, [...activity, ...assignmentActivity(plan)]);
 
   const title = (data.title as string | undefined) ?? s.title;
+  const finalOwnerId = plan?.ownerChange ? plan.ownerChange.ownerId : s.ownerId;
   const after = {
     id: s.id,
     title,
@@ -836,25 +1035,46 @@ async function applyUpdate(
     priority: (data.priority as TaskPriority | undefined) ?? s.priority,
     status: nextStatus,
   };
-  if (descriptionChanged) await syncMentions(env, after, "desc", nextDescription ?? null);
+  // The task as it now is, for the mention audience (C4).
+  const afterVisibility: TaskVisibilitySubject = {
+    visibility: nextVisibility,
+    ownerId: finalOwnerId,
+    createdById: s.createdById,
+    assigneeIds: uniq([
+      ...access.assigneeIds.filter((id) => !(plan?.remove ?? []).includes(id)),
+      ...(plan?.add ?? []).map((a) => a.userId),
+    ]),
+  };
+  let dropped: string[] = [];
+  // A task that just went private re-runs its stored mentions through the
+  // new audience, so somebody who was mentioned while it was open stops
+  // being mentioned on it (and their notification is already out of reach).
+  if (descriptionChanged || nextVisibility !== s.visibility) {
+    const sync = await syncMentions(
+      env,
+      { ...after, ...afterVisibility },
+      "desc",
+      nextDescription !== undefined ? nextDescription : s.description,
+    );
+    dropped = sync.dropped;
+  }
   await notifyAssignment(env, after, plan);
 
   // Reminders: everyone on a moved or reopened task; otherwise only the newcomers.
-  const finalOwner = plan?.ownerChange ? plan.ownerChange.ownerId : s.ownerId;
-  const finalAssignees = uniq([
-    ...access.assigneeIds.filter((id) => !(plan?.remove ?? []).includes(id)),
-    ...(plan?.add ?? []).map((a) => a.userId),
-  ]);
   const recipients =
     dueChanged || reopened
-      ? [...(finalOwner ? [finalOwner] : []), ...finalAssignees]
+      ? [...(finalOwnerId ? [finalOwnerId] : []), ...afterVisibility.assigneeIds]
       : [
           ...(plan?.ownerChange?.ownerId ? [plan.ownerChange.ownerId] : []),
           ...(plan?.add ?? []).map((a) => a.userId),
         ];
   await scheduleTaskReminders(db, env.org, after, recipients, env.now);
 
-  return { taskId: s.id, version: s.version + 1 };
+  return {
+    taskId: s.id,
+    version: s.version + 1,
+    ...(dropped.length > 0 ? { droppedMentions: dropped } : {}),
+  };
 }
 
 // ---- Quick paths (all through applyUpdate) ------------------------------------------
@@ -875,7 +1095,11 @@ export async function setTaskPriority(env: TaskEnv, taskId: string, priority: Ta
 export type SelfAssignAction = "join" | "leave" | "claim" | "release";
 
 /** The self-assign carve-out: join or leave as a collaborator, claim or release ownership. */
-export async function selfAssign(env: TaskEnv, taskId: string, action: SelfAssignAction): Promise<TaskActionResult> {
+export async function selfAssign(
+  env: TaskEnv,
+  taskId: string,
+  action: SelfAssignAction,
+): Promise<TaskActionResult> {
   const s = await loadSubject(env, taskId);
   const me = env.actor.userId;
   const current = s.assignees.map((a) => a.userId);
@@ -896,7 +1120,11 @@ export async function selfAssign(env: TaskEnv, taskId: string, action: SelfAssig
 }
 
 /** The flagged person or OWNER/ADMIN acknowledges an above-level assignment. */
-export async function acknowledgeFlag(env: TaskEnv, taskId: string, userId: string): Promise<TaskActionResult> {
+export async function acknowledgeFlag(
+  env: TaskEnv,
+  taskId: string,
+  userId: string,
+): Promise<TaskActionResult> {
   const s = await loadSubject(env, taskId);
   if (!canAcknowledgeFlag(env.actor, userId)) {
     throw new TaskError("Only the person it was assigned to or an admin can acknowledge the flag.");
@@ -915,7 +1143,8 @@ export async function acknowledgeFlag(env: TaskEnv, taskId: string, userId: stri
     data: { flagAcknowledgedAt: env.now },
   });
   if (res.count > 0) changed = true;
-  if (changed) await writeActivity(env, s.id, [{ type: "FLAG_ACKNOWLEDGED", diffJson: { userId } }]);
+  if (changed)
+    await writeActivity(env, s.id, [{ type: "FLAG_ACKNOWLEDGED", diffJson: { userId } }]);
   return { taskId: s.id };
 }
 
@@ -964,7 +1193,10 @@ export async function reorderTask(env: TaskEnv, input: unknown): Promise<TaskAct
     Object.assign(data, transition(statusFieldsOf(s), d.status, d.blockedReason, env.now));
     activity.push({ type: "STATUS_CHANGED", diffJson: { from: s.status, to: d.status } });
     if (d.status === TaskStatus.BLOCKED) {
-      activity.push({ type: "BLOCKED", diffJson: { reason: (data.blockedReason as string) ?? null } });
+      activity.push({
+        type: "BLOCKED",
+        diffJson: { reason: (data.blockedReason as string) ?? null },
+      });
     }
     reopened = s.status === TaskStatus.COMPLETED;
   }
@@ -982,10 +1214,20 @@ export async function reorderTask(env: TaskEnv, input: unknown): Promise<TaskAct
   return { taskId: s.id, version: s.version + 1 };
 }
 
-async function rebalanceColumn(env: TaskEnv, status: TaskStatus, movedTaskId: string): Promise<string> {
+async function rebalanceColumn(
+  env: TaskEnv,
+  status: TaskStatus,
+  movedTaskId: string,
+): Promise<string> {
   const { db, organizationId } = env.ctx;
   const tasks = await db.task.findMany({
-    where: { organizationId, status, parentTaskId: null, deletedAt: null, id: { not: movedTaskId } },
+    where: {
+      organizationId,
+      status,
+      parentTaskId: null,
+      deletedAt: null,
+      id: { not: movedTaskId },
+    },
     orderBy: { rank: "asc" },
     select: { id: true },
   });
@@ -1006,7 +1248,8 @@ async function loadMany(env: TaskEnv, rawIds: unknown): Promise<Subject[]> {
     where: { id: { in: ids }, organizationId: env.ctx.organizationId, deletedAt: null },
     select: subjectSelect,
   });
-  if (tasks.length !== ids.length) throw new TaskError("One or more tasks don't exist in this organization.");
+  if (tasks.length !== ids.length)
+    throw new TaskError("One or more tasks don't exist in this organization.");
   return tasks;
 }
 
@@ -1050,7 +1293,8 @@ export const bulkAssignSchema = z.object({
 export async function bulkAssign(env: TaskEnv, input: unknown): Promise<TaskActionResult> {
   const d = parse(bulkAssignSchema, input);
   const { db, organizationId } = env.ctx;
-  if (!env.memberIds.has(d.userId)) throw new TaskError("That user isn't a member of this organization.");
+  if (!env.memberIds.has(d.userId))
+    throw new TaskError("That user isn't a member of this organization.");
   const tasks = await loadMany(env, d.taskIds);
 
   const plans = tasks.map((t) => {
@@ -1092,7 +1336,10 @@ export async function bulkAssign(env: TaskEnv, input: unknown): Promise<TaskActi
         : `${actorName(env)} assigned you ${assigned.length} tasks`,
       // One line per task; the email lists every title.
       body: assigned
-        .map((a) => `${a.title}${a.dueDate ? ` (due ${formatDueKey(dueDateKey(a.dueDate), today)})` : ""}`)
+        .map(
+          (a) =>
+            `${a.title}${a.dueDate ? ` (due ${formatDueKey(dueDateKey(a.dueDate), today)})` : ""}`,
+        )
         .join("\n")
         .slice(0, 2000),
       linkUrl: single ? taskPath(env.org.slug, single.id) : `/app/${env.org.slug}/tasks?view=mine`,
@@ -1108,7 +1355,10 @@ export async function bulkDelete(env: TaskEnv, rawIds: unknown): Promise<TaskAct
   assertAllEditable(env, tasks, "delete");
   const ids = tasks.map((t) => t.id);
   await env.ctx.db.task.updateMany({
-    where: { organizationId: env.ctx.organizationId, OR: [{ id: { in: ids } }, { parentTaskId: { in: ids } }] },
+    where: {
+      organizationId: env.ctx.organizationId,
+      OR: [{ id: { in: ids } }, { parentTaskId: { in: ids } }],
+    },
     data: { deletedAt: env.now },
   });
   return {};
@@ -1146,10 +1396,16 @@ const commentBodySchema = z
 export interface CommentResult {
   error?: string;
   commentId?: string;
+  /** Members named with @ who cannot see this private task (C4). */
+  droppedMentions?: string[];
 }
 
 /** Any member may comment on a task they can see. Mentions notify; the owner and collaborators get a comment notice. */
-export async function addComment(env: TaskEnv, taskId: string, rawBody: unknown): Promise<CommentResult> {
+export async function addComment(
+  env: TaskEnv,
+  taskId: string,
+  rawBody: unknown,
+): Promise<CommentResult> {
   const body = parse(commentBodySchema, rawBody);
   const s = await loadSubject(env, taskId);
   const { db, organizationId } = env.ctx;
@@ -1158,10 +1414,13 @@ export async function addComment(env: TaskEnv, taskId: string, rawBody: unknown)
     select: { id: true },
   });
   await writeActivity(env, s.id, [{ type: "COMMENTED", diffJson: { commentId: comment.id } }]);
-  const mentioned = await syncMentions(env, s, comment.id, body);
-  const watchers = uniq([...(s.ownerId ? [s.ownerId] : []), ...s.assignees.map((a) => a.userId)]).filter(
-    (id) => id !== env.actor.userId && !mentioned.includes(id),
-  );
+  const mentions = await syncMentions(env, { ...s, ...visibilityOf(s) }, comment.id, body);
+  // The owner and the collaborators are inside a private task's audience by
+  // definition, so this notice never needs its own filter.
+  const watchers = uniq([
+    ...(s.ownerId ? [s.ownerId] : []),
+    ...s.assignees.map((a) => a.userId),
+  ]).filter((id) => id !== env.actor.userId && !mentions.notified.includes(id));
   if (watchers.length > 0) {
     await notifyUsers(db, organizationId, watchers, {
       type: NotificationType.TASK_COMMENTED,
@@ -1172,13 +1431,35 @@ export async function addComment(env: TaskEnv, taskId: string, rawBody: unknown)
       actorId: env.actor.userId,
     });
   }
-  return { commentId: comment.id };
+  return {
+    commentId: comment.id,
+    ...(mentions.dropped.length > 0 ? { droppedMentions: mentions.dropped } : {}),
+  };
 }
 
 async function loadComment(env: TaskEnv, commentId: string) {
   const comment = await env.ctx.db.taskComment.findFirst({
-    where: { id: parse(idSchema, commentId), organizationId: env.ctx.organizationId, deletedAt: null },
-    select: { id: true, authorId: true, taskId: true, task: { select: { id: true, title: true, deletedAt: true } } },
+    where: {
+      id: parse(idSchema, commentId),
+      organizationId: env.ctx.organizationId,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      authorId: true,
+      taskId: true,
+      task: {
+        select: {
+          id: true,
+          title: true,
+          deletedAt: true,
+          visibility: true,
+          ownerId: true,
+          createdById: true,
+          assignees: { select: { userId: true } },
+        },
+      },
+    },
   });
   if (!comment || comment.task.deletedAt) throw new TaskError("Comment not found.");
   if (comment.authorId !== env.actor.userId && !env.actor.isAdmin) {
@@ -1187,21 +1468,36 @@ async function loadComment(env: TaskEnv, commentId: string) {
   return comment;
 }
 
-export async function editComment(env: TaskEnv, commentId: string, rawBody: unknown): Promise<CommentResult> {
+export async function editComment(
+  env: TaskEnv,
+  commentId: string,
+  rawBody: unknown,
+): Promise<CommentResult> {
   const body = parse(commentBodySchema, rawBody);
   const c = await loadComment(env, commentId);
   await env.ctx.db.taskComment.updateMany({
     where: { id: c.id, organizationId: env.ctx.organizationId },
     data: { body, editedAt: env.now },
   });
-  await syncMentions(env, c.task, c.id, body);
-  return { commentId: c.id };
+  const mentions = await syncMentions(
+    env,
+    { ...c.task, assigneeIds: c.task.assignees.map((a) => a.userId) },
+    c.id,
+    body,
+  );
+  return {
+    commentId: c.id,
+    ...(mentions.dropped.length > 0 ? { droppedMentions: mentions.dropped } : {}),
+  };
 }
 
 export async function deleteComment(env: TaskEnv, commentId: string): Promise<CommentResult> {
   const c = await loadComment(env, commentId);
   const { db, organizationId } = env.ctx;
-  await db.taskComment.updateMany({ where: { id: c.id, organizationId }, data: { deletedAt: env.now } });
+  await db.taskComment.updateMany({
+    where: { id: c.id, organizationId },
+    data: { deletedAt: env.now },
+  });
   await db.taskMention.deleteMany({ where: { organizationId, taskId: c.taskId, sourceKey: c.id } });
   return { commentId: c.id };
 }

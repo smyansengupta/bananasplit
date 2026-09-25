@@ -296,6 +296,17 @@ enum TaskStatus {
   COMPLETED
 }
 
+/// Who may read a task (C4). ORG is the default: the board is open, every
+/// member sees every task. PRIVATE narrows it to the task's own people —
+/// its owner, its collaborators, its creator, and org OWNER/ADMIN — and the
+/// RLS SELECT policy on Task (and on its comments, mentions, activity,
+/// collaborators and labels) enforces that in the database. A subtask always
+/// carries its parent's visibility; a database trigger keeps them equal.
+enum TaskVisibility {
+  ORG
+  PRIVATE
+}
+
 enum TaskPriority {
   LOW
   MEDIUM
@@ -332,6 +343,10 @@ model Task {
   title             String
   description       String?
   status            TaskStatus          @default(NOT_STARTED)
+  /// C4: ORG (everyone in the org) or PRIVATE (the task's own people plus
+  /// OWNER/ADMIN). A subtask always equals its parent; the
+  /// task_visibility_inherit trigger enforces that on both sides.
+  visibility        TaskVisibility      @default(ORG)
   priority          TaskPriority        @default(MEDIUM)
   dueDate           DateTime?
   /// Fractional-indexing rank string for kanban ordering within a status column.
@@ -378,6 +393,8 @@ model Task {
   @@index([organizationId, ownerId, deletedAt, status])
   @@index([organizationId, dueDate])
   @@index([organizationId, completedAt])
+  // C4: the "Private only" filter, and the RLS predicate's cheap first test.
+  @@index([organizationId, visibility])
 }
 
 /// How an assignee (or owner) relates to the assigner in the published org

@@ -13,12 +13,11 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { useBlockedReason } from "@/components/tasks/prompts";
 import { TaskCard } from "@/components/tasks/task-card";
-import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import { useTasks } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
 import { TaskStatus } from "@/generated/prisma/enums";
@@ -44,14 +43,19 @@ export function KanbanBoard({
   initialTasks,
   queryKey,
   olderCompleted,
-  showAllHref,
+  showAll,
+  todayKey,
 }: {
   initialTasks: TaskItem[];
   queryKey: readonly unknown[];
   olderCompleted: number;
-  showAllHref: string | null;
+  showAll: boolean;
+  todayKey: string;
 }) {
-  const { org, announce } = useTasks();
+  const { org, announce, showTask, newTask } = useTasks();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [blockedPrompt, askReason] = useBlockedReason();
   const { data: tasks = initialTasks } = useQuery({
@@ -68,11 +72,12 @@ export function KanbanBoard({
   }, [initialTasks, queryClient, queryKey]);
 
   const [activeTask, setActiveTask] = useState<TaskItem | null>(null);
-  const [detail, setDetail] = useState<{ open: boolean; taskId: string | null; defaultStatus?: TaskStatus }>({
-    open: false,
-    taskId: null,
-  });
-  const detailTask = detail.taskId ? (tasks.find((t) => t.id === detail.taskId) ?? null) : null;
+
+  function showOlderCompleted() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("done", "all");
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -122,7 +127,8 @@ export function KanbanBoard({
       if (idx !== -1) insertIndex = idx;
     }
     const beforeTask = insertIndex > 0 ? targetColumnTasks[insertIndex - 1] : null;
-    const afterTask = insertIndex < targetColumnTasks.length ? targetColumnTasks[insertIndex] : null;
+    const afterTask =
+      insertIndex < targetColumnTasks.length ? targetColumnTasks[insertIndex] : null;
     if (dragged.status === targetStatus && beforeTask?.id === dragged.id) return;
 
     let blockedReason: string | null = null;
@@ -185,35 +191,37 @@ export function KanbanBoard({
         onDragEnd={(e) => void handleDragEnd(e)}
         onDragCancel={() => setActiveTask(null)}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-4 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
           {COLUMNS.map((col) => (
             <KanbanColumn
               key={col.status}
               id={col.status}
               title={col.title}
               tasks={columns[col.status]}
-              todayKey={org.todayKey}
-              onOpenTask={(taskId) => setDetail({ open: true, taskId })}
-              onAddTask={() => setDetail({ open: true, taskId: null, defaultStatus: col.status })}
+              todayKey={todayKey}
+              onOpenTask={(taskId) => {
+                const found = tasks.find((t) => t.id === taskId);
+                if (found) showTask(found);
+              }}
+              onAddTask={() => newTask({ status: col.status })}
               footer={
-                col.status === TaskStatus.COMPLETED && showAllHref && olderCompleted > 0 ? (
-                  <Link href={showAllHref} className="text-muted-foreground hover:text-foreground block px-1 text-xs">
+                col.status === TaskStatus.COMPLETED && !showAll && olderCompleted > 0 ? (
+                  <button
+                    type="button"
+                    onClick={showOlderCompleted}
+                    className="text-muted-foreground hover:text-foreground block w-full rounded px-1 py-1 text-left text-xs underline-offset-4 hover:underline"
+                  >
                     Show {olderCompleted} older completed
-                  </Link>
+                  </button>
                 ) : null
               }
             />
           ))}
         </div>
-        <DragOverlay>{activeTask && <TaskCard task={activeTask} todayKey={org.todayKey} />}</DragOverlay>
+        <DragOverlay>
+          {activeTask && <TaskCard task={activeTask} todayKey={todayKey} />}
+        </DragOverlay>
       </DndContext>
-
-      <TaskDetailDialog
-        open={detail.open}
-        onOpenChange={(open) => setDetail((s) => ({ ...s, open }))}
-        task={detailTask}
-        defaults={{ status: detail.defaultStatus }}
-      />
     </>
   );
 }

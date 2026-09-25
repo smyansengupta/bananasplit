@@ -8,9 +8,14 @@ import { useMemo, useState, useTransition } from "react";
 import { useBlockedReason, useConfirmFlagged } from "@/components/tasks/prompts";
 import { QuickPriority, QuickStatus } from "@/components/tasks/quick-controls";
 import { STATUS_LABELS } from "@/components/tasks/status-select";
-import { DueLabel, FlagBadge, isTaskFlagged } from "@/components/tasks/task-badges";
-import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
-import { accessSubjectOf, useTasks } from "@/components/tasks/tasks-context";
+import {
+  DueLabel,
+  FlagBadge,
+  PrivateMark,
+  isTaskFlagged,
+  isTaskPrivate,
+} from "@/components/tasks/task-badges";
+import { accessSubjectOf, useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,7 +57,39 @@ import { bulkAssign, bulkDelete, bulkUpdateStatus } from "../actions";
 
 type SortKey = "title" | "dueDate" | "priority" | "status";
 const PRIORITY_RANK: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
-const COLUMN_KEYS = ["owner", "involved", "creator", "project", "labels", "priority", "dueDate"] as const;
+
+/**
+ * The table is the one layout that cannot shed columns on a phone and stay
+ * itself — sorting, bulk-select and the column chooser are the point of it.
+ * So it scrolls sideways, and the checkbox and the title stay pinned to the
+ * left edge while it does: you can always see which row you are changing,
+ * and the pinned edge is the cue that there is more to the right.
+ *
+ * `PINNED_*` keep the header, the body and the subtask rows on the same two
+ * offsets. `w-10` on the checkbox column is where `left-10` comes from.
+ */
+const PINNED_CELL = "bg-background sticky z-20 group-hover:bg-muted/50";
+const PINNED_HEAD = "bg-background sticky z-30";
+/** 3rem, and `left-12` on the title is that same 3rem. */
+const PINNED_CHECKBOX = "left-0 w-12 min-w-12";
+const PINNED_TITLE = "left-12 w-[min(58vw,28rem)] max-w-[min(58vw,28rem)] border-r";
+/**
+ * Chrome will not paint a `position: sticky` cell reliably above a table
+ * that collapses its borders — the scrolled cells bleed through it. So this
+ * one table separates them and draws the row rules on the cells instead.
+ */
+const PINNABLE_TABLE =
+  "border-separate border-spacing-0 [&_td]:border-b [&_th]:border-b " +
+  "[&_tbody_tr:last-child_td]:border-b-0";
+const COLUMN_KEYS = [
+  "owner",
+  "involved",
+  "creator",
+  "project",
+  "labels",
+  "priority",
+  "dueDate",
+] as const;
 type ColumnKey = (typeof COLUMN_KEYS)[number];
 const COLUMN_LABELS: Record<ColumnKey, string> = {
   owner: "Owner",
@@ -75,7 +112,8 @@ export function TaskTable({
   page: number;
   pageSize: number;
 }) {
-  const { org, viewer, actor, members, memberById, announce } = useTasks();
+  const { org, viewer, actor, members, memberById, announce, showTask, newTask } = useTasks();
+  const ws = useWorkspace();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -88,21 +126,20 @@ export function TaskTable({
   const [visible, setVisible] = useState<Record<ColumnKey, boolean>>({
     owner: true,
     involved: false,
-    creator: true,
+    creator: false,
     project: true,
     labels: true,
     priority: true,
     dueDate: true,
   });
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const openTask = openTaskId ? (tasks.find((t) => t.id === openTaskId) ?? null) : null;
 
   const sorted = useMemo(() => {
     if (!sortKey) return tasks;
     const factor = sortDir === "asc" ? 1 : -1;
     return [...tasks].sort((a, b) => {
       if (sortKey === "title") return factor * a.title.localeCompare(b.title);
-      if (sortKey === "priority") return factor * (PRIORITY_RANK[a.priority]! - PRIORITY_RANK[b.priority]!);
+      if (sortKey === "priority")
+        return factor * (PRIORITY_RANK[a.priority]! - PRIORITY_RANK[b.priority]!);
       if (sortKey === "status") return factor * a.status.localeCompare(b.status);
       const at = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
       const bt = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
@@ -153,7 +190,9 @@ export function TaskTable({
       confirmed = await confirmFlagged([memberById.get(userId)?.name ?? "This person"]);
       if (!confirmed) return;
     }
-    runBulk(() => bulkAssign(org.id, [...selected], userId, { role: "owner", confirmFlagged: confirmed }));
+    runBulk(() =>
+      bulkAssign(org.id, [...selected], userId, { role: "owner", confirmFlagged: confirmed }),
+    );
   }
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -169,46 +208,55 @@ export function TaskTable({
     <div className="space-y-3">
       {blockedPrompt}
       {confirmElement}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {selected.size > 0 && (
-            <>
-              <span className="text-muted-foreground text-sm">{selected.size} selected</span>
-              <Select onValueChange={(s) => void bulkStatus(s as TaskStatus)} disabled={isPending}>
-                <SelectTrigger className="h-8 w-40">
-                  <SelectValue placeholder="Change status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.values(TaskStatus).map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {STATUS_LABELS[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select onValueChange={(u) => void bulkOwner(u)} disabled={isPending}>
-                <SelectTrigger className="h-8 w-44">
-                  <SelectValue placeholder="Set owner" />
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.name ?? "Member"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={isPending}
-                onClick={() => runBulk(() => bulkDelete(org.id, [...selected]))}
-              >
-                Delete
-              </Button>
-            </>
-          )}
+      {selected.size > 0 && (
+        <div
+          role="toolbar"
+          aria-label="Actions for the selected tasks"
+          className="bg-popover ring-border fixed inset-x-4 bottom-4 z-40 flex flex-wrap items-center gap-2 rounded-xl p-2 shadow-lg ring-1 sm:inset-x-auto sm:left-1/2 sm:w-auto sm:-translate-x-1/2"
+        >
+          <span className="ps-1.5 text-sm font-medium">{selected.size} selected</span>
+          <Select onValueChange={(s) => void bulkStatus(s as TaskStatus)} disabled={isPending}>
+            <SelectTrigger className="h-8 w-40">
+              <SelectValue placeholder="Change status" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.values(TaskStatus).map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select onValueChange={(u) => void bulkOwner(u)} disabled={isPending}>
+            <SelectTrigger className="h-8 w-44">
+              <SelectValue placeholder="Set owner" />
+            </SelectTrigger>
+            <SelectContent>
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name ?? "Member"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={isPending}
+            onClick={() => runBulk(() => bulkDelete(org.id, [...selected]))}
+          >
+            Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            Cancel
+          </Button>
         </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-muted-foreground text-sm">
+          {total === 0 ? "No tasks" : `${total} task${total === 1 ? "" : "s"}`}
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -230,28 +278,55 @@ export function TaskTable({
         </DropdownMenu>
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
-        <Table>
+      <div className="rounded-md border">
+        <Table className={PINNABLE_TABLE}>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">
+              <TableHead className={cn(PINNED_HEAD, PINNED_CHECKBOX)}>
                 <Checkbox
                   checked={selected.size > 0 && selected.size === tasks.length}
                   onCheckedChange={() =>
-                    setSelected((prev) => (prev.size === tasks.length ? new Set() : new Set(tasks.map((t) => t.id))))
+                    setSelected((prev) =>
+                      prev.size === tasks.length ? new Set() : new Set(tasks.map((t) => t.id)),
+                    )
                   }
                   aria-label="Select all tasks on this page"
                 />
               </TableHead>
-              <SortableHead label="Title" sortKey="title" active={sortKey} dir={sortDir} onClick={toggleSort} />
-              <SortableHead label="Status" sortKey="status" active={sortKey} dir={sortDir} onClick={toggleSort} />
+              <SortableHead
+                label="Title"
+                sortKey="title"
+                active={sortKey}
+                dir={sortDir}
+                onClick={toggleSort}
+                className={cn(PINNED_HEAD, PINNED_TITLE)}
+              />
+              <SortableHead
+                label="Status"
+                sortKey="status"
+                active={sortKey}
+                dir={sortDir}
+                onClick={toggleSort}
+              />
               {visible.owner && <TableHead>Owner</TableHead>}
               {visible.involved && <TableHead>Also involved</TableHead>}
               {visible.priority && (
-                <SortableHead label="Priority" sortKey="priority" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortableHead
+                  label="Priority"
+                  sortKey="priority"
+                  active={sortKey}
+                  dir={sortDir}
+                  onClick={toggleSort}
+                />
               )}
               {visible.dueDate && (
-                <SortableHead label="Due" sortKey="dueDate" active={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortableHead
+                  label="Due"
+                  sortKey="dueDate"
+                  active={sortKey}
+                  dir={sortDir}
+                  onClick={toggleSort}
+                />
               )}
               {visible.labels && <TableHead>Labels</TableHead>}
               {visible.project && <TableHead>Project</TableHead>}
@@ -261,8 +336,34 @@ export function TaskTable({
           <TableBody>
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={colSpan} className="text-muted-foreground py-10 text-center">
-                  No tasks match these filters.
+                <TableCell colSpan={colSpan} className="py-12 text-center">
+                  <p className="text-sm font-medium">
+                    {ws.filterCount > 0 ? "No tasks match these filters" : "No tasks here yet"}
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    {ws.filterCount > 0
+                      ? "Remove one of the filters above to widen the search."
+                      : "The table lists every task in the club, 50 to a page."}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3"
+                    onClick={() =>
+                      ws.filterCount > 0
+                        ? ws.setFilters({
+                            status: undefined,
+                            labelId: undefined,
+                            q: undefined,
+                            flagged: false,
+                            blockers: false,
+                            visibility: undefined,
+                          })
+                        : newTask()
+                    }
+                  >
+                    {ws.filterCount > 0 ? "Clear filters" : "New task"}
+                  </Button>
                 </TableCell>
               </TableRow>
             )}
@@ -270,19 +371,27 @@ export function TaskTable({
               const access = accessSubjectOf(task);
               const editable = canEditTask(actor, access);
               const isExpanded = expanded.has(task.id);
-              const doneSubtasks = task.subtasks.filter((s) => s.status === TaskStatus.COMPLETED).length;
+              const doneSubtasks = task.subtasks.filter(
+                (s) => s.status === TaskStatus.COMPLETED,
+              ).length;
               return (
                 <FragmentRows key={task.id}>
-                  <TableRow className="cursor-pointer" onClick={() => setOpenTaskId(task.id)}>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableRow
+                    className="hover:bg-muted/50 group cursor-pointer"
+                    onClick={() => showTask(task)}
+                  >
+                    <TableCell
+                      className={cn(PINNED_CELL, PINNED_CHECKBOX)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Checkbox
                         checked={selected.has(task.id)}
                         onCheckedChange={() => toggleSelected(task.id)}
                         aria-label={`Select ${task.title}`}
                       />
                     </TableCell>
-                    <TableCell className="max-w-md">
-                      <div className="flex items-center gap-1">
+                    <TableCell className={cn(PINNED_CELL, PINNED_TITLE)}>
+                      <div className="flex min-w-0 items-center gap-1">
                         {task.subtasks.length > 0 ? (
                           <button
                             type="button"
@@ -295,21 +404,26 @@ export function TaskTable({
                                 return next;
                               });
                             }}
-                            className="text-muted-foreground"
+                            className="text-muted-foreground shrink-0"
                             aria-label={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
                           >
-                            {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                            {isExpanded ? (
+                              <ChevronDown className="size-4" />
+                            ) : (
+                              <ChevronRight className="size-4" />
+                            )}
                           </button>
                         ) : (
-                          <span className="w-4" />
+                          <span className="w-4 shrink-0" />
                         )}
+                        {isTaskPrivate(task) && <PrivateMark />}
                         <span className="truncate">{task.title}</span>
                         {task.subtasks.length > 0 && (
-                          <span className="text-muted-foreground text-xs">
+                          <span className="text-muted-foreground shrink-0 text-xs">
                             ({doneSubtasks}/{task.subtasks.length})
                           </span>
                         )}
-                        {isTaskFlagged(task) && <FlagBadge className="ml-1" />}
+                        {isTaskFlagged(task) && <FlagBadge className="ml-1 shrink-0" />}
                       </div>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -333,19 +447,28 @@ export function TaskTable({
                           {task.assignees.map((a) => (
                             <UserAvatar key={a.userId} user={a.user} size="xs" />
                           ))}
-                          {task.assignees.length === 0 && <span className="text-muted-foreground">–</span>}
+                          {task.assignees.length === 0 && (
+                            <span className="text-muted-foreground">–</span>
+                          )}
                         </span>
                       </TableCell>
                     )}
                     {visible.priority && (
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <QuickPriority task={task} disabled={!editable || !canTriage(actor, access)} />
+                        <QuickPriority
+                          task={task}
+                          disabled={!editable || !canTriage(actor, access)}
+                        />
                       </TableCell>
                     )}
                     {visible.dueDate && (
                       <TableCell>
                         {task.dueDate ? (
-                          <DueLabel dueDate={task.dueDate} todayKey={org.todayKey} done={task.status === "COMPLETED"} />
+                          <DueLabel
+                            dueDate={task.dueDate}
+                            todayKey={org.todayKey}
+                            done={task.status === "COMPLETED"}
+                          />
                         ) : (
                           <span className="text-muted-foreground">–</span>
                         )}
@@ -355,7 +478,11 @@ export function TaskTable({
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {task.labels.map(({ label }) => (
-                            <Badge key={label.id} style={{ backgroundColor: label.color, color: "white" }} className="border-0">
+                            <Badge
+                              key={label.id}
+                              style={{ backgroundColor: label.color, color: "white" }}
+                              className="border-0"
+                            >
                               {label.name}
                             </Badge>
                           ))}
@@ -374,16 +501,37 @@ export function TaskTable({
                   </TableRow>
                   {isExpanded &&
                     task.subtasks.map((s) => (
+                      // Three cells, not two, so a subtask lines up with the
+                      // pinned columns above it: nothing, its title, then its
+                      // details across the rest.
                       <TableRow key={s.id} className="bg-muted/30">
-                        <TableCell />
-                        <TableCell colSpan={colSpan - 1}>
-                          <div className="flex items-center gap-2 pl-6 text-sm">
-                            <span className={cn(s.status === TaskStatus.COMPLETED && "text-muted-foreground line-through")}>
+                        <TableCell className={cn("bg-muted/30 sticky z-20", PINNED_CHECKBOX)} />
+                        <TableCell className={cn("bg-muted/30 sticky z-20", PINNED_TITLE)}>
+                          <div className="flex min-w-0 items-center gap-1 pl-6 text-sm">
+                            <span
+                              className={cn(
+                                "truncate",
+                                s.status === TaskStatus.COMPLETED &&
+                                  "text-muted-foreground line-through",
+                              )}
+                            >
                               {s.title}
                             </span>
-                            <span className="text-muted-foreground text-xs">{STATUS_LABELS[s.status]}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell colSpan={colSpan - 2}>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground text-xs">
+                              {STATUS_LABELS[s.status]}
+                            </span>
                             {s.owner && <UserAvatar user={s.owner} size="xs" />}
-                            {s.dueDate && <DueLabel dueDate={s.dueDate} todayKey={org.todayKey} className="text-xs" />}
+                            {s.dueDate && (
+                              <DueLabel
+                                dueDate={s.dueDate}
+                                todayKey={org.todayKey}
+                                className="text-xs"
+                              />
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -397,12 +545,18 @@ export function TaskTable({
 
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">
-          {total === 0 ? "No tasks" : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+          {total === 0
+            ? "No tasks"
+            : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
         </span>
         {pages > 1 && (
           <div className="flex items-center gap-2">
             <Button asChild variant="outline" size="sm" disabled={page <= 1}>
-              <Link href={pageHref(page - 1)} aria-disabled={page <= 1} className={cn(page <= 1 && "pointer-events-none opacity-50")}>
+              <Link
+                href={pageHref(page - 1)}
+                aria-disabled={page <= 1}
+                className={cn(page <= 1 && "pointer-events-none opacity-50")}
+              >
                 Previous
               </Link>
             </Button>
@@ -421,8 +575,6 @@ export function TaskTable({
           </div>
         )}
       </div>
-
-      <TaskDetailDialog open={openTaskId !== null} onOpenChange={(o) => !o && setOpenTaskId(null)} task={openTask} />
     </div>
   );
 }
@@ -437,18 +589,26 @@ function SortableHead({
   active,
   dir,
   onClick,
+  className,
 }: {
   label: string;
   sortKey: SortKey;
   active: SortKey | null;
   dir: "asc" | "desc";
   onClick: (key: SortKey) => void;
+  className?: string;
 }) {
   return (
-    <TableHead>
-      <button type="button" onClick={() => onClick(sortKey)} className="hover:text-foreground flex items-center gap-1">
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className="hover:text-foreground flex items-center gap-1"
+      >
         {label}
-        {active === sortKey && <ChevronDown className={cn("size-3", dir === "asc" && "rotate-180")} aria-hidden="true" />}
+        {active === sortKey && (
+          <ChevronDown className={cn("size-3", dir === "asc" && "rotate-180")} aria-hidden="true" />
+        )}
       </button>
     </TableHead>
   );

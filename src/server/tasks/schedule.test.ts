@@ -44,7 +44,9 @@ describe("digest and Sunday-reminder triggers", () => {
 
   it("the Sunday reminder fires only on Sunday at 18:00 local", () => {
     const sunday = (d: string) => weekdayOfKey(d) === 0;
-    expect(nextOccurrence(zonedInstant("2026-09-27", 18, NY), NY, 18, "hourly", sunday)?.dateKey).toBe("2026-09-27");
+    expect(
+      nextOccurrence(zonedInstant("2026-09-27", 18, NY), NY, 18, "hourly", sunday)?.dateKey,
+    ).toBe("2026-09-27");
     expect(nextOccurrence(zonedInstant("2026-09-26", 18, NY), NY, 18, "hourly", sunday)).toBeNull();
     // The daily fallback on Sunday morning schedules the evening reminder.
     expect(nextOccurrence(zonedInstant("2026-09-27", 6, NY), NY, 18, "daily", sunday)).toEqual({

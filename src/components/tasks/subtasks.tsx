@@ -69,7 +69,13 @@ export function Subtasks({
       if (!confirmed) return;
     }
     startTransition(async () => {
-      const input = { title: text, parentTaskId: parentId, ownerId, dueDate: dueDate || null, confirmFlagged: confirmed };
+      const input = {
+        title: text,
+        parentTaskId: parentId,
+        ownerId,
+        dueDate: dueDate || null,
+        confirmFlagged: confirmed,
+      };
       let result = await createTask(org.id, input);
       if ("confirm" in result && result.confirm) {
         const ok = await confirmFlagged(result.confirm.flagged.map((f) => f.name ?? "Someone"));
@@ -119,14 +125,23 @@ export function Subtasks({
                 >
                   {s.title}
                 </button>
-                {s.status === TaskStatus.BLOCKED && <span className="text-destructive text-xs">Blocked</span>}
-                <DueLabel dueDate={s.dueDate} todayKey={org.todayKey} done={isDone} className="text-muted-foreground text-xs" />
+                {s.status === TaskStatus.BLOCKED && (
+                  <span className="text-destructive text-xs">Blocked</span>
+                )}
+                <DueLabel
+                  dueDate={s.dueDate}
+                  todayKey={org.todayKey}
+                  done={isDone}
+                  className="text-muted-foreground text-xs"
+                />
                 {owner ? (
                   <UserAvatar user={owner} size="xs" />
                 ) : (
                   <span className="text-muted-foreground text-xs">No owner</span>
                 )}
-                {onOpen && <ChevronRight className="text-muted-foreground size-4" aria-hidden="true" />}
+                {onOpen && (
+                  <ChevronRight className="text-muted-foreground size-4" aria-hidden="true" />
+                )}
               </li>
             );
           })}
@@ -155,7 +170,13 @@ export function Subtasks({
             className="h-8 w-36"
             onChange={(e) => setDueDate(e.target.value)}
           />
-          <Button type="button" size="sm" variant="outline" onClick={() => void add()} disabled={isPending || !title.trim()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void add()}
+            disabled={isPending || !title.trim()}
+          >
             Add
           </Button>
         </div>

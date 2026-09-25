@@ -113,7 +113,13 @@ export async function scheduleOrgTaskJobs(
     const tzOf = new Map(members.map((m) => [m.userId, effectiveTimezone(m.user, org)]));
     for (const lead of leads) {
       const tz = tzOf.get(lead.userId) ?? effectiveTimezone(null, org);
-      const at = nextOccurrence(now, tz, WEEKLY_REMINDER_HOUR_LOCAL, mode, (d) => weekdayOfKey(d) === 0);
+      const at = nextOccurrence(
+        now,
+        tz,
+        WEEKLY_REMINDER_HOUR_LOCAL,
+        mode,
+        (d) => weekdayOfKey(d) === 0,
+      );
       if (!at) continue;
       const weekStart = weekStartKey(new Date(at.runAt.getTime()), tz);
       const posted = await db.weeklyUpdate.findFirst({

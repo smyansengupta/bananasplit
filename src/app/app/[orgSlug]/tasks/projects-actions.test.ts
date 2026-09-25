@@ -7,9 +7,8 @@ vi.mock("@/server/db/context", async () =>
 
 const { fake, resetFake } = await import("@/test/fake-context");
 const { Role } = await import("@/generated/prisma/enums");
-const { archiveProject, createProject, setProjectIntake, unarchiveProject } = await import(
-  "./projects-actions"
-);
+const { archiveProject, createProject, setProjectIntake, unarchiveProject } =
+  await import("./projects-actions");
 
 function makeDb() {
   return {

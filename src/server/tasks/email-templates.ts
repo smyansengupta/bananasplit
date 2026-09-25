@@ -73,7 +73,9 @@ export function taskAssignedEmail(input: {
     subject: `${input.actorName} ${verb}: ${input.task.title}`,
     eyebrow: input.orgName,
     bodyHtml: paragraph(lead) + (input.flagged ? note(FLAGGED_NOTE) : "") + factsHtml(input.task),
-    bodyText: [lead, input.flagged ? FLAGGED_NOTE : null, factsText(input.task)].filter(Boolean).join("\n\n"),
+    bodyText: [lead, input.flagged ? FLAGGED_NOTE : null, factsText(input.task)]
+      .filter(Boolean)
+      .join("\n\n"),
     cta: { label: "Open task", url: input.url },
     footer: FOOTER,
   });
@@ -97,7 +99,11 @@ export function taskBulkAssignedEmail(input: {
       paragraph(lead) +
       (input.flagged ? note(FLAGGED_NOTE) : "") +
       `<ul style="margin:0 0 12px;padding-left:20px">${list}</ul>`,
-    bodyText: [lead, input.flagged ? FLAGGED_NOTE : null, input.items.map((t) => `- ${t}`).join("\n")]
+    bodyText: [
+      lead,
+      input.flagged ? FLAGGED_NOTE : null,
+      input.items.map((t) => `- ${t}`).join("\n"),
+    ]
       .filter(Boolean)
       .join("\n\n"),
     cta: { label: "Open My Tasks", url: input.url },
@@ -140,7 +146,9 @@ export function taskMentionedEmail(input: {
     subject: `${input.actorName} mentioned you: ${input.task.title}`,
     eyebrow: input.orgName,
     bodyHtml: paragraph(lead) + quote + factsHtml(input.task),
-    bodyText: [lead, input.excerpt ? `"${input.excerpt}"` : null, factsText(input.task)].filter(Boolean).join("\n\n"),
+    bodyText: [lead, input.excerpt ? `"${input.excerpt}"` : null, factsText(input.task)]
+      .filter(Boolean)
+      .join("\n\n"),
     cta: { label: "Open task", url: input.url },
     footer: FOOTER,
   });
@@ -161,7 +169,9 @@ export function taskCommentedEmail(input: {
     subject: `New comment: ${input.task.title}`,
     eyebrow: input.orgName,
     bodyHtml: paragraph(lead) + quote + factsHtml(input.task),
-    bodyText: [lead, input.excerpt ? `"${input.excerpt}"` : null, factsText(input.task)].filter(Boolean).join("\n\n"),
+    bodyText: [lead, input.excerpt ? `"${input.excerpt}"` : null, factsText(input.task)]
+      .filter(Boolean)
+      .join("\n\n"),
     cta: { label: "Open task", url: input.url },
     footer: FOOTER,
   });
@@ -235,15 +245,22 @@ export function taskDigestEmail(input: {
     html.push(
       `<ul style="margin:0 0 8px;padding-left:20px">${items
         .map((i) => {
-          const due = i.dueLabel ? ` <span style="color:#71717a">&middot; ${escapeHtml(i.dueLabel)}</span>` : "";
-          const extra = i.note ? ` <span style="color:#71717a">&middot; ${escapeHtml(i.note)}</span>` : "";
+          const due = i.dueLabel
+            ? ` <span style="color:#71717a">&middot; ${escapeHtml(i.dueLabel)}</span>`
+            : "";
+          const extra = i.note
+            ? ` <span style="color:#71717a">&middot; ${escapeHtml(i.note)}</span>`
+            : "";
           return `<li style="margin:0 0 4px">${escapeHtml(i.title)}${due}${extra}</li>`;
         })
         .join("")}</ul>`,
     );
     text.push(
       `${title}\n${items
-        .map((i) => `- ${i.title}${i.dueLabel ? ` (${i.dueLabel})` : ""}${i.note ? ` - ${i.note}` : ""}`)
+        .map(
+          (i) =>
+            `- ${i.title}${i.dueLabel ? ` (${i.dueLabel})` : ""}${i.note ? ` - ${i.note}` : ""}`,
+        )
         .join("\n")}`,
     );
   }
@@ -267,7 +284,8 @@ export function weeklyUpdateReminderEmail(input: {
   return layout({
     subject: `Post your Sunday update (${input.orgName})`,
     eyebrow: input.orgName,
-    bodyHtml: paragraph(lead) + paragraph("Review it, add a note, and post it before Sunday night."),
+    bodyHtml:
+      paragraph(lead) + paragraph("Review it, add a note, and post it before Sunday night."),
     bodyText: `${lead}\n\nReview it, add a note, and post it before Sunday night.`,
     cta: { label: "Open the Sunday update", url: input.url },
     footer: FOOTER,

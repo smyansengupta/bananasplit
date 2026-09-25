@@ -32,16 +32,22 @@ interface PendingComment {
 export function TaskComments({
   taskId,
   initial,
+  audience,
 }: {
   taskId: string;
   initial?: { comments: TaskCommentItem[]; hasMore: boolean };
+  /** C4: on a private task, who may be mentioned in a comment. */
+  audience?: readonly string[] | null;
 }) {
   const { org, viewer, memberById, announce } = useTasks();
   const [comments, setComments] = useState<TaskCommentItem[]>(initial?.comments ?? []);
   const [hasMore, setHasMore] = useState(initial?.hasMore ?? false);
   const [loaded, setLoaded] = useState(Boolean(initial));
   const [body, setBody] = useState("");
-  const [pending, addPending] = useOptimistic<PendingComment[], PendingComment>([], (state, c) => [...state, c]);
+  const [pending, addPending] = useOptimistic<PendingComment[], PendingComment>([], (state, c) => [
+    ...state,
+    c,
+  ]);
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -127,7 +133,13 @@ export function TaskComments({
   return (
     <section className="space-y-3" aria-label="Comments">
       {hasMore && (
-        <Button variant="link" size="sm" className="h-auto p-0" onClick={loadEarlier} disabled={isPending}>
+        <Button
+          variant="link"
+          size="sm"
+          className="h-auto p-0"
+          onClick={loadEarlier}
+          disabled={isPending}
+        >
           Load earlier comments
         </Button>
       )}
@@ -145,7 +157,10 @@ export function TaskComments({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
                   <span className="text-foreground font-medium">{c.author.name ?? "Member"}</span>
-                  <time className="text-muted-foreground" dateTime={new Date(c.createdAt).toISOString()}>
+                  <time
+                    className="text-muted-foreground"
+                    dateTime={new Date(c.createdAt).toISOString()}
+                  >
                     {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
                   </time>
                   {c.editedAt && <span className="text-muted-foreground">(edited)</span>}
@@ -178,12 +193,17 @@ export function TaskComments({
                       rows={3}
                       onChange={(v) => setEditing({ id: c.id, body: v })}
                       onSubmitShortcut={saveEdit}
+                      audience={audience}
                     />
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={saveEdit} disabled={!editing.body.trim() || isPending}>
+                      <Button
+                        size="sm"
+                        onClick={saveEdit}
+                        disabled={!editing.body.trim() || isPending}
+                      >
                         Save comment
                       </Button>
                     </div>
@@ -217,6 +237,7 @@ export function TaskComments({
           rows={2}
           onChange={setBody}
           onSubmitShortcut={submit}
+          audience={audience}
         />
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground text-xs">Markdown works. Ctrl+Enter to send.</span>

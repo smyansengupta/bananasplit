@@ -2,8 +2,17 @@ import { ListChecks, MessageSquare } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { cn } from "@/lib/utils";
 
-import { BlockedNote, DueLabel, FlagBadge, PriorityDot, isTaskFlagged } from "./task-badges";
+import {
+  BlockedNote,
+  DueLabel,
+  FlagBadge,
+  PriorityDot,
+  PrivateBadge,
+  isTaskFlagged,
+  isTaskPrivate,
+} from "./task-badges";
 import type { TaskItem } from "./types";
 
 export type TaskCardData = Pick<
@@ -11,6 +20,7 @@ export type TaskCardData = Pick<
   | "id"
   | "title"
   | "status"
+  | "visibility"
   | "priority"
   | "dueDate"
   | "owner"
@@ -28,22 +38,47 @@ export type TaskCardData = Pick<
  * Plain presentational card: no button role of its own. Inside a sortable
  * list the wrapper (SortableTaskCard) owns click, focus and drag on a single
  * element; a nested <button> here would compete with it.
+ *
+ * A private task gets a dashed edge as well as the badge. Nothing else in
+ * the workspace is dashed, so on a board of forty cards the restricted ones
+ * are countable at a glance, without relying on a colour.
  */
 export function TaskCard({ task, todayKey }: { task: TaskCardData; todayKey: string }) {
   const completedSubtasks = task.subtasks.filter((s) => s.status === "COMPLETED").length;
   const done = task.status === "COMPLETED";
   const flagged = isTaskFlagged(task);
+  const priv = isTaskPrivate(task);
 
   return (
-    <div className="bg-card w-full space-y-2 rounded-md border p-3 text-sm shadow-sm">
-      {task.parentTask && <p className="text-muted-foreground truncate text-xs">{task.parentTask.title} /</p>}
-      <p className={done ? "text-muted-foreground font-medium line-through" : "font-medium"}>{task.title}</p>
+    <div
+      className={cn(
+        "bg-card w-full space-y-2 rounded-lg border p-3 text-sm shadow-sm transition-shadow duration-150 group-hover:shadow-md",
+        priv && "border-dashed",
+        done && "opacity-70",
+      )}
+    >
+      {task.parentTask && (
+        <p className="text-muted-foreground truncate text-xs">{task.parentTask.title} /</p>
+      )}
+      <p
+        className={cn(
+          "leading-snug font-medium text-pretty",
+          done && "text-muted-foreground line-through",
+        )}
+      >
+        {task.title}
+      </p>
 
-      {(flagged || task.labels.length > 0) && (
+      {(priv || flagged || task.labels.length > 0) && (
         <div className="flex flex-wrap gap-1">
+          {priv && <PrivateBadge />}
           {flagged && <FlagBadge />}
           {task.labels.map(({ label }) => (
-            <Badge key={label.id} style={{ backgroundColor: label.color, color: "white" }} className="border-0">
+            <Badge
+              key={label.id}
+              style={{ backgroundColor: label.color, color: "white" }}
+              className="border-0"
+            >
               {label.name}
             </Badge>
           ))}
