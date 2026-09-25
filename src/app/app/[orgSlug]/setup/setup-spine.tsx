@@ -30,7 +30,9 @@ export function SetupSpine({
 }) {
   const base = `/app/${orgSlug}/setup`;
   return (
-    <nav aria-label="Setup steps" className="lg:sticky lg:top-6">
+    // min-w-0: without it a grid item takes its content's width, and the
+    // rail's own horizontal scroller would widen the whole page on a phone.
+    <nav aria-label="Setup steps" className="min-w-0 lg:sticky lg:top-6">
       <ol className="flex gap-2 overflow-x-auto pb-2 lg:block lg:overflow-visible lg:pb-0">
         {steps.map((view, i) => {
           const step = setupStep(view.id);

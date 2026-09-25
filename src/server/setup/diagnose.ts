@@ -109,7 +109,10 @@ const RULES: Record<SetupStepId, Rule[]> = {
   ],
   claude: [
     {
-      match: /rejected this API key/i,
+      // Named, not bare "rejected this API key": Resend's message says the
+      // same words, and a rule that matched both would hand an officer the
+      // wrong instructions.
+      match: /Claude rejected this API key/i,
       fix: "The key is wrong, revoked, or from a different account. Make a fresh one at console.anthropic.com under API keys and paste it here.",
       field: "apiKey",
     },

@@ -135,8 +135,7 @@ function DataResult({
       ) : (
         <>
           <p className="text-base">
-            Your databases now hold{" "}
-            <span className="font-semibold">{countsSentence(counts)}</span>.
+            Your databases now hold <span className="font-semibold">{countsSentence(counts)}</span>.
           </p>
 
           <StatRow className="sm:grid-cols-4">

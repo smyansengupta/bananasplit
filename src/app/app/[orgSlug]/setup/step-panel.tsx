@@ -100,7 +100,17 @@ export function StepPanel({
         </PanelSection>
       ) : null}
 
-      <PanelSection title={view.hasSecret ? "Or replace the credential" : "Paste it here"}>
+      <PanelSection
+        title={
+          view.id === "calendar"
+            ? view.hasSecret
+              ? "Or connect a different account"
+              : "Connect the account"
+            : view.hasSecret
+              ? "Or replace the credential"
+              : "Paste it here"
+        }
+      >
         {view.id === "data" ? <DataSourceForm orgId={orgId} view={view} /> : null}
         {view.id === "calendar" ? (
           <CalendarForm orgId={orgId} view={view} configured={googleConfigured} />

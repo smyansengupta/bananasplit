@@ -98,9 +98,9 @@ export function FinishPanel({
             <p className="text-sm font-medium">Your databases are still empty.</p>
             <p className="text-muted-foreground text-sm">
               Attendance, Signups and the reports built on them need rows before they say anything.
-              A club website is the hands-off way to fill them, but it is not the only way — these
-              two work with no integration at all, and the data you put in behaves exactly like
-              synced data.
+              A club website is the hands-off way to fill them, but it is not the only way — the
+              routes below need no integration at all, and the rows you put in behave exactly like
+              synced ones.
             </p>
           </div>
           <EmptyRoutes orgSlug={orgSlug} links={summary.links} />

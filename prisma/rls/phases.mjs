@@ -725,6 +725,73 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     { value: { no_actor: "42501", owner_actor: 1 } },
   );
 
+  // ======================= C1: guided setup =======================
+  // The guided setup adds no table: its two stored choices are columns on
+  // OrgSettings (20260924190000_c1_setup_state), so the GRANTS matrix above
+  // keeps its existing OrgSettings row and there is no new policy. What has
+  // to hold is that the existing per-command rules cover the new columns.
+  await tcase(
+    "P-C1-01",
+    "OrgSettings.setupSkipped / setupCompletedAt follow the OrgSettings rules: a member may read but not write them, an ADMIN may, and neither crosses into another org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_reads = await count(
+        q,
+        `SELECT count(*) n FROM "OrgSettings" WHERE "setupSkipped" IS NOT NULL`,
+      );
+      s.member_skip = await rc(q, `UPDATE "OrgSettings" SET "setupSkipped" = ARRAY['email']`);
+      s.member_finish = await rc(q, `UPDATE "OrgSettings" SET "setupCompletedAt" = now()`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_skip = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "setupSkipped" = ARRAY['email','claude']`,
+      );
+      s.admin_finish = await rc(q, `UPDATE "OrgSettings" SET "setupCompletedAt" = now()`);
+      s.admin_sees_own = (await q(`SELECT "setupSkipped" v FROM "OrgSettings"`)).rows.map(
+        (r) => r.v,
+      );
+      // Another org's row is invisible, so it cannot be skipped or finished.
+      s.admin_cross_org = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "setupCompletedAt" = now() WHERE "organizationId" = 'org_B'`,
+      );
+      return s;
+    },
+    {
+      value: {
+        member_reads: 1,
+        member_skip: 0,
+        member_finish: 0,
+        admin_skip: 1,
+        admin_finish: 1,
+        admin_sees_own: [["email", "claude"]],
+        admin_cross_org: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-C1-02",
+    "the setup columns are reachable on the service path (a connection clears its own skip there) and never leave the org in the GUC",
+    "app_service",
+    { org: "org_A" },
+    async (q) => {
+      const s = {};
+      s.clears_own_skip = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "setupSkipped" = ARRAY[]::text[] WHERE "organizationId" = 'org_A'`,
+      );
+      s.cannot_touch_other_org = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "setupSkipped" = ARRAY['data'] WHERE "organizationId" = 'org_B'`,
+      );
+      s.sees_only_own = await count(q, `SELECT count(*) n FROM "OrgSettings"`);
+      return s;
+    },
+    { value: { clears_own_skip: 1, cannot_touch_other_org: 0, sees_only_own: 1 } },
+  );
+
   // ======================= Phase 2: profiles =======================
   await tcase(
     "P2-01",
@@ -814,7 +881,10 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         await c.query("BEGIN");
         try {
           // The EXECUTE check comes before the body: no context is needed.
-          out[role] = await tryv((sql, params) => c.query(sql, params), `SELECT app.clear_ics_token_hash()`);
+          out[role] = await tryv(
+            (sql, params) => c.query(sql, params),
+            `SELECT app.clear_ics_token_hash()`,
+          );
         } finally {
           await c.query("ROLLBACK");
         }
@@ -943,11 +1013,20 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       s.admin_foreign = await rc(q, `DELETE FROM "OrgChartPosition" WHERE "id" = 'pos_B1_pres'`);
       s.admin_draft = await rc(q, `DELETE FROM "OrgChartPosition" WHERE "id" = 'pos_A2_pres'`);
       await q(`UPDATE "OrgChartVersion" SET "status" = 'DISCARDED' WHERE "id" = 'ocv_A2'`);
-      s.admin_discarded = await rc(q, `DELETE FROM "OrgChartPosition" WHERE "versionId" = 'ocv_A2'`);
+      s.admin_discarded = await rc(
+        q,
+        `DELETE FROM "OrgChartPosition" WHERE "versionId" = 'ocv_A2'`,
+      );
       return s;
     },
     {
-      value: { member_draft: 0, admin_published: 0, admin_foreign: 0, admin_draft: 1, admin_discarded: 0 },
+      value: {
+        member_draft: 0,
+        admin_published: 0,
+        admin_foreign: 0,
+        admin_draft: 1,
+        admin_discarded: 0,
+      },
     },
   );
   await tcase(
@@ -1993,8 +2072,14 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         q,
         `INSERT INTO "BudgetPeriod" ("id","organizationId","label","startsOn","endsOn") VALUES ('bp_t','org_A','T','2027-01-01','2027-06-30')`,
       );
-      s.treasurer_update = await rc(q, `UPDATE "BudgetPeriod" SET "label" = 'T' WHERE "id" = 'bp_A'`);
-      s.treasurer_foreign = await rc(q, `UPDATE "BudgetPeriod" SET "label" = 'X' WHERE "id" = 'bp_B'`);
+      s.treasurer_update = await rc(
+        q,
+        `UPDATE "BudgetPeriod" SET "label" = 'T' WHERE "id" = 'bp_A'`,
+      );
+      s.treasurer_foreign = await rc(
+        q,
+        `UPDATE "BudgetPeriod" SET "label" = 'X' WHERE "id" = 'bp_B'`,
+      );
       return s;
     },
     {

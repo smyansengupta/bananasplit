@@ -131,7 +131,7 @@ export default async function SetupStatusPage({
                   <div className="flex flex-wrap items-center gap-3">
                     <Button asChild size="sm">
                       <Link href={`/app/${orgSlug}/setup?step=${s.step.id}&edit=1`}>
-                        Fix {s.step.title.toLowerCase()}
+                        Fix {s.step.title}
                       </Link>
                     </Button>
                     {canWrite ? <TestButton orgId={organization.id} step={s.step.id} /> : null}

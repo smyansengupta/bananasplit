@@ -163,7 +163,8 @@ export default async function SetupPage({
       <div className="grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
         <SetupSpine orgSlug={orgSlug} steps={steps} active={activeId} finishActive={finishActive} />
 
-        <main className="max-w-2xl min-w-0">
+        {/* Not <main>: the app shell already owns the main landmark. */}
+        <div className="max-w-2xl min-w-0">
           {active === null ? (
             <FinishPanel
               orgId={organization.id}
@@ -191,7 +192,7 @@ export default async function SetupPage({
               googleConfigured={isGoogleConfigured()}
             />
           )}
-        </main>
+        </div>
       </div>
     </div>
   );

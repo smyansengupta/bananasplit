@@ -52,7 +52,12 @@ const remote = {
   roleName: "cbc_suite_reader",
 };
 
-const local = { mode: "local" as const, host: "localhost" as const, port: 5432, database: "standin" };
+const local = {
+  mode: "local" as const,
+  host: "localhost" as const,
+  port: 5432,
+  database: "standin",
+};
 const allowLocal = { SOURCE_SYNC_ALLOW_LOCAL: "1" };
 
 beforeEach(() => {
