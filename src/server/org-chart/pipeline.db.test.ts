@@ -168,10 +168,12 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       });
       return true;
     });
-    // Leftovers from an interrupted run must not block the one-active-parse rule.
+    // Leftovers from an interrupted run must not block the one-active-parse
+    // rule. Only this suite's own kind of leftover is cleared: other suites
+    // run against the same seeded org and keep drafts of their own.
     await withSystemOrgTx(s.cbcId, ({ db }) =>
       db.orgChartVersion.updateMany({
-        where: { organizationId: s.cbcId, status: "DRAFT" },
+        where: { organizationId: s.cbcId, status: "DRAFT", source: "UPLOAD" },
         data: { status: "DISCARDED" },
       }),
     );
@@ -206,6 +208,13 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     await disconnectAll();
     await disconnectOwnerDb();
   });
+
+  /** Puts a version this suite created back out of the way. */
+  async function discard(versionId: string) {
+    await withSystemOrgTx(s.cbcId, ({ db }) =>
+      db.orgChartVersion.updateMany({ where: { id: versionId, status: "DRAFT" }, data: { status: "DISCARDED" } }),
+    );
+  }
 
   async function track(res: Response) {
     const body = (await res.json()) as { versionId?: string; error?: string };
@@ -307,9 +316,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(draft?.version.parseCostUsd).toBeCloseTo(0.0125, 6);
     expect(draft?.positions).toHaveLength(9);
 
-    await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgChartVersion.update({ where: { id: versionId }, data: { status: "DISCARDED" } }),
-    );
+    await discard(versionId);
   });
 
   it("keeps the parser's reading when Claude cannot finish", async () => {
@@ -344,9 +351,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(draft?.positions.map((p) => p.key).sort()).toEqual(["head-of-tech", "president"]);
     expect(JSON.stringify(draft?.version.parseReport)).toMatch(/Claude could not read this document/);
 
-    await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgChartVersion.update({ where: { id: res.body.versionId! }, data: { status: "DISCARDED" } }),
-    );
+    await discard(res.body.versionId!);
   });
 
   it("a stale attempt is cancelled by the compare-and-set and changes nothing", async () => {
@@ -452,6 +457,15 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(copy?.version).toMatchObject({ status: "PUBLISHED", source: "ROLLBACK", basedOnVersionId: s.originalActive });
     expect(copy?.positions.find((p) => p.key === "vp-growth")?.title).toBe("VP Growth");
     expect((await getPublishedOrgChart(s.cbcId))?.versionId).toBe(copyId);
+
+    // Publishing swaps this org's chart for one with new position ids, and
+    // other suites hold ids from the seeded chart. Put it back as soon as
+    // the publish and rollback assertions are done, rather than in afterAll.
+    await withSystemOrgTx(s.cbcId, async ({ db }) => {
+      await db.orgChartVersion.update({ where: { id: copyId }, data: { status: "DISCARDED" } });
+      await db.orgChartVersion.update({ where: { id: s.originalActive }, data: { status: "PUBLISHED" } });
+      await db.organization.update({ where: { id: s.cbcId }, data: { activeOrgChartVersionId: s.originalActive } });
+    });
   });
 
   it("a refusal fails a draft the parser read nothing from, with a clear message", async () => {
@@ -464,6 +478,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(failed?.version.parseStatus).toBe("FAILED");
     expect(failed?.version.parseError).toMatch(/declined/);
     expect(failed?.positions).toEqual([]);
+    await discard(res.body.versionId!);
   });
 
   it("the injection fixture is read by the parser, which executes nothing and calls nothing", async () => {
@@ -479,9 +494,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     // place, never followed.
     const report = draft?.version.parseReport;
     expect(JSON.stringify(report?.orphanLines)).toMatch(/IMPORTANT INSTRUCTIONS/);
-    await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgChartVersion.update({ where: { id: res.body.versionId! }, data: { status: "DISCARDED" } }),
-    );
+    await discard(res.body.versionId!);
   });
 
   it("the injection fixture through Claude yields a schema-valid draft and no side effects", async () => {
@@ -507,9 +520,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(draft?.positions.every((p) => p.userId === null)).toBe(true);
     expect(draft?.version.openItems[0]?.question).toMatch(/ignored/);
     expect(await counts()).toEqual(before);
-    await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgChartVersion.update({ where: { id: res.body.versionId! }, data: { status: "DISCARDED" } }),
-    );
+    await discard(res.body.versionId!);
   });
 
   describe("an org with no Claude API key at all", () => {
@@ -547,6 +558,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
       expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
       expect(draft?.positions).toHaveLength(9);
+      await discard(res.body.versionId!);
     });
 
     it("lands an unreadable document in the editor rather than refusing it", async () => {
@@ -558,6 +570,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
       expect(draft?.positions).toEqual([]);
       expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/club template/);
+      await discard(res.body.versionId!);
     });
 
     it("offers the starter structure, laid out and ready to fill in", async () => {
