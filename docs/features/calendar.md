@@ -15,9 +15,9 @@ From there:
 
 ### 1. Events
 
-- **Who:** owners and admins create, edit, drag, resize and delete events.
-  Members see the calendar, answer invitations (RSVP) and run availability
-  polls. Finalizing a poll creates an event, so an admin does it.
+- **Who:** owners and admins create, edit, drag and delete events. Members
+  see the calendar, answer invitations (RSVP) and run availability polls.
+  Finalizing a poll creates an event, so an admin does it.
 - **Type:** workshop, info session, hackathon, social, board meeting or
   other. The website uses the type for its colors and labels.
 - **Visibility:** *Internal* (the default) or *Public*. Choosing Public shows
@@ -35,9 +35,40 @@ From there:
   from the event page, and are told when the time or place changes or the
   event is cancelled (you can switch that notice off per edit).
 
-The calendar loads only the weeks on screen, and can be filtered by type and
-visibility. Admins see a small icon on events that are still syncing to
-Google or whose sync failed.
+### 1a. Using the calendar
+
+Four views, switched in the header and remembered in the URL, so a link to
+a particular month or week is shareable.
+
+| View | What it is for |
+|---|---|
+| **Month** (default) | The term at a glance. Days that carry something take a tonal step; each event is a chip with its time, title and type. |
+| **Week** | One column per day with an hour axis, for spotting clashes and gaps. It opens on the hours that have something in them rather than on midnight. |
+| **Day** | One day's hour column. Reached from the switcher, or from a month cell's "+N more". |
+| **List** | Every day in the window that has something, in order, with the type, place, your RSVP and (for admins) the Google sync state on the row. This is the planning view. |
+
+- **Filters:** the type chips and the visibility menu narrow every view at
+  once, and are part of the URL. The header says how many events the
+  current window holds.
+- **Reading an event:** selecting one opens a card anchored to it with the
+  time, place, visibility and your RSVP, plus **Open** (the full page) and
+  **Edit**. Escape closes it.
+- **Creating one:** **New event**, or the **+** on a day cell, which starts
+  the event at 6pm that day. The form asks for a title, a time, a type, a
+  visibility and a place; everything else is behind **More details**.
+  Enter saves, Escape cancels, and moving the start moves the end with it.
+- **Moving one:** drag a chip to another day in the month grid (admins, on
+  a computer). The time of day and the length are kept.
+- **On a phone:** the month grid fits the screen, with events as colour
+  bars you tap; the week shows one day at a time under a strip of the
+  seven days, marked with a dot where something is scheduled.
+- **Colours** come from the org's theme (Settings > Theme), so each club's
+  calendar matches the rest of its workspace. Colour is never the only
+  cue: every event names its type, public events carry a globe, internal
+  ones a dashed outline, and both are in the event's screen-reader label.
+
+The calendar loads only the weeks on screen. Admins see a small icon on
+events that are still syncing to Google or whose sync failed.
 
 ### 2. Connect Google Calendar (optional, recommended)
 
@@ -193,3 +224,33 @@ the website's "Add to your calendar" link can keep pointing at it.
 
 - Point a local website build at it with
   `SUITE_EVENTS_URL=http://localhost:3000/api/public/claude-builders-club/events npm run build`.
+
+## How the calendar views are built
+
+The month grid, the hour columns and the agenda are this app's own
+components (`src/components/calendar/`), not a calendar library. The layout
+arithmetic — which day an event sits on, where it sits in an hour column,
+how overlapping events share the width, which hours to open on — is pure
+and lives in `src/lib/calendar/grid.ts`, with tests in `grid.test.ts`.
+
+Two rules worth knowing when changing them:
+
+- **Timed events are bucketed by the viewer's local day**, because their
+  times are shown in the viewer's timezone. **All-day events are bucketed
+  by org-timezone day keys**, resolved on the server, so an all-day event
+  covers the same days for everyone. Mixing the two drifts an all-day
+  event by a day for a viewer west of the club.
+- **Today is rendered in the org timezone on the server** and swapped for
+  the viewer's own day on hydration (`useTodayKey`), so the first paint
+  cannot mismatch.
+
+Event type colours are theme tokens (`--chart-1` … `--chart-5`, and
+`--muted-foreground` for *Other*), listed in
+`src/components/calendar/kinds.ts`. That palette is derived per org and is
+already checked for a lightness band, a chroma floor, colour-blind
+separation between adjacent slots and 3:1 against both surfaces
+(`src/lib/theme/chart.ts`), which is the guarantee a row of event types
+needs. Nothing in the calendar carries a fixed colour value.
+
+FullCalendar is still a dependency (the task calendar uses it) but the org
+calendar no longer loads it.

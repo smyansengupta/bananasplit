@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import type { CalendarSyncState, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
-import { KIND_META, SYNC_META, VISIBILITY_META } from "./kinds";
+import { KIND_META, kindStyle, SYNC_META, VISIBILITY_META } from "./kinds";
 
 export function KindBadge({ kind, className }: { kind: EventKind; className?: string }) {
   const meta = KIND_META[kind];
   return (
-    <Badge variant="outline" className={cn("gap-1.5", className)}>
-      <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: meta.color }} />
+    <Badge variant="outline" className={cn("gap-1.5", className)} style={kindStyle(kind)}>
+      <span aria-hidden className="size-2 rounded-full" style={{ background: "var(--kind)" }} />
       {meta.label}
     </Badge>
   );
