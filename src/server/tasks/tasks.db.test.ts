@@ -27,6 +27,7 @@ import { authDb, disconnectAll } from "../db/clients";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 import { withOrgAction, withSystemOrgTx, type SystemContext } from "../db/context";
 import type { JobRun } from "../jobs/types";
+import { renderTaskNotificationEmail } from "./email";
 import { taskDigestJob, taskReminderJob } from "./jobs";
 import { reminderKey } from "./reminders";
 import { nextOccurrence, scheduleOrgTaskJobs } from "./schedule";
@@ -526,5 +527,47 @@ describe.skipIf(!seeded)("tasks against the local database (seeded CBC)", () => 
     expect(closed.error).toBeUndefined();
     expect(closed.droppedMentions).toEqual([p.kristine.id]);
     expect(await read(({ db }) => db.taskMention.count({ where: { taskId: id } }))).toBe(0);
+  });
+
+  it("an email already queued is dropped at send time once the task is out of the recipient's reach", async () => {
+    // The outbox is the last gate: a notification is written while somebody
+    // can see the task, but the drain can run after it went private or
+    // after they were taken off it. renderTaskNotificationEmail runs on the
+    // service path, which sees the whole org, so it re-checks itself.
+    as(p.oliver);
+    const id = await create({
+      title: "C4 test: the outbox gate",
+      ownerId: p.oliver.id,
+      assigneeIds: [p.kristine.id],
+      dueDate: due(9),
+    });
+    const notification = {
+      userId: p.kristine.id,
+      type: NotificationType.TASK_ASSIGNED,
+      title: "C4 test: the outbox gate",
+      body: null,
+      linkUrl: `/app/claude-builders-club/tasks/${id}`,
+      taskId: id,
+      actorId: p.oliver.id,
+      dedupeKey: null,
+    };
+
+    // While she is on it, the mail renders and carries the title.
+    const open = await renderTaskNotificationEmail(s.cbcId, notification);
+    expect(open).not.toBe("skip");
+    expect(open).not.toBeNull();
+    expect(typeof open === "object" && open?.subject).toContain("C4 test: the outbox gate");
+
+    // Take her off it and make it private: the same queued row now sends nothing.
+    await act(svc.updateTask)(s.cbcId, id, {
+      assigneeIds: [],
+      visibility: TaskVisibility.PRIVATE,
+    });
+    expect(await renderTaskNotificationEmail(s.cbcId, notification)).toBe("skip");
+
+    // An admin is in the standing audience, so theirs still renders.
+    expect(
+      await renderTaskNotificationEmail(s.cbcId, { ...notification, userId: p.jackson.id }),
+    ).not.toBe("skip");
   });
 });

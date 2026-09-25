@@ -68,8 +68,12 @@ a thread they cannot see.
 
 Two consequences worth knowing:
 
-- Opening `/app/{org}/tasks/{id}` for a task you cannot see is a plain
-  **404** — the same answer as a task that does not exist.
+- Opening `/app/{org}/tasks/{id}` for a task you cannot see gives the
+  **not-found page**, byte for byte the answer a task id that does not
+  exist gives. That the two are indistinguishable is the point: the URL
+  never tells you whether the task is real. (The page streams, so the
+  response header is a 200 carrying the not-found body — again, exactly as
+  for an id that does not exist.)
 - Counts differ per viewer. "Oliver: 4 open" means four that _you_ can see.
   The Week view says so when you are looking at somebody else's work.
 
@@ -81,10 +85,18 @@ whole tree, and a database trigger keeps them equal in both directions
 (a new or re-parented subtask takes the parent's flag; changing the parent's
 flag pushes down to the children).
 
-A subtask can still be handed to somebody who is not on the parent — that is
-the point of handing work down. They see the subtask and not the parent, and
-the parent breadcrumb simply does not render for them, because RLS filters
-the relation too.
+The audience is worked out **per task**, not per tree, and that cuts both
+ways:
+
+- A subtask can be handed to somebody who is not on the parent — that is the
+  point of handing work down. They see the subtask and not the parent, and
+  the parent breadcrumb simply does not render for them, because RLS filters
+  the relation too.
+- The mirror image is the sharp edge: a **collaborator on a private parent
+  does not automatically see its subtasks**, only the ones they are named
+  on. Add them to the subtask as well, or do the work on the parent. The
+  failure is safe — they see less, never more — but a parent can look as
+  though it has no subtasks when it has some.
 
 ### Mentions
 
