@@ -289,7 +289,13 @@ export function EventCalendar({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/*
+          On a phone this is two rows rather than three: stepping and
+          creating on one, the view switcher spanning the width below it.
+          Letting four blocks wrap on their own put "New event" alone on a
+          line of its own and cost a band of screen where it is scarcest.
+        */}
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" onClick={() => step(-1)} aria-label={prevLabel(range.view)}>
               <ChevronLeft aria-hidden className="size-4" />
@@ -302,8 +308,14 @@ export function EventCalendar({
             </Button>
           </div>
 
+          {canManage && (
+            <Button size="sm" className="ml-auto md:order-3 md:ml-0" onClick={() => openCreate(null)}>
+              New event
+            </Button>
+          )}
+
           <div
-            className="bg-muted inline-flex rounded-md p-0.5"
+            className="bg-muted order-last flex w-full rounded-md p-0.5 md:order-2 md:w-auto"
             role="group"
             aria-label="Calendar view"
           >
@@ -314,9 +326,9 @@ export function EventCalendar({
                 aria-pressed={range.view === view}
                 onClick={() => setView(view)}
                 className={cn(
-                  "rounded-sm px-2.5 py-1 text-xs font-medium transition-colors",
+                  "flex-1 rounded-sm px-2.5 py-1 text-xs font-medium transition-colors md:flex-none",
                   range.view === view
-                    ? "bg-background text-foreground shadow-none"
+                    ? "bg-background text-foreground"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -324,17 +336,11 @@ export function EventCalendar({
               </button>
             ))}
           </div>
-
-          {canManage && (
-            <Button size="sm" onClick={() => openCreate(null)}>
-              New event
-            </Button>
-          )}
         </div>
       </div>
 
       <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
-        <div className="cal-filters flex-nowrap">
+        <div className="cal-filters">
           <span className="sr-only" id="cal-kind-filter-label">
             Filter by type
           </span>

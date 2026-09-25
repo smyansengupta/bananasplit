@@ -89,15 +89,16 @@ function AgendaRow({
       aria-expanded={open}
       onClick={(event) => onOpen(item, event.currentTarget)}
     >
-      <span className="cal-agenda__when">{item.allDay ? "All day" : timeRange(item)}</span>
+      {/* The dot rides in the time column so every row's dot lines up. */}
+      <span className="cal-agenda__when">
+        <span aria-hidden className="cal-chip__dot" />
+        {item.allDay ? "All day" : timeRange(item)}
+      </span>
 
       <span className="min-w-0">
         <span className="cal-agenda__title">{item.title}</span>
         <span className="cal-agenda__meta">
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="cal-chip__dot" />
-            {kind.label}
-          </span>
+          <span>{kind.label}</span>
           {item.location && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <MapPin aria-hidden className="size-3 shrink-0" />

@@ -14,7 +14,7 @@ import {
 } from "@/lib/calendar/grid";
 
 import { useMediaQuery, useNowMinutes } from "./hooks";
-import { type CalendarItem, itemLabel, timeRange } from "./item";
+import { type CalendarItem, itemLabel, shortTime, timeRange } from "./item";
 import { KIND_META, kindStyle, VISIBILITY_META } from "./kinds";
 import { longDate } from "./month-grid";
 
@@ -65,15 +65,19 @@ export function WeekGrid({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The strip's choice is derived, not synchronised: a pick that is no
-  // longer in the window (the week moved) simply falls back to today, or to
-  // the first day when today is elsewhere.
+  // longer in the window (the week moved) simply falls back.
+  //
+  // The fallback is today when today is in the week, and otherwise the
+  // first day that HAS something. Falling back to the Sunday opened an
+  // empty column on a week whose events are all midweek, which is a screen
+  // that tells you nothing about the week you just asked for.
   const [picked, setPicked] = useState<string | null>(null);
   const pickedDay =
     picked && windowKeys.includes(picked)
       ? picked
       : windowKeys.includes(todayKey)
         ? todayKey
-        : windowKeys[0];
+        : (windowKeys.find((key) => (byDay.get(key)?.length ?? 0) > 0) ?? windowKeys[0]);
 
   const narrow = useMediaQuery("(max-width: 47.99rem)");
   const showStrip = dayCount > 1 && narrow;
@@ -152,19 +156,22 @@ export function WeekGrid({
 
       <div className="cal-week">
         <div className="cal-week__grid" style={{ ["--cal-days" as string]: days.length }}>
-          <div className="cal-week__corner" />
-          {days.map((key) => (
-            <div key={key} className="cal-week__dayhead" data-today={key === todayKey ? "true" : undefined}>
-              <span aria-hidden className="cal-week__dow">
-                {DOW[weekdayOf(key)]}
-              </span>
-              <br aria-hidden />
-              <span aria-hidden className="cal-week__date">
-                {Number(key.slice(8, 10))}
-              </span>
-              <span className="sr-only">{longDate(key)}</span>
-            </div>
-          ))}
+          {/* With the strip above it, a day header inside the grid says the
+              same thing twice and costs a band of a phone screen. */}
+          {!showStrip && <div className="cal-week__corner" />}
+          {!showStrip &&
+            days.map((key) => (
+              <div key={key} className="cal-week__dayhead" data-today={key === todayKey ? "true" : undefined}>
+                <span aria-hidden className="cal-week__dow">
+                  {DOW[weekdayOf(key)]}
+                </span>
+                <br aria-hidden />
+                <span aria-hidden className="cal-week__date">
+                  {Number(key.slice(8, 10))}
+                </span>
+                <span className="sr-only">{longDate(key)}</span>
+              </div>
+            ))}
 
           {hasAllDay && (
             <>
@@ -260,8 +267,11 @@ function Slot({
       aria-label={itemLabel(item, KIND_META[item.kind].label, VISIBILITY_META[item.visibility].label)}
       onClick={(event) => onOpen(item, event.currentTarget)}
     >
+      {/* A half-hour slot is one line tall, and the full range spends it all
+          on the time. The start alone is enough there; the popover has the
+          rest. */}
       <span aria-hidden className="cal-slot__time">
-        {timeRange(item)}
+        {compact ? shortTime(item) : timeRange(item)}
       </span>
       <span aria-hidden className="cal-slot__title">
         {item.title}
