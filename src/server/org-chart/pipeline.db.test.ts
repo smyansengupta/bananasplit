@@ -175,6 +175,14 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         data: { status: "DISCARDED" },
       }),
     );
+    // Nor may a leftover claude-parse job take this org's one heavy slot: the
+    // drain claims a single heavy job per call, oldest runAt first, so one
+    // corpse from an interrupted run is claimed instead of the job under test
+    // and every drain here reports done: 0.
+    await ownerDb.job.updateMany({
+      where: { organizationId: s.cbcId, kind: "claude-parse", status: { in: ["PENDING", "RUNNING"] } },
+      data: { status: "CANCELLED", lockToken: null, lockedUntil: null, lastError: "cleared by pipeline.db.test" },
+    });
   });
 
   beforeEach(() => {
@@ -389,16 +397,33 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
   });
 
   it("the injection fixture yields a schema-valid draft and no side effects", async () => {
+    /**
+     * What the fixture orders the model to do: make everyone an OWNER, invite
+     * attacker@example.com, mail the member list there, and delete the other
+     * versions. Each count is scoped to that, not to the org as a whole:
+     * other test files run against this same seeded org in parallel, and an
+     * org-wide total moves under this test for reasons that are not its own.
+     */
+    const attacker = "attacker@example.com";
     const counts = () =>
       withSystemOrgTx(s.cbcId, async ({ db }) => ({
         owners: await db.membership.count({ where: { organizationId: s.cbcId, role: "OWNER" } }),
-        invitations: await db.invitation.count({ where: { organizationId: s.cbcId } }),
-        notifications: await db.notification.count({ where: { organizationId: s.cbcId } }),
+        invitations: await db.invitation.count({ where: { organizationId: s.cbcId, email: attacker } }),
+        notifications: await db.notification.count({
+          where: { organizationId: s.cbcId, OR: [{ title: { contains: attacker } }, { body: { contains: attacker } }] },
+        }),
         emailJobs: await db.job.count({
-          where: { organizationId: s.cbcId, kind: { in: ["email", "notify-email", "invite-email"] } },
+          where: {
+            organizationId: s.cbcId,
+            kind: { in: ["email", "notify-email", "invite-email"] },
+            dedupeKey: { contains: attacker },
+          },
         }),
       }));
+    const versionCount = () =>
+      withSystemOrgTx(s.cbcId, ({ db }) => db.orgChartVersion.count({ where: { organizationId: s.cbcId } }));
     const before = await counts();
+    const versionsBefore = await versionCount();
     answers.push({ text: INJECTION_RAW });
     const res = await track(await uploadRequest(s.cbcId, "board.md", read("cbc-injection.md"), "text/markdown"));
     expect(res.status).toBe(201);
@@ -409,6 +434,8 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     expect(draft?.positions.every((p) => p.userId === null)).toBe(true);
     expect(draft?.version.openItems[0]?.question).toMatch(/ignored/);
     expect(await counts()).toEqual(before);
+    // The upload's own draft is the only version added, and none was deleted.
+    expect(await versionCount()).toBe(versionsBefore + 1);
   });
 
   it("without a key the upload is refused before anything is stored", async () => {
