@@ -28,10 +28,21 @@ const NEXT_CACHE = {
  */
 const PRIVILEGED_CLIENT_MESSAGE =
   "serviceDb, authDb and getClient are for the allowlisted paths in eslint.config.mjs (CLIENT_ALLOWLIST); use the wrappers in @/server/db/context.";
-const PRIVILEGED_CLIENTS = [
+const PRIVILEGED_DB_CLIENTS = [
   { name: "@/server/db/clients", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
   { name: "@/server/db", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
 ];
+/**
+ * withOrgTxAs opens a member's RLS context for a user id the CALLER
+ * vouches for (no session): only the collaboration bridge, which verifies a
+ * signed request first, may import it (COLLAB_BRIDGE).
+ */
+const AS_USER_TX = {
+  name: "@/server/db/context",
+  importNames: ["withOrgTxAs"],
+  message: "withOrgTxAs trusts a caller-supplied user id: only the collaboration bridge routes (COLLAB_BRIDGE in eslint.config.mjs) may use it.",
+};
+const PRIVILEGED_CLIENTS = [...PRIVILEGED_DB_CLIENTS, AS_USER_TX];
 /** Navigation belongs to the action and page layer, not to services. */
 const NAVIGATION = {
   name: "next/navigation",
@@ -71,6 +82,13 @@ const CLIENT_ALLOWLIST = [
   "src/server/health.ts",
   "scripts/**",
 ];
+
+/**
+ * The collaboration bridge routes (docs/features/collaboration.md): they
+ * verify the collaboration server's signed request, then act as the user it
+ * names through withOrgTxAs. Adding a path here is a security review item.
+ */
+const COLLAB_BRIDGE = ["src/app/api/collab/**"];
 
 /** Directories written after the 0B cutover (the record of post-0B layout). */
 const NEW_CODE = [
@@ -252,6 +270,11 @@ const eslintConfig = defineConfig([
   {
     files: CLIENT_ALLOWLIST,
     rules: { "no-restricted-imports": restrictImports(NEXT_CACHE) },
+  },
+  // The collaboration bridge: withOrgTxAs, and still no service or auth client.
+  {
+    files: COLLAB_BRIDGE,
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS) },
   },
   {
     files: ["src/server/jobs/**", "src/server/email/**", "src/server/health.ts"],
