@@ -12,5 +12,9 @@ export default async function PublicPollLayout({
 }: LayoutProps<"/poll/[pollId]">) {
   const { pollId } = await params;
   const org = await getPublicOrgTheme(await orgIdForPoll(pollId));
-  return <PublicOrgFrame org={org}>{children}</PublicOrgFrame>;
+  return (
+    <PublicOrgFrame org={org} wide>
+      {children}
+    </PublicOrgFrame>
+  );
 }
