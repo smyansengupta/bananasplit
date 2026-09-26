@@ -4,13 +4,21 @@ import type { JSONContent } from "@tiptap/react";
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { updateNote, deleteNote } from "@/app/app/[orgSlug]/notes/actions";
+import {
+  updateNote,
+  updateNoteDetails,
+  deleteNote,
+  type NoteDetailsInput,
+} from "@/app/app/[orgSlug]/notes/actions";
+import { PresenceBar } from "@/components/notes/collab/presence-bar";
+import { useNoteCollab, type NoteCollabState } from "@/components/notes/collab/use-note-collab";
 import { NoteEditor } from "@/components/notes/editor/note-editor";
 import { EventLinkPicker, type EventOption } from "@/components/notes/event-link-picker";
-import { useAutosave } from "@/components/notes/use-autosave";
+import { useAutosave, type SaveStatus } from "@/components/notes/use-autosave";
 import { VisibilityToggle } from "@/components/notes/visibility-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { NoteCollabSession } from "@/server/collab/session";
 
 type Visibility = "PRIVATE" | "ORGANIZATION";
 
@@ -37,9 +45,22 @@ export interface NoteEditorShellProps {
   };
   canEdit: boolean;
   events: EventOption[];
+  /**
+   * The page's live-collaboration session, or null while collaboration is
+   * off (docs/features/collaboration.md). Without one, or when joining
+   * fails, this is the autosave editor exactly as before.
+   */
+  collab?: NoteCollabSession | null;
 }
 
-export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteEditorShellProps) {
+export function NoteEditorShell({
+  orgId,
+  orgSlug,
+  note,
+  canEdit,
+  events,
+  collab = null,
+}: NoteEditorShellProps) {
   const router = useRouter();
   const [title, setTitle] = useState(note.title);
   const [visibility, setVisibility] = useState<Visibility>(note.visibility);
@@ -47,6 +68,12 @@ export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteE
   const versionRef = useRef(note.version);
   const contentRef = useRef({ json: note.contentJson, text: note.contentText });
 
+  const session = useNoteCollab({ orgId, noteId: note.id, initial: collab });
+  // The collaborative editor, once joined (it stays, read-only, if the
+  // connection is interrupted).
+  const live = session.mode === "live" || session.mode === "interrupted" ? session.live : null;
+
+  // The autosave path: the whole note, version-checked.
   const { status, schedule } = useAutosave<NotePayload>({
     save: async (payload) => {
       const result = await updateNote(orgId, note.id, payload, versionRef.current);
@@ -55,11 +82,34 @@ export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteE
     },
   });
 
-  const canType = canEdit && status !== "conflict";
+  // The live path: the collaboration server saves the body, so only the
+  // fields that changed are sent, and each save starts a fresh batch.
+  const detailsRef = useRef<NoteDetailsInput>({});
+  const { status: detailsStatus, schedule: scheduleDetails } = useAutosave<NoteDetailsInput>({
+    save: (patch) => {
+      detailsRef.current = {};
+      return updateNoteDetails(orgId, note.id, patch);
+    },
+  });
+
+  const canType = live
+    ? session.mode === "live" && session.canWrite
+    : canEdit && status !== "conflict" && session.mode !== "connecting";
 
   const queueSave = useCallback(
     (overrides: Partial<NotePayload>) => {
       if (!canType) return;
+      if (live) {
+        const { title: t, visibility: v, eventId: e } = overrides;
+        detailsRef.current = {
+          ...detailsRef.current,
+          ...(t !== undefined ? { title: t } : {}),
+          ...(v !== undefined ? { visibility: v } : {}),
+          ...(e !== undefined ? { eventId: e } : {}),
+        };
+        scheduleDetails(detailsRef.current);
+        return;
+      }
       schedule({
         title,
         contentJson: JSON.stringify(contentRef.current.json),
@@ -69,14 +119,45 @@ export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteE
         ...overrides,
       });
     },
-    [canType, schedule, title, visibility, eventId],
+    [canType, live, scheduleDetails, schedule, title, visibility, eventId],
   );
+
+  if (session.mode === "revoked") {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+          <span>This note is no longer available to you.</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/app/${orgSlug}/notes`)}
+          >
+            Back to notes
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       {status === "conflict" && (
         <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
           <span>This note was updated by someone else — reload to see the latest version.</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </Button>
+        </div>
+      )}
+      {session.mode === "interrupted" && (
+        <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+          <span>Live editing was interrupted — reload to keep editing.</span>
           <Button
             type="button"
             variant="outline"
@@ -99,7 +180,10 @@ export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteE
           placeholder="Untitled note"
           className="border-none px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
         />
-        <SaveIndicator status={status} />
+        <div className="flex shrink-0 items-center gap-3">
+          {live && <PresenceBar peers={session.peers} />}
+          <SaveIndicator label={saveLabel(session, live ? detailsStatus : status)} />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -135,29 +219,41 @@ export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteE
         )}
       </div>
 
-      <NoteEditor
-        content={note.contentJson}
-        editable={canType}
-        onChange={(json, text) => {
-          contentRef.current = { json, text };
-          queueSave({});
-        }}
-      />
+      {live ? (
+        <NoteEditor
+          // A new session (another Y.Doc) needs a new editor bound to it.
+          key={live.doc.guid}
+          collaboration={{ doc: live.doc, provider: live.provider, user: live.user }}
+          editable={canType}
+        />
+      ) : (
+        <NoteEditor
+          key="autosave"
+          content={note.contentJson}
+          editable={canType}
+          onChange={(json, text) => {
+            contentRef.current = { json, text };
+            queueSave({});
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function SaveIndicator({ status }: { status: string }) {
-  const label =
-    status === "saving"
-      ? "Saving…"
-      : status === "saved"
-        ? "Saved"
-        : status === "conflict"
-          ? "Conflict"
-          : status === "error"
-            ? "Couldn't save"
-            : "";
+/** What the corner of the editor says: the save, or the live connection. */
+function saveLabel(session: NoteCollabState, status: SaveStatus): string {
+  if (session.mode === "connecting") return "Connecting…";
+  if (status === "saving") return "Saving…";
+  if (status === "conflict") return "Conflict";
+  if (status === "error") return "Couldn't save";
+  if (session.mode !== "live") return status === "saved" ? "Saved" : "";
+  if (session.connection !== "connected") return "Offline — reconnecting…";
+  if (session.unsynced > 0) return "Syncing…";
+  return session.stored > 0 || status === "saved" ? "Saved" : "Live";
+}
+
+function SaveIndicator({ label }: { label: string }) {
   if (!label) return null;
   return <span className="text-muted-foreground shrink-0 text-xs">{label}</span>;
 }

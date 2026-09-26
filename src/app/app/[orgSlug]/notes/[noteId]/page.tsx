@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 
 import { NoteEditorShell } from "@/components/notes/note-editor-shell";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { can } from "@/lib/auth/permissions";
+import { collabConfig } from "@/lib/collab/config";
+import { canEditNote } from "@/lib/notes/access";
+import { mintNoteCollabSession } from "@/server/collab/session";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import { getNoteById, getOrgEventsForPicker } from "../queries";
@@ -23,7 +25,13 @@ export default async function NoteDetailPage({
     notFound();
   }
 
-  const canEdit = note.authorId === user.id || can({ role }, "notes.manageAll");
+  const actor = { userId: user.id, organizationId: org.id, role, user };
+  const canEdit = canEditNote(actor, note);
+  // Live collaboration (docs/features/collaboration.md): the first token,
+  // for a note RLS just returned to this user. Null while the flag is off,
+  // which keeps the autosave editor.
+  const config = collabConfig();
+  const collab = config ? mintNoteCollabSession(config, actor, note) : null;
 
   return (
     <NoteEditorShell
@@ -31,6 +39,7 @@ export default async function NoteDetailPage({
       orgSlug={orgSlug}
       canEdit={canEdit}
       events={events}
+      collab={collab}
       note={{
         id: note.id,
         title: note.title,
