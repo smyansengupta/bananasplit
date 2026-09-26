@@ -102,17 +102,21 @@ test("full workspace workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Create poll" }).click();
   await expect(page).toHaveURL(/\/calendar\/polls\/[a-z0-9]+$/);
 
-  // The redirect from "Create poll" briefly leaves the previous page's own
-  // <table> (the date-picker calendar) in the DOM before the poll page's
-  // response grid mounts — wait for a marker unique to the response grid so
-  // "table button" below can't resolve to the wrong page's table.
-  await page.getByText("Mark as:").waitFor();
-  const firstSlotButton = page.locator("table button").first();
-  await firstSlotButton.click();
+  // The date picker on the form is a grid too: go by the response grid's name.
+  const mine = page.getByRole("grid", { name: "Your availability" });
+  await mine.waitFor();
+  // Two half-hours in a row (the default meeting is an hour), from the
+  // keyboard: Space marks the first, Shift+ArrowDown marks the next.
+  await mine.locator('[data-cell="0:0"]').focus();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   await expect(page.getByText(/1 responded/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Finalize" }).first().click();
-  await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}/calendar/`));
+  await page.getByRole("tab", { name: /Everyone/ }).click();
+  await page.getByRole("button", { name: "Schedule", exact: true }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Schedule" }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}/calendar/(?!polls)[a-z0-9]+$`));
 
   // --- download the .ics for the finalized event ---
   const downloadPromise = page.waitForEvent("download");
