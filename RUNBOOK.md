@@ -43,8 +43,11 @@ needs, plus what to do when something breaks.
 4. **First migration** — `vercel.json`'s `buildCommand` runs
    `prisma migrate deploy && next build`, so migrations apply automatically on
    every deploy, including the first one. Nothing manual required.
-5. **Auth** — create the Google OAuth client (see spec §11, human step 1:
-   `openid email profile` scopes only, no Calendar scope) and add the
+5. **Auth** — sign-in is email/password only for now ("Continue with
+   Google" is hidden in the UI), so the Google sign-in client is optional
+   until the button comes back. When it does: create the Google OAuth client
+   (see spec §11, human step 1: `openid email profile` scopes only, no
+   Calendar scope), set `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`, and add the
    Vercel-assigned domain(s) to its authorized redirect URIs. Google
    Calendar sync uses a **second, separate** OAuth client
    (`GOOGLE_CALENDAR_CLIENT_ID` / `_SECRET`, Calendar API enabled, scopes
@@ -114,10 +117,14 @@ needs, plus what to do when something breaks.
   through the outbox (a `verify-email` job). Without a key, outside
   production, the mail sink writes it to the server log and `.data/mail/`.
   Google sign-ins count as verified when Google says the address is.
-- **Google account linking.** A Google sign-in links to an existing account
+- **Google account linking.** (Applies once Google sign-in is back in the
+  UI; it is hidden for now.) A Google sign-in links to an existing account
   with the same verified address; an unverified password account squatting on
   that address is deleted first (or loses its password if it already joined
   an org). Google sign-ins whose address Google has not verified are refused.
+  While the button is hidden, an account that only ever signed in with Google
+  has no password (and there is no reset flow yet), so it cannot sign in
+  from `/sign-in`; `/sign-up` refuses the address as already taken.
 - **Content Security Policy.** `/app`, `/poll`, `/invite` and the auth pages
   get a per-request nonce policy (`src/proxy.ts`); every other route gets a
   static policy (`next.config.ts`). Both are **enforced** by default, in

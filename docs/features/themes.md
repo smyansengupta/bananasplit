@@ -117,6 +117,6 @@ The sites that other sections left hard-coded now use tokens:
 | `bg-amber-500` outline warning dot                           | `bg-warning`                                               | `org-chart/editor/outline-tree.tsx`                                      |
 | `bg-emerald-500/15`, `bg-amber-500/15` badge tones           | `bg-success/15`, `bg-warning/15`                           | `databases/cell.tsx`                                                     |
 
-Not converted on purpose: `google-icon.tsx` (Google's brand colours), email HTML
-in `src/server/email/**` (mail clients have no CSS variables), label colours
-(`src/lib/label-colors.ts`, data chosen per label) and the CBC seed's label hexes.
+Not converted on purpose: email HTML in `src/server/email/**` (mail clients have no CSS
+variables), label colours (`src/lib/label-colors.ts`, data chosen per label) and the CBC seed's
+label hexes.
