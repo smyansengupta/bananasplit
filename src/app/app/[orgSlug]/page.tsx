@@ -1,38 +1,43 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
 
+import { SetupPrompt } from "@/components/setup/setup-prompt";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getMoneyOwedToUser } from "@/app/app/[orgSlug]/finance/queries";
+import { can } from "@/lib/auth/permissions";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireOrgMembership } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { formatCents } from "@/lib/finance/money";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { loadSetupState } from "@/server/setup/progress";
 
 export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
+  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  // Only owners and admins can act on it, and RLS hides the integration
+  // rows from everyone else anyway.
+  const canSetUp = can({ role }, "integrations.write");
 
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    notFound();
-  }
-
-  try {
-    await requireOrgMembership(org.id);
-  } catch (error) {
-    handleAuthErrorInPage(error);
-  }
-
-  const [openTaskCount, overdueTaskCount] = await Promise.all([
-    prisma.task.count({
-      where: { organizationId: org.id, deletedAt: null, status: { not: "COMPLETED" } },
-    }),
-    prisma.task.count({
-      where: {
-        organizationId: org.id,
-        deletedAt: null,
-        status: { not: "COMPLETED" },
-        dueDate: { lt: new Date() },
-      },
-    }),
-  ]);
+  // One transaction as the member: the counts run one after another on its
+  // connection, and RLS bounds each to the org.
+  const now = new Date();
+  const { openTaskCount, overdueTaskCount, upcomingEventCount, moneyOwedToYouCents, setup } =
+    await withOrgTx(org.id, async ({ db }) => ({
+      openTaskCount: await db.task.count({
+        where: { organizationId: org.id, deletedAt: null, status: { not: "COMPLETED" } },
+      }),
+      overdueTaskCount: await db.task.count({
+        where: {
+          organizationId: org.id,
+          deletedAt: null,
+          status: { not: "COMPLETED" },
+          dueDate: { lt: now },
+        },
+      }),
+      upcomingEventCount: await db.event.count({
+        where: { organizationId: org.id, deletedAt: null, startsAt: { gte: now } },
+      }),
+      moneyOwedToYouCents: await getMoneyOwedToUser(db, org.id, user.id),
+      setup: canSetUp ? await loadSetupState(db, org.id) : null,
+    })).catch(handleAuthErrorInPage);
 
   return (
     <div className="space-y-6">
@@ -42,6 +47,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
           Organization: <span className="font-mono">{orgSlug}</span>
         </p>
       </div>
+      {setup ? <SetupPrompt orgSlug={orgSlug} state={setup} /> : null}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link href={`/app/${orgSlug}/tasks`}>
           <Card className="hover:bg-accent/50 transition-colors">
@@ -56,18 +62,24 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
             </CardHeader>
           </Card>
         </Link>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Upcoming events</CardTitle>
-            <CardDescription>Coming in Phase 4.</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Money owed to you</CardTitle>
-            <CardDescription>Coming in Phase 5.</CardDescription>
-          </CardHeader>
-        </Card>
+        <Link href={`/app/${orgSlug}/calendar`}>
+          <Card className="hover:bg-accent/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Upcoming events</CardTitle>
+              <CardDescription>
+                {upcomingEventCount} upcoming event{upcomingEventCount === 1 ? "" : "s"}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href={`/app/${orgSlug}/finance/my-reimbursements`}>
+          <Card className="hover:bg-accent/50 transition-colors">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Money owed to you</CardTitle>
+              <CardDescription>{formatCents(moneyOwedToYouCents)}</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
       </div>
     </div>
   );

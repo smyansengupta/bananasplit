@@ -7,9 +7,11 @@ import { TaskCard, type TaskCardData } from "@/components/tasks/task-card";
 
 export function SortableTaskCard({
   task,
+  todayKey,
   onOpen,
 }: {
   task: TaskCardData;
+  todayKey: string;
   onOpen: (taskId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -21,7 +23,7 @@ export function SortableTaskCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={
-        "focus-visible:ring-ring rounded-md focus-visible:ring-2 focus-visible:outline-none" +
+        "group focus-visible:ring-ring cursor-grab rounded-lg focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing" +
         (isDragging ? " opacity-40" : "")
       }
       onClick={() => onOpen(task.id)}
@@ -35,7 +37,7 @@ export function SortableTaskCard({
       {...attributes}
       {...listeners}
     >
-      <TaskCard task={task} />
+      <TaskCard task={task} todayKey={todayKey} />
     </div>
   );
 }

@@ -1,0 +1,965 @@
+/*
+ * The org calendar's month grid, week column and agenda.
+ *
+ * Structure and density follow the club website's events calendar
+ * (anthropic-club-website/src/index.css, ".cal-*"): a real table, Sunday
+ * first, a tonal step on days that carry something, a full-width chip per
+ * event, and colour bars instead of a sideways scroll on a phone. Colour,
+ * shape and type come from this app's own tokens instead, so every org
+ * theme restyles the calendar (Settings > Theme).
+ *
+ * Every colour here is a token or a mix of tokens. `--kind` is set per
+ * element from KIND_META (src/components/calendar/kinds.ts) and is the only
+ * thing that changes between event types.
+ */
+
+.cal {
+  --cal-cell-height: clamp(5.5rem, 7.6vw, 7.75rem);
+  --cal-hour-height: 3.25rem;
+  --cal-line: var(--border);
+  /* Mixed toward the foreground rather than toward --muted, so the step is
+     the same size in light and dark. A muted-based tint is nearly
+     invisible on a dark card. */
+  --cal-tint: color-mix(in oklab, var(--foreground) 4.5%, var(--card));
+  --cal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------------------------------------------------------------- header */
+
+.cal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cal-head__label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.cal-head__month {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--foreground);
+}
+
+.cal-head__count {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- filters */
+
+/* One line that scrolls sideways rather than three rows of chips pushing
+   the grid off a phone screen. A chip row is the one place a horizontal
+   scroll is right: it is a short list of equals, not a data grid. */
+.cal-filters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.375rem;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* A filter chip. Selected is a tonal fill plus a stronger border, never a
+   colour change, so the kind dot stays the only coloured thing in the row. */
+.cal-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  height: 1.875rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--cal-line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--cal-ease),
+    border-color 150ms var(--cal-ease),
+    color 150ms var(--cal-ease);
+}
+
+.cal-filter:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.cal-filter[aria-pressed="true"] {
+  background: var(--muted);
+  border-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+  color: var(--foreground);
+}
+
+.cal-filter__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--kind);
+  flex: none;
+}
+
+/* Unselected chips keep the dot legible but quiet. */
+.cal-filter:not([aria-pressed="true"]) .cal-filter__dot {
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------------ month grid */
+
+.cal-wrap {
+  position: relative;
+}
+
+.cal-shell {
+  border: 1px solid var(--cal-line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card);
+}
+
+.cal-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.cal-th {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  background: var(--muted);
+  border-bottom: 1px solid var(--cal-line);
+  border-right: 1px solid var(--cal-line);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.cal-th:last-child,
+.cal-td:last-child {
+  border-right: 0;
+}
+
+.cal-table tbody tr:last-child .cal-td {
+  border-bottom: 0;
+}
+
+.cal-td {
+  height: var(--cal-cell-height);
+  vertical-align: top;
+  padding: 0.3125rem 0.375rem 0.375rem;
+  border-right: 1px solid var(--cal-line);
+  border-bottom: 1px solid var(--cal-line);
+  background: var(--card);
+}
+
+/* The tonal step that marks a day with something on it. */
+.cal-td[data-has-events="true"] {
+  background: var(--cal-tint);
+}
+
+/* Leading and trailing days of the neighbouring months recede but stay
+   usable: an admin can still click one to add an event there. */
+.cal-td[data-outside="true"] {
+  background: color-mix(in oklab, var(--muted) 25%, transparent);
+}
+
+.cal-td[data-outside="true"] .cal-day__num {
+  opacity: 0.45;
+}
+
+.cal-day {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  min-height: 1.375rem;
+}
+
+.cal-day__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 0.3125rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.cal-td[data-has-events="true"] .cal-day__num {
+  color: var(--foreground);
+}
+
+/* Today is the one filled mark on the grid. */
+.cal-td[data-today="true"] .cal-day__num {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 600;
+}
+
+/* The add-here affordance: invisible until the cell is hovered or it is
+   focused, so the grid is not a field of plus signs. */
+.cal-day__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity 150ms var(--cal-ease),
+    background-color 150ms var(--cal-ease);
+}
+
+.cal-td:hover .cal-day__add,
+.cal-day__add:focus-visible {
+  opacity: 1;
+}
+
+.cal-day__add:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+@media (hover: none) {
+  .cal-day__add {
+    display: none;
+  }
+}
+
+/* ----------------------------------------------------------- event chips */
+
+.cal-chip {
+  display: block;
+  width: 100%;
+  margin-top: 0.1875rem;
+  padding: 0.25rem 0.375rem;
+  border: 1px solid color-mix(in oklab, var(--kind) 36%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--kind) 15%, var(--card));
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms var(--cal-ease),
+    background-color 150ms var(--cal-ease);
+}
+
+.cal-chip:hover,
+.cal-chip[aria-expanded="true"] {
+  border-color: var(--kind);
+  background: color-mix(in oklab, var(--kind) 22%, var(--card));
+}
+
+.cal-chip[data-internal="true"] {
+  /* Internal events read a shade quieter than public ones, which is the
+     same ordering the legend states. A dashed border rather than a lighter
+     fill, so the difference survives a colour-blind reading. */
+  border-style: dashed;
+}
+
+.cal-chip__line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3125rem;
+  min-width: 0;
+}
+
+.cal-chip__dot,
+.cal-chip__marks {
+  align-self: center;
+}
+
+.cal-chip__dot {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 999px;
+  background: var(--kind);
+  flex: none;
+}
+
+.cal-chip__time {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  flex: none;
+}
+
+/* Two lines, then ellipsis. A seven-column grid gives a title about 110px,
+   and "Workshop 4: Retrieval-Augmented Gener…" on one line tells you less
+   than the same title wrapped. The cell's height is a minimum, so a day
+   with a long title grows instead of clipping it. */
+.cal-chip__title {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.cal-chip__marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  flex: none;
+}
+
+.cal-more {
+  display: block;
+  width: 100%;
+  margin-top: 0.1875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.cal-more:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* -------------------------------------------------------- month on phone
+ *
+ * The grid fits the viewport instead of scrolling sideways. Seven columns
+ * at 390px are about 50px each, which cannot carry a title, so the chips
+ * become plain colour bars and every word moves into the card that opens on
+ * tap. The text is visually hidden rather than removed, so the bar still
+ * reads as "Workshop 3: Tool use, 6:00 PM, workshop, internal" to a screen
+ * reader. Bars hold 24px, the smallest target WCAG 2.5.8 allows.
+ */
+@media (max-width: 47.99rem) {
+  .cal {
+    --cal-cell-height: auto;
+  }
+
+  .cal-th {
+    padding: 0.5rem 0.125rem;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+
+  .cal-td {
+    min-height: 4rem;
+    padding: 0.25rem 0.1875rem 0.3125rem;
+  }
+
+  .cal-day {
+    justify-content: center;
+  }
+
+  .cal-chip {
+    min-height: 1.5rem;
+    margin-top: 0.1875rem;
+    padding: 0;
+    border-width: 1px;
+    background: var(--kind);
+  }
+
+  .cal-chip[data-internal="true"] {
+    /* A solid bar cannot carry a dashed border legibly at this size, so the
+       internal bar is hatched instead: a cue that survives a colour-blind
+       reading. The two stripe tones are close together on purpose — the
+       bar has to read as one event, not as a warning. */
+    background: repeating-linear-gradient(
+      135deg,
+      var(--kind) 0 0.3125rem,
+      color-mix(in oklab, var(--kind) 78%, var(--card)) 0.3125rem 0.625rem
+    );
+    border-style: solid;
+  }
+
+  .cal-chip__line {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .cal-more {
+    text-align: center;
+    padding: 0.125rem;
+  }
+}
+
+/* ------------------------------------------------------- detail popover */
+
+/*
+ * No shadow: a 1px border a step stronger than the grid's hairline is what
+ * separates it, which is the same device the rest of the app uses for
+ * popovers. It stays mounted while you move between events, so left/top
+ * glide it to the next anchor instead of blinking out and back.
+ */
+.cal-pop {
+  position: absolute;
+  z-index: 30;
+  width: 19rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.875rem 1rem 1rem;
+  border: 1px solid color-mix(in oklab, var(--foreground) 30%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  transform: translateX(-50%);
+  animation: cal-pop-below 180ms var(--cal-ease) both;
+  transition:
+    left 200ms var(--cal-ease),
+    top 200ms var(--cal-ease);
+}
+
+.cal-pop[data-place="above"] {
+  transform: translate(-50%, -100%);
+  animation-name: cal-pop-above;
+}
+
+/* An animated transform replaces the declared one outright, so each
+   keyframe restates the full transform. */
+@keyframes cal-pop-below {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes cal-pop-above {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%) translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-pop {
+    animation: none;
+    transition: none;
+  }
+}
+
+.cal-pop__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.cal-pop__kind .cal-chip__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+/* ------------------------------------------------------------- week grid */
+
+.cal-week {
+  border: 1px solid var(--cal-line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card);
+}
+
+.cal-week__grid {
+  display: grid;
+  grid-template-columns: 3.25rem repeat(var(--cal-days), minmax(0, 1fr));
+}
+
+.cal-week__corner,
+.cal-week__dayhead {
+  background: var(--muted);
+  border-bottom: 1px solid var(--cal-line);
+  border-right: 1px solid var(--cal-line);
+  padding: 0.5rem 0.5rem 0.4375rem;
+}
+
+.cal-week__dayhead:last-child {
+  border-right: 0;
+}
+
+.cal-week__dow {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.cal-week__date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.125rem;
+  padding: 0 0.3125rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
+.cal-week__dayhead[data-today="true"] .cal-week__date {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* The all-day band sits between the header and the hour columns. */
+.cal-week__allday-label,
+.cal-week__allday {
+  border-bottom: 1px solid var(--cal-line);
+  border-right: 1px solid var(--cal-line);
+  padding: 0.25rem 0.3125rem;
+  min-height: 2rem;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+}
+
+.cal-week__allday:last-child {
+  border-right: 0;
+}
+
+.cal-week__allday-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  text-align: right;
+  padding-top: 0.5rem;
+}
+
+.cal-week__scroll {
+  max-height: min(60vh, 34rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The first hour's label sits half a line above its rule, so the column
+   needs that much room at the top or the label is sliced off. */
+.cal-week__scroll > .cal-week__grid {
+  padding-top: 0.625rem;
+}
+
+.cal-week__axis {
+  border-right: 1px solid var(--cal-line);
+  position: relative;
+}
+
+.cal-week__hour {
+  height: var(--cal-hour-height);
+  position: relative;
+}
+
+.cal-week__hour::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  border-top: 1px solid var(--cal-line);
+}
+
+/* Half-hour rules, quieter than the hour rules. */
+.cal-week__hour::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto 0;
+  border-top: 1px dashed color-mix(in oklab, var(--cal-line) 60%, transparent);
+}
+
+.cal-week__axis .cal-week__hour::before,
+.cal-week__axis .cal-week__hour::after {
+  border: 0;
+}
+
+.cal-week__hourlabel {
+  position: absolute;
+  top: -0.5rem;
+  right: 0.5rem;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  background: var(--card);
+  padding: 0 0.125rem;
+}
+
+.cal-week__col {
+  position: relative;
+  border-right: 1px solid var(--cal-line);
+}
+
+.cal-week__col:last-child {
+  border-right: 0;
+}
+
+.cal-week__col[data-weekend="true"] {
+  background: color-mix(in oklab, var(--muted) 22%, transparent);
+}
+
+/*
+ * A timed event in the hour column. The border is one weight all the way
+ * round: a thick coloured edge on one side only is a generated-UI tell,
+ * and the tinted fill already carries the type. Internal events dash the
+ * whole outline, which is the same rule the month chips follow.
+ */
+.cal-slot {
+  position: absolute;
+  padding: 0.1875rem 0.375rem;
+  border: 1px solid color-mix(in oklab, var(--kind) 58%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--kind) 16%, var(--card));
+  color: var(--foreground);
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    border-color 150ms var(--cal-ease),
+    background-color 150ms var(--cal-ease);
+}
+
+.cal-slot:hover,
+.cal-slot[aria-expanded="true"] {
+  background: color-mix(in oklab, var(--kind) 26%, var(--card));
+  border-color: var(--kind);
+}
+
+.cal-slot[data-internal="true"] {
+  border-style: dashed;
+}
+
+.cal-slot__time {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  line-height: 1.3;
+}
+
+.cal-slot__title {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A short event has no room for two lines: the time moves inline. */
+.cal-slot[data-compact="true"] {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.cal-slot[data-compact="true"] .cal-slot__time {
+  flex: none;
+  white-space: nowrap;
+}
+
+.cal-slot[data-compact="true"] .cal-slot__title {
+  white-space: nowrap;
+}
+
+.cal-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--destructive);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.cal-now::before {
+  content: "";
+  position: absolute;
+  left: -0.25rem;
+  top: -0.25rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--destructive);
+}
+
+/* The day strip that replaces seven columns on a phone. */
+.cal-daystrip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.cal-daystrip__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  padding: 0.375rem 0.125rem 0.3125rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--cal-ease),
+    border-color 150ms var(--cal-ease);
+}
+
+.cal-daystrip__day:hover {
+  background: var(--muted);
+}
+
+.cal-daystrip__day[aria-pressed="true"] {
+  background: var(--muted);
+  border-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+}
+
+.cal-daystrip__dow {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.cal-daystrip__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
+.cal-daystrip__day[data-today="true"] .cal-daystrip__num {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.cal-daystrip__dots {
+  display: flex;
+  gap: 0.125rem;
+  height: 0.25rem;
+}
+
+.cal-daystrip__dot {
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--kind);
+}
+
+/* --------------------------------------------------------------- agenda */
+
+.cal-agenda {
+  border: 1px solid var(--cal-line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--card);
+}
+
+.cal-agenda__day + .cal-agenda__day {
+  border-top: 1px solid var(--cal-line);
+}
+
+.cal-agenda__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--muted);
+  border-bottom: 1px solid var(--cal-line);
+}
+
+.cal-agenda__head[data-today="true"] {
+  background: color-mix(in oklab, var(--primary) 12%, var(--muted));
+}
+
+.cal-agenda__date {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-agenda__rel {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+/*
+ * No coloured left border. The kind is carried by the dot in the time
+ * column, which lines every row's dot up in a single column: that is what
+ * makes "where are the socials" answerable by scanning, and it does it
+ * without painting a rail down the side of every row.
+ */
+.cal-agenda__row {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.6875rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms var(--cal-ease);
+}
+
+.cal-agenda__row + .cal-agenda__row {
+  border-top: 1px solid color-mix(in oklab, var(--cal-line) 70%, transparent);
+}
+
+.cal-agenda__row:hover {
+  background: var(--muted);
+}
+
+.cal-agenda__when {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  padding-top: 0.125rem;
+}
+
+.cal-agenda__title {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.cal-agenda__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.1875rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.cal-agenda__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  padding-top: 0.0625rem;
+}
+
+@media (max-width: 47.99rem) {
+  .cal-agenda__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+    padding: 0.625rem 0.75rem;
+  }
+
+  .cal-agenda__badges {
+    justify-content: flex-start;
+  }
+}
+
+/* ---------------------------------------------------------- empty states */
+
+.cal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.cal-empty__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.cal-empty__body {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  max-width: 34ch;
+}
+
+/* ---------------------------------------------------------------- legend */
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 1rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.cal-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* A dragged chip follows the pointer; the cell under it takes the tint. */
+.cal-td[data-drop="true"] {
+  background: color-mix(in oklab, var(--primary) 14%, var(--card));
+  outline: 2px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  outline-offset: -2px;
+}
+
+.cal-chip[data-dragging="true"] {
+  opacity: 0.35;
+}

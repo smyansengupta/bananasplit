@@ -1,9 +1,14 @@
+import Link from "next/link";
+
+import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
 import { GoogleIcon } from "@/components/google-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { signIn } from "@/lib/auth/config";
+import { getUserIdentity } from "@/lib/auth/email-verification";
+import { sameEmail } from "@/lib/auth/normalize-email";
 import { getSession } from "@/lib/auth/session";
-import { findInvitationByRawToken } from "@/lib/invitations";
+import { findInvitationByRawToken } from "@/server/settings/invitations";
 
 import { JoinButton } from "./join-button";
 
@@ -48,7 +53,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   if (!session) {
     return (
       <InviteCard
-        title={`Join ${invitation.organization.name}`}
+        title={`Join ${invitation.orgName}`}
         description={`Sign in as ${invitation.email} to accept this invite.`}
       >
         <form
@@ -62,25 +67,51 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
             Continue with Google
           </Button>
         </form>
+        <p className="text-muted-foreground mt-3 text-center text-sm">
+          Or{" "}
+          <Link href="/sign-in" className="underline underline-offset-4">
+            sign in
+          </Link>{" "}
+          or{" "}
+          <Link href="/sign-up" className="underline underline-offset-4">
+            create an account
+          </Link>{" "}
+          with your email, verify it, then open this link again.
+        </p>
       </InviteCard>
     );
   }
 
-  if (session.user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+  // Compare against the account's STORED address, and require it verified:
+  // an invite can only be taken by whoever controls the invited mailbox
+  // (0A Fix 4).
+  const identity = await getUserIdentity(session.user.id);
+  if (!identity || !sameEmail(identity.email, invitation.email)) {
     return (
       <InviteCard
         title="Wrong account"
-        description={`This invite was sent to ${invitation.email}, but you're signed in as ${session.user.email}.`}
+        description={`This invite was sent to ${invitation.email}, but you're signed in as ${identity?.email ?? session.user.email}.`}
       />
+    );
+  }
+
+  if (!identity.emailVerified) {
+    return (
+      <InviteCard
+        title={`Join ${invitation.orgName}`}
+        description="Verify your email address to accept this invite."
+      >
+        <VerifyEmailNotice email={identity.email} action="accept this invite" />
+      </InviteCard>
     );
   }
 
   return (
     <InviteCard
-      title={`Join ${invitation.organization.name}`}
+      title={`Join ${invitation.orgName}`}
       description={`You're invited as ${invitation.role.toLowerCase()}.`}
     >
-      <JoinButton token={token} orgName={invitation.organization.name} />
+      <JoinButton token={token} orgName={invitation.orgName} />
     </InviteCard>
   );
 }

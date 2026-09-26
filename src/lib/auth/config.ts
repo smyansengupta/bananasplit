@@ -1,10 +1,35 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 
+import {
+  googleProviderOptions,
+  googleSignInGate,
+  markGoogleEmailVerified,
+  withNormalizedEmails,
+} from "@/lib/auth/google-linking";
+import { normalizeEmail } from "@/lib/auth/normalize-email";
 import { verifyPassword } from "@/lib/auth/password";
-import { prisma } from "@/lib/prisma";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { clientIpFrom } from "@/lib/request-ip";
+import { authDb } from "@/server/db/clients";
+
+/**
+ * Credentials sign-in limits (Postgres-backed, shared by every instance;
+ * counted on the auth role as their own statements, so failures count too).
+ * Applied in authorize(), which both the sign-in form's Server Action and a
+ * direct POST to /api/auth/callback/credentials go through.
+ */
+export const SIGN_IN_LIMITS = {
+  perIp: { limit: 30, windowSec: 15 * 60 },
+  perEmail: { limit: 10, windowSec: 15 * 60 },
+} as const;
+
+/** Thrown from authorize() when a limit is hit; the form shows a specific message. */
+export class RateLimitedSignIn extends CredentialsSignin {
+  code = "rate_limited";
+}
 
 declare module "next-auth" {
   interface Session {
@@ -15,41 +40,77 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  // The identity plane runs as app_auth: grants on User, Account, Session,
+  // VerificationToken and UserCredential only, and no tenant access. Every
+  // email the adapter writes or looks up is normalized (0A Fix 4(a)).
+  adapter: withNormalizedEmails(PrismaAdapter(authDb)),
   // Credentials sign-in only persists sessions with the JWT strategy — the
   // adapter still manages User/Account rows for Google, only session storage
   // moves from a Session table row to a signed cookie.
   session: { strategy: "jwt" },
   pages: {
     signIn: "/sign-in",
+    // Auth errors (OAuthAccountNotLinked, AccessDenied) land on the sign-in
+    // page, which explains them.
+    error: "/sign-in",
   },
   providers: [
     // Client ID/secret are read from AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET.
-    // Only the three non-sensitive scopes below — no Calendar access, no
-    // Google verification review required (see spec section 11, item 1).
-    Google({
-      authorization: {
-        params: { scope: "openid email profile" },
-      },
-    }),
+    // Only the three non-sensitive scopes — no Calendar access, no Google
+    // verification review required (see spec section 11, item 1). Email
+    // account linking is allowed because both sides must have verified the
+    // address first (0A Fix 4(d); see google-linking.ts).
+    Google(googleProviderOptions),
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        const email = typeof credentials?.email === "string" ? credentials.email : null;
+      async authorize(credentials, request) {
+        const rawEmail = typeof credentials?.email === "string" ? credentials.email : null;
         const password = typeof credentials?.password === "string" ? credentials.password : null;
-        if (!email || !password) {
+        if (!rawEmail || !password) {
+          return null;
+        }
+        // Emails are stored as lower(btrim()) (migration 0a_normalize_emails).
+        const email = normalizeEmail(rawEmail);
+
+        const ip = clientIpFrom(request.headers);
+        const [byIp, byEmail] = await Promise.all([
+          checkRateLimit(
+            rateLimitKey("signin-ip", ip),
+            SIGN_IN_LIMITS.perIp.limit,
+            SIGN_IN_LIMITS.perIp.windowSec,
+            { via: "auth" },
+          ),
+          checkRateLimit(
+            rateLimitKey("signin-email", email),
+            SIGN_IN_LIMITS.perEmail.limit,
+            SIGN_IN_LIMITS.perEmail.windowSec,
+            { via: "auth" },
+          ),
+        ]);
+        if (!byIp.allowed || !byEmail.allowed) {
+          throw new RateLimitedSignIn();
+        }
+
+        // The password hash lives in UserCredential, which only app_auth can read.
+        const user = await authDb.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            image: true,
+            credential: { select: { passwordHash: true } },
+          },
+        });
+        const passwordHash = user?.credential?.passwordHash;
+        if (!user || !passwordHash) {
           return null;
         }
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user?.passwordHash) {
-          return null;
-        }
-
-        const valid = await verifyPassword(password, user.passwordHash);
+        const valid = await verifyPassword(password, passwordHash);
         if (!valid) {
           return null;
         }
@@ -59,6 +120,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    // Runs before Auth.js looks the address up (@auth/core handleAuthorized
+    // precedes handleLoginOrRegister). Refuses a Google sign-in without a
+    // verified address, and clears an unverified password account squatting
+    // on it before Auth.js links (fails closed; see google-linking.ts).
+    signIn: ({ account, profile }) => googleSignInGate({ account, profile }),
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -71,5 +137,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session;
     },
+  },
+  events: {
+    signIn: ({ user, account, profile }) => markGoogleEmailVerified({ user, account, profile }),
   },
 });

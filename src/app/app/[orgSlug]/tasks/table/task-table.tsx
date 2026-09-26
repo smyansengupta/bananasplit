@@ -1,14 +1,22 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
 import { ChevronDown, ChevronRight, Columns3 } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
 
-import type { OrgMemberOption } from "@/components/tasks/assignee-picker";
-import type { LabelOption } from "@/components/tasks/label-picker";
+import { useBlockedReason, useConfirmFlagged } from "@/components/tasks/prompts";
+import { QuickPriority, QuickStatus } from "@/components/tasks/quick-controls";
 import { STATUS_LABELS } from "@/components/tasks/status-select";
-import { formatDueDate, isOverdue } from "@/components/tasks/utils";
-import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import {
+  DueLabel,
+  FlagBadge,
+  PrivateMark,
+  isTaskFlagged,
+  isTaskPrivate,
+} from "@/components/tasks/task-badges";
+import { accessSubjectOf, useTasks, useWorkspace } from "@/components/tasks/tasks-context";
+import type { TaskItem } from "@/components/tasks/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,150 +41,222 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { UserAvatar } from "@/components/user-avatar";
 import { TaskStatus } from "@/generated/prisma/enums";
+import { canEditTask, canTriage } from "@/lib/tasks/access";
+import { relationFor } from "@/lib/tasks/assignment";
 import { cn } from "@/lib/utils";
 
 import { bulkAssign, bulkDelete, bulkUpdateStatus } from "../actions";
-import type { TaskWithRelations } from "../queries";
+
+/**
+ * The task table: server-paginated (50 a page), sortable within the page,
+ * hideable columns including Owner and Creator, and bulk status, assign
+ * and delete through the same checked path as single edits.
+ */
 
 type SortKey = "title" | "dueDate" | "priority" | "status";
 const PRIORITY_RANK: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
-const COLUMN_KEYS = ["project", "assignees", "labels", "priority", "dueDate"] as const;
+
+/**
+ * The table is the one layout that cannot shed columns on a phone and stay
+ * itself — sorting, bulk-select and the column chooser are the point of it.
+ * So it scrolls sideways, and the checkbox and the title stay pinned to the
+ * left edge while it does: you can always see which row you are changing,
+ * and the pinned edge is the cue that there is more to the right.
+ *
+ * `PINNED_*` keep the header, the body and the subtask rows on the same two
+ * offsets. `w-10` on the checkbox column is where `left-10` comes from.
+ */
+const PINNED_CELL = "bg-background sticky z-20 group-hover:bg-muted/50";
+const PINNED_HEAD = "bg-background sticky z-30";
+/** 3rem, and `left-12` on the title is that same 3rem. */
+const PINNED_CHECKBOX = "left-0 w-12 min-w-12";
+const PINNED_TITLE = "left-12 w-[min(58vw,28rem)] max-w-[min(58vw,28rem)] border-r";
+/**
+ * Chrome will not paint a `position: sticky` cell reliably above a table
+ * that collapses its borders — the scrolled cells bleed through it. So this
+ * one table separates them and draws the row rules on the cells instead.
+ */
+const PINNABLE_TABLE =
+  "border-separate border-spacing-0 [&_td]:border-b [&_th]:border-b " +
+  "[&_tbody_tr:last-child_td]:border-b-0";
+const COLUMN_KEYS = [
+  "owner",
+  "involved",
+  "creator",
+  "project",
+  "labels",
+  "priority",
+  "dueDate",
+] as const;
 type ColumnKey = (typeof COLUMN_KEYS)[number];
 const COLUMN_LABELS: Record<ColumnKey, string> = {
+  owner: "Owner",
+  involved: "Also involved",
+  creator: "Creator",
   project: "Project",
-  assignees: "Assignees",
   labels: "Labels",
   priority: "Priority",
   dueDate: "Due date",
 };
 
 export function TaskTable({
-  orgId,
   tasks,
-  members,
-  labels,
-  projects,
+  total,
+  page,
+  pageSize,
 }: {
-  orgId: string;
-  tasks: TaskWithRelations[];
-  members: OrgMemberOption[];
-  labels: LabelOption[];
-  projects: { id: string; name: string }[];
+  tasks: TaskItem[];
+  total: number;
+  page: number;
+  pageSize: number;
 }) {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
+  const { org, viewer, actor, members, memberById, announce, showTask, newTask } = useTasks();
+  const ws = useWorkspace();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+  const [blockedPrompt, askReason] = useBlockedReason();
+  const [confirmElement, confirmFlagged] = useConfirmFlagged();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>({
+  const [visible, setVisible] = useState<Record<ColumnKey, boolean>>({
+    owner: true,
+    involved: false,
+    creator: false,
     project: true,
-    assignees: true,
     labels: true,
     priority: true,
     dueDate: true,
   });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  // Store only the id and derive the task from the live `tasks` prop — a
-  // captured snapshot wouldn't reflect edits (e.g. toggling a subtask) made
-  // while the dialog stays open across a router.refresh().
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const editingTask = editingTaskId ? (tasks.find((t) => t.id === editingTaskId) ?? null) : null;
 
-  const sortedTasks = useMemo(() => {
+  const sorted = useMemo(() => {
     if (!sortKey) return tasks;
     const factor = sortDir === "asc" ? 1 : -1;
     return [...tasks].sort((a, b) => {
       if (sortKey === "title") return factor * a.title.localeCompare(b.title);
       if (sortKey === "priority")
-        return factor * (PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+        return factor * (PRIORITY_RANK[a.priority]! - PRIORITY_RANK[b.priority]!);
       if (sortKey === "status") return factor * a.status.localeCompare(b.status);
-      const aTime = a.dueDate?.getTime() ?? Infinity;
-      const bTime = b.dueDate?.getTime() ?? Infinity;
-      return factor * (aTime - bTime);
+      const at = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const bt = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      return factor * (at - bt);
     });
   }, [tasks, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
       setSortKey(key);
       setSortDir("asc");
     }
   }
 
-  function toggleSelected(taskId: string) {
+  function toggleSelected(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
 
-  function toggleAll() {
-    setSelected((prev) =>
-      prev.size === sortedTasks.length ? new Set() : new Set(sortedTasks.map((t) => t.id)),
-    );
-  }
-
-  function runBulk(action: () => Promise<unknown>) {
+  function runBulk(action: () => Promise<{ error?: string; confirm?: unknown }>) {
     startTransition(async () => {
-      await action();
+      const result = await action();
+      if (result.error) {
+        announce(result.error);
+        return;
+      }
       setSelected(new Set());
-      router.refresh();
     });
   }
 
+  async function bulkStatus(status: TaskStatus) {
+    let reason: string | null = null;
+    if (status === TaskStatus.BLOCKED) {
+      reason = await askReason();
+      if (!reason) return;
+    }
+    runBulk(() => bulkUpdateStatus(org.id, [...selected], status, reason));
+  }
+
+  async function bulkOwner(userId: string) {
+    let confirmed = false;
+    if (relationFor(viewer.chart, userId) === "ABOVE") {
+      confirmed = await confirmFlagged([memberById.get(userId)?.name ?? "This person"]);
+      if (!confirmed) return;
+    }
+    runBulk(() =>
+      bulkAssign(org.id, [...selected], userId, { role: "owner", confirmFlagged: confirmed }),
+    );
+  }
+
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (p <= 1) params.delete("page");
+    else params.set("page", String(p));
+    return `${pathname}?${params.toString()}`;
+  };
+  const colSpan = 3 + COLUMN_KEYS.filter((k) => visible[k]).length;
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {selected.size > 0 && (
-            <>
-              <span className="text-muted-foreground text-sm">{selected.size} selected</span>
-              <Select
-                onValueChange={(status) =>
-                  runBulk(() => bulkUpdateStatus(orgId, [...selected], status as TaskStatus))
-                }
-              >
-                <SelectTrigger className="h-8 w-40">
-                  <SelectValue placeholder="Change status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.values(TaskStatus).map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {STATUS_LABELS[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                onValueChange={(userId) => runBulk(() => bulkAssign(orgId, [...selected], userId))}
-              >
-                <SelectTrigger className="h-8 w-40">
-                  <SelectValue placeholder="Assign to" />
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map((m) => (
-                    <SelectItem key={m.userId} value={m.userId}>
-                      {m.name ?? m.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => runBulk(() => bulkDelete(orgId, [...selected]))}
-              >
-                Delete
-              </Button>
-            </>
-          )}
+      {blockedPrompt}
+      {confirmElement}
+      {selected.size > 0 && (
+        <div
+          role="toolbar"
+          aria-label="Actions for the selected tasks"
+          className="bg-popover ring-border fixed inset-x-4 bottom-4 z-40 flex flex-wrap items-center gap-2 rounded-xl p-2 shadow-lg ring-1 sm:inset-x-auto sm:left-1/2 sm:w-auto sm:-translate-x-1/2"
+        >
+          <span className="ps-1.5 text-sm font-medium">{selected.size} selected</span>
+          <Select onValueChange={(s) => void bulkStatus(s as TaskStatus)} disabled={isPending}>
+            <SelectTrigger className="h-8 w-40">
+              <SelectValue placeholder="Change status" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.values(TaskStatus).map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select onValueChange={(u) => void bulkOwner(u)} disabled={isPending}>
+            <SelectTrigger className="h-8 w-44">
+              <SelectValue placeholder="Set owner" />
+            </SelectTrigger>
+            <SelectContent>
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name ?? "Member"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={isPending}
+            onClick={() => runBulk(() => bulkDelete(org.id, [...selected]))}
+          >
+            Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            Cancel
+          </Button>
         </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-muted-foreground text-sm">
+          {total === 0 ? "No tasks" : `${total} task${total === 1 ? "" : "s"}`}
+        </span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -188,10 +268,8 @@ export function TaskTable({
             {COLUMN_KEYS.map((key) => (
               <DropdownMenuCheckboxItem
                 key={key}
-                checked={visibleColumns[key]}
-                onCheckedChange={(checked) =>
-                  setVisibleColumns((prev) => ({ ...prev, [key]: checked }))
-                }
+                checked={visible[key]}
+                onCheckedChange={(checked) => setVisible((prev) => ({ ...prev, [key]: checked }))}
               >
                 {COLUMN_LABELS[key]}
               </DropdownMenuCheckboxItem>
@@ -201,234 +279,337 @@ export function TaskTable({
       </div>
 
       <div className="rounded-md border">
-        <Table>
+        <Table className={PINNABLE_TABLE}>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">
+              <TableHead className={cn(PINNED_HEAD, PINNED_CHECKBOX)}>
                 <Checkbox
-                  checked={selected.size > 0 && selected.size === sortedTasks.length}
-                  onCheckedChange={toggleAll}
-                  aria-label="Select all tasks"
+                  checked={selected.size > 0 && selected.size === tasks.length}
+                  onCheckedChange={() =>
+                    setSelected((prev) =>
+                      prev.size === tasks.length ? new Set() : new Set(tasks.map((t) => t.id)),
+                    )
+                  }
+                  aria-label="Select all tasks on this page"
                 />
               </TableHead>
               <SortableHead
                 label="Title"
                 sortKey="title"
-                activeKey={sortKey}
+                active={sortKey}
                 dir={sortDir}
                 onClick={toggleSort}
+                className={cn(PINNED_HEAD, PINNED_TITLE)}
               />
               <SortableHead
                 label="Status"
                 sortKey="status"
-                activeKey={sortKey}
+                active={sortKey}
                 dir={sortDir}
                 onClick={toggleSort}
               />
-              {visibleColumns.priority && (
+              {visible.owner && <TableHead>Owner</TableHead>}
+              {visible.involved && <TableHead>Also involved</TableHead>}
+              {visible.priority && (
                 <SortableHead
                   label="Priority"
                   sortKey="priority"
-                  activeKey={sortKey}
+                  active={sortKey}
                   dir={sortDir}
                   onClick={toggleSort}
                 />
               )}
-              {visibleColumns.dueDate && (
+              {visible.dueDate && (
                 <SortableHead
                   label="Due"
                   sortKey="dueDate"
-                  activeKey={sortKey}
+                  active={sortKey}
                   dir={sortDir}
                   onClick={toggleSort}
                 />
               )}
-              {visibleColumns.assignees && <TableHead>Assignees</TableHead>}
-              {visibleColumns.labels && <TableHead>Labels</TableHead>}
-              {visibleColumns.project && <TableHead>Project</TableHead>}
+              {visible.labels && <TableHead>Labels</TableHead>}
+              {visible.project && <TableHead>Project</TableHead>}
+              {visible.creator && <TableHead>Creator</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedTasks.map((task) => (
-              <TaskTableRows
-                key={task.id}
-                task={task}
-                depth={0}
-                selected={selected}
-                expanded={expanded}
-                visibleColumns={visibleColumns}
-                onToggleSelected={toggleSelected}
-                onToggleExpanded={(id) =>
-                  setExpanded((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  })
-                }
-                onOpen={(task) => {
-                  setEditingTaskId(task.id);
-                  setDialogOpen(true);
-                }}
-              />
-            ))}
+            {sorted.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={colSpan} className="py-12 text-center">
+                  <p className="text-sm font-medium">
+                    {ws.filterCount > 0 ? "No tasks match these filters" : "No tasks here yet"}
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    {ws.filterCount > 0
+                      ? "Remove one of the filters above to widen the search."
+                      : "The table lists every task in the club, 50 to a page."}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3"
+                    onClick={() =>
+                      ws.filterCount > 0
+                        ? ws.setFilters({
+                            status: undefined,
+                            labelId: undefined,
+                            q: undefined,
+                            flagged: false,
+                            blockers: false,
+                            visibility: undefined,
+                          })
+                        : newTask()
+                    }
+                  >
+                    {ws.filterCount > 0 ? "Clear filters" : "New task"}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
+            {sorted.map((task) => {
+              const access = accessSubjectOf(task);
+              const editable = canEditTask(actor, access);
+              const isExpanded = expanded.has(task.id);
+              const doneSubtasks = task.subtasks.filter(
+                (s) => s.status === TaskStatus.COMPLETED,
+              ).length;
+              return (
+                <FragmentRows key={task.id}>
+                  <TableRow
+                    className="hover:bg-muted/50 group cursor-pointer"
+                    onClick={() => showTask(task)}
+                  >
+                    <TableCell
+                      className={cn(PINNED_CELL, PINNED_CHECKBOX)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        checked={selected.has(task.id)}
+                        onCheckedChange={() => toggleSelected(task.id)}
+                        aria-label={`Select ${task.title}`}
+                      />
+                    </TableCell>
+                    <TableCell className={cn(PINNED_CELL, PINNED_TITLE)}>
+                      <div className="flex min-w-0 items-center gap-1">
+                        {task.subtasks.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpanded((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(task.id)) next.delete(task.id);
+                                else next.add(task.id);
+                                return next;
+                              });
+                            }}
+                            className="text-muted-foreground shrink-0"
+                            aria-label={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="size-4" />
+                            ) : (
+                              <ChevronRight className="size-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <span className="w-4 shrink-0" />
+                        )}
+                        {isTaskPrivate(task) && <PrivateMark />}
+                        <span className="truncate">{task.title}</span>
+                        {task.subtasks.length > 0 && (
+                          <span className="text-muted-foreground shrink-0 text-xs">
+                            ({doneSubtasks}/{task.subtasks.length})
+                          </span>
+                        )}
+                        {isTaskFlagged(task) && <FlagBadge className="ml-1 shrink-0" />}
+                      </div>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <QuickStatus task={task} disabled={!editable} />
+                    </TableCell>
+                    {visible.owner && (
+                      <TableCell>
+                        {task.owner ? (
+                          <span className="flex items-center gap-1.5">
+                            <UserAvatar user={task.owner} size="xs" />
+                            <span className="truncate">{task.owner.name}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">No owner</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {visible.involved && (
+                      <TableCell>
+                        <span className="flex -space-x-1">
+                          {task.assignees.map((a) => (
+                            <UserAvatar key={a.userId} user={a.user} size="xs" />
+                          ))}
+                          {task.assignees.length === 0 && (
+                            <span className="text-muted-foreground">–</span>
+                          )}
+                        </span>
+                      </TableCell>
+                    )}
+                    {visible.priority && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <QuickPriority
+                          task={task}
+                          disabled={!editable || !canTriage(actor, access)}
+                        />
+                      </TableCell>
+                    )}
+                    {visible.dueDate && (
+                      <TableCell>
+                        {task.dueDate ? (
+                          <DueLabel
+                            dueDate={task.dueDate}
+                            todayKey={org.todayKey}
+                            done={task.status === "COMPLETED"}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">–</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {visible.labels && (
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {task.labels.map(({ label }) => (
+                            <Badge
+                              key={label.id}
+                              style={{ backgroundColor: label.color, color: "white" }}
+                              className="border-0"
+                            >
+                              {label.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                    )}
+                    {visible.project && <TableCell>{task.project?.name ?? "–"}</TableCell>}
+                    {visible.creator && (
+                      <TableCell>
+                        <span className="flex items-center gap-1.5">
+                          <UserAvatar user={task.createdBy} size="xs" />
+                          <span className="truncate">{task.createdBy.name ?? "Former member"}</span>
+                        </span>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                  {isExpanded &&
+                    task.subtasks.map((s) => (
+                      // Three cells, not two, so a subtask lines up with the
+                      // pinned columns above it: nothing, its title, then its
+                      // details across the rest.
+                      <TableRow key={s.id} className="bg-muted/30">
+                        <TableCell className={cn("bg-muted/30 sticky z-20", PINNED_CHECKBOX)} />
+                        <TableCell className={cn("bg-muted/30 sticky z-20", PINNED_TITLE)}>
+                          <div className="flex min-w-0 items-center gap-1 pl-6 text-sm">
+                            <span
+                              className={cn(
+                                "truncate",
+                                s.status === TaskStatus.COMPLETED &&
+                                  "text-muted-foreground line-through",
+                              )}
+                            >
+                              {s.title}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell colSpan={colSpan - 2}>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground text-xs">
+                              {STATUS_LABELS[s.status]}
+                            </span>
+                            {s.owner && <UserAvatar user={s.owner} size="xs" />}
+                            {s.dueDate && (
+                              <DueLabel
+                                dueDate={s.dueDate}
+                                todayKey={org.todayKey}
+                                className="text-xs"
+                              />
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </FragmentRows>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
 
-      <TaskDetailDialog
-        orgId={orgId}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        task={editingTask}
-        members={members}
-        labels={labels}
-        projects={projects}
-      />
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">
+          {total === 0
+            ? "No tasks"
+            : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`}
+        </span>
+        {pages > 1 && (
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm" disabled={page <= 1}>
+              <Link
+                href={pageHref(page - 1)}
+                aria-disabled={page <= 1}
+                className={cn(page <= 1 && "pointer-events-none opacity-50")}
+              >
+                Previous
+              </Link>
+            </Button>
+            <span className="text-muted-foreground">
+              Page {page} of {pages}
+            </span>
+            <Button asChild variant="outline" size="sm">
+              <Link
+                href={pageHref(page + 1)}
+                aria-disabled={page >= pages}
+                className={cn(page >= pages && "pointer-events-none opacity-50")}
+              >
+                Next
+              </Link>
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+function FragmentRows({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
 
 function SortableHead({
   label,
   sortKey,
-  activeKey,
+  active,
   dir,
   onClick,
+  className,
 }: {
   label: string;
   sortKey: SortKey;
-  activeKey: SortKey | null;
+  active: SortKey | null;
   dir: "asc" | "desc";
   onClick: (key: SortKey) => void;
+  className?: string;
 }) {
   return (
-    <TableHead>
+    <TableHead className={className}>
       <button
         type="button"
         onClick={() => onClick(sortKey)}
         className="hover:text-foreground flex items-center gap-1"
       >
         {label}
-        {activeKey === sortKey &&
-          (dir === "asc" ? <ChevronUpIcon /> : <ChevronDown className="size-3" />)}
+        {active === sortKey && (
+          <ChevronDown className={cn("size-3", dir === "asc" && "rotate-180")} aria-hidden="true" />
+        )}
       </button>
     </TableHead>
-  );
-}
-
-function ChevronUpIcon() {
-  return <ChevronDown className="size-3 rotate-180" aria-hidden="true" />;
-}
-
-function TaskTableRows({
-  task,
-  depth,
-  selected,
-  expanded,
-  visibleColumns,
-  onToggleSelected,
-  onToggleExpanded,
-  onOpen,
-}: {
-  task: TaskWithRelations;
-  depth: number;
-  selected: Set<string>;
-  expanded: Set<string>;
-  visibleColumns: Record<ColumnKey, boolean>;
-  onToggleSelected: (id: string) => void;
-  onToggleExpanded: (id: string) => void;
-  onOpen: (task: TaskWithRelations) => void;
-}) {
-  const hasSubtasks = task.subtasks.length > 0;
-  const isExpanded = expanded.has(task.id);
-  const overdue = isOverdue(task.dueDate, task.status);
-  const completedSubtasks = task.subtasks.filter((s) => s.status === TaskStatus.COMPLETED).length;
-
-  return (
-    <>
-      <TableRow className="cursor-pointer" onClick={() => onOpen(task)}>
-        <TableCell onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={selected.has(task.id)}
-            onCheckedChange={() => onToggleSelected(task.id)}
-          />
-        </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-1" style={{ paddingLeft: depth * 16 }}>
-            {hasSubtasks ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleExpanded(task.id);
-                }}
-                className="text-muted-foreground"
-                aria-label={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
-              >
-                {isExpanded ? (
-                  <ChevronDown className="size-4" />
-                ) : (
-                  <ChevronRight className="size-4" />
-                )}
-              </button>
-            ) : (
-              depth === 0 && <span className="w-4" />
-            )}
-            <span>{task.title}</span>
-            {hasSubtasks && (
-              <span className="text-muted-foreground text-xs">
-                ({completedSubtasks}/{task.subtasks.length})
-              </span>
-            )}
-          </div>
-        </TableCell>
-        <TableCell>{STATUS_LABELS[task.status]}</TableCell>
-        {visibleColumns.priority && <TableCell>{task.priority}</TableCell>}
-        {visibleColumns.dueDate && (
-          <TableCell className={cn(overdue && "text-destructive font-medium")}>
-            {task.dueDate ? formatDueDate(task.dueDate) : "—"}
-          </TableCell>
-        )}
-        {visibleColumns.assignees && (
-          <TableCell>
-            {task.assignees.map((a) => a.user.name ?? a.user.email).join(", ") || "—"}
-          </TableCell>
-        )}
-        {visibleColumns.labels && (
-          <TableCell>
-            <div className="flex flex-wrap gap-1">
-              {task.labels.map(({ label }) => (
-                <Badge
-                  key={label.id}
-                  style={{ backgroundColor: label.color, color: "white" }}
-                  className="border-0"
-                >
-                  {label.name}
-                </Badge>
-              ))}
-            </div>
-          </TableCell>
-        )}
-        {visibleColumns.project && <TableCell>{task.project?.name ?? "—"}</TableCell>}
-      </TableRow>
-      {isExpanded &&
-        task.subtasks.map((s) => (
-          <TableRow key={s.id} className="bg-muted/30">
-            <TableCell />
-            <TableCell colSpan={6}>
-              <div className="flex items-center gap-2" style={{ paddingLeft: (depth + 1) * 16 }}>
-                <span
-                  className={
-                    s.status === TaskStatus.COMPLETED ? "text-muted-foreground line-through" : ""
-                  }
-                >
-                  {s.title}
-                </span>
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
-    </>
   );
 }

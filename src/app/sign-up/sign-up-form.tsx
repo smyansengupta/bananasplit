@@ -15,6 +15,22 @@ export function SignUpForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const mismatch = confirmPassword.length > 0 && password !== confirmPassword;
 
+  if (state.checkEmail) {
+    return (
+      <div className="space-y-3" role="status">
+        <p className="text-sm font-medium">Check your email</p>
+        <p className="text-muted-foreground text-sm">
+          We sent a verification link to <span className="font-medium">{state.checkEmail}</span>.
+          Open it to verify your address, then sign in. You need a verified email to create or
+          join an organization.
+        </p>
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/sign-in">Go to sign in</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <form action={formAction} className="space-y-3">
       <div className="grid gap-1.5">

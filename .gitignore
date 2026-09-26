@@ -42,3 +42,11 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# local-dev-only receipt storage fallback (see src/lib/finance/receipt-storage.ts)
+/.data
+
+# playwright (e2e)
+/test-results
+/playwright-report
+/playwright/.cache

@@ -2,55 +2,86 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { Plus } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import type { TaskCardData } from "@/components/tasks/task-card";
+import { cn } from "@/lib/utils";
 
 import { SortableTaskCard } from "./sortable-task-card";
 
+/**
+ * A board column.
+ *
+ * The column is a filled surface rather than a dashed outline: dashed now
+ * means "private" on the cards inside it, and two different dashed edges in
+ * one screen cancel each other out. Blocked keeps a tinted header so the
+ * column that matters at an exec sync is findable without reading.
+ */
 export function KanbanColumn({
   id,
   title,
   tasks,
+  todayKey,
   onOpenTask,
   onAddTask,
+  footer,
 }: {
   id: string;
   title: string;
   tasks: TaskCardData[];
+  todayKey: string;
   onOpenTask: (taskId: string) => void;
   onAddTask: () => void;
+  footer?: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  const blocked = id === "BLOCKED";
 
   return (
-    <div className="flex w-72 shrink-0 flex-col gap-3 sm:w-80">
-      <div className="flex items-center justify-between px-1">
-        <h2 className="text-sm font-medium">
-          {title} <span className="text-muted-foreground">({tasks.length})</span>
+    <section
+      aria-label={`${title}, ${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
+      className="group/col flex w-[17rem] shrink-0 flex-col gap-2 lg:w-auto lg:min-w-0 lg:flex-1"
+    >
+      <div className="flex items-center gap-2 px-1">
+        <h2 className={cn("text-sm font-semibold tracking-tight", blocked && "text-destructive")}>
+          {title}
         </h2>
+        <span className="text-muted-foreground text-xs tabular-nums">{tasks.length}</span>
         <button
           type="button"
           onClick={onAddTask}
-          className="text-muted-foreground hover:text-foreground text-sm"
-          aria-label={`Add task to ${title}`}
+          className="text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:ring-ring ms-auto rounded p-1 opacity-0 transition-opacity duration-150 group-focus-within/col:opacity-100 group-hover/col:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+          aria-label={`Add a task to ${title}`}
         >
-          + Add
+          <Plus className="size-4" aria-hidden="true" />
         </button>
       </div>
+
       <div
         ref={setNodeRef}
+        data-testid={`kanban-column-${id}`}
         className={cn(
-          "min-h-24 flex-1 space-y-2 rounded-lg border border-dashed p-2 transition-colors",
-          isOver && "border-ring bg-accent/40",
+          "bg-muted/50 ring-border min-h-28 flex-1 space-y-2 rounded-xl p-2 ring-1 transition-colors duration-150 ring-inset",
+          blocked && "bg-destructive/5 ring-destructive/20",
+          isOver && "ring-ring bg-accent/50 ring-2",
         )}
       >
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <SortableTaskCard key={task.id} task={task} onOpen={onOpenTask} />
+            <SortableTaskCard key={task.id} task={task} todayKey={todayKey} onOpen={onOpenTask} />
           ))}
         </SortableContext>
+        {tasks.length === 0 && (
+          <button
+            type="button"
+            onClick={onAddTask}
+            className="text-muted-foreground hover:text-foreground hover:bg-background/60 flex h-20 w-full items-center justify-center rounded-lg text-xs transition-colors duration-150"
+          >
+            {blocked ? "Nothing is blocked" : "Drop a task here, or add one"}
+          </button>
+        )}
       </div>
-    </div>
+      {footer}
+    </section>
   );
 }

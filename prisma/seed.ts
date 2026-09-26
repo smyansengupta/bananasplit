@@ -3,7 +3,15 @@ import { generateNKeysBetween } from "fractional-indexing";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "../src/lib/auth/password";
 import {
+  applyCbcTemplate,
+  CBC_ORG,
+  CBC_PEOPLE,
+  seedCbcDemoData,
+  type CbcPersonKey,
+} from "../src/server/bootstrap/cbc-template";
+import {
   ConferenceProvider,
+  OrgChartSource,
   NoteVisibility,
   PollAvailability,
   PrismaClient,
@@ -17,7 +25,37 @@ import {
   TransactionStatus,
 } from "../src/generated/prisma/client";
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+/**
+ * Local, preview and CI data. Never production: production data comes from
+ * real sign-ups and the OWNER-only 'Bootstrap CBC workspace' action.
+ *
+ * - Two fixture orgs (Robotics Club, Debate Society) with tasks, notes,
+ *   events, a poll and finance data, as before.
+ * - The Claude Builders Club (claude-builders-club): the 8 board members,
+ *   the published org chart, sessions, synthetic contacts with attendance,
+ *   signups and ballots, tasks, Sunday updates and a budget, all through
+ *   src/server/bootstrap/cbc-template.ts.
+ *
+ * Every seeded user signs in with the password `password123`.
+ *
+ * Runs as the migration owner (MIGRATE_DATABASE_URL, else DATABASE_URL),
+ * which owns the tables, so RLS does not apply; the same-org and
+ * member-of-org triggers still do. Re-runnable: the three orgs are deleted
+ * and recreated, users are upserted by email.
+ */
+if (process.env.VERCEL_ENV === "production") {
+  console.error(
+    "Refusing to seed: VERCEL_ENV=production. The seed never runs against production data.",
+  );
+  process.exit(1);
+}
+
+const ownerUrl = process.env.MIGRATE_DATABASE_URL || process.env.DATABASE_URL;
+if (!ownerUrl) {
+  console.error("Set MIGRATE_DATABASE_URL (or DATABASE_URL) to the migration owner's URL.");
+  process.exit(1);
+}
+const adapter = new PrismaPg({ connectionString: ownerUrl });
 const prisma = new PrismaClient({ adapter });
 
 faker.seed(20260913);
@@ -43,23 +81,47 @@ async function main() {
   // no real Google account behind these fixture emails.
   const SEED_PASSWORD_HASH = await hashPassword("password123");
 
-  const users: Record<string, Awaited<ReturnType<typeof prisma.user.upsert>>> = {};
-  for (const u of userSeeds) {
-    users[u.email] = await prisma.user.upsert({
-      where: { email: u.email },
-      update: { name: u.name, timezone: u.timezone, passwordHash: SEED_PASSWORD_HASH },
+  async function upsertUser(data: {
+    email: string;
+    name: string;
+    timezone?: string | null;
+    major?: string;
+    gradYear?: number;
+  }) {
+    const user = await prisma.user.upsert({
+      where: { email: data.email },
+      update: {
+        name: data.name,
+        timezone: data.timezone ?? null,
+        major: data.major,
+        gradYear: data.gradYear,
+      },
       create: {
-        email: u.email,
-        name: u.name,
-        timezone: u.timezone,
-        passwordHash: SEED_PASSWORD_HASH,
+        email: data.email,
+        name: data.name,
+        emailVerified: new Date(),
+        timezone: data.timezone ?? null,
+        major: data.major,
+        gradYear: data.gradYear,
       },
     });
+    // The password hash lives in UserCredential (readable by app_auth only).
+    await prisma.userCredential.upsert({
+      where: { userId: user.id },
+      update: { passwordHash: SEED_PASSWORD_HASH },
+      create: { userId: user.id, passwordHash: SEED_PASSWORD_HASH },
+    });
+    return user;
+  }
+
+  const users: Record<string, Awaited<ReturnType<typeof upsertUser>>> = {};
+  for (const u of userSeeds) {
+    users[u.email] = await upsertUser(u);
   }
   const [alice, bob, carol, dave, eve, frank, grace] = userSeeds.map((u) => users[u.email]);
 
   // --- Organizations (wipe and recreate — cascades remove all org-scoped data) ---
-  const ORG_SLUGS = ["robotics-club", "debate-society"];
+  const ORG_SLUGS = ["robotics-club", "debate-society", CBC_ORG.slug];
   await prisma.organization.deleteMany({ where: { slug: { in: ORG_SLUGS } } });
 
   const orgA = await prisma.organization.create({
@@ -166,6 +228,7 @@ async function main() {
           dueDate,
           rank,
           createdById: faker.helpers.arrayElement(members).id,
+          ownerId: assignees[0]?.id ?? null,
           completedAt:
             status === TaskStatus.COMPLETED
               ? daysFromNow(-faker.number.int({ min: 1, max: 10 }))
@@ -335,6 +398,7 @@ async function main() {
     slotStarts.map((startsAt) =>
       prisma.pollSlot.create({
         data: {
+          organizationId: orgA.id,
           pollId: poll.id,
           startsAt,
           endsAt: new Date(startsAt.getTime() + 60 * 60 * 1000),
@@ -348,6 +412,7 @@ async function main() {
     for (const slot of respondedSlots) {
       await prisma.pollResponse.create({
         data: {
+          organizationId: orgA.id,
           pollId: poll.id,
           slotId: slot.id,
           userId: responder.id,
@@ -658,11 +723,53 @@ async function main() {
     });
   }
 
+  // --- Claude Builders Club ---
+  const cbcUsers = {} as Record<CbcPersonKey, string>;
+  for (const person of CBC_PEOPLE) {
+    const user = await upsertUser({
+      email: person.email,
+      name: person.name,
+      major: person.major,
+      gradYear: person.gradYear,
+    });
+    cbcUsers[person.key] = user.id;
+  }
+  const cbc = await prisma.organization.create({
+    data: { name: CBC_ORG.name, slug: CBC_ORG.slug, timezone: CBC_ORG.timezone },
+  });
+  await prisma.membership.createMany({
+    data: CBC_PEOPLE.map((p) => ({
+      userId: cbcUsers[p.key],
+      organizationId: cbc.id,
+      role: p.role,
+      joinedAt: daysFromNow(-40),
+    })),
+  });
+  // CBC existed before per-org senders, so its mail stays on the platform
+  // sender (Phase 1 backfill); the seeded org also publishes its public feed.
+  await prisma.orgSettings.update({
+    where: { organizationId: cbc.id },
+    data: { platformMailFallback: true, publicEventsEnabled: true },
+  });
+  const template = await applyCbcTemplate(prisma, {
+    organizationId: cbc.id,
+    actorId: cbcUsers.jackson,
+    members: cbcUsers,
+    source: OrgChartSource.SEED,
+  });
+  const demo = await seedCbcDemoData(prisma, {
+    organizationId: cbc.id,
+    members: cbcUsers,
+    intakeProjectId: template.intakeProjectId,
+    labelIds: template.labelIds,
+  });
+
   console.log("Seed complete:", {
-    users: userSeeds.length,
-    organizations: 2,
+    users: userSeeds.length + CBC_PEOPLE.length,
+    organizations: ORG_SLUGS,
     orgATasks: 17,
     orgBTasks: 8,
+    claudeBuildersClub: demo,
   });
 }
 

@@ -1,11 +1,9 @@
 import { NotebookText } from "lucide-react";
-import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { NoteCard } from "@/components/notes/note-card";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requireOrgMembership, type OrgContext } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import { NewNoteButton } from "./new-note-button";
 import { NotesListFilters } from "./notes-list-filters";
@@ -17,18 +15,7 @@ export default async function NotesPage({
 }: PageProps<"/app/[orgSlug]/notes">) {
   const { orgSlug } = await params;
   const query = await searchParams;
-
-  const org = await prisma.organization.findUnique({ where: { slug: orgSlug } });
-  if (!org) {
-    notFound();
-  }
-
-  let ctx: OrgContext;
-  try {
-    ctx = await requireOrgMembership(org.id);
-  } catch (error) {
-    handleAuthErrorInPage(error);
-  }
+  const { organization: org, user } = await getOrgContextBySlug(orgSlug);
 
   const visibility =
     typeof query.visibility === "string" && query.visibility !== "all"
@@ -37,10 +24,11 @@ export default async function NotesPage({
   const author =
     typeof query.author === "string" && query.author !== "all" ? query.author : undefined;
 
-  const [notes, memberships] = await Promise.all([
-    getNotesForList(org.id, ctx.user.id, { visibility, authorId: author }),
-    getOrgMembersForFilter(org.id),
-  ]);
+  // One transaction, so the reads run one after another on its connection.
+  const { notes, memberships } = await withOrgTx(org.id, async ({ db }) => ({
+    notes: await getNotesForList(db, org.id, user.id, { visibility, authorId: author }),
+    memberships: await getOrgMembersForFilter(db, org.id),
+  })).catch(handleAuthErrorInPage);
 
   const members = memberships.map((m) => ({
     userId: m.userId,

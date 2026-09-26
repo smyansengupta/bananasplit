@@ -27,7 +27,9 @@ export function LabelPicker({
   selectedIds,
   onChange,
   disabled,
+  id,
 }: {
+  id?: string;
   labels: LabelOption[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
@@ -48,6 +50,7 @@ export function LabelPicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
           aria-expanded={open}

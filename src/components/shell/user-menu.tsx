@@ -1,32 +1,42 @@
 "use client";
 
-import { LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, Sun, UserRound, Users } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 
 import type { ShellUser } from "@/components/shell/types";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { UserAvatar } from "@/components/user-avatar";
+import { peopleHref, profileHref } from "@/lib/profile/href";
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+/**
+ * The shell's user menu. `user` comes from the database on every request
+ * (getShellUser in the org layout), not from the session token, so a new
+ * name or picture shows at once. `avatar` is User.avatar (uploaded
+ * variants); UserAvatar falls back to the OAuth image, then initials.
+ */
+export type UserMenuUser = ShellUser & { avatar?: unknown };
 
-export function UserMenu({ user }: { user: ShellUser }) {
+export function UserMenu({ user }: { user: UserMenuUser }) {
   const displayName = user.name ?? user.email;
-  const { setTheme } = useTheme();
+  // Each member's Light/Dark/System choice overrides the org's default mode,
+  // unless the org locks the mode (Settings > Theme), which next-themes
+  // reports as forcedTheme.
+  const { setTheme, theme, forcedTheme } = useTheme();
+  const locked = Boolean(forcedTheme);
+  const params = useParams<{ orgSlug?: string }>();
+  const orgSlug = typeof params?.orgSlug === "string" ? params.orgSlug : null;
 
   return (
     <DropdownMenu>
@@ -36,33 +46,52 @@ export function UserMenu({ user }: { user: ShellUser }) {
           className="focus-visible:ring-ring rounded-full focus-visible:ring-2 focus-visible:outline-none"
           aria-label={`Open user menu for ${displayName}`}
         >
-          <Avatar>
-            {user.image && <AvatarImage src={user.image} alt="" />}
-            <AvatarFallback>{initials(displayName)}</AvatarFallback>
-          </Avatar>
+          <UserAvatar user={user} size="md" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="flex flex-col">
-          <span className="font-medium">{displayName}</span>
-          <span className="text-muted-foreground text-xs font-normal">{user.email}</span>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="flex items-center gap-3">
+          <UserAvatar user={user} size="lg" />
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate font-medium">{displayName}</span>
+            <span className="text-muted-foreground truncate text-xs font-normal">{user.email}</span>
+          </span>
         </DropdownMenuLabel>
+        {orgSlug && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href={profileHref(orgSlug)}>
+                <UserRound className="size-4" aria-hidden="true" />
+                Your profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={peopleHref(orgSlug)}>
+                <Users className="size-4" aria-hidden="true" />
+                People
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-          Theme
+          {locked ? "Theme (set by your organization)" : "Theme"}
         </DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => setTheme("light")}>
-          <Sun className="size-4" aria-hidden="true" />
-          Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme("dark")}>
-          <Moon className="size-4" aria-hidden="true" />
-          Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme("system")}>
-          <Monitor className="size-4" aria-hidden="true" />
-          System
-        </DropdownMenuItem>
+        <DropdownMenuRadioGroup value={forcedTheme ?? theme ?? "system"} onValueChange={setTheme}>
+          <DropdownMenuRadioItem value="light" disabled={locked}>
+            <Sun className="size-4" aria-hidden="true" />
+            Light
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark" disabled={locked}>
+            <Moon className="size-4" aria-hidden="true" />
+            Dark
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system" disabled={locked}>
+            <Monitor className="size-4" aria-hidden="true" />
+            System
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => signOut({ redirectTo: "/" })}>
           <LogOut className="size-4" aria-hidden="true" />

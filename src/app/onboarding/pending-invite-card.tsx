@@ -10,7 +10,7 @@ import { joinPendingInvitationAction } from "./actions";
 export function PendingInviteCard({
   invitation,
 }: {
-  invitation: { id: string; role: string; organization: { name: string } };
+  invitation: { id: string; role: string; orgName: string };
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +19,7 @@ export function PendingInviteCard({
     <Card>
       <CardHeader className="flex items-center justify-between gap-4 sm:flex-row">
         <div>
-          <CardTitle>{invitation.organization.name}</CardTitle>
+          <CardTitle>{invitation.orgName}</CardTitle>
           <CardDescription>Invited as {invitation.role.toLowerCase()}</CardDescription>
           {error && <p className="text-destructive mt-1 text-sm">{error}</p>}
         </div>

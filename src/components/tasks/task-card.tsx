@@ -1,38 +1,78 @@
-import { CalendarClock, ListChecks } from "lucide-react";
+import { ListChecks, MessageSquare } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 
-import { formatDueDate, initials, isOverdue } from "./utils";
+import {
+  BlockedNote,
+  DueLabel,
+  FlagBadge,
+  PriorityDot,
+  PrivateBadge,
+  isTaskFlagged,
+  isTaskPrivate,
+} from "./task-badges";
+import type { TaskItem } from "./types";
 
-export interface TaskCardData {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  dueDate: Date | null;
-  assignees: { user: { id: string; name: string | null; email: string; image: string | null } }[];
-  labels: { label: { id: string; name: string; color: string } }[];
-  subtasks: { id: string; status: string }[];
-}
+export type TaskCardData = Pick<
+  TaskItem,
+  | "id"
+  | "title"
+  | "status"
+  | "visibility"
+  | "priority"
+  | "dueDate"
+  | "owner"
+  | "ownerId"
+  | "ownerFlagged"
+  | "assignees"
+  | "labels"
+  | "subtasks"
+  | "blockedReason"
+  | "parentTask"
+  | "_count"
+>;
 
 /**
- * Plain presentational card — no button/interactive role of its own. When
- * used inside a sortable list, the wrapper (e.g. SortableTaskCard) owns
- * click/focus/drag on a single element; a nested <button> here would create
- * two competing focusable/interactive elements for the same card.
+ * Plain presentational card: no button role of its own. Inside a sortable
+ * list the wrapper (SortableTaskCard) owns click, focus and drag on a single
+ * element; a nested <button> here would compete with it.
+ *
+ * A private task gets a dashed edge as well as the badge. Nothing else in
+ * the workspace is dashed, so on a board of forty cards the restricted ones
+ * are countable at a glance, without relying on a colour.
  */
-export function TaskCard({ task }: { task: TaskCardData }) {
-  const overdue = isOverdue(task.dueDate, task.status);
+export function TaskCard({ task, todayKey }: { task: TaskCardData; todayKey: string }) {
   const completedSubtasks = task.subtasks.filter((s) => s.status === "COMPLETED").length;
+  const done = task.status === "COMPLETED";
+  const flagged = isTaskFlagged(task);
+  const priv = isTaskPrivate(task);
 
   return (
-    <div className="bg-card w-full space-y-2 rounded-md border p-3 text-sm shadow-sm">
-      <p className="font-medium">{task.title}</p>
+    <div
+      className={cn(
+        "bg-card w-full space-y-2 rounded-lg border p-3 text-sm shadow-sm transition-shadow duration-150 group-hover:shadow-md",
+        priv && "border-dashed",
+        done && "opacity-70",
+      )}
+    >
+      {task.parentTask && (
+        <p className="text-muted-foreground truncate text-xs">{task.parentTask.title} /</p>
+      )}
+      <p
+        className={cn(
+          "leading-snug font-medium text-pretty",
+          done && "text-muted-foreground line-through",
+        )}
+      >
+        {task.title}
+      </p>
 
-      {task.labels.length > 0 && (
+      {(priv || flagged || task.labels.length > 0) && (
         <div className="flex flex-wrap gap-1">
+          {priv && <PrivateBadge />}
+          {flagged && <FlagBadge />}
           {task.labels.map(({ label }) => (
             <Badge
               key={label.id}
@@ -45,36 +85,33 @@ export function TaskCard({ task }: { task: TaskCardData }) {
         </div>
       )}
 
-      <div className="text-muted-foreground flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          {task.dueDate && (
-            <span
-              className={cn("flex items-center gap-1", overdue && "text-destructive font-medium")}
-            >
-              <CalendarClock className="size-3.5" aria-hidden="true" />
-              {formatDueDate(task.dueDate)}
-            </span>
-          )}
+      {task.status === "BLOCKED" && <BlockedNote reason={task.blockedReason} />}
+
+      <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
+        <div className="flex min-w-0 items-center gap-3">
+          <PriorityDot priority={task.priority} />
+          <DueLabel dueDate={task.dueDate} todayKey={todayKey} done={done} />
           {task.subtasks.length > 0 && (
             <span className="flex items-center gap-1">
               <ListChecks className="size-3.5" aria-hidden="true" />
               {completedSubtasks}/{task.subtasks.length}
             </span>
           )}
+          {task._count.comments > 0 && (
+            <span className="flex items-center gap-1">
+              <MessageSquare className="size-3.5" aria-hidden="true" />
+              {task._count.comments}
+            </span>
+          )}
         </div>
 
-        {task.assignees.length > 0 && (
-          <div className="flex -space-x-2">
-            {task.assignees.slice(0, 3).map(({ user }) => (
-              <Avatar key={user.id} className="border-background size-6 border-2">
-                {user.image && <AvatarImage src={user.image} alt="" />}
-                <AvatarFallback className="text-[10px]">
-                  {initials(user.name ?? user.email)}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-          </div>
-        )}
+        <div className="flex shrink-0 items-center -space-x-1.5">
+          {task.owner && <UserAvatar user={task.owner} size="sm" />}
+          {task.assignees.slice(0, 2).map(({ user }) => (
+            <UserAvatar key={user.id} user={user} size="xs" />
+          ))}
+          {task.assignees.length > 2 && <span className="pl-2">+{task.assignees.length - 2}</span>}
+        </div>
       </div>
     </div>
   );

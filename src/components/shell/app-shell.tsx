@@ -4,6 +4,7 @@ import { Menu, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { CommandPalette } from "@/components/command-palette/command-palette";
+import { NotificationBell } from "@/components/shell/notification-bell";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { navItems } from "@/components/shell/nav-config";
@@ -17,12 +18,15 @@ export function AppShell({
   orgId,
   orgs,
   user,
+  brand,
   children,
 }: {
   orgSlug: string;
   orgId: string;
   orgs: OrgSummary[];
   user: ShellUser;
+  /** The org's logo and name (Settings > Theme > Logo display), above the switcher. */
+  brand?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -49,6 +53,7 @@ export function AppShell({
       </a>
 
       <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden flex-col gap-4 border-r p-4 md:flex">
+        {brand}
         <OrgSwitcher orgs={orgs} activeSlug={orgSlug} />
         <SidebarNav items={navItems} orgSlug={orgSlug} />
       </aside>
@@ -67,8 +72,9 @@ export function AppShell({
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="bg-sidebar text-sidebar-foreground w-72 p-4">
-              <SheetHeader className="p-0">
+              <SheetHeader className="gap-3 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
+                {brand}
                 <OrgSwitcher orgs={orgs} activeSlug={orgSlug} />
               </SheetHeader>
               <div className="mt-4">
@@ -93,6 +99,7 @@ export function AppShell({
           </Button>
 
           <div className="flex-1" />
+          <NotificationBell />
           <UserMenu user={user} />
         </header>
 

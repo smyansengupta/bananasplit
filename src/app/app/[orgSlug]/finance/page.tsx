@@ -1,16 +1,26 @@
-import { Wallet } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { EmptyState } from "@/components/empty-state";
+import { DashboardView } from "@/components/finance/dashboard-view";
+import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
+import { can } from "@/lib/auth/permissions";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
-export default function FinancePage() {
+import { getDashboardData, getMoneyOwedToUser } from "./queries";
+
+export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/finance">) {
+  const { orgSlug } = await params;
+  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+
+  if (!can({ role }, "finance.manage")) {
+    redirect(`/app/${orgSlug}/finance/my-reimbursements`);
+  }
+
+  const { dashboard, moneyOwedToYouCents } = await withOrgTx(org.id, async ({ db }) => ({
+    dashboard: await getDashboardData(db, org.id),
+    moneyOwedToYouCents: await getMoneyOwedToUser(db, org.id, user.id),
+  })).catch(handleAuthErrorInPage);
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Finance</h1>
-      <EmptyState
-        icon={Wallet}
-        title="Finance tracking arrives in Phase 5"
-        description="Owners and treasurers will see the full ledger and budgets here; everyone else sees their own reimbursements."
-      />
-    </div>
+    <DashboardView data={dashboard} orgSlug={orgSlug} moneyOwedToYouCents={moneyOwedToYouCents} />
   );
 }

@@ -1,7 +1,8 @@
 "use server";
 
-import { AuthError } from "next-auth";
+import { AuthError, CredentialsSignin } from "next-auth";
 
+import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { signIn } from "@/lib/auth/config";
 
 export interface PasswordSignInState {
@@ -18,9 +19,16 @@ export async function passwordSignInAction(
     return { error: "Enter your email and password." };
   }
 
+  // Back to the page that sent them here (an email deep link), if it is a
+  // same-origin relative path; otherwise the app home.
+  const redirectTo = safeCallbackUrl(formData.get("callbackUrl")) ?? "/app";
+
   try {
-    await signIn("credentials", { email, password, redirectTo: "/app" });
+    await signIn("credentials", { email, password, redirectTo });
   } catch (error) {
+    if (error instanceof CredentialsSignin && error.code === "rate_limited") {
+      return { error: "Too many sign-in attempts. Wait a few minutes and try again." };
+    }
     if (error instanceof AuthError) {
       return { error: "Incorrect email or password." };
     }

@@ -1,10 +1,18 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import type { Invitation } from "@/generated/prisma/client";
-import type { SessionUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import type { Role } from "@/generated/prisma/enums";
+
+/**
+ * Invitation tokens and shared copy. The database work (create, resend,
+ * revoke, look up by token, accept) lives in src/server/settings/invitations.ts,
+ * on the RLS-enforced roles.
+ */
 
 export const INVITATION_EXPIRY_DAYS = 7;
+
+export function invitationExpiry(now = new Date()): Date {
+  return new Date(now.getTime() + INVITATION_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+}
 
 export function generateInvitationToken(): { token: string; tokenHash: string } {
   const token = randomBytes(32).toString("base64url");
@@ -15,61 +23,34 @@ export function hashInvitationToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export function findInvitationByRawToken(rawToken: string) {
-  return prisma.invitation.findUnique({
-    where: { token: hashInvitationToken(rawToken) },
-    include: { organization: true },
-  });
-}
-
-export function findPendingInvitationsForEmail(email: string) {
-  return prisma.invitation.findMany({
-    where: { email, acceptedAt: null, expiresAt: { gt: new Date() } },
-    include: { organization: true },
-    orderBy: { createdAt: "desc" },
-  });
+/** An invitation as the joining user sees it (no token, no inviter email). */
+export interface InvitationForJoin {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: Role;
+  expiresAt: Date;
+  acceptedAt: Date | null;
+  invitedById: string;
+  orgName: string;
+  orgSlug: string;
 }
 
 export type AcceptInvitationResult =
   | { ok: true; orgId: string; orgSlug: string }
-  | { ok: false; reason: "already_used" | "expired" | "email_mismatch"; invitedEmail?: string };
+  | {
+      ok: false;
+      reason: "already_used" | "expired" | "email_mismatch" | "unverified" | "org_inactive";
+      invitedEmail?: string;
+    };
 
-/**
- * Shared accept logic for both entry points: the emailed /invite/[token]
- * link, and the onboarding page's "Join" button for an already-verified
- * signed-in email. Membership + marking the invite accepted happen in one
- * transaction so a retry can never double-join or silently skip either.
- */
-export async function acceptInvitation(
-  invitation: Invitation,
-  user: SessionUser,
-): Promise<AcceptInvitationResult> {
-  if (invitation.acceptedAt) {
-    return { ok: false, reason: "already_used" };
-  }
-  if (invitation.expiresAt < new Date()) {
-    return { ok: false, reason: "expired" };
-  }
-  if (invitation.email.toLowerCase() !== user.email.toLowerCase()) {
-    return { ok: false, reason: "email_mismatch", invitedEmail: invitation.email };
-  }
-
-  await prisma.$transaction([
-    prisma.membership.upsert({
-      where: {
-        userId_organizationId: { userId: user.id, organizationId: invitation.organizationId },
-      },
-      update: {},
-      create: { userId: user.id, organizationId: invitation.organizationId, role: invitation.role },
-    }),
-    prisma.invitation.update({
-      where: { id: invitation.id },
-      data: { acceptedAt: new Date() },
-    }),
-  ]);
-
-  const org = await prisma.organization.findUniqueOrThrow({
-    where: { id: invitation.organizationId },
-  });
-  return { ok: true, orgId: org.id, orgSlug: org.slug };
-}
+export const ACCEPT_ERROR_MESSAGES: Record<
+  Exclude<AcceptInvitationResult, { ok: true }>["reason"],
+  string
+> = {
+  already_used: "This invite has already been used.",
+  expired: "This invite has expired.",
+  email_mismatch: "This invite was sent to a different email address.",
+  unverified: "Verify your email address before accepting this invite.",
+  org_inactive: "This organization is no longer active.",
+};

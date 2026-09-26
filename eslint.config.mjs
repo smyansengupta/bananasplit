@@ -3,6 +3,199 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import prettierConfig from "eslint-config-prettier";
 
+// =====================================================================
+// Platform rules (docs/ARCHITECTURE.md, "Platform services" and "Lint").
+// ESLint's flat config replaces a rule's options wholesale when a later
+// block matches the same file, so each block below lists the COMPLETE set
+// of restrictions for its files, composed from the pieces here.
+// =====================================================================
+
+const TESTS = ["**/*.test.ts", "**/*.test.tsx"];
+
+// ---- Imports --------------------------------------------------------
+
+/** Invalidate through invalidate(): after commit, updateTag only in actions. */
+const NEXT_CACHE = {
+  name: "next/cache",
+  importNames: ["updateTag", "revalidateTag", "revalidatePath"],
+  message: "Use invalidate() from @/server/cache/invalidate (after commit, the right API per context).",
+};
+
+/**
+ * The service and auth clients bypass the member path: only the enumerated
+ * paths in CLIENT_ALLOWLIST may import them. Everything else reaches the
+ * database through the wrappers in @/server/db/context.
+ */
+const PRIVILEGED_CLIENT_MESSAGE =
+  "serviceDb, authDb and getClient are for the allowlisted paths in eslint.config.mjs (CLIENT_ALLOWLIST); use the wrappers in @/server/db/context.";
+const PRIVILEGED_CLIENTS = [
+  { name: "@/server/db/clients", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
+  { name: "@/server/db", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
+];
+/** Navigation belongs to the action and page layer, not to services. */
+const NAVIGATION = {
+  name: "next/navigation",
+  importNames: ["redirect", "permanentRedirect", "notFound", "forbidden", "unauthorized"],
+  message: "Services throw AppErrors (@/lib/auth/errors); pages and actions decide how to navigate.",
+};
+/** Cached loaders run outside the request: explicit arguments, their own withSystemOrgTx. */
+const REQUEST_CONTEXT = {
+  name: "@/server/db/context",
+  importNames: ["currentTx", "afterCommitOrNow", "withOrgTx", "withOrgAction", "withUserTx"],
+  message: "Cached loaders take explicit arguments and open their own withSystemOrgTx.",
+};
+
+const restrictImports = (...paths) => ["error", { paths: paths.flat() }];
+
+/**
+ * The reviewed importers of serviceDb / authDb / getClient (0B allowlist):
+ * the identity plane (Auth.js, sign-up, email verification, the Google
+ * sign-in gate and the purge), the rate limiter, the ICS feed, the cron
+ * routes and the job runner, the health check, and the data layer itself.
+ * Adding a path here is a security review item.
+ */
+const CLIENT_ALLOWLIST = [
+  "src/lib/auth/config.ts",
+  "src/lib/auth/purge-squatter.ts",
+  // authDb only: User.emailVerified and UserCredential (0A Fix 4).
+  "src/lib/auth/email-verification.ts",
+  "src/lib/auth/google-linking.ts",
+  "src/app/sign-up/actions.ts",
+  "src/app/verify-email/**",
+  "src/lib/rate-limit.ts",
+  "src/app/api/calendar/feed/**",
+  "src/app/api/cron/**",
+  "src/server/jobs/**",
+  "src/server/email/jobs.ts",
+  "src/server/email/verification.ts",
+  "src/server/health.ts",
+  "scripts/**",
+];
+
+/** Directories written after the 0B cutover (the record of post-0B layout). */
+const NEW_CODE = [
+  "src/server/**/*.{ts,tsx}",
+  "src/app/app/[[]orgSlug]/org-chart/**",
+  "src/app/app/[[]orgSlug]/databases/**",
+  "src/app/app/[[]orgSlug]/reports/**",
+  "src/app/app/[[]orgSlug]/calendar/**",
+  "src/app/poll/**",
+  "src/components/calendar/**",
+  "src/lib/calendar/**",
+  "src/app/app/[[]orgSlug]/tasks/**",
+  "src/components/tasks/**",
+  "src/app/app/[[]orgSlug]/profile/**",
+  "src/app/app/[[]orgSlug]/people/**",
+  "src/app/app/[[]orgSlug]/settings/{general,integrations,privacy,theme,danger,members,invitations,labels,audit}/**",
+  "src/app/app/[[]orgSlug]/settings/{layout,page,settings-nav,settings-subnav,settings-no-access}.{ts,tsx}",
+  "src/app/app/[[]orgSlug]/{layout,org-pending-deletion}.tsx",
+  "src/app/app/{new,platform}/**",
+  "src/app/app/{page,actions}.{ts,tsx}",
+  "src/app/onboarding/**",
+  "src/app/invite/**",
+  "src/components/shell/org-switcher.tsx",
+  "src/app/api/public/**",
+  "src/app/api/integrations/**",
+  "src/app/api/orgs/**",
+  "src/app/verify-email/**",
+];
+
+// ---- Syntax ---------------------------------------------------------
+
+/** One cache-tag grammar, built in one file (D8). */
+const CACHE_TAG_LITERALS = [
+  {
+    selector: "Literal[value=/^org:/]",
+    message: "Build cache tags with the helpers in src/server/cache/tags.ts.",
+  },
+  {
+    selector: "TemplateLiteral > TemplateElement:first-child[value.raw=/^org:/]",
+    message: "Build cache tags with the helpers in src/server/cache/tags.ts.",
+  },
+];
+
+/**
+ * The tenant context is transaction-bound (app.set_context, only in
+ * context.ts). A session-level set_config, SET SESSION, SET app.* or
+ * RESET app.* in any SQL string would leak a context onto a pooled
+ * connection (N8).
+ */
+const SESSION_CONTEXT_MESSAGE =
+  "The tenant context is set only by app.set_context in src/server/db/context.ts (transaction-bound); never set_config, SET SESSION, SET app.* or RESET app.*.";
+const SESSION_CONTEXT_SQL = [
+  /set_config\s*\(/,
+  /\b(SET|set)\s+(SESSION|session|app\.)/,
+  /\b(RESET|reset)\s+(app\.|ALL|all)/,
+].flatMap((re) => [
+  { selector: `Literal[value=${re}]`, message: SESSION_CONTEXT_MESSAGE },
+  { selector: `TemplateElement[value.raw=${re}]`, message: SESSION_CONTEXT_MESSAGE },
+]);
+
+/**
+ * Secrets never reach client code (Phase 1): a "use client" module may not
+ * import the secrets module or the data layer (type-only imports are erased
+ * and allowed). Settings pages hand client components DTOs only.
+ */
+const CLIENT_SERVER_IMPORTS = [
+  {
+    selector:
+      "Program:has(> ExpressionStatement[directive='use client']) ImportDeclaration[importKind!='type'][source.value=/^@.server.(secrets|db)([^a-z-]|$)/]",
+    message: "Client components must not import @/server/secrets or @/server/db; pass DTOs from a server component.",
+  },
+];
+
+/** Runtime code gets its URL from src/server/db/urls.ts (per role, never the owner). */
+const DATABASE_URL_ENV = [
+  {
+    selector:
+      "MemberExpression[object.type='MemberExpression'][object.object.name='process'][object.property.name='env'][property.name=/^DATABASE_URL/]",
+    message: "Only src/server/db/urls.ts (and prisma.config.ts, the seed and owner scripts) read DATABASE_URL.",
+  },
+];
+
+const restrictSyntax = (...selectors) => ["error", ...selectors.flat()];
+
+// ---- Theme tokens (Phase 8) ------------------------------------------
+
+/**
+ * Components colour with the design tokens (bg-primary, text-success,
+ * var(--chart-2)), never Tailwind palette classes (text-green-600) or raw
+ * colour values, so an org theme restyles everything. An error: every site
+ * has been converted (see docs/features/themes.md). The only exceptions are
+ * the ignores below: brand marks and email HTML.
+ */
+const PALETTE_CLASS =
+  /(?:^|[\s"'`:!])(?:bg|text|border|ring|fill|stroke|from|to|via|outline|decoration|divide|accent|caret|shadow|placeholder)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/;
+const RAW_COLOR = /(?:^|[\s:(,'"])#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(?:rgba?|hsla?)\(\s*\d/;
+const themePlugin = {
+  rules: {
+    "no-raw-colors": {
+      meta: {
+        type: "suggestion",
+        schema: [],
+        messages: {
+          palette: "Use a theme token (bg-primary, text-success, text-warning, bg-chart-1, ...) instead of a Tailwind palette colour.",
+          raw: "Use a theme token (var(--primary), var(--chart-1), ...) instead of a raw colour value.",
+        },
+      },
+      create(context) {
+        const check = (node, text) => {
+          if (PALETTE_CLASS.test(text)) context.report({ node, messageId: "palette" });
+          else if (RAW_COLOR.test(text)) context.report({ node, messageId: "raw" });
+        };
+        return {
+          Literal(node) {
+            if (typeof node.value === "string") check(node, node.value);
+          },
+          TemplateElement(node) {
+            check(node, node.value.raw);
+          },
+        };
+      },
+    },
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -14,6 +207,104 @@ const eslintConfig = defineConfig([
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
     },
+  },
+  // Every source file and script.
+  {
+    files: ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
+    ignores: ["src/generated/**"],
+    rules: {
+      // RLS contains logic bugs, not SQL injection: injected SQL can forge
+      // the tenant context (test T29). Tagged-template $queryRaw only.
+      "no-restricted-properties": [
+        "error",
+        { property: "$queryRawUnsafe", message: "Use the tagged-template $queryRaw (values are bound)." },
+        { property: "$executeRawUnsafe", message: "Use the tagged-template $executeRaw (values are bound)." },
+        { object: "Prisma", property: "raw", message: "Prisma.raw splices text into SQL; bind values instead." },
+      ],
+      "no-restricted-syntax": restrictSyntax(
+        CACHE_TAG_LITERALS,
+        SESSION_CONTEXT_SQL,
+        DATABASE_URL_ENV,
+        CLIENT_SERVER_IMPORTS,
+      ),
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS),
+    },
+  },
+  {
+    files: NEW_CODE,
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS) },
+  },
+  // Services: additionally no navigation.
+  {
+    files: ["src/server/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, NAVIGATION),
+    },
+  },
+  // Cached loaders: additionally no request context.
+  {
+    files: ["src/server/cached/**/*.ts", "src/server/org-chart/queries.ts"],
+    rules: {
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, NAVIGATION, REQUEST_CONTEXT),
+    },
+  },
+  // The client allowlist: the service and auth clients are allowed.
+  {
+    files: CLIENT_ALLOWLIST,
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE) },
+  },
+  {
+    files: ["src/server/jobs/**", "src/server/email/**", "src/server/health.ts"],
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, NAVIGATION) },
+  },
+  // Re-apply the stricter rules to the non-allowlisted email modules.
+  {
+    files: ["src/server/email/**"],
+    ignores: ["src/server/email/jobs.ts", "src/server/email/verification.ts"],
+    rules: {
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, NAVIGATION),
+    },
+  },
+  // The data layer: defines and re-exports the clients; context.ts owns
+  // navigation (getOrgContextBySlug) and set_context.
+  {
+    files: ["src/server/db/**"],
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE) },
+  },
+  {
+    files: ["src/server/db/urls.ts", "scripts/**/*.ts"],
+    rules: { "no-restricted-syntax": restrictSyntax(CACHE_TAG_LITERALS, SESSION_CONTEXT_SQL) },
+  },
+  {
+    files: ["src/server/db/context.ts"],
+    rules: { "no-restricted-syntax": restrictSyntax(CACHE_TAG_LITERALS, DATABASE_URL_ENV) },
+  },
+  {
+    files: ["src/server/cache/tags.ts"],
+    rules: { "no-restricted-syntax": restrictSyntax(SESSION_CONTEXT_SQL, DATABASE_URL_ENV) },
+  },
+  {
+    files: ["src/server/cache/invalidate.ts"],
+    rules: {
+      "no-restricted-imports": restrictImports(PRIVILEGED_CLIENTS, NAVIGATION),
+    },
+  },
+  // Theme tokens only in components and pages (see themePlugin).
+  {
+    files: ["src/**/*.tsx"],
+    ignores: [
+      ...TESTS,
+      // Brand marks with fixed colours, and email HTML (no CSS variables in mail clients).
+      "src/components/google-icon.tsx",
+      "src/server/email/**",
+    ],
+    plugins: { theme: themePlugin },
+    rules: { "theme/no-raw-colors": "error" },
+  },
+  // Tests drive every layer directly.
+  {
+    files: TESTS,
+    rules: { "no-restricted-imports": "off", "no-restricted-syntax": "off" },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([
