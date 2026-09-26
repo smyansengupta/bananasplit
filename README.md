@@ -64,6 +64,7 @@ Email/password is a deliberate addition beyond the original spec, which scoped v
 | `pnpm format:check` | Check formatting without writing |
 | `pnpm test`         | Unit/integration tests (Vitest)  |
 | `pnpm test:e2e`     | End-to-end browser tests (Playwright) |
+| `pnpm collab:dev`   | Live-collaboration server for notes (optional, see below) |
 
 ## Documentation
 
@@ -82,4 +83,8 @@ through hardening: notifications, an authorization audit, accessibility
 fixes, performance work, E2E tests, and deployment/docs prep) are done.
 Per the spec's own sequencing, Phase 7 (stretch: Google Calendar sync,
 real-time collaborative editing) is intentionally not started — v1 is meant
-to run with a real e-board for a month first.
+to run with a real e-board for a month first. Real-time collaborative
+editing of notes has since been built but is off by default: it needs a
+separate WebSocket server that Vercel cannot host, and choosing where to run
+it is still open (see
+[`docs/features/collaboration.md`](docs/features/collaboration.md)).

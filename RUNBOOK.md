@@ -98,6 +98,39 @@ needs, plus what to do when something breaks.
    no "first user becomes owner" bootstrap by design — every org is created
    through the normal onboarding flow, which makes its creator the owner).
 
+## Live collaboration (optional, off by default)
+
+Live editing of notes needs a WebSocket server that Vercel cannot host.
+Until one is running, leave it off: notes use the autosave editor. Choices
+and trade-offs: `docs/features/collaboration.md`. With the bundled server:
+
+1. **Secret** — `openssl rand -base64 48`; keep a copy offline. It signs the
+   editors' tokens and the server-to-server calls, so treat it like
+   `AUTH_SECRET`.
+2. **Collaboration host** (any always-on Node 22+ host with WebSockets and
+   TLS) — deploy this repo, `pnpm install --frozen-lockfile`, run
+   `pnpm collab:start` with `COLLAB_SECRET`, `COLLAB_PORT` (or the
+   platform's `PORT`) and `COLLAB_APP_URL` set to the app's origin. Give it
+   a `wss://` hostname and check `https://<collab host>/` answers 200.
+3. **Vercel, Production scope** — `COLLAB_ENABLED=true`,
+   `COLLAB_SERVER_URL=wss://<collab host>`, the same `COLLAB_SECRET`, then
+   redeploy (migration `20260926120000_note_yjs_state` applies in the build
+   step). Leave the Preview scope without `COLLAB_ENABLED`.
+4. **Check** — open a note in two browsers: the status says "Live" and each
+   sees the other's caret. Add the collaboration host to the uptime monitor.
+
+**If it is down**, notes open in the autosave editor after a few seconds;
+live editors that were already connected keep their edits in the tab and
+save them when it comes back. Restarting it is safe at any time (it saves
+open notes on SIGTERM; editors reconnect).
+
+**Rotating the secret** — set the new `COLLAB_SECRET` on both sides and
+restart both (Vercel redeploy, then the collaboration server). Editors open
+in between reconnect once they get a token signed with the new value (within
+five minutes). **Turning it off** — remove `COLLAB_ENABLED` and redeploy;
+nothing else changes (`Note.yjsState` is kept, and autosaves keep it in
+step, so turning it on again later is safe).
+
 ## Security switches (Phase 0A)
 
 - **Org creation lock.** In production (`VERCEL_ENV=production`, or
