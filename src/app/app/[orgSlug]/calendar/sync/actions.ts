@@ -6,7 +6,8 @@ import { requestGoogleImport, requestGoogleSync } from "@/server/google-calendar
 import { actionError } from "../action-result";
 
 /**
- * Calendar > Sync and website feed. ADMIN+ (integrations.write), checked in
+ * Calendar > Sync and website feed (and its import card on Settings >
+ * Integrations > Google Calendar). ADMIN+ (integrations.write), checked in
  * the request functions; the work runs in gcal / google-import jobs after
  * commit (the import is a heavy job, kicked to /api/cron/jobs).
  */

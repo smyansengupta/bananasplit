@@ -100,7 +100,9 @@ them in place instead of duplicating them.
 
 ### 3. Import the events that are already on Google (once)
 
-Calendar > Sync and website feed > **Import existing Google events**:
+Calendar > Sync and website feed > **Import existing Google events** (the
+same card is on Settings > Integrations > Google Calendar while Google is
+connected):
 
 1. **Dry run** reads the public Google calendar (six months back to about a
    year ahead) and reports *N linked, M new, K ambiguous*, with sample
