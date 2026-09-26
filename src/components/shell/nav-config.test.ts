@@ -13,6 +13,7 @@ describe("sidebar navigation", () => {
       "Tasks",
       "Notes",
       "Calendar",
+      "Polls",
       "Org Chart",
       "Databases",
       "Reports",
@@ -28,6 +29,13 @@ describe("sidebar navigation", () => {
     expect(isNavItemActive(item("Overview"), "cbc", "/app/cbc")).toBe(true);
     expect(isNavItemActive(item("Overview"), "cbc", "/app/cbc/tasks")).toBe(false);
     expect(isNavItemActive(item("Notes"), "cbc", "/app/cbc/notesy")).toBe(false);
+  });
+
+  it("marks only the most specific section active when sections nest", () => {
+    expect(isNavItemActive(item("Polls"), "cbc", "/app/cbc/calendar/polls/abc")).toBe(true);
+    expect(isNavItemActive(item("Calendar"), "cbc", "/app/cbc/calendar/polls/abc")).toBe(false);
+    expect(isNavItemActive(item("Calendar"), "cbc", "/app/cbc/calendar/sync")).toBe(true);
+    expect(isNavItemActive(item("Polls"), "cbc", "/app/cbc/calendar")).toBe(false);
   });
 });
 
