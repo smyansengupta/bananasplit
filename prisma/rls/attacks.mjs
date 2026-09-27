@@ -603,7 +603,7 @@ runSuite("rls-attacks", async ({ clients, record: rec }) => {
   await acase(
     "A-N7b",
     "N7",
-    "the real schema has no violations across all non-system schemas",
+    "the real schema has no violations (object checks: every reachable schema; role checks: all)",
     "owner",
     null,
     async (q) =>
