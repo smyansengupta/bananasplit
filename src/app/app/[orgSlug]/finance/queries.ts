@@ -1,9 +1,11 @@
 import {
+  EventKind,
   TransactionDirection,
   TransactionKind,
   TransactionStatus,
 } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
+import { computeRunway, countsTowardBalance, type Runway } from "@/lib/finance/stats";
 import type { TxClient } from "@/server/db/context";
 
 /**
@@ -13,6 +15,8 @@ import type { TxClient } from "@/server/db/context";
  * transaction's submitter or to OWNER/TREASURER. Helpers run their queries
  * one after another: a transaction has one connection.
  */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function getActivePeriod(db: TxClient, organizationId: string) {
   return db.budgetPeriod.findFirst({ where: { organizationId, isActive: true } });
@@ -25,7 +29,11 @@ export function getOrgPeriods(db: TxClient, organizationId: string) {
   });
 }
 
-export function getCategoriesForPeriod(db: TxClient, organizationId: string, budgetPeriodId: string) {
+export function getCategoriesForPeriod(
+  db: TxClient,
+  organizationId: string,
+  budgetPeriodId: string,
+) {
   return db.budgetCategory.findMany({
     where: { organizationId, budgetPeriodId },
     orderBy: { sortOrder: "asc" },
@@ -105,7 +113,11 @@ export function buildTransactionWhere(
   };
 }
 
-export function getTransactions(db: TxClient, organizationId: string, filters: TransactionFilters = {}) {
+export function getTransactions(
+  db: TxClient,
+  organizationId: string,
+  filters: TransactionFilters = {},
+) {
   return db.transaction.findMany({
     where: buildTransactionWhere(organizationId, filters),
     include: transactionInclude,
@@ -138,7 +150,7 @@ export function getSponsorships(db: TxClient, organizationId: string) {
 }
 
 export interface DashboardData {
-  period: { id: string; label: string } | null;
+  period: { id: string; label: string; startsOn: Date; endsOn: Date } | null;
   balanceCents: number;
   totalAllocatedCents: number;
   categories: { id: string; name: string; allocatedCents: number; spentCents: number }[];
@@ -147,9 +159,21 @@ export interface DashboardData {
   sponsorshipReceivedCents: number;
   burnByMonth: { month: string; inCents: number; outCents: number }[];
   unreconciledOver60DaysCount: number;
+  runway: Runway | null;
 }
 
-export async function getDashboardData(db: TxClient, organizationId: string): Promise<DashboardData> {
+/**
+ * The active period's dashboard. Balance, category spend, burn and runway
+ * all read the same ledger: non-voided transactions, less expenses still in
+ * draft or rejected (countsTowardBalance). Meetings, for the per-meeting
+ * average, are the period's calendar events other than board meetings: those
+ * are the officers' own and carry no club spending.
+ */
+export async function getDashboardData(
+  db: TxClient,
+  organizationId: string,
+  now: Date = new Date(),
+): Promise<DashboardData> {
   const period = await getActivePeriod(db, organizationId);
   if (!period) {
     return {
@@ -162,6 +186,7 @@ export async function getDashboardData(db: TxClient, organizationId: string): Pr
       sponsorshipReceivedCents: 0,
       burnByMonth: [],
       unreconciledOver60DaysCount: 0,
+      runway: null,
     };
   }
 
@@ -187,13 +212,29 @@ export async function getDashboardData(db: TxClient, organizationId: string): Pr
       categoryId: true,
     },
   });
+  const meetings = await db.event.findMany({
+    where: {
+      organizationId,
+      deletedAt: null,
+      mergedIntoId: null,
+      kind: { not: EventKind.BOARD_MEETING },
+      startsAt: { gte: period.startsOn, lt: new Date(period.endsOn.getTime() + DAY_MS) },
+    },
+    select: { startsAt: true },
+  });
+
+  const ledger = allTransactions.filter((t) => countsTowardBalance(t.status));
+  const spending = ledger.filter((t) => t.direction === TransactionDirection.OUT);
 
   let inTotal = 0;
   let outTotal = 0;
-  let outstandingReimbursementsCents = 0;
-  for (const t of allTransactions) {
+  for (const t of ledger) {
     if (t.direction === TransactionDirection.IN) inTotal += t.amountCents;
     else outTotal += t.amountCents;
+  }
+
+  let outstandingReimbursementsCents = 0;
+  for (const t of allTransactions) {
     if (
       t.kind === TransactionKind.EXPENSE &&
       (t.status === TransactionStatus.SUBMITTED || t.status === TransactionStatus.APPROVED)
@@ -205,8 +246,8 @@ export async function getDashboardData(db: TxClient, organizationId: string): Pr
   // Single pass over the already-fetched period transactions instead of one
   // aggregate query per category (was O(categories) round-trips).
   const spentByCategory = new Map<string, number>();
-  for (const t of allTransactions) {
-    if (t.direction !== TransactionDirection.OUT || !t.categoryId) continue;
+  for (const t of spending) {
+    if (!t.categoryId) continue;
     spentByCategory.set(t.categoryId, (spentByCategory.get(t.categoryId) ?? 0) + t.amountCents);
   }
   const categorySpent = categories.map((c) => ({
@@ -217,7 +258,7 @@ export async function getDashboardData(db: TxClient, organizationId: string): Pr
   }));
 
   const burnMap = new Map<string, { inCents: number; outCents: number }>();
-  for (const t of allTransactions) {
+  for (const t of ledger) {
     const month = t.occurredAt.toISOString().slice(0, 7);
     const entry = burnMap.get(month) ?? { inCents: 0, outCents: 0 };
     if (t.direction === TransactionDirection.IN) entry.inCents += t.amountCents;
@@ -228,29 +269,50 @@ export async function getDashboardData(db: TxClient, organizationId: string): Pr
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, v]) => ({ month, ...v }));
 
-  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * DAY_MS);
   const unreconciledOver60DaysCount = allTransactions.filter(
     (t) => !t.reconciledAt && t.occurredAt < sixtyDaysAgo,
   ).length;
 
+  const balanceCents = inTotal - outTotal;
+  const sponsorshipCommittedCents = sponsorships
+    .filter((s) => s.status === "COMMITTED" || s.status === "INVOICED")
+    .reduce((sum, s) => sum + s.amountCents, 0);
+
   return {
-    period: { id: period.id, label: period.label },
-    balanceCents: inTotal - outTotal,
+    period: {
+      id: period.id,
+      label: period.label,
+      startsOn: period.startsOn,
+      endsOn: period.endsOn,
+    },
+    balanceCents,
     totalAllocatedCents: categories.reduce((sum, c) => sum + c.allocatedCents, 0),
     categories: categorySpent,
     outstandingReimbursementsCents,
-    sponsorshipCommittedCents: sponsorships
-      .filter((s) => s.status === "COMMITTED" || s.status === "INVOICED")
-      .reduce((sum, s) => sum + s.amountCents, 0),
+    sponsorshipCommittedCents,
     sponsorshipReceivedCents: sponsorships
       .filter((s) => s.status === "RECEIVED")
       .reduce((sum, s) => sum + s.amountCents, 0),
     burnByMonth,
     unreconciledOver60DaysCount,
+    runway: computeRunway({
+      period,
+      balanceCents,
+      spending,
+      // Received sponsorships are ledger income already; these are still to come.
+      expectedIncomeCents: sponsorshipCommittedCents,
+      meetingStarts: meetings.map((m) => m.startsAt),
+      now,
+    }),
   };
 }
 
-export async function getMoneyOwedToUser(db: TxClient, organizationId: string, userId: string): Promise<number> {
+export async function getMoneyOwedToUser(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+): Promise<number> {
   const result = await db.transaction.aggregate({
     where: {
       organizationId,

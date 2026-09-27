@@ -6,6 +6,9 @@ import type { PollAvailability } from "@/generated/prisma/enums";
  * ids, no emails, no member names and no guest keys: each respondent is an
  * opaque key ("r1", "r2", ...) with a display label. Guests show the name
  * they typed (a duplicate gets a " (2)" suffix); members show as "Member".
+ * Inside the app, where every viewer is a member of the org and already sees
+ * the others' names, the page may pass `memberNames` so members show by
+ * name; it is ignored for a guest viewer.
  *
  * Client-safe: no server imports.
  */
@@ -35,12 +38,16 @@ export interface PollView {
   isFinalized: boolean;
   /** Only for members viewing in the app (links to the scheduled event). */
   finalizedEventId: string | null;
+  /** When the scheduled event is: members only, like the link. */
+  scheduled: { startsAt: Date; endsAt: Date } | null;
   slots: PollViewSlot[];
   responses: PollViewResponse[];
   /** The viewer's own answers, by slot id. */
   myResponses: Record<string, PollAvailability>;
   /** The name a returning guest answered under, to prefill the form. */
   myGuestName: string | null;
+  /** The viewer's own opaque key in `responses`, once they have answered. */
+  myRespondentKey: string | null;
 }
 
 /** Who is looking: a member of the poll's org, or anyone else (a guest). */
@@ -57,6 +64,8 @@ export interface PollSource {
   durationMinutes: number;
   closesAt: Date | null;
   finalizedEventId: string | null;
+  /** The scheduled event's time, when the query loads it. */
+  finalizedEvent?: { startsAt: Date; endsAt: Date } | null;
   slots: PollViewSlot[];
   responses: {
     slotId: string;
@@ -77,7 +86,13 @@ function sourceKey(r: PollSource["responses"][number]): string {
   return `n:${r.guestName ?? ""}`;
 }
 
-export function buildPollView(poll: PollSource, viewer: PollViewer): PollView {
+export interface PollViewOptions {
+  /** Members' display names by user id (in-app only; ignored for guests). */
+  memberNames?: ReadonlyMap<string, string>;
+}
+
+export function buildPollView(poll: PollSource, viewer: PollViewer, options: PollViewOptions = {}): PollView {
+  const memberNames = viewer.kind === "member" ? options.memberNames : undefined;
   const opaque = new Map<string, { key: string; label: string; isGuest: boolean }>();
   const nameCounts = new Map<string, number>();
 
@@ -85,7 +100,7 @@ export function buildPollView(poll: PollSource, viewer: PollViewer): PollView {
     const id = sourceKey(r);
     if (opaque.has(id)) continue;
     const isGuest = !r.userId;
-    let label = "Member";
+    let label = (r.userId && memberNames?.get(r.userId)?.trim()) || "Member";
     if (isGuest) {
       const name = r.guestName?.trim() || "Guest";
       const seen = (nameCounts.get(name.toLowerCase()) ?? 0) + 1;
@@ -102,9 +117,11 @@ export function buildPollView(poll: PollSource, viewer: PollViewer): PollView {
 
   const myResponses: Record<string, PollAvailability> = {};
   let myGuestName: string | null = null;
+  let myRespondentKey: string | null = null;
   for (const r of poll.responses) {
     if (!isMine(r)) continue;
     myResponses[r.slotId] = r.availability;
+    myRespondentKey ??= opaque.get(sourceKey(r))!.key;
     if (viewer.kind === "guest" && myGuestName === null) myGuestName = r.guestName;
   }
 
@@ -117,6 +134,10 @@ export function buildPollView(poll: PollSource, viewer: PollViewer): PollView {
     closesAt: poll.closesAt,
     isFinalized: poll.finalizedEventId !== null,
     finalizedEventId: viewer.kind === "member" ? poll.finalizedEventId : null,
+    scheduled:
+      viewer.kind === "member" && poll.finalizedEventId && poll.finalizedEvent
+        ? { startsAt: poll.finalizedEvent.startsAt, endsAt: poll.finalizedEvent.endsAt }
+        : null,
     slots: poll.slots.map((s) => ({ id: s.id, startsAt: s.startsAt, endsAt: s.endsAt })),
     responses: poll.responses.map((r) => {
       const who = opaque.get(sourceKey(r))!;
@@ -130,5 +151,6 @@ export function buildPollView(poll: PollSource, viewer: PollViewer): PollView {
     }),
     myResponses,
     myGuestName,
+    myRespondentKey,
   };
 }

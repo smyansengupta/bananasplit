@@ -51,3 +51,20 @@ function getNowMinutes(): number {
   const now = new Date();
   return now.getHours() * 60 + now.getMinutes();
 }
+
+function subscribeNever() {
+  return () => {};
+}
+
+function deviceTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+/**
+ * The viewer's own timezone. `serverZone` is what the server rendered in
+ * (for a poll, the poll's zone), so the first paint matches the HTML and the
+ * browser's zone is swapped in on hydration.
+ */
+export function useViewerTimeZone(serverZone: string): string {
+  return useSyncExternalStore(subscribeNever, deviceTimeZone, () => serverZone);
+}
