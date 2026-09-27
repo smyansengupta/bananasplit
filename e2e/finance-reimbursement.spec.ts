@@ -94,7 +94,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await page.getByRole("button", { name: "Close" }).first().click();
 
   // Reimbursement doesn't touch the ledger balance — the expense already
-  // counted against it the moment it was created.
+  // counted against it the moment it was submitted (a draft never does).
   await page.goto(`/app/${orgSlug}/finance`);
   await expect(page.getByText("Balance", { exact: true }).locator("..").first()).toContainText(
     "-$42.50",

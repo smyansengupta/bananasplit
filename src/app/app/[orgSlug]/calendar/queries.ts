@@ -87,6 +87,16 @@ export function getEventsInRange(db: TxClient, organizationId: string, f: RangeF
   });
 }
 
+/** The next `limit` events that have not ended yet (one under way included), for the overview. */
+export function getUpcomingEvents(db: TxClient, organizationId: string, now: Date, limit: number) {
+  return db.event.findMany({
+    where: { organizationId, deletedAt: null, mergedIntoId: null, endsAt: { gt: now } },
+    select: calendarEventSelect,
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+    take: limit,
+  });
+}
+
 /**
  * The viewer's OWN answer for each of these events, so the grid can show an
  * RSVP at a glance without shipping the attendee list. A separate query

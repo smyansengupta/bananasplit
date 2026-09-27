@@ -155,6 +155,44 @@ export async function getAgendaTasks(
 }
 
 /**
+ * The overview's "My tasks": open tasks the viewer owns or is on (subtasks
+ * included, as in the Week), soonest due first, with how many there are in
+ * all and how many are past due.
+ */
+export async function getMyOpenTasks(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  opts: { limit: number; today: Date },
+) {
+  const mine = taskFilterWhere(organizationId, { assigneeId: userId, status: "open" });
+  const tasks = await db.task.findMany({
+    where: mine,
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      visibility: true,
+      dueDate: true,
+      blockedReason: true,
+      project: { select: { name: true } },
+      parentTask: { select: { title: true } },
+    },
+    orderBy: [
+      { dueDate: { sort: "asc", nulls: "last" } },
+      { priority: "desc" },
+      { createdAt: "asc" },
+    ],
+    take: opts.limit,
+  });
+  const total = await db.task.count({ where: mine });
+  const overdue = await db.task.count({ where: { AND: [mine, { dueDate: { lt: opts.today } }] } });
+  return { tasks, total, overdue };
+}
+
+export type MyOpenTask = Awaited<ReturnType<typeof getMyOpenTasks>>["tasks"][number];
+
+/**
  * One filter set for every layout (C4). Week, Board, Table, Calendar and
  * Team all read the same toolbar, so the same `where` builds all five and
  * switching layout never silently changes what you are looking at.
