@@ -60,6 +60,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // verification review required (see spec section 11, item 1). Email
     // account linking is allowed because both sides must have verified the
     // address first (0A Fix 4(d); see google-linking.ts).
+    // No page links to it for now: "Continue with Google" is hidden on
+    // /sign-in and /invite/[token]. Kept so it can come back as-is.
     Google(googleProviderOptions),
     Credentials({
       credentials: {

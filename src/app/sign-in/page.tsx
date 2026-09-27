@@ -1,17 +1,21 @@
 import { redirect } from "next/navigation";
 
-import { GoogleIcon } from "@/components/google-icon";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
-import { auth, signIn } from "@/lib/auth/config";
+import { auth } from "@/lib/auth/config";
 
 import { PasswordSignInForm } from "./password-sign-in-form";
 
 /**
  * Auth.js sends its errors here (pages.error). The remaining ways a Google
  * sign-in can be refused after 0A Fix 4(d), explained in plain words.
+ *
+ * Google sign-in is off in the UI for now (this page and /invite/[token]
+ * offer email and password only), but the provider is still configured in
+ * src/lib/auth/config.ts: bringing it back means restoring the "Continue
+ * with Google" form (a server action calling signIn("google", { redirectTo }))
+ * and src/components/google-icon.tsx, removed with it. These messages stay
+ * for that.
  */
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   OAuthAccountNotLinked:
@@ -42,7 +46,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Sign in to CBC Portal</CardTitle>
-          <CardDescription>Use your Google account or your email and password.</CardDescription>
+          <CardDescription>Use your email and password.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {errorMessage && (
@@ -50,24 +54,6 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
               {errorMessage}
             </p>
           )}
-          <form
-            action={async () => {
-              "use server";
-              await signIn("google", callbackUrl ? { redirectTo: callbackUrl } : undefined);
-            }}
-          >
-            <Button type="submit" variant="outline" className="w-full">
-              <GoogleIcon className="size-4" />
-              Continue with Google
-            </Button>
-          </form>
-
-          <div className="flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-muted-foreground text-xs">or</span>
-            <Separator className="flex-1" />
-          </div>
-
           <PasswordSignInForm callbackUrl={callbackUrl} />
         </CardContent>
       </Card>

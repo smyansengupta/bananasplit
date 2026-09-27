@@ -141,16 +141,28 @@ owns every table, so it bypasses RLS and the app never connects as it).
     WHERE n.nspname IN ('public', 'app') AND r.rolname IN ('anon', 'authenticated', 'service_role')
       AND has_function_privilege(r.oid, p.oid, 'EXECUTE');
    ```
-   The manifest checks its object rules only where a runtime role can reach
-   (migration `20260927120000_security_manifest_reachable_schemas`); before
-   that migration it also reported 59 rows about Supabase's own schemas
-   (`auth`, `storage`, `realtime`, `extensions`, `graphql_public`,
-   `pgbouncer`), which the runtime roles have no `USAGE` on. Anything it
-   reports now is real. Then deploy, and gate on `/api/health` (step 7):
-   every `role:` check, `security_manifest` and the `production:` checks
-   must pass.
-5. **Auth** — create the Google OAuth client (see spec §11, human step 1:
-   `openid email profile` scopes only, no Calendar scope) and add the
+   Store the passwords as `APP_DB_PASSWORD`, `SERVICE_DB_PASSWORD` and
+   `AUTH_DB_PASSWORD` in Vercel (Production scope;
+   previews get their own values). The runtime URLs are derived from
+   `DATABASE_URL` with the role swapped in (`src/server/db/urls.ts`). Without
+   this step the migration creates the roles `NOLOGIN` and the app cannot
+   connect. Also set `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT`,
+   `SECRETS_FINGERPRINT_KEY`, `CRON_SECRET` and `PLATFORM_ADMIN_EMAILS`
+   (see `.env.example`). Locally, `pnpm db:local-roles` gives the roles the
+   password `test`.
+   A cluster upgraded from before `20260924120000_0c_drop_app_legacy` also
+   has an `app_legacy` role. That migration revokes everything from it in the
+   database it runs on, and drops the role only when that is the cluster's
+   single application database; otherwise drop it by hand (`DROP ROLE
+   app_legacy`) once every database has run the migration.
+4. **First migration** — `vercel.json`'s `buildCommand` runs
+   `prisma migrate deploy && next build`, so migrations apply automatically on
+   every deploy, including the first one. Nothing manual required.
+5. **Auth** — sign-in is email/password only for now ("Continue with
+   Google" is hidden in the UI), so the Google sign-in client is optional
+   until the button comes back. When it does: create the Google OAuth client
+   (see spec §11, human step 1: `openid email profile` scopes only, no
+   Calendar scope), set `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`, and add the
    Vercel-assigned domain(s) to its authorized redirect URIs. Google
    Calendar sync uses a **second, separate** OAuth client
    (`GOOGLE_CALENDAR_CLIENT_ID` / `_SECRET`, Calendar API enabled, scopes
@@ -266,6 +278,39 @@ Without the roles, the migration creates them `NOLOGIN` and the app cannot
 connect. Steps 1 to 2.5 and step 3's database variables are
 Supabase-specific; 2.6, the rest of step 3, and step 4 apply as written.
 
+## Live collaboration (optional, off by default)
+
+Live editing of notes needs a WebSocket server that Vercel cannot host.
+Until one is running, leave it off: notes use the autosave editor. Choices
+and trade-offs: `docs/features/collaboration.md`. With the bundled server:
+
+1. **Secret** — `openssl rand -base64 48`; keep a copy offline. It signs the
+   editors' tokens and the server-to-server calls, so treat it like
+   `AUTH_SECRET`.
+2. **Collaboration host** (any always-on Node 22+ host with WebSockets and
+   TLS) — deploy this repo, `pnpm install --frozen-lockfile`, run
+   `pnpm collab:start` with `COLLAB_SECRET`, `COLLAB_PORT` (or the
+   platform's `PORT`) and `COLLAB_APP_URL` set to the app's origin. Give it
+   a `wss://` hostname and check `https://<collab host>/` answers 200.
+3. **Vercel, Production scope** — `COLLAB_ENABLED=true`,
+   `COLLAB_SERVER_URL=wss://<collab host>`, the same `COLLAB_SECRET`, then
+   redeploy (migration `20260926120000_note_yjs_state` applies in the build
+   step). Leave the Preview scope without `COLLAB_ENABLED`.
+4. **Check** — open a note in two browsers: the status says "Live" and each
+   sees the other's caret. Add the collaboration host to the uptime monitor.
+
+**If it is down**, notes open in the autosave editor after a few seconds;
+live editors that were already connected keep their edits in the tab and
+save them when it comes back. Restarting it is safe at any time (it saves
+open notes on SIGTERM; editors reconnect).
+
+**Rotating the secret** — set the new `COLLAB_SECRET` on both sides and
+restart both (Vercel redeploy, then the collaboration server). Editors open
+in between reconnect once they get a token signed with the new value (within
+five minutes). **Turning it off** — remove `COLLAB_ENABLED` and redeploy;
+nothing else changes (`Note.yjsState` is kept, and autosaves keep it in
+step, so turning it on again later is safe).
+
 ## Security switches (Phase 0A)
 
 - **Org creation lock.** In production (`VERCEL_ENV=production`, or
@@ -282,10 +327,14 @@ Supabase-specific; 2.6, the rest of step 3, and step 4 apply as written.
   through the outbox (a `verify-email` job). Without a key, outside
   production, the mail sink writes it to the server log and `.data/mail/`.
   Google sign-ins count as verified when Google says the address is.
-- **Google account linking.** A Google sign-in links to an existing account
+- **Google account linking.** (Applies once Google sign-in is back in the
+  UI; it is hidden for now.) A Google sign-in links to an existing account
   with the same verified address; an unverified password account squatting on
   that address is deleted first (or loses its password if it already joined
   an org). Google sign-ins whose address Google has not verified are refused.
+  While the button is hidden, an account that only ever signed in with Google
+  has no password (and there is no reset flow yet), so it cannot sign in
+  from `/sign-in`; `/sign-up` refuses the address as already taken.
 - **Content Security Policy.** `/app`, `/poll`, `/invite` and the auth pages
   get a per-request nonce policy (`src/proxy.ts`); every other route gets a
   static policy (`next.config.ts`). Both are **enforced** by default, in

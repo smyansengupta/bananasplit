@@ -33,6 +33,9 @@ org equality. The wrappers in `src/server/db/context.ts`:
   cannot start);
 - `withUserTx(userId, fn)` for the user's own cross-org rows;
 - `withSystemOrgTx(orgId, { userId? }, fn)` for the fail-closed service path;
+- `withOrgTxAs(userId, orgId, fn)`, app_user for a member named by a
+  verified signed request instead of a session: the collaboration bridge
+  only (see "Live collaboration" below);
 - `getOrgContextBySlug(slug)`, React `cache()`-deduped, for the org layout.
 
 `ctx = { user, organizationId, role, db, afterCommit }`. No network I/O inside
@@ -187,7 +190,9 @@ Google profile whose address Google has not verified, and for a verified one
 purges such an account (`src/lib/auth/purge-squatter.ts`) and strips the
 password of an unverified account the purge had to keep, before Auth.js looks
 the address up. It fails closed, because the Google provider allows email
-account linking. The 'check your email' notice (onboarding, invite page) and
+account linking. (The provider stays configured, but "Continue with Google"
+is hidden in the UI for now, so the pages offer email and password only.)
+The 'check your email' notice (onboarding, invite page) and
 the link page share one resend limit per account.
 
 **Lint** (`eslint.config.mjs`). ESLint bans:
@@ -199,9 +204,41 @@ the link page share one resend limit per account.
 - importing `serviceDb`, `authDb` or `getClient` outside
   `CLIENT_ALLOWLIST` (the identity plane, the rate limiter, the ICS feed, the
   cron routes and job runner, the health check, scripts and the data layer;
-  adding a path is a security review item);
+  adding a path is a security review item), and `withOrgTxAs` outside
+  `COLLAB_BRIDGE` (the collaboration bridge routes; same review rule);
 - `redirect`/`notFound` in `src/server` services (except `context.ts`), and
   request-context imports in cached loaders.
+
+## Live collaboration (notes)
+
+Off unless `COLLAB_ENABLED`, `COLLAB_SERVER_URL` and `COLLAB_SECRET` are all
+set; the setup, hosting choices and trade-offs are in
+`docs/features/collaboration.md`. Vercel functions cannot hold WebSockets, so
+the realtime part is a separate long-lived process (Hocuspocus,
+`src/collab-server/`, `pnpm collab:start`) that holds no database
+credentials. The rules that matter here:
+
+- **Nothing from the browser is trusted.** The app mints a 5-minute HS256
+  token (`src/lib/collab/token.ts`) only after reading the note through RLS
+  as the user; it carries the user, org, document and `perm`. The
+  collaboration server verifies it, makes `read` connections read-only,
+  stamps presence with the token's user, refreshes it before expiry and
+  drops the connection without a valid one. `/revoke` (signed, after commit)
+  closes a note's sessions when it turns PRIVATE or is deleted, and refuses
+  every token for it minted before then.
+- **Persistence goes through the app, as the user.** The collaboration
+  server loads and saves via `/api/collab/load` and `/store`, HMAC-signed
+  with a key derived from the same secret. Those routes open the named
+  user's own context with `withOrgTxAs`, so the Note policies (6.8) decide,
+  exactly as for an autosave. The Yjs state lives in `Note.yjsState`
+  (no new table, no new policy; RLS case P-COLLAB-01); `contentJson` and
+  `contentText` are rewritten on every save, so search and the list are
+  unchanged.
+- **One lineage per note.** Seeds are deterministic and every later write
+  (live save or autosave) builds on the stored Yjs state, so two copies of a
+  note never merge into duplicated text (`src/lib/collab/note-doc.ts`).
+- **Fallback.** With the flag off, or the server unreachable at load, the
+  editor is the autosave editor, unchanged.
 
 ## 0C: legacy modules on the RLS path (done)
 

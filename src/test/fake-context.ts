@@ -79,6 +79,13 @@ export function fakeContextModule() {
       withQueue((afterCommit) =>
         fn({ kind: "user", db: fake.db, userId, organizationId: null, role: null, afterCommit }),
       ),
+    // The named user, not the session one (the collaboration bridge).
+    withOrgTxAs: vi.fn(
+      (userId: string, organizationId: string, fn: (ctx: any) => Promise<unknown>) =>
+        withQueue((afterCommit) =>
+          fn({ kind: "action", db: fake.db, userId, organizationId, role: fake.role, afterCommit }),
+        ),
+    ),
     withSystemOrgTx: vi.fn(
       (organizationId: string | null, optsOrFn: any, maybeFn?: (ctx: any) => Promise<unknown>) => {
         const fn = typeof optsOrFn === "function" ? optsOrFn : maybeFn!;

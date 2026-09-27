@@ -73,12 +73,16 @@ export interface TxContext {
   afterCommit: AfterCommit;
 }
 
-/** withOrgAction / withOrgTx context: an authenticated member of the org. */
-export interface OrgContext extends TxContext {
-  user: SessionUser;
+/** A member of the org acting in it: what withOrgTxAs hands its callback. */
+export interface MemberContext extends TxContext {
   userId: string;
   organizationId: string;
   role: Role;
+}
+
+/** withOrgAction / withOrgTx context: an authenticated member of the org. */
+export interface OrgContext extends MemberContext {
+  user: SessionUser;
 }
 
 /** withUserTx context: an authenticated user, no org. */
@@ -299,6 +303,33 @@ export async function withOrgTx<T>(
       retryOnStartFailure: true,
     },
     (ctx) => fn({ ...ctx, user, userId: user.id, organizationId, role: ctx.role as Role }),
+  );
+}
+
+/**
+ * App-user work for a member who was authenticated WITHOUT a session: the
+ * collaboration bridge (src/app/api/collab), whose signed requests carry the
+ * user id the collaboration server verified from that user's own token.
+ * Otherwise exactly withOrgAction: app_user under RLS with the user's
+ * context, NotFoundError for a non-member, no retry. The caller must have
+ * verified the identity first; ESLint limits the importers
+ * (COLLAB_BRIDGE in eslint.config.mjs, a security review item).
+ */
+export function withOrgTxAs<T>(
+  userId: string,
+  organizationId: string,
+  fn: (ctx: MemberContext) => Promise<T>,
+): Promise<T> {
+  return runInTx(
+    {
+      client: appDb,
+      kind: "action",
+      userId,
+      organizationId,
+      requireMember: true,
+      retryOnStartFailure: false,
+    },
+    (ctx) => fn({ ...ctx, userId, organizationId, role: ctx.role as Role }),
   );
 }
 

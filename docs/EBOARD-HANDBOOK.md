@@ -97,8 +97,9 @@ reconstructing access later.
 
 1. An OWNER or ADMIN invites them from Settings → Members with their school
    email and a role.
-2. They accept the invite by signing up (or signing in with Google) using
-   that same email — the pending invite shows up automatically on their
+2. They accept the invite by signing up with that same email and a password
+   (or signing in, if they already have an account) and verifying the
+   address — the pending invite shows up automatically on their
    onboarding screen.
 3. Point them at this document and at the app itself; there's no separate
    training environment, but a `MEMBER` account can't see or touch finance

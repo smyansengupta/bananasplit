@@ -1,10 +1,9 @@
 import Link from "next/link";
 
 import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
-import { GoogleIcon } from "@/components/google-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { signIn } from "@/lib/auth/config";
+import { signInPath } from "@/lib/auth/callback-url";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { sameEmail } from "@/lib/auth/normalize-email";
 import { getSession } from "@/lib/auth/session";
@@ -56,27 +55,16 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
         title={`Join ${invitation.orgName}`}
         description={`Sign in as ${invitation.email} to accept this invite.`}
       >
-        <form
-          action={async () => {
-            "use server";
-            await signIn("google", { redirectTo: `/invite/${token}` });
-          }}
-        >
-          <Button type="submit" variant="outline" className="w-full">
-            <GoogleIcon className="size-4" />
-            Continue with Google
-          </Button>
-        </form>
+        {/* Google sign-in is off in the UI for now (see /sign-in). */}
+        <Button asChild className="w-full">
+          <Link href={signInPath(`/invite/${token}`)}>Sign in</Link>
+        </Button>
         <p className="text-muted-foreground mt-3 text-center text-sm">
-          Or{" "}
-          <Link href="/sign-in" className="underline underline-offset-4">
-            sign in
-          </Link>{" "}
-          or{" "}
+          New here?{" "}
           <Link href="/sign-up" className="underline underline-offset-4">
-            create an account
+            Create an account
           </Link>{" "}
-          with your email, verify it, then open this link again.
+          with this email, verify it, then open this link again.
         </p>
       </InviteCard>
     );

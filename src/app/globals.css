@@ -205,6 +205,39 @@
 }
 
 /*
+ * Other editors' carets and selections in a live note
+ * (src/components/notes/editor/carets.ts). --caret-color is one of the
+ * --chart-1..5 tokens, picked per user.
+ */
+.tiptap .collaboration-carets__caret {
+  position: relative;
+  margin-inline: -1px;
+  border-inline: 1px solid var(--caret-color);
+  pointer-events: none;
+  word-break: normal;
+}
+
+.tiptap .collaboration-carets__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px 3px 3px 0;
+  background-color: var(--caret-color);
+  color: var(--background);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.tiptap .collaboration-carets__selection {
+  background-color: color-mix(in oklab, var(--caret-color) 25%, transparent);
+}
+
+/*
  * Third-party widgets read the tokens too, so every theme restyles them.
  * Both libraries define their defaults on an ancestor (:root / .react-flow)
  * and read the variables where they paint; defining them on the widget's

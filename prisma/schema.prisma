@@ -556,6 +556,11 @@ model Note {
   /// Generated column (see migration SQL): to_tsvector('english', title || contentText).
   /// Prisma has no native tsvector type, so this is queried via $queryRaw, never the client API.
   searchVector   Unsupported("tsvector")?
+  /// Live collaboration (docs/features/collaboration.md): the Yjs document the
+  /// body is edited in, NULL until a note is first saved live. contentJson and
+  /// contentText stay in step with it and remain what search, the list and the
+  /// autosave editor read. Internal storage: omit it from list reads and exports.
+  yjsState       Bytes?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   author       User         @relation("NoteAuthor", fields: [authorId], references: [id])

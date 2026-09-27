@@ -8,7 +8,8 @@
  * Each table is read on the service path (withSystemOrgTx(orgId)) in keyset
  * pages ordered by `key`, and written as data/{Model}.ndjson plus
  * data/{Model}.csv. `omit` drops columns that are secrets, hashes of
- * secrets or internal storage keys: ciphertext is never exported.
+ * secrets, internal storage keys or internal copies of exported data:
+ * ciphertext is never exported.
  */
 
 export interface ExportTable {
@@ -45,7 +46,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "TaskMention", key: ID },
   { model: "TaskActivity", key: ID },
   { model: "WeeklyUpdate", key: ID },
-  { model: "Note", key: ID },
+  // yjsState: the live editor's binary copy of the body contentJson carries.
+  { model: "Note", key: ID, omit: ["yjsState"] },
   { model: "Event", key: ID },
   { model: "EventAttendee", key: ["eventId", "userId"] },
   { model: "EventLinkLog", key: ID },
