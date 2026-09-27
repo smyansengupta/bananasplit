@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState, useTransition } from "react";
+import { type FormEvent, type ReactNode, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,6 @@ import {
 
 import {
   disconnectGoogleAction,
-  requestGoogleImportAction,
   saveClaudeAction,
   saveEmailSenderAction,
   saveGoogleCalendarsAction,
@@ -441,11 +440,14 @@ export function GoogleCalendarPanel({
   dto,
   canWrite,
   configured,
+  importPanel,
 }: {
   orgId: string;
   dto: IntegrationDto;
   canWrite: boolean;
   configured: boolean;
+  /** The calendar's import card (dry run, results, apply), rendered by the page. */
+  importPanel?: ReactNode;
 }) {
   const calendars = (
     Array.isArray(dto.config.calendars) ? dto.config.calendars : []
@@ -454,7 +456,6 @@ export function GoogleCalendarPanel({
   const [internalId, setInternalId] = useState(str(dto.config.internalCalendarId));
   const save = useSubmit();
   const disconnect = useSubmit();
-  const importRun = useSubmit();
   const connected = dto.status === "CONNECTED" || dto.status === "ERROR";
 
   return (
@@ -543,23 +544,7 @@ export function GoogleCalendarPanel({
           <FeedbackLine feedback={save.feedback} />
         </form>
       )}
-      {canWrite && dto.status === "CONNECTED" && (
-        <div className="space-y-2 rounded-lg border p-4">
-          <p className="text-sm font-medium">Import existing events</p>
-          <p className="text-muted-foreground text-xs">
-            Bring events already in your Google calendars into the portal. This starts a dry run;
-            nothing changes until you review and apply it from Calendar &gt; Sync.
-          </p>
-          <Button
-            variant="outline"
-            disabled={importRun.isPending}
-            onClick={() => importRun.submit(() => requestGoogleImportAction(orgId))}
-          >
-            {importRun.isPending ? "Queuing…" : "Start import dry run"}
-          </Button>
-          <FeedbackLine feedback={importRun.feedback} />
-        </div>
-      )}
+      {importPanel}
       {canWrite && dto.hasSecret && dto.status !== "DISCONNECTED" && (
         <div className="space-y-2">
           <Button
