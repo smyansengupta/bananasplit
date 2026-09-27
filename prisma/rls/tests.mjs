@@ -23,7 +23,7 @@
 //                        integration id is refused outright (23503).
 //   T27c-f               the reviewed lists include the Phase 1-8 functions
 //                        and definer-only tables.
-import { A, B, count, connect, HASH, rc, runSuite, tryq } from "./lib.mjs";
+import { A, B, count, connect, connectAdmin, HASH, rc, runSuite, tryq } from "./lib.mjs";
 
 runSuite("rls-tests", async ({ clients, tcase, record }) => {
   // ---------------- Tenant isolation ----------------
@@ -1611,7 +1611,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
   // ---------------- Catalog manifest (drift guard) ----------------
   // app.security_manifest() (0B Section 9) is the single source of truth
   // for the catalog rules; CI asserts it is empty (T27a) and that it still
-  // detects every class of mistake (T27b). T27c-f pin the reviewed lists.
+  // detects every class of mistake (T27b). T27j-n pin its scope: object
+  // checks cover what a runtime role can reach (a Supabase project's auth,
+  // storage and realtime schemas are out of it), role checks cover every
+  // schema. T27c-f pin the reviewed lists.
   await tcase(
     "T27a",
     "app.security_manifest() reports no violations",
@@ -1705,6 +1708,206 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       ).rows.map((r) => r.v);
     },
     { value: ["role_membership app_user in app_service"] },
+  );
+
+  // The manifest's scope (20260927120000_security_manifest_reachable_schemas).
+  // zz_supa stands in for a Supabase-managed schema (auth, storage,
+  // realtime, ...): a table without RLS, a PUBLIC-executable function and a
+  // definer function without the pinned search_path (like
+  // pgbouncer.get_auth()), and no USAGE for any runtime role.
+  const manifestRows = async (q, like) =>
+    (
+      await q(
+        `SELECT check_name || ' ' || object_name AS v FROM app.security_manifest()
+          WHERE $1::text IS NULL OR object_name LIKE $1 ORDER BY 1`,
+        [like ?? null],
+      )
+    ).rows.map((r) => r.v);
+  const plantSupabaseLike = async (q, schema) => {
+    await q(`CREATE SCHEMA ${schema}`);
+    await q(`CREATE TABLE ${schema}.t (id int)`);
+    await q(`CREATE FUNCTION ${schema}.f() RETURNS int LANGUAGE sql AS 'SELECT 1'`);
+    await q(`GRANT EXECUTE ON FUNCTION ${schema}.f() TO PUBLIC`);
+    await q(
+      `CREATE FUNCTION ${schema}.d() RETURNS int LANGUAGE sql SECURITY DEFINER SET search_path = '' AS 'SELECT 1'`,
+    );
+  };
+  await tcase(
+    "T27j",
+    "a schema no runtime role can USE is out of the object checks, and back in the moment one can",
+    "owner",
+    null,
+    async (q) => {
+      await plantSupabaseLike(q, "zz_supa");
+      const s = {};
+      s.no_usage = await manifestRows(q);
+      await q(`GRANT USAGE ON SCHEMA zz_supa TO app_user`);
+      s.app_user_usage = await manifestRows(q, "zz_supa.%");
+      // USAGE through PUBLIC counts as well.
+      await q(`REVOKE USAGE ON SCHEMA zz_supa FROM app_user`);
+      await q(`GRANT USAGE ON SCHEMA zz_supa TO PUBLIC`);
+      s.public_usage = await manifestRows(q, "zz_supa.%");
+      return s;
+    },
+    {
+      value: {
+        no_usage: [],
+        app_user_usage: [
+          "definer_search_path zz_supa.d()",
+          "public_execute zz_supa.f()",
+          "rls_disabled zz_supa.t",
+        ],
+        public_usage: [
+          "definer_search_path zz_supa.d()",
+          "public_execute zz_supa.f()",
+          "rls_disabled zz_supa.t",
+        ],
+      },
+    },
+  );
+  await tcase(
+    "T27k",
+    "CREATE and TRUNCATE held by a runtime role are reported even in a schema no runtime role can USE",
+    "owner",
+    null,
+    async (q) => {
+      await plantSupabaseLike(q, "zz_supa");
+      // CREATE needs no USAGE: a function planted in a schema on someone
+      // else's search_path is picked up by the roles that can USE it.
+      await q(`GRANT CREATE ON SCHEMA zz_supa TO app_auth`);
+      await q(`GRANT TRUNCATE ON zz_supa.t TO app_user`);
+      return await manifestRows(q);
+    },
+    {
+      value: ["dangerous_privilege zz_supa.t:app_user:TRUNCATE", "schema_create zz_supa:app_auth"],
+    },
+  );
+  // Why schema_create stays global: CREATE without USAGE is enough to plant
+  // an object. Committed, because app_auth has to see the schema from its
+  // own connection; dropped in the finally (the schema owner may drop what
+  // app_auth created in it).
+  {
+    const o = clients.owner;
+    const a = clients.app_auth;
+    const v = {};
+    try {
+      await o.query(`CREATE SCHEMA zz_create`);
+      await o.query(`GRANT CREATE ON SCHEMA zz_create TO app_auth`);
+      v.usage = (await a.query(`SELECT has_schema_privilege('zz_create', 'USAGE') u`)).rows[0].u;
+      v.plant = await a
+        .query(`CREATE FUNCTION zz_create.planted() RETURNS int LANGUAGE sql AS 'SELECT 1'`)
+        .then(
+          () => "created",
+          (e) => e.code,
+        );
+    } catch (e) {
+      v.error = `${e.code} ${e.message}`;
+    } finally {
+      await o.query(`DROP SCHEMA IF EXISTS zz_create CASCADE`).catch(() => {});
+    }
+    record(
+      JSON.stringify(v) === JSON.stringify({ usage: false, plant: "created" }),
+      `T27k2 [owner+app_auth] CREATE on a schema without USAGE is enough to create in it -> ${JSON.stringify(v)}`,
+    );
+  }
+  // Committed, because app_user has to see the objects from its own
+  // connection; dropped in the finally.
+  {
+    const o = clients.owner;
+    const u = clients.app_user;
+    const v = {};
+    try {
+      await o.query(`CREATE SCHEMA zz_hidden`);
+      await o.query(`CREATE TABLE zz_hidden.t (id int)`);
+      await o.query(`INSERT INTO zz_hidden.t VALUES (1)`);
+      await o.query(`GRANT SELECT ON zz_hidden.t TO app_user`);
+      await o.query(`CREATE FUNCTION zz_hidden.f() RETURNS int LANGUAGE sql AS 'SELECT 1'`);
+      await o.query(`GRANT EXECUTE ON FUNCTION zz_hidden.f() TO PUBLIC`);
+      const planted = () => manifestRows((sql, p) => o.query(sql, p), "zz_hidden.%");
+      v.planted = await planted();
+      v.by_name = await u.query(`SELECT count(*)::int n FROM zz_hidden.t`).then(
+        (r) => r.rows[0].n,
+        (e) => e.code,
+      );
+      // An invoker view checks app_user's privileges on the table but never
+      // its schema USAGE (the names were resolved when the view was made).
+      await o.query(`CREATE VIEW public.zz_through WITH (security_invoker = true)
+                       AS SELECT id, zz_hidden.f() AS f FROM zz_hidden.t`);
+      await o.query(`GRANT SELECT ON public.zz_through TO app_user`);
+      v.through_view = await u.query(`SELECT count(*)::int n FROM public.zz_through`).then(
+        (r) => r.rows[0].n,
+        (e) => e.code,
+      );
+      v.reached = await planted();
+    } catch (e) {
+      v.error = `${e.code} ${e.message}`;
+    } finally {
+      await o.query(`DROP VIEW IF EXISTS public.zz_through`).catch(() => {});
+      await o.query(`DROP SCHEMA IF EXISTS zz_hidden CASCADE`).catch(() => {});
+    }
+    const expected = {
+      planted: [],
+      by_name: "42501",
+      through_view: 1,
+      reached: [
+        "policy_gap zz_hidden.t:app_user:SELECT",
+        "public_execute zz_hidden.f()",
+        "rls_disabled zz_hidden.t",
+      ],
+    };
+    record(
+      JSON.stringify(v) === JSON.stringify(expected),
+      `T27l [owner+app_user] what a reachable view uses is in scope, in any schema -> ${JSON.stringify(v)}`,
+    );
+  }
+  {
+    const admin = await connectAdmin();
+    try {
+      await tcase(
+        "T27m",
+        "an event-trigger function is in the definer check wherever it lives, and not in public_execute",
+        "admin",
+        null,
+        async (q) => {
+          const su = (await q(`SELECT rolsuper FROM pg_roles WHERE rolname = current_user`)).rows[0]
+            .rolsuper;
+          if (!su)
+            return { skipped: "the admin is not a superuser (CREATE EVENT TRIGGER needs one)" };
+          await q(`CREATE SCHEMA zz_evt`);
+          await q(`CREATE FUNCTION zz_evt.on_ddl() RETURNS event_trigger LANGUAGE plpgsql
+                     SECURITY DEFINER AS $$ BEGIN END $$`);
+          await q(`GRANT EXECUTE ON FUNCTION zz_evt.on_ddl() TO PUBLIC`);
+          const s = {};
+          s.plain_function = await manifestRows(q, "zz_evt.%");
+          await q(
+            `CREATE EVENT TRIGGER zz_on_ddl ON ddl_command_end EXECUTE FUNCTION zz_evt.on_ddl()`,
+          );
+          s.event_trigger = await manifestRows(q, "zz_evt.%");
+          // The fix applied to Supabase's public.rls_auto_enable().
+          await q(`ALTER FUNCTION zz_evt.on_ddl() SET search_path = pg_catalog, public, pg_temp`);
+          s.fixed = await manifestRows(q, "zz_evt.%");
+          return s;
+        },
+        {
+          value: {
+            plain_function: [],
+            event_trigger: ["definer_search_path zz_evt.on_ddl()"],
+            fixed: [],
+          },
+        },
+        admin,
+      );
+    } finally {
+      await admin.end();
+    }
+  }
+  await tcase(
+    "T27n",
+    "app_service, the role /api/health asks, gets the same empty manifest",
+    "app_service",
+    null,
+    async (q) => await manifestRows(q),
+    { value: [] },
   );
   await tcase(
     "T27c",

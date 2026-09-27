@@ -125,6 +125,10 @@ async function main() {
       RLS_DB: dbName,
       OWNER_USER: ownerUser,
       OWNER_PASSWORD: ownerPassword,
+      // For the few cases that need more than the owner (an event trigger
+      // needs a superuser); they SKIP when the admin is not one.
+      ADMIN_USER: decodeURIComponent(admin.username),
+      ADMIN_PASSWORD: decodeURIComponent(admin.password),
     };
     for (const suite of ["tests.mjs", "attacks.mjs", "phases.mjs"]) {
       console.log(`\n[test:rls] ===== ${suite} =====`);

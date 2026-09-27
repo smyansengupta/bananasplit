@@ -14,8 +14,10 @@ with `LOGIN PASSWORD`, see RUNBOOK):
 | `app_auth` | `authDb` | the Auth.js adapter, credentials sign-in, sign-up, ICS token lookup, the rate limiter |
 
 URLs come from `src/server/db/urls.ts`: explicit `DATABASE_URL_APP` /
-`_SERVICE` / `_AUTH`, or derived from `DATABASE_URL` plus the three role
-passwords (Neon previews). There is no fallback to the owner URL.
+`_SERVICE` / `_AUTH` (local, CI, and production on Supabase, whose pooler
+wants `role.<project-ref>` usernames), or derived from `DATABASE_URL` plus
+the three role passwords (Neon and its preview branches). There is no
+fallback to the owner URL.
 
 **Transaction-bound context.** Every unit of work is one interactive
 transaction whose first statement is `SELECT app.set_context(user, org)`: it
@@ -63,6 +65,20 @@ user's own row. Everything else gets `AND (SELECT app.is_org_admin())` (or
 `is_org_owner`, `is_finance`) beside the tenant test. Adding an entry to the
 allowlist is a security review item.
 
+**What the manifest covers.** Its object checks (RLS off, views without
+`security_invoker`, readable materialized views and foreign tables, policy
+gaps, permissive policies, PUBLIC `EXECUTE`, definer search paths) look only
+at what a runtime role can reach: objects in a schema one of them has
+`USAGE` on, plus whatever those objects lead to through `pg_depend` (an
+invoker view over a table elsewhere, a default or trigger calling a function
+elsewhere, casts), plus every event-trigger function for the definer check.
+Its role checks (attributes, memberships, ownership, `TEMP`, `CREATE` on any
+schema, `TRUNCATE`/`TRIGGER`/`REFERENCES` grants) cover every schema. So a
+Supabase project's own schemas (`auth`, `storage`, `realtime`, ...), which
+the runtime roles cannot use, stay out of it, and a schema enters it the
+moment a migration grants a runtime role `USAGE` on it (migration
+`20260927120000_security_manifest_reachable_schemas`, RLS cases T27j-n).
+
 **Known limitation.** RLS contains logic bugs, not SQL injection: SQL that
 runs as a runtime role can call `set_config()` itself and forge the context
 (test T29). The injection control is the ban on `$queryRawUnsafe`,
@@ -70,8 +86,9 @@ runs as a runtime role can call `set_config()` itself and forge the context
 enforced by ESLint (see "Lint" below).
 
 **Tests.** `pnpm test:rls` creates a throwaway database owned by a
-non-superuser role (like `neondb_owner`), applies every migration,
-`prisma/rls/local-roles.sql` and `prisma/rls/fixtures.sql`, and runs the
+non-superuser role (like Supabase's `postgres` or Neon's `neondb_owner`),
+applies every migration, `prisma/rls/local-roles.sql` and
+`prisma/rls/fixtures.sql`, and runs the
 regression suite (`tests.mjs`), the executed attack suite (`attacks.mjs`) and
 the Phase 1-9 suite with the catalog checks (`phases.mjs`).
 
@@ -285,7 +302,8 @@ Roles are cluster-global while a migration is per-database, and Postgres
 checks only the current database before `DROP ROLE`: dropping it while
 another database still grants it leaves dangling ACL entries there. So the
 migration drops the role only when it is the cluster's single application
-database (a Neon project, CI). On a shared cluster it raises a notice and
+database (a Neon project, CI; RUNBOOK step 2.6 has the check for a
+Supabase project). On a shared cluster it raises a notice and
 leaves the role with nothing granted; drop it by hand once every database
 has run the migration.
 
