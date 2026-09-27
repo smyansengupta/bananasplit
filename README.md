@@ -25,7 +25,8 @@ Email/password is a deliberate addition beyond the original spec, which scoped v
    cp .env.example .env
    ```
 
-   Fill in `DATABASE_URL` (a local or Neon Postgres instance) and `AUTH_SECRET`
+   Fill in `DATABASE_URL` (a local Postgres instance; production runs on
+   Supabase, see `RUNBOOK.md`) and `AUTH_SECRET`
    (`npx auth secret`). The app also connects at runtime as three non-owner,
    row-level-security-scoped roles (`app_user` / `app_service` / `app_auth`,
    see `docs/ARCHITECTURE.md`) instead of the owner; locally, set
