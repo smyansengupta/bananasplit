@@ -95,7 +95,7 @@ test("public poll: guests keep separate answers, non-members answer as guests, o
   await page.getByRole("button", { name: "Create poll" }).click();
   // Not /polls/new itself: wait for the created poll's page.
   await expect(page).toHaveURL(/\/calendar\/polls\/(?!new$)[a-z0-9]+$/);
-  await page.getByText("Mark as:").waitFor();
+  await page.getByRole("grid", { name: "Your availability" }).waitFor();
   const pollId = new URL(page.url()).pathname.split("/").pop()!;
 
   // The public page, as an anonymous visitor sees it, carries no emails
@@ -106,12 +106,18 @@ test("public poll: guests keep separate answers, non-members answer as guests, o
   expect(publicHtml).not.toMatch(/@example\.com/);
   await anonymous.context.close();
 
+  const firstCell = (p: Page, grid = "Your availability") =>
+    p.getByRole("grid", { name: grid }).locator('[data-cell="0:0"]');
+
   // Two guests type the same name: two respondents, neither erases the other.
+  // Reloading shows what the server kept, not the page's own copy.
   for (const [index, name] of ["Alex", "Alex"].entries()) {
     const guest = await newGuest(browser, baseURL);
     await guest.page.goto(`/poll/${pollId}`);
     await guest.page.getByLabel("Your name").fill(name);
-    await guest.page.locator("table button").first().click();
+    await firstCell(guest.page).click();
+    await expect(guest.page.getByText("Saved", { exact: true })).toBeVisible();
+    await guest.page.reload();
     await expect(guest.page.getByText(`${index + 1} responded`)).toBeVisible();
     await guest.context.close();
   }
@@ -123,23 +129,33 @@ test("public poll: guests keep separate answers, non-members answer as guests, o
   await outsider.page.goto(`/poll/${pollId}`);
   await expect(outsider.page.getByText(/not a member of the organization/)).toBeVisible();
   await outsider.page.getByLabel("Your name").fill("Outsider");
-  await outsider.page.locator("table button").first().click();
+  await firstCell(outsider.page).click();
+  await expect(outsider.page.getByText("Saved", { exact: true })).toBeVisible();
+  await outsider.page.reload();
   await expect(outsider.page.getByText("3 responded")).toBeVisible();
   await outsider.context.close();
 
   await page.goto(`/app/${orgSlug}/calendar/polls/${pollId}`);
-  await page.getByText("Mark as:").waitFor();
-  await expect(page.locator("table button").first()).toHaveAttribute(
-    "title",
-    /Alex, Alex \(2\), Outsider/,
+  await page.getByRole("tab", { name: /Everyone/ }).click();
+  await expect(firstCell(page, "Everyone's availability")).toHaveAttribute(
+    "aria-label",
+    /Available: Alex, Alex \(2\), Outsider\./,
   );
-  await page.locator("table button").first().click();
+  await page.getByRole("tab", { name: "Your availability" }).click();
+  await firstCell(page).click();
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   await expect(page.getByText("4 responded")).toBeVisible();
 
-  await page.getByRole("button", { name: "Finalize" }).first().click();
-  await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}/calendar/[a-z0-9]+$`));
+  // Nobody marked a whole hour, so schedule from the time itself.
+  await page.getByRole("tab", { name: /Everyone/ }).click();
+  await firstCell(page, "Everyone's availability").click();
+  await page.getByRole("button", { name: "Schedule at this time" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText(/3 guests can make it but can't be invited/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Schedule" }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}/calendar/(?!polls)[a-z0-9]+$`));
   // Only the member (the owner) became an attendee.
-  await expect(page.getByText("Attendees (1)")).toBeVisible();
+  await expect(page.getByText("Invited (1)")).toBeVisible();
 });
 
 test("calendar feed: the link is shown once, and regenerating kills the old one", async ({
