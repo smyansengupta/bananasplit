@@ -21,7 +21,7 @@ export function SidebarNav({
     <nav aria-label="Main" className="flex flex-col gap-1">
       {items.map((item) => {
         const href = item.href(orgSlug);
-        const isActive = isNavItemActive(item, orgSlug, pathname);
+        const isActive = isNavItemActive(item, orgSlug, pathname, items);
         const Icon = item.icon;
         return (
           <Link
