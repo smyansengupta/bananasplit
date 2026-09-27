@@ -1,4 +1,5 @@
 import {
+  CalendarCheck,
   CalendarDays,
   ChartColumn,
   CheckSquare,
@@ -32,6 +33,7 @@ export const navItems: NavItem[] = [
   { label: "Tasks", href: (org) => `/app/${org}/tasks`, icon: CheckSquare },
   { label: "Notes", href: (org) => `/app/${org}/notes`, icon: NotebookText },
   { label: "Calendar", href: (org) => `/app/${org}/calendar`, icon: CalendarDays },
+  { label: "Polls", href: (org) => `/app/${org}/calendar/polls`, icon: CalendarCheck },
   { label: "Org Chart", href: (org) => `/app/${org}/org-chart`, icon: Network },
   { label: "Databases", href: (org) => `/app/${org}/databases`, icon: Database },
   { label: "Reports", href: (org) => `/app/${org}/reports`, icon: ChartColumn },
@@ -39,10 +41,26 @@ export const navItems: NavItem[] = [
   { label: "Settings", href: (org) => `/app/${org}/settings`, icon: Settings },
 ];
 
-/** Whether `item` is the active nav item on `pathname`. */
-export function isNavItemActive(item: NavItem, orgSlug: string, pathname: string): boolean {
+function matchesPath(item: NavItem, orgSlug: string, pathname: string): boolean {
   const href = item.href(orgSlug);
   if (pathname === href) return true;
   if (item.match === "exact") return false;
   return pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Whether `item` is the active nav item on `pathname`. When items nest
+ * (Polls lives under Calendar), only the most specific match is active.
+ */
+export function isNavItemActive(
+  item: NavItem,
+  orgSlug: string,
+  pathname: string,
+  items: readonly NavItem[] = navItems,
+): boolean {
+  if (!matchesPath(item, orgSlug, pathname)) return false;
+  const length = item.href(orgSlug).length;
+  return !items.some(
+    (other) => other.href(orgSlug).length > length && matchesPath(other, orgSlug, pathname),
+  );
 }

@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { TxClient } from "@/server/db/context";
+import { userPublicSelect } from "@/server/members";
 
 /**
  * Note reads. Every helper takes the caller's transaction client (ctx.db
@@ -46,6 +47,29 @@ export function getNotesForList(
     orderBy: { updatedAt: "desc" },
   });
 }
+
+/** The overview's most recently edited notes the viewer may read. */
+export function getRecentNotes(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  limit: number,
+) {
+  return db.note.findMany({
+    where: { organizationId, deletedAt: null, ...visibleToUser(userId) },
+    select: {
+      id: true,
+      title: true,
+      visibility: true,
+      updatedAt: true,
+      updatedBy: { select: userPublicSelect },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  });
+}
+
+export type RecentNote = Awaited<ReturnType<typeof getRecentNotes>>[number];
 
 export function getNoteById(db: TxClient, organizationId: string, userId: string, noteId: string) {
   return db.note.findFirst({

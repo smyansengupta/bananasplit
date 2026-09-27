@@ -1,3 +1,6 @@
+import { SyncPanel } from "@/components/calendar/sync-panel";
+import { withOrgTx } from "@/server/db/context";
+import { getGoogleSyncStatus } from "@/server/google-calendar/requests";
 import {
   GOOGLE_CALLBACK_MESSAGES,
   type GoogleCallbackError,
@@ -18,9 +21,13 @@ const EXTRA_MESSAGES: Record<string, string> = {
 
 /**
  * Settings > Integrations > Google Calendar: connect (OAuth with PKCE and a
- * signed state), choose calendars, test, disconnect (OWNER/ADMIN) and remove
- * (OWNER). The refresh token is an encrypted OrgSecret; the page shows only
- * its last four characters.
+ * signed state), choose calendars, import existing events, test, disconnect
+ * (OWNER/ADMIN) and remove (OWNER). The refresh token is an encrypted
+ * OrgSecret; the page shows only its last four characters.
+ *
+ * The import is the calendar's own card (SyncPanel, "import" only): the same
+ * status, actions and results as Calendar > Sync, shown while the
+ * connection is usable.
  */
 export default async function GoogleCalendarIntegrationPage({
   params,
@@ -35,6 +42,10 @@ export default async function GoogleCalendarIntegrationPage({
   const notice = code
     ? (EXTRA_MESSAGES[code] ?? GOOGLE_CALLBACK_MESSAGES[code as GoogleCallbackError] ?? null)
     : null;
+  const syncStatus =
+    dto.status === "CONNECTED" || dto.status === "ERROR"
+      ? await withOrgTx(organization.id, (ctx) => getGoogleSyncStatus(ctx))
+      : null;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -61,6 +72,17 @@ export default async function GoogleCalendarIntegrationPage({
         dto={dto}
         canWrite={canWrite}
         configured={isGoogleConfigured()}
+        importPanel={
+          syncStatus && (
+            <SyncPanel
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              canWrite={canWrite}
+              status={syncStatus}
+              sections={["import"]}
+            />
+          )
+        }
       />
       {dto.hasSecret && (
         <TestAndRemove

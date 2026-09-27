@@ -548,43 +548,6 @@ export async function disconnectGoogle(orgId: string, actor: OrgActor): Promise<
   };
 }
 
-/**
- * "Import existing events": queues a DRY RUN of the calendar builder's
- * google-import job (nothing is written until someone applies it from the
- * calendar's Sync page). OWNER/ADMIN.
- * TODO(integration): replace with requestGoogleImport(ctx, "dry-run") from
- * src/server/google-calendar/requests.ts and show its SyncPanel here.
- */
-export async function requestGoogleImportDryRun(orgId: string): Promise<IntegrationResult> {
-  return withOrgTx(orgId, async (ctx) => {
-    requirePermission(ctx, "integrations.write");
-    const row = await ctx.db.orgIntegration.findUnique({
-      where: { organizationId_provider: { organizationId: orgId, provider: "GOOGLE_CALENDAR" } },
-      select: { id: true, status: true },
-    });
-    if (!row || row.status !== IntegrationStatus.CONNECTED) {
-      return { ok: false as const, error: "Connect Google Calendar first." };
-    }
-    await enqueueJob(ctx.db, {
-      orgId,
-      kind: "google-import",
-      key: `${row.id}:dry-run`,
-      payload: { integrationId: row.id, mode: "dry-run" },
-    });
-    await writeOrgAuditLog(ctx.db, {
-      organizationId: orgId,
-      action: "calendar.google_import_requested",
-      targetType: "OrgIntegration",
-      targetId: row.id,
-      diff: { mode: "dry-run" },
-    });
-    return {
-      ok: true as const,
-      message: "Import dry run queued. Review and apply it from Calendar > Sync.",
-    };
-  });
-}
-
 // ---------------------------------------------------------------- Test and remove (all)
 
 export async function testProvider(

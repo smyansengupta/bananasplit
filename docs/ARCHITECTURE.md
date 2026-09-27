@@ -173,7 +173,9 @@ Google profile whose address Google has not verified, and for a verified one
 purges such an account (`src/lib/auth/purge-squatter.ts`) and strips the
 password of an unverified account the purge had to keep, before Auth.js looks
 the address up. It fails closed, because the Google provider allows email
-account linking. The 'check your email' notice (onboarding, invite page) and
+account linking. (The provider stays configured, but "Continue with Google"
+is hidden in the UI for now, so the pages offer email and password only.)
+The 'check your email' notice (onboarding, invite page) and
 the link page share one resend limit per account.
 
 **Lint** (`eslint.config.mjs`). ESLint bans:

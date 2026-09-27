@@ -327,6 +327,7 @@ async function fakeFetch(input: string | URL | Request, init: RequestInit = {}):
 
 const { gcalJob, syncDeps, pushToGoogle } = await import("./sync");
 const { googleImportJob } = await import("./import");
+const { requestGoogleImport } = await import("./requests");
 const { googleRevokeJob } = await import("./revoke");
 const { siteRebuildJob, parseBuildHookUrl } = await import("@/server/public-events/rebuild");
 const { createCalendarClient } = await import("./client");
@@ -334,6 +335,7 @@ const { getAccessToken, clearAllAccessTokens, GoogleReauthError, GoogleNotConfig
 const { googleEventId } = await import("./mapping");
 const { withSystemOrgTx, NetworkInTransactionError } = await import("@/server/db/context");
 const { PermanentJobError } = await import("@/server/jobs/types");
+const { ForbiddenError } = await import("@/lib/auth/errors");
 const { updateEvent, deleteEvent } = await import("@/server/events/service");
 const { implementedKinds } = await import("@/server/jobs/registry");
 
@@ -811,6 +813,68 @@ describe("google-import", () => {
       created: 0,
       ambiguous: 0,
     });
+  });
+});
+
+// Calendar > Sync and Settings > Integrations > Google Calendar both call this
+// (through SyncPanel's import card).
+describe("requesting the Google import", () => {
+  function request(mode: "dry-run" | "apply", role: "OWNER" | "ADMIN" | "MEMBER" = "ADMIN") {
+    return withSystemOrgTx(ORG, { userId: "u_admin" }, (ctx) =>
+      requestGoogleImport({ ...ctx, organizationId: ORG, userId: "u_admin", role }, mode),
+    );
+  }
+
+  it("a dry run queues one google-import job, records the request and writes one audit row", async () => {
+    store.integrations[0].config = {
+      publicCalendarId: PUBLIC_CAL,
+      import: { mode: "dry-run", status: "done", ranAt: "2026-09-01T00:00:00.000Z", linked: 2 },
+    };
+    expect(await request("dry-run")).toEqual({ ok: true });
+    expect(store.jobs).toEqual([
+      {
+        orgId: ORG,
+        kind: "google-import",
+        key: "int_google:dry-run",
+        payload: { integrationId: "int_google", mode: "dry-run" },
+      },
+    ]);
+    expect(store.audits).toEqual(["calendar.google_import_requested"]);
+    // The last summary stays; the request is what the import card reads as "queued".
+    const config = store.integrations[0].config as Record<string, Record<string, unknown>>;
+    expect(config.publicCalendarId).toBe(PUBLIC_CAL);
+    expect(config.import).toMatchObject({ mode: "dry-run", linked: 2, requested: "dry-run" });
+    expect(typeof config.import.requestedAt).toBe("string");
+  });
+
+  it("is ADMIN+ only", async () => {
+    await expect(request("dry-run", "MEMBER")).rejects.toBeInstanceOf(ForbiddenError);
+    expect(store.jobs).toHaveLength(0);
+    expect(store.audits).toHaveLength(0);
+  });
+
+  it("needs a usable connection", async () => {
+    store.integrations[0].status = "DISCONNECTED";
+    expect(await request("dry-run")).toEqual({
+      ok: false,
+      error: "Connect Google Calendar in Settings > Integrations first.",
+    });
+    store.integrations[0].status = "NEEDS_REAUTH";
+    expect(await request("dry-run")).toMatchObject({ ok: false, error: expect.stringMatching(/^Reconnect/) });
+    store.integrations = store.integrations.filter((i) => i.provider !== "GOOGLE_CALENDAR");
+    expect(await request("dry-run")).toMatchObject({ ok: false, error: expect.stringMatching(/^Connect/) });
+    expect(store.jobs).toHaveLength(0);
+    expect(store.audits).toHaveLength(0);
+  });
+
+  it("applies only after a dry run that did not fail", async () => {
+    expect(await request("apply")).toMatchObject({ ok: false, error: expect.stringMatching(/dry run first/) });
+    store.integrations[0].config = { publicCalendarId: PUBLIC_CAL, import: { mode: "dry-run", status: "failed" } };
+    expect(await request("apply")).toMatchObject({ ok: false });
+    expect(store.jobs).toHaveLength(0);
+    store.integrations[0].config = { publicCalendarId: PUBLIC_CAL, import: { mode: "dry-run", status: "done" } };
+    expect(await request("apply")).toEqual({ ok: true });
+    expect(store.jobs.map((j) => j.key)).toEqual(["int_google:apply"]);
   });
 });
 

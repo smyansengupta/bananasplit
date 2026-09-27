@@ -87,6 +87,16 @@ export function getEventsInRange(db: TxClient, organizationId: string, f: RangeF
   });
 }
 
+/** The next `limit` events that have not ended yet (one under way included), for the overview. */
+export function getUpcomingEvents(db: TxClient, organizationId: string, now: Date, limit: number) {
+  return db.event.findMany({
+    where: { organizationId, deletedAt: null, mergedIntoId: null, endsAt: { gt: now } },
+    select: calendarEventSelect,
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+    take: limit,
+  });
+}
+
 /**
  * The viewer's OWN answer for each of these events, so the grid can show an
  * RSVP at a glance without shipping the attendee list. A separate query
@@ -149,19 +159,51 @@ export function canEditEvent(
   return can({ role: viewer.role as Role | null | undefined }, "events.write");
 }
 
-/** The polls list: titles, a response count and whether each is finalized. */
-export function getOrgPolls(db: TxClient, organizationId: string) {
-  return db.availabilityPoll.findMany({
+/**
+ * The polls list: titles, status, the span of dates on offer, the meeting
+ * length and how many people (not answers: one person answers many slots)
+ * have responded.
+ */
+export async function getOrgPolls(db: TxClient, organizationId: string) {
+  const polls = await db.availabilityPoll.findMany({
     where: { organizationId },
     select: {
       id: true,
       title: true,
+      timezone: true,
+      durationMinutes: true,
+      closesAt: true,
       finalizedEventId: true,
+      finalizedEvent: { select: { startsAt: true, endsAt: true } },
       createdById: true,
-      _count: { select: { responses: true } },
     },
     orderBy: { createdAt: "desc" },
   });
+  if (polls.length === 0) return [];
+  const pollIds = polls.map((p) => p.id);
+  const [spans, respondents] = await Promise.all([
+    db.pollSlot.groupBy({
+      by: ["pollId"],
+      where: { organizationId, pollId: { in: pollIds } },
+      _min: { startsAt: true },
+      _max: { endsAt: true },
+    }),
+    // One row per (poll, person): members by user id, guests by key (or, for
+    // rows from before guest keys, by name).
+    db.pollResponse.groupBy({
+      by: ["pollId", "userId", "guestKeyHash", "guestName"],
+      where: { organizationId, pollId: { in: pollIds } },
+    }),
+  ]);
+  const spanOf = new Map(spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]));
+  const respondentCount = new Map<string, number>();
+  for (const r of respondents) respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);
+  return polls.map((p) => ({
+    ...p,
+    firstSlotAt: spanOf.get(p.id)?.from ?? null,
+    lastSlotEndsAt: spanOf.get(p.id)?.to ?? null,
+    respondentCount: respondentCount.get(p.id) ?? 0,
+  }));
 }
 
 /**
@@ -182,6 +224,8 @@ export function getPollSource(db: TxClient, organizationId: string, pollId: stri
       durationMinutes: true,
       closesAt: true,
       finalizedEventId: true,
+      // When the poll was scheduled for; buildPollView shows it to members only.
+      finalizedEvent: { select: { startsAt: true, endsAt: true } },
       slots: {
         select: { id: true, startsAt: true, endsAt: true },
         orderBy: { startsAt: "asc" },

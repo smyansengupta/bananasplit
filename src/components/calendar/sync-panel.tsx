@@ -55,18 +55,31 @@ function when(iso: string | Date | null | undefined): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 }
 
+/** The panel's cards, in page order. */
+export type SyncPanelSection = "feed" | "google" | "import" | "buildHook";
+
+const ALL_SECTIONS: readonly SyncPanelSection[] = ["feed", "google", "import", "buildHook"];
+
+/**
+ * Calendar > Sync shows every card. Settings > Integrations > Google
+ * Calendar shows only "import", so the dry run started there reports its
+ * results (and is applied) through the same card and actions.
+ */
 export function SyncPanel({
   orgId,
   orgSlug,
   canWrite,
   status,
   feed,
+  sections = ALL_SECTIONS,
 }: {
   orgId: string;
   orgSlug: string;
   canWrite: boolean;
   status: GoogleSyncStatus;
-  feed: { json: string; ics: string };
+  /** The public feed URLs; the feed card is shown only with them. */
+  feed?: { json: string; ics: string };
+  sections?: readonly SyncPanelSection[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -74,6 +87,7 @@ export function SyncPanel({
   const google = status.google;
   const usable = google && (google.status === "CONNECTED" || google.status === "ERROR");
   const imp = google?.import ?? null;
+  const show = (section: SyncPanelSection) => sections.includes(section);
 
   function run(action: () => Promise<{ error?: string; queued?: number }>, ok: (queued?: number) => string) {
     setMessage(null);
@@ -92,97 +106,101 @@ export function SyncPanel({
         </p>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            Website events feed
-            <Badge variant={status.publicEventsEnabled ? "secondary" : "outline"}>
-              {status.publicEventsEnabled ? "On" : "Off"}
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            Upcoming public events as JSON (what the club website reads at build time) and as a calendar feed anyone
-            can subscribe to. Cached for five minutes at the CDN.
-            {!status.publicEventsEnabled && (
+      {show("feed") && feed && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Website events feed
+              <Badge variant={status.publicEventsEnabled ? "secondary" : "outline"}>
+                {status.publicEventsEnabled ? "On" : "Off"}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Upcoming public events as JSON (what the club website reads at build time) and as a calendar feed anyone
+              can subscribe to. Cached for five minutes at the CDN.
+              {!status.publicEventsEnabled && (
+                <>
+                  {" "}
+                  It answers 404 until an owner or admin turns it on in{" "}
+                  <Link className="underline" href={`/app/${orgSlug}/settings/privacy`}>
+                    Settings &gt; Privacy
+                  </Link>
+                  .
+                </>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <CopyField label="JSON (set as SUITE_EVENTS_URL on the website)" value={feed.json} />
+            <CopyField label="iCalendar" value={feed.ics} />
+          </CardContent>
+        </Card>
+      )}
+
+      {show("google") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Google Calendar mirror
+              <StatusBadge status={google?.status ?? null} />
+            </CardTitle>
+            <CardDescription>
+              Every save in the suite is copied to Google within about a minute. Changes made directly in Google are
+              overwritten by the next save here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {google ? (
               <>
-                {" "}
-                It answers 404 until an owner or admin turns it on in{" "}
-                <Link className="underline" href={`/app/${orgSlug}/settings/privacy`}>
-                  Settings &gt; Privacy
+                <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1">
+                  <dt className="text-muted-foreground">Public calendar</dt>
+                  <dd className="truncate">{google.publicCalendarId}</dd>
+                  <dt className="text-muted-foreground">Internal calendar</dt>
+                  <dd className="truncate">{google.internalCalendarId ?? "None: internal events stay off Google"}</dd>
+                  <dt className="text-muted-foreground">Events</dt>
+                  <dd>
+                    {status.counts.SYNCED} on Google · {status.counts.PENDING} syncing · {status.counts.FAILED} failed
+                  </dd>
+                  <dt className="text-muted-foreground">Last Sync now</dt>
+                  <dd>{when(google.lastSyncRequestAt)}</dd>
+                </dl>
+                {google.lastError && <p className="text-destructive">Last error: {google.lastError}</p>}
+                {status.failures.length > 0 && (
+                  <ul className="space-y-1">
+                    {status.failures.map((f) => (
+                      <li key={f.id}>
+                        <Link className="underline" href={`/app/${orgSlug}/calendar/${f.id}`}>
+                          {f.title}
+                        </Link>
+                        {f.error && <span className="text-muted-foreground">: {f.error}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {canWrite && (
+                  <Button
+                    type="button"
+                    disabled={isPending || !usable}
+                    onClick={() => run(() => syncGoogleNow(orgId), (n) => `Queued ${n ?? 0} event(s) for Google.`)}
+                  >
+                    Sync now
+                  </Button>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground">
+                Not connected. Connect the club&apos;s Google account in{" "}
+                <Link className="underline" href={`/app/${orgSlug}/settings/integrations`}>
+                  Settings &gt; Integrations
                 </Link>
                 .
-              </>
+              </p>
             )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <CopyField label="JSON (set as SUITE_EVENTS_URL on the website)" value={feed.json} />
-          <CopyField label="iCalendar" value={feed.ics} />
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            Google Calendar mirror
-            <StatusBadge status={google?.status ?? null} />
-          </CardTitle>
-          <CardDescription>
-            Every save in the suite is copied to Google within about a minute. Changes made directly in Google are
-            overwritten by the next save here.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          {google ? (
-            <>
-              <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1">
-                <dt className="text-muted-foreground">Public calendar</dt>
-                <dd className="truncate">{google.publicCalendarId}</dd>
-                <dt className="text-muted-foreground">Internal calendar</dt>
-                <dd className="truncate">{google.internalCalendarId ?? "None: internal events stay off Google"}</dd>
-                <dt className="text-muted-foreground">Events</dt>
-                <dd>
-                  {status.counts.SYNCED} on Google · {status.counts.PENDING} syncing · {status.counts.FAILED} failed
-                </dd>
-                <dt className="text-muted-foreground">Last Sync now</dt>
-                <dd>{when(google.lastSyncRequestAt)}</dd>
-              </dl>
-              {google.lastError && <p className="text-destructive">Last error: {google.lastError}</p>}
-              {status.failures.length > 0 && (
-                <ul className="space-y-1">
-                  {status.failures.map((f) => (
-                    <li key={f.id}>
-                      <Link className="underline" href={`/app/${orgSlug}/calendar/${f.id}`}>
-                        {f.title}
-                      </Link>
-                      {f.error && <span className="text-muted-foreground">: {f.error}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {canWrite && (
-                <Button
-                  type="button"
-                  disabled={isPending || !usable}
-                  onClick={() => run(() => syncGoogleNow(orgId), (n) => `Queued ${n ?? 0} event(s) for Google.`)}
-                >
-                  Sync now
-                </Button>
-              )}
-            </>
-          ) : (
-            <p className="text-muted-foreground">
-              Not connected. Connect the club&apos;s Google account in{" "}
-              <Link className="underline" href={`/app/${orgSlug}/settings/integrations`}>
-                Settings &gt; Integrations
-              </Link>
-              .
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {google && (
+      {show("import") && google && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Import existing Google events</CardTitle>
@@ -247,24 +265,26 @@ export function SyncPanel({
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            Website rebuild hook
-            <StatusBadge status={status.buildHook?.status ?? null} />
-          </CardTitle>
-          <CardDescription>
-            When a public event changes, the suite waits a minute (so a burst of edits is one deploy) and then asks
-            Netlify to rebuild the website. The hook URL is saved in Settings &gt; Integrations.
-          </CardDescription>
-        </CardHeader>
-        {status.buildHook && (
-          <CardContent className="space-y-1 text-sm">
-            <p className="text-muted-foreground">Last successful rebuild request: {when(status.buildHook.lastVerifiedAt)}</p>
-            {status.buildHook.lastError && <p className="text-destructive">{status.buildHook.lastError}</p>}
-          </CardContent>
-        )}
-      </Card>
+      {show("buildHook") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              Website rebuild hook
+              <StatusBadge status={status.buildHook?.status ?? null} />
+            </CardTitle>
+            <CardDescription>
+              When a public event changes, the suite waits a minute (so a burst of edits is one deploy) and then asks
+              Netlify to rebuild the website. The hook URL is saved in Settings &gt; Integrations.
+            </CardDescription>
+          </CardHeader>
+          {status.buildHook && (
+            <CardContent className="space-y-1 text-sm">
+              <p className="text-muted-foreground">Last successful rebuild request: {when(status.buildHook.lastVerifiedAt)}</p>
+              {status.buildHook.lastError && <p className="text-destructive">{status.buildHook.lastError}</p>}
+            </CardContent>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

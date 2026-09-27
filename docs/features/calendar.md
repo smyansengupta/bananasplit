@@ -70,6 +70,41 @@ a particular month or week is shareable.
 The calendar loads only the weeks on screen. Admins see a small icon on
 events that are still syncing to Google or whose sync failed.
 
+### 1b. Availability polls
+
+Calendar > **Availability polls** finds a meeting time (when2meet-style).
+
+- **Creating one** (any member): a title, the days to offer, the daily hours
+  and the time zone those hours are in (the organization's by default; the
+  form says what they are in your own zone when the two differ), the meeting
+  length, how finely people mark their time, and optionally when it stops
+  taking answers. The form shows how many slots that makes before you create
+  it.
+- **Sharing:** the poll page has the link for people outside the club. They
+  answer as guests under a name they type, with no account. Members answer as
+  themselves, in the app or on the link.
+- **Answering** (*Your availability*): pick *Available*, *If needed* or
+  *Unavailable*, then click a time or drag a rectangle across several (mouse
+  or touch; on a phone, drag the time column to scroll). Starting on a time
+  you have already marked undoes it. With the keyboard, the grid is one tab
+  stop: arrows move, Space marks, Shift+arrow marks as you move. Answers save
+  as you go.
+- **Reading it** (*Everyone*): each time shows how many people can make it,
+  shaded one colour from few to many, with a corner mark where some of them
+  said "if needed". Point at a time, tab to it or tap it to see who is
+  available, who only if needed, who can't and who hasn't answered. Inside
+  the app members are shown by name; on the public link members show as
+  "Member" and guests by the name they typed.
+- **Times** are shown in your own time zone, which the page names, with a
+  switch to the poll's.
+- **Best times** lists up to five non-overlapping windows of the meeting's
+  length that suit the most people. An owner or admin schedules one (or any
+  time, from the *Everyone* read-out) after a confirmation: that creates an
+  internal event, invites the members who can make its start and closes the
+  poll. Guests can't be invited; the confirmation says how many there are.
+- The poll's creator, or an owner or admin, can delete it; an event it
+  scheduled stays on the calendar.
+
 ### 2. Connect Google Calendar (optional, recommended)
 
 1. **Settings > Integrations > Google Calendar > Connect**, signed in to
@@ -100,7 +135,9 @@ them in place instead of duplicating them.
 
 ### 3. Import the events that are already on Google (once)
 
-Calendar > Sync and website feed > **Import existing Google events**:
+Calendar > Sync and website feed > **Import existing Google events** (the
+same card is on Settings > Integrations > Google Calendar while Google is
+connected):
 
 1. **Dry run** reads the public Google calendar (six months back to about a
    year ahead) and reports *N linked, M new, K ambiguous*, with sample

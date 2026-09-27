@@ -1,4 +1,7 @@
+import { CalendarX2, Info } from "lucide-react";
 import { cookies } from "next/headers";
+
+import { EmptyState } from "@/components/empty-state";
 
 import { getPollSource } from "@/app/app/[orgSlug]/calendar/queries";
 import { PollResponder } from "@/components/calendar/poll-responder";
@@ -12,7 +15,12 @@ import { pollOrgId } from "./poll-org";
 function Missing() {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
-      <p className="text-muted-foreground text-sm">This poll doesn&apos;t exist or was removed.</p>
+      <EmptyState
+        icon={CalendarX2}
+        title="This poll isn't available"
+        description="The link may be mistyped, or the poll was deleted. Ask whoever sent it for a new one."
+        className="w-full max-w-md"
+      />
     </div>
   );
 }
@@ -53,17 +61,23 @@ export default async function PublicPollPage({ params }: PageProps<"/poll/[pollI
   const view = buildPollView(poll, viewer);
 
   return (
-    <div className="mx-auto w-full max-w-2xl flex-1 p-6">
-      <p className="text-muted-foreground mb-4 text-xs">
-        Organizers: an admin finalizes this poll from Calendar &gt; Availability polls in the app.
-      </p>
-      {session && !isMember && (
-        <p className="text-muted-foreground mb-4 text-sm">
-          You&apos;re signed in, but not a member of the organization running this poll, so
-          you&apos;ll answer as a guest.
-        </p>
-      )}
-      <PollResponder poll={view} respondAs={viewer.kind} canFinalize={false} />
+    <div className="mx-auto w-full max-w-5xl flex-1 p-6">
+      <PollResponder
+        poll={view}
+        respondAs={viewer.kind}
+        canFinalize={false}
+        notices={
+          session && !isMember ? (
+            <div className="bg-muted/40 flex gap-2 rounded-lg border p-3 text-sm" role="note">
+              <Info aria-hidden className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+              <p>
+                You&apos;re signed in, but not a member of the organization running this poll, so
+                you&apos;ll answer as a guest.
+              </p>
+            </div>
+          ) : undefined
+        }
+      />
     </div>
   );
 }

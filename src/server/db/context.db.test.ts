@@ -35,13 +35,22 @@ async function orgBySlug(slug: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Async, so a missing role URL (no local database, as in CI) rejects inside
+ * Promise.all like the service lookups instead of throwing before it and
+ * leaving their rejections unhandled.
+ */
+async function userByEmail(email: string) {
+  return authDb.user.findUnique({ where: { email }, select: { id: true, email: true, name: true } });
+}
+
 let seeded: Seeded | null = null;
 try {
   const [cbc, robotics, jackson, kristine] = await Promise.all([
     orgBySlug("claude-builders-club"),
     orgBySlug("robotics-club"),
-    authDb.user.findUnique({ where: { email: "jackson@example.edu" }, select: { id: true, email: true, name: true } }),
-    authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
+    userByEmail("jackson@example.edu"),
+    userByEmail("kristine@example.edu"),
   ]);
   if (cbc && robotics && jackson && kristine) {
     seeded = { cbcId: cbc.id, roboticsId: robotics.id, jackson, kristine };

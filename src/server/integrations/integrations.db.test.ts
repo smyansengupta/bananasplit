@@ -28,6 +28,7 @@ vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 import { ForbiddenError } from "@/lib/auth/errors";
 import { POST as startRoute } from "@/app/api/integrations/google-calendar/start/route";
 import { GET as callbackRoute } from "@/app/api/integrations/google-calendar/callback/route";
+import { importGoogleEvents } from "@/app/app/[orgSlug]/calendar/sync/actions";
 import { authDb, disconnectAll } from "@/server/db/clients";
 import { withSystemOrgTx } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
@@ -41,7 +42,6 @@ import {
   disconnectGoogle,
   loadIntegrations,
   removeProvider,
-  requestGoogleImportDryRun,
   resolveActor,
   saveClaude,
   saveEmailSender,
@@ -405,12 +405,18 @@ describe.skipIf(!dbReady)("integrations against the local database", () => {
     sessionUser.current = owner;
     const { cookie, state } = await start(orgId);
     expect(await callback(state, cookie)).toBe("connected");
-    expect(await requestGoogleImportDryRun(orgId)).toMatchObject({ ok: true });
+    // The Google Calendar settings page's import card (the calendar's SyncPanel) runs this action.
+    expect(await importGoogleEvents(orgId, "dry-run")).toEqual({});
     const importJob = await client.query(
       `SELECT payload FROM "Job" WHERE "organizationId" = $1 AND kind = 'google-import'`,
       [orgId],
     );
     expect(importJob.rows[0].payload).toMatchObject({ mode: "dry-run" });
+    const importAudit = await client.query(
+      `SELECT action FROM "OrgAuditLog" WHERE "organizationId" = $1 AND action = 'calendar.google_import_requested'`,
+      [orgId],
+    );
+    expect(importAudit.rows).toHaveLength(1);
 
     const revoke = vi.spyOn(googleHttp, "fetch");
     expect(await disconnectGoogle(orgId, await resolveActor(orgId))).toMatchObject({
@@ -425,6 +431,8 @@ describe.skipIf(!dbReady)("integrations against the local database", () => {
     expect(
       await getSecret({ orgId, provider: "GOOGLE_CALENDAR", kind: "REFRESH_TOKEN" }),
     ).toBeNull();
-    expect(await requestGoogleImportDryRun(orgId)).toMatchObject({ ok: false });
+    expect(await importGoogleEvents(orgId, "dry-run")).toEqual({
+      error: "Connect Google Calendar in Settings > Integrations first.",
+    });
   });
 });
