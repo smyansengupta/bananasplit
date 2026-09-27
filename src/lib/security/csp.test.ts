@@ -68,6 +68,20 @@ describe("nonce policy (0A Fix 13)", () => {
     );
     expect(policy.get("connect-src")).toBe("'self'");
   });
+
+  it("allows the live-collaboration WebSocket only while collaboration is on", () => {
+    const collab = {
+      NODE_ENV: "production",
+      COLLAB_SERVER_URL: "wss://collab.example.org/ws",
+      COLLAB_SECRET: "s".repeat(40),
+    };
+    const connect = (vars: Record<string, string>) =>
+      directives(buildNonceCsp("n", { env: env(vars) })).get("connect-src");
+    expect(connect({ ...collab, COLLAB_ENABLED: "true" })).toBe("'self' wss://collab.example.org");
+    expect(connect(collab)).toBe("'self'");
+    // Enabled but unusable (no secret): collaboration stays off, and so does the origin.
+    expect(connect({ ...collab, COLLAB_ENABLED: "true", COLLAB_SECRET: "" })).toBe("'self'");
+  });
 });
 
 describe("static policy for every other route", () => {

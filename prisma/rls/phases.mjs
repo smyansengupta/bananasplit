@@ -827,6 +827,62 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     { value: { clears_own_skip: 1, cannot_touch_other_org: 0, sees_only_own: 1 } },
   );
 
+  // ======================= Live collaboration on notes =======================
+  // Note.yjsState (20260926120000_note_yjs_state) is a column, not a table,
+  // so the GRANTS matrix keeps its Note row and there is no new policy: the
+  // collaboration bridge writes it as app_user in the editing user's own
+  // context (withOrgTxAs), and the 6.8 Note policies must cover it exactly
+  // as they cover the body.
+  await tcase(
+    "P-COLLAB-01",
+    "Note.yjsState follows the Note policies: members read an ORGANIZATION note's state but only the author or an OWNER/ADMIN writes it, a PRIVATE note's state is its author's alone, and nothing crosses orgs",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const state = `decode('0102', 'hex')`;
+      const s = {};
+      s.member_reads_org = await count(
+        q,
+        `SELECT count(*) n FROM "Note" WHERE "id" = 'n_A_org' AND "yjsState" IS NULL`,
+      );
+      s.member_writes_org = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_org'`,
+      );
+      s.member_sees_private = await count(
+        q,
+        `SELECT count(*) n FROM "Note" WHERE "id" = 'n_A_priv'`,
+      );
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_writes_others_private = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_priv'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_writes_org = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_org'`,
+      );
+      s.author_writes_own_private = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_priv'`,
+      );
+      s.admin_cross_org = await rc(q, `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_B'`);
+      return s;
+    },
+    {
+      value: {
+        member_reads_org: 1,
+        member_writes_org: 0,
+        member_sees_private: 0,
+        owner_writes_others_private: 0,
+        admin_writes_org: 1,
+        author_writes_own_private: 1,
+        admin_cross_org: 0,
+      },
+    },
+  );
+
   // ======================= Phase 2: profiles =======================
   await tcase(
     "P2-01",

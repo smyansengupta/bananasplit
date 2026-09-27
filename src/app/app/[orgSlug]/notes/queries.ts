@@ -15,7 +15,13 @@ export const noteListInclude = {
   event: { select: { id: true, title: true, startsAt: true } },
 } satisfies Prisma.NoteInclude;
 
-export type NoteWithRelations = Prisma.NoteGetPayload<{ include: typeof noteListInclude }>;
+/** The live-collaboration state is internal storage: never loaded for lists or pages. */
+const noteListOmit = { yjsState: true } satisfies Prisma.NoteOmit;
+
+export type NoteWithRelations = Prisma.NoteGetPayload<{
+  include: typeof noteListInclude;
+  omit: typeof noteListOmit;
+}>;
 
 /** Private notes are invisible to everyone but their author, regardless of role. */
 function visibleToUser(userId: string): Prisma.NoteWhereInput {
@@ -37,6 +43,7 @@ export function getNotesForList(
       ...(filters.authorId ? { authorId: filters.authorId } : {}),
     },
     include: noteListInclude,
+    omit: noteListOmit,
     orderBy: { updatedAt: "desc" },
   });
 }
@@ -68,6 +75,7 @@ export function getNoteById(db: TxClient, organizationId: string, userId: string
   return db.note.findFirst({
     where: { id: noteId, organizationId, deletedAt: null, ...visibleToUser(userId) },
     include: noteListInclude,
+    omit: noteListOmit,
   });
 }
 

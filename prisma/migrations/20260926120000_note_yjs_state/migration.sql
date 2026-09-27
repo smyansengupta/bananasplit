@@ -1,0 +1,23 @@
+-- Live collaboration on notes (docs/features/collaboration.md).
+--
+-- "yjsState" holds the Yjs document a note's body is edited in when live
+-- collaboration is on (COLLAB_ENABLED). It stays NULL until the first live
+-- save; contentJson and contentText are rewritten from it on every save, so
+-- the list, the searchVector generated column and the autosave editor keep
+-- reading what they read today. With the flag off nothing writes it.
+--
+-- No new table, so no new policy and no new GRANT: the column lives on
+-- "Note", whose per-command app_user policies (6.8 in
+-- 20260922000400_0b_rls_roles_policies_triggers) already decide who may read
+-- it (ORGANIZATION notes: members; PRIVATE notes: the author) and who may
+-- write it (the author or an OWNER/ADMIN), and whose table-level GRANTs cover
+-- columns added later. The reviewed grant matrix in prisma/rls/phases.mjs is
+-- per-table and therefore unchanged (Note: SIUD / SIUD / -); the new
+-- P-COLLAB-01 case there exercises the column under those policies.
+--
+-- The bridge that writes it (src/app/api/collab/*) runs as app_user with the
+-- editing user's own context (withOrgTxAs), never as app_service, so the same
+-- policies apply to a live save as to an autosave.
+
+-- AlterTable
+ALTER TABLE "Note" ADD COLUMN     "yjsState" BYTEA;

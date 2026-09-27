@@ -30,6 +30,9 @@
  * included. A <style> needs no nonce.
  */
 
+// Relative, not "@/...": next.config.ts loads this file too.
+import { collabConfig } from "../collab/config";
+
 export type CspMode = "enforce" | "report-only";
 
 /** Paths under the nonce policy (the proxy matcher lists the same set). */
@@ -86,14 +89,20 @@ interface PolicyOptions {
 
 function sharedDirectives(env: NodeJS.ProcessEnv): string[] {
   const isProduction = env.NODE_ENV === "production";
-  const sentry = sentryOrigin(env);
+  const connect = [
+    "'self'",
+    sentryOrigin(env),
+    // The live-collaboration WebSocket, only while collaboration is on
+    // (docs/features/collaboration.md).
+    collabConfig(env)?.origin,
+  ].filter(Boolean);
   return [
     "default-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' blob: data: ${IMAGE_HOSTS.join(" ")}`,
     // FullCalendar ships its icon font inline as a data: URI in its CSS.
     "font-src 'self' data:",
-    `connect-src 'self'${sentry ? ` ${sentry}` : ""}`,
+    `connect-src ${connect.join(" ")}`,
     `form-action 'self' ${FORM_TARGETS.join(" ")}`,
     "frame-ancestors 'none'",
     "object-src 'none'",
