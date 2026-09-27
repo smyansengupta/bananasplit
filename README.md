@@ -5,11 +5,16 @@ scheduling, and finance tracking.
 
 ## Stack
 
-Next.js (App Router) + React + TypeScript, Postgres via Prisma, Auth.js (Google OAuth + email/
-password), Tailwind CSS + shadcn/ui. See the project spec for the full rationale.
+Next.js (App Router) + React + TypeScript, Postgres via Prisma, Auth.js (email/password, plus a
+Google OAuth provider that is currently hidden), Tailwind CSS + shadcn/ui. See the project spec
+for the full rationale.
 
-Sign-in supports both Google OAuth and email/password (bcrypt-hashed, `/sign-up` to register).
-Email/password is a deliberate addition beyond the original spec, which scoped v1 to Google-only.
+Sign-in is email/password (bcrypt-hashed, `/sign-up` to register). Email/password is a deliberate
+addition beyond the original spec, which scoped v1 to Google-only. "Continue with Google" is
+turned off in the UI for now (`/sign-in` and `/invite/[token]` no longer show it), but the Auth.js
+Google provider, the account-linking rules in `src/lib/auth/google-linking.ts` and the `Account`
+table are all still in place, so bringing it back only means restoring the button. Google
+Calendar sync (Settings > Integrations) is a separate OAuth client and is unaffected.
 
 ## Local setup
 
