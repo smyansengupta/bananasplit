@@ -317,7 +317,8 @@ const eslintConfig = defineConfig([
     files: ["src/**/*.tsx"],
     ignores: [
       ...TESTS,
-      // Email HTML (no CSS variables in mail clients).
+      // Brand marks with fixed colours, and email HTML (no CSS variables in mail clients).
+      "src/components/google-icon.tsx",
       "src/server/email/**",
     ],
     plugins: { theme: themePlugin },

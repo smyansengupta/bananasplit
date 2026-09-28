@@ -190,8 +190,9 @@ Google profile whose address Google has not verified, and for a verified one
 purges such an account (`src/lib/auth/purge-squatter.ts`) and strips the
 password of an unverified account the purge had to keep, before Auth.js looks
 the address up. It fails closed, because the Google provider allows email
-account linking. (The provider stays configured, but "Continue with Google"
-is hidden in the UI for now, so the pages offer email and password only.)
+account linking. The provider is always configured, but `/sign-in` and
+`/invite/[token]` offer "Continue with Google" only when `AUTH_GOOGLE_ID` and
+`AUTH_GOOGLE_SECRET` are both set (`src/lib/auth/google-sign-in.ts`).
 The 'check your email' notice (onboarding, invite page) and
 the link page share one resend limit per account.
 
