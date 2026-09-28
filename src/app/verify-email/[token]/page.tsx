@@ -110,7 +110,7 @@ export default async function VerifyEmailPage({
   return (
     <Shell
       title="Confirm your email"
-      description="Confirm this address to finish setting up your CBC Portal account."
+      description="Confirm this address to finish setting up your Clubport account."
     >
       <form action={confirmEmailAction.bind(null, token)}>
         <Button type="submit" className="w-full">

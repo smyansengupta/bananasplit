@@ -155,7 +155,7 @@ function buildVEvent(event: IcsEvent, timeZone: string, uidHost: string): string
  */
 export function buildIcsCalendar(
   events: IcsEvent[],
-  nameOrOptions: string | IcsCalendarOptions = "CBC Portal",
+  nameOrOptions: string | IcsCalendarOptions = "Clubport",
 ): string {
   const options: IcsCalendarOptions =
     typeof nameOrOptions === "string" ? { name: nameOrOptions } : nameOrOptions;
@@ -164,10 +164,10 @@ export function buildIcsCalendar(
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//CBC Portal//Calendar//EN",
+    "PRODID:-//Clubport//Calendar//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    `X-WR-CALNAME:${escapeText(options.name ?? "CBC Portal")}`,
+    `X-WR-CALNAME:${escapeText(options.name ?? "Clubport")}`,
   ];
   if (options.description) lines.push(`X-WR-CALDESC:${escapeText(options.description)}`);
   if (options.timeZone) lines.push(`X-WR-TIMEZONE:${timeZone}`);

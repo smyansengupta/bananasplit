@@ -77,7 +77,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   events.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime() || (a.id < b.id ? -1 : 1));
 
   const ics = buildIcsCalendar(events, {
-    name: `${user.name ?? "CBC Portal"} — CBC Portal`,
+    name: `${user.name ?? "Clubport"} — Clubport`,
     refreshMinutes: 60,
   });
 
