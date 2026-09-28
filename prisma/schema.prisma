@@ -1,4 +1,4 @@
-// CBC Portal — data model
+// Clubport — data model
 // See the project spec, section 2, for the design rationale behind each table.
 // Money is always integer cents. Tenant-scoped tables always carry organizationId.
 

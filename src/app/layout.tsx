@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CBC Portal",
+  title: "Clubport",
   description: "A workspace for student club executive boards.",
 };
 

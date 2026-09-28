@@ -255,7 +255,7 @@ function countLines(body: Buffer): number {
   return n;
 }
 
-const README = `This archive holds every record of your organization in CBC Portal.
+const README = `This archive holds every record of your organization in Clubport.
 
 data/{Table}.ndjson  one JSON object per line (the exact values)
 data/{Table}.csv     the same rows for spreadsheets; cells that start with

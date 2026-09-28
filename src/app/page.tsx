@@ -15,7 +15,7 @@ export default async function Home() {
     <PublicThemeRoot>
       <div className="flex flex-1 flex-col items-center justify-center gap-6 p-10 text-center">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">CBC Portal</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Clubport</h1>
           <p className="text-muted-foreground mx-auto max-w-md text-sm">
             A workspace for student club executive boards: tasks, notes, meetings, and finance.
           </p>

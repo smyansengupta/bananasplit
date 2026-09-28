@@ -42,7 +42,7 @@ export default async function OnboardingPage() {
   return (
     <div className="mx-auto w-full max-w-lg space-y-8 p-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome to CBC Portal</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Welcome to Clubport</h1>
         <p className="text-muted-foreground text-sm">
           Create an organization or accept a pending invite to get started.
         </p>
