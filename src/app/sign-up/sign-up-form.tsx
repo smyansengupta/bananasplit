@@ -24,6 +24,11 @@ export function SignUpForm() {
           Open it to verify your address, then sign in. You need a verified email to create or
           join an organization.
         </p>
+        {state.error && (
+          <p className="text-destructive text-sm" role="alert">
+            {state.error}
+          </p>
+        )}
         <Button asChild variant="outline" className="w-full">
           <Link href="/sign-in">Go to sign in</Link>
         </Button>

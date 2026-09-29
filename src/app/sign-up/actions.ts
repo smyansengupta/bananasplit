@@ -1,9 +1,9 @@
 "use server";
 
-import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { signIn } from "@/lib/auth/config";
+import { credentialsSignIn, SIGN_IN_UNAVAILABLE_MESSAGE } from "@/lib/auth/credentials-sign-in";
 import { emailVerificationRequired } from "@/lib/auth/email-verification";
 import { hashPassword } from "@/lib/auth/password";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
@@ -26,7 +26,11 @@ const signUpSchema = z.object({
 
 export interface SignUpState {
   error?: string;
-  /** The account exists and a verification link was sent to this address. */
+  /**
+   * The account exists and a verification link was sent to this address,
+   * but the user is not signed in (the automatic sign-in failed; `error`
+   * says so when the server could not sign anyone in).
+   */
   checkEmail?: string;
 }
 
@@ -99,7 +103,7 @@ export async function signUpAction(
   // platform job, sent right after this request). An account that is never
   // confirmed, and never joins an org, is removed after 72 hours.
   // If queueing fails the account exists either way; onboarding offers
-  // "Resend link".
+  // "Resend verification email".
   if (mustVerify) {
     try {
       await enqueueVerificationEmail(user.id);
@@ -108,17 +112,19 @@ export async function signUpAction(
     }
   }
 
-  try {
-    await signIn("credentials", {
-      email: parsed.data.email,
-      password: parsed.data.password,
-      redirectTo: "/onboarding",
-    });
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return mustVerify ? { checkEmail: parsed.data.email } : { error: "Could not sign you in. Try signing in with your new password." };
-    }
-    throw error;
+  const signedIn = await credentialsSignIn(parsed.data.email, parsed.data.password, "/onboarding");
+  if (signedIn.ok) redirect("/onboarding");
+
+  // The account exists either way. A server-side failure is said as such
+  // (it is not the password); anything else falls back to signing in by hand.
+  const unavailable =
+    signedIn.reason === "unavailable"
+      ? `Your account was created, but we couldn't sign you in. ${SIGN_IN_UNAVAILABLE_MESSAGE}`
+      : undefined;
+  if (mustVerify) {
+    return unavailable
+      ? { checkEmail: parsed.data.email, error: unavailable }
+      : { checkEmail: parsed.data.email };
   }
-  return mustVerify ? { checkEmail: parsed.data.email } : {};
+  return { error: unavailable ?? "Could not sign you in. Try signing in with your new password." };
 }

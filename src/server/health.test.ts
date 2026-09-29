@@ -121,6 +121,7 @@ describe("health checks", () => {
     expect(failing(report)).toEqual([
       "production:email",
       "production:cron_secret",
+      "production:auth_secret",
       "production:secrets",
       "production:app_url",
     ]);
@@ -131,9 +132,70 @@ describe("health checks", () => {
       EMAIL_FROM: "CBC <no-reply@claudeneu.com>",
       NEXT_PUBLIC_APP_URL: "https://portal.claudeneu.com",
       CRON_SECRET: "c",
+      AUTH_SECRET: "a",
       SECRETS_KEK_V1: kek,
       SECRETS_FINGERPRINT_KEY: "f",
     });
     expect(failing(ok)).toEqual([]);
+  });
+
+  describe("production:auth_secret", () => {
+    const check = async (env: Record<string, string>) =>
+      (await runHealthChecks(probes(), { VERCEL_ENV: "production", ...env })).checks.find(
+        (c) => c.name === "production:auth_secret",
+      );
+
+    it("fails without an Auth.js secret, which is what makes every sign-in a 500", async () => {
+      expect(await check({})).toEqual({
+        name: "production:auth_secret",
+        ok: false,
+        detail: "AUTH_SECRET is not set (nor NEXTAUTH_SECRET)",
+      });
+      expect((await check({ AUTH_SECRET: "  " }))?.ok).toBe(false);
+    });
+
+    it("passes with AUTH_SECRET, the legacy NEXTAUTH_SECRET or a rotation slot", async () => {
+      expect((await check({ AUTH_SECRET: "s" }))?.ok).toBe(true);
+      expect((await check({ NEXTAUTH_SECRET: "s" }))?.ok).toBe(true);
+      expect((await check({ AUTH_SECRET_1: "s" }))?.ok).toBe(true);
+    });
+
+    it("is only checked in production", async () => {
+      const preview = await runHealthChecks(probes({ fixtureOnly: "on" }), {
+        VERCEL_ENV: "preview",
+      });
+      expect(preview.checks.map((c) => c.name)).not.toContain("production:auth_secret");
+    });
+  });
+
+  describe("production:app_url", () => {
+    const check = async (env: Record<string, string>) =>
+      (await runHealthChecks(probes(), { VERCEL_ENV: "production", ...env })).checks.find(
+        (c) => c.name === "production:app_url",
+      );
+
+    it("passes on the project's production domain when NEXT_PUBLIC_APP_URL is not set", async () => {
+      expect(await check({ VERCEL_PROJECT_PRODUCTION_URL: "clubport.smyan.dev" })).toEqual({
+        name: "production:app_url",
+        ok: true,
+        detail:
+          "NEXT_PUBLIC_APP_URL is not set; links use https://clubport.smyan.dev (VERCEL_PROJECT_PRODUCTION_URL)",
+      });
+    });
+
+    it("fails with no app URL at all, or one on localhost or plain http", async () => {
+      expect(await check({})).toMatchObject({
+        ok: false,
+        detail: expect.stringMatching(/^No app URL in production: set NEXT_PUBLIC_APP_URL/),
+      });
+      expect(await check({ NEXT_PUBLIC_APP_URL: "http://localhost:3000" })).toMatchObject({
+        ok: false,
+        detail: expect.stringMatching(/points at localhost/),
+      });
+      expect(await check({ NEXT_PUBLIC_APP_URL: "http://portal.example.org" })).toMatchObject({
+        ok: false,
+        detail: "the app URL http://portal.example.org is not https",
+      });
+    });
   });
 });

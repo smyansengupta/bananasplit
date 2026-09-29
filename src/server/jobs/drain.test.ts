@@ -37,6 +37,7 @@ vi.mock("./registry", () => {
   };
 });
 
+import { appUrl } from "@/lib/app-url";
 import { isBackgroundWork } from "@/server/cache/invalidate";
 
 import { drainJobs, jobStore, runnableKinds } from "./drain";
@@ -105,6 +106,22 @@ describe("drainJobs", () => {
     const error = (retry![2] as { error: string }).error;
     expect(error).not.toContain("jackson@example.edu");
     expect(error).not.toContain("re_12345678abcdef");
+  });
+
+  it("records a missing production app URL as the job's lastError, readable as such", async () => {
+    // What an email handler hits in production with neither
+    // NEXT_PUBLIC_APP_URL nor VERCEL_PROJECT_PRODUCTION_URL.
+    handlers.mail = vi.fn(async () => {
+      appUrl("/verify-email/tok", { VERCEL_ENV: "production" });
+    });
+    queue = [row("mail")];
+    const summary = await drainJobs();
+    expect(summary).toMatchObject({ retried: 1 });
+    expect(finish).toHaveBeenCalledWith(expect.any(String), "tok", {
+      status: "RETRY",
+      error:
+        "AppUrlConfigError: No app URL in production: set NEXT_PUBLIC_APP_URL, or enable Vercel's system environment variables so VERCEL_PROJECT_PRODUCTION_URL is available.",
+    });
   });
 
   it("dead-letters an invalid payload without running the handler", async () => {
