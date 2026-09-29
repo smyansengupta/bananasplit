@@ -16,6 +16,8 @@
  * becomes the sink.
  */
 
+import { appOrigin } from "@/lib/app-url";
+
 export type EmailDelivery = "live" | "sink" | "off";
 
 type Env = Record<string, string | undefined>;
@@ -88,8 +90,22 @@ export function emailConfigProblems(env: Env = process.env): string[] {
   const problems: string[] = [];
   if (!env.RESEND_API_KEY) problems.push("RESEND_API_KEY is not set");
   if (!env.EMAIL_FROM) problems.push("EMAIL_FROM is not set");
-  else if (env.NEXT_PUBLIC_APP_URL && !fromMatchesAppDomain(env.EMAIL_FROM, env.NEXT_PUBLIC_APP_URL)) {
-    problems.push("EMAIL_FROM is not on the app's (verified) domain");
+  else {
+    // The origin the links use (NEXT_PUBLIC_APP_URL, else the production
+    // domain). Without one there is nothing to compare; production:app_url
+    // reports that.
+    const origin = linkOrigin(env);
+    if (origin && !fromMatchesAppDomain(env.EMAIL_FROM, origin)) {
+      problems.push("EMAIL_FROM is not on the app's (verified) domain");
+    }
   }
   return problems;
+}
+
+function linkOrigin(env: Env): string | null {
+  try {
+    return appOrigin(env);
+  } catch {
+    return null;
+  }
 }

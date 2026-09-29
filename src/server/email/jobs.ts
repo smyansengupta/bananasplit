@@ -108,6 +108,9 @@ export const inviteEmailJob: JobHandler<{ invitationId: string }> = async (run) 
   const id = run.payload.invitationId;
   const token = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
+  // Before the hash is replaced, so a missing app URL fails the job without
+  // invalidating a link already delivered.
+  const acceptUrl = appUrl(`/invite/${token}`);
 
   const invite = await withSystemOrgTx(orgId, async ({ db }) => {
     const row = await db.invitation.findFirst({
@@ -135,7 +138,7 @@ export const inviteEmailJob: JobHandler<{ invitationId: string }> = async (run) 
         orgName: invite.organization.name,
         inviterName: invite.invitedBy.name ?? invite.invitedBy.email,
         role: invite.role,
-        acceptUrl: appUrl(`/invite/${token}`),
+        acceptUrl,
         expiresAt: invite.expiresAt,
       }),
     },
@@ -269,6 +272,10 @@ export const verifyEmailJob: JobHandler<{ userId: string }> = async (run) => {
 
   const token = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
+  // Built before any write: without a usable app URL (AppUrlConfigError in
+  // production) the job fails with that message and the user's current link
+  // is left alone, instead of mailing a link to localhost.
+  const verifyUrl = appUrl(`/verify-email/${token}`);
   await authDb.$transaction([
     authDb.verificationToken.deleteMany({ where: { identifier: user.email } }),
     authDb.verificationToken.create({
@@ -285,7 +292,7 @@ export const verifyEmailJob: JobHandler<{ userId: string }> = async (run) => {
       to: user.email,
       ...verifyEmailEmail({
         name: user.name,
-        verifyUrl: appUrl(`/verify-email/${token}`),
+        verifyUrl,
         expiresHours: VERIFY_EMAIL_TTL_HOURS,
       }),
     },

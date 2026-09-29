@@ -119,9 +119,12 @@ owns every table, so it bypasses RLS and the app never connects as it).
    variables may appear in the Preview scope** (see "Vercel previews"
    below). Then fill in the rest of `.env.example` under Project Settings →
    Environment Variables, Production and Preview separately where values
-   differ (e.g. `NEXT_PUBLIC_APP_URL`): at least `SECRETS_KEK_V1`,
-   `SECRETS_KEK_CURRENT`, `SECRETS_FINGERPRINT_KEY`, `CRON_SECRET` and
-   `PLATFORM_ADMIN_EMAILS`. Locally none of this applies:
+   differ (e.g. `NEXT_PUBLIC_APP_URL`): at least `AUTH_SECRET` (without
+   it nobody can sign in), `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT`,
+   `SECRETS_FINGERPRINT_KEY`, `CRON_SECRET` and `PLATFORM_ADMIN_EMAILS`.
+   `NEXT_PUBLIC_APP_URL` may be left unset in Production: links then use
+   `https://$VERCEL_PROJECT_PRODUCTION_URL` (keep "Automatically expose
+   System Environment Variables" on). Locally none of this applies:
    `pnpm db:local-roles` gives the roles the password `test`.
 4. **Verify the database, then deploy.** In the SQL editor, both of these
    must return no rows:
@@ -190,8 +193,11 @@ owns every table, so it bypasses RLS and the app never connects as it).
    roles (not superuser, no BYPASSRLS, owning nothing) with the `UTC` /
    `15s` / `15s` session defaults, `app.security_manifest()` is empty, and the
    environment checks pass (production: `RESEND_API_KEY` plus `EMAIL_FROM` on
-   the app's domain, or `EMAIL_DELIVERY=off`; `CRON_SECRET`; the secrets
-   keyring and `SECRETS_FINGERPRINT_KEY`; an https `NEXT_PUBLIC_APP_URL`.
+   the app's domain, or `EMAIL_DELIVERY=off`; `CRON_SECRET`;
+   `AUTH_SECRET` (`production:auth_secret`; `NEXTAUTH_SECRET` also counts);
+   the secrets keyring and `SECRETS_FINGERPRINT_KEY`; an https app URL,
+   from `NEXT_PUBLIC_APP_URL` or else `VERCEL_PROJECT_PRODUCTION_URL`, never
+   localhost (`production:app_url`).
    Previews: the `app.fixture_only` marker, no live mail, the preview Blob
    stores and KEK). Anything else is `503`. To see which check failed:
    `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/health`.

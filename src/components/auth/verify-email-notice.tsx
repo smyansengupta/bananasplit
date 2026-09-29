@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 /**
  * The 'check your email' state for a signed-in user whose address is not
  * verified yet (0A Fix 4). Shown wherever an unverified account would
- * otherwise create or join an organization.
+ * otherwise create or join an organization; onboarding, where sign-in lands
+ * an account without an org, is the main one.
  */
 export function VerifyEmailNotice({ email, action }: { email: string; action: string }) {
   const [state, formAction, isPending] = useActionState<ResendState, FormData>(
@@ -24,17 +25,28 @@ export function VerifyEmailNotice({ email, action }: { email: string; action: st
         <div className="space-y-1">
           <p className="text-sm font-medium">Check your email</p>
           <p className="text-muted-foreground text-sm">
-            We sent a verification link to <span className="font-medium">{email}</span>. Verify
-            your address to {action}.
+            Your email address isn&apos;t verified yet. We sent a verification link to{" "}
+            <span className="font-medium">{email}</span>. Verify your address to {action}.
           </p>
         </div>
       </div>
       <form action={formAction} className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="outline" size="sm" disabled={isPending}>
-          {isPending ? "Sending…" : "Resend link"}
+          {isPending ? "Sending…" : "Resend verification email"}
         </Button>
-        {state.sent && <span className="text-muted-foreground text-xs">A new link is on its way.</span>}
-        {state.error && <span className="text-destructive text-xs">{state.error}</span>}
+        <span aria-live="polite" className="text-xs">
+          {state.sent && (
+            <span className="text-muted-foreground">
+              A new link is on its way. It may take a minute to arrive.
+            </span>
+          )}
+          {state.verified && (
+            <span className="text-muted-foreground">
+              Your email is already verified. Refresh this page to continue.
+            </span>
+          )}
+          {state.error && <span className="text-destructive">{state.error}</span>}
+        </span>
       </form>
     </div>
   );

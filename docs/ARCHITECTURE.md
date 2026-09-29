@@ -142,9 +142,11 @@ generic `email` kind (templated org mail such as the treasurer digest).
 Routing: the org's own verified Resend sender, else the platform sender "on
 behalf of" the org while `OrgSettings.platformMailFallback` is on, else
 in-app only. Templates escape every value and link absolutely to
-`NEXT_PUBLIC_APP_URL`. Without a Resend key (and on previews) mail goes to the
-console and `.data/mail/`. `@/lib/email` remains as thin wrappers that send
-immediately through the platform sender; new code should not use it.
+`NEXT_PUBLIC_APP_URL` (in production, else the project's production domain,
+never localhost; `src/lib/app-url.ts`). Without a Resend key (and on
+previews) mail goes to the console and `.data/mail/`. `@/lib/email` remains
+as thin wrappers that send immediately through the platform sender; new
+code should not use it.
 
 **Secrets.** AES-256-GCM envelope encryption: a fresh data key per secret,
 wrapped by the current KEK (`SECRETS_KEK_V{n}`, `SECRETS_KEK_CURRENT`), with
