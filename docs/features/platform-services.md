@@ -50,8 +50,7 @@ Google account, no membership).
 platform sender; the link opens `/verify-email/<token>`, where the user
 presses "Confirm email" (valid 24 hours; a signed-in user can ask for a new
 link there). A verified Google sign-in for the same address replaces an
-unconfirmed password account that never joined an org (Google sign-in is
-hidden in the UI for now; the rule applies once it is back). This needs the
+unconfirmed password account that never joined an org. This needs the
 platform sender (`RESEND_API_KEY`, `EMAIL_FROM`) in production.
 
 ## Local development

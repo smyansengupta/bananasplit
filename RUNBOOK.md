@@ -158,17 +158,28 @@ owns every table, so it bypasses RLS and the app never connects as it).
 4. **First migration** — `vercel.json`'s `buildCommand` runs
    `prisma migrate deploy && next build`, so migrations apply automatically on
    every deploy, including the first one. Nothing manual required.
-5. **Auth** — sign-in is email/password only for now ("Continue with
-   Google" is hidden in the UI), so the Google sign-in client is optional
-   until the button comes back. When it does: create the Google OAuth client
-   (see spec §11, human step 1: `openid email profile` scopes only, no
-   Calendar scope), set `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`, and add the
-   Vercel-assigned domain(s) to its authorized redirect URIs. Google
-   Calendar sync uses a **second, separate** OAuth client
-   (`GOOGLE_CALENDAR_CLIENT_ID` / `_SECRET`, Calendar API enabled, scopes
-   `calendar.events.owned` and `calendar.calendarlist.readonly`, a published
-   and verified consent screen); the sign-in client never asks for Calendar
-   access. Setup and the public events feed: `docs/features/calendar.md`.
+5. **Auth** — in Google Cloud Console (APIs & Services → Credentials),
+   create the Google sign-in OAuth client: type **Web application**, scopes
+   `openid email profile` only, no Calendar scope (spec §11, human step 1).
+   Add `https://<production host>` as an authorized JavaScript origin and
+   `https://<production host>/api/auth/callback/google` as an authorized
+   redirect URI (plus `http://localhost:3000` and
+   `http://localhost:3000/api/auth/callback/google` if the same client is
+   used locally). Set `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` in Vercel's
+   **Production** scope and redeploy. "Continue with Google" on `/sign-in`
+   and `/invite/[token]` appears only when both are set
+   (`src/lib/auth/google-sign-in.ts`); without them the pages offer email
+   and password only, instead of a button that fails with Auth.js's
+   "server configuration" error. Leaving them out of the Preview scope is
+   fine: preview hosts are not registered with the client, so previews
+   simply offer email and password. Google Calendar sync uses a **second,
+   separate** OAuth client (`GOOGLE_CALENDAR_CLIENT_ID` / `_SECRET`, Calendar
+   API enabled, scopes `calendar.events.owned` and
+   `calendar.calendarlist.readonly`, redirect URI
+   `https://<production host>/api/integrations/google-calendar/callback`, a
+   published and verified consent screen); the sign-in client never asks for
+   Calendar access. Setup and the public events feed:
+   `docs/features/calendar.md`.
 6. **Sentry** — create a project (Next.js platform), set
    `NEXT_PUBLIC_SENTRY_DSN` in Vercel. Optionally set `SENTRY_AUTH_TOKEN` /
    `SENTRY_ORG` / `SENTRY_PROJECT` too, so the build step uploads source maps
@@ -327,14 +338,14 @@ step, so turning it on again later is safe).
   through the outbox (a `verify-email` job). Without a key, outside
   production, the mail sink writes it to the server log and `.data/mail/`.
   Google sign-ins count as verified when Google says the address is.
-- **Google account linking.** (Applies once Google sign-in is back in the
-  UI; it is hidden for now.) A Google sign-in links to an existing account
+- **Google account linking.** A Google sign-in links to an existing account
   with the same verified address; an unverified password account squatting on
   that address is deleted first (or loses its password if it already joined
   an org). Google sign-ins whose address Google has not verified are refused.
-  While the button is hidden, an account that only ever signed in with Google
-  has no password (and there is no reset flow yet), so it cannot sign in
-  from `/sign-in`; `/sign-up` refuses the address as already taken.
+  Removing `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` hides the button, and an
+  account that only ever signed in with Google has no password (there is no
+  reset flow yet), so it cannot sign in from `/sign-in` until they are set
+  again; `/sign-up` refuses the address as already taken.
 - **Content Security Policy.** `/app`, `/poll`, `/invite` and the auth pages
   get a per-request nonce policy (`src/proxy.ts`); every other route gets a
   static policy (`next.config.ts`). Both are **enforced** by default, in

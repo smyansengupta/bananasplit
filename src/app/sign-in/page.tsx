@@ -1,21 +1,18 @@
 import { redirect } from "next/navigation";
 
+import { GoogleIcon } from "@/components/google-icon";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
-import { auth } from "@/lib/auth/config";
+import { auth, signIn } from "@/lib/auth/config";
+import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 
 import { PasswordSignInForm } from "./password-sign-in-form";
 
 /**
  * Auth.js sends its errors here (pages.error). The remaining ways a Google
  * sign-in can be refused after 0A Fix 4(d), explained in plain words.
- *
- * Google sign-in is off in the UI for now (this page and /invite/[token]
- * offer email and password only), but the provider is still configured in
- * src/lib/auth/config.ts: bringing it back means restoring the "Continue
- * with Google" form (a server action calling signIn("google", { redirectTo }))
- * and src/components/google-icon.tsx, removed with it. These messages stay
- * for that.
  */
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   OAuthAccountNotLinked:
@@ -40,13 +37,20 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
   const errorMessage = errorCode
     ? (AUTH_ERROR_MESSAGES[errorCode] ?? "Something went wrong signing you in. Try again.")
     : null;
+  // Only offered when the Google client is configured; otherwise the button
+  // would only reach Auth.js's "server configuration" error.
+  const googleEnabled = googleSignInEnabled();
 
   return (
     <div className="flex flex-1 items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Sign in to Clubport</CardTitle>
-          <CardDescription>Use your email and password.</CardDescription>
+          <CardDescription>
+            {googleEnabled
+              ? "Use your Google account or your email and password."
+              : "Use your email and password."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {errorMessage && (
@@ -54,6 +58,28 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
               {errorMessage}
             </p>
           )}
+          {googleEnabled && (
+            <>
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("google", callbackUrl ? { redirectTo: callbackUrl } : undefined);
+                }}
+              >
+                <Button type="submit" variant="outline" className="w-full">
+                  <GoogleIcon className="size-4" />
+                  Continue with Google
+                </Button>
+              </form>
+
+              <div className="flex items-center gap-3">
+                <Separator className="flex-1" />
+                <span className="text-muted-foreground text-xs">or</span>
+                <Separator className="flex-1" />
+              </div>
+            </>
+          )}
+
           <PasswordSignInForm callbackUrl={callbackUrl} />
         </CardContent>
       </Card>

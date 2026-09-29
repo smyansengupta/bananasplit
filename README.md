@@ -5,16 +5,15 @@ scheduling, and finance tracking.
 
 ## Stack
 
-Next.js (App Router) + React + TypeScript, Postgres via Prisma, Auth.js (email/password, plus a
-Google OAuth provider that is currently hidden), Tailwind CSS + shadcn/ui. See the project spec
-for the full rationale.
+Next.js (App Router) + React + TypeScript, Postgres via Prisma, Auth.js (Google OAuth + email/
+password), Tailwind CSS + shadcn/ui. See the project spec for the full rationale.
 
-Sign-in is email/password (bcrypt-hashed, `/sign-up` to register). Email/password is a deliberate
-addition beyond the original spec, which scoped v1 to Google-only. "Continue with Google" is
-turned off in the UI for now (`/sign-in` and `/invite/[token]` no longer show it), but the Auth.js
-Google provider, the account-linking rules in `src/lib/auth/google-linking.ts` and the `Account`
-table are all still in place, so bringing it back only means restoring the button. Google
-Calendar sync (Settings > Integrations) is a separate OAuth client and is unaffected.
+Sign-in supports both Google OAuth and email/password (bcrypt-hashed, `/sign-up` to register).
+Email/password is a deliberate addition beyond the original spec, which scoped v1 to Google-only.
+"Continue with Google" (on `/sign-in` and `/invite/[token]`) appears only when `AUTH_GOOGLE_ID`
+and `AUTH_GOOGLE_SECRET` are both set (`src/lib/auth/google-sign-in.ts`); without them the pages
+offer email and password only. Google Calendar sync (Settings > Integrations) is a separate OAuth
+client.
 
 ## Local setup
 
@@ -42,11 +41,13 @@ Calendar sync (Settings > Integrations) is a separate OAuth client and is unaffe
    which the secrets-at-rest keyring (integrations settings, `/api/health`)
    needs. `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` need a real
    Google Cloud OAuth client (spec section 11, item 1) — request only
-   `openid email profile`. Until that exists, placeholder values let the app
-   boot; Google sign-in itself won't work, but every seeded user (see below)
-   can sign in with email/password instead, so you don't need real Google
-   credentials for local development. See `.env.example` for what each
-   variable is for.
+   `openid email profile`, with `http://localhost:3000` as an authorized
+   JavaScript origin and `http://localhost:3000/api/auth/callback/google` as
+   a redirect URI. Leave both empty unless you have one: "Continue with
+   Google" only appears when both are set, so placeholder values would show
+   a button that fails. You don't need Google for local development: every
+   seeded user (see below) signs in with email/password. See `.env.example`
+   for what each variable is for.
 
 3. **Set up the database** (from Phase 0.3 onward)
 
