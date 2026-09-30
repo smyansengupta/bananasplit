@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { makeUser, signIn, signOut, signUpVerified, uniqueSuffix } from "./helpers";
+import {
+  createOrgViaOnboarding,
+  makeUser,
+  signIn,
+  signOut,
+  signUpVerified,
+  uniqueSuffix,
+} from "./helpers";
 
 // Spec 6.5, flow (b): member submits an expense with a receipt -> treasurer
 // (here, the org owner, who also carries finance access) approves -> marks
@@ -12,11 +19,8 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   const orgName = `E2E Finance ${uniqueSuffix()}`;
   const expenseDescription = `E2E pizza run ${uniqueSuffix()}`;
 
-  await signUpVerified(page, owner);
-  await page.getByLabel("Organization name").fill(orgName);
-  await page.getByRole("button", { name: "Create organization" }).click();
-  await expect(page).toHaveURL(/\/app\/[^/]+$/);
-  const orgSlug = new URL(page.url()).pathname.split("/")[2];
+  await signUpVerified(page, owner, "create");
+  const orgSlug = await createOrgViaOnboarding(page, orgName);
 
   await page.goto(`/app/${orgSlug}/finance/budget`);
   await page.getByRole("button", { name: "New period" }).click();
@@ -34,7 +38,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
 
   await signOut(page);
   await signUpVerified(page, member);
-  await page.getByRole("button", { name: "Join" }).click();
+  await page.getByRole("button", { name: "Join", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}$`));
 
   // Baseline: nothing owed yet.

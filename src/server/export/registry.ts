@@ -78,6 +78,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
 /** Org tables that are deliberately not exported, and why. */
 export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   OrgSecret: "Encrypted integration secrets: ciphertext is never exported.",
+  OrgJoinCode: "The live invite code is a credential for joining the org; an export must not carry it.",
   Job: "Background job bookkeeping (ids and sanitized errors), not org data.",
   OrgSlugHistory:
     "Retired slugs; no runtime role can read the table (the manifest lists the current slug).",

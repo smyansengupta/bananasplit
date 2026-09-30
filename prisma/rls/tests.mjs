@@ -1946,9 +1946,11 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "list_org_creation_codes",
         "lock_org",
         "log_org_deletion",
+        "member_busy_hours",
         "member_org_id",
         "member_role",
         "membership_history",
+        "org_by_join_code",
         "org_has_members",
         "org_has_other_owner",
         "organization_defaults",
@@ -2079,6 +2081,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "TaskMention:INSERT",
         "TaskMention:UPDATE",
         "User:UPDATE",
+        "UserAvailability:INSERT",
+        "UserAvailability:UPDATE",
         "WeeklyUpdate:INSERT",
         "WeeklyUpdate:UPDATE",
       ],
@@ -2189,6 +2193,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // grant; only the table owner fires them).
       can_read_task: "us",
       task_visibility_inherit: "",
+      // Onboarding: "Join with invite code" (verified callers only)
+      org_by_join_code: "u",
+      // Another member's busy hours: never the rules, and only as the org allows
+      member_busy_hours: "u",
     };
     await tcase(
       "T27f",

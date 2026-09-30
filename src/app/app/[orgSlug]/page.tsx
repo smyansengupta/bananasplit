@@ -4,17 +4,20 @@ import { FinanceSnapshotCard } from "@/components/overview/finance-snapshot-card
 import { MyTasksCard } from "@/components/overview/my-tasks-card";
 import { RecentNotesCard } from "@/components/overview/recent-notes-card";
 import { UpcomingEventsCard } from "@/components/overview/upcoming-events-card";
+import { JoinCodeCard } from "@/components/onboarding/join-code-card";
 import { SetupPrompt } from "@/components/setup/setup-prompt";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
 import { getDashboardData, getMoneyOwedToUser } from "@/app/app/[orgSlug]/finance/queries";
 import { getRecentNotes } from "@/app/app/[orgSlug]/notes/queries";
+import { absoluteAppUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { formatCents } from "@/lib/finance/money";
 import { effectiveTimezone, fromDateKey, localDateKey } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import { loadSetupState } from "@/server/setup/progress";
 import { getMyOpenTasks } from "@/server/tasks/queries";
 
@@ -22,8 +25,11 @@ const MY_TASKS_LIMIT = 6;
 const EVENTS_LIMIT = 5;
 const NOTES_LIMIT = 5;
 
-export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
+export default async function OrgOverviewPage({ params, searchParams }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
+  // ?welcome=1: the end of org setup. The admin's first look at their org
+  // shows the invite code and link to share (the flowchart's END).
+  const welcome = (await searchParams).welcome === "1";
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
   // Only owners and admins can act on it, and RLS hides the integration
   // rows from everyone else anyway.
@@ -48,6 +54,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     moneyOwedToYouCents,
     finance,
     setup,
+    joinCode,
   } = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
     const tz = effectiveTimezone(me, org);
@@ -84,6 +91,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       moneyOwedToYouCents: await getMoneyOwedToUser(db, org.id, user.id),
       finance: canSeeFinance ? await getDashboardData(db, org.id, now) : null,
       setup: canSetUp ? await loadSetupState(db, org.id) : null,
+      joinCode: welcome && can({ role }, "members.invite") ? await getOrCreateJoinCode(db, org.id, user.id) : null,
     };
   }).catch(handleAuthErrorInPage);
 
@@ -95,6 +103,34 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
           Organization: <span className="font-mono">{orgSlug}</span>
         </p>
       </div>
+      {joinCode && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="space-y-3">
+            <div>
+              <CardTitle>{org.name} is ready</CardTitle>
+              <CardDescription>
+                Invite your members: share this code or link. They set up their profile, enter it, and see{" "}
+                {org.name} before they join. Manage it any time in{" "}
+                <Link href={`/app/${orgSlug}/settings/members`} className="underline underline-offset-4">
+                  Settings › Members
+                </Link>
+                .
+              </CardDescription>
+            </div>
+            <JoinCodeCard
+              orgId={org.id}
+              compact
+              joinUrlBase={absoluteAppUrl("/onboarding/join")}
+              initial={{
+                code: joinCode.code,
+                enabled: joinCode.enabled,
+                allowedDomain: joinCode.allowedDomain,
+                useCount: joinCode.useCount,
+              }}
+            />
+          </CardHeader>
+        </Card>
+      )}
       {setup ? <SetupPrompt orgSlug={orgSlug} state={setup} /> : null}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link href={`/app/${orgSlug}/tasks`}>

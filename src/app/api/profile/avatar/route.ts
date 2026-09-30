@@ -4,6 +4,7 @@ import { ImageRejectedError, sniffImageType } from "@/server/images";
 import { removeOwnAvatar, replaceOwnAvatar } from "@/server/profiles/service";
 import { MAX_UPLOAD_BYTES } from "@/server/storage";
 import { readUpload, UploadError } from "@/server/storage/upload";
+import { isCrossSite } from "@/lib/http/cross-site";
 
 /**
  * /api/profile/avatar: the signed-in user's profile picture (Phase 2).
@@ -36,20 +37,6 @@ const TOO_LARGE = "Profile pictures are limited to 4 MB. Try a smaller photo.";
 
 function json(status: number, body: Record<string, unknown>): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-}
-
-/**
- * Route handlers get no built-in CSRF check (Server Actions do): refuse a
- * browser request whose Origin is another site.
- */
-function isCrossSite(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== new URL(request.url).host;
-  } catch {
-    return true;
-  }
 }
 
 export async function POST(request: Request): Promise<Response> {

@@ -14,6 +14,7 @@ import {
   type StoredImage,
 } from "@/server/images";
 import { readUpload, uploadErrorResponse } from "@/server/storage/upload";
+import { isCrossSite } from "@/lib/http/cross-site";
 
 /**
  * POST /api/orgs/{orgId}/logo   multipart `file` (JPEG, PNG or WebP, 4 MB)
@@ -35,16 +36,6 @@ function json(status: number, body: Record<string, unknown>) {
 }
 
 /** Route handlers get no built-in CSRF check (Server Actions do). */
-function isCrossSite(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== new URL(request.url).host;
-  } catch {
-    return true;
-  }
-}
-
 type Guard = { ok: true; userId: string } | { ok: false; response: Response };
 
 async function guard(request: Request, orgId: string): Promise<Guard> {

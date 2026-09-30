@@ -100,6 +100,8 @@ async function main() {
         email: data.email,
         name: data.name,
         emailVerified: new Date(),
+        // Seeded people have finished profile setup (onboarding Flow A).
+        onboardedAt: new Date(),
         timezone: data.timezone ?? null,
         major: data.major,
         gradYear: data.gradYear,

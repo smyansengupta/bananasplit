@@ -1,6 +1,13 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
-import { dayButtonName, makeUser, signUp, signUpVerified, uniqueSuffix } from "./helpers";
+import {
+  createOrgViaOnboarding,
+  dayButtonName,
+  makeUser,
+  signUp,
+  signUpVerified,
+  uniqueSuffix,
+} from "./helpers";
 
 /**
  * The 0A security fixes through the real UI: the CSP scope and zero
@@ -10,11 +17,8 @@ import { dayButtonName, makeUser, signUp, signUpVerified, uniqueSuffix } from ".
  */
 
 async function createOrg(page: Page, label: string): Promise<string> {
-  await signUpVerified(page, makeUser(label));
-  await page.getByLabel("Organization name").fill(`E2E ${label} ${uniqueSuffix()}`);
-  await page.getByRole("button", { name: "Create organization" }).click();
-  await expect(page).toHaveURL(/\/app\/[^/]+$/);
-  return new URL(page.url()).pathname.split("/")[2];
+  await signUpVerified(page, makeUser(label), "create");
+  return createOrgViaOnboarding(page, `E2E ${label} ${uniqueSuffix()}`);
 }
 
 /** Records securitypolicyviolation events from the first script onward. */
@@ -164,7 +168,7 @@ test("calendar feed: the link is shown once, and regenerating kills the old one"
   const orgSlug = await createOrg(page, "Feed Owner");
   await page.goto(`/app/${orgSlug}/settings/calendar`);
 
-  await page.getByRole("button", { name: "Create feed link" }).click();
+  await page.getByRole("button", { name: "Create link" }).click();
   const first = await page.getByLabel("Calendar feed URL").inputValue();
   expect(first).toMatch(/^https?:\/\/[^/]+\/api\/calendar\/feed\/[A-Za-z0-9_-]+$/);
   const firstPath = new URL(first).pathname;
@@ -200,7 +204,7 @@ test("member roles: an admin is never offered OWNER and cannot touch an owner", 
 
   const adminSession = await newGuest(browser, baseURL);
   await signUpVerified(adminSession.page, admin);
-  await adminSession.page.getByRole("button", { name: "Join" }).click();
+  await adminSession.page.getByRole("button", { name: "Join", exact: true }).click();
   await expect(adminSession.page).toHaveURL(new RegExp(`/app/${orgSlug}$`));
 
   await adminSession.page.goto(`/app/${orgSlug}/settings/members`);

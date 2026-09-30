@@ -19,7 +19,12 @@ const { getOrgContextBySlugMock, getOrgPersonMock, listOrgPeopleMock } = vi.hois
 vi.mock("@/server/db/context", () => ({ getOrgContextBySlug: getOrgContextBySlugMock }));
 vi.mock("@/server/profiles/queries", async () => {
   const actual = await vi.importActual<typeof import("@/server/profiles/queries")>("@/server/profiles/queries");
-  return { ...actual, getOrgPerson: getOrgPersonMock, listOrgPeople: listOrgPeopleMock };
+  return {
+    ...actual,
+    getOrgPerson: getOrgPersonMock,
+    listOrgPeople: listOrgPeopleMock,
+    getPersonBusyHours: async () => null,
+  };
 });
 vi.mock("next/form", () => ({
   default: ({ children, ...props }: React.ComponentProps<"form">) => <form {...props}>{children}</form>,

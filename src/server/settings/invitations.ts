@@ -12,6 +12,7 @@ import { tags } from "@/server/cache/tags";
 import { invalidate } from "@/server/cache/invalidate";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { notifyUser } from "@/server/notifications";
+import { ownPreferredTitle } from "@/server/onboarding/title";
 
 /**
  * Joining an org by invitation, off the legacy role (Phase 1 / 0C PR 1).
@@ -121,6 +122,8 @@ export async function acceptInvitation(
   if (!identity.emailVerified) return { ok: false, reason: "unverified" };
 
   const orgId = invitation.organizationId;
+  // The title picked during profile setup rides along onto the new membership.
+  const title = await ownPreferredTitle(user.id);
   const result = await withSystemOrgTx(orgId, { userId: user.id }, async ({ db }) => {
     const locked = await db.$queryRaw<
       {
@@ -155,7 +158,7 @@ export async function acceptInvitation(
     });
     if (!existing) {
       await db.membership.create({
-        data: { userId: user.id, organizationId: orgId, role: row.role },
+        data: { userId: user.id, organizationId: orgId, role: row.role, title },
       });
     }
     await db.invitation.update({ where: { id: row.id }, data: { acceptedAt: new Date() } });

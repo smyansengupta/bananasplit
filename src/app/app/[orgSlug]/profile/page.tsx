@@ -8,19 +8,24 @@ import { UserAvatar } from "@/components/user-avatar";
 import { parseNotificationPreferences } from "@/lib/notifications/preferences";
 import { personHref, type ProfileSection } from "@/lib/profile/href";
 import { effectiveTimezone } from "@/lib/profile/timezone";
+import { parsePersonalTheme } from "@/lib/theme/personal";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { getOwnProfile } from "@/server/profiles/queries";
 
+import { AvailabilityForm } from "./availability-form";
 import { AvatarEditor } from "./avatar-editor";
 import { CalendarFeedCard } from "./calendar-feed-card";
 import { DetailsForm } from "./details-form";
 import { LinksForm } from "./links-form";
 import { NotificationPreferencesForm } from "./notification-preferences-form";
+import { ThemeForm } from "./theme-form";
 
 const SECTIONS: { id: ProfileSection; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "photo", label: "Picture" },
   { id: "links", label: "Links" },
+  { id: "theme", label: "Theme" },
+  { id: "availability", label: "Availability" },
   { id: "notifications", label: "Notifications" },
   { id: "calendar", label: "Calendar feed" },
 ];
@@ -142,6 +147,35 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           </CardHeader>
           <CardContent>
             <LinksForm initial={profile.links} />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section id="theme" aria-labelledby="theme-title" className="scroll-mt-20">
+        <Card>
+          <CardHeader>
+            <CardTitle id="theme-title">Theme</CardTitle>
+            <CardDescription>
+              Only changes your view, in every organization. An organization that locks light or dark keeps its lock.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ThemeForm initial={parsePersonalTheme(profile.themePreference)} />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section id="availability" aria-labelledby="availability-title" className="scroll-mt-20">
+        <Card>
+          <CardHeader>
+            <CardTitle id="availability-title">When you can&apos;t meet</CardTitle>
+            <CardDescription>
+              Click or drag to block hours in a typical week, or add rules. Teammates see &ldquo;busy,&rdquo; never
+              the reason.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AvailabilityForm initial={profile.availability} />
           </CardContent>
         </Card>
       </section>

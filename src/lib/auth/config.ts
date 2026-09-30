@@ -14,6 +14,7 @@ import { verifyPassword } from "@/lib/auth/password";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { clientIpFrom } from "@/lib/request-ip";
 import { authDb } from "@/server/db/clients";
+import { signInPerIpLimit } from "@/lib/auth/ip-limits";
 
 /**
  * Credentials sign-in limits (Postgres-backed, shared by every instance;
@@ -22,7 +23,8 @@ import { authDb } from "@/server/db/clients";
  * direct POST to /api/auth/callback/credentials go through.
  */
 export const SIGN_IN_LIMITS = {
-  perIp: { limit: 30, windowSec: 15 * 60 },
+  /** The per-IP count is sized for a room on one network (src/lib/auth/ip-limits.ts). */
+  perIp: { windowSec: 15 * 60 },
   perEmail: { limit: 10, windowSec: 15 * 60 },
 } as const;
 
@@ -80,7 +82,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const [byIp, byEmail] = await Promise.all([
           checkRateLimit(
             rateLimitKey("signin-ip", ip),
-            SIGN_IN_LIMITS.perIp.limit,
+            signInPerIpLimit(),
             SIGN_IN_LIMITS.perIp.windowSec,
             { via: "auth" },
           ),

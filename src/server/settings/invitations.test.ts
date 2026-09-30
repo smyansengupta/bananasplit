@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/server/db/context", async () =>
   (await import("@/test/fake-context")).fakeContextModule(),
 );
+// The title picked in profile setup, copied onto the new membership.
+vi.mock("@/server/onboarding/title", () => ({ ownPreferredTitle: async () => "Project Manager" }));
 vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 const { getUserIdentityMock } = vi.hoisted(() => ({ getUserIdentityMock: vi.fn() }));
 vi.mock("@/lib/auth/email-verification", () => ({ getUserIdentity: getUserIdentityMock }));
@@ -101,7 +103,7 @@ describe("acceptInvitation (0A Fix 4, service path)", () => {
     expect(result).toEqual({ ok: true, orgId: "org_1", orgSlug: "org-one" });
     expect(fake.systemCalls).toContainEqual(["org_1", { userId: "user_1" }]);
     expect(fake.systemDb.membership.create).toHaveBeenCalledWith({
-      data: { userId: "user_1", organizationId: "org_1", role: "MEMBER" },
+      data: { userId: "user_1", organizationId: "org_1", role: "MEMBER", title: "Project Manager" },
     });
     expect(fake.systemDb.invitation.update).toHaveBeenCalledWith({
       where: { id: "inv_1" },

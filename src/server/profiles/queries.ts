@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import type { Prisma, Role } from "@/generated/prisma/client";
+import { parseAvailability, type Availability } from "@/lib/availability";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
 import { withOrgTx, withUserTx } from "@/server/db/context";
 import { userPublicSelect, type UserPublic } from "@/server/members";
@@ -37,20 +38,40 @@ export interface ShellUserRecord {
   avatar: Prisma.JsonValue | null;
 }
 
+/** The viewer's own settings the org layout needs besides the shell user. */
+export interface ViewerPrefs {
+  /** NULL until profile setup is finished (the layout sends them there). */
+  onboardedAt: Date | null;
+  /** Raw User.themePreference; parse with parsePersonalTheme. */
+  themePreference: Prisma.JsonValue | null;
+}
+
 /**
  * The signed-in user as the shell shows them, read from the database on
  * every request (not from the JWT), so a name or picture change shows at
  * once without signing in again. Deduped per request.
  */
 export const getShellUser = cache(async (userId: string, fallbackEmail: string): Promise<ShellUserRecord> => {
-  const row = await withUserTx(userId, ({ db }) =>
+  const row = await getShellRow(userId);
+  if (!row) return { name: null, email: fallbackEmail, image: null, avatar: null };
+  return { name: row.name, email: row.email, image: row.image, avatar: row.avatar };
+});
+
+/** Profile-setup state and personal theme, from the same per-request read. */
+export const getViewerPrefs = cache(async (userId: string): Promise<ViewerPrefs> => {
+  const row = await getShellRow(userId);
+  // A missing row (deleted mid-session) never traps anyone in setup.
+  return { onboardedAt: row ? row.onboardedAt : new Date(0), themePreference: row?.themePreference ?? null };
+});
+
+const getShellRow = cache((userId: string) =>
+  withUserTx(userId, ({ db }) =>
     db.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true, image: true, avatar: true },
+      select: { name: true, email: true, image: true, avatar: true, onboardedAt: true, themePreference: true },
     }),
-  );
-  return row ?? { name: null, email: fallbackEmail, image: null, avatar: null };
-});
+  ),
+);
 
 // ---------------------------------------------------------------- own profile
 
@@ -75,6 +96,10 @@ export interface OwnProfile {
   links: ProfileLink[];
   timezone: string | null;
   emailPreferences: Prisma.JsonValue;
+  /** Raw; parse with parsePersonalTheme. */
+  themePreference: Prisma.JsonValue | null;
+  /** The user's own availability rules (owner-only table). */
+  availability: Availability;
   memberships: OwnMembership[];
   /** When the current calendar feed link was created, or null. */
   icsActiveSince: Date | null;
@@ -98,6 +123,8 @@ export async function getOwnProfile(userId: string): Promise<OwnProfile | null> 
         links: true,
         timezone: true,
         emailPreferences: true,
+        themePreference: true,
+        availability: { select: { rules: true } },
       },
     });
     if (!user) return null;
@@ -113,6 +140,7 @@ export async function getOwnProfile(userId: string): Promise<OwnProfile | null> 
     const rows = await db.$queryRaw<{ t: Date | null }[]>`SELECT app.ics_token_created_at() AS t`;
     return {
       ...user,
+      availability: parseAvailability(user.availability?.rules),
       links: parseStoredLinks(user.links),
       memberships: memberships
         .filter((m) => m.organization.deletedAt === null)
@@ -235,5 +263,20 @@ export async function getOrgPerson(organizationId: string, userId: string): Prom
       title: membership.title,
       joinedAt: membership.joinedAt,
     };
+  });
+}
+
+/**
+ * A current member's busy hours in a typical week, for their people page:
+ * the hours only, never the rules, labels or reasons. The database decides
+ * (app.member_busy_hours): both must be members of this org, and the org
+ * must share busy times unless the viewer is one of its admins. null when
+ * the viewer may not see them.
+ */
+export async function getPersonBusyHours(organizationId: string, userId: string): Promise<string[] | null> {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(userId)) return null;
+  return withOrgTx(organizationId, async ({ db }) => {
+    const rows = await db.$queryRaw<{ busy: string[] | null }[]>`SELECT app.member_busy_hours(${userId}) AS busy`;
+    return rows[0]?.busy ?? null;
   });
 }

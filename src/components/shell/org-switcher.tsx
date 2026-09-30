@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, KeyRound, Plus } from "lucide-react";
 import Link from "next/link";
 import { useTransition } from "react";
 
@@ -97,7 +97,13 @@ export function OrgSwitcher({ orgs, activeSlug }: { orgs: OrgSummary[]; activeSl
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/app/new">
+          <Link href="/onboarding/join">
+            <KeyRound className="size-4" aria-hidden="true" />
+            Join with invite code
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/onboarding/organization">
             <Plus className="size-4" aria-hidden="true" />
             Create organization
           </Link>
