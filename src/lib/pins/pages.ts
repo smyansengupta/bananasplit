@@ -14,7 +14,8 @@ export type PageLookup =
   | { type: "event"; id: string }
   | { type: "poll"; id: string }
   | { type: "database"; key: string }
-  | { type: "person"; id: string };
+  | { type: "person"; id: string }
+  | { type: "file"; id: string };
 
 export interface PageInfo {
   /** The in-app path, without query or hash. */
@@ -86,6 +87,9 @@ export function describePath(orgSlug: string, pathname: string): PageInfo | null
 
   if (section === "settings") {
     return { href, kind: "page", label: `Settings · ${titleCase(second)}` };
+  }
+  if (section === "notes" && second === "files" && third && parts.length === 3 && ID.test(third)) {
+    return { href, kind: "file", label: "File", lookup: { type: "file", id: third } };
   }
   if (section === "notes" && parts.length === 2 && ID.test(second)) {
     return { href, kind: "note", label: "Note", lookup: { type: "note", id: second } };

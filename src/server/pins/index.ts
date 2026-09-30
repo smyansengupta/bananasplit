@@ -37,7 +37,7 @@ async function resolveLabels(
   const ids = (type: string) =>
     infos.flatMap((i) => (i.lookup?.type === type && "id" in i.lookup ? [i.lookup.id] : []));
   const keys = infos.flatMap((i) => (i.lookup?.type === "database" ? [i.lookup.key] : []));
-  const [notes, tasks, events, polls, databases, people] = await Promise.all([
+  const [notes, tasks, events, polls, databases, people, files] = await Promise.all([
     ids("note").length
       ? db.note.findMany({
           where: { organizationId: orgId, id: { in: ids("note") }, deletedAt: null },
@@ -74,6 +74,12 @@ async function resolveLabels(
           select: { userId: true, user: { select: { name: true } } },
         })
       : [],
+    ids("file").length
+      ? db.orgFile.findMany({
+          where: { organizationId: orgId, id: { in: ids("file") }, deletedAt: null },
+          select: { id: true, name: true },
+        })
+      : [],
   ]);
   const byType = {
     note: new Map(notes.map((n) => [n.id, n.title || "Untitled note"])),
@@ -82,6 +88,7 @@ async function resolveLabels(
     poll: new Map(polls.map((p) => [p.id, p.title])),
     database: new Map(databases.map((d) => [d.key, d.name])),
     person: new Map(people.map((m) => [m.userId, m.user.name ?? "Member"])),
+    file: new Map(files.map((f) => [f.id, f.name])),
   };
   const out = new Map<string, string | null>();
   for (const info of infos) {

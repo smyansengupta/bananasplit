@@ -153,12 +153,20 @@ export const STATIC_SECURITY_HEADERS: { key: string; value: string }[] = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
   },
-  { key: "X-Frame-Options", value: "DENY" },
 ];
+
+/**
+ * X-Frame-Options: DENY, on every path except the Notes files route, whose
+ * PDFs the in-app preview shows in a same-origin frame (that route sends
+ * SAMEORIGIN and its own frame-ancestors 'self').
+ */
+export const FRAME_DENY_HEADER = { key: "X-Frame-Options", value: "DENY" };
+const FRAMABLE = "api/orgs/[^/]+/files/";
+export const NOT_FRAMABLE_SOURCE = `/((?!${FRAMABLE}).*)`;
 
 /**
  * next.config.ts `source` for the static CSP: every path EXCEPT the nonce
  * routes (so a matched route never carries two policies).
  */
 export const STATIC_CSP_SOURCE =
-  "/((?!app/|app$|poll/|poll$|invite/|invite$|sign-in|sign-up|verify-email|onboarding).*)";
+  `/((?!app/|app$|poll/|poll$|invite/|invite$|sign-in|sign-up|verify-email|onboarding|${FRAMABLE}).*)`;

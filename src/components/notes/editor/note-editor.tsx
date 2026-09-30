@@ -22,6 +22,7 @@ import { NOTE_FIELD, type CollabUser } from "@/lib/collab/protocol";
 import { noteSchemaExtensions } from "@/lib/notes/schema-extensions";
 import { cn } from "@/lib/utils";
 import { renderCaret, renderSelection } from "./carets";
+import { EditorToolbar, NoteOutline } from "./editor-toolbar";
 import { SlashCommand } from "./slash-command-extension";
 
 export interface NoteEditorHandle {
@@ -76,7 +77,8 @@ export function NoteEditor({
     content: collaboration ? undefined : content,
     editorProps: {
       attributes: {
-        class: "tiptap prose prose-sm dark:prose-invert max-w-none focus:outline-none",
+        class:
+          "tiptap prose prose-sm sm:prose-base dark:prose-invert max-w-none focus:outline-none prose-headings:tracking-tight prose-a:text-primary prose-li:my-0.5",
       },
     },
     onUpdate: ({ editor, transaction }) => {
@@ -91,18 +93,62 @@ export function NoteEditor({
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editable, editor]);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState("");
 
-  if (!editor) return null;
+  if (!editor) return <div className="bg-muted/30 h-64 animate-pulse rounded-lg" />;
 
   return (
-    <div>
-      <BubbleMenu
-        editor={editor}
-        className="flex items-center gap-1 rounded-md border p-1 shadow-md"
-      >
-        <BubbleMenuContent editor={editor} />
-      </BubbleMenu>
-      <EditorContent editor={editor} />
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_12rem]">
+      <div className="min-w-0 space-y-4">
+        {editable && (
+          <EditorToolbar
+            editor={editor}
+            showHistory={!collaboration}
+            onLink={() => {
+              setLinkValue(editor.getAttributes("link").href ?? "");
+              setLinkOpen(true);
+            }}
+          />
+        )}
+        {linkOpen && (
+          <form
+            className="flex items-center gap-2 rounded-lg border p-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const url = linkValue.trim();
+              if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+              else editor.chain().focus().extendMarkRange("link").unsetLink().run();
+              setLinkOpen(false);
+            }}
+          >
+            <LinkIcon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+            <input
+              autoFocus
+              value={linkValue}
+              onChange={(e) => setLinkValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setLinkOpen(false);
+              }}
+              placeholder="Paste a link, then press Enter (empty removes it)"
+              aria-label="Link address"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+            />
+          </form>
+        )}
+        <BubbleMenu
+          editor={editor}
+          className="bg-popover flex items-center gap-1 rounded-md border p-1 shadow-md"
+        >
+          <BubbleMenuContent editor={editor} />
+        </BubbleMenu>
+        <EditorContent editor={editor} className="min-h-[40vh]" />
+      </div>
+      <div className="hidden xl:block">
+        <div className="sticky top-20">
+          <NoteOutline editor={editor} />
+        </div>
+      </div>
     </div>
   );
 }

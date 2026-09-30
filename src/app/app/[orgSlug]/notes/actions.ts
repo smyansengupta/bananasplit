@@ -105,6 +105,48 @@ export const createNote = withOrgAction(
   },
 );
 
+const importSchema = z.object({
+  title: titleSchema,
+  contentJson: z.string().max(2_000_000),
+  contentText: z.string().max(200_000),
+});
+
+/**
+ * A note made from an imported Word document or Google Doc: the browser
+ * turned the document into the editor's JSON; it is checked against the
+ * note schema here (the same check a live edit gets) before it is stored.
+ * Imported notes start PRIVATE, like every new note.
+ */
+export const importNote = withOrgAction(async (ctx, input: unknown): Promise<ActionResult> => {
+  const parsed = importSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  let contentJson: object;
+  let state: Uint8Array;
+  try {
+    contentJson = JSON.parse(parsed.data.contentJson);
+    state = applyContentToState(seedNoteState(EMPTY_DOC), contentJson);
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof InvalidNoteContentError) {
+      return { error: "That document couldn't be turned into a note." };
+    }
+    throw error;
+  }
+  const note = await ctx.db.note.create({
+    data: {
+      organizationId: ctx.organizationId,
+      title: parsed.data.title,
+      contentJson,
+      contentText: parsed.data.contentText,
+      visibility: NoteVisibility.PRIVATE,
+      authorId: ctx.userId,
+      updatedById: ctx.userId,
+      ...(collabConfig() ? { yjsState: new Uint8Array(state) } : {}),
+    },
+    select: { id: true },
+  });
+  return { noteId: note.id };
+});
+
 export const updateNote = withOrgAction(
   async (ctx, noteId: string, input: unknown, expectedVersion: number): Promise<ActionResult> => {
     const existing = await ctx.db.note.findFirst({
