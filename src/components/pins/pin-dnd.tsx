@@ -12,7 +12,7 @@ import { pinPathAction, reorderPinsAction } from "@/app/app/[orgSlug]/_shell/pin
  * (text/uri-list); a pin being reordered carries its id under PIN_MIME.
  */
 
-export const PIN_MIME = "application/x-clubport-pin";
+export const PIN_MIME = "application/x-bananasplit-pin";
 
 /** The same-origin path a drop carries, or null. */
 export function pathFromDrop(data: DataTransfer): string | null {

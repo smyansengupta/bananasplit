@@ -145,7 +145,7 @@ CREATE POLICY app_user_update ON "MemberPrefs" FOR UPDATE TO app_user
   USING ("organizationId" = (SELECT app.member_org_id()) AND "userId" = (SELECT app.user_id()))
   WITH CHECK ("organizationId" = (SELECT app.member_org_id()) AND "userId" = (SELECT app.user_id()));
 
-REVOKE ALL ON "Pin", "RecentVisit", "MemberPrefs" FROM PUBLIC, app_user, app_service, app_auth, app_legacy;
+REVOKE ALL ON "Pin", "RecentVisit", "MemberPrefs" FROM PUBLIC, app_user, app_service, app_auth;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "Pin" TO app_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "RecentVisit" TO app_user;
 GRANT SELECT, INSERT, UPDATE ON "MemberPrefs" TO app_user;
@@ -168,7 +168,7 @@ CREATE POLICY app_user_update ON "OrgFile" FOR UPDATE TO app_user
 CREATE POLICY app_service_select ON "OrgFile" FOR SELECT TO app_service
   USING ((SELECT app.org_id()) IS NOT NULL AND "organizationId" = (SELECT app.org_id()));
 
-REVOKE ALL ON "OrgFile" FROM PUBLIC, app_user, app_service, app_auth, app_legacy;
+REVOKE ALL ON "OrgFile" FROM PUBLIC, app_user, app_service, app_auth;
 GRANT SELECT, INSERT, UPDATE ON "OrgFile" TO app_user;
 GRANT SELECT ON "OrgFile" TO app_service;
 

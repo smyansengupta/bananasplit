@@ -45,8 +45,8 @@ import { Input } from "@/components/ui/input";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { cn } from "@/lib/utils";
 
-const NOTE_MIME = "application/x-clubport-note";
-const FILE_MIME = "application/x-clubport-file";
+const NOTE_MIME = "application/x-bananasplit-note";
+const FILE_MIME = "application/x-bananasplit-file";
 
 const COLORS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"] as const;
 

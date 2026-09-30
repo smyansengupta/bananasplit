@@ -90,7 +90,7 @@ CREATE POLICY app_user_delete ON "NoteFolder" FOR DELETE TO app_user
 CREATE POLICY app_service_select ON "NoteFolder" FOR SELECT TO app_service
   USING ((SELECT app.org_id()) IS NOT NULL AND "organizationId" = (SELECT app.org_id()));
 
-REVOKE ALL ON "NoteFolder" FROM PUBLIC, app_user, app_service, app_auth, app_legacy;
+REVOKE ALL ON "NoteFolder" FROM PUBLIC, app_user, app_service, app_auth;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "NoteFolder" TO app_user;
 GRANT SELECT ON "NoteFolder" TO app_service;
 
