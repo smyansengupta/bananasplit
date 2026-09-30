@@ -50,10 +50,11 @@ controls.
 top of the org's theme. If an org locks light or dark, the lock still wins.
 "Use the organization's theme" on the profile page clears your choice.
 
-**Availability.** It is stored on your own row. Other members only ever see
-busy or free for each hour of a typical week, on your people page, and never
-the labels ("Lab section"), the dates, or the reasons. Org admins can turn
-that off for members (B5). Admins and you always see it.
+**Availability.** It lives in its own table that only you can read or write,
+enforced by the database. Other members only ever see busy or free for each
+hour of a typical week, on your people page. They never see the labels ("Lab
+section"), the dates or the reasons. Each org decides whether its members see
+busy times (B5). That org's admins, and you, always do.
 
 ## Joining (A7, `/onboarding/join`)
 
@@ -102,6 +103,59 @@ B2-B5 are for owners and admins. Anyone else who opens them is told so.
 Everything can be changed later in Settings, the Org Chart, Finance and
 Databases.
 
+## Many organizations
+
+Any number of clubs can use the same Clubport. One person can belong to
+several of them: the org switcher lists them, and it has **Join with invite
+code** and **Create organization**, which runs this same org setup for every
+new org.
+
+Who may create an organization is a platform setting, not code:
+
+| Setting                         | What it does                                                                                                                  |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `PLATFORM_ORG_CREATION_ENABLED` | Off (the production default): only `PLATFORM_ADMIN_EMAILS` may create orgs.                                                  |
+| `ORG_CREATION_MODE=open`        | Any verified account may. Limits: 3 a day per person, and in production also 1 every 30 days per person and 20 a day overall. |
+| `ORG_CREATION_MODE=invite`      | Only people holding a single-use org-creation code from a platform admin.                                                     |
+
+Production is still admins-only. Opening it up is the owners' call, because
+it also decides who is responsible for other clubs' student data.
+
+### What is shared and what stays in one org
+
+| Data                                                                                                                             | Belongs to  | Who can see it                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Account: email, password, verification                                                                                           | the person  | only the sign-in system. Email is never on people pages.                                                                             |
+| Profile: name, picture, pronouns, major, year, bio, links, time zone                                                             | the person  | the person, and members of any org they share. It's the same profile in every org.                                                   |
+| Personal theme                                                                                                                   | the person  | only changes their own view.                                                                                                         |
+| Availability rules and labels                                                                                                    | the person  | only the person (their own table).                                                                                                   |
+| Busy hours                                                                                                                       | the person  | the person; the admins of orgs they belong to; other members of an org that shares busy times. Asked per org.                         |
+| Membership: role and title                                                                                                       | one org     | that org. The title starts as the one picked in profile setup, and each org's admins can change it separately.                       |
+| Everything else: tasks, notes, calendar, polls, finance, databases, reports, org chart, invite code, integrations, settings, audit | one org     | only that org's members, with each feature's own rules (finance: owner and treasurer; invite code and integrations: owners and admins). |
+
+**How the database keeps orgs apart.** Every org-owned row carries its org's
+id. The app runs each request as one of four restricted database roles.
+Row-level security then lets a query see and change only rows of the org the
+person is in right now, and only if they're a member of it. A bug in a page
+can't show another org's data, because the database won't return it.
+
+`pnpm test:rls` checks this for every table on every change:
+- isolation between orgs;
+- one role check per command;
+- a catalog that fails when a table is added without a reviewed policy.
+
+The multi-org test (`src/server/onboarding/multi-org.db.test.ts`) runs the
+whole story end to end: two founders, one member in both orgs, nothing
+crossing between them.
+
+**Leaving and deleting.**
+- **Leaving an org** removes only that membership. The profile, the
+  availability and the other orgs are untouched.
+- **Deleting an org** removes everything it owns after a 30-day grace period.
+  Its people keep their accounts.
+- **Org exports** contain only that org's rows. They never include anyone's
+  profile, availability or the invite code.
+
 ## Where it lives
 
 - Pages: `src/app/onboarding/**`. Shared cards and controls:
@@ -110,14 +164,17 @@ Databases.
   `src/lib/availability`. Personal theme: `src/lib/theme/personal.ts`.
   Invite-code format: `src/lib/join-code.ts`.
 - Server: `src/server/onboarding/` (profile saves, invite codes, org setup).
-- Database: migration `20260929120000_onboarding_flow`.
-  - The new user columns are `onboardedAt`, `preferredTitle`,
-    `themePreference` and `availability`. Users can update them on their own
-    row only.
+- Database: migrations `20260929120000_onboarding_flow` and
+  `20260930120000_private_availability`.
+  - The new user columns are `onboardedAt`, `preferredTitle` and
+    `themePreference`. Users can update them on their own row only.
+  - Availability is in `UserAvailability`, which is owner-only. Other members
+    get busy hours through `app.member_busy_hours(user)`, which checks that
+    both people are in the same org and applies the org's setting.
   - The `OrgJoinCode` table is read and written by owners and admins only.
     Someone who isn't a member yet reaches it only through
     `app.org_by_join_code(code)`, which answers verified callers only.
   - New columns: `DatabaseDefinition.tag`, and on `OrgSettings`,
     `financeDashboardCards` and `showMemberAvailability`.
   - The database-security suite (`pnpm test:rls`) covers all of it: tests
-    `P-ONB-01` to `P-ONB-05`.
+    `P-ONB-01` to `P-ONB-07`.

@@ -72,6 +72,8 @@ const GRANTS = {
   TaskMention: ["SIUD", "SIUD", ""],
   Transaction: ["SIU", "SIU", ""],
   User: ["Su", "S", "SIUD"],
+  // Owner-only; other members reach busy hours through app.member_busy_hours.
+  UserAvailability: ["SIU", "", ""],
   UserCredential: ["", "", "SIUD"],
   VerificationToken: ["", "", "SIUD"],
   WeeklyUpdate: ["SIUD", "SIUD", ""],
@@ -86,6 +88,7 @@ const NO_ORG_ID = [
   "RateLimitBucket",
   "Session",
   "User",
+  "UserAvailability",
   "UserCredential",
   "VerificationToken",
   "_prisma_migrations",
@@ -237,7 +240,6 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       ).rows.map((r) => r.column_name),
     {
       value: [
-        "availability",
         "avatar",
         "bio",
         "emailPreferences",
@@ -2731,11 +2733,87 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     async (q) => ({
       own: await rc(
         q,
-        `UPDATE "User" SET "onboardedAt" = now(), "preferredTitle" = 'PM', "availability" = '{"v":1}', "themePreference" = '{"preset":"harbor"}' WHERE "id" = 'u_memberA'`,
+        `UPDATE "User" SET "onboardedAt" = now(), "preferredTitle" = 'PM', "themePreference" = '{"preset":"harbor"}' WHERE "id" = 'u_memberA'`,
       ),
-      other: await rc(q, `UPDATE "User" SET "availability" = '{}' WHERE "id" = 'u_adminA'`),
+      other: await rc(q, `UPDATE "User" SET "preferredTitle" = 'x' WHERE "id" = 'u_adminA'`),
     }),
     { value: { own: 1, other: 0 } },
+  );
+  await tcase(
+    "P-ONB-06",
+    "UserAvailability: a user reads and writes only their own row, even inside a shared org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.own_insert = await tryq(
+        q,
+        `INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA','{"rules":[{"label":"Therapy"}]}',ARRAY['1-9'])`,
+      );
+      s.other_insert = await tryq(
+        q,
+        `INSERT INTO "UserAvailability" ("userId","rules") VALUES ('u_adminA','{}')`,
+      );
+      s.own_reads = await count(q, `SELECT count(*) n FROM "UserAvailability"`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads_member = await count(q, `SELECT count(*) n FROM "UserAvailability" WHERE "userId" = 'u_memberA'`);
+      s.admin_updates_member = await rc(q, `UPDATE "UserAvailability" SET "busy" = '{}' WHERE "userId" = 'u_memberA'`);
+      s.bad_busy = await tryq(
+        q,
+        `INSERT INTO "UserAvailability" ("userId","busy") VALUES ('u_adminA',ARRAY['9-99'])`,
+      );
+      return s;
+    },
+    {
+      value: {
+        own_insert: 1,
+        other_insert: "42501",
+        own_reads: 1,
+        admin_reads_member: 0,
+        admin_updates_member: 0,
+        bad_busy: "23514",
+      },
+    },
+  );
+  await tcase(
+    "P-ONB-07",
+    "app.member_busy_hours: busy cells only, for members of the same org, as the org allows",
+    "owner",
+    null,
+    async (q) => {
+      await q(`INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA','{"secret":"Therapy"}',ARRAY['1-9','2-10'])`);
+      await q(`INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_bothAB','{}',ARRAY['0-8'])`);
+      const busy = async (user, org, target) => {
+        await q(`SELECT app.set_context($1, $2)`, [user, org]);
+        return (await q(`SELECT app.member_busy_hours($1) AS b`, [target])).rows[0]?.b ?? null;
+      };
+      const s = {};
+      s.co_member = await busy("u_treasA", "org_A", "u_memberA");
+      s.self_no_org = await busy("u_memberA", "", "u_memberA");
+      s.other_org = await busy("u_memberB", "org_B", "u_memberA");
+      s.shared_member_via_b = await busy("u_memberB", "org_B", "u_bothAB");
+      s.no_row = await busy("u_treasA", "org_A", "u_adminA");
+      await q(`UPDATE "OrgSettings" SET "showMemberAvailability" = false WHERE "organizationId" = 'org_A'`);
+      s.hidden_member = await busy("u_treasA", "org_A", "u_memberA");
+      s.hidden_admin = await busy("u_adminA", "org_A", "u_memberA");
+      s.hidden_self = await busy("u_memberA", "org_A", "u_memberA");
+      // org_B still shares, so u_bothAB stays visible there.
+      s.b_still_shares = await busy("u_memberB", "org_B", "u_bothAB");
+      return s;
+    },
+    {
+      value: {
+        co_member: ["1-9", "2-10"],
+        self_no_org: ["1-9", "2-10"],
+        other_org: null,
+        shared_member_via_b: ["0-8"],
+        no_row: [],
+        hidden_member: null,
+        hidden_admin: ["1-9", "2-10"],
+        hidden_self: ["1-9", "2-10"],
+        b_still_shares: ["0-8"],
+      },
+    },
   );
   await tcase(
     "P-ONB-05",

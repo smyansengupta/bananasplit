@@ -1,5 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
-import { parseAvailability, type Availability } from "@/lib/availability";
+import { busyCells, parseAvailability, type Availability } from "@/lib/availability";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
 import { parsePersonalTheme, type PersonalTheme } from "@/lib/theme/personal";
 import { withUserTx } from "@/server/db/context";
@@ -54,8 +54,8 @@ export async function getOnboardingProfile(userId: string): Promise<OnboardingPr
         timezone: true,
         preferredTitle: true,
         themePreference: true,
-        availability: true,
         onboardedAt: true,
+        availability: { select: { rules: true } },
       },
     });
     if (!user) return null;
@@ -69,7 +69,7 @@ export async function getOnboardingProfile(userId: string): Promise<OnboardingPr
       emailVerified: Boolean(user.emailVerified),
       links: parseStoredLinks(user.links),
       themePreference: parsePersonalTheme(user.themePreference),
-      availability: parseAvailability(user.availability),
+      availability: parseAvailability(user.availability?.rules),
       hasGooglePhoto: Boolean(user.image),
       memberships: memberships.map((m) => m.organization),
     };
@@ -102,13 +102,26 @@ export async function updateOwnOnboardingFields(
       ? (values.themePreference as unknown as Prisma.InputJsonValue)
       : Prisma.DbNull;
   }
-  if (values.availability !== undefined) {
-    data.availability = values.availability as unknown as Prisma.InputJsonValue;
-  }
-  if (Object.keys(data).length === 0) return;
-  await withUserTx(userId, ({ db }) =>
-    db.user.update({ where: { id: userId }, data, select: { id: true } }),
-  );
+  const availability = values.availability;
+  if (Object.keys(data).length === 0 && availability === undefined) return;
+  await withUserTx(userId, async ({ db }) => {
+    if (Object.keys(data).length > 0) {
+      await db.user.update({ where: { id: userId }, data, select: { id: true } });
+    }
+    if (availability !== undefined) {
+      // The rules stay on the owner-only row; busy is all anyone else sees.
+      const row = {
+        rules: availability as unknown as Prisma.InputJsonValue,
+        busy: busyCells(availability),
+      };
+      await db.userAvailability.upsert({
+        where: { userId },
+        create: { userId, ...row },
+        update: row,
+        select: { userId: true },
+      });
+    }
+  });
 }
 
 /** "Profile complete": the gate in /app and the org layout lets the user through. */

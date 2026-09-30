@@ -1946,6 +1946,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "list_org_creation_codes",
         "lock_org",
         "log_org_deletion",
+        "member_busy_hours",
         "member_org_id",
         "member_role",
         "membership_history",
@@ -2080,6 +2081,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "TaskMention:INSERT",
         "TaskMention:UPDATE",
         "User:UPDATE",
+        "UserAvailability:INSERT",
+        "UserAvailability:UPDATE",
         "WeeklyUpdate:INSERT",
         "WeeklyUpdate:UPDATE",
       ],
@@ -2192,6 +2195,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       task_visibility_inherit: "",
       // Onboarding: "Join with invite code" (verified callers only)
       org_by_join_code: "u",
+      // Another member's busy hours: never the rules, and only as the org allows
+      member_busy_hours: "u",
     };
     await tcase(
       "T27f",

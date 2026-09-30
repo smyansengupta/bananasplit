@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { UserAvatar } from "@/components/user-avatar";
-import { parseAvailability } from "@/lib/availability";
 import { parseNotificationPreferences } from "@/lib/notifications/preferences";
 import { personHref, type ProfileSection } from "@/lib/profile/href";
 import { effectiveTimezone } from "@/lib/profile/timezone";
@@ -176,7 +175,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <AvailabilityForm initial={parseAvailability(profile.availability)} />
+            <AvailabilityForm initial={profile.availability} />
           </CardContent>
         </Card>
       </section>

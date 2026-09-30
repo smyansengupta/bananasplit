@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BusyGrid } from "@/components/onboarding/availability-editor";
 import { UserAvatar } from "@/components/user-avatar";
-import { can } from "@/lib/auth/permissions";
 import { peopleHref, personTasksHref, profileHref } from "@/lib/profile/href";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { getOrgPerson, getPersonBusyHours } from "@/server/profiles/queries";
@@ -21,15 +20,14 @@ import { getOrgPerson, getPersonBusyHours } from "@/server/profiles/queries";
  */
 export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/people/[userId]">) {
   const { orgSlug, userId } = await params;
-  const { organization, user, role, settings } = await getOrgContextBySlug(orgSlug);
+  const { organization, user } = await getOrgContextBySlug(orgSlug);
   const person = await getOrgPerson(organization.id, userId);
   if (!person) notFound();
 
   const isSelf = person.id === user.id;
-  // Busy hours: for everyone when the org shares them (org setup B5), for
-  // admins and the person themselves always. Never the reasons.
-  const showBusy = isSelf || can({ role }, "members.changeRole") || (settings?.showMemberAvailability ?? true);
-  const busy = showBusy ? await getPersonBusyHours(organization.id, person.id) : null;
+  // Busy hours, never the reasons. The database decides who may see them
+  // (app.member_busy_hours: the org's setting, admins, the person).
+  const busy = await getPersonBusyHours(organization.id, person.id);
   const detail = majorAndYear(person.major, person.gradYear);
   const displayName = person.name ?? "Unnamed member";
 
