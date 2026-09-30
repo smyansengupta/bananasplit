@@ -18,7 +18,7 @@ import { isValidTimeZone } from "@/lib/timezones";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
-import { ownPreferredTitle } from "@/server/onboarding/join-code";
+import { ownPreferredTitle } from "@/server/onboarding/title";
 
 /**
  * Creating an organization (onboarding and /app/new) and the platform

@@ -99,6 +99,8 @@ export default async function SetupPage({
   const active = activeId ? steps.find((s) => s.id === activeId)! : null;
   // "Change the credential" reopens the form for a step that is connected.
   const editing = sp.edit === "1";
+  // Opened from org setup (onboarding B2): a way back to it.
+  const from = typeof sp.from === "string" && /^\/onboarding\/organization\/[a-z0-9-]+\/data$/.test(sp.from) ? sp.from : null;
 
   // The first chart. Outside the transaction above: getReport opens its own
   // service transaction (it may be revalidated with no request context).
@@ -139,6 +141,11 @@ export default async function SetupPage({
 
   return (
     <div className="space-y-8">
+      {from && (
+        <Link href={from} className="text-primary text-sm underline-offset-4 hover:underline">
+          ← Back to organization setup
+        </Link>
+      )}
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="min-w-0 space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Set up {organization.name}</h1>

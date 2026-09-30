@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/server/db/context", async () =>
   (await import("@/test/fake-context")).fakeContextModule(),
 );
+// The title picked in profile setup, copied onto the new membership.
+vi.mock("@/server/onboarding/title", () => ({ ownPreferredTitle: async () => "Project Manager" }));
 const { getUserIdentityMock, rateLimitMock } = vi.hoisted(() => ({
   getUserIdentityMock: vi.fn(),
   rateLimitMock: vi.fn(),
@@ -86,7 +88,7 @@ describe("createOrganization", () => {
       data: { id: orgId, name: "New Club", slug: "new-club", timezone: "America/New_York" },
     });
     expect(fake.systemDb.membership.create).toHaveBeenCalledWith({
-      data: { organizationId: orgId, userId: "user_1", role: "OWNER" },
+      data: { organizationId: orgId, userId: "user_1", role: "OWNER", title: "Project Manager" },
     });
   });
 

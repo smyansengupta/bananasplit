@@ -38,6 +38,9 @@ export function normalizeDomain(input: string | null | undefined): string | null
 export function emailOnDomain(email: string, domain: string): boolean {
   const at = email.lastIndexOf("@");
   if (at < 0) return false;
-  const host = email.slice(at + 1).trim().toLowerCase();
+  const host = email
+    .slice(at + 1)
+    .trim()
+    .toLowerCase();
   return host === domain || host.endsWith(`.${domain}`);
 }

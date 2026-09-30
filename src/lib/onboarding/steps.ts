@@ -4,7 +4,7 @@ import { MAX_LINKS, type LinkKind } from "@/lib/profile/links";
 import { profileDetailsSchema, profileLinkSchema } from "@/lib/profile/schema";
 
 /**
- * The two onboarding flows from the design (docs/features/onboarding.md):
+ * The two onboarding flows from the design (docs/features/onboarding-flows.md):
  *
  *   A  Profile setup, once per new member:
  *      A1 basics -> A2 school -> A3 bio -> A4 theme -> A5 availability -> A6 review
@@ -15,7 +15,14 @@ import { profileDetailsSchema, profileLinkSchema } from "@/lib/profile/schema";
  * Pure and client-safe: the pages, forms and actions share these.
  */
 
-export const PROFILE_STEPS = ["basics", "school", "bio", "theme", "availability", "review"] as const;
+export const PROFILE_STEPS = [
+  "basics",
+  "school",
+  "bio",
+  "theme",
+  "availability",
+  "review",
+] as const;
 export type ProfileStep = (typeof PROFILE_STEPS)[number];
 
 export const PROFILE_STEP_TITLES: Record<ProfileStep, string> = {

@@ -7,12 +7,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { JoinCodeCard } from "@/components/onboarding/join-code-card";
 import { UserAvatar } from "@/components/user-avatar";
 import { Role } from "@/generated/prisma/enums";
+import { absoluteAppUrl } from "@/lib/app-url";
 import { canActOnMember } from "@/lib/auth/member-roles";
 import { assignableRoles, can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
+import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 
 import { InviteForm } from "./invite-form";
 import { LeaveOrgCard } from "./leave-org-card";
@@ -51,7 +54,7 @@ export default async function MembersPage({
   const showEmails =
     can({ role }, "members.viewEmails") || Boolean(settings?.showMemberEmailsToMembers);
 
-  const { members, invites } = await withOrgTx(orgId, async ({ db }) => {
+  const { members, invites, joinCode } = await withOrgTx(orgId, async ({ db }) => {
     const members = await db.membership.findMany({
       where: { organizationId: orgId },
       orderBy: { joinedAt: "asc" },
@@ -78,7 +81,9 @@ export default async function MembersPage({
           },
         })
       : [];
-    return { members, invites };
+    // The shareable invite code, made the first time an admin opens this page.
+    const joinCode = canInvite ? await getOrCreateJoinCode(db, orgId, user.id) : null;
+    return { members, invites, joinCode };
   });
 
   const inviteRows: PendingInviteRow[] = invites.map((i) => ({
@@ -117,6 +122,30 @@ export default async function MembersPage({
           </div>
           <InviteForm orgId={orgId} />
           <PendingInvites orgId={orgId} invites={inviteRows} />
+        </section>
+      )}
+
+      {joinCode && (
+        <section className="space-y-3 rounded-lg border p-4" aria-labelledby="join-code-heading">
+          <div>
+            <h2 id="join-code-heading" className="text-sm font-medium">
+              Invite code
+            </h2>
+            <p className="text-muted-foreground text-xs">
+              Share it with your members instead of emailing each one. They enter it after setting up their profile,
+              and see {organization.name}&apos;s name before they join.
+            </p>
+          </div>
+          <JoinCodeCard
+            orgId={orgId}
+            joinUrlBase={absoluteAppUrl("/onboarding/join")}
+            initial={{
+              code: joinCode.code,
+              enabled: joinCode.enabled,
+              allowedDomain: joinCode.allowedDomain,
+              useCount: joinCode.useCount,
+            }}
+          />
         </section>
       )}
 

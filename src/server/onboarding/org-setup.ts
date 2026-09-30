@@ -1,5 +1,3 @@
-import { TZDate } from "@date-fns/tz";
-
 import { EventKind, EventVisibility, MemberVisibility, Prisma } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { FINANCE_CARD_IDS } from "@/lib/finance/dashboard-cards";
@@ -12,6 +10,7 @@ import {
   fiscalYearFor,
   isDataTag,
   labelsInputSchema,
+  meetingOccurrences,
   teamsInputSchema,
   type DataTag,
 } from "@/lib/onboarding/org";
@@ -37,6 +36,17 @@ import { publishDraft, saveDraft, startDraft } from "@/server/org-chart/service"
 
 export type StepResult = { ok: true } | { ok: false; error: string };
 
+/**
+ * A refusal after something was already written: thrown so the whole step's
+ * transaction rolls back; the action turns it into { ok: false, error }.
+ */
+export class StepFailure extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StepFailure";
+  }
+}
+
 // ---------------------------------------------------------------- B3
 
 export interface DataSourceRow {
@@ -48,7 +58,9 @@ export interface DataSourceRow {
   memberVisibility: MemberVisibility;
 }
 
-export async function loadDataSources(ctx: Pick<OrgContext, "db" | "organizationId">): Promise<DataSourceRow[]> {
+export async function loadDataSources(
+  ctx: Pick<OrgContext, "db" | "organizationId">,
+): Promise<DataSourceRow[]> {
   const rows = await ctx.db.databaseDefinition.findMany({
     where: { organizationId: ctx.organizationId, archivedAt: null },
     select: { id: true, key: true, name: true, kind: true, tag: true, memberVisibility: true },
@@ -61,11 +73,16 @@ export async function saveDataLabels(ctx: OrgContext, raw: unknown): Promise<Ste
   requirePermission(ctx, "databases.write");
   requirePermission(ctx, "privacy.write");
   const parsed = labelsInputSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the labels." };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the labels." };
   const { sources, visibility } = parsed.data;
 
   const known = await ctx.db.databaseDefinition.findMany({
-    where: { organizationId: ctx.organizationId, archivedAt: null, id: { in: sources.map((s) => s.id) } },
+    where: {
+      organizationId: ctx.organizationId,
+      archivedAt: null,
+      id: { in: sources.map((s) => s.id) },
+    },
     select: { id: true },
   });
   const knownIds = new Set(known.map((k) => k.id));
@@ -75,7 +92,11 @@ export async function saveDataLabels(ctx: OrgContext, raw: unknown): Promise<Ste
     const vis = tag ? visibility[tag] : undefined;
     await ctx.db.databaseDefinition.update({
       where: { id: source.id },
-      data: { name: source.name, tag, ...(vis ? { memberVisibility: vis as MemberVisibility } : {}) },
+      data: {
+        name: source.name,
+        tag,
+        ...(vis ? { memberVisibility: vis as MemberVisibility } : {}),
+      },
       select: { id: true },
     });
   }
@@ -85,7 +106,9 @@ export async function saveDataLabels(ctx: OrgContext, raw: unknown): Promise<Ste
     targetType: "DatabaseDefinition",
     diff: {
       sources: sources.length,
-      visibility: Object.fromEntries(DATA_TAGS.filter((t) => visibility[t]).map((t) => [t, visibility[t]])),
+      visibility: Object.fromEntries(
+        DATA_TAGS.filter((t) => visibility[t]).map((t) => [t, visibility[t]]),
+      ),
     },
   });
   invalidate([tags.databases(ctx.organizationId), tags.reports(ctx.organizationId)]);
@@ -100,7 +123,9 @@ export interface FinanceSetupState {
   canManageFinance: boolean;
 }
 
-export async function loadFinanceSetup(ctx: Pick<OrgContext, "db" | "organizationId" | "role">): Promise<FinanceSetupState> {
+export async function loadFinanceSetup(
+  ctx: Pick<OrgContext, "db" | "organizationId" | "role">,
+): Promise<FinanceSetupState> {
   const settings = await ctx.db.orgSettings.findUnique({
     where: { organizationId: ctx.organizationId },
     select: { financeDashboardCards: true },
@@ -125,23 +150,32 @@ export async function loadFinanceSetup(ctx: Pick<OrgContext, "db" | "organizatio
 
 const DEFAULT_CATEGORY_NAMES = ["Food", "Materials", "Travel", "Marketing", "Speaker Fees"];
 
-export async function saveFinanceSetup(ctx: OrgContext, raw: unknown, orgTimezone: string): Promise<StepResult> {
+export async function saveFinanceSetup(
+  ctx: OrgContext,
+  raw: unknown,
+  orgTimezone: string,
+): Promise<StepResult> {
   requirePermission(ctx, "settings.general.write");
   const parsed = financeInputSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the finance settings." };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the finance settings." };
   const { cards, fiscalYearStartMonth, createPeriod } = parsed.data;
+  // The budget itself is the treasurer's: OWNER or TREASURER (RLS agrees).
+  // Checked before any write, so a refusal leaves nothing half-saved.
+  if (createPeriod) requirePermission(ctx, "finance.manage");
 
   await ctx.db.orgSettings.update({
     where: { organizationId: ctx.organizationId },
     // All of them = the default, stored as empty so new reports show up too.
-    data: { financeDashboardCards: cards.length === FINANCE_CARD_IDS.length ? [] : cards, updatedById: ctx.userId },
+    data: {
+      financeDashboardCards: cards.length === FINANCE_CARD_IDS.length ? [] : cards,
+      updatedById: ctx.userId,
+    },
     select: { organizationId: true },
   });
 
   let createdPeriod: string | null = null;
   if (createPeriod) {
-    // The budget itself is the treasurer's: OWNER or TREASURER (RLS agrees).
-    requirePermission(ctx, "finance.manage");
     const active = await ctx.db.budgetPeriod.findFirst({
       where: { organizationId: ctx.organizationId, isActive: true },
       select: { id: true },
@@ -188,7 +222,9 @@ export interface TeamsSetupState {
   hasPublishedChart: boolean;
 }
 
-export async function loadTeamsSetup(ctx: Pick<OrgContext, "db" | "organizationId">): Promise<TeamsSetupState> {
+export async function loadTeamsSetup(
+  ctx: Pick<OrgContext, "db" | "organizationId">,
+): Promise<TeamsSetupState> {
   const members = await ctx.db.membership.findMany({
     where: { organizationId: ctx.organizationId },
     select: { userId: true, user: { select: { name: true, email: true } } },
@@ -207,35 +243,14 @@ export async function loadTeamsSetup(ctx: Pick<OrgContext, "db" | "organizationI
     select: { activeOrgChartVersionId: true },
   });
   return {
-    members: members.map((m) => ({ userId: m.userId, name: m.user.name ?? m.user.email.split("@")[0] })),
+    members: members.map((m) => ({
+      userId: m.userId,
+      name: m.user.name ?? m.user.email.split("@")[0],
+    })),
     showMemberAvailability: settings?.showMemberAvailability ?? true,
     googleConnected: Boolean(google),
     hasPublishedChart: Boolean(org?.activeOrgChartVersionId),
   };
-}
-
-/** The next `count` meeting starts (UTC instants) at a local weekday/time in `tz`. */
-export function meetingOccurrences(
-  meeting: { day: number; minutes: number; cadence: "weekly" | "biweekly" },
-  tz: string,
-  now: Date,
-  weeksAhead: number,
-): Date[] {
-  const today = localDateKey(now, tz);
-  const [y, m, d] = today.split("-").map(Number);
-  // Weekday of today in the org's zone, Monday = 0.
-  const todayDow = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
-  let offset = (meeting.day - todayDow + 7) % 7;
-  const h = Math.floor(meeting.minutes / 60);
-  const min = meeting.minutes % 60;
-  const first = new TZDate(y, m - 1, d + offset, h, min, tz);
-  if (first.getTime() <= now.getTime()) offset += 7;
-  const step = meeting.cadence === "biweekly" ? 14 : 7;
-  const out: Date[] = [];
-  for (let days = offset; days < weeksAhead * 7; days += step) {
-    out.push(new Date(new TZDate(y, m - 1, d + days, h, min, tz).getTime()));
-  }
-  return out;
 }
 
 export async function saveTeamsSetup(
@@ -246,8 +261,10 @@ export async function saveTeamsSetup(
   requirePermission(ctx, "orgchart.write");
   requirePermission(ctx, "settings.general.write");
   const parsed = teamsInputSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the teams." };
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the teams." };
   const { teams, addMeetingsToCalendar, showMemberAvailability } = parsed.data;
+  if (addMeetingsToCalendar) requirePermission(ctx, "events.write");
 
   const members = await ctx.db.membership.findMany({
     where: { organizationId: ctx.organizationId },
@@ -276,26 +293,41 @@ export async function saveTeamsSetup(
     };
   });
   const saved = await saveDraft(ctx, { versionId, editVersion: 1, positions, openItems: [] });
-  if (!saved.ok) return { ok: false, error: saved.error };
+  if (!saved.ok) throw new StepFailure(saved.error);
   const published = await publishDraft(ctx, versionId, { expectedEditVersion: saved.editVersion });
-  if (!published.ok) return { ok: false, error: published.issues?.[0]?.message ?? published.error };
+  if (!published.ok) throw new StepFailure(published.issues?.[0]?.message ?? published.error);
 
   // Team meetings: about a semester of them, skipping any already there.
   let meetings = 0;
   if (addMeetingsToCalendar) {
-    requirePermission(ctx, "events.write");
     const now = new Date();
     for (const [i, team] of teams.entries()) {
       if (!team.meeting) continue;
       const title = `${team.name} meeting`;
       const existing = await ctx.db.event.count({
-        where: { organizationId: ctx.organizationId, title, deletedAt: null, startsAt: { gt: now } },
+        where: {
+          organizationId: ctx.organizationId,
+          title,
+          deletedAt: null,
+          startsAt: { gt: now },
+        },
       });
       if (existing > 0) continue;
       const lead = team.leadUserId && nameOf.has(team.leadUserId) ? team.leadUserId : null;
-      for (const startsAt of meetingOccurrences(team.meeting, orgTimezone, now, MEETING_WEEKS_AHEAD)) {
+      for (const startsAt of meetingOccurrences(
+        team.meeting,
+        orgTimezone,
+        now,
+        MEETING_WEEKS_AHEAD,
+      )) {
         await createEvent(
-          { db: ctx.db, organizationId: ctx.organizationId, userId: ctx.userId, role: ctx.role, kind: ctx.kind },
+          {
+            db: ctx.db,
+            organizationId: ctx.organizationId,
+            userId: ctx.userId,
+            role: ctx.role,
+            kind: ctx.kind,
+          },
           {
             title,
             startsAt,

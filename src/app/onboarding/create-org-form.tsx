@@ -15,7 +15,15 @@ import { checkSlugAvailability, createOrganizationAction } from "./actions";
  * Create an organization (onboarding and /app/new). The server re-checks
  * everything: the creation policy, the code, the URL and the limits.
  */
-export function CreateOrgForm({ requiresCode = false }: { requiresCode?: boolean }) {
+export function CreateOrgForm({
+  requiresCode = false,
+  flow,
+}: {
+  requiresCode?: boolean;
+  /** "onboarding": the flowchart's B1 wording, and B2 comes next. */
+  flow?: "onboarding";
+}) {
+  const onboarding = flow === "onboarding";
   const [state, formAction, isPending] = useActionState(createOrganizationAction, {});
   const [name, setName] = useState("");
   const [manualSlug, setManualSlug] = useState("");
@@ -54,6 +62,7 @@ export function CreateOrgForm({ requiresCode = false }: { requiresCode?: boolean
 
   return (
     <form action={formAction} className="space-y-4">
+      {onboarding && <input type="hidden" name="flow" value="onboarding" />}
       <div className="grid gap-1.5">
         <Label htmlFor="org-name">Organization name</Label>
         <Input
@@ -66,7 +75,7 @@ export function CreateOrgForm({ requiresCode = false }: { requiresCode?: boolean
         />
       </div>
       <div className="grid gap-1.5">
-        <Label htmlFor="org-slug">URL</Label>
+        <Label htmlFor="org-slug">{onboarding ? "Portal URL" : "URL"}</Label>
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground text-sm">/app/</span>
           <Input
@@ -85,7 +94,7 @@ export function CreateOrgForm({ requiresCode = false }: { requiresCode?: boolean
         {showAvailable && <p className={`text-sm ${SUCCESS_TEXT}`}>Available</p>}
       </div>
       <div className="grid gap-1.5">
-        <Label htmlFor="org-timezone">Timezone</Label>
+        <Label htmlFor="org-timezone">{onboarding ? "Default time zone" : "Timezone"}</Label>
         <select
           id="org-timezone"
           name="timezone"
@@ -125,7 +134,7 @@ export function CreateOrgForm({ requiresCode = false }: { requiresCode?: boolean
         </p>
       )}
       <Button type="submit" disabled={isPending || showTaken} className="w-full">
-        {isPending ? "Creating…" : "Create organization"}
+        {isPending ? "Creating…" : onboarding ? "Continue" : "Create organization"}
       </Button>
     </form>
   );

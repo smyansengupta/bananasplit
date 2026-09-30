@@ -1,6 +1,8 @@
+import { TZDate } from "@date-fns/tz";
 import { z } from "zod";
 
 import { FINANCE_CARD_IDS } from "@/lib/finance/dashboard-cards";
+import { localDateKey } from "@/lib/tasks/dates";
 
 /**
  * Org setup (Flow B) inputs, shared by the step forms and their Server
@@ -40,7 +42,10 @@ export const VISIBILITY_OPTIONS = [
   { value: "HIDDEN", label: "Hidden from members' list" },
 ] as const;
 export type VisibilityValue = (typeof VISIBILITY_OPTIONS)[number]["value"];
-const visibilityValues = VISIBILITY_OPTIONS.map((o) => o.value) as [VisibilityValue, ...VisibilityValue[]];
+const visibilityValues = VISIBILITY_OPTIONS.map((o) => o.value) as [
+  VisibilityValue,
+  ...VisibilityValue[],
+];
 
 export const labelsInputSchema = z
   .object({
@@ -52,7 +57,12 @@ export const labelsInputSchema = z
             name: z
               .string()
               .transform((s) => s.replace(/\s+/g, " ").trim())
-              .pipe(z.string().min(1, "Give every source a label.").max(60, "Keep labels under 60 characters.")),
+              .pipe(
+                z
+                  .string()
+                  .min(1, "Give every source a label.")
+                  .max(60, "Keep labels under 60 characters."),
+              ),
             tag: z.enum(DATA_TAGS).nullable(),
           })
           .strict(),
@@ -84,7 +94,10 @@ export const MONTHS = [
 
 export const financeInputSchema = z
   .object({
-    cards: z.array(z.enum(FINANCE_CARD_IDS as [string, ...string[]])).min(1, "Keep at least one report.").max(10),
+    cards: z
+      .array(z.enum(FINANCE_CARD_IDS as [string, ...string[]]))
+      .min(1, "Keep at least one report.")
+      .max(10),
     /** 1-12: the month the fiscal year starts on the 1st of. */
     fiscalYearStartMonth: z.number().int().min(1).max(12),
     /** Create the budget period for the current fiscal year. */
@@ -99,14 +112,19 @@ export type FinanceInput = z.input<typeof financeInputSchema>;
  * zone), starting on the 1st of `startMonth`: its label and its first and
  * last days.
  */
-export function fiscalYearFor(today: string, startMonth: number): { label: string; startsOn: string; endsOn: string } {
+export function fiscalYearFor(
+  today: string,
+  startMonth: number,
+): { label: string; startsOn: string; endsOn: string } {
   const [y, m] = today.split("-").map(Number);
   const startYear = m >= startMonth ? y : y - 1;
   const start = `${startYear}-${String(startMonth).padStart(2, "0")}-01`;
   const endDate = new Date(Date.UTC(startYear + 1, startMonth - 1, 1) - 24 * 60 * 60 * 1000);
   const endsOn = endDate.toISOString().slice(0, 10);
   const label =
-    startMonth === 1 ? `FY ${startYear}` : `FY ${startYear}–${String((startYear + 1) % 100).padStart(2, "0")}`;
+    startMonth === 1
+      ? `FY ${startYear}`
+      : `FY ${startYear}–${String((startYear + 1) % 100).padStart(2, "0")}`;
   return { label, startsOn: start, endsOn };
 }
 
@@ -127,7 +145,12 @@ const meetingSchema = z
     /** 0 = Monday. */
     day: z.number().int().min(0).max(6),
     /** Minutes after midnight, on the quarter hour. */
-    minutes: z.number().int().min(0).max(23 * 60 + 45).multipleOf(15),
+    minutes: z
+      .number()
+      .int()
+      .min(0)
+      .max(23 * 60 + 45)
+      .multipleOf(15),
     cadence: z.enum(["weekly", "biweekly"]),
   })
   .strict();
@@ -141,7 +164,12 @@ export const teamsInputSchema = z
             name: z
               .string()
               .transform((s) => s.replace(/\s+/g, " ").trim())
-              .pipe(z.string().min(1, "Name every team.").max(80, "Keep team names under 80 characters.")),
+              .pipe(
+                z
+                  .string()
+                  .min(1, "Name every team.")
+                  .max(80, "Keep team names under 80 characters."),
+              ),
             leadUserId: z.string().min(1).max(100).nullable(),
             meeting: meetingSchema.nullable(),
           })
@@ -167,4 +195,28 @@ export function describeMeeting(m: { day: number; minutes: number; cadence: stri
   const h12 = ((h + 11) % 12) + 1;
   const time = `${h12}${min ? `:${String(min).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`;
   return `${DAY_NAMES[m.day]} ${time} ${m.cadence === "biweekly" ? "every 2 weeks" : "weekly"}`;
+}
+
+/** The next `count` meeting starts (UTC instants) at a local weekday/time in `tz`. */
+export function meetingOccurrences(
+  meeting: { day: number; minutes: number; cadence: "weekly" | "biweekly" },
+  tz: string,
+  now: Date,
+  weeksAhead: number,
+): Date[] {
+  const today = localDateKey(now, tz);
+  const [y, m, d] = today.split("-").map(Number);
+  // Weekday of today in the org's zone, Monday = 0.
+  const todayDow = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+  let offset = (meeting.day - todayDow + 7) % 7;
+  const h = Math.floor(meeting.minutes / 60);
+  const min = meeting.minutes % 60;
+  const first = new TZDate(y, m - 1, d + offset, h, min, tz);
+  if (first.getTime() <= now.getTime()) offset += 7;
+  const step = meeting.cadence === "biweekly" ? 14 : 7;
+  const out: Date[] = [];
+  for (let days = offset; days < weeksAhead * 7; days += step) {
+    out.push(new Date(new TZDate(y, m - 1, d + days, h, min, tz).getTime()));
+  }
+  return out;
 }

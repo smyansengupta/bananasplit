@@ -91,7 +91,10 @@ export interface OnboardingFields {
 }
 
 /** Saves the onboarding-only columns (already validated). Undefined = untouched. */
-export async function updateOwnOnboardingFields(userId: string, values: OnboardingFields): Promise<void> {
+export async function updateOwnOnboardingFields(
+  userId: string,
+  values: OnboardingFields,
+): Promise<void> {
   const data: Prisma.UserUpdateInput = {};
   if (values.preferredTitle !== undefined) data.preferredTitle = values.preferredTitle;
   if (values.themePreference !== undefined) {
@@ -103,12 +106,17 @@ export async function updateOwnOnboardingFields(userId: string, values: Onboardi
     data.availability = values.availability as unknown as Prisma.InputJsonValue;
   }
   if (Object.keys(data).length === 0) return;
-  await withUserTx(userId, ({ db }) => db.user.update({ where: { id: userId }, data, select: { id: true } }));
+  await withUserTx(userId, ({ db }) =>
+    db.user.update({ where: { id: userId }, data, select: { id: true } }),
+  );
 }
 
 /** "Profile complete": the gate in /app and the org layout lets the user through. */
 export async function markProfileSetupComplete(userId: string): Promise<void> {
   await withUserTx(userId, ({ db }) =>
-    db.user.updateMany({ where: { id: userId, onboardedAt: null }, data: { onboardedAt: new Date() } }),
+    db.user.updateMany({
+      where: { id: userId, onboardedAt: null },
+      data: { onboardedAt: new Date() },
+    }),
   );
 }

@@ -50,7 +50,9 @@ export function parsePersonalTheme(raw: unknown): PersonalTheme | null {
 }
 
 /** The light and dark palettes a personal theme stands for. */
-export function personalPalettes(theme: PersonalTheme): { light: ThemeRoles; dark: ThemeRoles } | null {
+export function personalPalettes(
+  theme: PersonalTheme,
+): { light: ThemeRoles; dark: ThemeRoles } | null {
   if (theme.preset === CUSTOM_PRESET_ID) {
     const light = parseRoles(theme.custom);
     return light ? { light, dark: deriveDarkRoles(light) } : null;
@@ -63,11 +65,20 @@ export function personalPalettes(theme: PersonalTheme): { light: ThemeRoles; dar
  * The org's resolved theme with the member's palette and mode on top. The
  * org keeps its logo display and any light/dark lock.
  */
-export function applyPersonalTheme(org: ResolvedTheme, personal: PersonalTheme | null): ResolvedTheme {
+export function applyPersonalTheme(
+  org: ResolvedTheme,
+  personal: PersonalTheme | null,
+): ResolvedTheme {
   if (!personal) return org;
   const palettes = personalPalettes(personal);
   if (!palettes) return org;
-  const mode = org.lockMode ? org.mode : personal.mode === "light" ? "LIGHT" : personal.mode === "dark" ? "DARK" : "SYSTEM";
+  const mode = org.lockMode
+    ? org.mode
+    : personal.mode === "light"
+      ? "LIGHT"
+      : personal.mode === "dark"
+        ? "DARK"
+        : "SYSTEM";
   return {
     ...org,
     preset: personal.preset,
@@ -78,5 +89,33 @@ export function applyPersonalTheme(org: ResolvedTheme, personal: PersonalTheme |
     tokens: deriveTheme(palettes.light, palettes.dark),
     // The default preset is exactly globals.css: nothing to inject.
     isDefault: personal.preset === DEFAULT_PRESET_ID,
+  };
+}
+
+/** Where "Custom" starts: warm paper with a terracotta primary. */
+export const DEFAULT_CUSTOM_ROLES: ThemeRoles = {
+  primary: "#c2522d",
+  accent: "#e0a23a",
+  background: "#faf7f2",
+  surface: "#ffffff",
+  text: "#1a1512",
+};
+
+/** The preview swatches and sample row for one palette (derived tokens). */
+export function previewTokens(
+  palettes: { light: ThemeRoles; dark: ThemeRoles },
+  mode: "light" | "dark",
+) {
+  const derived = deriveTheme(palettes.light, palettes.dark);
+  const t = mode === "light" ? derived.light : derived.dark;
+  return {
+    page: t.background,
+    surface: t.card,
+    text: t.foreground,
+    muted: t["muted-foreground"],
+    primary: t.primary,
+    onPrimary: t["primary-foreground"],
+    accent: t["brand-accent"],
+    border: t.border,
   };
 }

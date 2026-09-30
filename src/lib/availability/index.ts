@@ -51,12 +51,19 @@ const hour = z.number().int().min(0).max(24);
 const label = z
   .string()
   .transform((s) => s.replace(/\s+/g, " ").trim())
-  .pipe(z.string().min(1, "Give it a name.").max(MAX_RULE_LABEL, `Keep it under ${MAX_RULE_LABEL} characters.`));
+  .pipe(
+    z
+      .string()
+      .min(1, "Give it a name.")
+      .max(MAX_RULE_LABEL, `Keep it under ${MAX_RULE_LABEL} characters.`),
+  );
 
 const neverHourRule = z
   .object({ kind: z.literal("never"), scope: z.literal("hour"), hour: hour.max(23) })
   .strict();
-const neverDayRule = z.object({ kind: z.literal("never"), scope: z.literal("day"), day: dayIndex }).strict();
+const neverDayRule = z
+  .object({ kind: z.literal("never"), scope: z.literal("day"), day: dayIndex })
+  .strict();
 const weeklyRule = z
   .object({
     kind: z.literal("weekly"),
@@ -93,8 +100,16 @@ const blockKey = z.string().regex(/^[0-6]-([0-9]|1[0-9]|2[0-3])$/);
 export const availabilitySchema = z
   .object({
     v: z.literal(1).optional().default(1),
-    blocks: z.array(blockKey).max(7 * 24).optional().default([]),
-    rules: z.array(availabilityRuleSchema).max(MAX_RULES, `Add at most ${MAX_RULES} rules.`).optional().default([]),
+    blocks: z
+      .array(blockKey)
+      .max(7 * 24)
+      .optional()
+      .default([]),
+    rules: z
+      .array(availabilityRuleSchema)
+      .max(MAX_RULES, `Add at most ${MAX_RULES} rules.`)
+      .optional()
+      .default([]),
   })
   .strict()
   .transform((a) => ({ v: 1 as const, blocks: [...new Set(a.blocks)].sort(), rules: a.rules }));
@@ -170,26 +185,45 @@ function formatDays(days: readonly number[]): string {
 function formatRange(start: number, end: number): string {
   const s = hourLabelLong(start);
   const e = hourLabelLong(end);
-  const sameHalf = (start < 12) === (end < 12 || end === 24);
+  const sameHalf = start < 12 === (end < 12 || end === 24);
   return sameHalf ? `${s.split(" ")[0]}–${e}` : `${s}–${e}`;
 }
 
 /** The rule list's text: [badge, title, when]. */
-export function describeRule(rule: AvailabilityRule): { badge: string; title: string; when: string } {
+export function describeRule(rule: AvailabilityRule): {
+  badge: string;
+  title: string;
+  when: string;
+} {
   switch (rule.kind) {
     case "never":
       return rule.scope === "hour"
-        ? { badge: "NEVER", title: `I can never meet at ${hourLabelLong(rule.hour)}`, when: "every day" }
+        ? {
+            badge: "NEVER",
+            title: `I can never meet at ${hourLabelLong(rule.hour)}`,
+            when: "every day",
+          }
         : { badge: "NEVER", title: `No meetings on ${DAY_LABELS[rule.day]}s`, when: "all day" };
     case "weekly":
-      return { badge: "WEEKLY", title: rule.label, when: `${formatDays(rule.days)} ${formatRange(rule.start, rule.end)}` };
+      return {
+        badge: "WEEKLY",
+        title: rule.label,
+        when: `${formatDays(rule.days)} ${formatRange(rule.start, rule.end)}`,
+      };
     case "date": {
       const d = new Date(`${rule.date}T12:00:00Z`);
-      const day = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+      const day = d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      });
       return {
         badge: "DATE",
         title: rule.label,
-        when: rule.start === null || rule.end === null ? `${day}, all day` : `${day}, ${formatRange(rule.start, rule.end)}`,
+        when:
+          rule.start === null || rule.end === null
+            ? `${day}, all day`
+            : `${day}, ${formatRange(rule.start, rule.end)}`,
       };
     }
   }

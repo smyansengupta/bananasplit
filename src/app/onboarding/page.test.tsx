@@ -2,16 +2,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Onboarding is where sign-in lands an account with no organization
- * (/app redirects here). For an unverified address it is the "check your
- * email" page: the notice with the address and the resend button, and no
- * way to create or join an org until the link is followed.
+ * /onboarding is where sign-up and sign-in land an account with no org.
+ * It is the flowchart's "Profile complete?" decision: profile setup first,
+ * an existing member goes straight to their org, and everyone else chooses
+ * between joining (invite code or emailed invite) and creating an org. An
+ * unverified address gets the "check your email" notice and no way to join
+ * or create until the link is followed.
  */
 
 const mocks = vi.hoisted(() => ({
-  identity: vi.fn(),
+  profile: vi.fn(),
   pendingInvites: vi.fn(),
-  membershipFirst: vi.fn(),
   membershipMany: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw Object.assign(new Error(`NEXT_REDIRECT ${url}`), { url });
@@ -24,18 +25,13 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("@/server/db/context", () => ({
   withUserTx: (_userId: string, fn: (ctx: unknown) => unknown) =>
-    Promise.resolve(
-      fn({
-        db: { membership: { findFirst: mocks.membershipFirst, findMany: mocks.membershipMany } },
-      }),
-    ),
+    Promise.resolve(fn({ db: { membership: { findMany: mocks.membershipMany } } })),
 }));
-vi.mock("@/lib/auth/email-verification", () => ({ getUserIdentity: mocks.identity }));
+vi.mock("@/server/onboarding/profile", () => ({ getOnboardingProfile: mocks.profile }));
 vi.mock("@/server/settings/invitations", () => ({
   findPendingInvitationsForMe: mocks.pendingInvites,
 }));
 vi.mock("@/app/verify-email/actions", () => ({ resendVerificationEmailAction: vi.fn() }));
-vi.mock("./create-org-form", () => ({ CreateOrgForm: () => <form data-testid="create-org" /> }));
 vi.mock("./pending-invite-card", () => ({
   PendingInviteCard: ({ invitation }: { invitation: { orgName: string } }) => (
     <div>Invite to {invitation.orgName}</div>
@@ -48,50 +44,58 @@ async function render() {
   return renderToStaticMarkup(await OnboardingPage()).replace(/&#x27;/g, "'");
 }
 
+function profile(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "u1",
+    name: "Verify Test",
+    email: "verify-test@example.edu",
+    emailVerified: true,
+    onboardedAt: new Date("2026-09-01T00:00:00Z"),
+    memberships: [],
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.membershipFirst.mockResolvedValue(null);
   mocks.membershipMany.mockResolvedValue([]);
   mocks.pendingInvites.mockResolvedValue([{ id: "inv1", role: "MEMBER", orgName: "Robotics" }]);
 });
 
 describe("OnboardingPage", () => {
+  it("sends someone who hasn't finished profile setup to its first step", async () => {
+    mocks.profile.mockResolvedValue(profile({ onboardedAt: null }));
+    await expect(render()).rejects.toMatchObject({ url: "/onboarding/profile/basics" });
+  });
+
+  it("sends a member straight to their organization", async () => {
+    mocks.profile.mockResolvedValue(profile({ memberships: [{ name: "CBC", slug: "cbc" }] }));
+    await expect(render()).rejects.toMatchObject({ url: "/app/cbc" });
+  });
+
   it("shows an unverified account the check-your-email notice, and nothing to create or join", async () => {
-    mocks.identity.mockResolvedValue({
-      id: "u1",
-      email: "verify-test@example.edu",
-      emailVerified: null,
-    });
+    mocks.profile.mockResolvedValue(profile({ emailVerified: false }));
 
     const html = await render();
 
     expect(html).toContain("Check your email");
-    expect(html).toContain("Your email address isn't verified yet.");
     expect(html).toContain("verify-test@example.edu");
     expect(html).toContain("Resend verification email");
-    expect(html).not.toContain('data-testid="create-org"');
+    expect(html).not.toContain('href="/onboarding/join"');
+    expect(html).not.toContain('href="/onboarding/organization"');
     // Invites are not even looked up for an unverified address.
     expect(mocks.pendingInvites).not.toHaveBeenCalled();
-    expect(html).not.toContain("Invite to Robotics");
   });
 
-  it("offers org creation and pending invites once the address is verified", async () => {
-    mocks.identity.mockResolvedValue({
-      id: "u1",
-      email: "verify-test@example.edu",
-      emailVerified: new Date(),
-    });
+  it("offers the invite code, emailed invites and org creation once the address is verified", async () => {
+    mocks.profile.mockResolvedValue(profile());
 
     const html = await render();
 
     expect(html).not.toContain("Check your email");
-    expect(html).toContain('data-testid="create-org"');
     expect(html).toContain("Invite to Robotics");
-  });
-
-  it("sends a member straight to their organization", async () => {
-    mocks.membershipFirst.mockResolvedValue({ organization: { slug: "robotics" } });
-
-    await expect(OnboardingPage()).rejects.toMatchObject({ url: "/app/robotics" });
+    expect(html).toContain('href="/onboarding/join"');
+    expect(html).toContain("Join with invite code");
+    expect(html).toContain('href="/onboarding/organization"');
   });
 });

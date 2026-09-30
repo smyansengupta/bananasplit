@@ -1,7 +1,12 @@
 import { NotificationType, Prisma, Role } from "@/generated/prisma/client";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import type { SessionUser } from "@/lib/auth/session";
-import { emailOnDomain, generateJoinCode, normalizeDomain, normalizeJoinCode } from "@/lib/join-code";
+import {
+  emailOnDomain,
+  generateJoinCode,
+  normalizeDomain,
+  normalizeJoinCode,
+} from "@/lib/join-code";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
@@ -9,6 +14,8 @@ import { tags } from "@/server/cache/tags";
 import { withSystemOrgTx, withUserTx, type TxClient } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
 import { notifyUser } from "@/server/notifications";
+
+import { ownPreferredTitle } from "./title";
 
 /**
  * The org's shareable invite code (onboarding "Join with invite code").
@@ -69,15 +76,27 @@ export async function getOrCreateJoinCode(
   organizationId: string,
   userId: string,
 ): Promise<JoinCodeView> {
-  const existing = await db.orgJoinCode.findUnique({ where: { organizationId }, select: joinCodeSelect });
+  const existing = await db.orgJoinCode.findUnique({
+    where: { organizationId },
+    select: joinCodeSelect,
+  });
   if (existing) return existing;
   const created = await insertWithFreshCode(db, organizationId, userId);
-  await writeOrgAuditLog(db, { organizationId, action: "join_code.created", targetType: "OrgJoinCode", targetId: organizationId });
+  await writeOrgAuditLog(db, {
+    organizationId,
+    action: "join_code.created",
+    targetType: "OrgJoinCode",
+    targetId: organizationId,
+  });
   return created;
 }
 
 /** A new code; the old one stops working at commit. */
-export async function rotateJoinCode(db: TxClient, organizationId: string, userId: string): Promise<JoinCodeView> {
+export async function rotateJoinCode(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+): Promise<JoinCodeView> {
   await getOrCreateJoinCode(db, organizationId, userId);
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -88,7 +107,12 @@ export async function rotateJoinCode(db: TxClient, organizationId: string, userI
         select: joinCodeSelect,
       });
       await db.$executeRaw`RELEASE SAVEPOINT join_code_rotate`;
-      await writeOrgAuditLog(db, { organizationId, action: "join_code.rotated", targetType: "OrgJoinCode", targetId: organizationId });
+      await writeOrgAuditLog(db, {
+        organizationId,
+        action: "join_code.rotated",
+        targetType: "OrgJoinCode",
+        targetId: organizationId,
+      });
       return row;
     } catch (error) {
       await db.$executeRaw`ROLLBACK TO SAVEPOINT join_code_rotate`;
@@ -98,7 +122,8 @@ export async function rotateJoinCode(db: TxClient, organizationId: string, userI
   throw new Error("could not generate a unique invite code");
 }
 
-export type JoinCodeSettingsResult = { ok: true; code: JoinCodeView } | { ok: false; error: string };
+export type JoinCodeSettingsResult =
+  { ok: true; code: JoinCodeView } | { ok: false; error: string };
 
 /** Turn the code on or off, and set or clear the allowed email domain. */
 export async function updateJoinCodeSettings(
@@ -116,7 +141,11 @@ export async function updateJoinCodeSettings(
     data.allowedDomain = domain;
   }
   await getOrCreateJoinCode(db, organizationId, userId);
-  const row = await db.orgJoinCode.update({ where: { organizationId }, data, select: joinCodeSelect });
+  const row = await db.orgJoinCode.update({
+    where: { organizationId },
+    data,
+    select: joinCodeSelect,
+  });
   await writeOrgAuditLog(db, {
     organizationId,
     action: "join_code.updated",
@@ -146,7 +175,14 @@ export type JoinCodeCheck =
   | { ok: true; org: JoinCodeOrg; alreadyMember: boolean }
   | {
       ok: false;
-      reason: "invalid_format" | "not_found" | "disabled" | "org_inactive" | "wrong_domain" | "unverified" | "rate_limited";
+      reason:
+        | "invalid_format"
+        | "not_found"
+        | "disabled"
+        | "org_inactive"
+        | "wrong_domain"
+        | "unverified"
+        | "rate_limited";
       message: string;
     };
 
@@ -167,16 +203,29 @@ interface LookupRow {
  */
 export async function checkJoinCode(user: SessionUser, rawCode: string): Promise<JoinCodeCheck> {
   const code = normalizeJoinCode(rawCode);
-  if (!code) return { ok: false, reason: "invalid_format", message: "Invite codes look like ABCD-EFGH." };
+  if (!code)
+    return { ok: false, reason: "invalid_format", message: "Invite codes look like ABCD-EFGH." };
 
   const identity = await getUserIdentity(user.id);
   if (!identity?.emailVerified) {
-    return { ok: false, reason: "unverified", message: "Verify your email address before joining an organization." };
+    return {
+      ok: false,
+      reason: "unverified",
+      message: "Verify your email address before joining an organization.",
+    };
   }
 
-  const limit = await checkRateLimit(rateLimitKey("join-code", user.id), LOOKUP_LIMIT.limit, LOOKUP_LIMIT.windowSec);
+  const limit = await checkRateLimit(
+    rateLimitKey("join-code", user.id),
+    LOOKUP_LIMIT.limit,
+    LOOKUP_LIMIT.windowSec,
+  );
   if (!limit.allowed) {
-    return { ok: false, reason: "rate_limited", message: `Too many tries. Try again ${retryAfterText(limit)}.` };
+    return {
+      ok: false,
+      reason: "rate_limited",
+      message: `Too many tries. Try again ${retryAfterText(limit)}.`,
+    };
   }
 
   const { row, alreadyMember } = await withUserTx(user.id, async ({ db }) => {
@@ -185,14 +234,28 @@ export async function checkJoinCode(user: SessionUser, rawCode: string): Promise
         FROM app.org_by_join_code(${code})`;
     const found = rows[0] ?? null;
     const member = found
-      ? await db.membership.findFirst({ where: { userId: user.id, organizationId: found.organizationId }, select: { id: true } })
+      ? await db.membership.findFirst({
+          where: { userId: user.id, organizationId: found.organizationId },
+          select: { id: true },
+        })
       : null;
     return { row: found, alreadyMember: Boolean(member) };
   });
 
-  if (!row) return { ok: false, reason: "not_found", message: "That code doesn't match any organization. Check it with whoever sent it." };
-  if (row.deleted) return { ok: false, reason: "org_inactive", message: "This organization is no longer active." };
-  if (!row.enabled) return { ok: false, reason: "disabled", message: "This organization has turned its invite code off. Ask an admin for a new one." };
+  if (!row)
+    return {
+      ok: false,
+      reason: "not_found",
+      message: "That code doesn't match any organization. Check it with whoever sent it.",
+    };
+  if (row.deleted)
+    return { ok: false, reason: "org_inactive", message: "This organization is no longer active." };
+  if (!row.enabled)
+    return {
+      ok: false,
+      reason: "disabled",
+      message: "This organization has turned its invite code off. Ask an admin for a new one.",
+    };
   if (row.allowedDomain && !emailOnDomain(identity.email, row.allowedDomain)) {
     return {
       ok: false,
@@ -214,14 +277,18 @@ export async function checkJoinCode(user: SessionUser, rawCode: string): Promise
   };
 }
 
-export type JoinWithCodeResult = { ok: true; orgId: string; orgSlug: string } | { ok: false; message: string };
+export type JoinWithCodeResult =
+  { ok: true; orgId: string; orgSlug: string } | { ok: false; message: string };
 
 /**
  * Joins the org behind `rawCode` as a MEMBER, with the title the user picked
  * during profile setup. The code is re-read under a row lock inside the
  * join transaction, so a code rotated or turned off a moment ago is refused.
  */
-export async function joinWithCode(user: SessionUser, rawCode: string): Promise<JoinWithCodeResult> {
+export async function joinWithCode(
+  user: SessionUser,
+  rawCode: string,
+): Promise<JoinWithCodeResult> {
   const check = await checkJoinCode(user, rawCode);
   if (!check.ok) return { ok: false, message: check.message };
   const { org } = check;
@@ -235,7 +302,10 @@ export async function joinWithCode(user: SessionUser, rawCode: string): Promise<
       SELECT "code", "enabled" FROM "OrgJoinCode" WHERE "organizationId" = ${org.organizationId} FOR UPDATE`;
     const current = locked[0];
     if (!current || current.code !== code || !current.enabled) {
-      return { ok: false as const, message: "This invite code just changed. Ask an admin for the new one." };
+      return {
+        ok: false as const,
+        message: "This invite code just changed. Ask an admin for the new one.",
+      };
     }
     const existing = await db.membership.findUnique({
       where: { userId_organizationId: { userId: user.id, organizationId: org.organizationId } },
@@ -275,12 +345,4 @@ export async function joinWithCode(user: SessionUser, rawCode: string): Promise<
   });
   if (result.ok) invalidate([tags.members(org.organizationId)]);
   return result;
-}
-
-/** The title picked in profile setup, for the new Membership (own row). */
-export async function ownPreferredTitle(userId: string): Promise<string | null> {
-  const row = await withUserTx(userId, ({ db }) =>
-    db.user.findUnique({ where: { id: userId }, select: { preferredTitle: true } }),
-  );
-  return row?.preferredTitle ?? null;
 }

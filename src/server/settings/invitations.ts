@@ -12,7 +12,7 @@ import { tags } from "@/server/cache/tags";
 import { invalidate } from "@/server/cache/invalidate";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { notifyUser } from "@/server/notifications";
-import { ownPreferredTitle } from "@/server/onboarding/join-code";
+import { ownPreferredTitle } from "@/server/onboarding/title";
 
 /**
  * Joining an org by invitation, off the legacy role (Phase 1 / 0C PR 1).

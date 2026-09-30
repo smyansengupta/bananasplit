@@ -44,6 +44,8 @@ vi.mock("@/app/app/[orgSlug]/finance/queries", () => ({
   getMoneyOwedToUser: mocks.getMoneyOwedToUser,
 }));
 vi.mock("@/server/setup/progress", () => ({ loadSetupState: mocks.loadSetupState }));
+vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
+vi.mock("@/components/onboarding/join-code-card", () => ({ JoinCodeCard: () => null }));
 
 const { default: OverviewPage } = await import("./page");
 
@@ -56,6 +58,7 @@ const org = {
 };
 const props = {
   params: Promise.resolve({ orgSlug: "cbc" }),
+  searchParams: Promise.resolve({}),
 } as unknown as PageProps<"/app/[orgSlug]">;
 
 // 10:00 on Monday, Oct 5 in Los Angeles, where the viewer lives.

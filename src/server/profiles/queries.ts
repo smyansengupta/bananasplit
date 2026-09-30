@@ -1,6 +1,7 @@
 import { cache } from "react";
 
 import type { Prisma, Role } from "@/generated/prisma/client";
+import { busyCells, parseAvailability } from "@/lib/availability";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
 import { withOrgTx, withUserTx } from "@/server/db/context";
 import { userPublicSelect, type UserPublic } from "@/server/members";
@@ -95,6 +96,9 @@ export interface OwnProfile {
   links: ProfileLink[];
   timezone: string | null;
   emailPreferences: Prisma.JsonValue;
+  /** Raw; parse with parsePersonalTheme / parseAvailability. */
+  themePreference: Prisma.JsonValue | null;
+  availability: Prisma.JsonValue;
   memberships: OwnMembership[];
   /** When the current calendar feed link was created, or null. */
   icsActiveSince: Date | null;
@@ -118,6 +122,8 @@ export async function getOwnProfile(userId: string): Promise<OwnProfile | null> 
         links: true,
         timezone: true,
         emailPreferences: true,
+        themePreference: true,
+        availability: true,
       },
     });
     if (!user) return null;
@@ -255,5 +261,20 @@ export async function getOrgPerson(organizationId: string, userId: string): Prom
       title: membership.title,
       joinedAt: membership.joinedAt,
     };
+  });
+}
+
+/**
+ * A current member's busy hours in a typical week, for their people page:
+ * the hours only, never the labels, dates or reasons behind them.
+ */
+export async function getPersonBusyHours(organizationId: string, userId: string): Promise<string[] | null> {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(userId)) return null;
+  return withOrgTx(organizationId, async ({ db }) => {
+    const membership = await db.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId } },
+      select: { user: { select: { availability: true } } },
+    });
+    return membership ? busyCells(parseAvailability(membership.user.availability)) : null;
   });
 }
