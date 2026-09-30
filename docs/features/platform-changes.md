@@ -119,6 +119,14 @@ Week, board, table and team share one group header and panel style
     Overview widget) to pin it, and drag pins to reorder them.
   - Note, file and database cards have a pin button.
   - The top bar's button says "Pin" or "Pinned".
+- **Pin anything:** "Pin something" (the + by Pinned, the Overview widget,
+  the arrow on the Pin button, or ⌘K) searches everything the member can
+  open and pins it. That covers notes, files, folders, tasks, events,
+  polls, people, databases, pages and views.
+  - Views that live in the query string (a Notes folder, the Files tab, a
+    Tasks layout) have one canonical address (`src/lib/pins/pages.ts`).
+  - Pin buttons appear on task rows, the task panel, people, polls, folders,
+    and note, file and database cards.
 - **Sidebar per org** (`src/lib/nav/sidebar.ts`, Settings › Sidebar): owners
   and admins hide, reorder, regroup and rename sections and headings.
   - Overview and Settings always stay.
@@ -156,3 +164,6 @@ It only adds tables.
 - Covered by the RLS test P-PIN-03.
 
 It only adds things.
+
+`20261003120000_pin_folder_kind` lets pins and recent pages point at a
+folder.
