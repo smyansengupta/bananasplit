@@ -1,6 +1,7 @@
 import { ArrowRight, Check, Loader2, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -8,12 +9,13 @@ import { cn } from "@/lib/utils";
  * The onboarding card: an icon badge, the step counter and a segmented
  * progress bar, the title and the fields. It sits on a faint dotted canvas
  * (a nod to the flowchart it came from). Every colour is a theme token, so
- * it matches the rest of the app in light and dark.
+ * it matches the rest of the app in light and dark. Sign out sits in the
+ * corner, since onboarding has no org shell and so no user menu.
  */
 
 export function OnboardingFrame({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
-    <div className="relative flex min-h-svh flex-1 flex-col items-center px-4 py-10 sm:py-16">
+    <div className="relative flex min-h-svh flex-1 flex-col items-center px-4 pt-14 pb-10 sm:py-16">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
@@ -22,6 +24,7 @@ export function OnboardingFrame({ children, wide = false }: { children: ReactNod
           backgroundSize: "22px 22px",
         }}
       />
+      <SignOutButton className="absolute top-3 right-3 sm:top-4 sm:right-4" />
       <div className={cn("relative w-full space-y-4", wide ? "max-w-xl" : "max-w-md")}>{children}</div>
     </div>
   );
