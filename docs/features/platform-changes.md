@@ -103,6 +103,42 @@ FullCalendar. You drag chips between days and from the "No due date" tray.
 Week, board, table and team share one group header and panel style
 (`src/components/tasks/layout-ui.tsx`).
 
+## Round two: customizable everything
+
+- **Boards** (`src/lib/boards`, `src/components/boards/widget-board.tsx`): the
+  Overview and Finance are each member's own board. They can:
+  - add any widget from the gallery;
+  - drag it by the handle to reorder;
+  - drag its corner to resize (width snaps to 1-4 columns, height to 20px),
+    or use the width and height buttons.
+
+  Saved in `MemberPrefs.overviewWidgets` / `financeWidgets`. The Overview has
+  no finance widgets at all.
+- **Pins:**
+  - Drag any sidebar page or in-app link onto Pinned (in the sidebar, or the
+    Overview widget) to pin it, and drag pins to reorder them.
+  - Note, file and database cards have a pin button.
+  - The top bar's button says "Pin" or "Pinned".
+- **Sidebar per org** (`src/lib/nav/sidebar.ts`, Settings › Sidebar): owners
+  and admins hide, reorder, regroup and rename sections and headings.
+  - Overview and Settings always stay.
+  - A member who opens a hidden section sees a notice. Hiding tidies the app;
+    it isn't a permission.
+- **Settings** has a grouped rail with icons, and the settings overview lists
+  every section by group.
+- **Notes:**
+  - Shared folders (`NoteFolder`). Any member creates one; its creator or an
+    admin renames, recolours or deletes it. A trigger keeps notes and files in
+    their own org's folders.
+  - Drag cards onto a folder to move them. Moving a note is an edit, so its
+    author or an admin can do it.
+  - Search, sort, grid or list view, and templates.
+  - A Word document or Google Doc is previewed before it becomes a note. You
+    pick the title, folder and who can see it, and can keep the original
+    `.docx`.
+  - File cards show a text excerpt (`OrgFile.excerpt`) or an image thumbnail.
+  - Word files and text files preview as a page.
+
 ## Migration
 
 `20261001120000_pins_files_prefs`:
@@ -112,3 +148,11 @@ Week, board, table and team share one group header and panel style
 - Adds the manifest allowlist entries for their own-row writes.
 
 It only adds tables.
+
+`20261002120000_folders_sidebar_boards`:
+- Adds the `NoteFolder` table, with RLS, grants and the same-org trigger.
+- Adds the columns `Note.folderId`, `OrgFile.folderId`, `OrgFile.excerpt`,
+  `OrgSettings.sidebar` and `MemberPrefs.overviewWidgets`.
+- Covered by the RLS test P-PIN-03.
+
+It only adds things.
