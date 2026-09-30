@@ -43,6 +43,6 @@ describe("the Tasks calendar", () => {
     expect(html).toContain("1 task due this month");
     // The undated task waits in the tray, draggable.
     expect(html).toContain("No due date");
-    expect(html).toMatch(/draggable="true"[^>]*>.*Order pizza/s);
+    expect(html).toMatch(/draggable="true"[^>]*>[\s\S]*Order pizza/);
   });
 });

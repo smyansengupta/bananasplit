@@ -86,7 +86,8 @@ test("full workspace workflow", async ({ page }) => {
 
   // --- write and share a note ---
   await page.goto(`/app/${orgSlug}/notes`);
-  await page.getByRole("button", { name: "New note" }).click();
+  await page.getByRole("button", { name: "New" }).click();
+  await page.getByRole("menuitem", { name: "Blank note" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}/notes/`));
   const noteTitle = `E2E note ${uniqueSuffix()}`;
   await page.getByPlaceholder("Untitled note").fill(noteTitle);
