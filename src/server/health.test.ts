@@ -175,11 +175,11 @@ describe("health checks", () => {
       );
 
     it("passes on the project's production domain when NEXT_PUBLIC_APP_URL is not set", async () => {
-      expect(await check({ VERCEL_PROJECT_PRODUCTION_URL: "clubport.smyan.dev" })).toEqual({
+      expect(await check({ VERCEL_PROJECT_PRODUCTION_URL: "bananasplit.smyan.dev" })).toEqual({
         name: "production:app_url",
         ok: true,
         detail:
-          "NEXT_PUBLIC_APP_URL is not set; links use https://clubport.smyan.dev (VERCEL_PROJECT_PRODUCTION_URL)",
+          "NEXT_PUBLIC_APP_URL is not set; links use https://bananasplit.smyan.dev (VERCEL_PROJECT_PRODUCTION_URL)",
       });
     });
 

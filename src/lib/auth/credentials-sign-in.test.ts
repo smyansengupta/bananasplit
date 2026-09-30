@@ -38,7 +38,7 @@ afterEach(() => {
 
 describe("credentialsSignIn", () => {
   it("signs in without letting Auth.js redirect, and reports success", async () => {
-    signInMock.mockResolvedValue("https://clubport.smyan.dev/app");
+    signInMock.mockResolvedValue("https://bananasplit.smyan.dev/app");
 
     expect(await credentialsSignIn("a@example.edu", "pw", "/app")).toEqual({ ok: true });
     expect(signInMock).toHaveBeenCalledWith("credentials", {
@@ -67,7 +67,7 @@ describe("credentialsSignIn", () => {
 
   it("reports a configuration error (no throw, Auth.js's own callback URL back) as unavailable", async () => {
     // What signIn() returns when @auth/core answers MissingSecret with a 500.
-    signInMock.mockResolvedValue("https://clubport.smyan.dev/api/auth/callback/credentials?");
+    signInMock.mockResolvedValue("https://bananasplit.smyan.dev/api/auth/callback/credentials?");
 
     expect(await credentialsSignIn("a@example.edu", "pw", "/app")).toEqual({
       ok: false,

@@ -105,7 +105,7 @@ Databases.
 
 ## Many organizations
 
-Any number of clubs can use the same Clubport. One person can belong to
+Any number of clubs can use the same Bananasplit. One person can belong to
 several of them: the org switcher lists them, and it has **Join with invite
 code** and **Create organization**, which runs this same org setup for every
 new org.

@@ -110,7 +110,7 @@ export default async function VerifyEmailPage({
   return (
     <Shell
       title="Confirm your email"
-      description="Confirm this address to finish setting up your Clubport account."
+      description="Confirm this address to finish setting up your Bananasplit account."
     >
       <form action={confirmEmailAction.bind(null, token)}>
         <Button type="submit" className="w-full">

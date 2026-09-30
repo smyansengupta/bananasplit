@@ -43,7 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   signInMock.mockImplementation(async (_provider: string, options: { redirectTo: string }) =>
-    new URL(options.redirectTo, "https://clubport.smyan.dev").toString(),
+    new URL(options.redirectTo, "https://bananasplit.smyan.dev").toString(),
   );
 });
 
@@ -84,7 +84,7 @@ describe("passwordSignInAction", () => {
   it("reports a server configuration error instead of a wrong password (the production bug)", async () => {
     // AUTH_SECRET missing: Auth.js answers 500 without throwing, and signIn()
     // hands back its own callback URL, where the browser used to be sent.
-    signInMock.mockResolvedValue("https://clubport.smyan.dev/api/auth/callback/credentials?");
+    signInMock.mockResolvedValue("https://bananasplit.smyan.dev/api/auth/callback/credentials?");
 
     const state = await submit(credentials);
 
