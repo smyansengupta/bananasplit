@@ -20,10 +20,11 @@ this is what comes on top of it.
    | Variable | Why it matters tonight |
    | --- | --- |
    | `RESEND_API_KEY`, `EMAIL_FROM` (on a domain verified in Resend) | **Required.** Every new account must verify its email before it can join or create an org, and the link comes by email. Without a sender, new members are stuck. The alternative is Google sign-in (`AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`): Google-verified addresses count as verified. |
-   | `BLOB_READ_WRITE_TOKEN`, `BLOB_PUBLIC_READ_WRITE_TOKEN` | Profile pictures (step A1) and org logos. Without them, uploads fail. The rest of the flow still works. |
+   | `BLOB_READ_WRITE_TOKEN` (and optionally `BLOB_PUBLIC_READ_WRITE_TOKEN`) | Profile pictures, club pictures, receipts and Notes files. One store is enough: without the public token, pictures are kept in the private store and served through `/api/media`. With no store at all, uploads say so instead of failing silently. |
    | `NEXT_PUBLIC_APP_URL` (https) | The invite link admins share (`/onboarding/join?code=...`). |
    | `AUTH_SECRET`, `CRON_SECRET`, `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT`, `SECRETS_FINGERPRINT_KEY`, the three role passwords | As in `RUNBOOK.md`. `/api/health` fails without them. |
    | `PLATFORM_ADMIN_EMAILS` | Your address. Only platform admins can create an org while creation is locked. |
+   | `ANTHROPIC_API_KEY` | Optional. Reads schedule screenshots in "When can't you meet?". Without it, members mark their hours on the grid. |
    | `SIGNUP_LIMIT_PER_IP_HOUR`, `SIGNIN_LIMIT_PER_IP_15MIN` | Optional. The defaults (40 and 120) fit a room signing up on one campus network. Raise them for a big event. |
 
 3. **Health check.** `curl -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/health`

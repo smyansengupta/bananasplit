@@ -34,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { Chip, DashedButton } from "./step-card";
+import { ScheduleImport } from "./schedule-import";
 
 /**
  * "When can't you meet?" (onboarding A5, profile page).
@@ -172,6 +173,7 @@ export function AvailabilityEditor({
             {p.label}
           </Chip>
         ))}
+        <ScheduleImport value={value} onChange={commit} />
         {value.blocks.length > 0 && (
           <button
             type="button"
