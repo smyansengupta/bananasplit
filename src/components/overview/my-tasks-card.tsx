@@ -25,6 +25,7 @@ export function MyTasksCard({
   overdue,
   todayKey,
   className,
+  bare = false,
 }: {
   orgSlug: string;
   tasks: readonly MyOpenTask[];
@@ -32,7 +33,50 @@ export function MyTasksCard({
   overdue: number;
   todayKey: string;
   className?: string;
+  /** Inside a board widget, which has its own frame and title. */
+  bare?: boolean;
 }) {
+  if (bare) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground">
+            {total} open
+            {overdue > 0 && <span className="text-destructive"> · {overdue} overdue</span>}
+          </span>
+          <Link href={`/app/${orgSlug}/tasks?view=mine`} className="text-muted-foreground hover:underline">
+            {total > tasks.length ? `View all ${total}` : "View all"}
+          </Link>
+        </div>
+        {tasks.length === 0 ? (
+          <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
+            <CircleCheck className="size-4" aria-hidden="true" />
+            You&apos;re all caught up: nothing open is yours.
+          </p>
+        ) : (
+          <ul className="divide-y">
+            {tasks.map((task) => (
+              <li key={task.id}>
+                <Link
+                  href={`/app/${orgSlug}/tasks/${task.id}`}
+                  className="hover:bg-accent/50 -mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2"
+                >
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      {isTaskPrivate(task) && <PrivateMark />}
+                      <span className="truncate">{task.title}</span>
+                    </span>
+                    <TaskMeta task={task} />
+                  </span>
+                  <TaskDue dueDate={task.dueDate} todayKey={todayKey} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
   return (
     <Card className={className}>
       <CardHeader>

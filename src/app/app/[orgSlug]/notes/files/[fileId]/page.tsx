@@ -131,8 +131,10 @@ export default async function NoteFilePage({
           </div>
         ) : family === "word" ? (
           docHtml != null ? (
-            <div className="mx-auto max-w-3xl p-6 sm:p-10">
-              <DocumentPreview html={docHtml} />
+            <div className="bg-muted/50 max-h-[80vh] overflow-y-auto px-3 py-6 sm:px-8 sm:py-10">
+              <article className="bg-background mx-auto min-h-[60vh] max-w-[52rem] rounded-sm px-6 py-10 shadow-md ring-1 ring-black/5 sm:px-16 sm:py-14">
+                <DocumentPreview html={docHtml} />
+              </article>
             </div>
           ) : (
             <EmptyState size="compact" title="This document can't be shown" description={docError ?? undefined} />
@@ -154,7 +156,11 @@ export default async function NoteFilePage({
             </table>
           </div>
         ) : text != null ? (
-          <pre className="max-h-[75vh] overflow-auto p-6 text-sm whitespace-pre-wrap">{text}</pre>
+          <div className="bg-muted/50 max-h-[80vh] overflow-y-auto px-3 py-6 sm:px-8 sm:py-10">
+            <pre className="bg-background mx-auto max-w-[52rem] rounded-sm px-6 py-8 font-sans text-sm leading-relaxed whitespace-pre-wrap shadow-md ring-1 ring-black/5 sm:px-12">
+              {text}
+            </pre>
+          </div>
         ) : (
           <EmptyState
             size="compact"

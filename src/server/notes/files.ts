@@ -37,6 +37,8 @@ export interface NoteFileRow {
   visibility: "PRIVATE" | "ORGANIZATION";
   createdAt: Date;
   noteId: string | null;
+  folderId: string | null;
+  excerpt: string | null;
   uploadedBy: { id: string; name: string | null };
 }
 
@@ -48,6 +50,8 @@ const fileSelect = {
   visibility: true,
   createdAt: true,
   noteId: true,
+  folderId: true,
+  excerpt: true,
   uploadedBy: { select: { id: true, name: true } },
 } as const;
 
@@ -66,10 +70,12 @@ export async function storeNoteFile(input: {
   filename: string;
   visibility: "PRIVATE" | "ORGANIZATION";
   noteId?: string | null;
+  folderId?: string | null;
 }): Promise<NoteFileRow> {
   const contentType = sniffNoteFile(input.bytes, input.filename);
   if (!contentType) throw new FileRejectedError(UNSUPPORTED);
   if (input.bytes.length > MAX_UPLOAD_BYTES) throw new FileRejectedError("Files are limited to 4 MB.", 413);
+  const excerpt = await excerptOf(input.bytes, contentType);
   const stored = await putBlob("files", input.orgId, [randomKeyId()], input.bytes, { contentType });
   try {
     return await withOrgTx(input.orgId, ({ db, userId }) =>
@@ -83,6 +89,8 @@ export async function storeNoteFile(input: {
           visibility: input.visibility,
           uploadedById: userId,
           noteId: input.noteId ?? null,
+          folderId: input.folderId ?? null,
+          excerpt,
         },
         select: fileSelect,
       }),
@@ -93,9 +101,21 @@ export async function storeNoteFile(input: {
   }
 }
 
-export function listNoteFiles(db: TxClient, orgId: string): Promise<NoteFileRow[]> {
+export function listNoteFiles(
+  db: TxClient,
+  orgId: string,
+  filters: { folderId?: string; q?: string } = {},
+): Promise<NoteFileRow[]> {
+  const q = filters.q?.trim().slice(0, 100);
   return db.orgFile.findMany({
-    where: { organizationId: orgId, deletedAt: null },
+    where: {
+      organizationId: orgId,
+      deletedAt: null,
+      ...(filters.folderId ? { folderId: filters.folderId === "none" ? null : filters.folderId } : {}),
+      ...(q
+        ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { excerpt: { contains: q, mode: "insensitive" } }] }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
     select: fileSelect,
     take: 200,
@@ -139,6 +159,30 @@ export async function removeNoteFile(db: TxClient, orgId: string, fileId: string
     data: { deletedAt: new Date() },
   });
   return count > 0 ? row.storageKey : null;
+}
+
+const EXCERPT_CHARS = 500;
+
+/** The first few hundred characters of a Word, text or CSV file, for cards and search. */
+async function excerptOf(bytes: Buffer, contentType: string): Promise<string | null> {
+  try {
+    let text: string | null = null;
+    if (contentType === DOCX) {
+      verifyZipEntries(bytes, readZipDirectory(bytes));
+      text = (await mammoth.extractRawText({ buffer: bytes })).value;
+    } else if (contentType.startsWith("text/")) {
+      text = bytes.subarray(0, 8_000).toString("utf8");
+    }
+    if (!text) return null;
+    const clean = text
+      .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return clean ? clean.slice(0, EXCERPT_CHARS) : null;
+  } catch {
+    // A preview is a nicety: an unreadable document still uploads.
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------- Word to note

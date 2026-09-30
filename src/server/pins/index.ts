@@ -243,6 +243,44 @@ export async function togglePin(
   return { ok: true, pinned: true };
 }
 
+/** Pins the page at `pathname` (already pinned: nothing changes). */
+export async function pinPage(
+  db: Db,
+  orgId: string,
+  orgSlug: string,
+  userId: string,
+  pathname: string,
+): Promise<PinResult> {
+  const page = await describePage(db, orgId, orgSlug, pathname);
+  if (!page) return { ok: false, error: "That can't be pinned." };
+  const existing = await db.pin.findUnique({
+    where: { userId_organizationId_href: { userId, organizationId: orgId, href: page.href } },
+    select: { id: true },
+  });
+  if (existing) return { ok: true, pinned: true };
+  const count = await db.pin.count({ where: { organizationId: orgId, userId } });
+  if (count >= MAX_PINS) return { ok: false, error: `You can pin up to ${MAX_PINS} items. Unpin one first.` };
+  await db.pin.create({
+    data: {
+      organizationId: orgId,
+      userId,
+      href: page.href,
+      label: page.label,
+      kind: page.kind,
+      targetId: page.targetId,
+      sortOrder: count,
+    },
+  });
+  return { ok: true, pinned: true };
+}
+
+/** Puts the member's pins in this order (ids not theirs are ignored by RLS). */
+export async function reorderPins(db: Db, orgId: string, userId: string, ids: readonly string[]): Promise<void> {
+  for (const [i, id] of ids.entries()) {
+    await db.pin.updateMany({ where: { id, organizationId: orgId, userId }, data: { sortOrder: i } });
+  }
+}
+
 export async function unpin(db: Db, orgId: string, userId: string, pinId: string): Promise<void> {
   await db.pin.deleteMany({ where: { id: pinId, organizationId: orgId, userId } });
 }

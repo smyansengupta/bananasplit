@@ -57,7 +57,16 @@ function readHidden(orgSlug: string): boolean {
  * org actually has. It goes away by itself when everything is done, or when
  * hidden (remembered on this device).
  */
-export function GettingStartedCard({ orgSlug, state }: { orgSlug: string; state: GettingStartedState }) {
+export function GettingStartedCard({
+  orgSlug,
+  state,
+  bare = false,
+}: {
+  orgSlug: string;
+  state: GettingStartedState;
+  /** Inside a board widget: no card, and removing the widget hides it. */
+  bare?: boolean;
+}) {
   const [hiddenNow, setHidden] = useState(false);
   const hiddenBefore = useSyncExternalStore(
     subscribeStorage,
@@ -67,6 +76,16 @@ export function GettingStartedCard({ orgSlug, state }: { orgSlug: string; state:
   const hidden = hiddenNow || hiddenBefore;
 
   const done = STEPS.filter((s) => state[s.key]).length;
+  if (bare) {
+    return done === STEPS.length ? (
+      <p className="text-muted-foreground flex items-center gap-2 text-sm">
+        <Check className="text-success size-4" aria-hidden="true" />
+        All set up. You can remove this widget.
+      </p>
+    ) : (
+      <StepList orgSlug={orgSlug} state={state} done={done} />
+    );
+  }
   if (hidden || done === STEPS.length) return null;
 
   return (
@@ -100,6 +119,15 @@ export function GettingStartedCard({ orgSlug, state }: { orgSlug: string; state:
         </button>
       </CardHeader>
       <CardContent className="space-y-3">
+        <StepList orgSlug={orgSlug} state={state} done={done} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function StepList({ orgSlug, state, done }: { orgSlug: string; state: GettingStartedState; done: number }) {
+  return (
+    <div className="space-y-3">
         <div className="bg-muted h-1.5 overflow-hidden rounded-full">
           <div className="bg-primary h-full rounded-full transition-all" style={{ width: `${(done / STEPS.length) * 100}%` }} />
         </div>
@@ -133,7 +161,6 @@ export function GettingStartedCard({ orgSlug, state }: { orgSlug: string; state:
             );
           })}
         </ul>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

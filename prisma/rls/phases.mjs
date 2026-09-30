@@ -39,6 +39,8 @@ const GRANTS = {
   MemberPrefs: ["SIU", "", ""],
   Membership: ["SUD", "SIUD", ""],
   Note: ["SIUD", "SIUD", ""],
+  // Notes page folders: members create; the creator or an admin edits.
+  NoteFolder: ["SIUD", "S", ""],
   Notification: ["SIu", "SIUD", ""],
   OrgAuditLog: ["S", "S", ""],
   // DELETE only on DRAFT positions (b3_org_chart_draft_delete; P-CAT5, P3-05).
@@ -131,6 +133,7 @@ const NEW_TENANT_TABLES = [
   "Receipt",
   "OrgJoinCode",
   "OrgFile",
+  "NoteFolder",
 ];
 
 /**
@@ -2733,6 +2736,58 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         admin_sees: 1,
         admin_removes: 1,
         other_org_sees: 0,
+      },
+    },
+  );
+
+  await tcase(
+    "P-PIN-03",
+    "NoteFolder: members create folders; only the creator or an admin changes one; nothing crosses orgs",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.create = await rc(
+        q,
+        `INSERT INTO "NoteFolder" ("id","organizationId","name","createdById") VALUES ('fo_1','org_A','Minutes','u_memberA')`,
+      );
+      s.as_other = await tryq(
+        q,
+        `INSERT INTO "NoteFolder" ("id","organizationId","name","createdById") VALUES ('fo_2','org_A','X','u_treasA')`,
+      );
+      s.note_into_folder = await rc(
+        q,
+        `INSERT INTO "Note" ("id","organizationId","title","contentJson","contentText","authorId","updatedById","updatedAt","folderId") VALUES ('n_fo','org_A','T','{}','','u_memberA','u_memberA',now(),'fo_1')`,
+      );
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.treas_sees = await count(q, `SELECT count(*) n FROM "NoteFolder"`);
+      s.treas_renames = await rc(q, `UPDATE "NoteFolder" SET "name" = 'Mine' WHERE "id" = 'fo_1'`);
+      s.treas_deletes = await rc(q, `DELETE FROM "NoteFolder" WHERE "id" = 'fo_1'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_sees = await count(q, `SELECT count(*) n FROM "NoteFolder"`);
+      s.cross_org_folder = await tryq(
+        q,
+        `INSERT INTO "Note" ("id","organizationId","title","contentJson","contentText","authorId","updatedById","updatedAt","folderId") VALUES ('n_x','org_B','T','{}','','u_memberB','u_memberB',now(),'fo_1')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_deletes = await rc(q, `DELETE FROM "NoteFolder" WHERE "id" = 'fo_1'`);
+      // The (private) note is still there for its author, out of the folder.
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.note_kept = await count(q, `SELECT count(*) n FROM "Note" WHERE "id" = 'n_fo' AND "folderId" IS NULL`);
+      return s;
+    },
+    {
+      value: {
+        create: 1,
+        as_other: "42501",
+        note_into_folder: 1,
+        treas_sees: 1,
+        treas_renames: 0,
+        treas_deletes: 0,
+        other_org_sees: 0,
+        cross_org_folder: "23503",
+        admin_deletes: 1,
+        note_kept: 1,
       },
     },
   );

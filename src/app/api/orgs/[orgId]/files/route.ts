@@ -8,7 +8,8 @@ import { readUpload, uploadErrorResponse } from "@/server/storage/upload";
 
 /**
  * POST /api/orgs/{orgId}/files: a file for the Notes page (multipart `file`,
- * optional `visibility` PRIVATE | ORGANIZATION, default ORGANIZATION).
+ * optional `visibility` PRIVATE | ORGANIZATION, default ORGANIZATION, and
+ * optional `folderId`, a Notes folder of this org; the database checks it).
  * Any member may upload; the type is sniffed from the bytes; the row is
  * written as the uploader under RLS.
  */
@@ -40,6 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
       bytes: upload.file.bytes,
       filename: upload.file.filename,
       visibility,
+      folderId: /^[A-Za-z0-9_-]{1,64}$/.test(upload.fields.folderId ?? "") ? upload.fields.folderId : null,
     });
     return json(200, { file: { id: file.id, name: file.name } });
   } catch (error) {

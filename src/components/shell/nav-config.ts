@@ -1,96 +1,59 @@
-import {
-  CalendarCheck,
-  CalendarDays,
-  CheckSquare,
-  Database,
-  LayoutDashboard,
-  Network,
-  NotebookText,
-  Settings,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { type ResolvedGroup } from "@/lib/nav/sidebar";
 
-export interface NavItem {
+/**
+ * The sidebar's links for one org: its sections (in the org's order, under
+ * its headings, with its names; Settings › Sidebar) as plain data the
+ * client sidebar can take, plus Settings, which always sits at the bottom.
+ */
+
+export interface NavLink {
+  id: string;
   label: string;
-  href: (orgSlug: string) => string;
-  icon: typeof LayoutDashboard;
+  href: string;
+  /** lucide icon name. */
+  icon: string;
   /**
-   * "exact": active only on the item's own URL (Overview, whose URL is a
-   * prefix of every other item's). "prefix" (default): also active on any
-   * page below it, e.g. Tasks on /tasks/abc and Settings on /settings/members.
+   * Active only on its own URL (Overview, whose URL is a prefix of every
+   * other link's); otherwise also on the pages below it.
    */
-  match?: "exact" | "prefix";
+  exact: boolean;
 }
 
-export interface NavGroup {
-  /** Shown above the group; null for the first, unlabelled group. */
+export interface NavSection {
+  id: string;
   label: string | null;
-  items: NavItem[];
+  items: NavLink[];
 }
 
-// Grouped so the sidebar reads as three short lists: your work, the club,
-// and its data. Reports lives inside Databases (a tab there); Polls stays
-// its own item. Every member can at least submit and track their own
-// reimbursements, so Finance stays in the nav for everyone; the page behind
-// it scopes down to "My reimbursements" for roles without finance access.
-// Settings sits apart at the bottom of the sidebar.
-export const navGroups: NavGroup[] = [
-  {
-    label: null,
-    items: [
-      { label: "Overview", href: (org) => `/app/${org}`, icon: LayoutDashboard, match: "exact" },
-      { label: "Tasks", href: (org) => `/app/${org}/tasks`, icon: CheckSquare },
-      { label: "Calendar", href: (org) => `/app/${org}/calendar`, icon: CalendarDays },
-      { label: "Notes", href: (org) => `/app/${org}/notes`, icon: NotebookText },
-    ],
-  },
-  {
-    label: "Club",
-    items: [
-      { label: "People", href: (org) => `/app/${org}/people`, icon: Users },
-      { label: "Org Chart", href: (org) => `/app/${org}/org-chart`, icon: Network },
-      { label: "Polls", href: (org) => `/app/${org}/calendar/polls`, icon: CalendarCheck },
-    ],
-  },
-  {
-    label: "Data",
-    items: [
-      { label: "Databases", href: (org) => `/app/${org}/databases`, icon: Database },
-      { label: "Finance", href: (org) => `/app/${org}/finance`, icon: Wallet },
-    ],
-  },
-];
+export function navSections(orgSlug: string, groups: readonly ResolvedGroup[]): NavSection[] {
+  return groups.map((g) => ({
+    id: g.id,
+    label: g.label,
+    items: g.items.map((i) => ({
+      id: i.id,
+      label: i.label,
+      href: `/app/${orgSlug}${i.path}`,
+      icon: i.icon,
+      exact: i.exact,
+    })),
+  }));
+}
 
-export const settingsNavItem: NavItem = {
-  label: "Settings",
-  href: (org) => `/app/${org}/settings`,
-  icon: Settings,
-};
+export function settingsLink(orgSlug: string): NavLink {
+  return { id: "settings", label: "Settings", href: `/app/${orgSlug}/settings`, icon: "Settings", exact: false };
+}
 
-/** Every item, in sidebar order (Settings last). */
-export const navItems: NavItem[] = [...navGroups.flatMap((g) => g.items), settingsNavItem];
-
-function matchesPath(item: NavItem, orgSlug: string, pathname: string): boolean {
-  const href = item.href(orgSlug);
-  if (pathname === href) return true;
-  if (item.match === "exact") return false;
-  return pathname.startsWith(`${href}/`);
+function matches(link: NavLink, pathname: string): boolean {
+  if (pathname === link.href) return true;
+  if (link.exact) return false;
+  return pathname.startsWith(`${link.href}/`);
 }
 
 /**
- * Whether `item` is the active nav item on `pathname`. When items nest
- * (Polls lives under Calendar), only the most specific match is active.
+ * Whether `link` is the active one on `pathname`. When links nest (Polls
+ * lives under Calendar), only the most specific match is active.
  */
-export function isNavItemActive(
-  item: NavItem,
-  orgSlug: string,
-  pathname: string,
-  items: readonly NavItem[] = navItems,
-): boolean {
-  if (!matchesPath(item, orgSlug, pathname)) return false;
-  const length = item.href(orgSlug).length;
-  return !items.some(
-    (other) => other.href(orgSlug).length > length && matchesPath(other, orgSlug, pathname),
-  );
+export function isLinkActive(link: NavLink, pathname: string, all: readonly NavLink[]): boolean {
+  if (!matches(link, pathname)) return false;
+  return !all.some((other) => other.href.length > link.href.length && matches(other, pathname));
 }

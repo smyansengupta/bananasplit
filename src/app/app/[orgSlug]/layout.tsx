@@ -2,11 +2,14 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { navSections, settingsLink } from "@/components/shell/nav-config";
 import type { OrgSummary } from "@/components/shell/types";
 import { OrgBrand } from "@/components/theme/org-brand";
 import { OrgThemeRoot } from "@/components/theme/org-theme-root";
 import { CALLBACK_HEADER } from "@/lib/auth/callback-url";
+import { can } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
+import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
@@ -108,6 +111,12 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         orgs={orgs}
         user={shellUser}
         pins={pins}
+        sections={navSections(ctx.organization.slug, visibleSidebar(ctx.settings?.sidebar))}
+        settings={settingsLink(ctx.organization.slug)}
+        sectionPaths={resolveSidebar(ctx.settings?.sidebar)
+          .flatMap((g) => g.items)
+          .map((i) => ({ path: i.path, hidden: i.hidden }))}
+        isAdmin={can({ role: ctx.role }, "settings.view")}
         brand={
           <OrgBrand
             name={ctx.organization.name}

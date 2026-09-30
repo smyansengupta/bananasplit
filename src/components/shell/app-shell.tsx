@@ -7,6 +7,8 @@ import { CommandPalette } from "@/components/command-palette/command-palette";
 import { NotificationBell } from "@/components/shell/notification-bell";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { PinButton, VisitTracker } from "@/components/shell/pin-button";
+import type { NavLink, NavSection } from "@/components/shell/nav-config";
+import { SectionGate } from "@/components/shell/section-gate";
 import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { UserMenu } from "@/components/shell/user-menu";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,10 @@ export function AppShell({
   user,
   brand,
   pins = [],
+  sections,
+  settings,
+  sectionPaths = [],
+  isAdmin = false,
   children,
 }: {
   orgSlug: string;
@@ -30,6 +36,12 @@ export function AppShell({
   brand?: React.ReactNode;
   /** The member's pins in this org (sidebar, and the pin button's state). */
   pins?: SidebarPin[];
+  /** The org's sidebar (Settings › Sidebar). */
+  sections: NavSection[];
+  settings: NavLink;
+  /** Every section's path and whether the org turned it off (members see a notice). */
+  sectionPaths?: { path: string; hidden: boolean }[];
+  isAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -58,7 +70,7 @@ export function AppShell({
       <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden flex-col gap-4 border-r p-4 md:sticky md:top-0 md:flex md:h-screen">
         {brand}
         <OrgSwitcher orgs={orgs} activeSlug={orgSlug} />
-        <SidebarNav orgSlug={orgSlug} orgId={orgId} pins={pins} />
+        <SidebarNav sections={sections} settings={settings} orgId={orgId} pins={pins} />
       </aside>
 
       <div className="flex min-w-0 flex-col">
@@ -82,7 +94,8 @@ export function AppShell({
               </SheetHeader>
               <div className="mt-4 flex min-h-0 flex-1 flex-col">
                 <SidebarNav
-                  orgSlug={orgSlug}
+                  sections={sections}
+                  settings={settings}
                   orgId={orgId}
                   pins={pins}
                   onNavigate={() => setMobileNavOpen(false)}
@@ -109,7 +122,9 @@ export function AppShell({
         </header>
 
         <main id="main-content" className="min-w-0 flex-1 p-4 md:p-6">
-          {children}
+          <SectionGate orgSlug={orgSlug} sectionPaths={sectionPaths} isAdmin={isAdmin}>
+            {children}
+          </SectionGate>
         </main>
       </div>
 

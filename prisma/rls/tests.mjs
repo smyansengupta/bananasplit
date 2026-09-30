@@ -1940,6 +1940,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "event_defaults",
         "explode_ballot",
         "finish_job",
+        "folder_in_same_org",
         "ics_token_created_at",
         "invitation_by_token_hash",
         "issue_org_creation_code",
@@ -2061,6 +2062,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "MemberPrefs:INSERT",
         "MemberPrefs:UPDATE",
         "Note:INSERT",
+        "NoteFolder:INSERT",
         "Notification:INSERT",
         "Notification:UPDATE",
         "OrgFile:INSERT",
@@ -2185,6 +2187,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       term_of: "us",
       event_defaults: "",
       assert_org_member: "",
+      // Notes folders: trigger only.
+      folder_in_same_org: "",
       // Phase 4b: the tier-taking functions check the org GUC themselves
       can_view_rows: "us",
       can_view_ballot_rows: "us",

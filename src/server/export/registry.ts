@@ -49,6 +49,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // yjsState: the live editor's binary copy of the body contentJson carries.
   { model: "Note", key: ID, omit: ["yjsState"] },
   { model: "OrgFile", key: ID, omit: ["storageKey"] },
+  { model: "NoteFolder", key: ID },
   { model: "Event", key: ID },
   { model: "EventAttendee", key: ["eventId", "userId"] },
   { model: "EventLinkLog", key: ID },

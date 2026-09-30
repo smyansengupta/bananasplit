@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { DashboardData } from "@/app/app/[orgSlug]/finance/queries";
 import { computeRunway, type RunwayInput } from "@/lib/finance/stats";
 
-import { resolveLayout, type Widget } from "@/lib/finance/widgets";
+import type { BoardWidget as Widget } from "@/lib/boards";
+import { resolveLayout } from "@/lib/finance/widgets";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("@/app/app/[orgSlug]/finance/widgets-actions", () => ({ saveFinanceWidgetsAction: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({ saveBoardAction: vi.fn() }));
 
 const { FinanceBoard } = await import("./finance-board");
 
@@ -45,7 +46,7 @@ function dashboard(runway: Partial<RunwayInput>): DashboardData {
   };
 }
 
-const RUNWAY: Widget[] = [{ id: "runway", type: "runway", size: "lg" }];
+const RUNWAY: Widget[] = [{ id: "runway", type: "runway", w: 4, h: null }];
 
 const render = (data: DashboardData, layout: Widget[] = RUNWAY) =>
   renderToStaticMarkup(
@@ -88,8 +89,8 @@ describe("finance board: the runway widget", () => {
 
   it("shows each number widget with where to act on it", () => {
     const html = render(dashboard({}), [
-      { id: "in-out", type: "in-out", size: "sm" },
-      { id: "pending", type: "pending", size: "sm" },
+      { id: "in-out", type: "in-out", w: 1, h: null },
+      { id: "pending", type: "pending", w: 1, h: 200 },
     ]);
     expect(html).toContain("In and out");
     expect(html).toContain("$1,200");
@@ -112,9 +113,17 @@ describe("finance board layout", () => {
     expect(noRunway.map((w) => w.type)).toContain("balance");
   });
 
-  it("keeps a member's saved board, and ignores one that no longer parses", () => {
-    const saved = [{ id: "trend", type: "trend", size: "lg" }];
+  it("keeps a member's saved board, reads the old size-only shape, and ignores one that doesn't parse", () => {
+    const saved = [{ id: "trend", type: "trend", w: 3, h: 340 }];
     expect(resolveLayout(saved, new Set())).toEqual(saved);
-    expect(resolveLayout([{ id: "x", type: "nope", size: "sm" }], new Set(["runway"])).length).toBeGreaterThan(1);
+    expect(resolveLayout([{ id: "trend", type: "trend", size: "lg" }], new Set())).toEqual([
+      { id: "trend", type: "trend", w: 4, h: null },
+    ]);
+    // Heights snap to 20px and stay within bounds; widths to 1-4 columns.
+    expect(resolveLayout([{ id: "a", type: "trend", w: 9, h: 5 }], new Set())).toEqual([
+      { id: "a", type: "trend", w: 4, h: 120 },
+    ]);
+    expect(resolveLayout([{ id: "x", type: "nope", w: 1 }], new Set(["runway"]))).toEqual([]);
+    expect(resolveLayout("garbage", new Set(["runway"])).length).toBeGreaterThan(1);
   });
 });

@@ -60,6 +60,7 @@ const ACTION_COPY: Record<string, string> = {
   "export.downloaded": "downloaded a data export",
   "export.expired": "data export expired",
   "workspace.bootstrapped": "applied a workspace template",
+  "settings.sidebar.updated": "changed the sidebar",
   "label.created": "created a label",
   "label.deleted": "deleted a label",
 };

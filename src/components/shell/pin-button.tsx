@@ -27,8 +27,8 @@ export function PinButton({ orgId, pinnedHrefs }: { orgId: string; pinnedHrefs: 
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
-          size="icon"
+          variant={pinned ? "secondary" : "ghost"}
+          size="sm"
           aria-label={label}
           aria-pressed={pinned}
           disabled={pending}
@@ -47,6 +47,7 @@ export function PinButton({ orgId, pinnedHrefs }: { orgId: string; pinnedHrefs: 
           ) : (
             <Pin className="size-4" aria-hidden="true" />
           )}
+          <span className="hidden sm:inline">{pinned ? "Pinned" : "Pin"}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent>

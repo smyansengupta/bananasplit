@@ -109,13 +109,16 @@ const importSchema = z.object({
   title: titleSchema,
   contentJson: z.string().max(2_000_000),
   contentText: z.string().max(200_000),
+  folderId: z.string().max(64).nullable().optional(),
+  visibility: z.enum(NOTE_VISIBILITY_VALUES).optional(),
 });
 
 /**
  * A note made from an imported Word document or Google Doc: the browser
  * turned the document into the editor's JSON; it is checked against the
  * note schema here (the same check a live edit gets) before it is stored.
- * Imported notes start PRIVATE, like every new note.
+ * Imported notes (and ones started from a template) start PRIVATE unless
+ * the member picked otherwise, optionally in a folder.
  */
 export const importNote = withOrgAction(async (ctx, input: unknown): Promise<ActionResult> => {
   const parsed = importSchema.safeParse(input);
@@ -131,13 +134,22 @@ export const importNote = withOrgAction(async (ctx, input: unknown): Promise<Act
     }
     throw error;
   }
+  const folderId = parsed.data.folderId ?? null;
+  if (folderId) {
+    const folder = await ctx.db.noteFolder.findFirst({
+      where: { id: folderId, organizationId: ctx.organizationId },
+      select: { id: true },
+    });
+    if (!folder) return { error: "That folder no longer exists." };
+  }
   const note = await ctx.db.note.create({
     data: {
       organizationId: ctx.organizationId,
       title: parsed.data.title,
       contentJson,
       contentText: parsed.data.contentText,
-      visibility: NoteVisibility.PRIVATE,
+      visibility: parsed.data.visibility ?? NoteVisibility.PRIVATE,
+      folderId,
       authorId: ctx.userId,
       updatedById: ctx.userId,
       ...(collabConfig() ? { yjsState: new Uint8Array(state) } : {}),

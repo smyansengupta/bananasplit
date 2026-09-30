@@ -27,6 +27,8 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { loadSetupState } from "@/server/setup/progress";
 import { loadSyncStatus } from "@/server/sync/status";
 import { cn } from "@/lib/utils";
+import { PinToggle } from "@/components/pins/pin-dnd";
+import { listPins } from "@/server/pins";
 
 import { StepPanel } from "../setup/step-panel";
 import type { SetupStepView } from "../setup/view";
@@ -61,11 +63,11 @@ export default async function DatabasesPage({
 }: PageProps<"/app/[orgSlug]/databases">) {
   const { orgSlug } = await params;
   const sp = await searchParams;
-  const { organization, role } = await getOrgContextBySlug(orgSlug);
+  const { organization, role, user } = await getOrgContextBySlug(orgSlug);
   const isAdmin = can({ role }, "databases.write");
   const canConnect = can({ role }, "integrations.write");
 
-  const { databases, counts, sync, dataStep } = await withOrgTx(organization.id, async ({ db }) => {
+  const { databases, counts, sync, dataStep, pinned } = await withOrgTx(organization.id, async ({ db }) => {
     const list = await listDatabases(db, organization.id, role);
     const counts: Record<string, number> = {};
     for (const d of list) {
@@ -106,7 +108,8 @@ export default async function DatabasesPage({
           connectedByName: data.connectedByName,
         }
       : null;
-    return { databases: list, counts, sync, dataStep };
+    const pins = await listPins(db, organization.id, organization.slug, user.id);
+    return { databases: list, counts, sync, dataStep, pinned: new Set(pins.map((p) => p.href)) };
   });
 
   const withData = databases.filter((d) => (counts[d.key] ?? 0) > 0);
@@ -122,10 +125,21 @@ export default async function DatabasesPage({
   const card = (d: (typeof databases)[number], muted = false) => {
     const Icon = (d.icon && ICONS[d.icon]) || Database;
     const unit = d.kind === "BALLOTS" ? "polls" : d.kind === "PEOPLE" ? "people" : "rows";
+    const href = `/app/${orgSlug}/databases/${d.key}`;
     return (
-      <li key={d.id}>
+      <li key={d.id} className="group relative">
+        <PinToggle
+          orgId={organization.id}
+          href={href}
+          pinned={pinned.has(href)}
+          label={d.name}
+          className={cn(
+            "absolute right-3 bottom-3 z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+            pinned.has(href) && "opacity-100",
+          )}
+        />
         <Link
-          href={`/app/${orgSlug}/databases/${d.key}`}
+          href={href}
           className={cn(
             "hover:bg-muted/50 focus-visible:ring-ring flex h-full flex-col gap-2 rounded-xl border p-4 transition-colors focus-visible:ring-2 focus-visible:outline-none",
             muted && "border-dashed",

@@ -35,20 +35,20 @@ export function NotesListFilters({
         value={searchParams.get("visibility") ?? "all"}
         onValueChange={(v) => setParam("visibility", v)}
       >
-        <SelectTrigger className="w-40">
+        <SelectTrigger className="h-9 w-36" aria-label="Visibility">
           <SelectValue placeholder="Visibility" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">All notes</SelectItem>
-          <SelectItem value="PRIVATE">Private</SelectItem>
-          <SelectItem value="ORGANIZATION">Organization</SelectItem>
+          <SelectItem value="all">Anyone can see</SelectItem>
+          <SelectItem value="PRIVATE">Only me</SelectItem>
+          <SelectItem value="ORGANIZATION">Shared</SelectItem>
         </SelectContent>
       </Select>
       <Select
         value={searchParams.get("author") ?? "all"}
         onValueChange={(v) => setParam("author", v)}
       >
-        <SelectTrigger className="w-44">
+        <SelectTrigger className="h-9 w-36" aria-label="Author">
           <SelectValue placeholder="Author" />
         </SelectTrigger>
         <SelectContent>
@@ -58,6 +58,16 @@ export function NotesListFilters({
               {m.name ?? m.email}
             </SelectItem>
           ))}
+        </SelectContent>
+      </Select>
+      <Select value={searchParams.get("sort") ?? "edited"} onValueChange={(v) => setParam("sort", v === "edited" ? null : v)}>
+        <SelectTrigger className="h-9 w-40" aria-label="Sort">
+          <SelectValue placeholder="Sort" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="edited">Recently edited</SelectItem>
+          <SelectItem value="created">Newest</SelectItem>
+          <SelectItem value="title">Title A–Z</SelectItem>
         </SelectContent>
       </Select>
     </div>

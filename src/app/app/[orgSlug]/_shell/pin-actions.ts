@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import { withOrgAction, type TxClient } from "@/server/db/context";
-import { recordVisit, togglePin, unpin, type PinResult } from "@/server/pins";
+import { pinPage, recordVisit, reorderPins, togglePin, unpin, type PinResult } from "@/server/pins";
 
 /**
  * Pins and "Recently visited" (the shell's pin button, the visit tracker,
@@ -34,4 +34,17 @@ export const recordVisitAction = withOrgAction(async (ctx, pathname: string): Pr
   const slug = await slugOf(ctx.db, ctx.organizationId);
   if (!path.success || !slug) return;
   await recordVisit(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
+});
+
+/** Pins a page (dragged onto Pinned, or a card's pin button). */
+export const pinPathAction = withOrgAction(async (ctx, pathname: string): Promise<PinResult> => {
+  const path = pathSchema.safeParse(pathname);
+  const slug = await slugOf(ctx.db, ctx.organizationId);
+  if (!path.success || !slug) return { ok: false, error: "That can't be pinned." };
+  return pinPage(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
+});
+
+export const reorderPinsAction = withOrgAction(async (ctx, ids: string[]): Promise<void> => {
+  const parsed = z.array(z.string().max(64)).max(50).parse(ids);
+  await reorderPins(ctx.db, ctx.organizationId, ctx.userId, parsed);
 });

@@ -10,7 +10,8 @@ import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { can } from "@/lib/auth/permissions";
 import { visibleFinanceCards } from "@/lib/finance/dashboard-cards";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { loadFinanceLayout } from "@/server/finance/widgets";
+import { resolveLayout } from "@/lib/finance/widgets";
+import { loadSavedBoard } from "@/server/boards";
 
 import { getCategoriesForPeriods, getDashboardData, getOrgPeriods } from "./queries";
 
@@ -28,11 +29,11 @@ export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/
   }
 
   const orgCards = visibleFinanceCards(settings?.financeDashboardCards);
-  const { dashboard, board, periods, categories } = await withOrgTx(org.id, async ({ db }) => {
+  const { dashboard, saved, periods, categories } = await withOrgTx(org.id, async ({ db }) => {
     const periods = await getOrgPeriods(db, org.id);
     return {
       dashboard: await getDashboardData(db, org.id),
-      board: await loadFinanceLayout(db, org.id, user.id, orgCards),
+      saved: await loadSavedBoard(db, org.id, user.id, "finance"),
       periods,
       categories: await getCategoriesForPeriods(db, org.id, periods),
     };
@@ -100,8 +101,8 @@ export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/
         orgId={org.id}
         orgSlug={orgSlug}
         data={dashboard}
-        initialLayout={board.layout}
-        customized={board.customized}
+        initialLayout={resolveLayout(saved, orgCards)}
+        customized={saved !== null}
       />
     </div>
   );
