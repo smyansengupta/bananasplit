@@ -7,13 +7,17 @@ import { credentialsSignIn, SIGN_IN_UNAVAILABLE_MESSAGE } from "@/lib/auth/crede
 import { emailVerificationRequired } from "@/lib/auth/email-verification";
 import { hashPassword } from "@/lib/auth/password";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
+import { signUpPerIpLimit } from "@/lib/auth/ip-limits";
 import { getClientIp } from "@/lib/request-ip";
 import { authDb } from "@/server/db/clients";
 import { enqueueVerificationEmail } from "@/server/email/verification";
 
-/** Sign-up limits: per client IP and per normalized email (Postgres-backed). */
+/**
+ * Sign-up limits: per client IP (sized for a room on one network; see
+ * src/lib/auth/ip-limits.ts) and per normalized email (Postgres-backed).
+ */
 const SIGN_UP_LIMITS = {
-  perIp: { limit: 5, windowSec: 60 * 60 },
+  perIp: { windowSec: 60 * 60 },
   perEmail: { limit: 3, windowSec: 60 * 60 },
 } as const;
 
@@ -58,7 +62,7 @@ export async function signUpAction(
   const [byIp, byEmail] = await Promise.all([
     checkRateLimit(
       rateLimitKey("signup-ip", ip),
-      SIGN_UP_LIMITS.perIp.limit,
+      signUpPerIpLimit(),
       SIGN_UP_LIMITS.perIp.windowSec,
       { via: "auth" },
     ),

@@ -273,3 +273,15 @@ describe("personal theme", () => {
     expect(applyPersonalTheme(locked, null)).toBe(locked);
   });
 });
+
+describe("per-IP sign-up and sign-in limits", () => {
+  it("default to a room's worth and take an override, ignoring junk", async () => {
+    const { signInPerIpLimit, signUpPerIpLimit } = await import("@/lib/auth/ip-limits");
+    expect(signUpPerIpLimit({})).toBe(40);
+    expect(signInPerIpLimit({})).toBe(120);
+    expect(signUpPerIpLimit({ SIGNUP_LIMIT_PER_IP_HOUR: "200" })).toBe(200);
+    expect(signUpPerIpLimit({ SIGNUP_LIMIT_PER_IP_HOUR: "0" })).toBe(40);
+    expect(signInPerIpLimit({ SIGNIN_LIMIT_PER_IP_15MIN: "lots" })).toBe(120);
+    expect(signInPerIpLimit({ SIGNIN_LIMIT_PER_IP_15MIN: "999999" })).toBe(2000);
+  });
+});

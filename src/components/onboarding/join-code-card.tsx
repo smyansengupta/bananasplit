@@ -131,7 +131,7 @@ export function JoinCodeCard({
             }}
           >
             <label htmlFor="join-domain" className="text-sm">
-              Only allow emails on
+              Limit to a school domain
             </label>
             <div className="flex gap-2">
               <Input

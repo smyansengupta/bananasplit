@@ -24,7 +24,7 @@ import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 
 import { getOrCreateJoinCode, joinWithCode } from "./join-code";
 import { updateOwnOnboardingFields } from "./profile";
-import { createOrganization } from "../settings/org-creation";
+import { createOrganization, issueOrgCreationCode } from "../settings/org-creation";
 import { getPersonBusyHours } from "../profiles/queries";
 
 const tag = randomBytes(4).toString("hex");
@@ -183,6 +183,45 @@ describe("several organizations against the local database", () => {
     requireUserMock.mockResolvedValue(founderA);
     expect(await getPersonBusyHours(orgB.id, both.id)).toBeNull();
     expect(await getPersonBusyHours(orgA.id, both.id)).toEqual(["0-9", "2-13"]);
+  });
+
+  it("in invite mode, a platform admin's single-use code lets another club's founder create their org", async () => {
+    if (!reachable) return;
+    vi.stubEnv("ORG_CREATION_MODE", "invite");
+    vi.stubEnv("PLATFORM_ADMIN_EMAILS", founderA.email);
+    const founderC = await makeUser("founder-c", "President");
+    try {
+      // Without a code: refused.
+      const noCode = await createOrganization(founderC, { name: `Chess ${tag}`, slug: `chess-${tag}`, timezone: "UTC" });
+      expect(noCode.ok).toBe(false);
+
+      const { code } = await issueOrgCreationCode(founderA.id, `Chess club ${tag}`);
+      const made = await createOrganization(founderC, {
+        name: `Chess ${tag}`,
+        slug: `chess-${tag}`,
+        timezone: "UTC",
+        code,
+      });
+      expect(made).toMatchObject({ ok: true });
+
+      // Single use: nobody can create a second org with it.
+      const again = await createOrganization(both, { name: `Go ${tag}`, slug: `go-${tag}`, timezone: "UTC", code });
+      expect(again).toEqual({ ok: false, error: "That code is invalid, used or expired." });
+
+      if (made.ok) {
+        const owner = await ownerDb.membership.findFirst({
+          where: { organizationId: made.orgId },
+          select: { userId: true, role: true },
+        });
+        expect(owner).toEqual({ userId: founderC.id, role: "OWNER" });
+        await ownerDb.organization.delete({ where: { id: made.orgId } });
+      }
+    } finally {
+      await ownerDb.orgSlugHistory.deleteMany({ where: { slug: { in: [`chess-${tag}`, `go-${tag}`] } } });
+      await ownerDb.user.delete({ where: { id: founderC.id } });
+      vi.stubEnv("ORG_CREATION_MODE", "open");
+      vi.stubEnv("PLATFORM_ADMIN_EMAILS", "");
+    }
   });
 
   it("gives one title per org: the profile-setup title to start, changeable per org", async () => {

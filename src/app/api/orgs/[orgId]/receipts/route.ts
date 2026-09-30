@@ -16,6 +16,7 @@ import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { withOrgAction, withOrgTx } from "@/server/db/context";
 import { putBlob } from "@/server/storage";
 import { readUpload, UploadError } from "@/server/storage/upload";
+import { isCrossSite } from "@/lib/http/cross-site";
 
 /**
  * POST /api/orgs/{orgId}/receipts (0A Fix 15): multipart form with `file`
@@ -44,20 +45,6 @@ const TOO_LARGE = "Receipts are capped at 4 MB. Try a smaller photo or a compres
 
 function json(status: number, body: Record<string, unknown>) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
-}
-
-/**
- * Route handlers get no built-in CSRF check (Server Actions do): refuse a
- * browser request whose Origin is another site.
- */
-function isCrossSite(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== new URL(request.url).host;
-  } catch {
-    return true;
-  }
 }
 
 function uploadError(error: unknown): Response {

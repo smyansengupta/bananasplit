@@ -168,7 +168,7 @@ test("calendar feed: the link is shown once, and regenerating kills the old one"
   const orgSlug = await createOrg(page, "Feed Owner");
   await page.goto(`/app/${orgSlug}/settings/calendar`);
 
-  await page.getByRole("button", { name: "Create feed link" }).click();
+  await page.getByRole("button", { name: "Create link" }).click();
   const first = await page.getByLabel("Calendar feed URL").inputValue();
   expect(first).toMatch(/^https?:\/\/[^/]+\/api\/calendar\/feed\/[A-Za-z0-9_-]+$/);
   const firstPath = new URL(first).pathname;
