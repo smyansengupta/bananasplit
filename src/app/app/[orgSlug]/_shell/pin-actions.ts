@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { withOrgAction, type TxClient } from "@/server/db/context";
 import { pinPage, recordVisit, reorderPins, togglePin, unpin, type PinResult } from "@/server/pins";
+import { searchPinnables, type PinnableGroup } from "@/server/pins/search";
 
 /**
  * Pins and "Recently visited" (the shell's pin button, the visit tracker,
@@ -48,3 +49,12 @@ export const reorderPinsAction = withOrgAction(async (ctx, ids: string[]): Promi
   const parsed = z.array(z.string().max(64)).max(50).parse(ids);
   await reorderPins(ctx.db, ctx.organizationId, ctx.userId, parsed);
 });
+
+/** "Pin something": what the member can pin, matching `query` (as them, under RLS). */
+export const searchPinnablesAction = withOrgAction(
+  async (ctx, query: string): Promise<PinnableGroup[]> => {
+    const slug = await slugOf(ctx.db, ctx.organizationId);
+    if (!slug) return [];
+    return searchPinnables(ctx.db, ctx.organizationId, slug, ctx.userId, z.string().max(200).catch("").parse(query));
+  },
+);

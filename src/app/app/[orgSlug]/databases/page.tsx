@@ -27,7 +27,7 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { loadSetupState } from "@/server/setup/progress";
 import { loadSyncStatus } from "@/server/sync/status";
 import { cn } from "@/lib/utils";
-import { PinToggle } from "@/components/pins/pin-dnd";
+import { PinToggle } from "@/components/pins/pins-context";
 import { listPins } from "@/server/pins";
 
 import { StepPanel } from "../setup/step-panel";
@@ -129,9 +129,7 @@ export default async function DatabasesPage({
     return (
       <li key={d.id} className="group relative">
         <PinToggle
-          orgId={organization.id}
           href={href}
-          pinned={pinned.has(href)}
           label={d.name}
           className={cn(
             "absolute right-3 bottom-3 z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",

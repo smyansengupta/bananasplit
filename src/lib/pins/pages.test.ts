@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describePath } from "./pages";
+import { canonicalHref, describePath } from "./pages";
 
 describe("describePath", () => {
   it("names fixed pages and sub-pages", () => {
@@ -23,6 +23,27 @@ describe("describePath", () => {
     });
     expect(describePath("cbc", "/app/cbc/calendar/polls/p_1")?.lookup).toEqual({ type: "poll", id: "p_1" });
     expect(describePath("cbc", "/app/cbc/people/u_1")?.kind).toBe("person");
+  });
+
+  it("keeps the views that live in the query string, so they can be pinned", () => {
+    expect(describePath("cbc", "/app/cbc/notes?folder=f_1&tab=files&junk=1")).toEqual({
+      href: "/app/cbc/notes?folder=f_1&tab=files",
+      kind: "folder",
+      label: "Folder",
+      lookup: { type: "folder", id: "f_1" },
+      suffix: " · Files",
+    });
+    expect(describePath("cbc", "/app/cbc/notes?tab=files")).toMatchObject({ label: "Notes · Files" });
+    expect(describePath("cbc", "/app/cbc/tasks?scope=mine&view=board")).toMatchObject({
+      href: "/app/cbc/tasks?view=board&scope=mine",
+      label: "Tasks · Board · Mine",
+    });
+    // The old "mine" view is the Week, scoped to you.
+    expect(canonicalHref("cbc", "/app/cbc/tasks?view=mine")).toBe("/app/cbc/tasks?view=week&scope=mine");
+    // Anything else in a query is dropped, so one view has one address.
+    expect(canonicalHref("cbc", "/app/cbc/finance?period=x")).toBe("/app/cbc/finance");
+    expect(canonicalHref("cbc", "/app/cbc/tasks?view=nonsense")).toBe("/app/cbc/tasks");
+    expect(canonicalHref("cbc", "/app/cbc/notes?folder=<b>")).toBe("/app/cbc/notes");
   });
 
   it("refuses paths outside the org or the app", () => {

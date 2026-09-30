@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckSquare, NotebookText } from "lucide-react";
+import { CheckSquare, NotebookText, Pin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { searchWorkspace } from "@/app/app/[orgSlug]/search/actions";
+import { usePins } from "@/components/pins/pins-context";
 import {
   Command,
   CommandDialog,
@@ -39,6 +40,7 @@ export function CommandPalette({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const pins = usePins();
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<NoteResult[]>([]);
   const [tasks, setTasks] = useState<TaskResult[]>([]);
@@ -88,6 +90,21 @@ export function CommandPalette({
           onValueChange={setQuery}
         />
         <CommandList>
+          {pins && (!trimmedQuery || "pin something".includes(trimmedQuery.toLowerCase())) && (
+            <CommandGroup heading="Actions">
+              <CommandItem
+                value="action-pin"
+                onSelect={() => {
+                  onOpenChange(false);
+                  setQuery("");
+                  pins.openPicker();
+                }}
+              >
+                <Pin className="size-4" aria-hidden="true" />
+                Pin something…
+              </CommandItem>
+            </CommandGroup>
+          )}
           {trimmedQuery && !isPending && !hasResults && (
             <CommandEmpty>No results found.</CommandEmpty>
           )}

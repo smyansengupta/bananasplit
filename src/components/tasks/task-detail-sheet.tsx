@@ -1,5 +1,6 @@
 "use client";
 
+import { PinToggle } from "@/components/pins/pins-context";
 import {
   Sheet,
   SheetContent,
@@ -57,6 +58,7 @@ export function TaskDetailSheet({
         <SheetHeader className="bg-popover/95 sticky top-0 z-10 flex-row items-center gap-2 border-b px-4 py-3 pe-12 supports-backdrop-filter:backdrop-blur">
           <SheetTitle className="text-sm font-medium">{heading}</SheetTitle>
           {task && isTaskPrivate(task) && <PrivateBadge />}
+          {task && <PinToggle path={`/tasks/${task.id}`} label={task.title} className="ms-auto" />}
           <SheetDescription className="sr-only">
             Edit this task, its people, its subtasks, its comments and who can see it.
           </SheetDescription>

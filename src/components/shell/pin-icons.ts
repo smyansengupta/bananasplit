@@ -3,6 +3,7 @@ import {
   CheckSquare,
   Database,
   FileText,
+  Folder,
   NotebookText,
   Paperclip,
   User,
@@ -20,4 +21,17 @@ export const PIN_ICONS: Record<PinKind, LucideIcon> = {
   database: Database,
   person: User,
   file: Paperclip,
+  folder: Folder,
+};
+
+/** What each kind is called on a pin card. */
+export const PIN_KIND_LABELS: Record<PinKind, string> = {
+  page: "Page",
+  note: "Note",
+  task: "Task",
+  event: "Event",
+  database: "Database",
+  person: "Person",
+  file: "File",
+  folder: "Folder",
 };

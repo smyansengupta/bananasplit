@@ -17,6 +17,7 @@ const { getOrgContextBySlugMock, getOrgPersonMock, listOrgPeopleMock } = vi.hois
 }));
 
 vi.mock("@/server/db/context", () => ({ getOrgContextBySlug: getOrgContextBySlugMock }));
+vi.mock("@/components/pins/pins-context", () => ({ PinToggle: () => null }));
 vi.mock("@/server/profiles/queries", async () => {
   const actual = await vi.importActual<typeof import("@/server/profiles/queries")>("@/server/profiles/queries");
   return {

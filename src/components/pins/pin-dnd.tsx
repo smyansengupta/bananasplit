@@ -1,15 +1,9 @@
 "use client";
 
-import { Pin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import {
-  pinPathAction,
-  reorderPinsAction,
-  togglePinAction,
-} from "@/app/app/[orgSlug]/_shell/pin-actions";
-import { cn } from "@/lib/utils";
+import { pinPathAction, reorderPinsAction } from "@/app/app/[orgSlug]/_shell/pin-actions";
 
 /**
  * Pinning by drag and drop: any in-app link (a sidebar section, a note card,
@@ -103,57 +97,4 @@ export function usePinDrop(orgId: string, ids: readonly string[]) {
   });
 
   return { over, error, pending, zone, pinProps };
-}
-
-/**
- * A small pin toggle for cards and rows (it sits inside links, so it stops
- * the click from opening them).
- */
-export function PinToggle({
-  orgId,
-  href,
-  pinned,
-  label,
-  className,
-}: {
-  orgId: string;
-  href: string;
-  pinned: boolean;
-  label: string;
-  className?: string;
-}) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [on, setOn] = useState(pinned);
-  const [lastPinned, setLastPinned] = useState(pinned);
-  if (pinned !== lastPinned) {
-    setLastPinned(pinned);
-    setOn(pinned);
-  }
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      aria-pressed={on}
-      aria-label={on ? `Unpin ${label}` : `Pin ${label}`}
-      title={on ? "Unpin" : "Pin to your sidebar and Overview"}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setOn(!on);
-        start(async () => {
-          const result = await togglePinAction(orgId, href);
-          if (!result.ok) setOn(on);
-          router.refresh();
-        });
-      }}
-      className={cn(
-        "bg-background/90 hover:bg-accent grid size-7 place-items-center rounded-md border shadow-xs transition-opacity",
-        on ? "text-primary" : "text-muted-foreground",
-        className,
-      )}
-    >
-      <Pin className={cn("size-3.5", on && "fill-current")} aria-hidden="true" />
-    </button>
-  );
 }

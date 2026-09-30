@@ -10,6 +10,7 @@ import {
   Network,
   NotebookText,
   Pin,
+  Plus,
   Settings,
   Users,
   Wallet,
@@ -17,12 +18,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
 import { unpinAction } from "@/app/app/[orgSlug]/_shell/pin-actions";
 import { isLinkActive, type NavLink, type NavSection } from "@/components/shell/nav-config";
 import { usePinDrop } from "@/components/pins/pin-dnd";
+import { usePins } from "@/components/pins/pins-context";
+import { canonicalHref } from "@/lib/pins/pages";
 import { PIN_ICONS } from "@/components/shell/pin-icons";
 import type { PinKind } from "@/lib/pins/pages";
 import { cn } from "@/lib/utils";
@@ -102,6 +105,9 @@ function PinnedList({
   onNavigate?: () => void;
 }) {
   const router = useRouter();
+  const pinsCtx = usePins();
+  const search = useSearchParams().toString();
+  const current = pinsCtx ? canonicalHref(pinsCtx.orgSlug, search ? `${pathname}?${search}` : pathname) : pathname;
   const [pending, start] = useTransition();
   const { over, error, zone, pinProps } = usePinDrop(
     orgId,
@@ -115,12 +121,25 @@ function PinnedList({
         over && "bg-sidebar-accent/60 ring-sidebar-ring ring-1",
       )}
     >
-      <GroupLabel>
-        <span className="inline-flex items-center gap-1">
-          <Pin className="size-3" aria-hidden="true" />
-          Pinned
-        </span>
-      </GroupLabel>
+      <div className="flex items-center justify-between pr-1">
+        <GroupLabel>
+          <span className="inline-flex items-center gap-1">
+            <Pin className="size-3" aria-hidden="true" />
+            Pinned
+          </span>
+        </GroupLabel>
+        {pinsCtx && (
+          <button
+            type="button"
+            onClick={() => pinsCtx.openPicker()}
+            aria-label="Pin something"
+            title="Pin something"
+            className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent mt-2 rounded p-0.5"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
       {pins.length === 0 ? (
         <p
           className={cn(
@@ -128,13 +147,13 @@ function PinnedList({
             over && "border-sidebar-ring text-sidebar-foreground",
           )}
         >
-          Drag any page here, or press Pin at the top of a page.
+          Drag any page here, press Pin at the top of a page, or use + to pin anything.
         </p>
       ) : (
         <ul className="flex flex-col gap-0.5">
           {pins.map((pin) => {
             const Icon = PIN_ICONS[pin.kind] ?? FileText;
-            const active = pathname === pin.href;
+            const active = current === pin.href;
             return (
               <li key={pin.id} className="group relative" {...pinProps(pin.id)}>
                 <Link

@@ -1,25 +1,17 @@
 "use client";
 
-import { FileText, Pin, X } from "lucide-react";
+import { FileText, Pin, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { unpinAction } from "@/app/app/[orgSlug]/_shell/pin-actions";
 import { usePinDrop } from "@/components/pins/pin-dnd";
-import { PIN_ICONS } from "@/components/shell/pin-icons";
+import { usePins } from "@/components/pins/pins-context";
+import { Button } from "@/components/ui/button";
+import { PIN_ICONS, PIN_KIND_LABELS } from "@/components/shell/pin-icons";
 import type { PinKind } from "@/lib/pins/pages";
 import { cn } from "@/lib/utils";
-
-const KIND_LABEL: Record<PinKind, string> = {
-  page: "Page",
-  note: "Note",
-  task: "Task",
-  event: "Event",
-  database: "Database",
-  person: "Person",
-  file: "File",
-};
 
 /**
  * The Overview's Pinned widget: shortcuts to what the member pinned. Drag a
@@ -34,6 +26,7 @@ export function PinnedGrid({
   pins: readonly { id: string; href: string; label: string; kind: PinKind }[];
 }) {
   const router = useRouter();
+  const pinsCtx = usePins();
   const [pending, start] = useTransition();
   const { over, error, zone, pinProps } = usePinDrop(
     orgId,
@@ -58,8 +51,14 @@ export function PinnedGrid({
           <p className="text-foreground font-medium">{over ? "Drop to pin it" : "Nothing pinned yet"}</p>
           <p className="max-w-sm text-balance">
             Drag any page from the sidebar here, press <strong>Pin</strong> at the top of a page, or
-            use the pin on a note or file card.
+            pick anything: notes, files, folders, tasks, events, people.
           </p>
+          {pinsCtx && (
+            <Button type="button" size="sm" variant="outline" onClick={() => pinsCtx.openPicker()}>
+              <Plus className="size-4" aria-hidden="true" />
+              Pin something
+            </Button>
+          )}
         </div>
       ) : (
         <ul className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))]">
@@ -77,7 +76,7 @@ export function PinnedGrid({
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{pin.label}</span>
-                    <span className="text-muted-foreground block text-xs">{KIND_LABEL[pin.kind]}</span>
+                    <span className="text-muted-foreground block text-xs">{PIN_KIND_LABELS[pin.kind]}</span>
                   </span>
                 </Link>
                 <button
@@ -97,13 +96,24 @@ export function PinnedGrid({
               </li>
             );
           })}
-          <li
-            className={cn(
-              "text-muted-foreground flex items-center justify-center rounded-lg border border-dashed p-2.5 text-xs",
-              over && "border-primary text-foreground",
-            )}
-          >
-            {over ? "Drop to pin" : "Drag a page here to pin it"}
+          <li>
+            <button
+              type="button"
+              onClick={() => pinsCtx?.openPicker()}
+              className={cn(
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50 flex size-full min-h-14 items-center justify-center gap-1.5 rounded-lg border border-dashed p-2.5 text-xs",
+                over && "border-primary text-foreground",
+              )}
+            >
+              {over ? (
+                "Drop to pin"
+              ) : (
+                <>
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Pin something, or drag a page here
+                </>
+              )}
+            </button>
           </li>
         </ul>
       )}

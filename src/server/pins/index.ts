@@ -28,75 +28,99 @@ export interface RecentItem {
 
 type Db = TxClient;
 
-/** Live labels for the lookups in `infos`; null for anything not visible. */
+/**
+ * Live labels for the lookups in `infos`; null for anything not visible.
+ * One query per kind, one after another (a transaction has one connection).
+ */
 async function resolveLabels(
   db: Db,
   orgId: string,
   infos: PageInfo[],
 ): Promise<Map<string, string | null>> {
-  const ids = (type: string) =>
-    infos.flatMap((i) => (i.lookup?.type === type && "id" in i.lookup ? [i.lookup.id] : []));
-  const keys = infos.flatMap((i) => (i.lookup?.type === "database" ? [i.lookup.key] : []));
-  const [notes, tasks, events, polls, databases, people, files] = await Promise.all([
-    ids("note").length
-      ? db.note.findMany({
-          where: { organizationId: orgId, id: { in: ids("note") }, deletedAt: null },
-          select: { id: true, title: true },
-        })
-      : [],
-    ids("task").length
-      ? db.task.findMany({
-          where: { organizationId: orgId, id: { in: ids("task") }, deletedAt: null },
-          select: { id: true, title: true },
-        })
-      : [],
-    ids("event").length
-      ? db.event.findMany({
-          where: { organizationId: orgId, id: { in: ids("event") }, deletedAt: null },
-          select: { id: true, title: true },
-        })
-      : [],
-    ids("poll").length
-      ? db.availabilityPoll.findMany({
-          where: { organizationId: orgId, id: { in: ids("poll") } },
-          select: { id: true, title: true },
-        })
-      : [],
-    keys.length
-      ? db.databaseDefinition.findMany({
-          where: { organizationId: orgId, key: { in: keys } },
-          select: { key: true, name: true },
-        })
-      : [],
-    ids("person").length
-      ? db.membership.findMany({
-          where: { organizationId: orgId, userId: { in: ids("person") } },
-          select: { userId: true, user: { select: { name: true } } },
-        })
-      : [],
-    ids("file").length
-      ? db.orgFile.findMany({
-          where: { organizationId: orgId, id: { in: ids("file") }, deletedAt: null },
-          select: { id: true, name: true },
-        })
-      : [],
-  ]);
-  const byType = {
-    note: new Map(notes.map((n) => [n.id, n.title || "Untitled note"])),
-    task: new Map(tasks.map((t) => [t.id, t.title])),
-    event: new Map(events.map((e) => [e.id, e.title])),
-    poll: new Map(polls.map((p) => [p.id, p.title])),
-    database: new Map(databases.map((d) => [d.key, d.name])),
-    person: new Map(people.map((m) => [m.userId, m.user.name ?? "Member"])),
-    file: new Map(files.map((f) => [f.id, f.name])),
+  const ids = (type: string) => [
+    ...new Set(infos.flatMap((i) => (i.lookup?.type === type && "id" in i.lookup ? [i.lookup.id] : []))),
+  ];
+  const keys = [...new Set(infos.flatMap((i) => (i.lookup?.type === "database" ? [i.lookup.key] : [])))];
+  const byType: Record<string, Map<string, string>> = {};
+  const load = async (type: string, rows: Promise<{ id: string; name: string }[]> | null) => {
+    byType[type] = new Map((rows ? await rows : []).map((r) => [r.id, r.name]));
   };
+  const notEmpty = (list: string[]) => list.length > 0;
+
+  await load(
+    "note",
+    notEmpty(ids("note"))
+      ? db.note
+          .findMany({ where: { organizationId: orgId, id: { in: ids("note") }, deletedAt: null }, select: { id: true, title: true } })
+          .then((r) => r.map((n) => ({ id: n.id, name: n.title || "Untitled note" })))
+      : null,
+  );
+  await load(
+    "task",
+    notEmpty(ids("task"))
+      ? db.task
+          .findMany({ where: { organizationId: orgId, id: { in: ids("task") }, deletedAt: null }, select: { id: true, title: true } })
+          .then((r) => r.map((t) => ({ id: t.id, name: t.title })))
+      : null,
+  );
+  await load(
+    "event",
+    notEmpty(ids("event"))
+      ? db.event
+          .findMany({ where: { organizationId: orgId, id: { in: ids("event") }, deletedAt: null }, select: { id: true, title: true } })
+          .then((r) => r.map((e) => ({ id: e.id, name: e.title })))
+      : null,
+  );
+  await load(
+    "poll",
+    notEmpty(ids("poll"))
+      ? db.availabilityPoll
+          .findMany({ where: { organizationId: orgId, id: { in: ids("poll") } }, select: { id: true, title: true } })
+          .then((r) => r.map((p) => ({ id: p.id, name: p.title })))
+      : null,
+  );
+  await load(
+    "database",
+    notEmpty(keys)
+      ? db.databaseDefinition
+          .findMany({ where: { organizationId: orgId, key: { in: keys } }, select: { key: true, name: true } })
+          .then((r) => r.map((d) => ({ id: d.key, name: d.name })))
+      : null,
+  );
+  await load(
+    "person",
+    notEmpty(ids("person"))
+      ? db.membership
+          .findMany({
+            where: { organizationId: orgId, userId: { in: ids("person") } },
+            select: { userId: true, user: { select: { name: true } } },
+          })
+          .then((r) => r.map((m) => ({ id: m.userId, name: m.user.name ?? "Member" })))
+      : null,
+  );
+  await load(
+    "file",
+    notEmpty(ids("file"))
+      ? db.orgFile
+          .findMany({ where: { organizationId: orgId, id: { in: ids("file") }, deletedAt: null }, select: { id: true, name: true } })
+          .then((r) => r.map((f) => ({ id: f.id, name: f.name })))
+      : null,
+  );
+  await load(
+    "folder",
+    notEmpty(ids("folder"))
+      ? db.noteFolder
+          .findMany({ where: { organizationId: orgId, id: { in: ids("folder") } }, select: { id: true, name: true } })
+          .then((r) => r.map((f) => ({ id: f.id, name: f.name })))
+      : null,
+  );
+
   const out = new Map<string, string | null>();
   for (const info of infos) {
     if (!info.lookup) continue;
     const l = info.lookup;
-    const map: Map<string, string> = byType[l.type];
-    const found = map.get(l.type === "database" ? l.key : l.id);
-    out.set(info.href, found ?? null);
+    const found = byType[l.type]?.get(l.type === "database" ? l.key : l.id);
+    out.set(info.href, found ? `${found}${info.suffix ?? ""}` : null);
   }
   return out;
 }
