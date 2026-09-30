@@ -43,6 +43,8 @@ function officeType(bytes: Buffer): string | null {
   return null;
 }
 
+const TEXT_EXTENSIONS = new Set(["", "txt", "text", "md", "markdown", "csv"]);
+
 function isUtf8Text(bytes: Buffer): boolean {
   if (bytes.includes(0)) return false;
   try {
@@ -61,8 +63,10 @@ export function sniffNoteFile(bytes: Buffer, filename: string): string | null {
   if (office) return office;
   // Any other archive is refused, even when its first bytes happen to be text.
   if (isZip(bytes)) return null;
-  if (bytes.length > 0 && isUtf8Text(bytes)) {
-    const ext = extension(filename);
+  // Text only by its own names: an .html or .svg file is text too, and is
+  // refused rather than kept as something it is not.
+  const ext = extension(filename);
+  if (bytes.length > 0 && TEXT_EXTENSIONS.has(ext) && isUtf8Text(bytes)) {
     if (ext === "md" || ext === "markdown") return "text/markdown";
     if (ext === "csv") return "text/csv";
     return "text/plain";

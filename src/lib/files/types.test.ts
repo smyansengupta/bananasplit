@@ -20,6 +20,8 @@ describe("sniffNoteFile", () => {
     expect(sniffNoteFile(zip("something/else.xml"), "a.zip")).toBeNull();
     expect(sniffNoteFile(Buffer.alloc(0), "empty.txt")).toBeNull();
     expect(sniffNoteFile(Buffer.from([0xc3, 0x28]), "bad.txt")).toBeNull();
+    expect(sniffNoteFile(Buffer.from("<script>alert(1)</script>"), "page.html")).toBeNull();
+    expect(sniffNoteFile(Buffer.from("<svg onload=x>"), "logo.svg")).toBeNull();
   });
 
   it("groups types for previews", () => {
