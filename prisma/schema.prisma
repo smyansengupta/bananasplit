@@ -38,6 +38,19 @@ model User {
   /// so adding a new notification type never silently requires a migration
   /// to keep existing users subscribed.
   emailPreferences Json      @default("{}")
+  // Onboarding (profile setup). NULL onboardedAt = the setup flow has not
+  // been finished; existing users were backfilled when the column arrived.
+  onboardedAt      DateTime?
+  /// The title picked during profile setup ("Project Manager"). Copied to
+  /// Membership.title when the user joins an org; admins change it there.
+  preferredTitle   String?
+  /// Personal theme: {preset, mode: "light"|"dark", custom?: {primary, accent,
+  /// background, surface, text}}. Only changes this user's own view.
+  themePreference  Json?
+  /// When the user can't meet: {v: 1, blocks: ["d-h", ...], rules: [...]}.
+  /// Labels are private; other members only ever see busy/free
+  /// (src/lib/availability).
+  availability     Json      @default("{}")
   createdAt        DateTime  @default(now())
 
   accounts   Account[]
@@ -79,6 +92,7 @@ model User {
   taskActivity           TaskActivity[]     @relation("TaskActivityActor")
   weeklyUpdates          WeeklyUpdate[]     @relation("WeeklyUpdateUser")
   notificationsActed     Notification[]     @relation("NotificationActor")
+  createdJoinCodes       OrgJoinCode[]      @relation("OrgJoinCodeCreatedBy")
 }
 
 model Account {
@@ -197,6 +211,7 @@ model Organization {
   ballots           Ballot[]
   weeklyUpdates     WeeklyUpdate[]
   theme             OrgTheme?
+  joinCode          OrgJoinCode?
 }
 
 enum NotificationType {
@@ -284,6 +299,27 @@ model Invitation {
 
   @@index([organizationId])
   @@index([email])
+}
+
+/// The org's shareable invite code (onboarding "Join with invite code").
+/// One per org, created the first time an admin opens it. Joining with it
+/// needs a verified email, and the email's domain must match allowedDomain
+/// when one is set; the joiner becomes a MEMBER. OWNER/ADMIN read and write;
+/// a non-member reaches it only through app.org_by_join_code(code).
+model OrgJoinCode {
+  organizationId String   @id
+  /// XXXX-XXXX from an unambiguous alphabet; stored upper-case.
+  code           String   @unique
+  enabled        Boolean  @default(true)
+  /// e.g. "northeastern.edu": only addresses on this domain (or a subdomain) may join.
+  allowedDomain  String?
+  useCount       Int      @default(0)
+  createdById    String?
+  createdAt      DateTime @default(now())
+  rotatedAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("OrgJoinCodeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 }
 
 // --- Tasks ---
@@ -1165,6 +1201,12 @@ model OrgSettings {
   /// When someone finished (or dismissed) the guided setup. Only hides the
   /// prompt; the flow and the connection status stay reachable.
   setupCompletedAt              DateTime?
+  // Org onboarding (Flow B)
+  /// Finance dashboard sections to show (src/lib/finance/dashboard-cards.ts);
+  /// empty = all of them.
+  financeDashboardCards         String[]         @default([])
+  /// Members see each other's busy times (never the labels) on people pages.
+  showMemberAvailability        Boolean          @default(true)
   updatedById                   String?
   updatedAt                     DateTime         @default(now()) @updatedAt
 
@@ -1452,6 +1494,9 @@ model DatabaseDefinition {
   kind             DatabaseKind
   columns          Json             @default("[]")
   memberVisibility MemberVisibility @default(MEMBERS)
+  /// What the data is for (Finance, People, Operations, Events, Other); set
+  /// in org setup. Visibility can be applied to every source with a tag.
+  tag              String?
   allowEdits       Boolean          @default(true)
   sortOrder        Int              @default(0)
   /// Archive instead of delete (app_user has no DELETE).

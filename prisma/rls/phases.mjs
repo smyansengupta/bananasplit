@@ -47,6 +47,8 @@ const GRANTS = {
   OrgDeletionLog: ["", "", ""],
   OrgExport: ["SI", "SIUD", ""],
   OrgIntegration: ["SIUD", "SIUD", ""],
+  // Onboarding invite code: admins manage it, no DELETE (rotate or turn off).
+  OrgJoinCode: ["SIU", "SU", ""],
   OrgMemberHistory: ["S", "S", ""],
   OrgSecret: ["", "", ""],
   OrgSettings: ["SU", "SIUD", ""],
@@ -118,6 +120,7 @@ const NEW_TENANT_TABLES = [
   "TaskAssignee",
   "TaskLabel",
   "Receipt",
+  "OrgJoinCode",
 ];
 
 /**
@@ -234,6 +237,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       ).rows.map((r) => r.column_name),
     {
       value: [
+        "availability",
         "avatar",
         "bio",
         "emailPreferences",
@@ -242,7 +246,10 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         "links",
         "major",
         "name",
+        "onboardedAt",
+        "preferredTitle",
         "pronouns",
+        "themePreference",
         "timezone",
       ],
     },
@@ -2615,6 +2622,142 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       return { own, foreign, none };
     },
     { value: { own: 1, foreign: 0, none: 0 } },
+  );
+
+  // ======================= Onboarding flows =======================
+  await tcase(
+    "P-ONB-01",
+    "OrgJoinCode: only OWNER/ADMIN read, create or change their org's invite code; no DELETE",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_insert = await tryq(
+        q,
+        `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_A','ABCD-EFGH')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_insert = await tryq(
+        q,
+        `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_A','ABCD-EFGH')`,
+      );
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "OrgJoinCode"`);
+      s.admin_update = await rc(q, `UPDATE "OrgJoinCode" SET "enabled" = false`);
+      s.admin_delete = await tryq(q, `DELETE FROM "OrgJoinCode"`);
+      s.other_org = await tryq(
+        q,
+        `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_B','WXYZ-2345')`,
+      );
+      s.bad_format = await tryq(q, `UPDATE "OrgJoinCode" SET "code" = 'nope'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_reads = await count(q, `SELECT count(*) n FROM "OrgJoinCode"`);
+      s.member_update = await rc(q, `UPDATE "OrgJoinCode" SET "enabled" = true`);
+      return s;
+    },
+    {
+      value: {
+        member_insert: "42501",
+        admin_insert: 1,
+        admin_reads: 1,
+        admin_update: 1,
+        admin_delete: "42501",
+        other_org: "42501",
+        bad_format: "23514",
+        member_reads: 0,
+        member_update: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-ONB-02",
+    "app.org_by_join_code answers a verified caller with no org, and nobody unverified",
+    "app_user",
+    B("u_ownerB"),
+    async (q) => {
+      await q(`INSERT INTO "OrgJoinCode" ("organizationId","code","allowedDomain") VALUES ('org_B','WXYZ-2345','example.edu')`);
+      await q(`SELECT app.set_context('u_invitee','')`);
+      const s = {};
+      s.verified = (
+        await q(`SELECT "orgSlug" IS NOT NULL AS ok, "allowedDomain" FROM app.org_by_join_code(' wxyz-2345 ')`)
+      ).rows;
+      s.unknown = await count(q, `SELECT count(*) n FROM app.org_by_join_code('AAAA-AAAA')`);
+      s.direct_table = await count(q, `SELECT count(*) n FROM "OrgJoinCode"`);
+      // A caller with no verified user row (unknown or unverified id) gets nothing.
+      await q(`SELECT app.set_context('u_nobody','')`);
+      s.no_user = await count(q, `SELECT count(*) n FROM app.org_by_join_code('WXYZ-2345')`);
+      return s;
+    },
+    {
+      value: {
+        verified: [{ ok: true, allowedDomain: "example.edu" }],
+        unknown: 0,
+        direct_table: 0,
+        no_user: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-ONB-02b",
+    "app.org_by_join_code: an unverified caller gets no row",
+    "owner",
+    null,
+    async (q) => {
+      await q(`INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_B','WXYZ-2345')`);
+      await q(`SELECT app.set_context('u_invitee','')`);
+      const verified = await count(q, `SELECT count(*) n FROM app.org_by_join_code('WXYZ-2345')`);
+      await q(`UPDATE "User" SET "emailVerified" = NULL WHERE "id" = 'u_invitee'`);
+      const unverified = await count(q, `SELECT count(*) n FROM app.org_by_join_code('WXYZ-2345')`);
+      return { verified, unverified };
+    },
+    { value: { verified: 1, unverified: 0 } },
+  );
+  await tcase(
+    "P-ONB-03",
+    "a joiner on the service path counts a use; app_service cannot create or delete codes",
+    "app_service",
+    { org: "org_A" },
+    async (q) => ({
+      insert: await tryq(q, `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_A','QQQQ-QQQQ')`),
+      delete: await tryq(q, `DELETE FROM "OrgJoinCode"`),
+      update_other_org: await rc(q, `UPDATE "OrgJoinCode" SET "useCount" = "useCount" + 1 WHERE "organizationId" = 'org_B'`),
+    }),
+    { value: { insert: "42501", delete: "42501", update_other_org: 0 } },
+  );
+  await tcase(
+    "P-ONB-04",
+    "User: a user writes their own onboarding columns, never another member's",
+    "app_user",
+    A("u_memberA"),
+    async (q) => ({
+      own: await rc(
+        q,
+        `UPDATE "User" SET "onboardedAt" = now(), "preferredTitle" = 'PM', "availability" = '{"v":1}', "themePreference" = '{"preset":"harbor"}' WHERE "id" = 'u_memberA'`,
+      ),
+      other: await rc(q, `UPDATE "User" SET "availability" = '{}' WHERE "id" = 'u_adminA'`),
+    }),
+    { value: { own: 1, other: 0 } },
+  );
+  await tcase(
+    "P-ONB-05",
+    "DatabaseDefinition.tag and the new OrgSettings columns: admins write, members cannot",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_tag = await rc(q, `UPDATE "DatabaseDefinition" SET "tag" = 'Finance'`);
+      s.member_settings = await rc(q, `UPDATE "OrgSettings" SET "showMemberAvailability" = false`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_tag = (await rc(q, `UPDATE "DatabaseDefinition" SET "tag" = 'People'`)) > 0;
+      s.admin_settings = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "showMemberAvailability" = false, "financeDashboardCards" = ARRAY['runway']`,
+      );
+      s.bad_tag = await tryq(q, `UPDATE "DatabaseDefinition" SET "tag" = ''`);
+      return s;
+    },
+    {
+      value: { member_tag: 0, member_settings: 0, admin_tag: true, admin_settings: 1, bad_tag: "23514" },
+    },
   );
   await tcase(
     "P-A3-06",

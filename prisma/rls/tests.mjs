@@ -1949,6 +1949,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "member_org_id",
         "member_role",
         "membership_history",
+        "org_by_join_code",
         "org_has_members",
         "org_has_other_owner",
         "organization_defaults",
@@ -2189,6 +2190,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // grant; only the table owner fires them).
       can_read_task: "us",
       task_visibility_inherit: "",
+      // Onboarding: "Join with invite code" (verified callers only)
+      org_by_join_code: "u",
     };
     await tcase(
       "T27f",

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DashboardData } from "@/app/app/[orgSlug]/finance/queries";
+import { FINANCE_CARD_IDS, type FinanceCardId } from "@/lib/finance/dashboard-cards";
 import { formatCents } from "@/lib/finance/money";
 import { formatFinanceDate, type Runway } from "@/lib/finance/stats";
 
@@ -15,10 +16,13 @@ export function DashboardView({
   data,
   orgSlug,
   moneyOwedToYouCents,
+  cards = new Set(FINANCE_CARD_IDS),
 }: {
   data: DashboardData;
   orgSlug: string;
   moneyOwedToYouCents: number;
+  /** The optional sections to show (OrgSettings.financeDashboardCards). */
+  cards?: ReadonlySet<FinanceCardId>;
 }) {
   if (!data.period) {
     return (
@@ -61,7 +65,7 @@ export function DashboardView({
         </div>
       )}
 
-      {data.runway && (
+      {cards.has("runway") && data.runway && (
         <RunwaySection
           runway={data.runway}
           period={data.period}
@@ -70,6 +74,7 @@ export function DashboardView({
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
+        {cards.has("categories") && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Spent by category</CardTitle>
@@ -103,7 +108,9 @@ export function DashboardView({
             })}
           </CardContent>
         </Card>
+        )}
 
+        {cards.has("sponsorships") && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">Sponsorships</CardTitle>
@@ -126,16 +133,19 @@ export function DashboardView({
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Burn by month</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BurnChart data={data.burnByMonth} />
-        </CardContent>
-      </Card>
+      {cards.has("burn") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Burn by month</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BurnChart data={data.burnByMonth} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

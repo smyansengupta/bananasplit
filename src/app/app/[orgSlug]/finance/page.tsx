@@ -3,13 +3,14 @@ import { redirect } from "next/navigation";
 import { DashboardView } from "@/components/finance/dashboard-view";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { can } from "@/lib/auth/permissions";
+import { visibleFinanceCards } from "@/lib/finance/dashboard-cards";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import { getDashboardData, getMoneyOwedToUser } from "./queries";
 
 export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/finance">) {
   const { orgSlug } = await params;
-  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
 
   if (!can({ role }, "finance.manage")) {
     redirect(`/app/${orgSlug}/finance/my-reimbursements`);
@@ -21,6 +22,11 @@ export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/
   })).catch(handleAuthErrorInPage);
 
   return (
-    <DashboardView data={dashboard} orgSlug={orgSlug} moneyOwedToYouCents={moneyOwedToYouCents} />
+    <DashboardView
+      data={dashboard}
+      orgSlug={orgSlug}
+      moneyOwedToYouCents={moneyOwedToYouCents}
+      cards={visibleFinanceCards(settings?.financeDashboardCards)}
+    />
   );
 }

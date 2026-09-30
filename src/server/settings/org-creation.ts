@@ -18,6 +18,7 @@ import { isValidTimeZone } from "@/lib/timezones";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
+import { ownPreferredTitle } from "@/server/onboarding/join-code";
 
 /**
  * Creating an organization (onboarding and /app/new) and the platform
@@ -145,6 +146,7 @@ export async function createOrganization(
   }
 
   const orgId = newOrgId();
+  const title = await ownPreferredTitle(user.id);
   try {
     const result = await withSystemOrgTx(orgId, { userId: user.id }, async ({ db }) => {
       if (policy.requiresCode) {
@@ -155,7 +157,7 @@ export async function createOrganization(
       }
       await db.organization.create({ data: { id: orgId, name, slug, timezone } });
       await db.membership.create({
-        data: { organizationId: orgId, userId: user.id, role: Role.OWNER },
+        data: { organizationId: orgId, userId: user.id, role: Role.OWNER, title },
       });
       await writeOrgAuditLog(db, {
         organizationId: orgId,
