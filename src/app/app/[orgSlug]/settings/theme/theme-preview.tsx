@@ -78,7 +78,7 @@ export function ThemePreview({
 
           <div className="min-w-0 space-y-3 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="mr-auto text-sm font-semibold">Workshop night</span>
+              <span className="mr-auto text-sm font-semibold">Weekly meeting</span>
               <Button size="sm" variant="outline">
                 Edit
               </Button>
@@ -87,12 +87,12 @@ export function ThemePreview({
 
             <div className="bg-card text-card-foreground space-y-2 rounded-lg border p-3">
               <div className="flex items-center gap-2">
-                <span className="font-medium">Intro to agents</span>
+                <span className="font-medium">Kickoff meeting</span>
                 <Badge>Public</Badge>
                 <Badge variant="secondary">Workshop</Badge>
               </div>
               <p className="text-muted-foreground text-xs">
-                Thursday, 6 pm in Curry 340. 42 members checked in last week.
+                Thursday, 6 pm in the student center. 42 members checked in last week.
               </p>
               <p className="text-xs">
                 Read the{" "}

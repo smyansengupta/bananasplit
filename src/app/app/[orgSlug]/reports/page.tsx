@@ -108,7 +108,9 @@ export default async function ReportsPage({ params, searchParams }: PageProps<"/
     link: { from: range.from, to: range.to, term: range.term },
     rangeLabel: range.label,
   };
-  const ids = ORDER.filter((id) => visible.has(id));
+  // Stamp cards are opt-in: an org with no milestones has no stamps to report.
+  const usesStamps = (settings?.stampMilestones?.length ?? 0) > 0;
+  const ids = ORDER.filter((id) => visible.has(id) && (id !== "stamps" || usesStamps));
 
   return (
     <ReportsFrame>

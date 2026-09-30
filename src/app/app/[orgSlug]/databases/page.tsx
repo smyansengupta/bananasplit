@@ -28,11 +28,11 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 const DESCRIPTIONS: Record<string, string> = {
-  SESSIONS: "Workshops, socials, hackathons and info sessions. The same events as the calendar.",
-  ATTENDANCE: "Every check-in, with the stamp it earned and the person's term total.",
-  SIGNUPS: "The interest form: who signed up, from where, and whether they came.",
+  SESSIONS: "Your meetings and events: the same ones as the calendar.",
+  ATTENDANCE: "Every check-in: who came to which session, and their total for the term.",
+  SIGNUPS: "Your interest or sign-up form: who signed up and whether they came.",
   BALLOTS: "Poll results, and individual votes where your role may see them.",
-  PEOPLE: "One row per person per term: sessions, stamps, and who stopped coming.",
+  PEOPLE: "One row per person per term: how often they came, and who stopped coming.",
 };
 
 const VISIBILITY_COPY: Record<string, string> = {

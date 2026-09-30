@@ -21,6 +21,7 @@ import { tags } from "@/server/cache/tags";
 import type { OrgContext } from "@/server/db/context";
 import { createEvent } from "@/server/events/service";
 import { publishDraft, saveDraft, startDraft } from "@/server/org-chart/service";
+import { DEFAULT_CATEGORY_NAMES } from "@/lib/finance/default-categories";
 
 /**
  * Org setup (onboarding Flow B, steps B3-B5), on the member path for an
@@ -147,8 +148,6 @@ export async function loadFinanceSetup(
     canManageFinance: ctx.role === "OWNER" || ctx.role === "TREASURER",
   };
 }
-
-const DEFAULT_CATEGORY_NAMES = ["Food", "Materials", "Travel", "Marketing", "Speaker Fees"];
 
 export async function saveFinanceSetup(
   ctx: OrgContext,

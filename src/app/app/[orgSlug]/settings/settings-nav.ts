@@ -77,7 +77,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     label: "Danger zone",
     segment: "danger",
-    description: "Export all data, bootstrap the CBC workspace, delete the organization.",
+    description: "Export all data, or delete the organization.",
     permission: "org.delete",
   },
 ];

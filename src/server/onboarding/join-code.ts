@@ -137,7 +137,7 @@ export async function updateJoinCodeSettings(
   if (input.allowedDomain !== undefined) {
     const raw = input.allowedDomain?.trim() ?? "";
     const domain = normalizeDomain(raw);
-    if (raw && !domain) return { ok: false, error: "Enter a domain like northeastern.edu." };
+    if (raw && !domain) return { ok: false, error: "Enter a domain like yourschool.edu." };
     data.allowedDomain = domain;
   }
   await getOrCreateJoinCode(db, organizationId, userId);

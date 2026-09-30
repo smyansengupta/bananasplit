@@ -133,13 +133,7 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     const categories = await withOrgTx(orgId, ({ db }) =>
       db.budgetCategory.findMany({ where: { budgetPeriodId: periodId }, orderBy: { sortOrder: "asc" } }),
     );
-    expect(categories.map((c) => c.name)).toEqual([
-      "Food",
-      "Materials",
-      "Travel",
-      "Marketing",
-      "Speaker Fees",
-    ]);
+    expect(categories.map((c) => c.name)).toEqual(["Food", "Supplies", "Events", "Travel", "Marketing"]);
 
     expect(await createCategory(orgId, periodId, { name: "Swag", allocatedCents: 5000 })).toEqual({});
     const swag = await withOrgTx(orgId, ({ db }) =>

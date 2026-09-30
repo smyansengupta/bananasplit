@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { withOrgAction } from "@/server/db/context";
+import { DEFAULT_CATEGORY_NAMES } from "@/lib/finance/default-categories";
 
 /**
  * Budget periods and categories (0C). These used to call
@@ -27,8 +28,6 @@ const periodInputSchema = z.object({
   startsOn: z.string(),
   endsOn: z.string(),
 });
-
-const DEFAULT_CATEGORY_NAMES = ["Food", "Materials", "Travel", "Marketing", "Speaker Fees"];
 
 /**
  * Creates a new budget period and makes it the active one. Copies the

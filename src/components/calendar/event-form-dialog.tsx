@@ -305,7 +305,7 @@ function EventForm({
             autoFocus
             required
             maxLength={200}
-            placeholder="Workshop 4: Retrieval"
+            placeholder="e.g. General meeting"
           />
         </div>
 
@@ -462,7 +462,7 @@ function EventForm({
                     id="event-host-name"
                     value={hostName}
                     onChange={(e) => setHostName(e.target.value)}
-                    placeholder="Guest speaker's name"
+                    placeholder="e.g. a guest speaker"
                     maxLength={120}
                   />
                 </div>

@@ -137,7 +137,7 @@ export function JoinCodeCard({
               <Input
                 id="join-domain"
                 value={domain}
-                placeholder="northeastern.edu (optional)"
+                placeholder="yourschool.edu (optional)"
                 onChange={(e) => setDomain(e.target.value)}
                 className="max-w-xs"
               />
