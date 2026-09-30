@@ -5,7 +5,13 @@ import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { blobStoreIdFromToken, driverFor, localDriver, StorageConfigError } from "./drivers";
+import {
+  blobStoreIdFromToken,
+  driverFor,
+  localDriver,
+  publicIsProxied,
+  StorageConfigError,
+} from "./drivers";
 import {
   assertBlobAllowed,
   MAX_UPLOAD_BYTES,
@@ -113,6 +119,15 @@ describe("storage kinds and keys", () => {
     expect(driverFor("private", {}).name).toBe("local");
     expect(driverFor("public", { BLOB_PUBLIC_READ_WRITE_TOKEN: "vercel_blob_rw_x_y" }).name).toBe("vercel-blob");
     expect(() => driverFor("private", { VERCEL: "1" })).toThrow(StorageConfigError);
+  });
+
+  it("keeps public blobs in the private store when that is the only one", () => {
+    const oneStore = { VERCEL: "1", BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_x_y" };
+    expect(publicIsProxied(oneStore)).toBe(true);
+    expect(driverFor("public", oneStore).name).toBe("vercel-blob");
+    expect(publicIsProxied({ ...oneStore, BLOB_PUBLIC_READ_WRITE_TOKEN: "vercel_blob_rw_p_q" })).toBe(false);
+    expect(publicIsProxied({})).toBe(false);
+    expect(() => driverFor("public", { VERCEL: "1" })).toThrow(StorageConfigError);
   });
 });
 

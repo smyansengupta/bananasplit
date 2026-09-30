@@ -20,14 +20,15 @@ import { StepNav, useStepSave } from "./step-nav";
 export function ThemeStep({ initial }: { initial: PersonalTheme | null }) {
   const { pending, errors, saveAndContinue } = useStepSave("theme");
   const { setTheme } = useTheme();
-  const [choice, setChoice] = useState(() => initialThemeChoice(initial, "harbor"));
+  const [choice, setChoice] = useState(() => initialThemeChoice(initial));
   const colors = useChoiceColors(choice);
 
   function submit() {
     saveAndContinue(async () => {
-      const result = await saveThemeStep(toPersonalTheme(choice));
+      const value = toPersonalTheme(choice);
+      const result = await saveThemeStep(value);
       // Light or dark applies right away on this device too.
-      if (result.ok) setTheme(choice.mode);
+      if (result.ok && value) setTheme(value.mode);
       return result;
     });
   }

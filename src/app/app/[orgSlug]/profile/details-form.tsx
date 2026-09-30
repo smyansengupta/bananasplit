@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MajorInput } from "@/components/onboarding/major-input";
+import { gradYearChoices } from "@/lib/onboarding/steps";
 import { PROFILE_LIMITS, profileDetailsSchema, profileFieldErrors } from "@/lib/profile/schema";
 
 import { saveProfileDetails } from "./actions";
@@ -33,6 +35,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 /** Name, pronouns, major and year, bio and timezone. */
 export function DetailsForm({ initial, orgTimezone }: { initial: DetailsInitial; orgTimezone: string }) {
   const [values, setValues] = useState(initial);
+  const [yearOptions] = useState(() => gradYearChoices(new Date(), 8));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -117,12 +120,11 @@ export function DetailsForm({ initial, orgTimezone }: { initial: DetailsInitial;
 
         <div className="space-y-2">
           <Label htmlFor="profile-major">Major</Label>
-          <Input
+          <MajorInput
             id="profile-major"
             value={values.major}
-            onChange={(e) => set("major", e.target.value)}
+            onChange={(major) => set("major", major)}
             maxLength={PROFILE_LIMITS.major}
-            placeholder="Computer Science"
             aria-invalid={Boolean(errors.major) || undefined}
             aria-describedby={describedBy("major")}
           />
@@ -131,15 +133,25 @@ export function DetailsForm({ initial, orgTimezone }: { initial: DetailsInitial;
 
         <div className="space-y-2">
           <Label htmlFor="profile-year">Graduation year</Label>
-          <Input
+          <select
             id="profile-year"
             value={values.gradYear}
-            onChange={(e) => set("gradYear", e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
-            inputMode="numeric"
-            placeholder="2028"
+            onChange={(e) => set("gradYear", e.target.value)}
             aria-invalid={Boolean(errors.gradYear) || undefined}
             aria-describedby={describedBy("gradYear")}
-          />
+            className="border-input focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-3"
+          >
+            <option value="">Not set</option>
+            {/* A year already on the profile stays selectable, even once it has passed. */}
+            {values.gradYear && !yearOptions.includes(Number(values.gradYear)) && (
+              <option value={values.gradYear}>{values.gradYear}</option>
+            )}
+            {yearOptions.map((y) => (
+              <option key={y} value={String(y)}>
+                {y}
+              </option>
+            ))}
+          </select>
           <FieldError id="gradYear-error" message={errors.gradYear} />
         </div>
 

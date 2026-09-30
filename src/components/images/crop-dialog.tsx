@@ -20,19 +20,25 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
 /**
- * The crop step of a picture upload. Loaded on demand (next/dynamic from
- * AvatarEditor), so react-easy-crop is not in the profile page's bundle.
+ * The crop step of a picture upload (profile pictures, club pictures).
+ * Loaded on demand (next/dynamic), so react-easy-crop is not in the pages'
+ * bundles.
  * Drag or use the arrow keys to move, pinch, scroll or use the slider to
  * zoom.
  */
-export default function AvatarCropDialog({
+export default function CropDialog({
   imageSrc,
   busy,
   error,
   onCancel,
   onConfirm,
+  title = "Crop your picture",
+  shape = "round",
 }: {
   imageSrc: string;
+  title?: string;
+  /** Round for people, a rounded square for clubs. */
+  shape?: "round" | "rect";
   busy: boolean;
   error: string | null;
   onCancel: () => void;
@@ -51,7 +57,7 @@ export default function AvatarCropDialog({
     >
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Crop your picture</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             Drag to position it. Pinch, scroll or use the slider to zoom.
           </DialogDescription>
@@ -66,7 +72,7 @@ export default function AvatarCropDialog({
             minZoom={MIN_ZOOM}
             maxZoom={MAX_ZOOM}
             aspect={1}
-            cropShape="round"
+            cropShape={shape}
             showGrid={false}
             objectFit="cover"
             onCropChange={setCrop}

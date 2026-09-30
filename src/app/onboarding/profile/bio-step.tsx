@@ -148,7 +148,7 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
             <div className="flex gap-1.5">
               <Input
                 aria-label="Link URL"
-                placeholder="github.com/your-handle"
+                placeholder="linkedin.com/in/your-name"
                 value={draft}
                 autoFocus
                 onChange={(e) => {

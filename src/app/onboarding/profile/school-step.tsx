@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { MajorInput } from "@/components/onboarding/major-input";
 import { Chip, FieldError, FieldLabel } from "@/components/onboarding/step-card";
 import { Input } from "@/components/ui/input";
 import {
@@ -62,12 +63,13 @@ export function SchoolStep({
   const [major, setMajor] = useState(first);
   const [minor, setMinor] = useState(second);
   const [showMinor, setShowMinor] = useState(second !== "");
-  const years = useMemo(() => gradYearChoices(), []);
-  const [gradYear, setGradYear] = useState<number | null>(initial.gradYear);
-  const [otherYear, setOtherYear] = useState(
-    initial.gradYear !== null && !years.includes(initial.gradYear) ? String(initial.gradYear) : "",
+  const allYears = useMemo(() => gradYearChoices(new Date(), 8), []);
+  const years = allYears.slice(0, 4);
+  const laterYears = allYears.slice(4);
+  const [gradYear, setGradYear] = useState<number | null>(
+    initial.gradYear !== null && allYears.includes(initial.gradYear) ? initial.gradYear : null,
   );
-  const [yearOther, setYearOther] = useState(otherYear !== "");
+  const [yearOther, setYearOther] = useState(gradYear !== null && laterYears.includes(gradYear));
   const knownRole =
     initial.preferredTitle && (ROLE_CHOICES as readonly string[]).includes(initial.preferredTitle);
   const [role, setRole] = useState<string>(
@@ -79,11 +81,10 @@ export function SchoolStep({
   const tooLong = joined.length > PROFILE_LIMITS.major;
 
   function submit() {
-    const year = yearOther ? (otherYear.trim() ? Number(otherYear) : null) : gradYear;
     saveAndContinue(() =>
       saveSchoolStep({
         major: joined || null,
-        gradYear: year,
+        gradYear,
         preferredTitle: role === OTHER ? customRole : role || null,
       }),
     );
@@ -95,20 +96,19 @@ export function SchoolStep({
         <FieldLabel htmlFor="ob-major" icon={BookOpen}>
           Major
         </FieldLabel>
-        <Input
+        <MajorInput
           id="ob-major"
           value={major}
-          placeholder="Computer Science"
-          onChange={(e) => setMajor(e.target.value)}
+          onChange={setMajor}
           aria-invalid={Boolean(errors.major) || tooLong || undefined}
         />
         {showMinor ? (
-          <Input
+          <MajorInput
             aria-label="Second major or minor"
             autoFocus={second === ""}
             value={minor}
             placeholder="Second major or minor"
-            onChange={(e) => setMinor(e.target.value)}
+            onChange={setMinor}
           />
         ) : (
           <button
@@ -138,7 +138,7 @@ export function SchoolStep({
             <Chip
               key={y}
               shape="box"
-              selected={!yearOther && gradYear === y}
+              selected={gradYear === y}
               onClick={() => {
                 setYearOther(false);
                 setGradYear(gradYear === y ? null : y);
@@ -147,20 +147,30 @@ export function SchoolStep({
               {y}
             </Chip>
           ))}
-          <Chip shape="box" selected={yearOther} onClick={() => setYearOther(!yearOther)}>
-            Other
+          <Chip
+            shape="box"
+            selected={yearOther}
+            onClick={() => {
+              if (yearOther && gradYear !== null && laterYears.includes(gradYear)) setGradYear(null);
+              setYearOther(!yearOther);
+            }}
+          >
+            Later
           </Chip>
         </div>
         {yearOther && (
-          <Input
-            aria-label="Graduation year"
-            inputMode="numeric"
-            placeholder="e.g. 2031"
-            maxLength={4}
-            value={otherYear}
-            onChange={(e) => setOtherYear(e.target.value.replace(/\D/g, ""))}
-            autoFocus
-          />
+          <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Later graduation years">
+            {laterYears.map((y) => (
+              <Chip
+                key={y}
+                shape="box"
+                selected={gradYear === y}
+                onClick={() => setGradYear(gradYear === y ? null : y)}
+              >
+                {y}
+              </Chip>
+            ))}
+          </div>
         )}
         <FieldError message={errors.gradYear} />
       </div>

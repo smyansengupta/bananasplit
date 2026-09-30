@@ -8,7 +8,9 @@ import type { StoreName } from "./kinds";
  * (BLOB_READ_WRITE_TOKEN for private, BLOB_PUBLIC_READ_WRITE_TOKEN for
  * public); otherwise the local filesystem driver under .data/blob/{store}/,
  * so uploads work in local development with no account. Public local files
- * are served by the dev-only route /api/dev/blob/[...key]. On Vercel the
+ * are served by the dev-only route /api/dev/blob/[...key]. With only the
+ * private token set, public blobs live in the private store and are served
+ * by /api/media/[...key] (proxiedPublicDriver). On Vercel the
  * filesystem is read-only, so a missing token there is a configuration
  * error, never a silent fallback.
  */
@@ -192,9 +194,38 @@ export function localDriver(root: string = LOCAL_BLOB_ROOT): BlobDriver {
 
 // ---------------------------------------------------------------- Selection
 
+/** Where public blobs are served from when they live in the private store. */
+export const PROXIED_PUBLIC_PREFIX = "/api/media/";
+
+/**
+ * Public blobs (avatars, logos) kept in the PRIVATE Vercel Blob store, for a
+ * deployment with only one store (BLOB_READ_WRITE_TOKEN, which is what
+ * Vercel's Blob integration sets). They are served by /api/media/[...key],
+ * which only ever answers for public-kind keys.
+ */
+export function proxiedPublicDriver(env: Env = process.env): BlobDriver {
+  const inner = vercelBlobDriver(env);
+  return {
+    name: "vercel-blob",
+    async put(_store, key, body, options) {
+      const stored = await inner.put("private", key, body, options);
+      return { key: stored.key, url: `${PROXIED_PUBLIC_PREFIX}${stored.key}` };
+    },
+    get: (_store, key) => inner.get("private", key),
+    delete: (_store, keys) => inner.delete("private", keys),
+    list: (_store, prefix, cursor) => inner.list("private", prefix, cursor),
+  };
+}
+
+/** Public blobs go to the private store and are served through the app. */
+export function publicIsProxied(env: Env = process.env): boolean {
+  return !storeToken("public", env) && Boolean(storeToken("private", env));
+}
+
 /** The driver for `store` in this environment. */
 export function driverFor(store: StoreName, env: Env = process.env): BlobDriver {
   if (storeToken(store, env)) return vercelBlobDriver(env);
+  if (store === "public" && publicIsProxied(env)) return proxiedPublicDriver(env);
   if (env.VERCEL) {
     throw new StorageConfigError(
       `${store === "private" ? "BLOB_READ_WRITE_TOKEN" : "BLOB_PUBLIC_READ_WRITE_TOKEN"} is required on Vercel`,

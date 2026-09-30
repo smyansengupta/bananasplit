@@ -92,9 +92,9 @@ export function applyPersonalTheme(
   };
 }
 
-/** Where "Custom" starts: warm paper with a terracotta primary. */
+/** Where "Custom" starts: warm paper with a terracotta primary (custom-builder.ts). */
 export const DEFAULT_CUSTOM_ROLES: ThemeRoles = {
-  primary: "#c2522d",
+  primary: "#b4462b",
   accent: "#e0a23a",
   background: "#faf7f2",
   surface: "#ffffff",

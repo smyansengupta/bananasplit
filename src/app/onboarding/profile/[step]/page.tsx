@@ -148,8 +148,9 @@ function Review({ profile }: { profile: OnboardingProfile }) {
     ? theme.preset === "custom"
       ? "Custom"
       : (THEME_PRESETS.find((p) => p.id === theme.preset)?.name ?? "Default")
-    : "Organization's theme";
-  const modeName = theme?.mode === "light" ? "Light" : theme?.mode === "dark" ? "Dark" : null;
+    : "Match my club";
+  const modeName =
+    theme?.mode === "light" ? "Light" : theme?.mode === "dark" ? "Dark" : theme ? "Auto" : null;
   const subtitle = [profile.pronouns, zoneShort(profile.timezone)].filter(Boolean).join(" · ");
   const home = profile.memberships[0];
   const blocked = blockedHoursPerWeek(profile.availability);
