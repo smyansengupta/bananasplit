@@ -155,7 +155,7 @@ function buildVEvent(event: IcsEvent, timeZone: string, uidHost: string): string
  */
 export function buildIcsCalendar(
   events: IcsEvent[],
-  nameOrOptions: string | IcsCalendarOptions = "Clubport",
+  nameOrOptions: string | IcsCalendarOptions = "Bananasplit",
 ): string {
   const options: IcsCalendarOptions =
     typeof nameOrOptions === "string" ? { name: nameOrOptions } : nameOrOptions;
@@ -164,10 +164,10 @@ export function buildIcsCalendar(
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Clubport//Calendar//EN",
+    "PRODID:-//Bananasplit//Calendar//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    `X-WR-CALNAME:${escapeText(options.name ?? "Clubport")}`,
+    `X-WR-CALNAME:${escapeText(options.name ?? "Bananasplit")}`,
   ];
   if (options.description) lines.push(`X-WR-CALDESC:${escapeText(options.description)}`);
   if (options.timeZone) lines.push(`X-WR-TIMEZONE:${timeZone}`);

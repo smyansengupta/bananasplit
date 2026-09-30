@@ -312,7 +312,7 @@ has run the migration.
 
 ## Tenancy model
 
-Clubport is multi-tenant at the **organization** level: one deployment can
+Bananasplit is multi-tenant at the **organization** level: one deployment can
 host many clubs, and every piece of data (tasks, notes, events, transactions,
 labels, projects...) belongs to exactly one `Organization` via an
 `organizationId` foreign key. There is no schema-per-tenant or

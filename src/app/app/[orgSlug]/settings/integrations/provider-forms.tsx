@@ -473,7 +473,7 @@ export function GoogleCalendarPanel({
               : "Sign in with the Google account that owns your club's calendars."}
           </p>
           <p className="text-muted-foreground mb-3 text-xs">
-            Clubport asks only to manage the events it creates and to list your calendars. It
+            Bananasplit asks only to manage the events it creates and to list your calendars. It
             never reads other events.
           </p>
           <Button type="submit" disabled={!configured}>

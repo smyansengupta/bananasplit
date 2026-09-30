@@ -1,4 +1,4 @@
-# Clubport
+# Bananasplit
 
 A multi-tenant workspace for student club executive boards: task management, notes, meeting
 scheduling, and finance tracking.

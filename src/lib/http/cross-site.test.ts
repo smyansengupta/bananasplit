@@ -10,19 +10,19 @@ describe("isCrossSite", () => {
   it("lets same-site requests through even when request.url names an internal host", () => {
     // Behind a proxy, request.url is the bound host; the browser's Host is the public one.
     expect(
-      isCrossSite(req("http://localhost:3000/api/profile/avatar", { origin: "https://clubport.app", host: "clubport.app" })),
+      isCrossSite(req("http://localhost:3000/api/profile/avatar", { origin: "https://bananasplit.app", host: "bananasplit.app" })),
     ).toBe(false);
   });
 
   it("refuses another site's browser request", () => {
     expect(
-      isCrossSite(req("https://clubport.app/api/profile/avatar", { origin: "https://evil.example", host: "clubport.app" })),
+      isCrossSite(req("https://bananasplit.app/api/profile/avatar", { origin: "https://evil.example", host: "bananasplit.app" })),
     ).toBe(true);
   });
 
   it("treats a request with no Origin as not cross-site, and a garbled Origin as cross-site", () => {
-    expect(isCrossSite(req("https://clubport.app/api/x", { host: "clubport.app" }))).toBe(false);
-    expect(isCrossSite(req("https://clubport.app/api/x", { origin: "not a url", host: "clubport.app" }))).toBe(true);
+    expect(isCrossSite(req("https://bananasplit.app/api/x", { host: "bananasplit.app" }))).toBe(false);
+    expect(isCrossSite(req("https://bananasplit.app/api/x", { origin: "not a url", host: "bananasplit.app" }))).toBe(true);
   });
 
   it("compares ports too", () => {

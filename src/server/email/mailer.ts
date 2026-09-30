@@ -41,7 +41,7 @@ export interface Mailer {
   send(message: RenderedEmail & { to: string }, options?: SendOptions): Promise<SendResult>;
 }
 
-const PLATFORM_NAME = "Clubport";
+const PLATFORM_NAME = "Bananasplit";
 
 /** The non-secret part of an org's Resend sender (OrgIntegration.config). */
 export const resendSenderConfig = z.object({
@@ -135,7 +135,7 @@ export async function resolveOrgMailRouting(orgId: string): Promise<OrgMailRouti
   });
 }
 
-/** The platform sender, labelled "<Org> via Clubport". */
+/** The platform sender, labelled "<Org> via Bananasplit". */
 export function platformFallbackMailer(orgName: string): Mailer {
   const name = displayName(`${orgName} via ${PLATFORM_NAME}`);
   const from = `"${name}" <${addressOf(platformFrom())}>`;

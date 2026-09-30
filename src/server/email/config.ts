@@ -37,9 +37,9 @@ export function emailDelivery(env: Env = process.env): EmailDelivery {
 }
 
 /** The dev fallback sender; production must set EMAIL_FROM. */
-export const DEV_EMAIL_FROM = "Clubport <no-reply@example.com>";
+export const DEV_EMAIL_FROM = "Bananasplit <no-reply@example.com>";
 
-/** The platform sender address (name plus address), e.g. "Clubport <no-reply@x.org>". */
+/** The platform sender address (name plus address), e.g. "Bananasplit <no-reply@x.org>". */
 export function platformFrom(env: Env = process.env): string {
   return env.EMAIL_FROM?.trim() || DEV_EMAIL_FROM;
 }

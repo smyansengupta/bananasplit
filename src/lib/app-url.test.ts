@@ -50,20 +50,20 @@ describe("appBaseUrl — never from the Host header (0A Fix 7)", () => {
       appOrigin(
         env({
           VERCEL_ENV: "production",
-          VERCEL_URL: "clubport-abc123.vercel.app",
-          VERCEL_PROJECT_PRODUCTION_URL: "clubport.smyan.dev",
+          VERCEL_URL: "bananasplit-abc123.vercel.app",
+          VERCEL_PROJECT_PRODUCTION_URL: "bananasplit.smyan.dev",
         }),
       ),
-    ).toBe("https://clubport.smyan.dev");
+    ).toBe("https://bananasplit.smyan.dev");
     expect(
       appUrl(
         "/verify-email/tok",
         env({
           VERCEL_ENV: "production",
-          VERCEL_PROJECT_PRODUCTION_URL: "https://clubport.smyan.dev/",
+          VERCEL_PROJECT_PRODUCTION_URL: "https://bananasplit.smyan.dev/",
         }),
       ),
-    ).toBe("https://clubport.smyan.dev/verify-email/tok");
+    ).toBe("https://bananasplit.smyan.dev/verify-email/tok");
   });
 
   it("prefers NEXT_PUBLIC_APP_URL over the production domain", () => {
@@ -71,11 +71,11 @@ describe("appBaseUrl — never from the Host header (0A Fix 7)", () => {
       appOrigin(
         env({
           VERCEL_ENV: "production",
-          VERCEL_PROJECT_PRODUCTION_URL: "clubport.vercel.app",
-          NEXT_PUBLIC_APP_URL: "https://clubport.smyan.dev",
+          VERCEL_PROJECT_PRODUCTION_URL: "bananasplit.vercel.app",
+          NEXT_PUBLIC_APP_URL: "https://bananasplit.smyan.dev",
         }),
       ),
-    ).toBe("https://clubport.smyan.dev");
+    ).toBe("https://bananasplit.smyan.dev");
   });
 
   it("never links a preview to production", () => {
@@ -83,11 +83,11 @@ describe("appBaseUrl — never from the Host header (0A Fix 7)", () => {
       appOrigin(
         env({
           VERCEL_ENV: "preview",
-          VERCEL_URL: "clubport-git-branch.vercel.app",
-          VERCEL_PROJECT_PRODUCTION_URL: "clubport.smyan.dev",
+          VERCEL_URL: "bananasplit-git-branch.vercel.app",
+          VERCEL_PROJECT_PRODUCTION_URL: "bananasplit.smyan.dev",
         }),
       ),
-    ).toBe("https://clubport-git-branch.vercel.app");
+    ).toBe("https://bananasplit-git-branch.vercel.app");
   });
 
   it("throws a configuration error in production instead of linking to localhost", () => {
@@ -108,7 +108,7 @@ describe("appBaseUrl — never from the Host header (0A Fix 7)", () => {
           env({
             VERCEL_ENV: "production",
             NEXT_PUBLIC_APP_URL: local,
-            VERCEL_PROJECT_PRODUCTION_URL: "clubport.smyan.dev",
+            VERCEL_PROJECT_PRODUCTION_URL: "bananasplit.smyan.dev",
           }),
         ),
       ).toThrow(/points at localhost in production/);
