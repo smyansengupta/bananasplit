@@ -4,6 +4,7 @@ import { CalendarDays, CheckSquare, Users } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { FinanceSnapshotCard } from "@/components/overview/finance-snapshot-card";
+import { GettingStartedCard } from "@/components/overview/getting-started-card";
 import { MyTasksCard } from "@/components/overview/my-tasks-card";
 import { PinnedCard, RecentlyVisitedCard } from "@/components/overview/pinned-card";
 import { UpcomingEventsCard } from "@/components/overview/upcoming-events-card";
@@ -73,6 +74,7 @@ export default async function OrgOverviewPage({ params, searchParams }: PageProp
     finance,
     setup,
     joinCode,
+    started,
   } = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({
       where: { id: user.id },
@@ -105,6 +107,17 @@ export default async function OrgOverviewPage({ params, searchParams }: PageProp
         welcome && can({ role }, "members.invite")
           ? await getOrCreateJoinCode(db, org.id, user.id)
           : null,
+      // A new club's first steps, for admins: what the org already has.
+      started: canSetUp
+        ? {
+            members: (await db.membership.count({ where: { organizationId: org.id } })) > 1,
+            picture: org.logo != null,
+            event: (await db.event.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+            task: (await db.task.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+            budget: (await db.budgetPeriod.count({ where: { organizationId: org.id } })) > 0,
+            note: (await db.note.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+          }
+        : null,
     };
   }).catch(handleAuthErrorInPage);
 
@@ -173,6 +186,7 @@ export default async function OrgOverviewPage({ params, searchParams }: PageProp
           </CardHeader>
         </Card>
       )}
+      {started && <GettingStartedCard orgSlug={orgSlug} state={started} />}
       {setup ? <SetupPrompt orgSlug={orgSlug} state={setup} /> : null}
 
       <PinnedCard pins={pins} />

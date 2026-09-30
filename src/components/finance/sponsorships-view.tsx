@@ -1,5 +1,6 @@
 "use client";
 
+import { Handshake } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { SponsorshipStatus } from "@/generated/prisma/enums";
 import { formatCents, parseDollarsToCents } from "@/lib/finance/money";
+import { EmptyState } from "@/components/empty-state";
 
 interface Sponsor {
   id: string;
@@ -256,7 +258,12 @@ export function SponsorshipsView({
             </li>
           ))}
           {sponsorships.length === 0 && (
-            <p className="text-muted-foreground text-sm">No sponsorships yet.</p>
+            <EmptyState
+              size="compact"
+              icon={Handshake}
+              title="No sponsorships yet"
+              description="Add a sponsor, then record what they committed. Money only counts toward the balance once it's received."
+            />
           )}
         </ul>
       </div>
