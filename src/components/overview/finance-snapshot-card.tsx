@@ -1,3 +1,4 @@
+import { Wallet } from "lucide-react";
 import Link from "next/link";
 
 import { RunwayStatusLabel } from "@/components/finance/runway-status";
@@ -7,25 +8,26 @@ import { formatCents } from "@/lib/finance/money";
 import { formatFinanceDate } from "@/lib/finance/stats";
 
 /**
- * The overview's finance card for OWNER/TREASURER: the balance and when it
- * runs out, from the same figures as the finance dashboard. Everyone else
- * sees what the club owes them instead.
+ * The overview's finance card, for finance roles only (OWNER/TREASURER):
+ * the balance and when it runs out, from the same figures as the finance
+ * dashboard. Nobody else sees finance on the Overview.
  */
 export function FinanceSnapshotCard({
   orgSlug,
   dashboard,
-  moneyOwedToYouCents,
 }: {
   orgSlug: string;
   dashboard: DashboardData;
-  moneyOwedToYouCents: number;
 }) {
   const { period, runway } = dashboard;
   return (
     <Link href={`/app/${orgSlug}/finance`}>
       <Card className="hover:bg-accent/50 h-full transition-colors">
         <CardHeader>
-          <CardTitle className="text-sm font-medium">Club balance</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Wallet className="text-muted-foreground size-4" aria-hidden="true" />
+            Club balance
+          </CardTitle>
           {period && runway ? (
             <>
               <CardDescription>
@@ -40,9 +42,6 @@ export function FinanceSnapshotCard({
             </>
           ) : (
             <CardDescription>No active budget period yet</CardDescription>
-          )}
-          {moneyOwedToYouCents > 0 && (
-            <CardDescription>{formatCents(moneyOwedToYouCents)} owed to you</CardDescription>
           )}
         </CardHeader>
       </Card>

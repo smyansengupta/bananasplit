@@ -36,6 +36,7 @@ const GRANTS = {
   Invitation: ["SIUD", "SIUD", ""],
   Job: ["S", "S", ""],
   Label: ["SIUD", "SIUD", ""],
+  MemberPrefs: ["SIU", "", ""],
   Membership: ["SUD", "SIUD", ""],
   Note: ["SIUD", "SIUD", ""],
   Notification: ["SIu", "SIUD", ""],
@@ -46,6 +47,8 @@ const GRANTS = {
   OrgCreationCode: ["", "", ""],
   OrgDeletionLog: ["", "", ""],
   OrgExport: ["SI", "SIUD", ""],
+  // Notes page files: shared or private to the uploader; no DELETE (soft).
+  OrgFile: ["SIU", "S", ""],
   OrgIntegration: ["SIUD", "SIUD", ""],
   // Onboarding invite code: admins manage it, no DELETE (rotate or turn off).
   OrgJoinCode: ["SIU", "SU", ""],
@@ -55,11 +58,14 @@ const GRANTS = {
   OrgSlugHistory: ["", "", ""],
   OrgTheme: ["SIUD", "SIUD", ""],
   Organization: ["SU", "SIUD", ""],
+  // A member's own pins and recent pages in one org (owner-only).
+  Pin: ["SIUD", "", ""],
   PollResponse: ["SIUD", "SIUD", ""],
   PollSlot: ["SIUD", "SIUD", ""],
   Project: ["SIUD", "SIUD", ""],
   RateLimitBucket: ["", "", ""],
   Receipt: ["SID", "SID", ""],
+  RecentVisit: ["SIUD", "", ""],
   Session: ["", "", "SIUD"],
   Signup: ["SIUD", "SIUD", ""],
   Sponsor: ["SIUD", "SIUD", ""],
@@ -124,6 +130,7 @@ const NEW_TENANT_TABLES = [
   "TaskLabel",
   "Receipt",
   "OrgJoinCode",
+  "OrgFile",
 ];
 
 /**
@@ -2624,6 +2631,110 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       return { own, foreign, none };
     },
     { value: { own: 1, foreign: 0, none: 0 } },
+  );
+
+  // ======================= Pins, recent pages, files =======================
+  await tcase(
+    "P-PIN-01",
+    "Pin, RecentVisit, MemberPrefs: a member reads and writes only their own rows in their current org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.own_pin = await rc(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_1','org_A','u_memberA','page','/app/org-a/tasks','Tasks')`,
+      );
+      s.pin_for_other = await tryq(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_2','org_A','u_treasA','page','/app/org-a/tasks','Tasks')`,
+      );
+      s.pin_other_org = await tryq(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_3','org_B','u_memberA','page','/app/org-b/tasks','Tasks')`,
+      );
+      s.outside_href = await tryq(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_4','org_A','u_memberA','page','https://evil.example','X')`,
+      );
+      s.own_visit = await rc(
+        q,
+        `INSERT INTO "RecentVisit" ("organizationId","userId","kind","href","label") VALUES ('org_A','u_memberA','page','/app/org-a/notes','Notes')`,
+      );
+      s.own_prefs = await rc(
+        q,
+        `INSERT INTO "MemberPrefs" ("organizationId","userId","financeWidgets") VALUES ('org_A','u_memberA','[]')`,
+      );
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_sees_pins = await count(q, `SELECT count(*) n FROM "Pin"`);
+      s.owner_sees_visits = await count(q, `SELECT count(*) n FROM "RecentVisit"`);
+      s.owner_sees_prefs = await count(q, `SELECT count(*) n FROM "MemberPrefs"`);
+      s.owner_deletes_pin = await rc(q, `DELETE FROM "Pin" WHERE "id" = 'pin_1'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_sees_pins = await count(q, `SELECT count(*) n FROM "Pin"`);
+      s.member_deletes_pin = await rc(q, `DELETE FROM "Pin" WHERE "id" = 'pin_1'`);
+      return s;
+    },
+    {
+      value: {
+        own_pin: 1,
+        pin_for_other: "42501",
+        pin_other_org: "42501",
+        outside_href: "23514",
+        own_visit: 1,
+        own_prefs: 1,
+        owner_sees_pins: 0,
+        owner_sees_visits: 0,
+        owner_sees_prefs: 0,
+        owner_deletes_pin: 0,
+        member_sees_pins: 1,
+        member_deletes_pin: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-PIN-02",
+    "OrgFile: shared files reach every member, private ones only the uploader; only the uploader or an admin changes one",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.shared = await rc(
+        q,
+        `INSERT INTO "OrgFile" ("id","organizationId","name","contentType","sizeBytes","storageKey","visibility","uploadedById") VALUES ('f_1','org_A','Plan.pdf','application/pdf',10,'files/org_A/a','ORGANIZATION','u_memberA')`,
+      );
+      s.private = await rc(
+        q,
+        `INSERT INTO "OrgFile" ("id","organizationId","name","contentType","sizeBytes","storageKey","visibility","uploadedById") VALUES ('f_2','org_A','Mine.pdf','application/pdf',10,'files/org_A/b','PRIVATE','u_memberA')`,
+      );
+      s.as_someone_else = await tryq(
+        q,
+        `INSERT INTO "OrgFile" ("id","organizationId","name","contentType","sizeBytes","storageKey","uploadedById") VALUES ('f_3','org_A','X.pdf','application/pdf',10,'files/org_A/c','u_treasA')`,
+      );
+      s.delete = await tryq(q, `DELETE FROM "OrgFile"`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.treas_sees = await count(q, `SELECT count(*) n FROM "OrgFile"`);
+      s.treas_renames = await rc(q, `UPDATE "OrgFile" SET "name" = 'Mine now.pdf' WHERE "id" = 'f_1'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_sees = await count(q, `SELECT count(*) n FROM "OrgFile"`);
+      s.admin_removes = await rc(q, `UPDATE "OrgFile" SET "deletedAt" = now() WHERE "id" = 'f_1'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_sees = await count(q, `SELECT count(*) n FROM "OrgFile"`);
+      return s;
+    },
+    {
+      value: {
+        shared: 1,
+        private: 1,
+        as_someone_else: "42501",
+        delete: "42501",
+        treas_sees: 1,
+        treas_renames: 0,
+        admin_sees: 1,
+        admin_removes: 1,
+        other_org_sees: 0,
+      },
+    },
   );
 
   // ======================= Onboarding flows =======================

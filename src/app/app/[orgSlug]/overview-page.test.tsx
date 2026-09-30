@@ -16,9 +16,9 @@ const mocks = vi.hoisted(() => ({
   getMyOpenTasks: vi.fn(),
   getUpcomingEvents: vi.fn(),
   getViewerRsvps: vi.fn(),
-  getRecentNotes: vi.fn(),
+  listPins: vi.fn(),
+  listRecent: vi.fn(),
   getDashboardData: vi.fn(),
-  getMoneyOwedToUser: vi.fn(),
   loadSetupState: vi.fn(),
 }));
 
@@ -38,10 +38,9 @@ vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({
   getUpcomingEvents: mocks.getUpcomingEvents,
   getViewerRsvps: mocks.getViewerRsvps,
 }));
-vi.mock("@/app/app/[orgSlug]/notes/queries", () => ({ getRecentNotes: mocks.getRecentNotes }));
+vi.mock("@/server/pins", () => ({ listPins: mocks.listPins, listRecent: mocks.listRecent }));
 vi.mock("@/app/app/[orgSlug]/finance/queries", () => ({
   getDashboardData: mocks.getDashboardData,
-  getMoneyOwedToUser: mocks.getMoneyOwedToUser,
 }));
 vi.mock("@/server/setup/progress", () => ({ loadSetupState: mocks.loadSetupState }));
 vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
@@ -72,14 +71,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
   mocks.getOrgContextBySlug.mockResolvedValue({ user: viewer, organization: org, role: "MEMBER" });
-  db.user.findUnique.mockResolvedValue({ timezone: "America/Los_Angeles" });
+  db.user.findUnique.mockResolvedValue({ timezone: "America/Los_Angeles", name: "Viewer" });
   db.task.count.mockResolvedValue(0);
   db.event.count.mockResolvedValue(0);
   mocks.getMyOpenTasks.mockResolvedValue({ tasks: [], total: 0, overdue: 0 });
   mocks.getUpcomingEvents.mockResolvedValue([]);
   mocks.getViewerRsvps.mockResolvedValue(new Map());
-  mocks.getRecentNotes.mockResolvedValue([]);
-  mocks.getMoneyOwedToUser.mockResolvedValue(1_250);
+  mocks.listPins.mockResolvedValue([]);
+  mocks.listRecent.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -87,12 +86,13 @@ afterEach(() => {
 });
 
 describe("org overview", () => {
-  it("shows a member what the club owes them, and never reads the club's finances", async () => {
+  it("shows a member no finance at all, and never reads the club's finances", async () => {
     const html = await render();
     expect(mocks.getDashboardData).not.toHaveBeenCalled();
-    expect(html).toContain("Money owed to you");
-    expect(html).toContain("$12.50");
+    expect(html).not.toContain("Money owed to you");
     expect(html).not.toContain("Club balance");
+    // Greets them by first name, in their own timezone (10:00 in Los Angeles).
+    expect(html).toContain("Good morning, Viewer");
   });
 
   it("shows a treasurer the balance and when it runs out", async () => {
@@ -121,8 +121,7 @@ describe("org overview", () => {
     expect(html).toContain("$300.00 · FY 2026-27");
     // $900 over the 90-day window is $10 a day: $300 lasts 30 days.
     expect(html).toContain("Runs out Nov 4, 2026");
-    expect(html).toContain("$12.50 owed to you");
-    expect(html).not.toContain("Money owed to you");
+    expect(html).not.toContain("owed to you");
   });
 
   it("asks for my open tasks against my own today, and links each one to its page", async () => {
@@ -189,7 +188,8 @@ describe("org overview", () => {
     mocks.getViewerRsvps.mockResolvedValue(new Map([["e_1", "YES"]]));
 
     const html = await render();
-    expect(mocks.getUpcomingEvents).toHaveBeenCalledWith(db, "org_cbc", NOW, 5);
+    expect(mocks.getUpcomingEvents).toHaveBeenCalledWith(db, "org_cbc", NOW, 5, "events");
+    expect(mocks.getUpcomingEvents).toHaveBeenCalledWith(db, "org_cbc", NOW, 5, "meetings");
     expect(html).toContain('href="/app/cbc/calendar/e_1"');
     expect(html).toContain("Today, 6:00 PM – 8:00 PM");
     expect(html).toContain("Workshop");
@@ -197,21 +197,32 @@ describe("org overview", () => {
     expect(html).toContain("Going");
   });
 
-  it("lists recently edited notes the viewer may read", async () => {
-    mocks.getRecentNotes.mockResolvedValue([
+  it("lists the viewer's pins and the pages they opened recently", async () => {
+    mocks.listPins.mockResolvedValue([
+      { id: "pin_1", href: "/app/cbc/notes/n_1", label: "E-board minutes", kind: "note" },
+    ]);
+    mocks.listRecent.mockResolvedValue([
       {
-        id: "n_1",
-        title: "E-board minutes",
-        visibility: "ORGANIZATION",
-        updatedAt: new Date("2026-10-05T15:00:00Z"),
-        updatedBy: { id: "u_2", name: "Oliver Ward", image: null, avatar: null },
+        href: "/app/cbc/databases/sessions",
+        label: "Sessions",
+        kind: "database",
+        visitedAt: new Date("2026-10-05T15:00:00Z"),
       },
     ]);
 
     const html = await render();
-    expect(mocks.getRecentNotes).toHaveBeenCalledWith(db, "org_cbc", "u_viewer", 5);
+    expect(mocks.listPins).toHaveBeenCalledWith(db, "org_cbc", "cbc", "u_viewer");
+    expect(mocks.listRecent).toHaveBeenCalledWith(db, "org_cbc", "cbc", "u_viewer", 8);
     expect(html).toContain('href="/app/cbc/notes/n_1"');
     expect(html).toContain("E-board minutes");
-    expect(html).toContain("Oliver Ward · about 2 hours ago");
+    expect(html).toContain('href="/app/cbc/databases/sessions"');
+    expect(html).toContain("2 hours ago");
+  });
+
+  it("shows a next step when there is nothing pinned or coming up", async () => {
+    const html = await render();
+    expect(html).toContain("Nothing pinned yet");
+    expect(html).toContain("No meetings coming up");
+    expect(html).toContain("No events coming up");
   });
 });

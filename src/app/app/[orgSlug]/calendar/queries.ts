@@ -88,9 +88,26 @@ export function getEventsInRange(db: TxClient, organizationId: string, f: RangeF
 }
 
 /** The next `limit` events that have not ended yet (one under way included), for the overview. */
-export function getUpcomingEvents(db: TxClient, organizationId: string, now: Date, limit: number) {
+export function getUpcomingEvents(
+  db: TxClient,
+  organizationId: string,
+  now: Date,
+  limit: number,
+  only?: "meetings" | "events",
+) {
+  // A meeting: a board meeting, or anything titled "... meeting" (the team
+  // meetings org setup adds). The Overview lists them apart from events.
+  const meeting: Prisma.EventWhereInput = {
+    OR: [{ kind: "BOARD_MEETING" }, { title: { contains: "meeting", mode: "insensitive" } }],
+  };
   return db.event.findMany({
-    where: { organizationId, deletedAt: null, mergedIntoId: null, endsAt: { gt: now } },
+    where: {
+      organizationId,
+      deletedAt: null,
+      mergedIntoId: null,
+      endsAt: { gt: now },
+      ...(only === "meetings" ? meeting : only === "events" ? { NOT: meeting } : {}),
+    },
     select: calendarEventSelect,
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     take: limit,

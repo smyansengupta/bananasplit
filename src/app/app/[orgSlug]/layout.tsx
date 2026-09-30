@@ -10,7 +10,8 @@ import { requireUser } from "@/lib/auth/session";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { listPins } from "@/server/pins";
 import { getShellUser, getViewerPrefs } from "@/server/profiles/queries";
 import { findPendingDeletionOrg } from "@/server/settings/deletion";
 
@@ -95,6 +96,9 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   // (React cache()), resolved and re-validated as strict hex before render;
   // the member's personal theme (profile setup A4) goes on top of it.
   const theme = applyPersonalTheme(resolveTheme(ctx.theme), parsePersonalTheme(prefs.themePreference));
+  const pins = await withOrgTx(ctx.organization.id, ({ db }) =>
+    listPins(db, ctx.organization.id, ctx.organization.slug, ctx.user.id),
+  );
 
   return (
     <OrgThemeRoot key={ctx.organization.id} theme={theme}>
@@ -103,6 +107,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         orgId={ctx.organization.id}
         orgs={orgs}
         user={shellUser}
+        pins={pins}
         brand={
           <OrgBrand
             name={ctx.organization.name}

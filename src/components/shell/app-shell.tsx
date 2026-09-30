@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette/command-palette";
 import { NotificationBell } from "@/components/shell/notification-bell";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
-import { SidebarNav } from "@/components/shell/sidebar-nav";
-import { navItems } from "@/components/shell/nav-config";
+import { PinButton, VisitTracker } from "@/components/shell/pin-button";
+import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { UserMenu } from "@/components/shell/user-menu";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -19,6 +19,7 @@ export function AppShell({
   orgs,
   user,
   brand,
+  pins = [],
   children,
 }: {
   orgSlug: string;
@@ -27,6 +28,8 @@ export function AppShell({
   user: ShellUser;
   /** The org's logo and name (Settings > Theme > Logo display), above the switcher. */
   brand?: React.ReactNode;
+  /** The member's pins in this org (sidebar, and the pin button's state). */
+  pins?: SidebarPin[];
   children: React.ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -52,10 +55,10 @@ export function AppShell({
         Skip to content
       </a>
 
-      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden flex-col gap-4 border-r p-4 md:flex">
+      <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden flex-col gap-4 border-r p-4 md:sticky md:top-0 md:flex md:h-screen">
         {brand}
         <OrgSwitcher orgs={orgs} activeSlug={orgSlug} />
-        <SidebarNav items={navItems} orgSlug={orgSlug} />
+        <SidebarNav orgSlug={orgSlug} orgId={orgId} pins={pins} />
       </aside>
 
       <div className="flex min-w-0 flex-col">
@@ -71,16 +74,17 @@ export function AppShell({
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="bg-sidebar text-sidebar-foreground w-72 p-4">
+            <SheetContent side="left" className="bg-sidebar text-sidebar-foreground flex w-72 flex-col p-4">
               <SheetHeader className="gap-3 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
                 {brand}
                 <OrgSwitcher orgs={orgs} activeSlug={orgSlug} />
               </SheetHeader>
-              <div className="mt-4">
+              <div className="mt-4 flex min-h-0 flex-1 flex-col">
                 <SidebarNav
-                  items={navItems}
                   orgSlug={orgSlug}
+                  orgId={orgId}
+                  pins={pins}
                   onNavigate={() => setMobileNavOpen(false)}
                 />
               </div>
@@ -99,6 +103,7 @@ export function AppShell({
           </Button>
 
           <div className="flex-1" />
+          <PinButton orgId={orgId} pinnedHrefs={pins.map((p) => p.href)} />
           <NotificationBell />
           <UserMenu user={user} />
         </header>
@@ -108,6 +113,7 @@ export function AppShell({
         </main>
       </div>
 
+      <VisitTracker orgId={orgId} />
       <CommandPalette
         orgId={orgId}
         orgSlug={orgSlug}

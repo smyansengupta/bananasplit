@@ -11,12 +11,12 @@ describe("sidebar navigation", () => {
     expect(navItems.map((i) => i.label)).toEqual([
       "Overview",
       "Tasks",
-      "Notes",
       "Calendar",
-      "Polls",
+      "Notes",
+      "People",
       "Org Chart",
+      "Polls",
       "Databases",
-      "Reports",
       "Finance",
       "Settings",
     ]);

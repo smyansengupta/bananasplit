@@ -170,7 +170,7 @@ function DataResult({
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h3 className="text-sm font-medium">Attendance over time</h3>
                 <Link
-                  href={`/app/${orgSlug}/reports`}
+                  href={`/app/${orgSlug}/databases/reports`}
                   className="text-muted-foreground text-xs underline-offset-4 hover:underline"
                 >
                   All reports
@@ -218,7 +218,7 @@ function DataResult({
                 />
               ) : null}
               <Destination
-                href={`/app/${orgSlug}/reports`}
+                href={`/app/${orgSlug}/databases/reports`}
                 icon={ArrowRight}
                 label="Reports"
                 detail="Attendance, retention, signups and stamp cards"

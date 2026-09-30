@@ -1,0 +1,37 @@
+"use server";
+
+import { z } from "zod";
+
+import { withOrgAction, type TxClient } from "@/server/db/context";
+import { recordVisit, togglePin, unpin, type PinResult } from "@/server/pins";
+
+/**
+ * Pins and "Recently visited" (the shell's pin button, the visit tracker,
+ * the sidebar's Pinned list). Every write is the member's own row in the
+ * org (RLS); the org's slug comes from the database, never the client.
+ */
+
+const pathSchema = z.string().min(1).max(400);
+
+async function slugOf(db: TxClient, orgId: string) {
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { slug: true } });
+  return org?.slug ?? null;
+}
+
+export const togglePinAction = withOrgAction(async (ctx, pathname: string): Promise<PinResult> => {
+  const path = pathSchema.safeParse(pathname);
+  const slug = await slugOf(ctx.db, ctx.organizationId);
+  if (!path.success || !slug) return { ok: false, error: "This page can't be pinned." };
+  return togglePin(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
+});
+
+export const unpinAction = withOrgAction(async (ctx, pinId: string): Promise<void> => {
+  await unpin(ctx.db, ctx.organizationId, ctx.userId, z.string().max(64).parse(pinId));
+});
+
+export const recordVisitAction = withOrgAction(async (ctx, pathname: string): Promise<void> => {
+  const path = pathSchema.safeParse(pathname);
+  const slug = await slugOf(ctx.db, ctx.organizationId);
+  if (!path.success || !slug) return;
+  await recordVisit(ctx.db, ctx.organizationId, slug, ctx.userId, path.data);
+});

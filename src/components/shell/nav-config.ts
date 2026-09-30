@@ -1,13 +1,13 @@
 import {
   CalendarCheck,
   CalendarDays,
-  ChartColumn,
   CheckSquare,
   Database,
   LayoutDashboard,
   Network,
   NotebookText,
   Settings,
+  Users,
   Wallet,
 } from "lucide-react";
 
@@ -23,23 +23,53 @@ export interface NavItem {
   match?: "exact" | "prefix";
 }
 
-// Every member can at least submit and track their own reimbursements, so
-// Finance stays in the nav for everyone; the page behind it (Phase 5) scopes
-// down to "My reimbursements" for roles without full finance access.
-// Only the platform owner of the shell edits this list (CONTRACTS.md);
-// feature builders replace their section's stub page instead.
-export const navItems: NavItem[] = [
-  { label: "Overview", href: (org) => `/app/${org}`, icon: LayoutDashboard, match: "exact" },
-  { label: "Tasks", href: (org) => `/app/${org}/tasks`, icon: CheckSquare },
-  { label: "Notes", href: (org) => `/app/${org}/notes`, icon: NotebookText },
-  { label: "Calendar", href: (org) => `/app/${org}/calendar`, icon: CalendarDays },
-  { label: "Polls", href: (org) => `/app/${org}/calendar/polls`, icon: CalendarCheck },
-  { label: "Org Chart", href: (org) => `/app/${org}/org-chart`, icon: Network },
-  { label: "Databases", href: (org) => `/app/${org}/databases`, icon: Database },
-  { label: "Reports", href: (org) => `/app/${org}/reports`, icon: ChartColumn },
-  { label: "Finance", href: (org) => `/app/${org}/finance`, icon: Wallet },
-  { label: "Settings", href: (org) => `/app/${org}/settings`, icon: Settings },
+export interface NavGroup {
+  /** Shown above the group; null for the first, unlabelled group. */
+  label: string | null;
+  items: NavItem[];
+}
+
+// Grouped so the sidebar reads as three short lists: your work, the club,
+// and its data. Reports lives inside Databases (a tab there); Polls stays
+// its own item. Every member can at least submit and track their own
+// reimbursements, so Finance stays in the nav for everyone; the page behind
+// it scopes down to "My reimbursements" for roles without finance access.
+// Settings sits apart at the bottom of the sidebar.
+export const navGroups: NavGroup[] = [
+  {
+    label: null,
+    items: [
+      { label: "Overview", href: (org) => `/app/${org}`, icon: LayoutDashboard, match: "exact" },
+      { label: "Tasks", href: (org) => `/app/${org}/tasks`, icon: CheckSquare },
+      { label: "Calendar", href: (org) => `/app/${org}/calendar`, icon: CalendarDays },
+      { label: "Notes", href: (org) => `/app/${org}/notes`, icon: NotebookText },
+    ],
+  },
+  {
+    label: "Club",
+    items: [
+      { label: "People", href: (org) => `/app/${org}/people`, icon: Users },
+      { label: "Org Chart", href: (org) => `/app/${org}/org-chart`, icon: Network },
+      { label: "Polls", href: (org) => `/app/${org}/calendar/polls`, icon: CalendarCheck },
+    ],
+  },
+  {
+    label: "Data",
+    items: [
+      { label: "Databases", href: (org) => `/app/${org}/databases`, icon: Database },
+      { label: "Finance", href: (org) => `/app/${org}/finance`, icon: Wallet },
+    ],
+  },
 ];
+
+export const settingsNavItem: NavItem = {
+  label: "Settings",
+  href: (org) => `/app/${org}/settings`,
+  icon: Settings,
+};
+
+/** Every item, in sidebar order (Settings last). */
+export const navItems: NavItem[] = [...navGroups.flatMap((g) => g.items), settingsNavItem];
 
 function matchesPath(item: NavItem, orgSlug: string, pathname: string): boolean {
   const href = item.href(orgSlug);

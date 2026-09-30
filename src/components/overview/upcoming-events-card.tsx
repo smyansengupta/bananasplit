@@ -1,4 +1,5 @@
 import {
+  CalendarDays,
   CircleCheck,
   CircleQuestionMark,
   CircleX,
@@ -29,6 +30,9 @@ export function UpcomingEventsCard({
   zones,
   now,
   className,
+  title = "Coming up",
+  icon: Icon = CalendarDays,
+  empty,
 }: {
   orgSlug: string;
   events: readonly CalendarEventSummary[];
@@ -36,11 +40,18 @@ export function UpcomingEventsCard({
   zones: { viewer: string; org: string };
   now: Date;
   className?: string;
+  title?: string;
+  icon?: LucideIcon;
+  /** What to show with nothing coming up, with a next step. */
+  empty?: React.ReactNode;
 }) {
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="text-sm font-medium">Coming up</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <Icon className="text-muted-foreground size-4" aria-hidden="true" />
+          {title}
+        </CardTitle>
         <CardAction>
           <Link
             href={`/app/${orgSlug}/calendar`}
@@ -52,7 +63,7 @@ export function UpcomingEventsCard({
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Nothing on the calendar yet.</p>
+          (empty ?? <p className="text-muted-foreground text-sm">Nothing on the calendar yet.</p>)
         ) : (
           <ul className="divide-y">
             {events.map((event) => {

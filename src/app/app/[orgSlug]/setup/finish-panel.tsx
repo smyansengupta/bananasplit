@@ -129,7 +129,7 @@ export function FinishPanel({
             ) : null}
             <li>
               <Link
-                href={`/app/${orgSlug}/reports`}
+                href={`/app/${orgSlug}/databases/reports`}
                 className="hover:bg-muted/60 focus-visible:ring-ring group flex items-center gap-3 rounded-lg border p-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
                 <span className="min-w-0 flex-1">

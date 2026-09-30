@@ -27,7 +27,7 @@ import { readUpload, UploadError, uploadErrorResponse } from "./upload";
 
 describe("storage kinds and keys", () => {
   it("every org-scoped kind is enumerated for the purge", () => {
-    expect([...ORG_SCOPED_KINDS].sort()).toEqual(["exports", "logos", "org-chart", "receipts"]);
+    expect([...ORG_SCOPED_KINDS].sort()).toEqual(["exports", "files", "logos", "org-chart", "receipts"]);
     expect(STORAGE_KINDS.avatars.scope).toBe("user");
     expect(STORAGE_KINDS.receipts.store).toBe("private");
     expect(STORAGE_KINDS.logos.store).toBe("public");
