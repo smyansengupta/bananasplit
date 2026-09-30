@@ -160,6 +160,29 @@ export interface DashboardData {
   burnByMonth: { month: string; inCents: number; outCents: number }[];
   unreconciledOver60DaysCount: number;
   runway: Runway | null;
+  /** Money in and out this period (the ledger: what counts toward the balance). */
+  inTotalCents: number;
+  outTotalCents: number;
+  /** Expenses submitted and waiting for approval. */
+  pendingApproval: { count: number; cents: number };
+  /** Money out by transaction type. */
+  spendByKind: { kind: TransactionKind; cents: number }[];
+  /** The running balance after each day with activity. */
+  balanceTrend: { date: string; balanceCents: number }[];
+  /** The latest ledger transactions, newest first. */
+  recent: DashboardTransaction[];
+  /** This period's largest money out. */
+  topExpenses: DashboardTransaction[];
+}
+
+export interface DashboardTransaction {
+  id: string;
+  description: string;
+  amountCents: number;
+  direction: TransactionDirection;
+  kind: TransactionKind;
+  occurredAt: Date;
+  categoryName: string | null;
 }
 
 /**
@@ -187,6 +210,13 @@ export async function getDashboardData(
       burnByMonth: [],
       unreconciledOver60DaysCount: 0,
       runway: null,
+      inTotalCents: 0,
+      outTotalCents: 0,
+      pendingApproval: { count: 0, cents: 0 },
+      spendByKind: [],
+      balanceTrend: [],
+      recent: [],
+      topExpenses: [],
     };
   }
 
@@ -203,6 +233,8 @@ export async function getDashboardData(
   const allTransactions = await db.transaction.findMany({
     where: { organizationId, budgetPeriodId: period.id, voidedAt: null },
     select: {
+      id: true,
+      description: true,
       direction: true,
       kind: true,
       status: true,
@@ -275,6 +307,29 @@ export async function getDashboardData(
   ).length;
 
   const balanceCents = inTotal - outTotal;
+
+  const categoryName = new Map(categories.map((c) => [c.id, c.name]));
+  const toRow = (t: (typeof ledger)[number]): DashboardTransaction => ({
+    id: t.id,
+    description: t.description,
+    amountCents: t.amountCents,
+    direction: t.direction,
+    kind: t.kind,
+    occurredAt: t.occurredAt,
+    categoryName: t.categoryId ? (categoryName.get(t.categoryId) ?? null) : null,
+  });
+  const byDate = [...ledger].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  const trend = new Map<string, number>();
+  let running = 0;
+  for (const t of byDate) {
+    running += t.direction === TransactionDirection.IN ? t.amountCents : -t.amountCents;
+    trend.set(t.occurredAt.toISOString().slice(0, 10), running);
+  }
+  const kindTotals = new Map<TransactionKind, number>();
+  for (const t of spending) kindTotals.set(t.kind, (kindTotals.get(t.kind) ?? 0) + t.amountCents);
+  const pending = allTransactions.filter(
+    (t) => t.kind === TransactionKind.EXPENSE && t.status === TransactionStatus.SUBMITTED,
+  );
   const sponsorshipCommittedCents = sponsorships
     .filter((s) => s.status === "COMMITTED" || s.status === "INVOICED")
     .reduce((sum, s) => sum + s.amountCents, 0);
@@ -305,6 +360,21 @@ export async function getDashboardData(
       meetingStarts: meetings.map((m) => m.startsAt),
       now,
     }),
+    inTotalCents: inTotal,
+    outTotalCents: outTotal,
+    pendingApproval: {
+      count: pending.length,
+      cents: pending.reduce((sum, t) => sum + t.amountCents, 0),
+    },
+    spendByKind: [...kindTotals.entries()]
+      .map(([kind, cents]) => ({ kind, cents }))
+      .sort((a, b) => b.cents - a.cents),
+    balanceTrend: [...trend.entries()].map(([date, balanceCents]) => ({ date, balanceCents })),
+    recent: byDate.slice(-8).reverse().map(toRow),
+    topExpenses: [...spending]
+      .sort((a, b) => b.amountCents - a.amountCents)
+      .slice(0, 5)
+      .map(toRow),
   };
 }
 

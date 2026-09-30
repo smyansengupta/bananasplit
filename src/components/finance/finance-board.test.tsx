@@ -1,10 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DashboardData } from "@/app/app/[orgSlug]/finance/queries";
 import { computeRunway, type RunwayInput } from "@/lib/finance/stats";
 
-import { DashboardView } from "./dashboard-view";
+import { resolveLayout, type Widget } from "@/lib/finance/widgets";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("@/app/app/[orgSlug]/finance/widgets-actions", () => ({ saveFinanceWidgetsAction: vi.fn() }));
+
+const { FinanceBoard } = await import("./finance-board");
 
 const period = { startsOn: new Date("2026-07-01"), endsOn: new Date("2027-06-30") };
 const now = new Date("2026-10-05T12:00:00Z");
@@ -30,13 +35,24 @@ function dashboard(runway: Partial<RunwayInput>): DashboardData {
     burnByMonth: [],
     unreconciledOver60DaysCount: 0,
     runway: computeRunway(input),
+    inTotalCents: 120_000,
+    outTotalCents: 90_000,
+    pendingApproval: { count: 2, cents: 4_500 },
+    spendByKind: [],
+    balanceTrend: [],
+    recent: [],
+    topExpenses: [],
   };
 }
 
-const render = (data: DashboardData) =>
-  renderToStaticMarkup(<DashboardView data={data} orgSlug="cbc" moneyOwedToYouCents={0} />);
+const RUNWAY: Widget[] = [{ id: "runway", type: "runway", size: "lg" }];
 
-describe("DashboardView runway", () => {
+const render = (data: DashboardData, layout: Widget[] = RUNWAY) =>
+  renderToStaticMarkup(
+    <FinanceBoard orgId="org_1" orgSlug="cbc" data={data} initialLayout={layout} customized={false} />,
+  );
+
+describe("finance board: the runway widget", () => {
   it("says when the money runs out, in words, with the rate it assumes", () => {
     const html = render(dashboard({}));
     expect(html).toContain("When the money runs out");
@@ -70,9 +86,35 @@ describe("DashboardView runway", () => {
     expect(html).toContain("Out of funds");
   });
 
-  it("has no runway without an active period", () => {
-    const html = render({ ...dashboard({}), period: null, runway: null });
-    expect(html).toContain("No active budget period yet.");
-    expect(html).not.toContain("Runway");
+  it("shows each number widget with where to act on it", () => {
+    const html = render(dashboard({}), [
+      { id: "in-out", type: "in-out", size: "sm" },
+      { id: "pending", type: "pending", size: "sm" },
+    ]);
+    expect(html).toContain("In and out");
+    expect(html).toContain("$1,200");
+    expect(html).toContain("Waiting for approval");
+    expect(html).toContain("$45.00 to review");
+    expect(html).toContain('href="/app/cbc/finance/transactions?status=SUBMITTED"');
+  });
+
+  it("offers a way back when the board is empty", () => {
+    expect(render(dashboard({}), [])).toContain("Your board is empty. Add a widget.");
+  });
+});
+
+describe("finance board layout", () => {
+  it("starts from the default, trimmed to the sections the org chose", () => {
+    const all = resolveLayout(null, new Set(["categories", "runway", "sponsorships", "burn"]));
+    expect(all.map((w) => w.type)).toContain("runway");
+    const noRunway = resolveLayout(null, new Set(["categories"]));
+    expect(noRunway.map((w) => w.type)).not.toContain("runway");
+    expect(noRunway.map((w) => w.type)).toContain("balance");
+  });
+
+  it("keeps a member's saved board, and ignores one that no longer parses", () => {
+    const saved = [{ id: "trend", type: "trend", size: "lg" }];
+    expect(resolveLayout(saved, new Set())).toEqual(saved);
+    expect(resolveLayout([{ id: "x", type: "nope", size: "sm" }], new Set(["runway"])).length).toBeGreaterThan(1);
   });
 });

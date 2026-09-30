@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import type { TransactionWithRelations } from "@/app/app/[orgSlug]/finance/queries";
@@ -114,7 +115,8 @@ export function NewTransactionButton({
   return (
     <>
       <Button type="button" onClick={() => setOpen(true)}>
-        New transaction
+        <Plus className="size-4" aria-hidden="true" />
+        Add transaction
       </Button>
       <TransactionDialog
         orgId={orgId}
