@@ -1,12 +1,12 @@
 "use client";
 
+import { Globe, LocateFixed, MessageCircle, PenLine, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AvatarEditor } from "@/app/app/[orgSlug]/profile/avatar-editor";
 import { TimezoneSelect } from "@/app/app/[orgSlug]/profile/timezone-select";
-import { Chip, FieldError } from "@/components/onboarding/step-card";
+import { Chip, FieldError, FieldLabel } from "@/components/onboarding/step-card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import type { UserAvatarUser } from "@/components/user-avatar";
 import { PRONOUN_CHOICES } from "@/lib/onboarding/steps";
 import { PROFILE_LIMITS } from "@/lib/profile/schema";
@@ -47,13 +47,13 @@ export function BasicsStep({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <AvatarEditor user={user} compact />
 
       <div className="grid gap-1.5">
-        <Label htmlFor="ob-name" className="text-xs">
+        <FieldLabel htmlFor="ob-name" icon={UserRound}>
           Full name
-        </Label>
+        </FieldLabel>
         <Input
           id="ob-name"
           value={name}
@@ -66,9 +66,9 @@ export function BasicsStep({
       </div>
 
       <div className="grid gap-1.5">
-        <span className="text-xs font-medium" id="ob-pronouns-label">
+        <FieldLabel id="ob-pronouns-label" icon={MessageCircle}>
           Pronouns
-        </span>
+        </FieldLabel>
         <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="ob-pronouns-label">
           {PRONOUN_CHOICES.map((p) => (
             <Chip
@@ -83,6 +83,7 @@ export function BasicsStep({
             </Chip>
           ))}
           <Chip
+            icon={PenLine}
             selected={custom}
             onClick={() => {
               setCustom(!custom);
@@ -106,9 +107,9 @@ export function BasicsStep({
       </div>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="ob-tz" className="text-xs">
+        <FieldLabel htmlFor="ob-tz" icon={Globe}>
           Time zone
-        </Label>
+        </FieldLabel>
         <TimezoneSelect
           id="ob-tz"
           value={timezone}
@@ -119,7 +120,12 @@ export function BasicsStep({
           }}
           invalid={Boolean(errors.timezone)}
         />
-        {detected && <p className="text-muted-foreground text-xs">Detected from this device.</p>}
+        {detected && (
+          <p className="text-muted-foreground flex items-center gap-1 text-xs">
+            <LocateFixed className="size-3" aria-hidden="true" />
+            Detected from this device.
+          </p>
+        )}
         <FieldError message={errors.timezone} />
       </div>
 

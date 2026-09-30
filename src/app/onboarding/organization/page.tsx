@@ -1,8 +1,9 @@
+import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
-import { OnboardingFrame, ProgressSegments, StepCard } from "@/components/onboarding/step-card";
+import { OnboardingFrame, StepCard } from "@/components/onboarding/step-card";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { ORG_CREATION_DENIAL_MESSAGES, orgCreationPolicy } from "@/lib/auth/org-creation";
 import { requireUser } from "@/lib/auth/session";
@@ -25,10 +26,9 @@ export default async function NameOrgPage() {
   return (
     <OnboardingFrame>
       <StepCard
-        label="B1 · Name the org"
-        progress={
-          <ProgressSegments total={ORG_STEP_COUNT} done={1} tone="warning" showCount={false} />
-        }
+        icon={Building2}
+        tone="warning"
+        step={{ index: 1, total: ORG_STEP_COUNT }}
         title="Set up your organization"
         description="You'll be its admin. Everything here can be changed later in Settings."
       >

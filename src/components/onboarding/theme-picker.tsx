@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, Eye, Moon, Sun } from "lucide-react";
 import { useMemo } from "react";
 
 import { cn } from "@/lib/utils";
@@ -110,12 +110,17 @@ export function ThemePicker({
               aria-pressed={value.mode === m}
               onClick={() => onChange({ ...value, mode: m })}
               className={cn(
-                "rounded-md px-2.5 py-1 text-xs capitalize transition-colors",
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs capitalize transition-colors",
                 value.mode === m
                   ? "bg-muted text-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
+              {m === "light" ? (
+                <Sun className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Moon className="size-3.5" aria-hidden="true" />
+              )}
               {m}
             </button>
           ))}
@@ -181,8 +186,9 @@ export function ThemePicker({
 
       {colors && (
         <div className="space-y-1.5">
-          <span className="text-muted-foreground font-mono text-[10px] tracking-[0.08em]">
-            PREVIEW
+          <span className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
+            <Eye className="size-3.5" aria-hidden="true" />
+            Preview
           </span>
           <div
             className="rounded-xl border p-3"

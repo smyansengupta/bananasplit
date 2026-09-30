@@ -1,3 +1,4 @@
+import { KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -32,7 +33,7 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
   return (
     <OnboardingFrame>
       <StepCard
-        label="A7 · Join"
+        icon={KeyRound}
         title="Join your organization"
         description="Enter the invite code an admin shared with you. We check it with the organization before you join."
       >
@@ -44,7 +45,10 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
 
         {invites.length > 0 && (
           <section className="space-y-2 border-t pt-3">
-            <h2 className="text-xs font-medium">Or accept an email invite to {profile.email}</h2>
+            <h2 className="flex items-center gap-1.5 text-sm font-medium">
+              <Mail className="text-muted-foreground size-3.5" aria-hidden="true" />
+              Or accept an email invite to {profile.email}
+            </h2>
             {invites.map((invitation) => (
               <PendingInviteCard
                 key={invitation.id}

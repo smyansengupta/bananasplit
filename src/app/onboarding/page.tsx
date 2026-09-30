@@ -1,9 +1,14 @@
+import { Building2, KeyRound, Mail, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
-import { OnboardingFrame, StepCard } from "@/components/onboarding/step-card";
-import { Button } from "@/components/ui/button";
+import {
+  ChoiceTileBody,
+  choiceTileClass,
+  OnboardingFrame,
+  StepCard,
+} from "@/components/onboarding/step-card";
 import { requireUser } from "@/lib/auth/session";
 import { withUserTx } from "@/server/db/context";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
@@ -39,9 +44,9 @@ export default async function OnboardingPage() {
   return (
     <OnboardingFrame>
       <StepCard
-        label="A7 · Join or create"
+        icon={Sparkles}
         title={`Welcome${profile.name ? `, ${profile.name.split(" ")[0]}` : ""}`}
-        description="Join your organization with the invite code an admin shared, or with an email invite. Starting a new one? Create it and you'll be its admin."
+        description="Your profile is set. Now find your club, or start one."
       >
         {!profile.emailVerified && (
           <VerifyEmailNotice email={profile.email} action="create an organization or join one" />
@@ -49,7 +54,10 @@ export default async function OnboardingPage() {
 
         {pendingInvites.length > 0 && (
           <section className="space-y-2">
-            <h2 className="text-xs font-medium">Email invites for {profile.email}</h2>
+            <h2 className="flex items-center gap-1.5 text-sm font-medium">
+              <Mail className="text-muted-foreground size-3.5" aria-hidden="true" />
+              Email invites for {profile.email}
+            </h2>
             {pendingInvites.map((invitation) => (
               <PendingInviteCard
                 key={invitation.id}
@@ -65,12 +73,21 @@ export default async function OnboardingPage() {
 
         {profile.emailVerified && (
           <div className="grid gap-2">
-            <Button asChild className="w-full font-semibold">
-              <Link href="/onboarding/join">Join with invite code</Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full">
-              <Link href="/onboarding/organization">Create an organization</Link>
-            </Button>
+            <Link href="/onboarding/join" className={choiceTileClass}>
+              <ChoiceTileBody
+                icon={KeyRound}
+                primary
+                title="Join with invite code"
+                detail="Your club's admin shared a code or a link."
+              />
+            </Link>
+            <Link href="/onboarding/organization" className={choiceTileClass}>
+              <ChoiceTileBody
+                icon={Building2}
+                title="Create an organization"
+                detail="Start a new workspace for your club. You'll be its admin."
+              />
+            </Link>
           </div>
         )}
 

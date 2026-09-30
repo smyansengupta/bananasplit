@@ -1,7 +1,8 @@
+import { Network, PiggyBank, Plug, Tags, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { OnboardingFrame, ProgressSegments, StepCard } from "@/components/onboarding/step-card";
+import { OnboardingFrame, StepCard } from "@/components/onboarding/step-card";
 import { can } from "@/lib/auth/permissions";
 import { isOrgStep, ORG_STEP_COUNT, ORG_STEPS, type OrgStep } from "@/lib/onboarding/steps";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
@@ -15,30 +16,28 @@ import { TeamsStep } from "../teams-step";
 
 export const dynamic = "force-dynamic";
 
-const META: Record<OrgStep, { label: string; title: string; hint?: string; description: string }> =
-  {
-    data: {
-      label: "B2 · Connect data",
-      title: "Connect your data",
-      hint: "Each connection is tested before it counts. Keys are stored encrypted.",
-      description: "The services the portal reads from and writes to.",
-    },
-    labels: {
-      label: "B3 · Label sources",
-      title: "Label your data",
-      description: "Name each table and tag what it’s for so reports and teams can find it.",
-    },
-    finance: {
-      label: "B4 · Finance reports",
-      title: "Finance reports",
-      description: "Pick what the finance dashboard shows and when your year starts.",
-    },
-    teams: {
-      label: "B5 · Org chart + calendars",
-      title: "Teams and calendars",
-      description: "Your teams become the org chart, and their meetings go on the calendar.",
-    },
-  };
+const META: Record<OrgStep, { icon: LucideIcon; title: string; description: string }> = {
+  data: {
+    icon: Plug,
+    title: "Connect your data",
+    description: "The services your portal reads from and writes to. Each is tested before it counts, and keys are stored encrypted.",
+  },
+  labels: {
+    icon: Tags,
+    title: "Label your data",
+    description: "Name each table and tag what it’s for, then decide who can see each kind.",
+  },
+  finance: {
+    icon: PiggyBank,
+    title: "Finance reports",
+    description: "Pick what the finance dashboard shows, and when your year starts.",
+  },
+  teams: {
+    icon: Network,
+    title: "Teams and calendars",
+    description: "Your teams become the org chart, and their meetings go on the calendar.",
+  },
+};
 
 /**
  * Org setup B2-B5 (onboarding Flow B), for an OWNER/ADMIN of the org. One
@@ -57,11 +56,9 @@ export default async function OrgSetupStepPage({
   const card = (body: React.ReactNode) => (
     <OnboardingFrame wide>
       <StepCard
-        label={meta.label}
-        hint={meta.hint}
-        progress={
-          <ProgressSegments total={ORG_STEP_COUNT} done={index} tone="warning" showCount={false} />
-        }
+        icon={meta.icon}
+        tone="warning"
+        step={{ index, total: ORG_STEP_COUNT }}
         title={meta.title}
         description={meta.description}
       >

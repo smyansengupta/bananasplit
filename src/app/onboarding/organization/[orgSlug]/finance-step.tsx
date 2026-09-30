@@ -1,10 +1,19 @@
 "use client";
 
-import { Check } from "lucide-react";
+import {
+  CalendarRange,
+  ChartColumn,
+  ChartPie,
+  Check,
+  CircleCheck,
+  Handshake,
+  Hourglass,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
-import { FieldError } from "@/components/onboarding/step-card";
-import { Button } from "@/components/ui/button";
+import { ContinueButton, FieldError } from "@/components/onboarding/step-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FINANCE_CARDS } from "@/lib/finance/dashboard-cards";
 import { fiscalYearFor, MONTHS } from "@/lib/onboarding/org";
@@ -12,6 +21,13 @@ import { cn } from "@/lib/utils";
 import type { FinanceSetupState } from "@/server/onboarding/org-setup";
 
 import { goToNextOrgStep, saveFinanceStepAction } from "./actions";
+
+const CARD_ICONS: Record<string, LucideIcon> = {
+  categories: ChartPie,
+  runway: Hourglass,
+  sponsorships: Handshake,
+  burn: ChartColumn,
+};
 
 function todayIn(tz: string): string {
   try {
@@ -78,93 +94,110 @@ export function FinanceStep({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-2" role="group" aria-label="Reports on the finance dashboard">
-        {FINANCE_CARDS.map((card) => {
-          const on = cards.includes(card.id);
-          return (
-            <button
-              key={card.id}
-              type="button"
-              role="checkbox"
-              aria-checked={on}
-              onClick={() => toggle(card.id)}
-              className={cn(
-                "focus-visible:ring-ring/50 flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors outline-none focus-visible:ring-3",
-                on ? "border-warning/40 bg-warning/5" : "hover:bg-muted/50",
-              )}
-            >
-              <span
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <span className="text-sm font-medium">On the finance dashboard</span>
+        <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Reports on the finance dashboard">
+          {FINANCE_CARDS.map((card) => {
+            const on = cards.includes(card.id);
+            const Icon = CARD_ICONS[card.id];
+            return (
+              <button
+                key={card.id}
+                type="button"
+                role="checkbox"
+                aria-checked={on}
+                onClick={() => toggle(card.id)}
                 className={cn(
-                  "mt-0.5 grid size-4 shrink-0 place-items-center rounded",
-                  on ? "bg-warning text-warning-foreground" : "border",
+                  "focus-visible:ring-ring/50 relative flex items-start gap-3 rounded-xl border p-3 text-left transition-all outline-none focus-visible:ring-3 active:scale-[0.99]",
+                  on ? "border-warning/50 bg-warning/5" : "hover:border-foreground/25",
                 )}
               >
-                {on && <Check className="size-3" strokeWidth={3} aria-hidden="true" />}
-              </span>
-              <span>
-                <span className="block text-sm font-medium">{card.title}</span>
-                <span className="text-muted-foreground block text-[11px]">{card.detail}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium">Fiscal year starts</span>
-          <select
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-            className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-          >
-            {MONTHS.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m} 1
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="grid gap-1.5">
-          <span className="text-xs font-medium">This year</span>
-          <div className="bg-muted/40 flex h-9 items-center rounded-md border px-3 text-xs">
-            {fy.label}: {formatDay(fy.startsOn)} – {formatDay(fy.endsOn)}
-          </div>
+                <span
+                  className={cn(
+                    "grid size-9 shrink-0 place-items-center rounded-lg transition-colors",
+                    on ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1 pr-5">
+                  <span className="block text-sm font-medium">{card.title}</span>
+                  <span className="text-muted-foreground block text-xs leading-snug">{card.detail}</span>
+                </span>
+                <span
+                  className={cn(
+                    "absolute top-3 right-3 grid size-4 place-items-center rounded-full border transition-colors",
+                    on && "border-warning bg-warning text-warning-foreground",
+                  )}
+                >
+                  {on && <Check className="size-3" strokeWidth={3} aria-hidden="true" />}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {state.activePeriod ? (
-        <p className="text-muted-foreground text-xs">
-          Budget period in use: {state.activePeriod.label}. Change it on the Budget page.
-        </p>
-      ) : state.canManageFinance ? (
-        <label className="flex items-start gap-2 text-xs">
-          <Checkbox
-            checked={createPeriod}
-            onCheckedChange={(v) => setCreatePeriod(v === true)}
-            className="mt-0.5"
-          />
-          <span>
-            Start the {fy.label} budget now, with the usual categories at $0. The treasurer sets the
-            amounts on the Budget page.
+      <div className="space-y-2">
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          <CalendarRange className="text-muted-foreground size-3.5" aria-hidden="true" />
+          Fiscal year
+        </span>
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border p-3">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Starts</span>
+            <select
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+              className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m} 1
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="bg-muted inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium">
+            {fy.label}
+            <span className="text-muted-foreground font-normal">
+              {formatDay(fy.startsOn)} – {formatDay(fy.endsOn)}
+            </span>
           </span>
-        </label>
-      ) : (
-        <p className="text-muted-foreground text-xs">
-          The owner or treasurer starts the budget period.
-        </p>
-      )}
+        </div>
+
+        {state.activePeriod ? (
+          <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <CircleCheck className="text-success size-3.5" aria-hidden="true" />
+            Budget period in use: {state.activePeriod.label}. Change it on the Budget page.
+          </p>
+        ) : state.canManageFinance ? (
+          <label className="hover:bg-muted/40 flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-sm transition-colors">
+            <Checkbox
+              checked={createPeriod}
+              onCheckedChange={(v) => setCreatePeriod(v === true)}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <Wallet className="text-muted-foreground size-3.5" aria-hidden="true" />
+                Start the {fy.label} budget now
+              </span>
+              <span className="text-muted-foreground block text-xs">
+                With the usual categories at $0. The treasurer sets the amounts on the Budget page.
+              </span>
+            </span>
+          </label>
+        ) : (
+          <p className="text-muted-foreground text-xs">The owner or treasurer starts the budget period.</p>
+        )}
+      </div>
 
       <FieldError message={error ?? undefined} />
-      <Button
-        type="button"
-        className="w-full font-semibold"
-        onClick={submit}
-        disabled={pending || cards.length === 0}
-      >
-        {pending ? "Saving…" : "Continue"}
-      </Button>
+      <div className="flex border-t pt-4">
+        <ContinueButton pending={pending} onClick={submit} disabled={cards.length === 0} />
+      </div>
     </div>
   );
 }

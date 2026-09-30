@@ -1,10 +1,28 @@
 "use client";
 
+import {
+  BadgeCheck,
+  BookOpen,
+  ClipboardList,
+  CodeXml,
+  Crown,
+  GraduationCap,
+  Handshake,
+  Megaphone,
+  NotebookPen,
+  PartyPopper,
+  PenLine,
+  PenTool,
+  PiggyBank,
+  Plus,
+  Star,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Chip, FieldError } from "@/components/onboarding/step-card";
+import { Chip, FieldError, FieldLabel } from "@/components/onboarding/step-card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   gradYearChoices,
   joinMajor,
@@ -18,6 +36,20 @@ import { saveSchoolStep } from "./actions";
 import { StepNav, useStepSave } from "./step-nav";
 
 const OTHER = "__other__";
+
+const ROLE_ICONS: Record<(typeof ROLE_CHOICES)[number], LucideIcon> = {
+  President: Crown,
+  "Vice President": Star,
+  Treasurer: PiggyBank,
+  Secretary: NotebookPen,
+  "Project Manager": ClipboardList,
+  Developer: CodeXml,
+  Designer: PenTool,
+  Marketing: Megaphone,
+  Events: PartyPopper,
+  Outreach: Handshake,
+  Member: UserRound,
+};
 
 /** A2 · School + role: major (and a second one), grad year, role. */
 export function SchoolStep({
@@ -58,11 +90,11 @@ export function SchoolStep({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="grid gap-1.5">
-        <Label htmlFor="ob-major" className="text-xs">
+        <FieldLabel htmlFor="ob-major" icon={BookOpen}>
           Major
-        </Label>
+        </FieldLabel>
         <Input
           id="ob-major"
           value={major}
@@ -81,10 +113,11 @@ export function SchoolStep({
         ) : (
           <button
             type="button"
-            className="text-primary w-fit text-xs hover:underline"
+            className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-xs"
             onClick={() => setShowMinor(true)}
           >
-            + Add a second major or minor
+            <Plus className="size-3.5" aria-hidden="true" />
+            Add a second major or minor
           </button>
         )}
         <FieldError
@@ -97,9 +130,9 @@ export function SchoolStep({
       </div>
 
       <div className="grid gap-1.5">
-        <span className="text-xs font-medium" id="ob-year-label">
+        <FieldLabel id="ob-year-label" icon={GraduationCap}>
           Grad year
-        </span>
+        </FieldLabel>
         <div className="grid grid-cols-5 gap-1.5" role="group" aria-labelledby="ob-year-label">
           {years.map((y) => (
             <Chip
@@ -133,23 +166,19 @@ export function SchoolStep({
       </div>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="ob-role" className="text-xs">
+        <FieldLabel id="ob-role-label" icon={BadgeCheck} aside="Admins can change this later">
           Your role
-        </Label>
-        <select
-          id="ob-role"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          className="border-input bg-background focus-visible:ring-ring/50 h-9 rounded-md border px-3 text-sm outline-none focus-visible:ring-3"
-        >
-          <option value="">Pick a role</option>
+        </FieldLabel>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="ob-role-label">
           {ROLE_CHOICES.map((r) => (
-            <option key={r} value={r}>
+            <Chip key={r} icon={ROLE_ICONS[r]} selected={role === r} onClick={() => setRole(role === r ? "" : r)}>
               {r}
-            </option>
+            </Chip>
           ))}
-          <option value={OTHER}>Something else…</option>
-        </select>
+          <Chip icon={PenLine} selected={role === OTHER} onClick={() => setRole(role === OTHER ? "" : OTHER)}>
+            Something else
+          </Chip>
+        </div>
         {role === OTHER && (
           <Input
             aria-label="Your role"
@@ -160,7 +189,6 @@ export function SchoolStep({
             autoFocus
           />
         )}
-        <p className="text-muted-foreground text-xs">Admins can change this later.</p>
         <FieldError message={errors.preferredTitle} />
       </div>
 

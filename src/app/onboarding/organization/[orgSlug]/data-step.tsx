@@ -1,9 +1,23 @@
 "use client";
 
+import {
+  CalendarDays,
+  Circle,
+  CircleCheck,
+  CircleDashed,
+  Database,
+  Info,
+  Mail,
+  Plug,
+  SkipForward,
+  Sparkles,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
-import { FieldError } from "@/components/onboarding/step-card";
+import { ContinueButton, FieldError } from "@/components/onboarding/step-card";
 import { Button } from "@/components/ui/button";
 import { orgStepHref } from "@/lib/onboarding/steps";
 import { cn } from "@/lib/utils";
@@ -20,15 +34,20 @@ export interface DataConnection {
   lastError: string | null;
 }
 
-const BADGE: Record<string, string> = { data: "DB", calendar: "CAL", email: "MAIL", claude: "AI" };
+const ICONS: Record<string, LucideIcon> = {
+  data: Database,
+  calendar: CalendarDays,
+  email: Mail,
+  claude: Sparkles,
+};
 
-const STATUS: Record<SetupStepStatus, { text: string; tone: string }> = {
-  connected: { text: "● Connected", tone: "text-success" },
-  untested: { text: "◌ Pending", tone: "text-warning" },
-  error: { text: "● Not working", tone: "text-destructive" },
-  needs_reauth: { text: "● Reconnect", tone: "text-destructive" },
-  skipped: { text: "Skipped", tone: "text-muted-foreground" },
-  todo: { text: "Not connected", tone: "text-muted-foreground" },
+const STATUS: Record<SetupStepStatus, { text: string; tone: string; icon: LucideIcon }> = {
+  connected: { text: "Connected", tone: "bg-success/10 text-success", icon: CircleCheck },
+  untested: { text: "Testing", tone: "bg-warning/10 text-warning", icon: CircleDashed },
+  error: { text: "Not working", tone: "bg-destructive/10 text-destructive", icon: TriangleAlert },
+  needs_reauth: { text: "Reconnect", tone: "bg-destructive/10 text-destructive", icon: TriangleAlert },
+  skipped: { text: "Skipped", tone: "bg-muted text-muted-foreground", icon: CircleDashed },
+  todo: { text: "Not connected", tone: "bg-muted text-muted-foreground", icon: Circle },
 };
 
 /**
@@ -56,35 +75,48 @@ export function DataStep({
       <ul className="grid grid-cols-1 gap-2">
         {connections.map((c) => {
           const status = STATUS[c.status];
+          const Icon = ICONS[c.id] ?? Plug;
+          const StatusIcon = status.icon;
           const connected = c.status === "connected";
           return (
             <li
               key={c.id}
-              className="flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5"
+              className={cn(
+                "flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 transition-colors",
+                connected && "border-success/30 bg-success/5",
+              )}
             >
               <span
                 className={cn(
-                  "rounded-md px-1.5 py-0.5 font-mono text-[10px]",
-                  connected ? "bg-success/15 text-success" : "bg-warning/15 text-warning",
+                  "grid size-9 shrink-0 place-items-center rounded-lg",
+                  connected ? "bg-success/15 text-success" : "bg-muted text-foreground",
                 )}
               >
-                {BADGE[c.id] ?? "API"}
+                <Icon className="size-4" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">{c.title}</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">{c.title}</span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                      status.tone,
+                    )}
+                  >
+                    <StatusIcon className="size-3" aria-hidden="true" />
+                    {status.text}
+                  </span>
+                </div>
                 {c.detail || c.lastError ? (
                   <div className="text-muted-foreground truncate font-mono text-[11px]">
                     {c.detail ?? c.lastError}
                   </div>
                 ) : (
-                  <div className="text-muted-foreground line-clamp-2 text-[11px] leading-snug">
+                  <div className="text-muted-foreground line-clamp-2 text-xs leading-snug">
                     {c.summary}
                   </div>
                 )}
               </div>
-              <span className={cn("shrink-0 text-[11px] whitespace-nowrap", status.tone)}>
-                {status.text}
-              </span>
               <Button
                 asChild
                 size="sm"
@@ -99,15 +131,19 @@ export function DataStep({
           );
         })}
       </ul>
-      <p className="text-muted-foreground text-xs">
+      <p className="text-muted-foreground flex gap-1.5 text-xs">
+        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <span>
         Connect opens the guided setup for that service: where the key comes from, what it can
         reach, and a live test. You come back here when it&apos;s done.
+        </span>
       </p>
       <FieldError message={error ?? undefined} />
-      <div className="flex gap-2">
+      <div className="flex gap-2 border-t pt-4">
         <Button
           type="button"
           variant="outline"
+          size="lg"
           className="text-muted-foreground flex-1"
           disabled={pending}
           onClick={() =>
@@ -122,16 +158,15 @@ export function DataStep({
             })
           }
         >
+          <SkipForward aria-hidden="true" />
           Skip for now
         </Button>
-        <Button
-          type="button"
-          className="flex-1 font-semibold"
-          disabled={pending || connectedCount === 0}
+        <ContinueButton
+          pending={pending}
+          pendingLabel="One moment…"
+          disabled={connectedCount === 0}
           onClick={() => start(() => goToNextOrgStep(orgSlug, "data"))}
-        >
-          Continue
-        </Button>
+        />
       </div>
     </div>
   );

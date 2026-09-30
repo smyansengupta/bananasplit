@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, ShieldCheck } from "lucide-react";
+import { ArrowRight, Building2, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -100,11 +100,22 @@ export function JoinForm({ initialCode, email }: { initialCode: string; email: s
           ) : (
             <Button
               type="button"
-              className="flex-1 font-semibold"
+              size="lg"
+              className="group flex-1 font-semibold"
               onClick={join}
               disabled={joining}
             >
-              {joining ? "Joining…" : `Join ${org.name}`}
+              {joining ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                  Joining…
+                </>
+              ) : (
+                <>
+                  Join {org.name}
+                  <ArrowRight className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -124,6 +135,11 @@ export function JoinForm({ initialCode, email }: { initialCode: string; email: s
         <Label htmlFor="invite-code" className="text-xs">
           Invite code
         </Label>
+        <div className="relative">
+          <KeyRound
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2"
+            aria-hidden="true"
+          />
         <Input
           id="invite-code"
           value={code}
@@ -135,10 +151,11 @@ export function JoinForm({ initialCode, email }: { initialCode: string; email: s
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
-          className="text-center font-mono text-lg tracking-[0.2em] uppercase"
+          className="h-12 text-center font-mono text-xl tracking-[0.25em] uppercase"
           aria-invalid={Boolean(error) || undefined}
           autoFocus
         />
+        </div>
         <p className="text-muted-foreground text-xs">
           Ask an admin of your organization for its code.
         </p>
@@ -146,10 +163,21 @@ export function JoinForm({ initialCode, email }: { initialCode: string; email: s
       <FieldError message={error ?? undefined} />
       <Button
         type="submit"
-        className="w-full font-semibold"
+        size="lg"
+        className="group w-full font-semibold"
         disabled={checking || code.length !== 9}
       >
-        {checking ? "Checking…" : "Continue"}
+        {checking ? (
+          <>
+            <Loader2 className="animate-spin" aria-hidden="true" />
+            Checking with the organization…
+          </>
+        ) : (
+          <>
+            Check code
+            <ArrowRight className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </>
+        )}
       </Button>
     </form>
   );

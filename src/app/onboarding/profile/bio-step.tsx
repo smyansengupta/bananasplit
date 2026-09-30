@@ -1,17 +1,54 @@
 "use client";
 
-import { X } from "lucide-react";
+import {
+  AtSign,
+  Briefcase,
+  Camera,
+  CodeXml,
+  Globe,
+  Link2,
+  Music2,
+  NotebookPen,
+  Plus,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
 
-import { DashedButton, FieldError } from "@/components/onboarding/step-card";
+import { DashedButton, FieldError, FieldLabel } from "@/components/onboarding/step-card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { detectLinkKind, SETUP_BIO_MAX } from "@/lib/onboarding/steps";
-import { LINK_KIND_META, MAX_LINKS, normalizeLinkUrl, type ProfileLink } from "@/lib/profile/links";
+import {
+  LINK_KIND_META,
+  MAX_LINKS,
+  normalizeLinkUrl,
+  type LinkKind,
+  type ProfileLink,
+} from "@/lib/profile/links";
 
 import { saveBioStep } from "./actions";
 import { StepNav, useStepSave } from "./step-nav";
+
+const KIND_ICONS: Record<LinkKind, LucideIcon> = {
+  linkedin: Briefcase,
+  github: CodeXml,
+  website: Globe,
+  instagram: Camera,
+  tiktok: Music2,
+  x: AtSign,
+  other: Link2,
+};
+
+function LinkKindIcon({ kind, small = false }: { kind: LinkKind; small?: boolean }) {
+  const Icon = KIND_ICONS[kind];
+  if (small) return <Icon className="size-3.5" aria-hidden="true" />;
+  return (
+    <span className="bg-background text-foreground grid size-7 shrink-0 place-items-center rounded-md border">
+      <Icon className="size-3.5" aria-hidden="true" />
+    </span>
+  );
+}
 
 /** "https://www.linkedin.com/in/ada" -> "linkedin.com/in/ada" */
 function shortUrl(url: string): string {
@@ -54,11 +91,11 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="grid gap-1.5">
-        <Label htmlFor="ob-bio" className="text-xs">
+        <FieldLabel htmlFor="ob-bio" icon={NotebookPen} aside={`${bio.length}/${SETUP_BIO_MAX}`}>
           Bio
-        </Label>
+        </FieldLabel>
         <Textarea
           id="ob-bio"
           rows={3}
@@ -68,26 +105,21 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
           onChange={(e) => setBio(e.target.value)}
           className="min-h-20 resize-none"
         />
-        <span className="text-muted-foreground justify-self-end font-mono text-[11px] tabular-nums">
-          {bio.length}/{SETUP_BIO_MAX}
-        </span>
         <FieldError message={errors.bio} />
       </div>
 
       <div className="grid gap-1.5">
-        <div className="flex items-baseline justify-between">
-          <span className="text-xs font-medium">Links</span>
-          <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
-            {links.length} / {MAX_LINKS}
-          </span>
-        </div>
+        <FieldLabel icon={Link2} aside={`${links.length} / ${MAX_LINKS}`}>
+          Links
+        </FieldLabel>
         <ul className="grid gap-1.5">
           {links.map((link, i) => (
             <li
               key={link.url}
-              className="bg-muted/40 flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs"
+              className="bg-muted/40 animate-in fade-in-0 slide-in-from-top-1 flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-sm duration-200"
             >
-              <span className="text-muted-foreground w-16 shrink-0">
+              <LinkKindIcon kind={link.kind} />
+              <span className="text-muted-foreground w-16 shrink-0 text-xs">
                 {LINK_KIND_META[link.kind].label}
               </span>
               <span className="min-w-0 flex-1 truncate font-mono text-[11px]">
@@ -141,7 +173,8 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
               </button>
             </div>
             {draftKind && !draftError && (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                <LinkKindIcon kind={draftKind} small />
                 Detected: {LINK_KIND_META[draftKind].label}
               </p>
             )}
@@ -149,7 +182,9 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
           </div>
         ) : (
           links.length < MAX_LINKS && (
-            <DashedButton onClick={() => setAdding(true)}>+ Add link</DashedButton>
+            <DashedButton icon={Plus} onClick={() => setAdding(true)}>
+              Add link
+            </DashedButton>
           )
         )}
       </div>

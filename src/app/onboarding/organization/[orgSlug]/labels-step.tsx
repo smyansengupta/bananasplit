@@ -1,27 +1,51 @@
 "use client";
 
+import {
+  CalendarDays,
+  Cog,
+  Crown,
+  Database,
+  DollarSign,
+  EyeOff,
+  Shapes,
+  ShieldCheck,
+  UserCheck,
+  Users,
+  UsersRound,
+  Vote,
+  type LucideIcon,
+} from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
-import { FieldError } from "@/components/onboarding/step-card";
-import { Button } from "@/components/ui/button";
+import { ContinueButton, FieldError } from "@/components/onboarding/step-card";
 import { Input } from "@/components/ui/input";
-import {
-  DATA_TAGS,
-  VISIBILITY_OPTIONS,
-  type DataTag,
-  type VisibilityValue,
-} from "@/lib/onboarding/org";
+import { DATA_TAGS, VISIBILITY_OPTIONS, type DataTag, type VisibilityValue } from "@/lib/onboarding/org";
 import { cn } from "@/lib/utils";
 import type { DataSourceRow } from "@/server/onboarding/org-setup";
 
 import { goToNextOrgStep, saveLabelsStepAction } from "./actions";
 
-const TAG_TONE: Record<DataTag, string> = {
-  Finance: "bg-warning/15 text-warning",
-  People: "bg-chart-2/15 text-chart-2",
-  Operations: "bg-success/15 text-success",
-  Events: "bg-primary/10 text-primary",
-  Other: "bg-muted text-muted-foreground",
+const TAGS: Record<DataTag, { icon: LucideIcon; tone: string }> = {
+  Finance: { icon: DollarSign, tone: "border-warning/40 bg-warning/10 text-warning" },
+  People: { icon: Users, tone: "border-chart-1/40 bg-chart-1/10 text-chart-1" },
+  Operations: { icon: Cog, tone: "border-success/40 bg-success/10 text-success" },
+  Events: { icon: CalendarDays, tone: "border-chart-5/40 bg-chart-5/10 text-chart-5" },
+  Other: { icon: Shapes, tone: "border-foreground/20 bg-muted text-foreground" },
+};
+
+const KIND_ICONS: Record<string, LucideIcon> = {
+  SESSIONS: CalendarDays,
+  ATTENDANCE: UserCheck,
+  SIGNUPS: Users,
+  BALLOTS: Vote,
+  PEOPLE: UsersRound,
+};
+
+const VISIBILITY_ICONS: Record<VisibilityValue, LucideIcon> = {
+  MEMBERS: Users,
+  ADMINS: ShieldCheck,
+  OWNER: Crown,
+  HIDDEN: EyeOff,
 };
 
 /**
@@ -38,7 +62,7 @@ export function LabelsStep({
   sources: DataSourceRow[];
 }) {
   const [rows, setRows] = useState(
-    sources.map((s) => ({ id: s.id, key: s.key, name: s.name, tag: s.tag })),
+    sources.map((s) => ({ id: s.id, key: s.key, kind: s.kind, name: s.name, tag: s.tag })),
   );
   const initialVisibility = useMemo(() => {
     const out: Partial<Record<DataTag, VisibilityValue>> = {};
@@ -73,84 +97,104 @@ export function LabelsStep({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-hidden rounded-xl border">
-        <div className="bg-muted/50 text-muted-foreground grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-2 px-3 py-2 font-mono text-[10px] tracking-[0.08em]">
-          <span>SOURCE</span>
-          <span>LABEL</span>
-          <span>TAG</span>
-        </div>
-        {rows.map((row, i) => (
-          <div
-            key={row.id}
-            className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] items-center gap-2 border-t px-3 py-2 text-xs"
-          >
-            <span className="text-muted-foreground truncate font-mono">db.{row.key}</span>
-            <Input
-              aria-label={`Label for ${row.key}`}
-              value={row.name}
-              maxLength={60}
-              placeholder="Add label…"
-              onChange={(e) => update(i, { name: e.target.value })}
-              className="h-7 text-xs"
-            />
-            <select
-              aria-label={`Tag for ${row.key}`}
-              value={row.tag}
-              onChange={(e) => update(i, { tag: e.target.value as DataTag })}
-              className={cn(
-                "h-7 w-fit rounded-full border-0 px-2 text-[11px] font-medium",
-                TAG_TONE[row.tag],
-              )}
-            >
-              {DATA_TAGS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
-        {rows.length === 0 && (
-          <p className="text-muted-foreground border-t px-3 py-3 text-xs">No databases yet.</p>
-        )}
-      </div>
+    <div className="space-y-5">
+      <ul className="grid gap-2">
+        {rows.map((row, i) => {
+          const KindIcon = KIND_ICONS[row.kind] ?? Database;
+          return (
+            <li key={row.id} className="space-y-2.5 rounded-xl border p-3">
+              <div className="flex items-center gap-3">
+                <span className="bg-muted grid size-9 shrink-0 place-items-center rounded-lg">
+                  <KindIcon className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <Input
+                    aria-label={`Label for ${row.key}`}
+                    value={row.name}
+                    maxLength={60}
+                    placeholder="Add a label…"
+                    onChange={(e) => update(i, { name: e.target.value })}
+                    className="h-8 font-medium"
+                  />
+                </div>
+                <span className="text-muted-foreground hidden font-mono text-[11px] sm:block">{row.key}</span>
+              </div>
+              <div className="flex flex-wrap gap-1" role="radiogroup" aria-label={`Tag for ${row.key}`}>
+                {DATA_TAGS.map((t) => {
+                  const on = row.tag === t;
+                  const Icon = TAGS[t].icon;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => update(i, { tag: t })}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                        on ? cn(TAGS[t].tone, "font-medium") : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="size-3" aria-hidden="true" />
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+            </li>
+          );
+        })}
+        {rows.length === 0 && <p className="text-muted-foreground text-sm">No databases yet.</p>}
+      </ul>
 
       {tagsInUse.length > 0 && (
-        <div className="grid gap-2">
-          {tagsInUse.map((tag) => (
-            <label key={tag} className="grid gap-1.5">
-              <span className="text-xs font-medium">Who can see {tag}-tagged data</span>
-              <select
-                value={visibility[tag] ?? "MEMBERS"}
-                onChange={(e) =>
-                  setVisibility({ ...visibility, [tag]: e.target.value as VisibilityValue })
-                }
-                className="border-input bg-background h-9 rounded-md border px-3 text-sm"
-              >
-                {VISIBILITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-          <p className="text-muted-foreground text-xs">
-            Applies to every source with that tag. Owners and admins always see everything.
-          </p>
+        <div className="space-y-2">
+          <div>
+            <span className="text-sm font-medium">Who can see what</span>
+            <p className="text-muted-foreground text-xs">
+              Applies to every source with that tag. Owners and admins always see everything.
+            </p>
+          </div>
+          <div className="divide-y rounded-xl border">
+            {tagsInUse.map((tag) => {
+              const TagIcon = TAGS[tag].icon;
+              const current = visibility[tag] ?? "MEMBERS";
+              const VisIcon = VISIBILITY_ICONS[current];
+              return (
+                <label key={tag} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className={cn("grid size-7 shrink-0 place-items-center rounded-md border", TAGS[tag].tone)}>
+                    <TagIcon className="size-3.5" aria-hidden="true" />
+                  </span>
+                  <span className="flex-1 text-sm font-medium">{tag}</span>
+                  <span className="relative">
+                    <VisIcon
+                      className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+                      aria-hidden="true"
+                    />
+                    <select
+                      aria-label={`Who can see ${tag}-tagged data`}
+                      value={current}
+                      onChange={(e) => setVisibility({ ...visibility, [tag]: e.target.value as VisibilityValue })}
+                      className="border-input bg-background h-9 rounded-md border pr-2 pl-8 text-sm"
+                    >
+                      {VISIBILITY_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
 
       <FieldError message={error ?? undefined} />
-      <Button
-        type="button"
-        className="w-full font-semibold"
-        onClick={submit}
-        disabled={pending || rows.some((r) => !r.name.trim())}
-      >
-        {pending ? "Saving…" : "Continue"}
-      </Button>
+      <div className="flex border-t pt-4">
+        <ContinueButton pending={pending} onClick={submit} disabled={rows.some((r) => !r.name.trim())} />
+      </div>
     </div>
   );
 }
