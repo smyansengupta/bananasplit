@@ -85,7 +85,7 @@ CREATE POLICY app_user_update ON "OrgJoinCode" FOR UPDATE TO app_user
 CREATE POLICY app_service_select ON "OrgJoinCode" FOR SELECT TO app_service USING ((SELECT app.org_id()) IS NOT NULL AND "organizationId" = (SELECT app.org_id()));
 CREATE POLICY app_service_update ON "OrgJoinCode" FOR UPDATE TO app_service USING ((SELECT app.org_id()) IS NOT NULL AND "organizationId" = (SELECT app.org_id())) WITH CHECK ((SELECT app.org_id()) IS NOT NULL AND "organizationId" = (SELECT app.org_id()));
 
-REVOKE ALL ON "OrgJoinCode" FROM PUBLIC, app_user, app_service, app_auth, app_legacy;
+REVOKE ALL ON "OrgJoinCode" FROM PUBLIC, app_user, app_service, app_auth;
 GRANT SELECT, INSERT, UPDATE ON "OrgJoinCode" TO app_user;
 GRANT SELECT, UPDATE ON "OrgJoinCode" TO app_service;
 
