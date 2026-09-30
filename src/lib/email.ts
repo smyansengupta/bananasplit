@@ -35,7 +35,7 @@ export async function sendNotificationEmail(params: {
   await getPlatformMailer().send({
     to: params.to,
     ...notificationEmail({
-      orgName: params.orgName ?? "Clubport",
+      orgName: params.orgName ?? "Bananasplit",
       title: params.title,
       body: params.body,
       url: absolute(params.linkUrl),
@@ -78,7 +78,7 @@ export async function sendReimbursementStatusEmail(params: {
   await getPlatformMailer().send({
     to: params.to,
     ...reimbursementStatusEmail({
-      orgName: params.orgName ?? "Clubport",
+      orgName: params.orgName ?? "Bananasplit",
       description: params.description,
       status: params.status,
       rejectionReason: params.rejectionReason,

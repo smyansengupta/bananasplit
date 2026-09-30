@@ -163,10 +163,10 @@ describe("email verification", () => {
       expect(await peekVerificationToken(current)).toBe("valid");
 
       // On Vercel the production domain stands in for NEXT_PUBLIC_APP_URL.
-      vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "clubport.smyan.dev");
+      vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "bananasplit.fyi");
       await run("u1");
       expect(store.sent.at(-1)?.text).toContain(
-        `https://clubport.smyan.dev/verify-email/${tokenFromLastMail()}`,
+        `https://bananasplit.fyi/verify-email/${tokenFromLastMail()}`,
       );
     } finally {
       vi.unstubAllEnvs();

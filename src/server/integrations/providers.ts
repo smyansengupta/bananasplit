@@ -133,7 +133,7 @@ export async function testNetlifyHook(ctx: IntegrationTestContext): Promise<Inte
   if (!ctx.secret || !isNetlifyHookUrl(ctx.secret))
     return { ok: false, reason: "Add a valid Netlify build hook URL first." };
   const res = await clients.fetch(
-    `${ctx.secret}?trigger_title=${encodeURIComponent("Clubport test build")}`,
+    `${ctx.secret}?trigger_title=${encodeURIComponent("Bananasplit test build")}`,
     {
       method: "POST",
       signal: ctx.signal,

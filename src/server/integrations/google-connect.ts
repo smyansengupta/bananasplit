@@ -51,7 +51,7 @@ export const GOOGLE_CALLBACK_MESSAGES: Record<GoogleCallbackError, string> = {
   scopes:
     "Google did not grant calendar access. Try again and keep both calendar permissions checked.",
   no_refresh_token:
-    "Google did not return offline access. Remove Clubport from your Google account's third-party access, then connect again.",
+    "Google did not return offline access. Remove Bananasplit from your Google account's third-party access, then connect again.",
   not_configured: "Google Calendar is not configured on this platform.",
   google_error: "Google could not complete the connection. Try again.",
 };

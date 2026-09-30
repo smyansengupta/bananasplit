@@ -16,7 +16,7 @@ import { PasswordSignInForm } from "./password-sign-in-form";
  */
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   OAuthAccountNotLinked:
-    "That Google account is linked to a different Clubport account than the one you're signed in with. Sign out, then sign in with your email and password, or with the Google account you used before.",
+    "That Google account is linked to a different Bananasplit account than the one you're signed in with. Sign out, then sign in with your email and password, or with the Google account you used before.",
   AccessDenied:
     "Google didn't confirm that your email address is verified, so we couldn't sign you in with it. Verify the address with Google, or sign in with your email and password.",
   Verification: "That sign-in link is no longer valid.",
@@ -45,7 +45,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
     <div className="flex flex-1 items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in to Clubport</CardTitle>
+          <CardTitle>Sign in to Bananasplit</CardTitle>
           <CardDescription>
             {googleEnabled
               ? "Use your Google account or your email and password."

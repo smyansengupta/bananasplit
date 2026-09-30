@@ -61,7 +61,7 @@ CREATE POLICY app_user_update ON "UserAvailability" FOR UPDATE TO app_user
   USING ("userId" = (SELECT app.user_id()))
   WITH CHECK ("userId" = (SELECT app.user_id()));
 
-REVOKE ALL ON "UserAvailability" FROM PUBLIC, app_user, app_service, app_auth, app_legacy;
+REVOKE ALL ON "UserAvailability" FROM PUBLIC, app_user, app_service, app_auth;
 GRANT SELECT, INSERT, UPDATE ON "UserAvailability" TO app_user;
 
 -- Another member's busy hours, for their people page. NULL when the caller
