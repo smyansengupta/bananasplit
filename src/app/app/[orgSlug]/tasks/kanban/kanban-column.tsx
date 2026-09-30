@@ -5,6 +5,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { Plus } from "lucide-react";
 
 import type { TaskCardData } from "@/components/tasks/task-card";
+import { GroupHeader, STATUS_TOKEN } from "@/components/tasks/layout-ui";
 import { cn } from "@/lib/utils";
 
 import { SortableTaskCard } from "./sortable-task-card";
@@ -42,11 +43,12 @@ export function KanbanColumn({
       aria-label={`${title}, ${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
       className="group/col flex w-[17rem] shrink-0 flex-col gap-2 lg:w-auto lg:min-w-0 lg:flex-1"
     >
-      <div className="flex items-center gap-2 px-1">
-        <h2 className={cn("text-sm font-semibold tracking-tight", blocked && "text-destructive")}>
-          {title}
-        </h2>
-        <span className="text-muted-foreground text-xs tabular-nums">{tasks.length}</span>
+      <GroupHeader
+        title={title}
+        count={tasks.length}
+        dot={STATUS_TOKEN[id] ?? "var(--muted-foreground)"}
+        tone={blocked ? "danger" : undefined}
+      >
         <button
           type="button"
           onClick={onAddTask}
@@ -55,7 +57,7 @@ export function KanbanColumn({
         >
           <Plus className="size-4" aria-hidden="true" />
         </button>
-      </div>
+      </GroupHeader>
 
       <div
         ref={setNodeRef}

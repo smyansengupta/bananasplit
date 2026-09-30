@@ -48,6 +48,7 @@ import { relationFor } from "@/lib/tasks/assignment";
 import { cn } from "@/lib/utils";
 
 import { bulkAssign, bulkDelete, bulkUpdateStatus } from "../actions";
+import { TASK_PANEL } from "@/components/tasks/layout-ui";
 
 /**
  * The task table: server-paginated (50 a page), sortable within the page,
@@ -278,7 +279,7 @@ export function TaskTable({
         </DropdownMenu>
       </div>
 
-      <div className="rounded-md border">
+      <div className={TASK_PANEL}>
         <Table className={PINNABLE_TABLE}>
           <TableHeader>
             <TableRow>
