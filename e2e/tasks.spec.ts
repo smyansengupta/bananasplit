@@ -76,5 +76,6 @@ test("a handed-down task emails a deep link that survives sign-in", async ({ pag
 
   // Alex owns it now; clean up.
   await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete task" }).click();
   await page.waitForURL(new RegExp(`/app/${ORG}/tasks$`));
 });

@@ -13,6 +13,7 @@ import { SectionGate } from "@/components/shell/section-gate";
 import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { UserMenu } from "@/components/shell/user-menu";
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/toaster";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
 
@@ -140,6 +141,7 @@ export function AppShell({
           open={commandOpen}
           onOpenChange={setCommandOpen}
         />
+        <Toaster />
       </div>
     </PinsProvider>
   );

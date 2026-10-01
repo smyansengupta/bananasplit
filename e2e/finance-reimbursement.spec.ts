@@ -23,13 +23,13 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   const orgSlug = await createOrgViaOnboarding(page, orgName);
 
   await page.goto(`/app/${orgSlug}/finance/budget`);
-  await page.getByRole("button", { name: "New period" }).click();
-  await page.getByPlaceholder("Label, e.g. FY 2026–27").fill("E2E fiscal year");
+  await page.getByRole("button", { name: "New period" }).first().click();
+  await page.getByLabel("Name").fill("E2E fiscal year");
   const endsOn = new Date();
   endsOn.setFullYear(endsOn.getFullYear() + 1);
-  await page.locator("input[type='date']").nth(1).fill(endsOn.toISOString().slice(0, 10));
-  await page.getByRole("button", { name: "Create and activate" }).click();
-  await expect(page.getByText("E2E fiscal year")).toBeVisible();
+  await page.getByLabel("Ends").fill(endsOn.toISOString().slice(0, 10));
+  await page.getByRole("button", { name: "Create and make active" }).click();
+  await expect(page.getByText("E2E fiscal year").first()).toBeVisible();
 
   await page.goto(`/app/${orgSlug}/settings/members`);
   await page.getByLabel("Email").fill(member.email);

@@ -74,6 +74,8 @@ const CLIENT_ALLOWLIST = [
   "src/app/sign-up/actions.ts",
   "src/app/verify-email/**",
   "src/lib/rate-limit.ts",
+  // serviceDb only: app.blob_* (StoredBlob, file bytes when there's no Blob store).
+  "src/server/storage/database-driver.ts",
   "src/app/api/calendar/feed/**",
   "src/app/api/cron/**",
   "src/server/jobs/**",

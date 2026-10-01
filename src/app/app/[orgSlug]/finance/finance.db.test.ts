@@ -139,7 +139,7 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     const swag = await withOrgTx(orgId, ({ db }) =>
       db.budgetCategory.findFirstOrThrow({ where: { budgetPeriodId: periodId, name: "Swag" } }),
     );
-    expect(await deleteCategory(orgId, swag.id)).toEqual({});
+    expect(await deleteCategory(orgId, swag.id)).toEqual({ moved: 0 });
   });
 
   it("an expense: submitter submits, a treasurer approves (outbox email), nobody self-approves", async () => {

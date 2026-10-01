@@ -48,6 +48,7 @@ export default async function ThemeSettingsPage({
         <PersonalThemeNotice
           themeName={personalName}
           profileHref={`/app/${organization.slug}/profile#theme`}
+          clubMode={theme.mode === "LIGHT" ? "light" : theme.mode === "DARK" ? "dark" : "system"}
         />
       )}
       <ThemeSettings
@@ -65,6 +66,7 @@ export default async function ThemeSettingsPage({
           dark: theme.dark,
         }}
         isDefault={theme.isDefault}
+        personalThemeName={personalName}
       />
     </div>
   );

@@ -3,12 +3,19 @@ import { NotesNewMenu } from "@/components/notes/notes-new-menu";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { listNoteFiles } from "@/server/notes/files";
+import { listDeletedNoteFiles, listNoteFiles } from "@/server/notes/files";
 import { listFolders } from "@/server/notes/folders";
 import { listPins } from "@/server/pins";
 
 import { NotesListFilters } from "./notes-list-filters";
-import { getNotesForList, getOrgMembersForFilter, NOTE_SORTS, type NoteSort } from "./queries";
+import {
+  countDeleted,
+  getDeletedNotes,
+  getNotesForList,
+  getOrgMembersForFilter,
+  NOTE_SORTS,
+  type NoteSort,
+} from "./queries";
 
 /**
  * Notes: the club's notes and files, filed in shared folders. "New" starts a
@@ -28,7 +35,8 @@ export default async function NotesPage({
   const str = (v: unknown) => (typeof v === "string" && v !== "all" ? v : undefined);
   const visibility = str(query.visibility) as "PRIVATE" | "ORGANIZATION" | undefined;
   const author = str(query.author);
-  const folderId = str(query.folder);
+  const inTrash = query.folder === "trash";
+  const folderId = inTrash ? undefined : str(query.folder);
   const q = str(query.q);
   const sort = (NOTE_SORTS as readonly string[]).includes(String(query.sort)) ? (query.sort as NoteSort) : "edited";
 
@@ -38,6 +46,13 @@ export default async function NotesPage({
     memberships: await getOrgMembersForFilter(db, org.id),
     folders: await listFolders(db, org.id, user.id),
     pins: await listPins(db, org.id, org.slug, user.id),
+    trash: inTrash
+      ? {
+          notes: await getDeletedNotes(db, org.id, user.id, isAdmin),
+          files: await listDeletedNoteFiles(db, org.id, user.id, isAdmin),
+        }
+      : null,
+    trashCount: await countDeleted(db, org.id, user.id, isAdmin),
     totals: {
       notes: await db.note.count({
         where: { organizationId: org.id, deletedAt: null, OR: [{ visibility: "ORGANIZATION" }, { authorId: user.id }] },
@@ -104,7 +119,19 @@ export default async function NotesPage({
           canMove: isAdmin || f.uploadedBy.id === user.id,
         }))}
         pinnedHrefs={data.pins.map((p) => p.href)}
-        totals={data.totals}
+        totals={{ ...data.totals, trash: data.trashCount }}
+        trash={
+          data.trash && {
+            notes: data.trash.notes.map((n) => ({
+              id: n.id,
+              title: n.title,
+              visibility: n.visibility,
+              deletedAt: n.deletedAt!,
+              authorName: n.author.name ?? n.author.email,
+            })),
+            files: data.trash.files,
+          }
+        }
         filters={tab === "notes" ? <NotesListFilters members={members} /> : null}
       />
     </div>

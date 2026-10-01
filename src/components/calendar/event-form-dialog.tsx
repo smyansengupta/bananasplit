@@ -6,6 +6,7 @@ import { useId, useState, useTransition } from "react";
 
 import { createEvent, deleteEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -156,6 +157,7 @@ function EventForm({
 }: Omit<Props, "open">) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [confirmEl, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const moreId = useId();
 
@@ -261,19 +263,20 @@ function EventForm({
     });
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!event) return;
-    if (!window.confirm(`Delete "${event.title}"? Invited members are told it was cancelled.`)) return;
-    startTransition(async () => {
-      const result = await deleteEvent(orgId, event.id, { notifyAttendees });
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
-      onOpenChange(false);
-      onDeleted?.();
-      router.refresh();
+    const ok = await confirm({
+      title: `Delete “${event.title}”?`,
+      description: notifyAttendees
+        ? "Invited members are told it was cancelled."
+        : "Invited members won't be notified.",
+      confirmLabel: "Delete event",
+      run: async () => (await deleteEvent(orgId, event.id, { notifyAttendees }))?.error,
     });
+    if (!ok) return;
+    onOpenChange(false);
+    onDeleted?.();
+    router.refresh();
   }
 
   /** Cmd/Ctrl+Enter saves from anywhere, including the description. */
@@ -583,9 +586,10 @@ function EventForm({
         )}
       </div>
 
+      {confirmEl}
       <DialogFooter className="flex items-center justify-between sm:justify-between">
         {event ? (
-          <Button type="button" variant="ghost" onClick={handleDelete} disabled={isPending}>
+          <Button type="button" variant="ghost" onClick={() => void handleDelete()} disabled={isPending}>
             Delete
           </Button>
         ) : (

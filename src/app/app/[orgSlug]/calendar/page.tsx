@@ -58,7 +58,7 @@ export default async function CalendarPage({ params, searchParams }: PageProps<"
         <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/app/${orgSlug}/calendar/polls`}>Availability polls</Link>
+            <Link href={`/app/${orgSlug}/calendar/polls`}>Polls</Link>
           </Button>
           {can({ role }, "integrations.view") && (
             <Button variant="outline" size="sm" asChild>

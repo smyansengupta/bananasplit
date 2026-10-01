@@ -17,7 +17,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
   { type: "meetings", title: "Meetings", description: "Board and team meetings coming up.", group: "Calendar", icon: "Users", w: 2, h: null },
   { type: "events", title: "Events", description: "Everything else coming up on the calendar.", group: "Calendar", icon: "CalendarDays", w: 2, h: null },
   { type: "week", title: "This week", description: "The next seven days, day by day.", group: "Calendar", icon: "CalendarRange", w: 4, h: null },
-  { type: "polls", title: "Open polls", description: "Availability polls still collecting answers.", group: "Calendar", icon: "Vote", w: 1, h: null },
+  { type: "polls", title: "Open polls", description: "Questions and find-a-time polls still taking answers.", group: "Calendar", icon: "Vote", w: 1, h: null },
   { type: "notes", title: "Recent notes", description: "Notes edited lately that you can read.", group: "Notes", icon: "NotebookText", w: 2, h: null },
   { type: "files", title: "Recent files", description: "The latest uploads on the Notes page.", group: "Notes", icon: "FolderOpen", w: 2, h: null },
   { type: "people", title: "People", description: "Who's in the club, newest first.", group: "Club", icon: "Users", w: 1, h: null },

@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowLeftRight,
+  ArrowRight,
   CalendarDays,
   CalendarRange,
   ChartBar,
@@ -20,6 +22,8 @@ import {
   Link2,
   ListChecks,
   Loader2,
+  Maximize2,
+  Minimize2,
   NotebookText,
   PiggyBank,
   Pin,
@@ -27,8 +31,10 @@ import {
   ReceiptText,
   Rocket,
   RotateCcw,
+  SlidersHorizontal,
   Target,
   Timer,
+  Trash2,
   TrendingDown,
   Users,
   Vote,
@@ -57,6 +63,7 @@ import {
   type BoardWidget,
   type WidgetMeta,
 } from "@/lib/boards";
+import { ItemMenu } from "@/components/item-menu";
 import { cn } from "@/lib/utils";
 
 export const BOARD_ICONS: Record<string, LucideIcon> = {
@@ -203,10 +210,19 @@ export function WidgetBoard({
   const add = (type: string) => {
     const m = meta.get(type);
     if (!m) return;
-    setLayout((l) => [...l, { id: newWidgetId(type, l), type, w: m.w, h: m.h }]);
+    const next = [...layout, { id: newWidgetId(type, layout), type, w: m.w, h: m.h }];
+    setLayout(next);
     setAdding(false);
-    setEditing(true);
+    // Outside Customize, adding is one step: it lands on the board and saves.
+    if (!editing) persist(next);
   };
+
+  /** Quick changes from a widget's menu, saved at once (outside Customize). */
+  function quick(change: (l: BoardWidget[]) => BoardWidget[]) {
+    const next = change(layout);
+    setLayout(next);
+    persist(next);
+  }
 
   const body = (type: string) => (bodies ? bodies[type] : renderBody?.(type)) ?? null;
 
@@ -251,10 +267,16 @@ export function WidgetBoard({
               </Button>
             </>
           ) : (
-            <Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)}>
-              <LayoutGrid className="size-4" aria-hidden="true" />
-              Customize
-            </Button>
+            <>
+              <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => setAdding(true)}>
+                <Plus className="size-4" aria-hidden="true" />
+                Add widget
+              </Button>
+              <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => setEditing(true)}>
+                <LayoutGrid className="size-4" aria-hidden="true" />
+                Customize
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -302,7 +324,7 @@ export function WidgetBoard({
                 data-dragging={dragId === w.id || undefined}
                 className={cn(
                   SPAN[w.w] ?? SPAN[1],
-                  "bg-card text-card-foreground relative flex min-w-0 flex-col overflow-hidden rounded-xl border shadow-xs transition-shadow",
+                  "group/widget bg-card text-card-foreground relative flex min-w-0 flex-col overflow-hidden rounded-xl border shadow-xs transition-shadow",
                   editing && "ring-primary/25 ring-2",
                   dragId === w.id && "opacity-40",
                   overId === w.id && dragId !== w.id && "ring-primary ring-2",
@@ -355,6 +377,54 @@ export function WidgetBoard({
                   )}
                   <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
                   <h2 className="min-w-0 truncate text-sm font-medium">{m.title}</h2>
+                  {!editing && (
+                    <ItemMenu
+                      label={`${m.title} options`}
+                      size="xs"
+                      className="ms-auto opacity-0 group-hover/widget:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                      items={[
+                        w.w < BOARD_COLUMNS && {
+                          label: "Wider",
+                          icon: Maximize2,
+                          onSelect: () => quick((l) => l.map((x) => (x.id === w.id ? { ...x, w: clampWidth(x.w + 1) } : x))),
+                        },
+                        w.w > 1 && {
+                          label: "Narrower",
+                          icon: Minimize2,
+                          onSelect: () => quick((l) => l.map((x) => (x.id === w.id ? { ...x, w: clampWidth(x.w - 1) } : x))),
+                        },
+                        layout[0]?.id !== w.id && {
+                          label: "Move earlier",
+                          icon: ArrowLeft,
+                          onSelect: () =>
+                            quick((l) => {
+                              const i = l.findIndex((x) => x.id === w.id);
+                              const next = [...l];
+                              [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                              return next;
+                            }),
+                        },
+                        layout[layout.length - 1]?.id !== w.id && {
+                          label: "Move later",
+                          icon: ArrowRight,
+                          onSelect: () =>
+                            quick((l) => {
+                              const i = l.findIndex((x) => x.id === w.id);
+                              const next = [...l];
+                              [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                              return next;
+                            }),
+                        },
+                        { label: "Resize and arrange…", icon: SlidersHorizontal, onSelect: () => setEditing(true), separated: true },
+                        {
+                          label: "Remove from board",
+                          icon: Trash2,
+                          destructive: true,
+                          onSelect: () => quick((l) => l.filter((x) => x.id !== w.id)),
+                        },
+                      ]}
+                    />
+                  )}
                   {editing && (
                     <div className="ms-auto flex shrink-0 items-center gap-1">
                       <div className="bg-muted flex rounded-md p-0.5" role="group" aria-label={`${m.title} width`}>
@@ -416,6 +486,17 @@ export function WidgetBoard({
               </section>
             );
           })}
+          {layout.length < MAX_WIDGETS && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              disabled={pending}
+              className="text-muted-foreground hover:text-foreground hover:border-foreground/25 hover:bg-muted/40 flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed p-4 text-sm transition-colors"
+            >
+              <Plus className="size-5" aria-hidden="true" />
+              Add a widget
+            </button>
+          )}
         </div>
       )}
 

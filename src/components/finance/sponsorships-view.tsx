@@ -1,6 +1,6 @@
 "use client";
 
-import { Handshake } from "lucide-react";
+import { Handshake, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -8,9 +8,14 @@ import {
   createSponsor,
   createSponsorship,
   updateSponsorshipStatus,
+  deleteSponsor,
+  deleteSponsorship,
 } from "@/app/app/[orgSlug]/finance/sponsorships-actions";
+import { ItemMenu } from "@/components/item-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toaster";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -131,8 +136,39 @@ export function SponsorshipsView({
     .filter((s) => s.status === "RECEIVED")
     .reduce((sum, s) => sum + s.amountCents, 0);
 
+  const [confirmEl, confirm] = useConfirm();
+
+  async function removeSponsorship(id: string, name: string, received: boolean) {
+    const ok = await confirm({
+      title: `Delete the sponsorship from \u201c${name}\u201d?`,
+      description: received
+        ? "The money received stays in your books as its own transaction. Delete that under Transactions too if it was a mistake."
+        : "It's removed from the pipeline and the totals.",
+      confirmLabel: "Delete sponsorship",
+      run: async () => (await deleteSponsorship(orgId, id)).error,
+    });
+    if (ok) {
+      toast({ title: "Sponsorship deleted", description: name });
+      router.refresh();
+    }
+  }
+
+  async function removeSponsor(id: string, name: string) {
+    const ok = await confirm({
+      title: `Delete the sponsor \u201c${name}\u201d?`,
+      description: "Only a sponsor with no sponsorships can be deleted.",
+      confirmLabel: "Delete sponsor",
+      run: async () => (await deleteSponsor(orgId, id)).error,
+    });
+    if (ok) {
+      toast({ title: "Sponsor deleted", description: name });
+      router.refresh();
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {confirmEl}
       <div className="flex gap-6 text-sm">
         <p>
           <span className="text-muted-foreground">Committed: </span>
@@ -167,9 +203,21 @@ export function SponsorshipsView({
         )}
         <div className="flex flex-wrap gap-2">
           {sponsors.map((s) => (
-            <Badge key={s.id} variant="outline">
+            <span key={s.id} className="inline-flex items-center gap-0.5 rounded-full border py-0.5 ps-2.5 pe-0.5 text-xs">
               {s.name}
-            </Badge>
+              <ItemMenu
+                label={`Actions for ${s.name}`}
+                size="xs"
+                items={[
+                  {
+                    label: "Delete sponsor",
+                    icon: Trash2,
+                    destructive: true,
+                    onSelect: () => void removeSponsor(s.id, s.name),
+                  },
+                ]}
+              />
+            </span>
           ))}
         </div>
       </div>
@@ -241,20 +289,33 @@ export function SponsorshipsView({
                 {s.tier && <Badge variant="outline">{s.tier}</Badge>}
                 <span className="text-muted-foreground">{formatCents(s.amountCents)}</span>
               </span>
-              <Select value={s.status} onValueChange={(v) => handleStatusChange(s.id, v)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue>
-                    <Badge variant={STATUS_VARIANT[s.status]}>{s.status}</Badge>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.values(SponsorshipStatus).map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span className="flex items-center gap-1">
+                <Select value={s.status} onValueChange={(v) => handleStatusChange(s.id, v)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue>
+                      <Badge variant={STATUS_VARIANT[s.status]}>{s.status}</Badge>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(SponsorshipStatus).map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <ItemMenu
+                  label={`Actions for ${s.sponsor.name}`}
+                  items={[
+                    {
+                      label: "Delete sponsorship",
+                      icon: Trash2,
+                      destructive: true,
+                      onSelect: () => void removeSponsorship(s.id, s.sponsor.name, s.status === "RECEIVED"),
+                    },
+                  ]}
+                />
+              </span>
             </li>
           ))}
           {sponsorships.length === 0 && (

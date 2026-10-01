@@ -5,6 +5,7 @@ import {
   TransactionStatus,
 } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
+import { DELETED_TRANSACTION_REASON } from "@/lib/finance/deleted";
 import { computeRunway, countsTowardBalance, type Runway } from "@/lib/finance/stats";
 import type { TxClient } from "@/server/db/context";
 
@@ -87,7 +88,14 @@ export interface TransactionFilters {
   dateFrom?: string;
   dateTo?: string;
   reconciled?: "yes" | "no";
+  /** Deleted transactions (voided as "Deleted") are hidden unless "show". */
+  deleted?: "show";
 }
+
+/** Everything but deleted transactions (a NULL voidReason must count as kept). */
+const NOT_DELETED: Prisma.TransactionWhereInput = {
+  OR: [{ voidReason: null }, { voidReason: { not: DELETED_TRANSACTION_REASON } }],
+};
 
 export function buildTransactionWhere(
   organizationId: string,
@@ -95,6 +103,7 @@ export function buildTransactionWhere(
 ): Prisma.TransactionWhereInput {
   return {
     organizationId,
+    ...(filters.deleted === "show" ? {} : NOT_DELETED),
     ...(filters.budgetPeriodId ? { budgetPeriodId: filters.budgetPeriodId } : {}),
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.kind ? { kind: filters.kind } : {}),
@@ -127,7 +136,7 @@ export function getTransactions(
 
 export function getMyReimbursements(db: TxClient, organizationId: string, userId: string) {
   return db.transaction.findMany({
-    where: { organizationId, kind: TransactionKind.EXPENSE, submittedById: userId },
+    where: { organizationId, kind: TransactionKind.EXPENSE, submittedById: userId, ...NOT_DELETED },
     include: transactionInclude,
     orderBy: { occurredAt: "desc" },
   });

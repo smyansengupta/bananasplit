@@ -2,6 +2,7 @@
 
 import { Info, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { useState, useTransition } from "react";
 
 import { saveThemeStep } from "@/app/onboarding/profile/actions";
@@ -11,8 +12,18 @@ import { Button } from "@/components/ui/button";
  * Shown on Settings > Theme when the viewer has their own theme: theirs is
  * what they see, so changes here would look like they did nothing.
  */
-export function PersonalThemeNotice({ themeName, profileHref }: { themeName: string; profileHref: string }) {
+export function PersonalThemeNotice({
+  themeName,
+  profileHref,
+  clubMode = "system",
+}: {
+  themeName: string;
+  profileHref: string;
+  /** The club's default light/dark, applied when switching back to it. */
+  clubMode?: "light" | "dark" | "system";
+}) {
   const router = useRouter();
+  const { setTheme } = useTheme();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +54,10 @@ export function PersonalThemeNotice({ themeName, profileHref }: { themeName: str
             setError(null);
             const result = await saveThemeStep(null);
             if (!result.ok) setError("Couldn't switch. Try again.");
-            else router.refresh();
+            else {
+              setTheme(clubMode);
+              router.refresh();
+            }
           })
         }
       >

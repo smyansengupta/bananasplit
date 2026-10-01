@@ -193,25 +193,25 @@ export async function getOrgPolls(db: TxClient, organizationId: string) {
       finalizedEventId: true,
       finalizedEvent: { select: { startsAt: true, endsAt: true } },
       createdById: true,
+      createdAt: true,
     },
     orderBy: { createdAt: "desc" },
   });
   if (polls.length === 0) return [];
   const pollIds = polls.map((p) => p.id);
-  const [spans, respondents] = await Promise.all([
-    db.pollSlot.groupBy({
-      by: ["pollId"],
-      where: { organizationId, pollId: { in: pollIds } },
-      _min: { startsAt: true },
-      _max: { endsAt: true },
-    }),
-    // One row per (poll, person): members by user id, guests by key (or, for
-    // rows from before guest keys, by name).
-    db.pollResponse.groupBy({
-      by: ["pollId", "userId", "guestKeyHash", "guestName"],
-      where: { organizationId, pollId: { in: pollIds } },
-    }),
-  ]);
+  // One after another: a transaction has one connection.
+  const spans = await db.pollSlot.groupBy({
+    by: ["pollId"],
+    where: { organizationId, pollId: { in: pollIds } },
+    _min: { startsAt: true },
+    _max: { endsAt: true },
+  });
+  // One row per (poll, person): members by user id, guests by key (or, for
+  // rows from before guest keys, by name).
+  const respondents = await db.pollResponse.groupBy({
+    by: ["pollId", "userId", "guestKeyHash", "guestName"],
+    where: { organizationId, pollId: { in: pollIds } },
+  });
   const spanOf = new Map(spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]));
   const respondentCount = new Map<string, number>();
   for (const r of respondents) respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);

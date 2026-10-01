@@ -1,6 +1,7 @@
 import mammoth from "mammoth";
 
 import { DOCX, googleDocId, sniffNoteFile } from "@/lib/files/types";
+import { trashCutoff } from "@/lib/notes/trash";
 import { withOrgTx, type TxClient } from "@/server/db/context";
 import { readZipDirectory, verifyZipEntries, SourceRejectedError } from "@/server/org-chart/extract";
 import { deleteBlobs, getBlob, MAX_UPLOAD_BYTES, putBlob, randomKeyId } from "@/server/storage";
@@ -147,7 +148,11 @@ export async function readNoteFile(
   return { row, body: blob.body };
 }
 
-/** Removes a file (the uploader or an admin, as RLS allows), then its blob. */
+/**
+ * Moves a file to "Recently deleted" (the uploader or an admin, as RLS
+ * allows). Its bytes stay NOTE_TRASH_DAYS so it can be restored; the daily
+ * maintenance job deletes them after that.
+ */
 export async function removeNoteFile(db: TxClient, orgId: string, fileId: string): Promise<string | null> {
   const row = await db.orgFile.findFirst({
     where: { id: fileId, organizationId: orgId, deletedAt: null },
@@ -159,6 +164,42 @@ export async function removeNoteFile(db: TxClient, orgId: string, fileId: string
     data: { deletedAt: new Date() },
   });
   return count > 0 ? row.storageKey : null;
+}
+
+/** Brings a file back from "Recently deleted" (within NOTE_TRASH_DAYS). */
+export async function restoreNoteFile(db: TxClient, orgId: string, fileId: string): Promise<boolean> {
+  const { count } = await db.orgFile.updateMany({
+    where: { id: fileId, organizationId: orgId, deletedAt: { gte: trashCutoff() } },
+    data: { deletedAt: null },
+  });
+  return count > 0;
+}
+
+export interface DeletedNoteFile {
+  id: string;
+  name: string;
+  contentType: string;
+  sizeBytes: number;
+  deletedAt: Date;
+}
+
+/** Files deleted in the last NOTE_TRASH_DAYS that this member may restore. */
+export function listDeletedNoteFiles(
+  db: TxClient,
+  orgId: string,
+  userId: string,
+  isAdmin: boolean,
+): Promise<DeletedNoteFile[]> {
+  return db.orgFile.findMany({
+    where: {
+      organizationId: orgId,
+      deletedAt: { gte: trashCutoff() },
+      ...(isAdmin ? {} : { uploadedById: userId }),
+    },
+    orderBy: { deletedAt: "desc" },
+    select: { id: true, name: true, contentType: true, sizeBytes: true, deletedAt: true },
+    take: 100,
+  }) as Promise<DeletedNoteFile[]>;
 }
 
 const EXCERPT_CHARS = 500;

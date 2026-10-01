@@ -163,7 +163,7 @@ export function PollForm({
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm transition-colors"
         >
           <ArrowLeft aria-hidden className="size-4" />
-          Availability polls
+          Polls
         </Link>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">New availability poll</h1>

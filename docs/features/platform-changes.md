@@ -147,6 +147,69 @@ Week, board, table and team share one group header and panel style
   - File cards show a text excerpt (`OrgFile.excerpt`) or an image thumbnail.
   - Word files and text files preview as a page.
 
+## Round three: things that have to just work
+
+**Finance never dead-ends.**
+- With no budget period, Finance shows a "Set up your budget" card (school
+  year, semester or calendar year, one click) above the normal board, and
+  "Add transaction" works anyway: a treasurer's first transaction makes this
+  school year (Aug 1 to Jul 31) with the starter categories
+  (`ensureActivePeriod`, `src/server/finance/periods.ts`). A member's
+  reimbursement request needs a period the treasurer set up and says so.
+- Budget is rebuilt: labelled fields, presets, rename or move a period,
+  delete an empty one, and per category the budget, spent and left with a
+  bar. Typing an amount and clicking away saves it. Dates show in UTC, so
+  Aug 1 no longer prints as Jul 31.
+- Deleting a category that's in use leaves its transactions uncategorized
+  (each change audited) instead of refusing; reconciled ones still lock it.
+- Widget boards: "Add widget" sits next to Customize, there's a dashed
+  "Add a widget" tile at the end, and each widget's "…" menu makes it wider
+  or narrower, moves it, or removes it, saved at once.
+
+**Delete anything, the same way everywhere.** Every card and row has a
+"…" menu (`src/components/item-menu.tsx`) with Delete last and red. Deletes
+ask first in one themed dialog (`src/components/ui/confirm-dialog.tsx`;
+`window.confirm` is gone) and most offer Undo in a toast
+(`src/components/ui/toaster.tsx`, mounted in the app shell).
+- Notes and Notes files: card menu (open, download, copy link, move to
+  folder, delete), a Delete button in the editor, drag a card onto
+  "Recently deleted". "Recently deleted" in the Notes rail keeps notes and
+  files for 30 days (`NOTE_TRASH_DAYS`) with Restore. A deleted file's bytes
+  now stay until then; the daily maintenance job removes them after.
+- Tasks: "…" on rows and board cards, a confirm (with subtask count) in the
+  editor and for bulk delete in the table, Undo through `restoreTask`.
+  Comments ask first too.
+- Finance: transactions get Delete (treasurers on anything not reconciled,
+  members on their own requests until approved). Money rows are never
+  erased: Delete voids with the reason "Deleted", lists hide them ("Show
+  deleted transactions" brings them back into view) and Restore or Undo
+  un-voids, all in the finance audit log. Receipts, categories, periods,
+  sponsorships and sponsors can be deleted as well.
+- Events and labels use the same dialog.
+
+**Notes always save.** The autosave (`use-autosave.ts`) never drops an
+edit: a failed save keeps its text and retries with backoff ("Couldn't save
+— retrying", with Retry now), leaving the editor or hiding the tab sends
+what's waiting at once, and closing the tab with unsaved changes asks
+first. Each save also keeps a copy in the browser (`note-backup.ts`) until
+the server confirms it; reopening a note whose last changes never arrived
+offers to restore them.
+
+**Files without setting anything up.** With no Vercel Blob store, files go
+to Postgres (`StoredBlob`, `src/server/storage/database-driver.ts`):
+club pictures, avatars, receipts, Notes files and exports all work on a
+fresh deployment. A Blob store, once added, takes over; files saved before
+stay readable, and an upload the store refuses still lands in the database.
+`/api/media` serves public pictures from either. The table has no grants:
+only `app.blob_put/get/delete/list` reach it, and only `app_service` may run
+them (RLS tests P-BLOB-01 to 03).
+
+**Saving a theme shows.** Saving the club theme also applies its light or
+dark mode for you (a mode picked earlier in the user menu used to win in
+that browser). If your own personal theme hides the club's, the save says
+so with "Show me the club theme". "Match my club" in your profile also goes
+back to the club's light or dark.
+
 ## Migration
 
 `20261001120000_pins_files_prefs`:
@@ -167,3 +230,6 @@ It only adds things.
 
 `20261003120000_pin_folder_kind` lets pins and recent pages point at a
 folder.
+
+`20261004120000_database_blob_storage` adds `StoredBlob` and the four
+`app.blob_*` functions (app_service only). It only adds things.

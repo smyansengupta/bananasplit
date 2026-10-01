@@ -49,6 +49,12 @@ describe("export registry catalog", () => {
     expect(omitted("PollResponse")).toContain("guestKeyHash");
   });
 
+  it("exports question polls, and their votes without the voter (anonymous polls stay anonymous)", () => {
+    const models = EXPORT_TABLES.map((t) => t.model);
+    expect(models).toEqual(expect.arrayContaining(["Poll", "PollOption", "PollVote"]));
+    expect(EXPORT_TABLES.find((t) => t.model === "PollVote")?.omit).toEqual(["userId"]);
+  });
+
   it("marks individual ballots as privacy-gated", () => {
     expect(
       EXPORT_TABLES.filter((t) => t.ballotRows)

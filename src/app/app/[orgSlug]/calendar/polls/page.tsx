@@ -1,28 +1,55 @@
-import { ArrowLeft, CalendarRange, ChevronRight, Plus } from "lucide-react";
+import { ArrowLeft, Vote } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
-import { PinToggle } from "@/components/pins/pins-context";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { NewPollButtons, NewPollMenu } from "@/components/polls/new-poll-menu";
+import { PollList, type PollListItem } from "@/components/polls/poll-list";
+import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
+import { isPollOpen } from "@/lib/polls/question-poll";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { listQuestionPolls, type QuestionPollSummary } from "@/server/polls/question-polls";
 
 import { getOrgPolls } from "../queries";
 
-type PollRow = Awaited<ReturnType<typeof getOrgPolls>>[number];
+type AvailabilityRow = Awaited<ReturnType<typeof getOrgPolls>>[number];
 
+/**
+ * Every poll in the org, both kinds, newest first: questions people vote on
+ * and find-a-time (availability) polls, split into open and closed.
+ */
 export default async function PollsListPage({
   params,
 }: PageProps<"/app/[orgSlug]/calendar/polls">) {
   const { orgSlug } = await params;
 
-  const { organization: org } = await getOrgContextBySlug(orgSlug);
-  const polls = await withOrgTx(org.id, ({ db }) => getOrgPolls(db, org.id));
-  const now = new Date().getTime();
-  const isOpen = (p: PollRow) => !p.finalizedEventId && !(p.closesAt && p.closesAt.getTime() < now);
-  const open = polls.filter(isOpen);
-  const past = polls.filter((p) => !isOpen(p));
+  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  const { availability, questions } = await withOrgTx(org.id, async ({ db }) => ({
+    availability: await getOrgPolls(db, org.id),
+    questions: await listQuestionPolls(db, org.id),
+  }));
+  const now = new Date();
+  const isAdmin = can({ role }, "events.write");
+  const base = `/app/${orgSlug}/calendar/polls`;
+
+  const all = [
+    ...availability.map((p) => ({
+      createdAt: p.createdAt,
+      open: availabilityOpen(p, now),
+      item: availabilityItem(p, base, now, p.createdById === user.id || isAdmin),
+    })),
+    ...questions.map((p) => ({
+      createdAt: p.createdAt,
+      open: isPollOpen(p, now),
+      item: questionItem(
+        p,
+        base,
+        now,
+        safeTimeZone(org.timezone),
+        p.createdById === user.id || isAdmin,
+      ),
+    })),
+  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -36,137 +63,117 @@ export default async function PollsListPage({
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">Availability polls</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Polls</h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              People mark when they&apos;re free; an admin schedules the time that suits the most.
+              Ask the club a question, or find a time that works for everyone.
             </p>
           </div>
-          <Button asChild>
-            <Link href={`/app/${orgSlug}/calendar/polls/new`}>
-              <Plus aria-hidden className="size-4" />
-              New poll
-            </Link>
-          </Button>
+          <NewPollMenu orgSlug={orgSlug} />
         </div>
       </div>
 
-      {polls.length === 0 ? (
+      {all.length === 0 ? (
         <EmptyState
-          icon={CalendarRange}
+          icon={Vote}
           title="No polls yet"
-          description="Pick some dates and hours, share the link, and see when most people are free."
-          action={
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/app/${orgSlug}/calendar/polls/new`}>Create a poll</Link>
-            </Button>
-          }
+          description="Ask a question and let people vote, or offer some days and hours and see when most people are free."
+          action={<NewPollButtons orgSlug={orgSlug} />}
         />
       ) : (
-        <>
-          <PollSection
-            title="Open"
-            empty="No open polls."
-            polls={open}
-            orgSlug={orgSlug}
-            now={now}
-          />
-          {past.length > 0 && (
-            <PollSection title="Closed" empty="" polls={past} orgSlug={orgSlug} now={now} />
-          )}
-        </>
+        <PollList
+          orgId={org.id}
+          open={all.filter((p) => p.open).map((p) => p.item)}
+          closed={all.filter((p) => !p.open).map((p) => p.item)}
+        />
       )}
     </div>
   );
 }
 
-function PollSection({
-  title,
-  empty,
-  polls,
-  orgSlug,
-  now,
-}: {
-  title: string;
-  empty: string;
-  polls: PollRow[];
-  orgSlug: string;
-  now: number;
-}) {
-  const id = `polls-${title.toLowerCase()}`;
-  return (
-    <section className="space-y-2" aria-labelledby={id}>
-      <h2 id={id} className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-        {title} <span className="tabular-nums">({polls.length})</span>
-      </h2>
-      {polls.length === 0 ? (
-        <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">{empty}</p>
-      ) : (
-        <ul className="divide-border bg-card divide-y rounded-lg border">
-          {polls.map((poll) => (
-            <li key={poll.id} className="group relative">
-              <PinToggle
-                href={`/app/${orgSlug}/calendar/polls/${poll.id}`}
-                label={poll.title}
-                className="absolute top-1/2 right-10 z-10 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-              />
-              <Link
-                href={`/app/${orgSlug}/calendar/polls/${poll.id}`}
-                className="hover:bg-muted/50 focus-visible:ring-ring/50 flex items-center gap-3 px-4 py-3 transition-colors outline-none first:rounded-t-lg last:rounded-b-lg focus-visible:ring-3 focus-visible:ring-inset"
-              >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="truncate font-medium">{poll.title}</span>
-                    <PollStatus poll={poll} now={now} />
-                  </div>
-                  <p className="text-muted-foreground text-xs">
-                    {[
-                      dateSpan(poll),
-                      `${poll.durationMinutes}-minute meeting`,
-                      poll.respondentCount === 0
-                        ? "No responses yet"
-                        : poll.respondentCount === 1
-                          ? "1 person responded"
-                          : `${poll.respondentCount} people responded`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-                <ChevronRight aria-hidden className="text-muted-foreground size-4 shrink-0" />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
+function people(n: number, verb: string): string {
+  if (n === 0) return verb === "voted" ? "No votes yet" : "No responses yet";
+  return n === 1 ? `1 person ${verb}` : `${n} people ${verb}`;
 }
 
-function PollStatus({ poll, now }: { poll: PollRow; now: number }) {
+function shortDate(at: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(at);
+}
+
+function questionItem(
+  poll: QuestionPollSummary,
+  base: string,
+  now: Date,
+  timeZone: string,
+  canDelete: boolean,
+): PollListItem {
+  const open = isPollOpen(poll, now);
+  return {
+    id: poll.id,
+    kind: "question",
+    title: poll.question,
+    href: `${base}/${poll.id}`,
+    status: open
+      ? {
+          tone: "open",
+          label: poll.closesAt ? `Open until ${shortDate(poll.closesAt, timeZone)}` : "Open",
+        }
+      : { tone: "closed", label: "Closed" },
+    meta: [
+      `${poll.optionCount} options`,
+      poll.multiple ? "Pick any" : null,
+      poll.anonymous ? "Anonymous" : null,
+      people(poll.voterCount, "voted"),
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    canDelete,
+  };
+}
+
+function availabilityOpen(poll: AvailabilityRow, now: Date): boolean {
+  return !poll.finalizedEventId && !(poll.closesAt && poll.closesAt.getTime() < now.getTime());
+}
+
+function availabilityItem(
+  poll: AvailabilityRow,
+  base: string,
+  now: Date,
+  canDelete: boolean,
+): PollListItem {
   const zone = safeTimeZone(poll.timezone);
-  if (poll.finalizedEventId) {
-    return (
-      <Badge variant="secondary">
-        {poll.finalizedEvent
-          ? `Scheduled ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zone }).format(poll.finalizedEvent.startsAt)}`
-          : "Scheduled"}
-      </Badge>
-    );
-  }
-  if (poll.closesAt && poll.closesAt.getTime() < now)
-    return <Badge variant="outline">Closed</Badge>;
-  return (
-    <Badge variant="outline" className="gap-1">
-      <span aria-hidden className="bg-success size-1.5 rounded-full" />
-      {poll.closesAt
-        ? `Open until ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: zone }).format(poll.closesAt)}`
-        : "Open"}
-    </Badge>
-  );
+  const status: PollListItem["status"] = poll.finalizedEventId
+    ? {
+        tone: "scheduled",
+        label: poll.finalizedEvent
+          ? `Scheduled ${shortDate(poll.finalizedEvent.startsAt, zone)}`
+          : "Scheduled",
+      }
+    : availabilityOpen(poll, now)
+      ? {
+          tone: "open",
+          label: poll.closesAt ? `Open until ${shortDate(poll.closesAt, zone)}` : "Open",
+        }
+      : { tone: "closed", label: "Closed" };
+  return {
+    id: poll.id,
+    kind: "availability",
+    title: poll.title,
+    href: `${base}/${poll.id}`,
+    status,
+    meta: [
+      dateSpan(poll),
+      `${poll.durationMinutes}-minute meeting`,
+      people(poll.respondentCount, "responded"),
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    canDelete,
+    deleteNote: poll.finalizedEventId ? "The event it scheduled stays on the calendar." : undefined,
+  };
 }
 
 /** "Sep 29 – Oct 3" in the poll's own zone, the days it offers. */
-function dateSpan(poll: PollRow): string | null {
+function dateSpan(poll: AvailabilityRow): string | null {
   if (!poll.firstSlotAt || !poll.lastSlotEndsAt) return null;
   const fmt = new Intl.DateTimeFormat("en-US", {
     month: "short",

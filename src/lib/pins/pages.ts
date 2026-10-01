@@ -62,6 +62,7 @@ const SECTIONS: Record<string, string> = {
 
 const SUBPAGES: Record<string, string> = {
   "calendar/polls": "Polls",
+  "calendar/polls/ask": "Ask a question",
   "calendar/polls/new": "New poll",
   "calendar/sync": "Calendar sync",
   "databases/reports": "Reports",

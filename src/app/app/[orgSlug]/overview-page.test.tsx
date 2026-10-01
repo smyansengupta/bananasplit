@@ -26,6 +26,7 @@ const db = {
   task: { count: vi.fn() },
   event: { count: vi.fn() },
   availabilityPoll: { findMany: vi.fn() },
+  poll: { findMany: vi.fn() },
   membership: { findMany: vi.fn(), count: vi.fn() },
   budgetPeriod: { count: vi.fn() },
   note: { count: vi.fn() },
@@ -95,6 +96,7 @@ beforeEach(() => {
   mocks.listRecent.mockResolvedValue([]);
   mocks.loadSavedBoard.mockResolvedValue(null);
   db.availabilityPoll.findMany.mockResolvedValue([]);
+  db.poll.findMany.mockResolvedValue([]);
   db.membership.findMany.mockResolvedValue([]);
   db.membership.count.mockResolvedValue(1);
 });
@@ -219,6 +221,28 @@ describe("org overview", () => {
     expect(html).toContain("E-board minutes");
     expect(html).toContain('href="/app/cbc/databases/sessions"');
     expect(html).toContain("2 hours ago");
+  });
+
+  it("lists open polls of both kinds, newest first", async () => {
+    mocks.loadSavedBoard.mockResolvedValue([{ id: "polls", type: "polls", w: 1, h: null }]);
+    db.availabilityPoll.findMany.mockResolvedValue([
+      { id: "ap_1", title: "Exec sync time", closesAt: null, createdAt: new Date("2026-10-01T12:00:00Z") },
+    ]);
+    db.poll.findMany.mockResolvedValue([
+      { id: "qp_1", question: "Pizza or tacos?", closesAt: null, createdAt: new Date("2026-10-04T12:00:00Z") },
+    ]);
+
+    const html = await render();
+    expect(db.poll.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: "org_cbc", closedAt: null }),
+      }),
+    );
+    expect(html.indexOf("Pizza or tacos?")).toBeLessThan(html.indexOf("Exec sync time"));
+    expect(html).toContain('href="/app/cbc/calendar/polls/qp_1"');
+    expect(html).toContain('href="/app/cbc/calendar/polls/ap_1"');
+    expect(html).toContain("Question · Open");
+    expect(html).toContain("Find a time · Open");
   });
 
   it("shows a next step when there is nothing pinned or coming up", async () => {

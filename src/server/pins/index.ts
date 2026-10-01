@@ -71,12 +71,24 @@ async function resolveLabels(
           .then((r) => r.map((e) => ({ id: e.id, name: e.title })))
       : null,
   );
+  // /calendar/polls/<id> is either kind of poll: a find-a-time poll or a question.
   await load(
     "poll",
     notEmpty(ids("poll"))
-      ? db.availabilityPoll
-          .findMany({ where: { organizationId: orgId, id: { in: ids("poll") } }, select: { id: true, title: true } })
-          .then((r) => r.map((p) => ({ id: p.id, name: p.title })))
+      ? (async () => {
+          const timePolls = await db.availabilityPoll.findMany({
+            where: { organizationId: orgId, id: { in: ids("poll") } },
+            select: { id: true, title: true },
+          });
+          const questionPolls = await db.poll.findMany({
+            where: { organizationId: orgId, id: { in: ids("poll") } },
+            select: { id: true, question: true },
+          });
+          return [
+            ...timePolls.map((p) => ({ id: p.id, name: p.title })),
+            ...questionPolls.map((p) => ({ id: p.id, name: p.question })),
+          ];
+        })()
       : null,
   );
   await load(

@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import {
   Ban,
+  CalendarRange,
   CalendarX2,
   CheckCircle2,
   Clock,
@@ -149,25 +150,48 @@ export function PollList({
   now,
 }: {
   orgSlug: string;
-  polls: { id: string; title: string; closesAt: Date | null }[];
+  /** Open polls of both kinds: questions to vote on, and find-a-time polls. */
+  polls: { id: string; title: string; closesAt: Date | null; kind: "question" | "availability" }[];
   now: Date;
 }) {
   if (polls.length === 0) {
-    return <EmptyState size="compact" icon={Vote} title="No open polls" description="Polls asking for your availability show here." />;
+    return (
+      <EmptyState
+        size="compact"
+        icon={Vote}
+        title="No open polls"
+        description="Questions to vote on and times to find show here."
+        action={
+          <Link href={`/app/${orgSlug}/calendar/polls`} className="text-primary text-sm hover:underline">
+            Start a poll
+          </Link>
+        }
+      />
+    );
   }
   return (
     <ul className="divide-y">
-      {polls.map((p) => (
-        <li key={p.id}>
-          <Link href={`/app/${orgSlug}/calendar/polls/${p.id}`} className="hover:bg-accent/50 -mx-2 block rounded-md px-2 py-2">
-            <span className="block truncate text-sm font-medium">{p.title}</span>
-            <span className="text-muted-foreground text-xs">
-              {p.closesAt ? `Closes ${formatDistanceToNow(p.closesAt, { addSuffix: true })}` : "Open"}
-              {p.closesAt && p.closesAt < now ? " (closed)" : ""}
-            </span>
-          </Link>
-        </li>
-      ))}
+      {polls.map((p) => {
+        const Icon = p.kind === "question" ? Vote : CalendarRange;
+        return (
+          <li key={p.id}>
+            <Link
+              href={`/app/${orgSlug}/calendar/polls/${p.id}`}
+              className="hover:bg-accent/50 -mx-2 flex items-start gap-2.5 rounded-md px-2 py-2"
+            >
+              <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{p.title}</span>
+                <span className="text-muted-foreground text-xs">
+                  {p.kind === "question" ? "Question" : "Find a time"} ·{" "}
+                  {p.closesAt ? `Closes ${formatDistanceToNow(p.closesAt, { addSuffix: true })}` : "Open"}
+                  {p.closesAt && p.closesAt < now ? " (closed)" : ""}
+                </span>
+              </span>
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }

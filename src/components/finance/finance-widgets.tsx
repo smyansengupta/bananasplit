@@ -122,13 +122,14 @@ export function WidgetBody({
   data: DashboardData;
   orgSlug: string;
 }) {
-  const period = data.period!;
+  // Null until the club sets up a budget: every widget still renders, empty.
+  const period = data.period;
   switch (type) {
     case "balance":
       return (
         <Big
           value={formatCents(data.balanceCents)}
-          sub={period.label}
+          sub={period?.label ?? "No budget period yet"}
           tone={data.balanceCents < 0 ? "bad" : undefined}
         />
       );
@@ -314,7 +315,7 @@ export function WidgetBody({
         </div>
       );
     case "runway":
-      return data.runway ? (
+      return data.runway && period ? (
         <RunwaySection
           runway={data.runway}
           period={period}

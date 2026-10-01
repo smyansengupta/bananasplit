@@ -8,9 +8,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   blobStoreIdFromToken,
   driverFor,
+  isLocalStore,
   localDriver,
   publicIsProxied,
-  StorageConfigError,
+  withDatabaseFallback,
+  type BlobDriver,
 } from "./drivers";
 import {
   assertBlobAllowed,
@@ -115,10 +117,17 @@ describe("storage kinds and keys", () => {
     expect(blobStoreIdFromToken(undefined)).toBeNull();
   });
 
-  it("uses the local driver without tokens, and refuses to on Vercel", () => {
+  it("uses the local driver without tokens, and the database on Vercel", () => {
     expect(driverFor("private", {}).name).toBe("local");
     expect(driverFor("public", { BLOB_PUBLIC_READ_WRITE_TOKEN: "vercel_blob_rw_x_y" }).name).toBe("vercel-blob");
-    expect(() => driverFor("private", { VERCEL: "1" })).toThrow(StorageConfigError);
+    // Vercel's filesystem is read-only: no Blob store means Postgres, not an error.
+    expect(driverFor("private", { VERCEL: "1" }).name).toBe("database");
+    expect(driverFor("public", { VERCEL: "1" }).name).toBe("database");
+    expect(isLocalStore("public", { VERCEL: "1" })).toBe(false);
+    // FILE_STORAGE=database wins everywhere, even over a token.
+    const forced = { FILE_STORAGE: "database", BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_x_y" };
+    expect(driverFor("private", forced).name).toBe("database");
+    expect(isLocalStore("private", { FILE_STORAGE: "database" })).toBe(false);
   });
 
   it("keeps public blobs in the private store when that is the only one", () => {
@@ -127,7 +136,84 @@ describe("storage kinds and keys", () => {
     expect(driverFor("public", oneStore).name).toBe("vercel-blob");
     expect(publicIsProxied({ ...oneStore, BLOB_PUBLIC_READ_WRITE_TOKEN: "vercel_blob_rw_p_q" })).toBe(false);
     expect(publicIsProxied({})).toBe(false);
-    expect(() => driverFor("public", { VERCEL: "1" })).toThrow(StorageConfigError);
+  });
+});
+
+describe("Vercel Blob with the database behind it", () => {
+  function memoryDriver(name: BlobDriver["name"], opts: { failPuts?: boolean; failReads?: boolean } = {}) {
+    const blobs = new Map<string, { body: Buffer; contentType: string }>();
+    const driver: BlobDriver = {
+      name,
+      async put(store, key, body, options) {
+        if (opts.failPuts) throw new Error("Vercel Blob: Cannot use private access on a public store");
+        if (blobs.has(key)) throw new Error("This blob already exists");
+        blobs.set(key, { body, contentType: options.contentType });
+        return { key, url: store === "public" ? `https://store.example/${key}` : null };
+      },
+      async get(_store, key) {
+        if (opts.failReads) throw new Error("store suspended");
+        return blobs.get(key) ?? null;
+      },
+      async delete(_store, keys) {
+        for (const k of keys) blobs.delete(k);
+      },
+      async list(_store, prefix, cursor) {
+        const all = [...blobs.keys()].filter((k) => k.startsWith(prefix)).sort();
+        const start = cursor ? all.indexOf(cursor) + 1 : 0;
+        const keys = all.slice(start, start + 2);
+        return { keys, cursor: start + 2 < all.length ? keys[keys.length - 1] : undefined };
+      },
+    };
+    return { driver, blobs };
+  }
+  const opts = { contentType: "image/webp" };
+
+  it("puts in the store, and in the database only when the store refuses", async () => {
+    const store = memoryDriver("vercel-blob");
+    const db = memoryDriver("database");
+    const both = withDatabaseFallback(store.driver, db.driver);
+    await both.put("public", "logos/o1/a/s64.webp", Buffer.from("a"), opts);
+    expect(store.blobs.has("logos/o1/a/s64.webp")).toBe(true);
+    expect(db.blobs.size).toBe(0);
+    // An existing key is a real error, never a reason to write elsewhere.
+    await expect(both.put("public", "logos/o1/a/s64.webp", Buffer.from("b"), opts)).rejects.toThrow(/already exists/);
+
+    const refusing = withDatabaseFallback(memoryDriver("vercel-blob", { failPuts: true }).driver, db.driver);
+    await refusing.put("private", "files/o1/f1", Buffer.from("pdf"), { contentType: "application/pdf" });
+    expect(db.blobs.get("files/o1/f1")?.body.toString()).toBe("pdf");
+  });
+
+  it("reads the database when the store misses or fails, and deletes from both", async () => {
+    const store = memoryDriver("vercel-blob");
+    const db = memoryDriver("database");
+    db.blobs.set("avatars/u1/x/s64.webp", { body: Buffer.from("old"), contentType: "image/webp" });
+    store.blobs.set("avatars/u1/y/s64.webp", { body: Buffer.from("new"), contentType: "image/webp" });
+    const both = withDatabaseFallback(store.driver, db.driver);
+    expect((await both.get("public", "avatars/u1/x/s64.webp"))?.body.toString()).toBe("old");
+    expect((await both.get("public", "avatars/u1/y/s64.webp"))?.body.toString()).toBe("new");
+    expect(await both.get("public", "avatars/u1/z/s64.webp")).toBeNull();
+    const failing = withDatabaseFallback(memoryDriver("vercel-blob", { failReads: true }).driver, db.driver);
+    expect((await failing.get("public", "avatars/u1/x/s64.webp"))?.body.toString()).toBe("old");
+
+    await both.delete("public", ["avatars/u1/x/s64.webp", "avatars/u1/y/s64.webp"]);
+    expect(store.blobs.size + db.blobs.size).toBe(0);
+  });
+
+  it("lists the store, then the database, page by page", async () => {
+    const store = memoryDriver("vercel-blob");
+    const db = memoryDriver("database");
+    for (const k of ["files/o1/a", "files/o1/b", "files/o1/c"]) store.blobs.set(k, { body: Buffer.from(k), contentType: "text/plain" });
+    for (const k of ["files/o1/d", "files/o1/e", "files/o2/z"]) db.blobs.set(k, { body: Buffer.from(k), contentType: "text/plain" });
+    const both = withDatabaseFallback(store.driver, db.driver);
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let i = 0; i < 10; i++) {
+      const page = await both.list("private", "files/o1/", cursor);
+      seen.push(...page.keys);
+      cursor = page.cursor;
+      if (!cursor) break;
+    }
+    expect(seen).toEqual(["files/o1/a", "files/o1/b", "files/o1/c", "files/o1/d", "files/o1/e"]);
   });
 });
 

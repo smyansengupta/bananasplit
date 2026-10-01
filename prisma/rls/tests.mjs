@@ -1927,6 +1927,11 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "assert_org_member",
         "assert_same_org",
         "ballot_tally",
+        // StoredBlob's only way in (file bytes when there's no Blob store).
+        "blob_delete",
+        "blob_get",
+        "blob_list",
+        "blob_put",
         // C4: reads "Task"/"TaskAssignee" without RLS so the task-visibility
         // policies cannot recurse into themselves. Answers only about
         // app.user_id().
@@ -1958,6 +1963,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "organization_slug_guard",
         "pending_invitations_for_me",
         "poll_org_id",
+        // Question polls: the counts of an anonymous poll, whose other votes
+        // RLS hides from members. Counts only, for the caller's member org.
+        "poll_vote_counts",
         "prune_jobs",
         "prune_rate_limit_buckets",
         "purge_unverified_users",
@@ -2069,12 +2077,15 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "Pin:DELETE",
         "Pin:INSERT",
         "Pin:UPDATE",
+        "Poll:INSERT",
         "PollResponse:DELETE",
         "PollResponse:INSERT",
         "PollResponse:UPDATE",
         "PollSlot:DELETE",
         "PollSlot:INSERT",
         "PollSlot:UPDATE",
+        "PollVote:DELETE",
+        "PollVote:INSERT",
         "Project:UPDATE",
         "RecentVisit:DELETE",
         "RecentVisit:INSERT",
@@ -2119,6 +2130,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "OrgSecret",
         "OrgSlugHistory",
         "RateLimitBucket",
+        "StoredBlob",
       ],
     },
   );
@@ -2189,6 +2201,11 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       assert_org_member: "",
       // Notes folders: trigger only.
       folder_in_same_org: "",
+      // File bytes in Postgres: the storage layer on the service pool only.
+      blob_put: "s",
+      blob_get: "s",
+      blob_delete: "s",
+      blob_list: "s",
       // Phase 4b: the tier-taking functions check the org GUC themselves
       can_view_rows: "us",
       can_view_ballot_rows: "us",
@@ -2210,6 +2227,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       org_by_join_code: "u",
       // Another member's busy hours: never the rules, and only as the org allows
       member_busy_hours: "u",
+      // Question poll results (counts only), for members of the poll's org
+      poll_vote_counts: "u",
     };
     await tcase(
       "T27f",

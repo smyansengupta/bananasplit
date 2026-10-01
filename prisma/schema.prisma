@@ -63,6 +63,9 @@ model User {
   eventAttendances       EventAttendee[]
   createdPolls           AvailabilityPoll[] @relation("PollCreatedBy")
   pollResponses          PollResponse[]
+  createdQuestionPolls   Poll[]             @relation("QuestionPollCreatedBy")
+  addedPollOptions       PollOption[]       @relation("PollOptionAddedBy")
+  pollVotes              PollVote[]
   submittedTransactions  Transaction[]      @relation("TransactionSubmittedBy")
   approvedTransactions   Transaction[]      @relation("TransactionApprovedBy")
   reconciledTransactions Transaction[]      @relation("TransactionReconciledBy")
@@ -314,6 +317,7 @@ model Organization {
   notes             Note[]
   events            Event[]
   availabilityPolls AvailabilityPoll[]
+  polls             Poll[]
   budgetPeriods     BudgetPeriod[]
   budgetCategories  BudgetCategory[]
   transactions      Transaction[]
@@ -952,6 +956,79 @@ model PollResponse {
   @@index([organizationId, pollId])
 }
 
+/// A question poll ("ask anything"): options members vote on. Members only,
+/// no guest link. Open while closedAt is NULL and closesAt has not passed.
+/// anonymous is enforced by RLS: a member reads only their own PollVote rows
+/// of an anonymous poll, and app.poll_vote_counts() gives everyone the
+/// counts. app_user may UPDATE only closedAt and closesAt (column grant), so
+/// a poll can never stop being anonymous.
+model Poll {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  question               String
+  description            String?
+  /// More than one choice per voter.
+  multiple               Boolean   @default(false)
+  anonymous              Boolean   @default(false)
+  allowMemberOptions     Boolean   @default(false)
+  /// Voters see only their own choice until it closes (the creator and admins see counts).
+  hideResultsUntilClosed Boolean   @default(false)
+  closesAt               DateTime?
+  /// Set when someone closes it by hand; cleared on reopen.
+  closedAt               DateTime?
+  createdById            String
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("QuestionPollCreatedBy", fields: [createdById], references: [id])
+  options      PollOption[]
+  votes        PollVote[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, createdAt])
+}
+
+/// An answer on a question poll. organizationId is denormalized from Poll and
+/// kept equal by the composite FK.
+model PollOption {
+  id             String   @id @default(cuid())
+  organizationId String
+  pollId         String
+  label          String
+  sortOrder      Int      @default(0)
+  /// Who added it (the creator, or a member when the poll allows it).
+  addedById      String?
+  createdAt      DateTime @default(now())
+
+  poll    Poll       @relation(fields: [organizationId, pollId], references: [organizationId, id], onDelete: Cascade)
+  addedBy User?      @relation("PollOptionAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+  votes   PollVote[]
+
+  @@unique([organizationId, id])
+  @@index([pollId])
+}
+
+/// One member's vote for one option. The option belonging to the same poll,
+/// and the poll being open, are checked by the RLS WITH CHECK. Changing a vote
+/// is delete + insert (no UPDATE).
+model PollVote {
+  id             String   @id @default(cuid())
+  organizationId String
+  pollId         String
+  optionId       String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  poll   Poll       @relation(fields: [organizationId, pollId], references: [organizationId, id], onDelete: Cascade)
+  option PollOption @relation(fields: [organizationId, optionId], references: [organizationId, id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, userId])
+  @@index([pollId])
+  @@index([organizationId, pollId])
+}
+
 // --- Finance ---
 // Amounts are always integer cents. There is no stored balance column anywhere;
 // balance is always derived from Transaction (spec section 5.7).
@@ -1227,6 +1304,22 @@ model RateLimitBucket {
   key         String   @id
   windowStart DateTime
   count       Int
+}
+
+/// File bytes kept in Postgres, for a deployment with no Vercel Blob store
+/// (src/server/storage/database-driver.ts). Keys are storage keys
+/// ({kind}/{scopeId}/...), so the org purge finds them by prefix. No grants:
+/// reached only through app.blob_put / blob_get / blob_delete / blob_list,
+/// which app_service alone may run.
+model StoredBlob {
+  store       String
+  key         String
+  contentType String
+  size        Int
+  body        Bytes
+  createdAt   DateTime @default(now())
+
+  @@id([store, key])
 }
 
 /// Every user who has ever belonged to an org. Lets "User" RLS show former

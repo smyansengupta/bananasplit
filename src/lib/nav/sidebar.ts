@@ -45,7 +45,7 @@ export const SECTIONS: readonly SectionDef[] = [
   { id: "notes", label: "Notes", icon: "NotebookText", path: "/notes", group: "main", description: "Notes, documents and files." },
   { id: "people", label: "People", icon: "Users", path: "/people", group: "club", description: "The member directory." },
   { id: "org-chart", label: "Org Chart", icon: "Network", path: "/org-chart", group: "club", description: "Roles and who reports to whom." },
-  { id: "polls", label: "Polls", icon: "CalendarCheck", path: "/calendar/polls", group: "club", description: "Find a time that works." },
+  { id: "polls", label: "Polls", icon: "CalendarCheck", path: "/calendar/polls", group: "club", description: "Ask the club anything, or find a time that works." },
   { id: "databases", label: "Databases", icon: "Database", path: "/databases", group: "data", description: "Attendance, sign-ups, votes and reports." },
   { id: "finance", label: "Finance", icon: "Wallet", path: "/finance", group: "data", description: "Budget, transactions and reimbursements." },
 ];

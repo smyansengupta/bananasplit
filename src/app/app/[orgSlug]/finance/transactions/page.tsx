@@ -1,4 +1,5 @@
 import { Download } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { NewTransactionButton, TransactionTable } from "@/components/finance/transaction-table";
@@ -37,6 +38,7 @@ export default async function TransactionsPage({
     dateTo: typeof query.dateTo === "string" ? query.dateTo : undefined,
     reconciled:
       query.reconciled === "yes" || query.reconciled === "no" ? query.reconciled : undefined,
+    deleted: query.deleted === "show" ? "show" : undefined,
   };
 
   const { transactions, periods, categories, memberships } = await withOrgTx(
@@ -54,6 +56,12 @@ export default async function TransactionsPage({
     name: m.user.name,
     email: m.user.email,
   }));
+
+  const toggleDeleted = new URLSearchParams(
+    Object.entries(query).filter(([k, v]) => typeof v === "string" && k !== "deleted") as [string, string][],
+  );
+  if (filters.deleted !== "show") toggleDeleted.set("deleted", "show");
+  const toggleDeletedQuery = toggleDeleted.toString();
 
   const exportQuery = new URLSearchParams(
     Object.entries(query).filter(([, v]) => typeof v === "string") as [string, string][],
@@ -78,6 +86,15 @@ export default async function TransactionsPage({
             currentUserId={user.id}
           />
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Link
+          href={`/app/${orgSlug}/finance/transactions?${toggleDeletedQuery}`}
+          className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
+        >
+          {filters.deleted === "show" ? "Hide deleted transactions" : "Show deleted transactions"}
+        </Link>
       </div>
 
       <TransactionTable
