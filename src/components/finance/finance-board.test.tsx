@@ -43,6 +43,8 @@ function dashboard(runway: Partial<RunwayInput>): DashboardData {
     balanceTrend: [],
     recent: [],
     topExpenses: [],
+    incomeByKind: [],
+    reimbursementQueue: [],
   };
 }
 

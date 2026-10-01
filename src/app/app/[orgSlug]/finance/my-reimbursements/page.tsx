@@ -4,6 +4,7 @@ import { can } from "@/lib/auth/permissions";
 import { formatCents } from "@/lib/finance/money";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
+import { FinanceAccessGate } from "../finance-access-gate";
 import {
   getCategoriesForPeriods,
   getMoneyOwedToUser,
@@ -28,6 +29,7 @@ export default async function MyReimbursementsPage({
 
   return (
     <div className="space-y-4">
+      {!isFinance && <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} compact />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <div className="rounded-xl border px-4 py-2.5">

@@ -54,13 +54,53 @@ export async function loadImportContext(orgId: string): Promise<ImportContext> {
   });
 }
 
+export interface FinanceImportContext {
+  userId: string;
+  canManageFinance: boolean;
+  timezone: string;
+  today: string;
+  /** Category names the model may file records under: the active period's first, then the rest. */
+  categories: string[];
+}
+
+const MAX_CATEGORY_NAMES = 80;
+
+/** The finance reader's context, read as the caller (NotFoundError for a non-member). */
+export async function loadFinanceImportContext(orgId: string): Promise<FinanceImportContext> {
+  return withOrgTx(orgId, async ({ db, role, userId }) => {
+    const org = await db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { timezone: true } });
+    const categories = await db.budgetCategory.findMany({
+      where: { organizationId: orgId },
+      select: { name: true, budgetPeriod: { select: { isActive: true } } },
+      orderBy: [{ sortOrder: "asc" }],
+      take: 500,
+    });
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const c of [...categories.filter((c) => c.budgetPeriod.isActive), ...categories]) {
+      const key = c.name.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      names.push(c.name.trim());
+    }
+    const timezone = safeTimeZone(org.timezone);
+    return {
+      userId,
+      canManageFinance: can({ role }, "finance.manage"),
+      timezone,
+      today: zonedDateKey(new Date(), timezone),
+      categories: names.slice(0, MAX_CATEGORY_NAMES),
+    };
+  });
+}
+
 /**
  * The audit row for one AI read: which feature, which connection and model,
  * and sizes. Never the text, the image or what the model said.
  */
 export async function auditAiRead(
   orgId: string,
-  action: "ai.action_items_read" | "ai.calendar_screenshot_read",
+  action: "ai.action_items_read" | "ai.calendar_screenshot_read" | "ai.finance_import_read",
   diff: Record<string, string | number>,
 ): Promise<void> {
   await withOrgTx(orgId, ({ db }) =>

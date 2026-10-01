@@ -37,11 +37,19 @@ export interface AiImage {
   base64: string;
 }
 
+/** A PDF: Claude reads it natively; OpenAI-compatible vendors get it as a file part (not all accept one). */
+export interface AiDocument {
+  mediaType: "application/pdf";
+  base64: string;
+  fileName: string;
+}
+
 export interface StructuredRequest<S extends z.ZodObject> {
   system: string;
   /** The member's material, already wrapped as data, plus the instruction. */
   text: string;
   image?: AiImage;
+  document?: AiDocument;
   schema: S;
   /** A short schema name (OpenAI-compatible APIs want one). */
   name: string;
@@ -84,7 +92,7 @@ export async function generateStructured<S extends z.ZodObject>(
 
 // ---------------------------------------------------------------- Claude
 
-function anthropicError(error: unknown, model: string, image: boolean): AiImportError {
+function anthropicError(error: unknown, model: string, attachment: "image" | "pdf" | null): AiImportError {
   if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
     return new AiImportError(
       "Claude rejected the API key. An owner or admin can update it in Settings › Integrations.",
@@ -99,7 +107,11 @@ function anthropicError(error: unknown, model: string, image: boolean): AiImport
   }
   if (error instanceof Anthropic.BadRequestError) {
     return new AiImportError(
-      image ? "That image couldn't be read. Try a clearer screenshot." : "Claude couldn't read that. Try shortening it.",
+      attachment === "image"
+        ? "That image couldn't be read. Try a clearer screenshot."
+        : attachment === "pdf"
+          ? "That PDF couldn't be read. Try a smaller one (100 pages at most), or export the data as CSV."
+          : "Claude couldn't read that. Try shortening it.",
       422,
     );
   }
@@ -119,6 +131,9 @@ async function anthropicStructured<S extends z.ZodObject>(
   if (req.image) {
     content.push({ type: "image", source: { type: "base64", media_type: req.image.mediaType, data: req.image.base64 } });
   }
+  if (req.document) {
+    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: req.document.base64 } });
+  }
   content.push({ type: "text", text: req.text });
   let response: Anthropic.Beta.BetaMessage;
   try {
@@ -130,7 +145,7 @@ async function anthropicStructured<S extends z.ZodObject>(
       messages: [{ role: "user", content }],
     });
   } catch (error) {
-    throw anthropicError(error, creds.model, Boolean(req.image));
+    throw anthropicError(error, creds.model, req.image ? "image" : req.document ? "pdf" : null);
   }
   if (response.stop_reason === "refusal") {
     throw new AiImportError("The model declined to read this. Try rewording it, or another model.");
@@ -212,7 +227,15 @@ async function openAiStructured<S extends z.ZodObject>(
         { type: "text", text: req.text },
         { type: "image_url", image_url: { url: `data:${req.image.mediaType};base64,${req.image.base64}` } },
       ]
-    : req.text;
+    : req.document
+      ? [
+          { type: "text", text: req.text },
+          {
+            type: "file",
+            file: { filename: req.document.fileName, file_data: `data:application/pdf;base64,${req.document.base64}` },
+          },
+        ]
+      : req.text;
   const send = (mode: "schema" | "json") =>
     aiClients.fetch(`${creds.baseUrl}/chat/completions`, {
       method: "POST",
@@ -276,7 +299,9 @@ async function openAiStructured<S extends z.ZodObject>(
     throw new AiImportError(
       req.image
         ? `${creds.model} couldn't read the image. It may not accept images: pick a model that does, or a clearer screenshot.`
-        : `${vendor} couldn't read that. Try shortening it.`,
+        : req.document
+          ? `${creds.model} couldn't read the PDF. It may not accept PDFs: export the data as CSV, or use a Claude connection.`
+          : `${vendor} couldn't read that. Try shortening it.`,
       422,
     );
   }

@@ -134,9 +134,19 @@ export function getTransactions(
   });
 }
 
+/**
+ * The member's own expense requests. An expense nobody is owed (NOT_APPLICABLE:
+ * paid with the club's money, or imported from past records) isn't one.
+ */
 export function getMyReimbursements(db: TxClient, organizationId: string, userId: string) {
   return db.transaction.findMany({
-    where: { organizationId, kind: TransactionKind.EXPENSE, submittedById: userId, ...NOT_DELETED },
+    where: {
+      organizationId,
+      kind: TransactionKind.EXPENSE,
+      submittedById: userId,
+      status: { not: TransactionStatus.NOT_APPLICABLE },
+      ...NOT_DELETED,
+    },
     include: transactionInclude,
     orderBy: { occurredAt: "desc" },
   });
@@ -182,6 +192,17 @@ export interface DashboardData {
   recent: DashboardTransaction[];
   /** This period's largest money out. */
   topExpenses: DashboardTransaction[];
+  /** Money in by transaction type. */
+  incomeByKind: { kind: TransactionKind; cents: number }[];
+  /** Expenses waiting to be approved or paid back, oldest first. */
+  reimbursementQueue: {
+    id: string;
+    description: string;
+    amountCents: number;
+    status: TransactionStatus;
+    submitter: string;
+    occurredAt: Date;
+  }[];
 }
 
 export interface DashboardTransaction {
@@ -226,6 +247,8 @@ export async function getDashboardData(
       balanceTrend: [],
       recent: [],
       topExpenses: [],
+      incomeByKind: [],
+      reimbursementQueue: [],
     };
   }
 
@@ -251,6 +274,7 @@ export async function getDashboardData(
       occurredAt: true,
       reconciledAt: true,
       categoryId: true,
+      submittedBy: { select: { name: true, email: true } },
     },
   });
   const meetings = await db.event.findMany({
@@ -336,6 +360,17 @@ export async function getDashboardData(
   }
   const kindTotals = new Map<TransactionKind, number>();
   for (const t of spending) kindTotals.set(t.kind, (kindTotals.get(t.kind) ?? 0) + t.amountCents);
+  const incomeTotals = new Map<TransactionKind, number>();
+  for (const t of ledger) {
+    if (t.direction === TransactionDirection.IN) incomeTotals.set(t.kind, (incomeTotals.get(t.kind) ?? 0) + t.amountCents);
+  }
+  const queue = allTransactions
+    .filter(
+      (t) =>
+        t.kind === TransactionKind.EXPENSE &&
+        (t.status === TransactionStatus.SUBMITTED || t.status === TransactionStatus.APPROVED),
+    )
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   const pending = allTransactions.filter(
     (t) => t.kind === TransactionKind.EXPENSE && t.status === TransactionStatus.SUBMITTED,
   );
@@ -384,6 +419,17 @@ export async function getDashboardData(
       .sort((a, b) => b.amountCents - a.amountCents)
       .slice(0, 5)
       .map(toRow),
+    incomeByKind: [...incomeTotals.entries()]
+      .map(([kind, cents]) => ({ kind, cents }))
+      .sort((a, b) => b.cents - a.cents),
+    reimbursementQueue: queue.slice(0, 12).map((t) => ({
+      id: t.id,
+      description: t.description,
+      amountCents: t.amountCents,
+      status: t.status,
+      submitter: t.submittedBy.name?.trim() || t.submittedBy.email,
+      occurredAt: t.occurredAt,
+    })),
   };
 }
 

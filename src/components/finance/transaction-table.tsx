@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { isDeletedTransaction } from "@/lib/finance/deleted";
 import { formatCents } from "@/lib/finance/money";
+import { formatFinanceDate } from "@/lib/finance/stats";
 import { cn } from "@/lib/utils";
 
 import { TransactionDialog } from "./transaction-dialog";
@@ -123,7 +124,7 @@ export function TransactionTable({
                 setDialogOpen(true);
               }}
             >
-              <TableCell>{t.occurredAt.toLocaleDateString()}</TableCell>
+              <TableCell className="whitespace-nowrap">{formatFinanceDate(t.occurredAt)}</TableCell>
               <TableCell className={cn(t.voidedAt && "line-through")}>{t.description}</TableCell>
               <TableCell>{t.category?.name ?? "—"}</TableCell>
               <TableCell>{t.submittedBy.name ?? t.submittedBy.email}</TableCell>

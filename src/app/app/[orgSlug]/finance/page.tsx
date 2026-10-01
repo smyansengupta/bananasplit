@@ -1,38 +1,29 @@
-import { Receipt } from "lucide-react";
+import { FileSpreadsheet, ListChecks, Receipt } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { BudgetSetupCard } from "@/components/finance/budget-setup-card";
 import { FinanceBoard } from "@/components/finance/finance-board";
+import { FinanceSetupBanner } from "@/components/finance/setup/setup-banner";
 import { NewTransactionButton } from "@/components/finance/transaction-table";
 import { Button } from "@/components/ui/button";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { can } from "@/lib/auth/permissions";
 import { visibleFinanceCards } from "@/lib/finance/dashboard-cards";
+import { coreSetupDone } from "@/lib/finance/setup";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { resolveLayout } from "@/lib/finance/widgets";
 import { loadSavedBoard } from "@/server/boards";
+import { loadSetupState } from "@/server/finance/setup";
 
 import { getCategoriesForPeriods, getDashboardData, getOrgPeriods } from "./queries";
-
-/** Today in the club's timezone, as YYYY-MM-DD. */
-function localToday(timeZone: string): string {
-  try {
-    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(
-      new Date(),
-    );
-  } catch {
-    return new Date().toISOString().slice(0, 10);
-  }
-}
 
 /**
  * The finance dashboard (OWNER/TREASURER): adding money in or out is the
  * first button on the page, and below it each member's own board of
- * widgets. It never dead-ends: with no budget period yet, a one-click setup
- * card sits on top, the board shows empty widgets, and the first
- * transaction sets up this school year by itself. Everyone else lands on
- * their reimbursements.
+ * widgets. It never dead-ends: until the budget basics are in place the
+ * setup guide's banner sits on top (Finance › Set up), the board shows
+ * empty widgets, and the first transaction sets up this school year by
+ * itself. Everyone else lands on their reimbursements.
  */
 export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/finance">) {
   const { orgSlug } = await params;
@@ -43,19 +34,20 @@ export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/
   }
 
   const orgCards = visibleFinanceCards(settings?.financeDashboardCards);
-  const { dashboard, saved, periods, categories } = await withOrgTx(org.id, async ({ db }) => {
+  const { dashboard, saved, periods, categories, setup } = await withOrgTx(org.id, async ({ db }) => {
     const periods = await getOrgPeriods(db, org.id);
     return {
       dashboard: await getDashboardData(db, org.id),
       saved: await loadSavedBoard(db, org.id, user.id, "finance"),
       periods,
       categories: await getCategoriesForPeriods(db, org.id, periods),
+      setup: await loadSetupState(db, org.id, user.id),
     };
   }).catch(handleAuthErrorInPage);
 
   return (
     <div className="space-y-6">
-      {!dashboard.period && <BudgetSetupCard orgId={org.id} orgSlug={orgSlug} today={localToday(org.timezone)} />}
+      {!coreSetupDone(setup) && <FinanceSetupBanner orgId={org.id} orgSlug={orgSlug} state={setup} />}
 
       <div className="bg-muted/40 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
         <div>
@@ -65,6 +57,18 @@ export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="ghost">
+            <Link href={`/app/${orgSlug}/finance/setup`}>
+              <ListChecks className="size-4" aria-hidden="true" />
+              Setup guide
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/app/${orgSlug}/finance/import`}>
+              <FileSpreadsheet className="size-4" aria-hidden="true" />
+              Import a spreadsheet
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href={`/app/${orgSlug}/finance/my-reimbursements`}>
               <Receipt className="size-4" aria-hidden="true" />
@@ -99,6 +103,7 @@ export default async function FinancePage({ params }: PageProps<"/app/[orgSlug]/
         orgId={org.id}
         orgSlug={orgSlug}
         data={dashboard}
+        setup={setup}
         initialLayout={resolveLayout(saved, orgCards)}
         customized={saved !== null}
       />

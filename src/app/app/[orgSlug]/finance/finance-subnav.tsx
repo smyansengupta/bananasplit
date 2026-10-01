@@ -15,6 +15,8 @@ export function FinanceSubnav({ orgSlug, isFinance }: { orgSlug: string; isFinan
     { label: "My reimbursements", href: `${base}/my-reimbursements` },
     ...(isFinance ? [{ label: "Budget", href: `${base}/budget` }] : []),
     ...(isFinance ? [{ label: "Sponsorships", href: `${base}/sponsorships` }] : []),
+    ...(isFinance ? [{ label: "Import", href: `${base}/import` }] : []),
+    ...(isFinance ? [{ label: "Set up", href: `${base}/setup` }] : []),
   ];
 
   return (
