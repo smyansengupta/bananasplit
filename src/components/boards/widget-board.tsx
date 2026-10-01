@@ -40,6 +40,7 @@ import {
   Vote,
   Wallet,
   X,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -93,6 +94,7 @@ export const BOARD_ICONS: Record<string, LucideIcon> = {
   Users,
   Vote,
   Wallet,
+  Zap,
 };
 
 const SPAN: Record<number, string> = {

@@ -1,8 +1,9 @@
 import { SponsorshipsView } from "@/components/finance/sponsorships-view";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requirePermission } from "@/lib/auth/permissions";
+import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
+import { FinanceAccessGate } from "../finance-access-gate";
 import { getActivePeriod, getOrgMembersForPicker, getSponsors, getSponsorships } from "../queries";
 
 export default async function SponsorshipsPage({
@@ -10,8 +11,10 @@ export default async function SponsorshipsPage({
 }: PageProps<"/app/[orgSlug]/finance/sponsorships">) {
   const { orgSlug } = await params;
   const { organization: org, role } = await getOrgContextBySlug(orgSlug);
-  // ForbiddenError renders the segment's "no access" state (error.tsx).
-  requirePermission({ role }, "finance.manage");
+  // Not an owner or treasurer: who is, and what to do instead (never an error page).
+  if (!can({ role }, "finance.manage")) {
+    return <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} />;
+  }
 
   const { sponsors, sponsorships, activePeriod, memberships } = await withOrgTx(
     org.id,

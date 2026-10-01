@@ -2,7 +2,14 @@
 
 import {
   ArrowDownLeft,
+  ArrowRight,
   ArrowUpRight,
+  Check,
+  FileSpreadsheet,
+  HandCoins,
+  ListChecks,
+  PiggyBank,
+  ReceiptText,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +33,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import type { DashboardData, DashboardTransaction } from "@/app/app/[orgSlug]/finance/queries";
 import { formatCents } from "@/lib/finance/money";
+import { SETUP_STEPS, stepDone, type FinanceSetupState } from "@/lib/finance/setup";
 import type { WidgetTypeId } from "@/lib/finance/widgets";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +55,16 @@ const KIND_LABEL: Record<string, string> = {
   OTHER_INCOME: "Other income",
   ADJUSTMENT: "Adjustments",
 };
+
+const INCOME_LABEL: Record<string, string> = {
+  SPONSORSHIP: "Sponsors",
+  ALLOCATION: "School funding",
+  OTHER_INCOME: "Dues, sales and gifts",
+  ADJUSTMENT: "Starting balance and adjustments",
+  EXPENSE: "Refunds",
+};
+
+const STATUS_LABEL: Record<string, string> = { SUBMITTED: "To approve", APPROVED: "To pay back" };
 
 const money = (cents: number) => formatCents(cents).replace(/\.00$/, "");
 
@@ -113,15 +131,34 @@ function TxList({ rows, orgSlug }: { rows: DashboardTransaction[]; orgSlug: stri
   );
 }
 
+function Shortcut({ href, icon: Icon, label, detail }: { href: string; icon: LucideIcon; label: string; detail: string }) {
+  return (
+    <Link href={href} className="hover:bg-accent/60 flex items-center gap-3 rounded-lg border p-2.5 transition-colors">
+      <span className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-md">
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{label}</span>
+        <span className="text-muted-foreground block truncate text-xs">{detail}</span>
+      </span>
+      <ArrowRight className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+    </Link>
+  );
+}
+
 export function WidgetBody({
   type,
   data,
   orgSlug,
+  setup,
 }: {
   type: WidgetTypeId;
   data: DashboardData;
   orgSlug: string;
+  /** Where finance setup stands (the setup widget). */
+  setup?: FinanceSetupState;
 }) {
+  const base = `/app/${orgSlug}/finance`;
   // Null until the club sets up a budget: every widget still renders, empty.
   const period = data.period;
   switch (type) {
@@ -343,5 +380,132 @@ export function WidgetBody({
       return <TxList rows={data.recent} orgSlug={orgSlug} />;
     case "top-expenses":
       return <TxList rows={data.topExpenses} orgSlug={orgSlug} />;
+    case "left-to-spend": {
+      const spent = data.categories.reduce((sum, c) => sum + c.spentCents, 0);
+      const left = data.totalAllocatedCents - spent;
+      if (data.totalAllocatedCents === 0) {
+        return (
+          <Big
+            value="—"
+            sub={
+              <Link href={`${base}/budget`} className="hover:underline">
+                Set a budget to see this
+              </Link>
+            }
+          />
+        );
+      }
+      return (
+        <Big value={formatCents(left)} sub={`of ${money(data.totalAllocatedCents)} budgeted`} tone={left < 0 ? "bad" : undefined} />
+      );
+    }
+    case "income-sources": {
+      const rows = data.incomeByKind.map((k) => ({ label: INCOME_LABEL[k.kind] ?? k.kind, cents: k.cents }));
+      if (rows.length === 0) return <ChartEmpty text="No money in yet this period" />;
+      const total = rows.reduce((sum, r) => sum + r.cents, 0);
+      return (
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <div className="h-40 w-40 shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={rows} dataKey="cents" nameKey="label" innerRadius="58%" outerRadius="100%" paddingAngle={2} stroke="none">
+                  {rows.map((r, i) => (
+                    <Cell key={r.label} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => formatCents(Number(value ?? 0))} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <ul className="w-full min-w-0 space-y-1.5">
+            {rows.map((r, i) => (
+              <li key={r.label} className="flex items-center gap-2 text-sm">
+                <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                <span className="text-muted-foreground tabular-nums">{money(r.cents)}</span>
+                <span className="text-muted-foreground w-9 text-right text-xs tabular-nums">
+                  {Math.round((r.cents / total) * 100)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+    case "reimbursements":
+      if (data.reimbursementQueue.length === 0) {
+        return <ChartEmpty icon={HandCoins} text="Nobody is waiting to be paid back" />;
+      }
+      return (
+        <ul className="divide-y">
+          {data.reimbursementQueue.map((t) => (
+            <li key={t.id}>
+              <Link
+                href={`${base}/transactions?status=${t.status}`}
+                className="hover:bg-accent/50 -mx-2 flex items-center gap-3 rounded-md px-2 py-2"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm">{t.description}</span>
+                  <span className="text-muted-foreground block truncate text-xs">
+                    {t.submitter} · {shortDate.format(new Date(t.occurredAt))}
+                  </span>
+                </span>
+                <Badge variant={t.status === "APPROVED" ? "default" : "secondary"} className="shrink-0 text-[10px]">
+                  {STATUS_LABEL[t.status] ?? t.status}
+                </Badge>
+                <span className="text-sm font-medium tabular-nums">{formatCents(t.amountCents)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      );
+    case "shortcuts":
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Shortcut
+            href={`${base}/import`}
+            icon={FileSpreadsheet}
+            label="Import a spreadsheet"
+            detail="Bank exports, PDFs, an old sheet"
+          />
+          <Shortcut href={`${base}/budget`} icon={PiggyBank} label="Budget" detail="What each category may spend" />
+          <Shortcut
+            href={`${base}/transactions?status=SUBMITTED`}
+            icon={ReceiptText}
+            label="Requests to review"
+            detail={data.pendingApproval.count ? `${data.pendingApproval.count} waiting` : "Nothing waiting"}
+          />
+          <Shortcut href={`${base}/setup`} icon={ListChecks} label="Setup guide" detail="Budget year, balance, treasurers" />
+        </div>
+      );
+    case "setup": {
+      if (!setup) return <ChartEmpty text="Open the setup guide to see what's left" />;
+      return (
+        <ul className="space-y-1.5">
+          {SETUP_STEPS.map((step) => {
+            const ok = stepDone(setup, step.id);
+            return (
+              <li key={step.id}>
+                <Link
+                  href={`${base}/setup`}
+                  className="hover:bg-accent/50 -mx-2 flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm"
+                >
+                  <span
+                    className={cn(
+                      "grid size-5 shrink-0 place-items-center rounded-full border",
+                      ok ? "bg-success border-success text-success-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {ok && <Check className="size-3" aria-hidden="true" />}
+                  </span>
+                  <span className={cn("min-w-0 flex-1 truncate", ok && "text-muted-foreground")}>{step.title}</span>
+                  {!ok && !step.core && <span className="text-muted-foreground text-xs">optional</span>}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      );
+    }
   }
 }

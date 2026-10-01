@@ -26,7 +26,7 @@ import { PendingInviteCard } from "./pending-invite-card";
 export default async function OnboardingPage() {
   const user = await requireUser();
   const profile = await getOnboardingProfile(user.id);
-  if (!profile) redirect("/sign-in");
+  if (!profile) redirect("/auth/session-ended");
   if (!profile.onboardedAt) redirect("/onboarding/profile/basics");
   if (profile.memberships[0]) redirect(`/app/${profile.memberships[0].slug}`);
 

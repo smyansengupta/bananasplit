@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export default async function JoinPage({ searchParams }: PageProps<"/onboarding/join">) {
   const user = await requireUser();
   const profile = await getOnboardingProfile(user.id);
-  if (!profile) redirect("/sign-in");
+  if (!profile) redirect("/auth/session-ended");
   const { code } = await searchParams;
   const initialCode = typeof code === "string" ? code.slice(0, 20) : "";
   // Profile setup comes first (the flowchart's "Profile complete?").

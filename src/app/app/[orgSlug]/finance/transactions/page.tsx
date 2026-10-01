@@ -4,9 +4,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NewTransactionButton, TransactionTable } from "@/components/finance/transaction-table";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requirePermission } from "@/lib/auth/permissions";
+import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
+import { FinanceAccessGate } from "../finance-access-gate";
 import {
   getCategoriesForPeriods,
   getOrgMembersForPicker,
@@ -24,8 +25,10 @@ export default async function TransactionsPage({
   const query = await searchParams;
 
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
-  // ForbiddenError renders the segment's "no access" state (error.tsx).
-  requirePermission({ role }, "finance.manage");
+  // Not an owner or treasurer: who is, and what to do instead (never an error page).
+  if (!can({ role }, "finance.manage")) {
+    return <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} />;
+  }
 
   const filters: TransactionFilters = {
     budgetPeriodId: typeof query.period === "string" ? query.period : undefined,

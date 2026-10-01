@@ -1,16 +1,19 @@
 import { BudgetView } from "@/components/finance/budget-view";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requirePermission } from "@/lib/auth/permissions";
+import { can } from "@/lib/auth/permissions";
 import { toDateValue } from "@/lib/finance/periods";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
+import { FinanceAccessGate } from "../finance-access-gate";
 import { getCategoriesForPeriod, getOrgPeriods } from "../queries";
 
 export default async function BudgetPage({ params }: PageProps<"/app/[orgSlug]/finance/budget">) {
   const { orgSlug } = await params;
   const { organization: org, role } = await getOrgContextBySlug(orgSlug);
-  // ForbiddenError renders the segment's "no access" state (error.tsx).
-  requirePermission({ role }, "finance.manage");
+  // Not an owner or treasurer: who is, and what to do instead (never an error page).
+  if (!can({ role }, "finance.manage")) {
+    return <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} />;
+  }
 
   const { periods, activePeriod, categories, spent, counts } = await withOrgTx(org.id, async ({ db }) => {
     const periods = await getOrgPeriods(db, org.id);

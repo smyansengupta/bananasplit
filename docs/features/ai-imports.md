@@ -11,6 +11,9 @@ connected:
    screenshot of an invite, an email, a calendar entry or a flyer
    (Calendar › **From a screenshot**, owners and admins). The model reads
    the title, date, times, timezone, place, details and any video link.
+3. **Past money records into Finance** (Finance › **Import**, owners and
+   treasurers): a spreadsheet's columns and categories, or the records in a
+   PDF, a photo or pasted history. See `finance-setup-and-import.md`.
 
 In both, **nothing is created until a person reviews it.** Every proposed
 row can be edited, unchecked or switched between task and event, and
@@ -89,6 +92,7 @@ model list (free, no model is run) and checks the id is there.
 |---|---|---|---|
 | `POST /api/orgs/{orgId}/ai/action-items` | members | `{ text, connection? }` | `{ items, notes, members, readBy, canCreateEvents, rules, timezone, today }` |
 | `POST /api/orgs/{orgId}/ai/calendar-screenshot` | `events.write` | multipart `file`, `connection?` | `{ events, notes, readBy, timezone, members }` |
+| `POST /api/orgs/{orgId}/ai/finance-import` | `finance.manage` | `{ mode: "sheet", sample }`, `{ mode: "text", text }`, or multipart `file` (PDF or picture); `connection?` | `{ mapping, labels, notes, readBy }` or `{ kind, rows, budget, notes, readBy }` |
 
 Both are same-site only (`isCrossSite`), signed-in, and answer 404 to a
 non-member, 409 `{ code: "no-connection" }` when nothing is connected, 429
