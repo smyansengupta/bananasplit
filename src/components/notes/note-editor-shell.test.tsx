@@ -28,6 +28,8 @@ const { actions, providers } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/app/app/[orgSlug]/notes/actions", () => actions);
+// The AI import dialog (and the task and event actions behind it) isn't under test here.
+vi.mock("@/components/ai/action-items-import", () => ({ ActionItemsImport: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/components/notes/collab/provider", () => ({
   createHocuspocusProvider: ({ doc, events, getToken }: CollabProviderOptions) => {

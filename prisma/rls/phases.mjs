@@ -62,8 +62,14 @@ const GRANTS = {
   Organization: ["SU", "SIUD", ""],
   // A member's own pins and recent pages in one org (owner-only).
   Pin: ["SIUD", "", ""],
+  // Question polls: UPDATE is a column grant (closedAt, closesAt) for the
+  // creator or an admin; votes are insert/delete; the service role reads
+  // them for the export (P-QPOLL-*).
+  Poll: ["SIuD", "S", ""],
+  PollOption: ["SID", "S", ""],
   PollResponse: ["SIUD", "SIUD", ""],
   PollSlot: ["SIUD", "SIUD", ""],
+  PollVote: ["SID", "S", ""],
   Project: ["SIUD", "SIUD", ""],
   RateLimitBucket: ["", "", ""],
   Receipt: ["SID", "SID", ""],
@@ -72,6 +78,8 @@ const GRANTS = {
   Signup: ["SIUD", "SIUD", ""],
   Sponsor: ["SIUD", "SIUD", ""],
   Sponsorship: ["SIUD", "SIUD", ""],
+  // File bytes when there's no Blob store: definer functions only (P-BLOB-*).
+  StoredBlob: ["", "", ""],
   Task: ["SIUD", "SIUD", ""],
   TaskActivity: ["SI", "SI", ""],
   TaskAssignee: ["SIUD", "SIUD", ""],
@@ -95,6 +103,8 @@ const NO_ORG_ID = [
   "Organization",
   "RateLimitBucket",
   "Session",
+  // Keys carry the org ({kind}/{orgId}/...); the purge deletes by prefix.
+  "StoredBlob",
   "User",
   "UserAvailability",
   "UserCredential",
@@ -134,6 +144,9 @@ const NEW_TENANT_TABLES = [
   "OrgJoinCode",
   "OrgFile",
   "NoteFolder",
+  "Poll",
+  "PollOption",
+  "PollVote",
 ];
 
 /**
@@ -2790,6 +2803,316 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         note_kept: 1,
       },
     },
+  );
+
+  // ======================= Question polls =======================
+  const qpoll = (id, question, createdById, allowMemberOptions = false) =>
+    `INSERT INTO "Poll" ("id","organizationId","question","createdById","allowMemberOptions","updatedAt")
+     VALUES ('${id}','org_A','${question}','${createdById}',${allowMemberOptions},now())`;
+  const qoption = (id, pollId, label, addedById, org = "org_A") =>
+    `INSERT INTO "PollOption" ("id","organizationId","pollId","label","addedById") VALUES ('${id}','${org}','${pollId}','${label}','${addedById}')`;
+  const qvote = (id, pollId, optionId, userId, org = "org_A") =>
+    `INSERT INTO "PollVote" ("id","organizationId","pollId","optionId","userId") VALUES ('${id}','${org}','${pollId}','${optionId}','${userId}')`;
+
+  await tcase(
+    "P-QPOLL-01",
+    "Poll: any member asks one as themselves; only its creator or an admin closes, reopens or deletes it; its question and settings never change; nothing crosses orgs",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.create = await rc(q, qpoll("qp_1", "Where should we go?", "u_memberA"));
+      s.as_someone_else = await tryq(q, qpoll("qp_2", "X", "u_treasA"));
+      s.other_org = await tryq(
+        q,
+        `INSERT INTO "Poll" ("id","organizationId","question","createdById","updatedAt") VALUES ('qp_3','org_B','X','u_memberA',now())`,
+      );
+      s.blank_question = await tryq(q, qpoll("qp_4", "   ", "u_memberA"));
+      s.options = await rc(
+        q,
+        `INSERT INTO "PollOption" ("id","organizationId","pollId","label","addedById") VALUES ('qo_1','org_A','qp_1','Here','u_memberA'),('qo_2','org_A','qp_1','There','u_memberA')`,
+      );
+      s.creator_closes = await rc(q, `UPDATE "Poll" SET "closedAt" = app.utc_now() WHERE "id" = 'qp_1'`);
+      s.creator_flips_anonymous = await tryq(q, `UPDATE "Poll" SET "anonymous" = true WHERE "id" = 'qp_1'`);
+      s.creator_rewords = await tryq(q, `UPDATE "Poll" SET "question" = 'Other' WHERE "id" = 'qp_1'`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.member_sees = await count(q, `SELECT count(*) n FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.member_reopens = await rc(q, `UPDATE "Poll" SET "closedAt" = NULL WHERE "id" = 'qp_1'`);
+      s.member_deletes = await rc(q, `DELETE FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.member_removes_option = await rc(q, `DELETE FROM "PollOption" WHERE "id" = 'qo_2'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reopens = await rc(q, `UPDATE "Poll" SET "closedAt" = NULL WHERE "id" = 'qp_1'`);
+      s.admin_removes_option = await rc(q, `DELETE FROM "PollOption" WHERE "id" = 'qo_2'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_sees = await count(q, `SELECT count(*) n FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.other_org_options = await count(q, `SELECT count(*) n FROM "PollOption" WHERE "pollId" = 'qp_1'`);
+      s.other_org_deletes = await rc(q, `DELETE FROM "Poll" WHERE "id" = 'qp_1'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_deletes = await rc(q, `DELETE FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.options_gone = await count(q, `SELECT count(*) n FROM "PollOption" WHERE "pollId" = 'qp_1'`);
+      return s;
+    },
+    {
+      value: {
+        create: 1,
+        as_someone_else: "42501",
+        other_org: "42501",
+        blank_question: "23514",
+        options: 2,
+        creator_closes: 1,
+        creator_flips_anonymous: "42501",
+        creator_rewords: "42501",
+        member_sees: 1,
+        member_reopens: 0,
+        member_deletes: 0,
+        member_removes_option: 0,
+        admin_reopens: 1,
+        admin_removes_option: 1,
+        other_org_sees: 0,
+        other_org_options: 0,
+        other_org_deletes: 0,
+        admin_deletes: 1,
+        options_gone: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-02",
+    "PollOption: the creator and admins add options; members only when the poll allows it, and always as themselves",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      await q(qpoll("qp_c", "Creator only", "u_memberA"));
+      await q(qpoll("qp_o", "Anyone adds", "u_memberA", true));
+      s.creator_adds = await rc(q, qoption("qo_c1", "qp_c", "First", "u_memberA"));
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.member_adds_closed = await tryq(q, qoption("qo_c2", "qp_c", "Mine", "u_treasA"));
+      s.member_adds_open = await rc(q, qoption("qo_o1", "qp_o", "Mine", "u_treasA"));
+      s.member_adds_as_other = await tryq(q, qoption("qo_o2", "qp_o", "Theirs", "u_memberA"));
+      s.blank_label = await tryq(q, qoption("qo_o3", "qp_o", "  ", "u_treasA"));
+      s.foreign_poll = await tryq(q, qoption("qo_o4", "qp_B", "Sneaky", "u_treasA"));
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_adds_closed = await rc(q, qoption("qo_c3", "qp_c", "From an admin", "u_adminA"));
+      return s;
+    },
+    {
+      value: {
+        creator_adds: 1,
+        member_adds_closed: "42501",
+        member_adds_open: 1,
+        member_adds_as_other: "42501",
+        blank_label: "23514",
+        foreign_poll: "42501",
+        admin_adds_closed: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-03",
+    "PollVote: a member votes as themselves for an option of the same poll while it is open, withdraws only their own vote, and sees everyone's on a named poll",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      await q(qpoll("qp_v", "Vote here", "u_memberA"));
+      await q(qpoll("qp_w", "Elsewhere", "u_memberA"));
+      await q(qoption("qo_v1", "qp_v", "One", "u_memberA"));
+      await q(qoption("qo_v2", "qp_v", "Two", "u_memberA"));
+      await q(qoption("qo_w1", "qp_w", "Other", "u_memberA"));
+      s.own = await rc(q, qvote("qv_1", "qp_v", "qo_v1", "u_memberA"));
+      s.for_someone_else = await tryq(q, qvote("qv_2", "qp_v", "qo_v2", "u_treasA"));
+      s.other_polls_option = await tryq(q, qvote("qv_3", "qp_v", "qo_w1", "u_memberA"));
+      s.twice = await tryq(q, qvote("qv_4", "qp_v", "qo_v1", "u_memberA"));
+      s.other_org = await tryq(q, qvote("qv_5", "qp_B", "qo_B1", "u_memberA", "org_B"));
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.member_votes = await rc(q, qvote("qv_6", "qp_v", "qo_v2", "u_treasA"));
+      s.sees_every_vote = await count(q, `SELECT count(*) n FROM "PollVote" WHERE "pollId" = 'qp_v'`);
+      s.withdraws_others = await rc(q, `DELETE FROM "PollVote" WHERE "pollId" = 'qp_v' AND "userId" = 'u_memberA'`);
+      s.update = await tryq(q, `UPDATE "PollVote" SET "optionId" = 'qo_v1' WHERE "id" = 'qv_6'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.creator_closes = await rc(q, `UPDATE "Poll" SET "closedAt" = app.utc_now() WHERE "id" = 'qp_v'`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.vote_when_closed = await tryq(q, qvote("qv_7", "qp_v", "qo_v1", "u_treasA"));
+      s.withdraw_when_closed = await rc(q, `DELETE FROM "PollVote" WHERE "id" = 'qv_6'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.past_deadline = await rc(
+        q,
+        `UPDATE "Poll" SET "closedAt" = NULL, "closesAt" = app.utc_now() - interval '1 minute' WHERE "id" = 'qp_v'`,
+      );
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.vote_past_deadline = await tryq(q, qvote("qv_8", "qp_v", "qo_v1", "u_treasA"));
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.reopened = await rc(q, `UPDATE "Poll" SET "closesAt" = NULL WHERE "id" = 'qp_v'`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.withdraw_own = await rc(q, `DELETE FROM "PollVote" WHERE "id" = 'qv_6'`);
+      return s;
+    },
+    {
+      value: {
+        own: 1,
+        for_someone_else: "42501",
+        other_polls_option: "42501",
+        twice: "23505",
+        other_org: "42501",
+        member_votes: 1,
+        sees_every_vote: 2,
+        withdraws_others: 0,
+        update: "42501",
+        creator_closes: 1,
+        vote_when_closed: "42501",
+        withdraw_when_closed: 0,
+        past_deadline: 1,
+        vote_past_deadline: "42501",
+        reopened: 1,
+        withdraw_own: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-04",
+    "anonymous poll: nobody reads another member's vote, not its creator and not an owner; app.poll_vote_counts still counts every vote, for the caller's own org only",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const counts = async (poll) =>
+        (
+          await q(
+            `SELECT "optionId", "votes"::int AS votes, "voters"::int AS voters FROM app.poll_vote_counts(ARRAY['${poll}']) ORDER BY 1`,
+          )
+        ).rows;
+      const votes = () => count(q, `SELECT count(*) n FROM "PollVote" WHERE "pollId" = 'qp_A'`);
+      const s = {};
+      // u_memberA asked it and voted; so did u_adminA and u_treasA (fixtures).
+      s.creator_reads = await votes();
+      s.creator_reads_others = await count(
+        q,
+        `SELECT count(*) n FROM "PollVote" WHERE "pollId" = 'qp_A' AND "userId" <> 'u_memberA'`,
+      );
+      s.counts = await counts("qp_A");
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_reads = await votes();
+      s.owner_counts = (await counts("qp_A")).length;
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads = await votes();
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_counts = (await counts("qp_A")).length;
+      s.own_org_counts = (await counts("qp_B")).length;
+      await q(`SELECT app.set_context('u_memberB','org_A')`);
+      s.spoofed_counts = (await counts("qp_A")).length;
+      return s;
+    },
+    {
+      value: {
+        creator_reads: 1,
+        creator_reads_others: 0,
+        counts: [
+          { optionId: "qo_A1", votes: 2, voters: 3 },
+          { optionId: "qo_A2", votes: 1, voters: 3 },
+        ],
+        owner_reads: 0,
+        owner_counts: 2,
+        admin_reads: 1,
+        other_org_counts: 0,
+        own_org_counts: 2,
+        spoofed_counts: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-05",
+    "question polls on the service path: the export reads its own org's polls, options and votes, and writes nothing",
+    "app_service",
+    { org: "org_A" },
+    async (q) => ({
+      polls: await count(q, `SELECT count(*) n FROM "Poll"`),
+      options: await count(q, `SELECT count(*) n FROM "PollOption"`),
+      votes: await count(q, `SELECT count(*) n FROM "PollVote"`),
+      insert: await tryq(q, qpoll("qp_s", "X", "u_adminA")),
+      vote: await tryq(q, qvote("qv_s", "qp_A", "qo_A2", "u_adminA")),
+      remove: await tryq(q, `DELETE FROM "PollVote"`),
+      counts: await tryv(q, `SELECT count(*) FROM app.poll_vote_counts(ARRAY['qp_A'])`),
+    }),
+    {
+      value: {
+        polls: 1,
+        options: 2,
+        votes: 3,
+        insert: "42501",
+        vote: "42501",
+        remove: "42501",
+        counts: "error:42501",
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-06",
+    "question polls: the identity role reaches neither the tables nor the counts",
+    "app_auth",
+    null,
+    async (q) => ({
+      read: await tryq(q, `SELECT 1 FROM "PollVote"`),
+      counts: await tryv(q, `SELECT count(*) FROM app.poll_vote_counts(ARRAY['qp_A'])`),
+    }),
+    { value: { read: "42501", counts: "error:42501" } },
+  );
+
+  // ======================= File bytes in the database =======================
+  await tcase(
+    "P-BLOB-01",
+    "StoredBlob: request and auth code cannot touch the table or its functions",
+    "app_user",
+    A("u_memberA"),
+    async (q) => ({
+      read: await tryq(q, `SELECT 1 FROM "StoredBlob"`),
+      put: await tryq(q, `SELECT app.blob_put('private','files/org_A/x','text/plain','\\x61'::bytea)`),
+      get: await tryq(q, `SELECT * FROM app.blob_get('private','files/org_A/x')`),
+      del: await tryq(q, `SELECT app.blob_delete('private', ARRAY['files/org_A/x'])`),
+      list: await tryq(q, `SELECT * FROM app.blob_list('private','files/',NULL,10)`),
+    }),
+    { value: { read: "42501", put: "42501", get: "42501", del: "42501", list: "42501" } },
+  );
+  await tcase(
+    "P-BLOB-02",
+    "StoredBlob: app_service stores once, reads, lists by prefix and deletes; bad keys and stores are refused",
+    "app_service",
+    null,
+    async (q) => {
+      const v = async (sql) => (await q(sql)).rows[0];
+      return {
+        first: (await v(`SELECT app.blob_put('private','files/org_A/f1','text/plain','\\x6869'::bytea) AS r`)).r,
+        again: (await v(`SELECT app.blob_put('private','files/org_A/f1','text/plain','\\x00'::bytea) AS r`)).r,
+        body: (await v(`SELECT encode("body",'escape') AS r FROM app.blob_get('private','files/org_A/f1')`)).r,
+        other_store: await count(q, `SELECT count(*) n FROM app.blob_get('public','files/org_A/f1')`),
+        listed: await count(q, `SELECT count(*) n FROM app.blob_list('private','files/org_A/',NULL,10)`),
+        traversal: await tryq(q, `SELECT app.blob_put('private','files/../x','text/plain','\\x00'::bytea)`),
+        bad_store: await tryq(q, `SELECT app.blob_put('elsewhere','files/org_A/f2','text/plain','\\x00'::bytea)`),
+        deleted: (await v(`SELECT app.blob_delete('private', ARRAY['files/org_A/f1','files/org_A/nope']) AS r`)).r,
+      };
+    },
+    {
+      value: {
+        first: true,
+        again: null,
+        body: "hi",
+        other_store: 0,
+        listed: 1,
+        traversal: "23514",
+        bad_store: "23514",
+        deleted: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-BLOB-03",
+    "StoredBlob: the identity role cannot reach the file functions either",
+    "app_auth",
+    null,
+    async (q) => ({
+      put: await tryq(q, `SELECT app.blob_put('private','files/org_A/x','text/plain','\\x61'::bytea)`),
+      get: await tryq(q, `SELECT * FROM app.blob_get('private','files/org_A/x')`),
+    }),
+    { value: { put: "42501", get: "42501" } },
   );
 
   // ======================= Onboarding flows =======================

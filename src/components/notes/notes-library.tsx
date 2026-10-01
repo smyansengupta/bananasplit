@@ -2,8 +2,11 @@
 
 import { formatDistanceToNow } from "date-fns";
 import {
+  ArchiveRestore,
   CalendarDays,
   Check,
+  Download,
+  ExternalLink,
   Folder,
   FolderInput,
   FolderOpen,
@@ -11,6 +14,7 @@ import {
   Inbox,
   LayoutGrid,
   Library,
+  Link2,
   List,
   Lock,
   MoreHorizontal,
@@ -24,6 +28,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { deleteNote, restoreNote } from "@/app/app/[orgSlug]/notes/actions";
+import { removeNoteFileAction, restoreNoteFileAction } from "@/app/app/[orgSlug]/notes/files-actions";
 import {
   createFolderAction,
   deleteFolderAction,
@@ -31,6 +37,7 @@ import {
   updateFolderAction,
 } from "@/app/app/[orgSlug]/notes/folder-actions";
 import { EmptyState } from "@/components/empty-state";
+import { ItemMenu } from "@/components/item-menu";
 import { FILE_ICONS, FILE_LABELS } from "@/components/notes/file-card";
 import { PinToggle } from "@/components/pins/pins-context";
 import {
@@ -41,8 +48,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toaster";
 import { familyOf, formatBytes } from "@/lib/files/types";
+import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
 import { cn } from "@/lib/utils";
 
 const NOTE_MIME = "application/x-bananasplit-note";
@@ -84,6 +101,35 @@ export interface LibraryFile {
   canMove: boolean;
 }
 
+export interface TrashNote {
+  id: string;
+  title: string;
+  visibility: "PRIVATE" | "ORGANIZATION";
+  deletedAt: Date;
+  authorName: string;
+}
+
+export interface TrashFile {
+  id: string;
+  name: string;
+  contentType: string;
+  sizeBytes: number;
+  deletedAt: Date;
+}
+
+/** What a card's menu, a drop on "Recently deleted" or the Move dialog acts on. */
+type Item = { kind: "note" | "file"; id: string; name: string; folderId: string | null };
+
+/** Saves a file the API serves as an attachment (a plain link, so no client navigation). */
+function downloadFrom(url: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function folderDot(color: string | null) {
   return color ? `var(--${color})` : "var(--muted-foreground)";
 }
@@ -102,6 +148,7 @@ export function NotesLibrary({
   files,
   pinnedHrefs,
   totals,
+  trash,
   filters,
 }: {
   orgId: string;
@@ -111,7 +158,9 @@ export function NotesLibrary({
   notes: LibraryNote[];
   files: LibraryFile[];
   pinnedHrefs: string[];
-  totals: { notes: number; files: number; unfiled: number };
+  totals: { notes: number; files: number; unfiled: number; trash: number };
+  /** The "Recently deleted" view's contents (only when it is open). */
+  trash: { notes: TrashNote[]; files: TrashFile[] } | null;
   filters: React.ReactNode;
 }) {
   const router = useRouter();
@@ -122,6 +171,9 @@ export function NotesLibrary({
   const [overFolder, setOverFolder] = useState<string | null>(null);
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [moving, setMoving] = useState<Item | null>(null);
+  const [overTrash, setOverTrash] = useState(false);
+  const [confirmEl, confirm] = useConfirm();
   const [q, setQ] = useState(params.get("q") ?? "");
   const folder = params.get("folder");
   const view = params.get("layout") === "list" ? "list" : "grid";
@@ -171,6 +223,73 @@ export function NotesLibrary({
     },
   });
 
+  function copyLink(href: string) {
+    void navigator.clipboard
+      ?.writeText(`${window.location.origin}${href}`)
+      .then(() => toast({ title: "Link copied", tone: "success", duration: 3_000 }))
+      .catch(() => toast({ title: "Couldn't copy the link", tone: "error" }));
+  }
+
+  /** Delete (to "Recently deleted"), with Undo. */
+  async function remove(item: Item) {
+    const isNote = item.kind === "note";
+    const ok = await confirm({
+      title: `Delete “${item.name}”?`,
+      description: `It moves to Recently deleted for ${NOTE_TRASH_DAYS} days, so you can bring it back.`,
+      confirmLabel: isNote ? "Delete note" : "Delete file",
+      run: async () =>
+        (isNote ? await deleteNote(orgId, item.id) : await removeNoteFileAction(orgId, item.id)).error,
+    });
+    if (!ok) return;
+    router.refresh();
+    toast({
+      title: isNote ? "Note deleted" : "File deleted",
+      description: item.name,
+      action: {
+        label: "Undo",
+        run: async () => {
+          const result = isNote ? await restoreNote(orgId, item.id) : await restoreNoteFileAction(orgId, item.id);
+          if (result.error) return result.error;
+          router.refresh();
+        },
+      },
+    });
+  }
+
+  function restore(kind: "note" | "file", id: string, name: string) {
+    setError(null);
+    start(async () => {
+      const result = kind === "note" ? await restoreNote(orgId, id) : await restoreNoteFileAction(orgId, id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      toast({ title: `Restored “${name}”`, tone: "success" });
+      router.refresh();
+    });
+  }
+
+  /** Dropping a card on "Recently deleted" deletes it (after the usual question). */
+  const trashDropProps = {
+    onDragOver: (e: React.DragEvent) => {
+      const types = Array.from(e.dataTransfer.types);
+      if (!types.includes(NOTE_MIME) && !types.includes(FILE_MIME)) return;
+      e.preventDefault();
+      setOverTrash(true);
+    },
+    onDragLeave: () => setOverTrash(false),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setOverTrash(false);
+      const noteId = e.dataTransfer.getData(NOTE_MIME);
+      const fileId = e.dataTransfer.getData(FILE_MIME);
+      const note = noteId ? notes.find((n) => n.id === noteId) : undefined;
+      const file = fileId ? files.find((f) => f.id === fileId) : undefined;
+      if (note) void remove({ kind: "note", id: note.id, name: note.title || "Untitled note", folderId: note.folderId });
+      else if (file) void remove({ kind: "file", id: file.id, name: file.name, folderId: file.folderId });
+    },
+  };
+
   const railItem = (
     key: string | null,
     label: string,
@@ -209,8 +328,12 @@ export function NotesLibrary({
   };
 
   const currentFolder = folders.find((f) => f.id === folder);
-  const heading =
-    folder === "none" ? "Not in a folder" : (currentFolder?.name ?? "All notes and files");
+  const inTrash = folder === "trash";
+  const heading = inTrash
+    ? "Recently deleted"
+    : folder === "none"
+      ? "Not in a folder"
+      : (currentFolder?.name ?? "All notes and files");
 
   const noteCard = (n: LibraryNote) => {
     const href = `${base}/${n.id}`;
@@ -251,7 +374,7 @@ export function NotesLibrary({
             {view === "list" && (
               <NotebookText className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
             )}
-            <p className="flex min-w-0 items-center gap-1.5 pr-8 text-sm font-medium">
+            <p className="flex min-w-0 items-center gap-1.5 pr-16 text-sm font-medium">
               {n.visibility === "PRIVATE" ? (
                 <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Private" />
               ) : null}
@@ -260,7 +383,7 @@ export function NotesLibrary({
             <p
               className={cn(
                 "text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2 text-xs",
-                view === "list" && "ms-auto flex-nowrap",
+                view === "list" && "ms-auto flex-nowrap pe-16",
               )}
             >
               <span className="truncate">{n.authorName}</span>
@@ -274,15 +397,41 @@ export function NotesLibrary({
             </p>
           </div>
         </Link>
-        <PinToggle
-          href={href}
-          label={n.title || "note"}
+        <div
           className={cn(
-            "absolute right-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+            "absolute right-2 flex items-center gap-1",
             view === "grid" ? "top-2" : "top-1/2 -translate-y-1/2",
-            pinned.has(href) && "opacity-100",
           )}
-        />
+        >
+          <PinToggle
+            href={href}
+            label={n.title || "note"}
+            className={cn(
+              "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+              pinned.has(href) && "opacity-100",
+            )}
+          />
+          <ItemMenu
+            label={`Actions for ${n.title || "Untitled note"}`}
+            className="bg-background/90 border shadow-xs"
+            items={[
+              { label: "Open", icon: ExternalLink, href },
+              { label: "Copy link", icon: Link2, onSelect: () => copyLink(href) },
+              n.canMove && {
+                label: "Move to folder…",
+                icon: FolderInput,
+                onSelect: () => setMoving({ kind: "note", id: n.id, name: n.title || "Untitled note", folderId: n.folderId }),
+              },
+              n.canMove && {
+                label: "Delete",
+                icon: Trash2,
+                destructive: true,
+                onSelect: () =>
+                  void remove({ kind: "note", id: n.id, name: n.title || "Untitled note", folderId: n.folderId }),
+              },
+            ]}
+          />
+        </div>
       </li>
     );
   };
@@ -344,7 +493,7 @@ export function NotesLibrary({
             {view === "list" && (
               <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
             )}
-            <p className="flex min-w-0 items-center gap-1.5 pr-8 text-sm font-medium">
+            <p className="flex min-w-0 items-center gap-1.5 pr-16 text-sm font-medium">
               {f.visibility === "PRIVATE" && (
                 <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Only you" />
               )}
@@ -353,7 +502,7 @@ export function NotesLibrary({
             <p
               className={cn(
                 "text-muted-foreground text-xs",
-                view === "list" && "ms-auto whitespace-nowrap",
+                view === "list" && "ms-auto pe-16 whitespace-nowrap",
               )}
             >
               {formatBytes(f.sizeBytes)} · {f.uploaderName},{" "}
@@ -361,15 +510,41 @@ export function NotesLibrary({
             </p>
           </div>
         </Link>
-        <PinToggle
-          href={href}
-          label={f.name}
+        <div
           className={cn(
-            "absolute right-2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+            "absolute right-2 flex items-center gap-1",
             view === "grid" ? "top-2" : "top-1/2 -translate-y-1/2",
-            pinned.has(href) && "opacity-100",
           )}
-        />
+        >
+          <PinToggle
+            href={href}
+            label={f.name}
+            className={cn(
+              "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+              pinned.has(href) && "opacity-100",
+            )}
+          />
+          <ItemMenu
+            label={`Actions for ${f.name}`}
+            className="bg-background/90 border shadow-xs"
+            items={[
+              { label: "Open", icon: ExternalLink, href },
+              { label: "Download", icon: Download, onSelect: () => downloadFrom(`${src}?download=1`) },
+              { label: "Copy link", icon: Link2, onSelect: () => copyLink(href) },
+              f.canMove && {
+                label: "Move to folder…",
+                icon: FolderInput,
+                onSelect: () => setMoving({ kind: "file", id: f.id, name: f.name, folderId: f.folderId }),
+              },
+              f.canMove && {
+                label: "Delete",
+                icon: Trash2,
+                destructive: true,
+                onSelect: () => void remove({ kind: "file", id: f.id, name: f.name, folderId: f.folderId }),
+              },
+            ]}
+          />
+        </div>
       </li>
     );
   };
@@ -496,15 +671,23 @@ export function NotesLibrary({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-destructive"
-                          onSelect={() => {
-                            if (
-                              window.confirm(
-                                `Delete “${f.name}”? Its notes and files stay, just out of the folder.`,
-                              )
-                            ) {
-                              if (folder === f.id) go({ folder: null });
-                              run(() => deleteFolderAction(orgId, f.id));
-                            }
+                          onSelect={async () => {
+                            const ok = await confirm({
+                              title: `Delete the folder “${f.name}”?`,
+                              description: "Its notes and files stay, just out of the folder.",
+                              confirmLabel: "Delete folder",
+                              run: async () => {
+                                const result = await deleteFolderAction(orgId, f.id);
+                                return result.ok ? undefined : result.error;
+                              },
+                            });
+                            if (!ok) return;
+                            if (folder === f.id) go({ folder: null });
+                            router.refresh();
+                            toast({
+                              title: `Folder “${f.name}” deleted`,
+                              description: "Everything in it is under Not in a folder.",
+                            });
                           }}
                         >
                           <Trash2 className="size-4" aria-hidden="true" />
@@ -554,6 +737,19 @@ export function NotesLibrary({
             </button>
           ) : null}
         </div>
+        <div
+          {...trashDropProps}
+          className={cn("rounded-md border-t pt-3", overTrash && "ring-destructive bg-destructive/10 ring-2")}
+        >
+          {railItem(
+            "trash",
+            "Recently deleted",
+            <Trash2 className="size-4 shrink-0" aria-hidden="true" />,
+            totals.trash,
+            false,
+          )}
+          {overTrash && <p className="text-destructive px-2.5 pt-1 text-xs">Drop to delete</p>}
+        </div>
         {error && <p className="text-destructive px-2 text-xs">{error}</p>}
       </aside>
 
@@ -569,124 +765,270 @@ export function NotesLibrary({
             ) : null}
             {heading}
           </h2>
-          <form
-            className="relative"
-            onSubmit={(e) => {
-              e.preventDefault();
-              go({ q: q.trim() || null });
-            }}
-          >
-            <Search
-              className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                if (!e.target.value) go({ q: null });
-              }}
-              placeholder={tab === "notes" ? "Search notes" : "Search files"}
-              aria-label="Search"
-              className="h-9 w-48 pl-8"
-            />
-          </form>
-          {filters}
-          <div className="bg-muted flex rounded-md p-0.5" role="group" aria-label="Layout">
-            {(
-              [
-                ["grid", LayoutGrid, "Grid"],
-                ["list", List, "List"],
-              ] as const
-            ).map(([v, Icon, label]) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                aria-label={label}
-                onClick={() => go({ layout: v === "grid" ? null : v })}
-                className={cn(
-                  "rounded px-2 py-1",
-                  view === v ? "bg-background shadow-xs" : "text-muted-foreground",
-                )}
+          {!inTrash && (
+            <>
+              <form
+                className="relative"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  go({ q: q.trim() || null });
+                }}
               >
-                <Icon className="size-4" aria-hidden="true" />
-              </button>
-            ))}
-          </div>
+                <Search
+                  className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+                  aria-hidden="true"
+                />
+                <Input
+                  type="search"
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    if (!e.target.value) go({ q: null });
+                  }}
+                  placeholder={tab === "notes" ? "Search notes" : "Search files"}
+                  aria-label="Search"
+                  className="h-9 w-48 pl-8"
+                />
+              </form>
+              {filters}
+              <div className="bg-muted flex rounded-md p-0.5" role="group" aria-label="Layout">
+                {(
+                  [
+                    ["grid", LayoutGrid, "Grid"],
+                    ["list", List, "List"],
+                  ] as const
+                ).map(([v, Icon, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-pressed={view === v}
+                    aria-label={label}
+                    onClick={() => go({ layout: v === "grid" ? null : v })}
+                    className={cn(
+                      "rounded px-2 py-1",
+                      view === v ? "bg-background shadow-xs" : "text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        <nav aria-label="Notes sections" className="border-b">
-          <ul className="-mb-px flex gap-1">
-            {(
-              [
-                ["notes", "Notes", NotebookText, totals.notes],
-                ["files", "Files", FolderOpen, totals.files],
-              ] as const
-            ).map(([id, label, Icon, count]) => (
-              <li key={id}>
+        {inTrash ? (
+          <TrashView trash={trash} pending={pending} onRestore={restore} />
+        ) : (
+          <>
+            <nav aria-label="Notes sections" className="border-b">
+              <ul className="-mb-px flex gap-1">
+                {(
+                  [
+                    ["notes", "Notes", NotebookText, totals.notes],
+                    ["files", "Files", FolderOpen, totals.files],
+                  ] as const
+                ).map(([id, label, Icon, count]) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => go({ tab: id === "notes" ? null : id })}
+                      aria-current={tab === id ? "page" : undefined}
+                      className={cn(
+                        "inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                        tab === id
+                          ? "border-primary text-foreground"
+                          : "text-muted-foreground hover:text-foreground border-transparent",
+                      )}
+                    >
+                      <Icon className="size-4" aria-hidden="true" />
+                      {label}
+                      <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[11px] tabular-nums">
+                        {count}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+
+            {items.length === 0 ? (
+              <EmptyState
+                icon={tab === "notes" ? NotebookText : FolderOpen}
+                title={
+                  params.get("q")
+                    ? "Nothing matches that search"
+                    : folder
+                      ? tab === "notes"
+                        ? "No notes in here yet"
+                        : "No files in here yet"
+                      : tab === "notes"
+                        ? "No notes yet"
+                        : "No files yet"
+                }
+                description={
+                  tab === "notes"
+                    ? "Start one from a template, or bring in a Word document or Google Doc with “New”. Drag notes onto a folder to file them."
+                    : "Upload PDFs, slides, spreadsheets and images with “New” › Upload a file. They open right here."
+                }
+              />
+            ) : (
+              <ul
+                className={cn(
+                  view === "grid"
+                    ? "grid [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))] gap-3"
+                    : "space-y-2",
+                  pending && "opacity-70",
+                )}
+              >
+                {tab === "notes" ? notes.map(noteCard) : files.map(fileCard)}
+              </ul>
+            )}
+            <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
+              <FolderInput className="size-3.5" aria-hidden="true" />
+              Drag a card onto a folder to move it, or onto Recently deleted to delete it.
+              <Users className="ms-2 size-3.5" aria-hidden="true" />
+              Folders are shared with the club; private notes stay private inside them.
+            </p>
+          </>
+        )}
+      </div>
+      {confirmEl}
+      <MoveDialog
+        item={moving}
+        folders={folders}
+        onClose={() => setMoving(null)}
+        onMove={(item, folderId) => {
+          setMoving(null);
+          run(() =>
+            moveToFolderAction(orgId, item.kind === "note" ? { noteIds: [item.id] } : { fileIds: [item.id] }, folderId),
+          );
+          const name = folderId ? (folders.find((f) => f.id === folderId)?.name ?? "the folder") : "Not in a folder";
+          toast({ title: `Moved to ${name}`, description: item.name, duration: 4_000 });
+        }}
+      />
+    </div>
+  );
+}
+
+function MoveDialog({
+  item,
+  folders,
+  onClose,
+  onMove,
+}: {
+  item: Item | null;
+  folders: LibraryFolder[];
+  onClose: () => void;
+  onMove: (item: Item, folderId: string | null) => void;
+}) {
+  const choices: { id: string | null; name: string; color: string | null }[] = [
+    { id: null, name: "Not in a folder", color: null },
+    ...folders.map((f) => ({ id: f.id, name: f.name, color: f.color })),
+  ];
+  return (
+    <Dialog open={item !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Move to a folder</DialogTitle>
+          <DialogDescription className="truncate">{item?.name}</DialogDescription>
+        </DialogHeader>
+        <ul className="-mx-1 max-h-72 space-y-0.5 overflow-y-auto">
+          {choices.map((c) => {
+            const current = (item?.folderId ?? null) === c.id;
+            return (
+              <li key={c.id ?? "none"}>
                 <button
                   type="button"
-                  onClick={() => go({ tab: id === "notes" ? null : id })}
-                  aria-current={tab === id ? "page" : undefined}
-                  className={cn(
-                    "inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-                    tab === id
-                      ? "border-primary text-foreground"
-                      : "text-muted-foreground hover:text-foreground border-transparent",
-                  )}
+                  disabled={current}
+                  onClick={() => item && onMove(item, c.id)}
+                  className="hover:bg-muted flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm disabled:opacity-60"
                 >
-                  <Icon className="size-4" aria-hidden="true" />
-                  {label}
-                  <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-[11px] tabular-nums">
-                    {count}
-                  </span>
+                  {c.id ? (
+                    <Folder className="size-4 shrink-0" style={{ color: folderDot(c.color) }} aria-hidden="true" />
+                  ) : (
+                    <Inbox className="size-4 shrink-0" aria-hidden="true" />
+                  )}
+                  <span className="truncate">{c.name}</span>
+                  {current && <span className="text-muted-foreground ms-auto text-xs">Here now</span>}
                 </button>
               </li>
-            ))}
-          </ul>
-        </nav>
-
-        {items.length === 0 ? (
-          <EmptyState
-            icon={tab === "notes" ? NotebookText : FolderOpen}
-            title={
-              params.get("q")
-                ? "Nothing matches that search"
-                : folder
-                  ? tab === "notes"
-                    ? "No notes in here yet"
-                    : "No files in here yet"
-                  : tab === "notes"
-                    ? "No notes yet"
-                    : "No files yet"
-            }
-            description={
-              tab === "notes"
-                ? "Start one from a template, or bring in a Word document or Google Doc with “New”. Drag notes onto a folder to file them."
-                : "Upload PDFs, slides, spreadsheets and images with “New” › Upload a file. They open right here."
-            }
-          />
-        ) : (
-          <ul
-            className={cn(
-              view === "grid"
-                ? "grid [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))] gap-3"
-                : "space-y-2",
-              pending && "opacity-70",
-            )}
-          >
-            {tab === "notes" ? notes.map(noteCard) : files.map(fileCard)}
-          </ul>
+            );
+          })}
+        </ul>
+        {folders.length === 0 && (
+          <p className="text-muted-foreground text-xs">No folders yet: make one with the + next to Folders.</p>
         )}
-        <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <FolderInput className="size-3.5" aria-hidden="true" />
-          Drag a card onto a folder to move it.
-          <Users className="ms-2 size-3.5" aria-hidden="true" />
-          Folders are shared with the club; private notes stay private inside them.
-        </p>
-      </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TrashView({
+  trash,
+  pending,
+  onRestore,
+}: {
+  trash: { notes: TrashNote[]; files: TrashFile[] } | null;
+  pending: boolean;
+  onRestore: (kind: "note" | "file", id: string, name: string) => void;
+}) {
+  const rows = [
+    ...(trash?.notes ?? []).map((n) => ({
+      kind: "note" as const,
+      id: n.id,
+      name: n.title || "Untitled note",
+      detail: n.authorName,
+      deletedAt: n.deletedAt,
+      Icon: NotebookText,
+    })),
+    ...(trash?.files ?? []).map((f) => ({
+      kind: "file" as const,
+      id: f.id,
+      name: f.name,
+      detail: formatBytes(f.sizeBytes),
+      deletedAt: f.deletedAt,
+      Icon: FILE_ICONS[familyOf(f.contentType)],
+    })),
+  ].sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime());
+
+  return (
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-sm">
+        Notes and files deleted in the last {NOTE_TRASH_DAYS} days. Restore puts them back where they were;
+        after {NOTE_TRASH_DAYS} days deleted files are gone for good.
+      </p>
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={Trash2}
+          title="Nothing here"
+          description="When you delete a note or a file, it waits here for a while in case you change your mind."
+        />
+      ) : (
+        <ul className={cn("divide-y rounded-xl border", pending && "opacity-70")}>
+          {rows.map((r) => (
+            <li key={`${r.kind}-${r.id}`} className="flex items-center gap-3 px-3 py-2.5">
+              <r.Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{r.name}</p>
+                <p className="text-muted-foreground truncate text-xs">
+                  {r.kind === "note" ? "Note" : "File"} · {r.detail} · deleted{" "}
+                  {formatDistanceToNow(r.deletedAt, { addSuffix: true })}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onRestore(r.kind, r.id, r.name)}
+                className="hover:bg-muted inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium"
+              >
+                <ArchiveRestore className="size-3.5" aria-hidden="true" />
+                Restore
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

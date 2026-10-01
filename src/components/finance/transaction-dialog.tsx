@@ -1,15 +1,18 @@
 "use client";
 
+import { ArchiveRestore, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
 import {
   approveExpense,
   createTransaction,
+  deleteTransaction,
   markExpenseNotApplicable,
   reconcileTransaction,
   rejectExpense,
   reimburseExpense,
+  restoreTransaction,
   submitExpense,
   unlockTransaction,
   updateTransaction,
@@ -24,6 +27,8 @@ import type { TransactionWithRelations } from "@/app/app/[orgSlug]/finance/queri
 import { TransactionKindSelect } from "@/components/finance/transaction-kind-select";
 import { TransactionStatusBadge } from "@/components/finance/transaction-status-badge";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toaster";
 import {
   Dialog,
   DialogContent,
@@ -114,6 +119,60 @@ function TransactionForm({
     !transaction ||
     (isFinance && !transaction.reconciledAt) ||
     (transaction.submittedById === currentUserId && transaction.status === "DRAFT");
+
+  // Delete (a void the lists hide, with Undo): finance on anything not
+  // locked; a member on their own request until it's approved.
+  const canDelete =
+    Boolean(transaction) &&
+    !transaction?.reconciledAt &&
+    (isFinance ||
+      (transaction?.submittedById === currentUserId &&
+        transaction?.kind === "EXPENSE" &&
+        (transaction?.status === "DRAFT" || transaction?.status === "SUBMITTED")));
+  const [confirmEl, confirm] = useConfirm();
+
+  async function remove() {
+    if (!transaction) return;
+    const ok = await confirm({
+      title: `Delete “${transaction.description}”?`,
+      description:
+        "It comes out of every list and total. The finance activity log keeps a record, and you can undo this right after.",
+      confirmLabel: "Delete transaction",
+      run: async () => (await deleteTransaction(orgId, transaction.id)).error,
+    });
+    if (!ok) return;
+    onOpenChange(false);
+    onSaved?.();
+    router.refresh();
+    const id = transaction.id;
+    toast({
+      title: "Transaction deleted",
+      description: transaction.description,
+      action: {
+        label: "Undo",
+        run: async () => {
+          const result = await restoreTransaction(orgId, id);
+          if (result.error) return result.error;
+          router.refresh();
+        },
+      },
+    });
+  }
+
+  function restore() {
+    if (!transaction) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await restoreTransaction(orgId, transaction.id);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      toast({ title: "Transaction restored", tone: "success" });
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
 
   function handleSave() {
     setError(null);
@@ -228,24 +287,30 @@ function TransactionForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-1.5">
           <Label>Budget period</Label>
-          <Select
-            value={budgetPeriodId}
-            onValueChange={setBudgetPeriodId}
-            // A saved transaction never moves between periods (the server
-            // ignores budgetPeriodId on update), so the picker is fixed then.
-            disabled={!canEditFields || Boolean(transaction)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {periods.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {periods.length === 0 ? (
+            <p className="text-muted-foreground bg-muted/50 rounded-md border px-3 py-2 text-sm">
+              This school year: it&apos;s set up when you save.
+            </p>
+          ) : (
+            <Select
+              value={budgetPeriodId}
+              onValueChange={setBudgetPeriodId}
+              // A saved transaction never moves between periods (the server
+              // ignores budgetPeriodId on update), so the picker is fixed then.
+              disabled={!canEditFields || Boolean(transaction)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {periods.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="grid gap-1.5">
           <Label>Category</Label>
@@ -348,6 +413,24 @@ function TransactionForm({
       )}
 
       <DialogFooter className="mt-6">
+        {transaction && !transaction.voidedAt && canDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-muted-foreground hover:text-destructive sm:mr-auto"
+            disabled={isPending}
+            onClick={() => void remove()}
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+            Delete
+          </Button>
+        )}
+        {transaction?.voidedAt && isFinance && (
+          <Button type="button" variant="ghost" className="sm:mr-auto" disabled={isPending} onClick={restore}>
+            <ArchiveRestore className="size-4" aria-hidden="true" />
+            Restore
+          </Button>
+        )}
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
           Close
         </Button>
@@ -357,6 +440,7 @@ function TransactionForm({
           </Button>
         )}
       </DialogFooter>
+      {confirmEl}
     </>
   );
 }
@@ -576,6 +660,7 @@ function ReceiptsPanel({
   onChanged: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [confirmReceiptEl, confirmReceipt] = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -619,11 +704,14 @@ function ReceiptsPanel({
     if (result.url) window.open(result.url, "_blank", "noopener,noreferrer");
   }
 
-  function handleDelete(receiptId: string) {
-    startTransition(async () => {
-      await deleteReceiptAction(orgId, receiptId);
-      onChanged();
+  async function handleDelete(receiptId: string, filename: string) {
+    const ok = await confirmReceipt({
+      title: `Remove the receipt “${filename}”?`,
+      description: "The file is deleted for good. The transaction stays.",
+      confirmLabel: "Remove receipt",
+      run: async () => (await deleteReceiptAction(orgId, receiptId))?.error,
     });
+    if (ok) onChanged();
   }
 
   return (
@@ -650,6 +738,7 @@ function ReceiptsPanel({
       </Button>
       {error && <p className="text-destructive text-sm">{error}</p>}
 
+      {confirmReceiptEl}
       {transaction.receipts.length === 0 ? (
         <p className="text-muted-foreground text-sm">No receipts attached.</p>
       ) : (
@@ -667,8 +756,9 @@ function ReceiptsPanel({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleDelete(r.id)}
+                onClick={() => void handleDelete(r.id, r.filename)}
                 disabled={isPending}
+                className="text-muted-foreground hover:text-destructive"
               >
                 Remove
               </Button>

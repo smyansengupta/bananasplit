@@ -4,8 +4,8 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Plus } from "lucide-react";
 
-import type { TaskCardData } from "@/components/tasks/task-card";
 import { GroupHeader, STATUS_TOKEN } from "@/components/tasks/layout-ui";
+import type { TaskItem } from "@/components/tasks/types";
 import { cn } from "@/lib/utils";
 
 import { SortableTaskCard } from "./sortable-task-card";
@@ -29,7 +29,7 @@ export function KanbanColumn({
 }: {
   id: string;
   title: string;
-  tasks: TaskCardData[];
+  tasks: TaskItem[];
   todayKey: string;
   onOpenTask: (taskId: string) => void;
   onAddTask: () => void;

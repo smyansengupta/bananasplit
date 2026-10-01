@@ -42,6 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ orgS
       q.get("reconciled") === "yes" || q.get("reconciled") === "no"
         ? (q.get("reconciled") as "yes" | "no")
         : undefined,
+    deleted: q.get("deleted") === "show" ? "show" : undefined,
   };
 
   let transactions;

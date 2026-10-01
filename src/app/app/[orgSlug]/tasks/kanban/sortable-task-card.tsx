@@ -3,17 +3,22 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { TaskCard, type TaskCardData } from "@/components/tasks/task-card";
+import { TaskCard } from "@/components/tasks/task-card";
+import { TaskItemMenu } from "@/components/tasks/task-item-menu";
+import { accessSubjectOf, useTasks } from "@/components/tasks/tasks-context";
+import type { TaskItem } from "@/components/tasks/types";
+import { canEditTask } from "@/lib/tasks/access";
 
 export function SortableTaskCard({
   task,
   todayKey,
   onOpen,
 }: {
-  task: TaskCardData;
+  task: TaskItem;
   todayKey: string;
   onOpen: (taskId: string) => void;
 }) {
+  const { actor } = useTasks();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
   });
@@ -23,7 +28,7 @@ export function SortableTaskCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={
-        "group focus-visible:ring-ring cursor-grab rounded-lg focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing" +
+        "group focus-visible:ring-ring relative cursor-grab rounded-lg focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing" +
         (isDragging ? " opacity-40" : "")
       }
       onClick={() => onOpen(task.id)}
@@ -38,6 +43,13 @@ export function SortableTaskCard({
       {...listeners}
     >
       <TaskCard task={task} todayKey={todayKey} />
+      {/* The menu keeps its own clicks and drags (ItemMenu stops them). */}
+      <TaskItemMenu
+        task={{ id: task.id, title: task.title, subtaskCount: task.subtasks.length }}
+        editable={canEditTask(actor, accessSubjectOf(task))}
+        onOpen={() => onOpen(task.id)}
+        className="bg-card absolute top-1.5 right-1.5 border opacity-0 shadow-xs group-focus-within:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+      />
     </div>
   );
 }

@@ -20,7 +20,7 @@ this is what comes on top of it.
    | Variable | Why it matters tonight |
    | --- | --- |
    | `RESEND_API_KEY`, `EMAIL_FROM` (on a domain verified in Resend) | **Required.** Every new account must verify its email before it can join or create an org, and the link comes by email. Without a sender, new members are stuck. The alternative is Google sign-in (`AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`): Google-verified addresses count as verified. |
-   | `BLOB_READ_WRITE_TOKEN` (and optionally `BLOB_PUBLIC_READ_WRITE_TOKEN`) | Profile pictures, club pictures, receipts and Notes files. One store is enough: without the public token, pictures are kept in the private store and served through `/api/media`. With no store at all, uploads say so instead of failing silently. |
+   | `BLOB_READ_WRITE_TOKEN` (and optionally `BLOB_PUBLIC_READ_WRITE_TOKEN`) | **Optional.** Profile pictures, club pictures, receipts and Notes files work with no Blob store: they're kept in Postgres (the `StoredBlob` table) and pictures are served through `/api/media`. Add a Vercel Blob store when the files get big or many; it takes over for new uploads, older files stay readable from the database, and an upload the store refuses still lands in the database. `FILE_STORAGE=database` keeps everything in Postgres regardless. |
    | `NEXT_PUBLIC_APP_URL` (https) | The invite link admins share (`/onboarding/join?code=...`). |
    | `AUTH_SECRET`, `CRON_SECRET`, `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT`, `SECRETS_FINGERPRINT_KEY`, the three role passwords | As in `RUNBOOK.md`. `/api/health` fails without them. |
    | `PLATFORM_ADMIN_EMAILS` | Your address. Only platform admins can create an org while creation is locked. |

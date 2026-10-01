@@ -76,6 +76,49 @@ export async function createTask(orgId: string, input: unknown) {
   return run(() => createTaskTx(orgId, input));
 }
 
+export interface ImportedTaskResult {
+  key: string;
+  taskId?: string;
+  error?: string;
+  /** Above-level assignments waiting for the member's OK; nothing was saved for this one. */
+  confirm?: svc.FlagConfirmation;
+}
+
+/**
+ * Creates the tasks a member kept from an AI import (src/server/ai), one at a
+ * time through the same createTask as the editor: same permissions, rules,
+ * assignment checks, notifications and activity, each in its own
+ * transaction. One that is refused or needs a confirmation doesn't stop the
+ * rest; the dialog shows which, and offers to confirm the flagged ones.
+ */
+export async function createTasksFromImport(
+  orgId: string,
+  rows: { key: string; input: unknown }[],
+  options: { confirmFlagged?: boolean } = {},
+): Promise<{ results: ImportedTaskResult[] }> {
+  if (!Array.isArray(rows) || rows.length > 100) return { results: [] };
+  const results: ImportedTaskResult[] = [];
+  for (const row of rows) {
+    const key = typeof row?.key === "string" ? row.key.slice(0, 20) : "";
+    const input =
+      row?.input && typeof row.input === "object"
+        ? { ...(row.input as Record<string, unknown>), confirmFlagged: options.confirmFlagged === true }
+        : row?.input;
+    try {
+      const result = await createTaskTx(orgId, input);
+      if (result.confirm) results.push({ key, confirm: result.confirm });
+      else if (result.error) results.push({ key, error: result.error });
+      else results.push({ key, taskId: result.taskId });
+    } catch (error) {
+      const message = refusal(error);
+      if (!message) throw error;
+      results.push({ key, error: message });
+    }
+  }
+  if (results.some((r) => r.taskId)) refresh();
+  return { results };
+}
+
 export async function updateTask(orgId: string, taskId: string, input: unknown) {
   return run(() => updateTaskTx(orgId, taskId, input));
 }

@@ -17,7 +17,14 @@ import type { PersonalTheme } from "@/lib/theme/personal";
  * Profile > Theme: the personal theme from onboarding A4, editable. "Match
  * my club" saves NULL, so the org's theme (Settings > Theme) shows again.
  */
-export function ThemeForm({ initial }: { initial: PersonalTheme | null }) {
+export function ThemeForm({
+  initial,
+  clubMode = "system",
+}: {
+  initial: PersonalTheme | null;
+  /** The org's default light/dark ("system" = the device), used by "Match my club". */
+  clubMode?: "light" | "dark" | "system";
+}) {
   const router = useRouter();
   const { setTheme } = useTheme();
   const [choice, setChoice] = useState(() => initialThemeChoice(initial));
@@ -35,7 +42,7 @@ export function ThemeForm({ initial }: { initial: PersonalTheme | null }) {
         });
         return;
       }
-      if (value) setTheme(value.mode);
+      setTheme(value ? value.mode : clubMode);
       setStatus({ ok: true, text: value ? "Theme saved." : "Following the organization's theme." });
       router.refresh();
     });

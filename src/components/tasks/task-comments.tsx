@@ -10,6 +10,7 @@ import {
   loadTaskComments,
 } from "@/app/app/[orgSlug]/tasks/actions";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import type { TaskCommentItem } from "@/server/tasks/queries";
 
@@ -117,21 +118,22 @@ export function TaskComments({
     });
   }
 
-  function remove(id: string) {
-    startTransition(async () => {
-      const result = await deleteTaskComment(org.id, id);
-      if (result.error) {
-        announce(result.error);
-        return;
-      }
-      setComments((current) => current.filter((c) => c.id !== id));
+  async function remove(id: string) {
+    const ok = await confirm({
+      title: "Delete this comment?",
+      description: "It's removed for everyone on the task.",
+      confirmLabel: "Delete comment",
+      run: async () => (await deleteTaskComment(org.id, id)).error,
     });
+    if (ok) setComments((current) => current.filter((c) => c.id !== id));
   }
 
   const me = memberById.get(viewer.userId);
+  const [confirmEl, confirm] = useConfirm();
 
   return (
     <section className="space-y-3" aria-label="Comments">
+      {confirmEl}
       {hasMore && (
         <Button
           variant="link"
@@ -178,7 +180,7 @@ export function TaskComments({
                       <button
                         type="button"
                         className="text-muted-foreground hover:text-destructive"
-                        onClick={() => remove(c.id)}
+                        onClick={() => void remove(c.id)}
                       >
                         Delete
                       </button>

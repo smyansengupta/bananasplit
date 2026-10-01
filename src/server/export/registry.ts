@@ -56,6 +56,11 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "AvailabilityPoll", key: ID },
   { model: "PollSlot", key: ID },
   { model: "PollResponse", key: ID, omit: ["guestKeyHash"] },
+  { model: "Poll", key: ID },
+  { model: "PollOption", key: ID },
+  // Question-poll votes without who cast them, so an anonymous poll stays
+  // anonymous in the export too (the counts per option are still there).
+  { model: "PollVote", key: ID, omit: ["userId"] },
   { model: "BudgetPeriod", key: ID },
   { model: "BudgetCategory", key: ID },
   { model: "Transaction", key: ID },

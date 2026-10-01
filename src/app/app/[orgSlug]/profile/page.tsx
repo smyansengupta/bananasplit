@@ -42,7 +42,8 @@ function roleLabel(role: string): string {
  */
 export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/profile">) {
   const { orgSlug } = await params;
-  const { user, organization } = await getOrgContextBySlug(orgSlug);
+  const { user, organization, theme: orgTheme } = await getOrgContextBySlug(orgSlug);
+  const clubMode = orgTheme?.mode === "LIGHT" ? "light" : orgTheme?.mode === "DARK" ? "dark" : "system";
   const profile = await getOwnProfile(user.id);
   if (!profile) notFound();
 
@@ -160,7 +161,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ThemeForm initial={parsePersonalTheme(profile.themePreference)} />
+            <ThemeForm initial={parsePersonalTheme(profile.themePreference)} clubMode={clubMode} />
           </CardContent>
         </Card>
       </section>

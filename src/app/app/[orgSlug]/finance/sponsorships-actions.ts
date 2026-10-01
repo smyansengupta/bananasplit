@@ -233,3 +233,51 @@ export const updateSponsorshipStatus = withOrgAction(
     return { sponsorshipId };
   },
 );
+
+/**
+ * Deletes a sponsorship (a wrong entry, a deal that never happened). Money
+ * already received is its own transaction and stays in the books; delete
+ * that under Transactions if it was a mistake too. The audit log keeps the
+ * deleted row.
+ */
+export const deleteSponsorship = withOrgAction(
+  async (ctx, sponsorshipId: string): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
+    const organizationId = ctx.organizationId;
+    const sponsorship = await ctx.db.sponsorship.findFirst({
+      where: { id: sponsorshipId, organizationId },
+      include: { sponsor: { select: { name: true } } },
+    });
+    if (!sponsorship) return { error: "Sponsorship not found." };
+    await ctx.db.sponsorship.delete({ where: { id: sponsorship.id } });
+    await writeFinanceAuditLog(ctx.db, {
+      organizationId,
+      transactionId: sponsorship.transactionId ?? undefined,
+      action: "SPONSORSHIP_DELETE",
+      before: sponsorship,
+    });
+    return {};
+  },
+);
+
+/** Deletes a sponsor with no sponsorships left (delete those first). */
+export const deleteSponsor = withOrgAction(async (ctx, sponsorId: string): Promise<ActionResult> => {
+  requirePermission(ctx, "finance.manage");
+  const organizationId = ctx.organizationId;
+  const sponsor = await ctx.db.sponsor.findFirst({
+    where: { id: sponsorId, organizationId },
+    include: { _count: { select: { sponsorships: true } } },
+  });
+  if (!sponsor) return { error: "Sponsor not found." };
+  if (sponsor._count.sponsorships > 0) {
+    const n = sponsor._count.sponsorships;
+    return { error: `${sponsor.name} still has ${n} sponsorship${n === 1 ? "" : "s"}. Delete ${n === 1 ? "it" : "them"} first.` };
+  }
+  await ctx.db.sponsor.delete({ where: { id: sponsor.id } });
+  await writeFinanceAuditLog(ctx.db, {
+    organizationId,
+    action: "SPONSOR_DELETE",
+    before: { id: sponsor.id, name: sponsor.name },
+  });
+  return {};
+});

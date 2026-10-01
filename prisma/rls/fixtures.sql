@@ -82,6 +82,22 @@ INSERT INTO "PollSlot" ("id", "organizationId", "pollId", "startsAt", "endsAt") 
   ('s_A', 'org_A', 'poll_A', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour'),
   ('s_B', 'org_B', 'poll_B', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour');
 
+-- Question polls: one per org, with two options and votes in both, so the
+-- isolation cases have rows on each side. qp_A is anonymous (P-QPOLL-04).
+INSERT INTO "Poll" ("id", "organizationId", "question", "anonymous", "createdById", "updatedAt") VALUES
+  ('qp_A', 'org_A', 'Pizza or tacos?', true,  'u_memberA', CURRENT_TIMESTAMP),
+  ('qp_B', 'org_B', 'Poll B question', false, 'u_memberB', CURRENT_TIMESTAMP);
+INSERT INTO "PollOption" ("id", "organizationId", "pollId", "label", "sortOrder", "addedById") VALUES
+  ('qo_A1', 'org_A', 'qp_A', 'Pizza', 0, 'u_memberA'),
+  ('qo_A2', 'org_A', 'qp_A', 'Tacos', 1, 'u_memberA'),
+  ('qo_B1', 'org_B', 'qp_B', 'Yes', 0, 'u_memberB'),
+  ('qo_B2', 'org_B', 'qp_B', 'No', 1, 'u_memberB');
+INSERT INTO "PollVote" ("id", "organizationId", "pollId", "optionId", "userId") VALUES
+  ('qv_A1', 'org_A', 'qp_A', 'qo_A1', 'u_memberA'),
+  ('qv_A2', 'org_A', 'qp_A', 'qo_A1', 'u_adminA'),
+  ('qv_A3', 'org_A', 'qp_A', 'qo_A2', 'u_treasA'),
+  ('qv_B1', 'org_B', 'qp_B', 'qo_B1', 'u_memberB');
+
 INSERT INTO "BudgetPeriod" ("id", "organizationId", "label", "startsOn", "endsOn", "isActive") VALUES
   ('bp_A', 'org_A', 'Fall A', '2026-09-01', '2026-12-31', true),
   ('bp_B', 'org_B', 'Fall B', '2026-09-01', '2026-12-31', true);

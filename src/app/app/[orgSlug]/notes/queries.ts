@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { trashCutoff } from "@/lib/notes/trash";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
 
@@ -70,6 +71,46 @@ export function getNotesForList(
           : { updatedAt: "desc" },
     take: 300,
   });
+}
+
+/**
+ * "Recently deleted": notes deleted in the last NOTE_TRASH_DAYS that this
+ * member may restore (their own, and for an admin any shared note), the
+ * same people restoreNote lets through.
+ */
+export function getDeletedNotes(db: TxClient, organizationId: string, userId: string, isAdmin: boolean) {
+  return db.note.findMany({
+    where: {
+      organizationId,
+      deletedAt: { gte: trashCutoff() },
+      OR: [{ authorId: userId }, ...(isAdmin ? [{ visibility: "ORGANIZATION" as const }] : [])],
+    },
+    select: {
+      id: true,
+      title: true,
+      visibility: true,
+      deletedAt: true,
+      author: { select: { name: true, email: true } },
+    },
+    orderBy: { deletedAt: "desc" },
+    take: 100,
+  });
+}
+
+/** How many items "Recently deleted" holds for this member (notes and files). */
+export async function countDeleted(db: TxClient, organizationId: string, userId: string, isAdmin: boolean) {
+  const since = trashCutoff();
+  const notes = await db.note.count({
+    where: {
+      organizationId,
+      deletedAt: { gte: since },
+      OR: [{ authorId: userId }, ...(isAdmin ? [{ visibility: "ORGANIZATION" as const }] : [])],
+    },
+  });
+  const files = await db.orgFile.count({
+    where: { organizationId, deletedAt: { gte: since }, ...(isAdmin ? {} : { uploadedById: userId }) },
+  });
+  return notes + files;
 }
 
 export const NOTE_SORTS = ["edited", "created", "title"] as const;

@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, Inbox, NotebookPen, Plus } from "lucide-react";
-import { useEffect } from "react";
+import { ArrowLeft, Inbox, NotebookPen, Plus, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 
+import { ActionItemsImport } from "@/components/ai/action-items-import";
 import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import { WorkspaceToolbar } from "@/components/tasks/workspace-toolbar";
 import { Button } from "@/components/ui/button";
@@ -33,8 +34,9 @@ export function WorkspaceHeader({
   /** Whether the viewer already posted this week's Sunday update. */
   posted: boolean;
 }) {
-  const { newTask } = useTasks();
+  const { newTask, org } = useTasks();
   const ws = useWorkspace();
+  const [importing, setImporting] = useState(false);
   const inDestination = isDestination(ws.query.view);
 
   // 1-5 switch layout, c starts a task. Typing in a field never triggers them.
@@ -98,6 +100,17 @@ export function WorkspaceHeader({
 
         <Button
           size="sm"
+          variant="outline"
+          onClick={() => setImporting(true)}
+          className="gap-1.5"
+          title="Paste a to-do list or meeting notes; AI turns it into tasks and events for you to check"
+        >
+          <Sparkles className="size-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Import with AI</span>
+          <span className="sm:hidden">Import</span>
+        </Button>
+        <Button
+          size="sm"
           onClick={() => newTask({ projectId: ws.query.projectId ?? null })}
           className="gap-1.5"
         >
@@ -110,6 +123,9 @@ export function WorkspaceHeader({
       </div>
 
       {!inDestination && <WorkspaceToolbar />}
+      {importing && (
+        <ActionItemsImport orgId={org.id} orgSlug={org.slug} open={importing} onOpenChange={setImporting} />
+      )}
     </div>
   );
 }

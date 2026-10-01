@@ -20,6 +20,8 @@ import type { TaskItem } from "@/components/tasks/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toaster";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -47,7 +49,7 @@ import { canEditTask, canTriage } from "@/lib/tasks/access";
 import { relationFor } from "@/lib/tasks/assignment";
 import { cn } from "@/lib/utils";
 
-import { bulkAssign, bulkDelete, bulkUpdateStatus } from "../actions";
+import { bulkAssign, bulkDelete, bulkUpdateStatus, restoreTask } from "../actions";
 import { TASK_PANEL } from "@/components/tasks/layout-ui";
 
 /**
@@ -120,6 +122,7 @@ export function TaskTable({
   const [isPending, startTransition] = useTransition();
   const [blockedPrompt, askReason] = useBlockedReason();
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
+  const [deleteConfirmEl, confirmDelete] = useConfirm();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -162,6 +165,31 @@ export function TaskTable({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+  }
+
+  async function deleteSelected() {
+    const ids = [...selected];
+    const n = ids.length;
+    const ok = await confirmDelete({
+      title: `Delete ${n} task${n === 1 ? "" : "s"}?`,
+      description: "Their subtasks go with them. You can undo this right after.",
+      confirmLabel: n === 1 ? "Delete task" : `Delete ${n} tasks`,
+      run: async () => (await bulkDelete(org.id, ids)).error,
+    });
+    if (!ok) return;
+    setSelected(new Set());
+    toast({
+      title: `${n} task${n === 1 ? "" : "s"} deleted`,
+      action: {
+        label: "Undo",
+        run: async () => {
+          for (const id of ids) {
+            const result = await restoreTask(org.id, id);
+            if (result.error) return result.error;
+          }
+        },
+      },
     });
   }
 
@@ -209,6 +237,7 @@ export function TaskTable({
     <div className="space-y-3">
       {blockedPrompt}
       {confirmElement}
+      {deleteConfirmEl}
       {selected.size > 0 && (
         <div
           role="toolbar"
@@ -244,7 +273,7 @@ export function TaskTable({
             size="sm"
             variant="destructive"
             disabled={isPending}
-            onClick={() => runBulk(() => bulkDelete(org.id, [...selected]))}
+            onClick={() => void deleteSelected()}
           >
             Delete
           </Button>

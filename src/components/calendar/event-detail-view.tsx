@@ -21,6 +21,8 @@ import { deleteEvent, rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import type { CalendarSyncState, RSVPStatus } from "@/generated/prisma/enums";
 
@@ -80,6 +82,7 @@ export function EventDetailView({
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(canEdit && startInEdit);
   const [isPending, startTransition] = useTransition();
+  const [confirmEl, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
 
   const myAttendance = event.attendees.find((a) => a.userId === currentUserId);
@@ -93,16 +96,16 @@ export function EventDetailView({
     });
   }
 
-  function handleDelete() {
-    if (!window.confirm(`Delete "${event.title}"? Invited members are told it was cancelled.`)) return;
-    startTransition(async () => {
-      const result = await deleteEvent(orgId, event.id);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      router.push(`/app/${orgSlug}/calendar`);
+  async function handleDelete() {
+    const ok = await confirm({
+      title: `Delete “${event.title}”?`,
+      description: "Invited members are told it was cancelled. It's removed from synced calendars and the public site too.",
+      confirmLabel: "Delete event",
+      run: async () => (await deleteEvent(orgId, event.id)).error,
     });
+    if (!ok) return;
+    toast({ title: "Event deleted", description: event.title });
+    router.push(`/app/${orgSlug}/calendar`);
   }
 
   function handleCreateMeetingNotes() {
@@ -116,6 +119,7 @@ export function EventDetailView({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      {confirmEl}
       <Link
         href={`/app/${orgSlug}/calendar`}
         className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm transition-colors"
@@ -144,7 +148,7 @@ export function EventDetailView({
               <Pencil aria-hidden className="size-4" />
               Edit
             </Button>
-            <Button variant="outline" size="icon" onClick={handleDelete} disabled={isPending} aria-label="Delete event">
+            <Button variant="outline" size="icon" onClick={() => void handleDelete()} disabled={isPending} aria-label="Delete event">
               <Trash2 className="size-4" />
             </Button>
           </div>

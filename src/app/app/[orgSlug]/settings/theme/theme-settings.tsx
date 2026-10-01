@@ -3,6 +3,7 @@
 import { Check, CheckCircle2, Palette, TriangleAlert } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   useDeferredValue,
@@ -47,6 +48,8 @@ import {
   type ThemeRoles,
 } from "@/lib/theme/types";
 import { cn } from "@/lib/utils";
+
+import { saveThemeStep } from "@/app/onboarding/profile/actions";
 
 import { resetOrgTheme, saveOrgTheme } from "./actions";
 import { ThemePreview } from "./theme-preview";
@@ -111,6 +114,7 @@ export function ThemeSettings({
   hasLogo,
   initial,
   isDefault,
+  personalThemeName = null,
 }: {
   orgId: string;
   orgSlug: string;
@@ -119,7 +123,13 @@ export function ThemeSettings({
   hasLogo: boolean;
   initial: ThemeDraft;
   isDefault: boolean;
+  /** The viewer's own theme, which is what they see instead of this one. */
+  personalThemeName?: string | null;
 }) {
+  const { setTheme } = useTheme();
+  const router = useRouter();
+  const [usingOwn, setUsingOwn] = useState(personalThemeName !== null);
+  const [switching, startSwitch] = useTransition();
   const [draft, setDraft] = useState<ThemeDraft>(initial);
   const [saved, setSaved] = useState<ThemeDraft>(initial);
   const [savedIsDefault, setSavedIsDefault] = useState(isDefault);
@@ -185,6 +195,9 @@ export function ThemeSettings({
         setSaved(stored);
         setSavedIsDefault(false);
         setPreviewApp(false);
+        // The admin sees the mode they just chose (a mode picked earlier
+        // from the user menu would otherwise keep winning in this browser).
+        if (!usingOwn) setTheme(draft.mode === "LIGHT" ? "light" : draft.mode === "DARK" ? "dark" : "system");
         const count = result.warnings.length;
         setStatus({
           kind: "ok",
@@ -427,6 +440,29 @@ export function ThemeSettings({
           </p>
         )}
         {!status && dirty && <p className="text-muted-foreground text-sm">Unsaved changes</p>}
+        {status?.kind === "ok" && usingOwn && (
+          <p className="text-warning flex flex-wrap items-center gap-2 text-sm">
+            Everyone else sees it now. You still see your own theme ({personalThemeName}).
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={switching}
+              onClick={() =>
+                startSwitch(async () => {
+                  const result = await saveThemeStep(null);
+                  if (!result.ok) return;
+                  setUsingOwn(false);
+                  setTheme(saved.mode === "LIGHT" ? "light" : saved.mode === "DARK" ? "dark" : "system");
+                  setStatus({ kind: "ok", text: "Saved. You see the club theme now too." });
+                  router.refresh();
+                })
+              }
+            >
+              Show me the club theme
+            </Button>
+          </p>
+        )}
       </div>
     </div>
   );

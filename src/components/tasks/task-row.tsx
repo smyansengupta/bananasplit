@@ -19,6 +19,7 @@ import {
   isTaskPrivate,
 } from "./task-badges";
 import { accessSubjectOf, useTasks } from "./tasks-context";
+import { TaskItemMenu } from "./task-item-menu";
 import type { TaskItem } from "./types";
 
 /**
@@ -147,6 +148,12 @@ export function TaskRow({
           path={`/tasks/${task.id}`}
           label={task.title}
           className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+        />
+        <TaskItemMenu
+          task={{ id: task.id, title: task.title, subtaskCount: task.subtasks.length }}
+          editable={editable}
+          onOpen={() => showTask(task)}
+          className="opacity-60 group-focus-within:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
         />
       </div>
     </li>

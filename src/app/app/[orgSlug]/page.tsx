@@ -36,6 +36,7 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listNoteFiles } from "@/server/notes/files";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import { listPins, listRecent } from "@/server/pins";
+import { listOpenPolls } from "@/server/polls/open-polls";
 import { loadSetupState } from "@/server/setup/progress";
 import { getMyOpenTasks, taskFilterWhere } from "@/server/tasks/queries";
 
@@ -107,12 +108,8 @@ export default async function OrgOverviewPage({ params, searchParams }: PageProp
       recent: await listRecent(db, org.id, org.slug, user.id, RECENT_LIMIT),
       notes: await getRecentNotes(db, org.id, user.id, 6),
       files: (await listNoteFiles(db, org.id)).slice(0, 6),
-      polls: await db.availabilityPoll.findMany({
-        where: { organizationId: org.id, finalizedEventId: null, OR: [{ closesAt: null }, { closesAt: { gt: now } }] },
-        select: { id: true, title: true, closesAt: true },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
+      // Questions and find-a-time polls still taking answers, newest first.
+      polls: await listOpenPolls(db, org.id, now, 5),
       people: await db.membership.findMany({
         where: { organizationId: org.id },
         select: {

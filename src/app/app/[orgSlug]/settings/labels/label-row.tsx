@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 
 import { deleteLabel, updateLabel } from "./actions";
@@ -21,6 +22,7 @@ export function LabelRow({
   const [name, setName] = useState(label.name);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [confirmEl, confirm] = useConfirm();
 
   function handleRename() {
     setError(null);
@@ -35,11 +37,20 @@ export function LabelRow({
     });
   }
 
-  function handleDelete() {
-    startTransition(async () => {
-      await deleteLabel(orgId, label.id);
-      router.refresh();
+  async function handleDelete() {
+    const ok = await confirm({
+      title: `Delete the label “${label.name}”?`,
+      description: "It comes off every task that has it. The tasks stay.",
+      confirmLabel: "Delete label",
+      run: async () => {
+        try {
+          await deleteLabel(orgId, label.id);
+        } catch {
+          return "Only owners and admins can delete labels.";
+        }
+      },
     });
+    if (ok) router.refresh();
   }
 
   return (
@@ -68,12 +79,13 @@ export function LabelRow({
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
             Rename
           </Button>
-          <Button size="sm" variant="outline" disabled={isPending} onClick={handleDelete}>
+          <Button size="sm" variant="outline" disabled={isPending} onClick={() => void handleDelete()}>
             Delete
           </Button>
         </>
       )}
       {error && <p className="text-destructive text-xs">{error}</p>}
+      {confirmEl}
     </div>
   );
 }

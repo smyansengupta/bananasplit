@@ -159,16 +159,30 @@ export async function searchPinnables(
     items: events.map((e) => ({ href: `${base}/calendar/${e.id}`, label: e.title, kind: "event" as const, detail: dateFmt.format(e.startsAt) })),
   });
 
-  const polls = await db.availabilityPoll.findMany({
+  // Both kinds of poll, newest first: find-a-time polls not yet scheduled,
+  // and question polls not closed by hand (or any, when searching).
+  const timePolls = await db.availabilityPoll.findMany({
     where: { organizationId: orgId, ...(contains ? { title: contains } : { finalizedEventId: null }) },
     orderBy: { createdAt: "desc" },
-    select: { id: true, title: true },
+    select: { id: true, title: true, createdAt: true },
     take: 4,
   });
+  const questionPolls = await db.poll.findMany({
+    where: { organizationId: orgId, ...(contains ? { question: contains } : { closedAt: null }) },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, question: true, createdAt: true },
+    take: 4,
+  });
+  const polls = [
+    ...timePolls.map((p) => ({ id: p.id, label: p.title, createdAt: p.createdAt, detail: "Find a time" })),
+    ...questionPolls.map((p) => ({ id: p.id, label: p.question, createdAt: p.createdAt, detail: "Question poll" })),
+  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   groups.push({
     id: "polls",
     label: "Polls",
-    items: polls.map((p) => ({ href: `${base}/calendar/polls/${p.id}`, label: p.title, kind: "event" as const, detail: "Poll" })),
+    items: polls
+      .slice(0, PER_KIND)
+      .map((p) => ({ href: `${base}/calendar/polls/${p.id}`, label: p.label, kind: "event" as const, detail: p.detail })),
   });
 
   const databases = await db.databaseDefinition.findMany({

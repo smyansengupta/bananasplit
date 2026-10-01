@@ -7,8 +7,11 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { importNote } from "@/app/app/[orgSlug]/notes/actions";
-import { removeNoteFileAction } from "@/app/app/[orgSlug]/notes/files-actions";
+import { removeNoteFileAction, restoreNoteFileAction } from "@/app/app/[orgSlug]/notes/files-actions";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toaster";
+import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
 import { noteSchemaExtensions } from "@/lib/notes/schema-extensions";
 
 /**
@@ -50,7 +53,7 @@ export function FileActions({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [confirmEl, confirm] = useConfirm();
 
   function makeNote() {
     if (noteHtml == null) return;
@@ -68,15 +71,27 @@ export function FileActions({
     });
   }
 
-  function remove() {
-    start(async () => {
-      setError(null);
-      const result = await removeNoteFileAction(orgId, fileId);
-      if (result.error) setError(result.error);
-      else {
-        router.push(`/app/${orgSlug}/notes?tab=files`);
-        router.refresh();
-      }
+  async function remove() {
+    const ok = await confirm({
+      title: `Delete “${name}”?`,
+      description: `It moves to Recently deleted in Notes for ${NOTE_TRASH_DAYS} days, so you can bring it back. Links to it stop working until then.`,
+      confirmLabel: "Delete file",
+      run: async () => (await removeNoteFileAction(orgId, fileId)).error,
+    });
+    if (!ok) return;
+    router.push(`/app/${orgSlug}/notes?tab=files`);
+    router.refresh();
+    toast({
+      title: "File deleted",
+      description: name,
+      action: {
+        label: "Undo",
+        run: async () => {
+          const result = await restoreNoteFileAction(orgId, fileId);
+          if (result.error) return result.error;
+          router.push(`/app/${orgSlug}/notes/files/${fileId}`);
+        },
+      },
     });
   }
 
@@ -94,22 +109,20 @@ export function FileActions({
           Download
         </a>
       </Button>
-      {canRemove &&
-        (confirming ? (
-          <>
-            <Button type="button" variant="destructive" size="sm" disabled={pending} onClick={remove}>
-              Remove for everyone
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-              Keep it
-            </Button>
-          </>
-        ) : (
-          <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => setConfirming(true)}>
-            <Trash2 className="size-4" aria-hidden="true" />
-            Remove
-          </Button>
-        ))}
+      {canRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-destructive"
+          disabled={pending}
+          onClick={() => void remove()}
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+          Delete
+        </Button>
+      )}
+      {confirmEl}
       {error && (
         <p role="alert" className="text-destructive w-full text-sm">
           {error}

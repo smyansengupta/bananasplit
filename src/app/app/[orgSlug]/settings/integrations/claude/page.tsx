@@ -18,7 +18,7 @@ export default async function ClaudeIntegrationPage({
       <IntegrationHeader
         orgSlug={orgSlug}
         title="Claude API"
-        description="Optional. The org chart importer reads most documents itself, for nothing; a key is the backup for a document it cannot make sense of, and for PDFs. Usage is billed to your Anthropic account."
+        description="Optional. Your club's own Claude key powers the AI imports (a pasted list of action items into tasks, a calendar screenshot into events) and backs up the org chart importer for documents it can't read itself. Usage is billed to your Anthropic account."
       />
       <StatusPanel dto={dto} secretLabel="API key" />
       <ClaudeForm orgId={organization.id} dto={dto} canWrite={canWrite} />

@@ -21,7 +21,18 @@ describe("describePath", () => {
       type: "database",
       key: "sessions",
     });
-    expect(describePath("cbc", "/app/cbc/calendar/polls/p_1")?.lookup).toEqual({ type: "poll", id: "p_1" });
+    // Either kind of poll: the server looks the id up in both tables.
+    expect(describePath("cbc", "/app/cbc/calendar/polls/p_1")).toMatchObject({
+      kind: "event",
+      lookup: { type: "poll", id: "p_1" },
+    });
+    // The forms that start one are pages, not polls.
+    expect(describePath("cbc", "/app/cbc/calendar/polls/ask")).toEqual({
+      href: "/app/cbc/calendar/polls/ask",
+      kind: "page",
+      label: "Ask a question",
+    });
+    expect(describePath("cbc", "/app/cbc/calendar/polls/new")?.lookup).toBeUndefined();
     expect(describePath("cbc", "/app/cbc/people/u_1")?.kind).toBe("person");
   });
 
