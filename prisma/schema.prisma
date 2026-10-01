@@ -1447,6 +1447,8 @@ enum IntegrationProvider {
   EMAIL_RESEND
   SUPABASE_SOURCE
   NETLIFY_BUILD_HOOK
+  /// An OpenAI-compatible model API at a fixed vendor address (src/lib/ai/vendors.ts).
+  OPENAI_COMPATIBLE
 }
 
 enum IntegrationStatus {

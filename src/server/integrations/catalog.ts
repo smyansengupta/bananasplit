@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { IntegrationProvider, IntegrationStatus } from "@/generated/prisma/enums";
+import { AI_MODEL_ID_PATTERN, AI_VENDOR_IDS } from "@/lib/ai/vendors";
 
 /**
  * The org integrations (Settings > Integrations): what each one stores as
@@ -11,7 +12,7 @@ import type { IntegrationProvider, IntegrationStatus } from "@/generated/prisma/
  */
 
 // The model list, prices and per-model request rules live with the org
-// chart, which is the only feature that calls Claude (B3 owns
+// chart, which first called Claude (the AI imports use the same key; B3 owns
 // src/lib/org-chart/**). Haiku 4.5 is the default: the built-in parser
 // reads most documents, so Claude only has to handle the awkward ones.
 export { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL } from "@/lib/org-chart/models";
@@ -27,6 +28,15 @@ import { CLAUDE_MODELS as MODELS, DEFAULT_CLAUDE_MODEL as DEFAULT_MODEL } from "
 export const claudeConfigSchema = z.object({
   model: z.enum(MODELS.map((m) => m.id) as [string, ...string[]]).default(DEFAULT_MODEL),
   fallbacks: z.boolean().default(true),
+});
+
+/**
+ * OrgIntegration.config for OPENAI_COMPATIBLE: which vendor (a fixed
+ * address from src/lib/ai/vendors.ts, never a URL) and which of its models.
+ */
+export const aiModelConfigSchema = z.object({
+  vendor: z.enum(AI_VENDOR_IDS),
+  model: z.string().trim().regex(AI_MODEL_ID_PATTERN, "Enter the model id exactly as your provider lists it."),
 });
 
 export const emailSenderConfigSchema = z.object({
@@ -131,6 +141,14 @@ export const PROVIDERS: readonly ProviderInfo[] = [
     description: "Optional backup reader for org-chart imports the portal cannot parse itself.",
     secretKind: "API_KEY",
     configKeys: ["model", "fallbacks"],
+  },
+  {
+    provider: "OPENAI_COMPATIBLE",
+    segment: "ai-model",
+    label: "Other AI models",
+    description: "OpenAI, Gemini, OpenRouter and other model APIs, for the AI imports.",
+    secretKind: "API_KEY",
+    configKeys: ["vendor", "model"],
   },
   {
     provider: "GOOGLE_CALENDAR",

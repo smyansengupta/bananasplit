@@ -2,7 +2,7 @@
 
 import type { JSONContent } from "@tiptap/react";
 import { formatDistanceToNow } from "date-fns";
-import { Check, CloudOff, History, Link2, Loader2, RotateCcw, Trash2 } from "lucide-react";
+import { Check, CloudOff, History, Link2, ListChecks, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
@@ -13,6 +13,7 @@ import {
   restoreNote,
   type NoteDetailsInput,
 } from "@/app/app/[orgSlug]/notes/actions";
+import { ActionItemsImport } from "@/components/ai/action-items-import";
 import { ItemMenu } from "@/components/item-menu";
 import { PresenceBar } from "@/components/notes/collab/presence-bar";
 import { useNoteCollab, type NoteCollabState } from "@/components/notes/collab/use-note-collab";
@@ -89,6 +90,8 @@ export function NoteEditorShell({
   // Once this visit writes its own backup, the one found on arrival is stale.
   const [wroteBackup, setWroteBackup] = useState(false);
   const [confirmEl, confirm] = useConfirm();
+  // "Make tasks from this note": the note's text at the moment it's opened.
+  const [importText, setImportText] = useState<string | null>(null);
 
   const session = useNoteCollab({ orgId, noteId: note.id, initial: collab });
   // The collaborative editor, once joined (it stays, read-only, if the
@@ -328,6 +331,17 @@ export function NoteEditorShell({
           <ItemMenu
             label="More note actions"
             items={[
+              {
+                label: "Make tasks from this note",
+                icon: ListChecks,
+                onSelect: () =>
+                  setImportText(
+                    [title.trim(), live ? note.contentText : contentRef.current.text]
+                      .filter(Boolean)
+                      .join("\n\n")
+                      .slice(0, 20_000),
+                  ),
+              },
               { label: "Copy link", icon: Link2, onSelect: copyLink },
               canEdit && { label: "Delete note", icon: Trash2, destructive: true, onSelect: () => void remove() },
             ]}
@@ -374,6 +388,16 @@ export function NoteEditorShell({
         />
       )}
       {confirmEl}
+      {importText !== null && (
+        <ActionItemsImport
+          orgId={orgId}
+          orgSlug={orgSlug}
+          open
+          onOpenChange={(o) => !o && setImportText(null)}
+          initialText={importText}
+          sourceLabel="this note"
+        />
+      )}
     </div>
   );
 }

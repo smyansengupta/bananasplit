@@ -8,6 +8,7 @@ vi.mock("@/server/db/context", async () =>
 
 import { toIntegrationDto } from "./catalog";
 import {
+  aiModelConnectionTest,
   clients,
   isNetlifyHookUrl,
   claudeConnectionTest,
@@ -23,6 +24,43 @@ const ctx = (secret: string | null, config: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => vi.restoreAllMocks());
+
+describe("Other AI models test (GET /models at the vendor's fixed address)", () => {
+  const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+
+  it("calls only the vendor's own host, with the key, and checks the model is listed", async () => {
+    const fetchMock = vi.spyOn(clients, "fetch").mockResolvedValue(ok({ data: [{ id: "gpt-4.1-mini" }, { id: "gpt-4.1" }] }));
+    const r = await aiModelConnectionTest(ctx("sk-openai-key-1234567", { vendor: "openai", model: "gpt-4.1-mini" }));
+    expect(r).toMatchObject({ ok: true, config: { vendor: "openai", model: "gpt-4.1-mini" } });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.openai.com/v1/models");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer sk-openai-key-1234567");
+    expect(init.redirect).toBe("error");
+  });
+
+  it("matches Gemini's models/ prefix, and reports a model the key can't see", async () => {
+    vi.spyOn(clients, "fetch").mockImplementation(async () => ok({ data: [{ id: "models/gemini-2.5-flash" }] }));
+    expect(await aiModelConnectionTest(ctx("AIza-test-key-1234567", { vendor: "gemini", model: "gemini-2.5-flash" }))).toMatchObject({
+      ok: true,
+    });
+    const missing = await aiModelConnectionTest(ctx("AIza-test-key-1234567", { vendor: "gemini", model: "gemini-9" }));
+    expect(missing).toMatchObject({ ok: false });
+    expect(missing.ok ? "" : missing.reason).toMatch(/doesn't list gemini-9/);
+  });
+
+  it("checks an OpenRouter key at /key, and refuses an unknown vendor or a rejected key", async () => {
+    const fetchMock = vi.spyOn(clients, "fetch").mockResolvedValue(ok({ data: { label: "x" } }));
+    await aiModelConnectionTest(ctx("sk-or-key-12345678901", { vendor: "openrouter", model: "openai/gpt-4.1" }));
+    expect(fetchMock.mock.calls[0][0]).toBe("https://openrouter.ai/api/v1/key");
+    expect(await aiModelConnectionTest(ctx("k".repeat(20), { vendor: "https://evil.example", model: "x" }))).toMatchObject({
+      ok: false,
+      reason: "Pick a provider first.",
+    });
+    fetchMock.mockResolvedValue(new Response("{}", { status: 401 }));
+    const bad = await aiModelConnectionTest(ctx("k".repeat(20), { vendor: "groq", model: "x" }));
+    expect(bad.ok ? "" : bad.reason).toMatch(/rejected this API key/);
+  });
+});
 
 describe("Claude test (models.list)", () => {
   function models(ids: string[]) {

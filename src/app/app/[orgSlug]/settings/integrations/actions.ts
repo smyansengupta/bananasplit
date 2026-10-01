@@ -8,6 +8,7 @@ import {
   disconnectGoogle,
   removeProvider,
   resolveActor,
+  saveAiModel,
   saveClaude,
   saveEmailSender,
   saveGoogleCalendars,
@@ -75,6 +76,16 @@ async function run(
 
 export async function saveClaudeAction(orgId: string, input: z.input<typeof claudeInput>) {
   return run(orgId, (actor) => saveClaude(orgId, actor, claudeInput.parse(input)));
+}
+
+const aiModelInput = z.object({
+  apiKey: z.string().max(600).optional(),
+  vendor: z.string().max(40).optional(),
+  model: z.string().max(200).optional(),
+});
+
+export async function saveAiModelAction(orgId: string, input: z.input<typeof aiModelInput>) {
+  return run(orgId, (actor) => saveAiModel(orgId, actor, aiModelInput.parse(input)));
 }
 
 export async function saveEmailSenderAction(orgId: string, input: z.input<typeof emailInput>) {
