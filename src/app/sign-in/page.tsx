@@ -20,6 +20,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   AccessDenied:
     "Google didn't confirm that your email address is verified, so we couldn't sign you in with it. Verify the address with Google, or sign in with your email and password.",
   Verification: "That sign-in link is no longer valid.",
+  SessionEnded: "You were signed out because that account no longer exists here. Sign in again.",
 };
 
 export default async function SignInPage({ searchParams }: PageProps<"/sign-in">) {

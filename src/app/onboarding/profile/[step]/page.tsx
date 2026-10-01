@@ -75,7 +75,7 @@ export default async function ProfileStepPage({ params }: PageProps<"/onboarding
   if (!isProfileStep(step)) notFound();
   const user = await requireUser();
   const profile = await getOnboardingProfile(user.id);
-  if (!profile) redirect("/sign-in");
+  if (!profile) redirect("/auth/session-ended");
 
   const index = PROFILE_STEPS.indexOf(step) + 1;
   const meta = META[step];
