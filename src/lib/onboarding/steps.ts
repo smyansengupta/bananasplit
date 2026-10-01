@@ -164,9 +164,13 @@ export function detectLinkKind(url: string): LinkKind {
   return "website";
 }
 
-/** The next four graduation years, starting with this academic year's. */
-export function gradYearChoices(now = new Date()): number[] {
-  // After June, this year's seniors have graduated.
+/**
+ * The next `count` graduation years, starting with this academic year's, so
+ * a year that has already graduated never shows. Worked out from the date
+ * (never a fixed list), so it moves on by itself every July.
+ */
+export function gradYearChoices(now = new Date(), count = 4): number[] {
+  // From July, this year's seniors have graduated.
   const first = now.getUTCMonth() >= 6 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
-  return [first, first + 1, first + 2, first + 3];
+  return Array.from({ length: count }, (_, i) => first + i);
 }

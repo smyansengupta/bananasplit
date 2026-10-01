@@ -15,10 +15,10 @@ import { cn } from "@/lib/utils";
 
 export function OnboardingFrame({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   return (
-    <div className="relative flex min-h-svh flex-1 flex-col items-center px-4 pt-14 pb-10 sm:py-16">
+    <div className="relative flex min-h-svh flex-1 flex-col items-center justify-center px-4 pt-14 pb-10 sm:py-16">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
+        className="pointer-events-none absolute inset-0 opacity-70 [mask-image:radial-gradient(ellipse_at_center,black_35%,transparent_80%)]"
         style={{
           backgroundImage: "radial-gradient(var(--border) 1px, transparent 1px)",
           backgroundSize: "22px 22px",

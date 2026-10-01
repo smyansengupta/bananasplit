@@ -19,6 +19,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { dueDateKey } from "@/lib/tasks/dates";
 import { cn } from "@/lib/utils";
 import type { TeamLane, TeamView as TeamViewData } from "@/server/tasks/team";
+import { TASK_PANEL } from "@/components/tasks/layout-ui";
 
 const LANE_PREVIEW = 6;
 
@@ -156,7 +157,7 @@ function Lane({ lane, todayKey }: { lane: TeamLane; todayKey: string }) {
 
   return (
     <section
-      className="group/lane bg-card overflow-hidden rounded-lg border"
+      className={cn("group/lane", TASK_PANEL)}
       style={{ marginInlineStart: `min(${lane.depth * 1.25}rem, 10vw)` }}
       aria-label={`${lane.personName ?? "Open position"}${lane.positionTitle ? `, ${lane.positionTitle}` : ""}`}
     >

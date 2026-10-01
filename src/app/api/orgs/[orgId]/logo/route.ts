@@ -13,6 +13,7 @@ import {
   storeImage,
   type StoredImage,
 } from "@/server/images";
+import { STORAGE_NOT_SET_UP, StorageConfigError } from "@/server/storage";
 import { readUpload, uploadErrorResponse } from "@/server/storage/upload";
 import { isCrossSite } from "@/lib/http/cross-site";
 
@@ -98,6 +99,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     stored = await storeImage("logos", orgId, "logo", upload.file.bytes);
   } catch (error) {
     if (error instanceof ImageRejectedError) return json(415, { error: error.message });
+    if (error instanceof StorageConfigError) {
+      console.error("[logo] storage not configured:", error.message);
+      return json(503, { error: STORAGE_NOT_SET_UP });
+    }
     throw error;
   }
 

@@ -39,7 +39,7 @@ export type ImportDecision =
   | { action: "create"; google: ImportedEvent }
   | { action: "skip"; google: ImportedEvent; reason: string };
 
-const STOP = new Set(["the", "a", "an", "and", "of", "to", "for", "with", "on", "at", "in", "cbc", "claude", "builders", "club"]);
+const STOP = new Set(["the", "a", "an", "and", "of", "to", "for", "with", "on", "at", "in", "club"]);
 
 export function titleTokens(title: string): string[] {
   return title

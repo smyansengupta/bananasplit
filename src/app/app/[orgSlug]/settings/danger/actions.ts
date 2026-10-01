@@ -3,6 +3,9 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { getUserIdentity } from "@/lib/auth/email-verification";
+import { isPlatformAdmin } from "@/lib/auth/org-creation";
+import { requireUser } from "@/lib/auth/session";
 import { withOrgAction } from "@/server/db/context";
 import { requestOrgExport } from "@/server/export/service";
 import { bootstrapCbcWorkspace } from "@/server/settings/bootstrap";
@@ -21,9 +24,21 @@ export const requestExportAction = withOrgAction(
   },
 );
 
-export const bootstrapCbcAction = withOrgAction(async (ctx, mapping: Record<string, string>) =>
+const bootstrapInOrg = withOrgAction(async (ctx, mapping: Record<string, string>) =>
   bootstrapCbcWorkspace(ctx, mapping),
 );
+
+/** The CBC template is for the platform's own club: platform admins only. */
+export async function bootstrapCbcAction(
+  organizationId: string,
+  mapping: Record<string, string>,
+): Promise<{ error?: string; chartVersionId?: string }> {
+  const user = await requireUser();
+  if (!isPlatformAdmin(await getUserIdentity(user.id))) {
+    return { error: "Only platform admins can apply this template." };
+  }
+  return bootstrapInOrg(organizationId, mapping);
+}
 
 export const scheduleDeletionAction = withOrgAction(
   async (ctx, confirmSlug: string): Promise<{ error?: string }> => {

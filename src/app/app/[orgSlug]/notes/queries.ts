@@ -32,21 +32,48 @@ export function getNotesForList(
   db: TxClient,
   organizationId: string,
   userId: string,
-  filters: { visibility?: "PRIVATE" | "ORGANIZATION"; authorId?: string } = {},
+  filters: {
+    visibility?: "PRIVATE" | "ORGANIZATION";
+    authorId?: string;
+    /** A folder id, or "none" for notes in no folder. */
+    folderId?: string;
+    q?: string;
+    sort?: NoteSort;
+  } = {},
 ) {
+  const q = filters.q?.trim().slice(0, 100);
   return db.note.findMany({
     where: {
-      organizationId,
-      deletedAt: null,
-      ...visibleToUser(userId),
-      ...(filters.visibility ? { visibility: filters.visibility } : {}),
-      ...(filters.authorId ? { authorId: filters.authorId } : {}),
+      AND: [
+        { organizationId, deletedAt: null },
+        visibleToUser(userId),
+        filters.visibility ? { visibility: filters.visibility } : {},
+        filters.authorId ? { authorId: filters.authorId } : {},
+        filters.folderId ? { folderId: filters.folderId === "none" ? null : filters.folderId } : {},
+        q
+          ? {
+              OR: [
+                { title: { contains: q, mode: "insensitive" } },
+                { contentText: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {},
+      ],
     },
     include: noteListInclude,
     omit: noteListOmit,
-    orderBy: { updatedAt: "desc" },
+    orderBy:
+      filters.sort === "title"
+        ? { title: "asc" }
+        : filters.sort === "created"
+          ? { createdAt: "desc" }
+          : { updatedAt: "desc" },
+    take: 300,
   });
 }
+
+export const NOTE_SORTS = ["edited", "created", "title"] as const;
+export type NoteSort = (typeof NOTE_SORTS)[number];
 
 /** The overview's most recently edited notes the viewer may read. */
 export function getRecentNotes(

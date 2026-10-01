@@ -7,6 +7,8 @@ import {
   cspMode,
   REPORTING_ENDPOINTS_HEADER,
   STATIC_CSP_SOURCE,
+  FRAME_DENY_HEADER,
+  NOT_FRAMABLE_SOURCE,
   STATIC_SECURITY_HEADERS,
 } from "./src/lib/security/csp";
 
@@ -18,6 +20,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: STATIC_SECURITY_HEADERS },
+      // Every path but the Notes files route (its PDFs preview in a same-origin frame).
+      { source: NOT_FRAMABLE_SOURCE, headers: [FRAME_DENY_HEADER] },
       {
         source: STATIC_CSP_SOURCE,
         headers: [

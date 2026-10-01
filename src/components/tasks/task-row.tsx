@@ -2,6 +2,7 @@
 
 import { ListChecks, MessageSquare } from "lucide-react";
 
+import { PinToggle } from "@/components/pins/pins-context";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { canEditTask } from "@/lib/tasks/access";
@@ -142,6 +143,11 @@ export function TaskRow({
             </span>
           ))}
         <QuickStatus task={task} disabled={!editable} quiet className="hidden md:flex" />
+        <PinToggle
+          path={`/tasks/${task.id}`}
+          label={task.title}
+          className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+        />
       </div>
     </li>
   );

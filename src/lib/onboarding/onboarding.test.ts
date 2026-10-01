@@ -285,3 +285,21 @@ describe("per-IP sign-up and sign-in limits", () => {
     expect(signInPerIpLimit({ SIGNIN_LIMIT_PER_IP_15MIN: "999999" })).toBe(2000);
   });
 });
+
+describe("major suggestions and graduation years", () => {
+  it("suggests majors that start with, then contain, what was typed", async () => {
+    const { suggestMajors } = await import("./majors");
+    expect(suggestMajors("comp")[0]).toBe("Comparative Literature");
+    expect(suggestMajors("comp")).toContain("Computer Science");
+    expect(suggestMajors("science")).toContain("Data Science");
+    expect(suggestMajors("")).toEqual([]);
+    expect(suggestMajors("Computer Science")).not.toContain("Computer Science");
+  });
+
+  it("never offers a year that has already graduated", async () => {
+    const { gradYearChoices } = await import("./steps");
+    expect(gradYearChoices(new Date(Date.UTC(2027, 3, 1)))).toEqual([2027, 2028, 2029, 2030]);
+    expect(gradYearChoices(new Date(Date.UTC(2027, 7, 1)))).toEqual([2028, 2029, 2030, 2031]);
+    expect(gradYearChoices(new Date(Date.UTC(2027, 7, 1)), 8)).toHaveLength(8);
+  });
+});

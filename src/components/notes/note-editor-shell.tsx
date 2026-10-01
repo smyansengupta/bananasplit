@@ -141,7 +141,7 @@ export function NoteEditorShell({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="mx-auto max-w-5xl space-y-4">
       {status === "conflict" && (
         <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
           <span>This note was updated by someone else — reload to see the latest version.</span>

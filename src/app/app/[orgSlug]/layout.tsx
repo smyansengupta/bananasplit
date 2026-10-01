@@ -2,15 +2,19 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { navSections, settingsLink } from "@/components/shell/nav-config";
 import type { OrgSummary } from "@/components/shell/types";
 import { OrgBrand } from "@/components/theme/org-brand";
 import { OrgThemeRoot } from "@/components/theme/org-theme-root";
 import { CALLBACK_HEADER } from "@/lib/auth/callback-url";
+import { can } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
+import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { listPins } from "@/server/pins";
 import { getShellUser, getViewerPrefs } from "@/server/profiles/queries";
 import { findPendingDeletionOrg } from "@/server/settings/deletion";
 
@@ -95,6 +99,9 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   // (React cache()), resolved and re-validated as strict hex before render;
   // the member's personal theme (profile setup A4) goes on top of it.
   const theme = applyPersonalTheme(resolveTheme(ctx.theme), parsePersonalTheme(prefs.themePreference));
+  const pins = await withOrgTx(ctx.organization.id, ({ db }) =>
+    listPins(db, ctx.organization.id, ctx.organization.slug, ctx.user.id),
+  );
 
   return (
     <OrgThemeRoot key={ctx.organization.id} theme={theme}>
@@ -103,6 +110,13 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         orgId={ctx.organization.id}
         orgs={orgs}
         user={shellUser}
+        pins={pins}
+        sections={navSections(ctx.organization.slug, visibleSidebar(ctx.settings?.sidebar))}
+        settings={settingsLink(ctx.organization.slug)}
+        sectionPaths={resolveSidebar(ctx.settings?.sidebar)
+          .flatMap((g) => g.items)
+          .map((i) => ({ path: i.path, hidden: i.hidden }))}
+        isAdmin={can({ role: ctx.role }, "settings.view")}
         brand={
           <OrgBrand
             name={ctx.organization.name}

@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus, ReceiptText } from "lucide-react";
 import { useState } from "react";
 
 import type { TransactionWithRelations } from "@/app/app/[orgSlug]/finance/queries";
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 import { TransactionDialog } from "./transaction-dialog";
 import { TransactionStatusBadge } from "./transaction-status-badge";
+import { EmptyState } from "@/components/empty-state";
 
 export function TransactionTable({
   orgId,
@@ -38,7 +40,13 @@ export function TransactionTable({
   const selected = transactions.find((t) => t.id === openId) ?? null;
 
   if (transactions.length === 0) {
-    return <p className="text-muted-foreground text-sm">No transactions match these filters.</p>;
+    return (
+      <EmptyState
+        icon={ReceiptText}
+        title="No transactions here"
+        description="Nothing matches these filters yet. Use “Add transaction” to record money in or out: an expense, a sponsorship, dues or other income."
+      />
+    );
   }
 
   return (
@@ -114,7 +122,8 @@ export function NewTransactionButton({
   return (
     <>
       <Button type="button" onClick={() => setOpen(true)}>
-        New transaction
+        <Plus className="size-4" aria-hidden="true" />
+        Add transaction
       </Button>
       <TransactionDialog
         orgId={orgId}

@@ -41,15 +41,15 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await page.getByRole("button", { name: "Join", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}$`));
 
-  // Baseline: nothing owed yet.
-  await page.goto(`/app/${orgSlug}`);
+  // Baseline: nothing owed yet (My reimbursements carries the total).
+  await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
   await expect(
     page.getByText("Money owed to you", { exact: true }).locator("..").first(),
   ).toContainText("$0.00");
 
   // --- member submits an expense with a receipt ---
   await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
-  await page.getByRole("button", { name: "New transaction" }).click();
+  await page.getByRole("button", { name: "Add transaction" }).click();
   await page.getByLabel("Description").fill(expenseDescription);
   await page.getByLabel("Amount").fill("42.50");
   await page.getByRole("button", { name: "Create", exact: true }).click();
@@ -72,7 +72,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await expect(page.getByRole("dialog").getByText("Submitted", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).first().click();
 
-  await page.goto(`/app/${orgSlug}`);
+  await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
   await expect(
     page.getByText("Money owed to you", { exact: true }).locator("..").first(),
   ).toContainText("$42.50");
@@ -107,7 +107,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   // --- the submitter's "owed to you" clears back to zero ---
   await signOut(page);
   await signIn(page, member);
-  await page.goto(`/app/${orgSlug}`);
+  await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
   await expect(
     page.getByText("Money owed to you", { exact: true }).locator("..").first(),
   ).toContainText("$0.00");

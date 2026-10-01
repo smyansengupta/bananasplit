@@ -13,7 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import type { PersonalTheme } from "@/lib/theme/personal";
 
-/** Profile > Theme: the personal theme from onboarding A4, editable. */
+/**
+ * Profile > Theme: the personal theme from onboarding A4, editable. "Match
+ * my club" saves NULL, so the org's theme (Settings > Theme) shows again.
+ */
 export function ThemeForm({ initial }: { initial: PersonalTheme | null }) {
   const router = useRouter();
   const { setTheme } = useTheme();
@@ -45,11 +48,6 @@ export function ThemeForm({ initial }: { initial: PersonalTheme | null }) {
         <Button type="button" onClick={() => save(toPersonalTheme(choice))} disabled={pending}>
           {pending ? "Saving…" : "Save theme"}
         </Button>
-        {initial && (
-          <Button type="button" variant="ghost" onClick={() => save(null)} disabled={pending}>
-            Use the organization&apos;s theme
-          </Button>
-        )}
         <span
           aria-live="polite"
           className={

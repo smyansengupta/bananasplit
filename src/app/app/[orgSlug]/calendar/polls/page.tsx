@@ -2,6 +2,7 @@ import { ArrowLeft, CalendarRange, ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
+import { PinToggle } from "@/components/pins/pins-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { safeTimeZone } from "@/lib/calendar/dates";
@@ -102,7 +103,12 @@ function PollSection({
       ) : (
         <ul className="divide-border bg-card divide-y rounded-lg border">
           {polls.map((poll) => (
-            <li key={poll.id}>
+            <li key={poll.id} className="group relative">
+              <PinToggle
+                href={`/app/${orgSlug}/calendar/polls/${poll.id}`}
+                label={poll.title}
+                className="absolute top-1/2 right-10 z-10 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              />
               <Link
                 href={`/app/${orgSlug}/calendar/polls/${poll.id}`}
                 className="hover:bg-muted/50 focus-visible:ring-ring/50 flex items-center gap-3 px-4 py-3 transition-colors outline-none first:rounded-t-lg last:rounded-b-lg focus-visible:ring-3 focus-visible:ring-inset"

@@ -23,6 +23,7 @@ export function StepPanel({
   view,
   nextStep,
   googleConfigured,
+  embedded = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -30,6 +31,8 @@ export function StepPanel({
   view: SetupStepView;
   nextStep: SetupStepId | null;
   googleConfigured: boolean;
+  /** Shown inside another page (Databases): no skip controls, no page header size. */
+  embedded?: boolean;
 }) {
   const step = setupStep(view.id);
   const reconnecting = view.status === "error" || view.status === "needs_reauth";
@@ -120,12 +123,12 @@ export function StepPanel({
       </PanelSection>
 
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-4">
-        {view.status === "skipped" ? (
+        {embedded ? null : view.status === "skipped" ? (
           <ResumeButton orgId={orgId} step={view.id} />
         ) : (
           <SkipButton orgId={orgId} orgSlug={orgSlug} step={view.id} nextStep={nextStep} />
         )}
-        <p className="text-muted-foreground max-w-md text-xs">{step.ifSkipped}</p>
+        {!embedded && <p className="text-muted-foreground max-w-md text-xs">{step.ifSkipped}</p>}
         <Link
           href={`/app/${orgSlug}/settings/integrations/${step.settingsSegment}`}
           className="text-muted-foreground ml-auto text-xs underline-offset-4 hover:underline"

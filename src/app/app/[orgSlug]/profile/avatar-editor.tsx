@@ -14,10 +14,10 @@ import {
   cropToSquare,
   MAX_SOURCE_BYTES,
   type PixelArea,
-} from "./crop-image";
+} from "@/components/images/crop-image";
 
 // react-easy-crop loads only when someone picks a file (or hovers the button).
-const loadCropDialog = () => import("./avatar-crop-dialog");
+const loadCropDialog = () => import("@/components/images/crop-dialog");
 const AvatarCropDialog = dynamic(loadCropDialog, { ssr: false });
 
 type Status = { kind: "idle" } | { kind: "saved"; message: string } | { kind: "error"; message: string };

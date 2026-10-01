@@ -42,7 +42,8 @@ export const DEFAULT_PRESET: ThemePreset = {
 };
 
 /**
- * Claude Builders Club, from the club website's design system
+ * "Paper & Coral" (id "cbc", kept so saved themes still resolve): first made
+ * for Claude Builders Club, from the club website's design system
  * (anthropic-club-website/DESIGN.md, "The Marked Page"): warm paper, near-black
  * ink, Burnt Terracotta for every readable coral (5.58:1 on paper) and Claude
  * Coral as a fill only (2.96:1 on paper, never text). In dark mode the coral
@@ -51,7 +52,7 @@ export const DEFAULT_PRESET: ThemePreset = {
  */
 export const CBC_PRESET: ThemePreset = {
   id: "cbc",
-  name: "Claude Builders Club",
+  name: "Paper & Coral",
   description: "Warm paper, ink text, terracotta links and a coral highlighter.",
   light: {
     primary: "#a34a2a",
@@ -127,6 +128,44 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
       background: "#120e1a",
       surface: "#1b1527",
       text: "#f2edf9",
+    },
+  },
+  {
+    id: "sunset",
+    name: "Sunset",
+    description: "Burnt orange on warm cream, with a golden accent.",
+    light: {
+      primary: "#b43c0c",
+      accent: "#f2a93b",
+      background: "#fdf8f3",
+      surface: "#ffffff",
+      text: "#24150d",
+    },
+    dark: {
+      primary: "#ff9a62",
+      accent: "#f6c05c",
+      background: "#16100c",
+      surface: "#221913",
+      text: "#f8ede4",
+    },
+  },
+  {
+    id: "midnight",
+    name: "Midnight",
+    description: "Indigo on a crisp page, with a teal accent. Best in dark.",
+    light: {
+      primary: "#4338ca",
+      accent: "#14b8a6",
+      background: "#f7f7fc",
+      surface: "#ffffff",
+      text: "#111127",
+    },
+    dark: {
+      primary: "#a5b4fc",
+      accent: "#2dd4bf",
+      background: "#090a18",
+      surface: "#121429",
+      text: "#e8e9fb",
     },
   },
 ];

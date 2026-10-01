@@ -27,7 +27,7 @@ export const TITLE_SIMILARITY_THRESHOLD = 0.8;
 
 const STOP_WORDS = new Set([
   "a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "with",
-  "cbc", "session", "sessions",
+  "club", "session", "sessions",
 ]);
 
 /** Lower-case word tokens of a title, without punctuation and stop words. */

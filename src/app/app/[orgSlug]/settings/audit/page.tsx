@@ -59,7 +59,8 @@ const ACTION_COPY: Record<string, string> = {
   "export.ready": "data export finished",
   "export.downloaded": "downloaded a data export",
   "export.expired": "data export expired",
-  "workspace.bootstrapped": "bootstrapped the CBC workspace",
+  "workspace.bootstrapped": "applied a workspace template",
+  "settings.sidebar.updated": "changed the sidebar",
   "label.created": "created a label",
   "label.deleted": "deleted a label",
 };

@@ -42,6 +42,10 @@ export {
 } from "./kinds";
 export { StorageConfigError, blobStoreIdFromToken, type StoredBlob } from "./drivers";
 
+/** What an upload route tells the user when no Blob store is configured. */
+export const STORAGE_NOT_SET_UP =
+  "File storage isn't set up on this server yet, so this can't be saved. Ask whoever runs Bananasplit to add a Vercel Blob store.";
+
 /** A random, URL-safe id for immutable keys. */
 export function randomKeyId(bytes = 12): string {
   return randomBytes(bytes).toString("base64url");

@@ -90,6 +90,11 @@ model User {
   notificationsActed     Notification[]     @relation("NotificationActor")
   createdJoinCodes       OrgJoinCode[]      @relation("OrgJoinCodeCreatedBy")
   availability           UserAvailability?
+  pins                   Pin[]
+  recentVisits           RecentVisit[]
+  memberPrefs            MemberPrefs[]
+  uploadedFiles          OrgFile[]          @relation("OrgFileUploadedBy")
+  noteFolders            NoteFolder[]       @relation("NoteFolderCreatedBy")
 }
 
 /// When a user can't meet (profile setup A5, the profile page). Its own
@@ -106,6 +111,113 @@ model UserAvailability {
   updatedAt DateTime @default(now()) @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A member's pinned page, note or item in one org (Overview, sidebar). Only
+/// its owner reads or writes it (RLS).
+model Pin {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  /// page | note | task | event | database | person | file
+  kind           String
+  /// The in-app path it opens, always under /app/{slug}/.
+  href           String
+  label          String
+  /// The note, task, event... id, so the label can follow renames.
+  targetId       String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId, href])
+  @@index([organizationId, userId, sortOrder])
+}
+
+/// The pages a member opened recently in one org (Overview's "Recently
+/// visited"). One row per page, bumped on each visit; the oldest are trimmed.
+/// Owner-only (RLS).
+model RecentVisit {
+  organizationId String
+  userId         String
+  href           String
+  label          String
+  kind           String
+  targetId       String?
+  visitedAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId, href])
+  @@index([userId, organizationId, visitedAt])
+}
+
+/// A member's own settings inside one org: which finance widgets they see,
+/// and the like. Owner-only (RLS).
+model MemberPrefs {
+  organizationId String
+  userId         String
+  /// Finance widget layout: [{ id, type, w, h }] (src/lib/boards).
+  financeWidgets Json?
+  /// Overview widget layout, same shape (src/lib/overview/widgets.ts).
+  overviewWidgets Json?
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+}
+
+/// A file uploaded to the Notes page (PDF, Word, images...): stored in the
+/// private Blob store, read back only through the permission-checked route.
+/// ORGANIZATION: every member of the org; PRIVATE: the uploader only.
+model OrgFile {
+  id             String         @id @default(cuid())
+  organizationId String
+  name           String
+  contentType    String
+  sizeBytes      Int
+  storageKey     String         @unique
+  visibility     NoteVisibility @default(ORGANIZATION)
+  uploadedById   String
+  /// The note it was converted into, if any.
+  noteId         String?
+  folderId       String?
+  /// The first few hundred characters of text (Word, text, CSV), for cards.
+  excerpt        String?
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation("OrgFileUploadedBy", fields: [uploadedById], references: [id])
+  folder       NoteFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, deletedAt, createdAt])
+}
+
+/// A folder on the Notes page, shared by the org; notes and files go in it.
+/// A private note stays private inside a shared folder (Note RLS).
+model NoteFolder {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  /// A chart colour token name ("chart-1".."chart-5") or null.
+  color          String?
+  sortOrder      Int      @default(0)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("NoteFolderCreatedBy", fields: [createdById], references: [id])
+  notes        Note[]
+  files        OrgFile[]
+
+  @@index([organizationId, sortOrder])
 }
 
 model Account {
@@ -225,6 +337,11 @@ model Organization {
   weeklyUpdates     WeeklyUpdate[]
   theme             OrgTheme?
   joinCode          OrgJoinCode?
+  pins              Pin[]
+  recentVisits      RecentVisit[]
+  memberPrefs       MemberPrefs[]
+  files             OrgFile[]
+  noteFolders       NoteFolder[]
 }
 
 enum NotificationType {
@@ -597,6 +714,7 @@ model Note {
   visibility     NoteVisibility           @default(PRIVATE)
   authorId       String
   eventId        String?
+  folderId       String?
   version        Int                      @default(1)
   updatedById    String
   deletedAt      DateTime?
@@ -615,6 +733,7 @@ model Note {
   author       User         @relation("NoteAuthor", fields: [authorId], references: [id])
   updatedBy    User         @relation("NoteUpdatedBy", fields: [updatedById], references: [id])
   event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  folder       NoteFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   // Phase 9: the notes list filters on deletedAt and orders by updatedAt.
   @@index([organizationId, deletedAt, updatedAt])
@@ -1220,6 +1339,9 @@ model OrgSettings {
   financeDashboardCards         String[]         @default([])
   /// Members see each other's busy times (never the labels) on people pages.
   showMemberAvailability        Boolean          @default(true)
+  /// The sidebar for everyone in the org: [{ id, hidden?, label? }] in order
+  /// (src/lib/nav/sidebar.ts). NULL: the default sidebar. OWNER/ADMIN edit it.
+  sidebar                       Json?
   updatedById                   String?
   updatedAt                     DateTime         @default(now()) @updatedAt
 

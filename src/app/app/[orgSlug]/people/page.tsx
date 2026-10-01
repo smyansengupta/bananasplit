@@ -7,6 +7,7 @@ import { majorAndYear } from "@/components/profile/profile-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/user-avatar";
+import { PinToggle } from "@/components/pins/pins-context";
 import { peopleHref, personHref, profileHref } from "@/lib/profile/href";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { listOrgPeople, parsePageParam, parseSearchParam } from "@/server/profiles/queries";
@@ -79,7 +80,12 @@ export default async function PeoplePage({ params, searchParams }: PageProps<"/a
             const detail = majorAndYear(person.major, person.gradYear);
             const isSelf = person.id === user.id;
             return (
-              <li key={person.id}>
+              <li key={person.id} className="group relative">
+                <PinToggle
+                  href={personHref(orgSlug, person.id)}
+                  label={person.name ?? "member"}
+                  className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                />
                 <Link
                   href={personHref(orgSlug, person.id)}
                   className="bg-card hover:bg-accent/50 focus-visible:ring-ring flex h-full items-center gap-3 rounded-xl p-3 ring-1 ring-foreground/10 transition-colors focus-visible:ring-2 focus-visible:outline-none"
