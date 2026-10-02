@@ -374,7 +374,15 @@ export function WidgetBody({
             <Badge>Received</Badge>
             <span className="font-medium tabular-nums">{formatCents(data.sponsorshipReceivedCents)}</span>
           </div>
-          <p className="text-muted-foreground text-xs">Pledged money never counts toward the balance.</p>
+          {data.sponsorshipCreditsCents > 0 && (
+            <div className="flex items-center justify-between gap-2">
+              <Badge variant="outline">In credits</Badge>
+              <span className="font-medium tabular-nums">{formatCents(data.sponsorshipCreditsCents)}</span>
+            </div>
+          )}
+          <p className="text-muted-foreground text-xs">
+            Pledged money never counts toward the balance{data.sponsorshipCreditsCents > 0 ? ", and credits never do" : ""}.
+          </p>
         </div>
       );
     case "recent":

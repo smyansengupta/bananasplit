@@ -33,6 +33,7 @@ function dashboard(runway: Partial<RunwayInput>): DashboardData {
     outstandingReimbursementsCents: 0,
     sponsorshipCommittedCents: input.expectedIncomeCents,
     sponsorshipReceivedCents: 0,
+    sponsorshipCreditsCents: 0,
     burnByMonth: [],
     unreconciledOver60DaysCount: 0,
     runway: computeRunway(input),

@@ -54,6 +54,13 @@ numbers, charts (monthly bars, balance over time, category donut, by type),
 budget vs. actual, runway, sponsorships and lists. "Add transaction" is the
 first thing on the page. The registry is `src/lib/finance/widgets.ts`.
 
+A sponsorship is **cash** or **credits** (`Sponsorship.type`). Cash works as
+before: reaching Received books an IN transaction. Credits (cloud, API or
+software credits) carry a dollar value for the pipeline but never reach the
+ledger: no transaction is booked, and they stay out of the balance, the
+runway and the cash Committed/Received totals. The Sponsorships page and the
+dashboard card show them on their own lines.
+
 ## Databases
 
 With no data and nothing connected, admins get setup inside Databases:
@@ -75,6 +82,8 @@ databases fold away once some have data. Reports is a tab
     is the only path without `X-Frame-Options: DENY` or the static CSP, and
     it sends `frame-ancestors 'self'`.
   - Images as images, Word documents as a read-only note, CSV as a table.
+- **Folders** are made from New › Folder, the "New folder" row under the
+  folders in the rail, or "Move to folder…" › Create and move.
 - **New › Word document or Google Doc** turns the document into a note.
   - Word files pass the zip-bomb guards before mammoth reads them.
   - Google Docs must be shared by link; the import follows redirects only
@@ -233,3 +242,7 @@ folder.
 
 `20261004120000_database_blob_storage` adds `StoredBlob` and the four
 `app.blob_*` functions (app_service only). It only adds things.
+
+`20261007120000_sponsorship_type` adds the `SponsorshipType` enum (`CASH`,
+`CREDITS`) and `Sponsorship.type`, defaulting to `CASH`, so every existing
+sponsorship stays cash. It only adds things.
