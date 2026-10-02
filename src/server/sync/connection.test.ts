@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { X509Certificate } from "node:crypto";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -44,6 +46,7 @@ import {
   testSupabaseSource,
   type SourceConfig,
 } from "./connection";
+import { SUPABASE_ROOT_2021_CA } from "./supabase-root-ca";
 
 const remote = {
   projectRef: "abcdefghijklmnopqrst",
@@ -89,16 +92,36 @@ describe("host derivation", () => {
     }
   });
 
-  it("verifies TLS against the derived host, and pins the root CA when one is set", () => {
+  it("verifies TLS against the derived host, pinned to the bundled Supabase root", () => {
     const cfg = parseSourceConfig(remote);
-    expect(clientOptions(cfg, "pw", {}).ssl).toMatchObject({
+    expect(clientOptions(cfg, "pw", {}).ssl).toEqual({
       rejectUnauthorized: true,
       servername: "aws-0-us-east-1.pooler.supabase.com",
+      ca: SUPABASE_ROOT_2021_CA,
     });
+    // A malformed override falls back to the bundled root, never to no pin.
+    expect(clientOptions(cfg, "pw", { SUPABASE_ROOT_CA_PEM: "nope" }).ssl).toMatchObject({
+      ca: SUPABASE_ROOT_2021_CA,
+    });
+  });
+
+  it("lets SUPABASE_ROOT_CA_PEM replace the bundled root", () => {
+    const cfg = parseSourceConfig(remote);
     const pinned = clientOptions(cfg, "pw", {
       SUPABASE_ROOT_CA_PEM: "-----BEGIN CERTIFICATE-----\\nX",
     });
     expect(pinned.ssl).toMatchObject({ ca: "-----BEGIN CERTIFICATE-----\nX" });
+  });
+
+  it("bundles the real Supabase Root 2021 CA", () => {
+    const cert = new X509Certificate(SUPABASE_ROOT_2021_CA);
+    expect(cert.subject).toContain("CN=Supabase Root 2021 CA");
+    expect(cert.ca).toBe(true);
+    expect(cert.checkIssued(cert)).toBe(true);
+    expect(cert.fingerprint256).toBe(
+      "80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA",
+    );
+    expect(new Date(cert.validTo).getUTCFullYear()).toBe(2031);
   });
 
   it("allows the local stand-in only in local development", () => {

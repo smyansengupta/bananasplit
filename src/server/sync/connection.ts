@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { assertNoTx } from "@/server/db/context";
 
+import { SUPABASE_ROOT_2021_CA } from "./supabase-root-ca";
+
 /**
  * The website data-source connection (Phase 4b, 'Meaning of "Supabase
  * connection"' decision).
@@ -20,9 +22,10 @@ import { assertNoTx } from "@/server/db/context";
  *   user  {roleName}.{projectRef}
  * so no free-form host ever reaches a socket (SSRF closed by construction).
  *
- * TLS is verify-full: the certificate must chain to a trusted CA and match
- * the derived host. The Supabase root CA is taken from SUPABASE_ROOT_CA_PEM
- * when set (the connection spike records whether the pooler needs it); it
+ * TLS is verify-full: the certificate must chain to the Supabase root CA
+ * and match the derived host. The pooler's chain ends at Supabase's private
+ * root, which no public trust store holds, so the root is pinned: the
+ * bundled copy (./supabase-root-ca), or SUPABASE_ROOT_CA_PEM when set. It
  * is never turned off.
  *
  * Local development only: with SOURCE_SYNC_ALLOW_LOCAL=1 (and never on
@@ -110,9 +113,9 @@ export function sourceEndpoint(cfg: SourceConfig): { host: string; port: number;
   };
 }
 
-function rootCa(env: Record<string, string | undefined>): string | undefined {
+function rootCa(env: Record<string, string | undefined>): string {
   const pem = env.SUPABASE_ROOT_CA_PEM?.replace(/\\n/g, "\n").trim();
-  return pem && pem.includes("BEGIN CERTIFICATE") ? pem : undefined;
+  return pem && pem.includes("BEGIN CERTIFICATE") ? pem : SUPABASE_ROOT_2021_CA;
 }
 
 /** The pg client options for a source (exported for tests). */
@@ -131,7 +134,7 @@ export function clientOptions(
     ssl:
       cfg.kind === "local"
         ? false
-        : { rejectUnauthorized: true, servername: ep.host, ...(rootCa(env) ? { ca: rootCa(env) } : {}) },
+        : { rejectUnauthorized: true, servername: ep.host, ca: rootCa(env) },
     statement_timeout: STATEMENT_TIMEOUT_MS,
     query_timeout: STATEMENT_TIMEOUT_MS + 5_000,
     connectionTimeoutMillis: 10_000,
@@ -204,7 +207,7 @@ export function describeConnectionError(error: unknown): string {
   if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "The pooler host was not found. Check the region and prefix.";
   if (code === "ECONNREFUSED" || code === "ETIMEDOUT") return "The website database did not answer.";
   if (/certificate|self[- ]signed|TLS|SSL/i.test(message)) {
-    return "The TLS certificate could not be verified. Set SUPABASE_ROOT_CA_PEM to the Supabase root CA.";
+    return "The website database's TLS certificate could not be verified against the Supabase root CA.";
   }
   if (/timeout/i.test(message)) return "The website database took too long to answer.";
   return "Could not read from the website database.";
