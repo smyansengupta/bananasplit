@@ -19,6 +19,7 @@ import { PIN_ICONS } from "@/components/shell/pin-icons";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { familyOf } from "@/lib/files/types";
 import type { PinKind } from "@/lib/pins/pages";
+import { ago } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,16 +28,6 @@ import { cn } from "@/lib/utils";
  * board places them in its frames.
  */
 
-const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-
-export function ago(date: Date, now: Date): string {
-  const minutes = Math.round((date.getTime() - now.getTime()) / 60_000);
-  if (minutes > -1) return "just now";
-  if (minutes > -60) return rtf.format(minutes, "minute");
-  const hours = Math.round(minutes / 60);
-  if (hours > -24) return rtf.format(hours, "hour");
-  return rtf.format(Math.round(hours / 24), "day");
-}
 
 export function RecentList({
   items,

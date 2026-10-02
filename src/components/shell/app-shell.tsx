@@ -3,7 +3,9 @@
 import { Menu, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import type { PaletteSection } from "@/components/command-palette/catalog";
 import { CommandPalette } from "@/components/command-palette/command-palette";
+import { useModKey } from "@/components/command-palette/use-mod-key";
 import { NotificationBell } from "@/components/shell/notification-bell";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { PinsProvider } from "@/components/pins/pins-context";
@@ -16,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/toaster";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
+import type { Role } from "@/generated/prisma/enums";
 
 export function AppShell({
   orgSlug,
@@ -27,6 +30,7 @@ export function AppShell({
   sections,
   settings,
   sectionPaths = [],
+  role = null,
   isAdmin = false,
   children,
 }: {
@@ -41,19 +45,28 @@ export function AppShell({
   /** The org's sidebar (Settings › Sidebar). */
   sections: NavSection[];
   settings: NavLink;
-  /** Every section's path and whether the org turned it off (members see a notice). */
-  sectionPaths?: { path: string; hidden: boolean }[];
+  /**
+   * Every section (path, name, icon) and whether the org turned it off:
+   * members see a notice there, and search leaves it out for them.
+   */
+  sectionPaths?: PaletteSection[];
+  /** The member's role in this org (what search may show them). */
+  role?: Role | null;
   isAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [commandOpen, setCommandOpen] = useState(false);
+  // Each opening is a new session (a fresh palette: empty box, no stale results).
+  const [command, setCommand] = useState({ open: false, session: 0 });
+  const setCommandOpen = (open: boolean) =>
+    setCommand((c) => (open === c.open ? c : { open, session: open ? c.session + 1 : c.session }));
+  const mod = useModKey();
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandOpen((value) => !value);
+        setCommand((c) => ({ open: !c.open, session: c.open ? c.session : c.session + 1 }));
       }
     }
     document.addEventListener("keydown", onKeyDown);
@@ -120,7 +133,7 @@ export function AppShell({
               <Search className="size-4" />
               <span className="hidden sm:inline">Search</span>
               <kbd className="bg-muted hidden rounded-sm px-1.5 py-0.5 text-[0.625rem] sm:inline">
-                ⌘K
+                {mod === "⌘" ? "⌘K" : "Ctrl K"}
               </kbd>
             </Button>
 
@@ -147,9 +160,13 @@ export function AppShell({
 
         <VisitTracker orgId={orgId} />
         <CommandPalette
+          key={command.session}
           orgId={orgId}
           orgSlug={orgSlug}
-          open={commandOpen}
+          role={role}
+          sections={sectionPaths}
+          orgs={orgs}
+          open={command.open}
           onOpenChange={setCommandOpen}
         />
         <Toaster />

@@ -21,8 +21,14 @@ import { NotFoundError } from "@/lib/auth/errors";
 import { authDb, disconnectAll, serviceDb } from "@/server/db/clients";
 import { withOrgTx, withSystemOrgTx } from "@/server/db/context";
 
-import { searchWorkspace } from "../search/actions";
+import { searchWorkspaceAction } from "../search/actions";
 import { createNote, deleteNote, restoreNote, updateNote } from "./actions";
+
+/** The note ids the palette's search returns for `query`, as the mocked session user. */
+async function noteHits(orgId: string, query: string): Promise<string[]> {
+  const res = await searchWorkspaceAction(orgId, { query, scope: "notes" });
+  return (res.groups.find((g) => g.id === "notes")?.hits ?? []).map((h) => h.key.replace(/^note:/, ""));
+}
 
 interface Person {
   id: string;
@@ -114,10 +120,10 @@ describe.skipIf(!seeded)("notes and search on the RLS path (seeded CBC)", () => 
     // RLS: even a query without the visibility filter sees nothing.
     const direct = await withOrgTx(s.cbcId, ({ db }) => db.note.findUnique({ where: { id } }));
     expect(direct).toBeNull();
-    expect((await searchWorkspace(s.cbcId, WORD)).notes.map((n) => n.id)).not.toContain(id);
+    expect(await noteHits(s.cbcId, WORD)).not.toContain(id);
 
     as(s.kristine);
-    expect((await searchWorkspace(s.cbcId, WORD)).notes.map((n) => n.id)).toContain(id);
+    expect(await noteHits(s.cbcId, WORD)).toContain(id);
   });
 
   it("an ORGANIZATION note: an ADMIN edits it, another MEMBER cannot (app and database)", async () => {
@@ -156,10 +162,10 @@ describe.skipIf(!seeded)("notes and search on the RLS path (seeded CBC)", () => 
     as(s.kristine);
     // Called with a foreign note id in the member's own org: not found.
     expect((await deleteNote(s.cbcId, foreign.id)).error).toMatch(/not found/i);
-    expect((await searchWorkspace(s.cbcId, WORD)).notes.map((n) => n.id)).not.toContain(foreign.id);
+    expect(await noteHits(s.cbcId, WORD)).not.toContain(foreign.id);
     // Called with the other org's id: the wrapper refuses a non-member.
     await expect(deleteNote(s.roboticsId, foreign.id)).rejects.toBeInstanceOf(NotFoundError);
-    await expect(searchWorkspace(s.roboticsId, WORD)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(noteHits(s.roboticsId, WORD)).rejects.toBeInstanceOf(NotFoundError);
 
     const untouched = await withSystemOrgTx(s.roboticsId, ({ db }) =>
       db.note.findUnique({ where: { id: foreign.id }, select: { deletedAt: true } }),
