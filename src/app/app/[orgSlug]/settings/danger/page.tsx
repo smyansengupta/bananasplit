@@ -63,7 +63,7 @@ export default async function DangerZonePage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Danger zone</h1>
+      <h1 className="page-title">Danger zone</h1>
       <ExportCard
         orgId={orgId}
         orgSlug={organization.slug}

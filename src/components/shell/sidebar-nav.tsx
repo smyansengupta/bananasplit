@@ -22,6 +22,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
 import { unpinAction } from "@/app/app/[orgSlug]/_shell/pin-actions";
+import { BananasplitMark } from "@/components/bananasplit-mark";
 import { isLinkActive, type NavLink, type NavSection } from "@/components/shell/nav-config";
 import { usePinDrop } from "@/components/pins/pin-dnd";
 import { usePins } from "@/components/pins/pins-context";
@@ -52,9 +53,10 @@ const NAV_ICONS: Record<string, LucideIcon> = {
 
 const itemClass = (active: boolean) =>
   cn(
-    "focus-visible:ring-ring flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+    "focus-visible:ring-ring relative flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
     active
-      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      ? // The page you're on: a highlighter tint, with the primary ink's notch.
+        "bg-sidebar-accent text-sidebar-accent-foreground before:bg-sidebar-primary font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full"
       : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
   );
 
@@ -87,7 +89,7 @@ function NavItemLink({
 
 function GroupLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-sidebar-foreground/50 px-3 pt-3 pb-1 text-[11px] font-semibold tracking-wide uppercase">
+    <span className="eyebrow text-sidebar-foreground/60 px-3 pt-4 pb-1.5">
       {children}
     </span>
   );
@@ -226,6 +228,13 @@ export function SidebarNav({
       </div>
       <div className="border-sidebar-border mt-3 border-t pt-3">
         <NavItemLink link={settings} pathname={pathname} all={all} onNavigate={onNavigate} />
+        {/* The platform's signature, under the club's own nav: quiet, not a link. */}
+        <p className="text-sidebar-foreground/60 mt-3 flex items-center gap-2 px-3">
+          <BananasplitMark className="size-5" />
+          <span className="font-heading text-[0.7rem] font-black tracking-[-0.02em] font-stretch-[150%]">
+            Bananasplit
+          </span>
+        </p>
       </div>
     </nav>
   );

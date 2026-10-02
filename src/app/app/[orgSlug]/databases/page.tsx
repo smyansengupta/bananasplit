@@ -174,7 +174,7 @@ export default async function DatabasesPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Databases</h1>
+        <h1 className="page-title">Databases</h1>
         <p className="text-muted-foreground text-sm">
           {organization.name}&apos;s data: your events, check-ins, sign-ups and poll results.
         </p>

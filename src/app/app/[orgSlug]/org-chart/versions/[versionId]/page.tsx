@@ -123,7 +123,7 @@ export default async function VersionPage({
             <ChevronLeft className="size-4" aria-hidden="true" />
             Version history
           </Link>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <h1 className="page-title flex items-center gap-2">
             Version {version.number}
             {version.isActive ? <Badge>Published</Badge> : <Badge variant="outline">{version.status.toLowerCase()}</Badge>}
           </h1>

@@ -18,7 +18,7 @@ export function IntegrationHeader({
       >
         ← Integrations
       </Link>
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <h1 className="page-title">{title}</h1>
       <p className="text-muted-foreground text-sm">{description}</p>
     </div>
   );

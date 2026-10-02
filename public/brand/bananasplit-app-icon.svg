@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bananasplit">
+  <rect width="64" height="64" rx="14" fill="#b0135f"/>
+  <defs>
+    <clipPath id="t-a"><polygon points="-34.19,103.73 97.35,-44.26 23.36,-110.03 -108.19,37.96"/></clipPath>
+    <clipPath id="t-b"><polygon points="-31.35,106.26 100.19,-41.73 174.19,24.04 42.64,172.03"/></clipPath>
+  </defs>
+  <g transform="translate(-1.2 0.4)">
+    <g transform="translate(2.6 2.6)"><path d="M15 15 A25.5 25.5 0 0 0 51 47 A41 41 0 0 1 15 15 Z" fill="#fbf6ea" stroke="#fbf6ea" stroke-width="3.2" stroke-linejoin="round"/><path d="M14.98,17.6 L15.04,9.6" stroke="#fbf6ea" stroke-width="3.6" stroke-linecap="square" fill="none"/></g>
+    <g clip-path="url(#t-a)"><path d="M15 15 A25.5 25.5 0 0 0 51 47 A41 41 0 0 1 15 15 Z" fill="#f2c230" stroke="#f2c230" stroke-width="3.2" stroke-linejoin="round"/><path d="M14.98,17.6 L15.04,9.6" stroke="#f2c230" stroke-width="3.6" stroke-linecap="square" fill="none"/></g>
+    <g transform="translate(1.79 1.59)"><g clip-path="url(#t-b)"><path d="M15 15 A25.5 25.5 0 0 0 51 47 A41 41 0 0 1 15 15 Z" fill="#f2c230" stroke="#f2c230" stroke-width="3.2" stroke-linejoin="round"/><path d="M14.98,17.6 L15.04,9.6" stroke="#f2c230" stroke-width="3.6" stroke-linecap="square" fill="none"/></g></g>
+  </g>
+</svg>

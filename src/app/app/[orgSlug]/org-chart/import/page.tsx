@@ -70,7 +70,7 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
           <ChevronLeft className="size-4" aria-hidden="true" />
           Org Chart
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Import an org chart</h1>
+        <h1 className="page-title">Import an org chart</h1>
         <p className="text-muted-foreground text-sm">
           The portal reads your document into a draft. Nothing changes for members until you review the draft and
           publish it.

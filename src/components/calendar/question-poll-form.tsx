@@ -220,7 +220,7 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
           Polls
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Ask a question</h1>
+          <h1 className="page-title">Ask a question</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             Give the options and let the club vote. Everyone in the club can answer.
           </p>

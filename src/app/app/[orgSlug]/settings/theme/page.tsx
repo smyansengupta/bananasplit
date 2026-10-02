@@ -38,7 +38,7 @@ export default async function ThemeSettingsPage({
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Theme</h1>
+        <h1 className="page-title">Theme</h1>
         <p className="text-muted-foreground max-w-prose text-sm">
           Colours, logo and light or dark mode for everyone in {organization.name}, including the
           org&apos;s public poll and invite pages. Changes apply as soon as you save.

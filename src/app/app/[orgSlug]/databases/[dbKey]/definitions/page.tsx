@@ -76,7 +76,7 @@ export default async function BallotDefinitionsPage({
           <ChevronLeft className="size-3" aria-hidden="true" />
           {data.database.name}
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Poll definitions</h1>
+        <h1 className="page-title">Poll definitions</h1>
         <p className="text-muted-foreground text-sm">
           Labels, question types and voting windows for each poll. Ballots cast outside the window, test polls,
           load and smoke tests, and ballots naming options a poll no longer has are kept but not counted.

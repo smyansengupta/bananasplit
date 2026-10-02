@@ -326,7 +326,7 @@ export function WidgetBoard({
                 data-dragging={dragId === w.id || undefined}
                 className={cn(
                   SPAN[w.w] ?? SPAN[1],
-                  "group/widget bg-card text-card-foreground relative flex min-w-0 flex-col overflow-hidden rounded-xl border shadow-xs transition-shadow",
+                  "group/widget bg-card text-card-foreground sheet relative flex min-w-0 flex-col overflow-hidden rounded-xl border transition-shadow",
                   editing && "ring-primary/25 ring-2",
                   dragId === w.id && "opacity-40",
                   overId === w.id && dragId !== w.id && "ring-primary ring-2",
@@ -378,7 +378,12 @@ export function WidgetBoard({
                     </span>
                   )}
                   <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-                  <h2 className="min-w-0 truncate text-sm font-medium">{m.title}</h2>
+                  <h2
+                    title={m.title}
+                    className="font-heading min-w-0 truncate text-[0.95rem] font-bold tracking-[-0.005em] font-stretch-[88%]"
+                  >
+                    {m.title}
+                  </h2>
                   {!editing && (
                     <ItemMenu
                       label={`${m.title} options`}

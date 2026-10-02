@@ -22,7 +22,7 @@ export default async function GeneralSettingsPage({
 
   return (
     <div className="max-w-2xl space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">General</h1>
+      <h1 className="page-title">General</h1>
       <LogoForm
         orgId={organization.id}
         orgName={organization.name}

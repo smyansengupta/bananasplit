@@ -415,7 +415,7 @@ export function PollResponder({
       {/* Not a <header>: on the public link the org frame owns the page header. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight break-words">{poll.title}</h1>
+          <h1 className="page-title break-words">{poll.title}</h1>
           {poll.description && (
             <p className="text-muted-foreground max-w-prose text-sm whitespace-pre-wrap">
               {poll.description}

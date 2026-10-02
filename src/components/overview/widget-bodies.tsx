@@ -92,11 +92,11 @@ export function TaskStats({
         const Icon = c.icon;
         return (
           <Link key={c.label} href={c.href} className="hover:bg-muted/50 rounded-lg border p-2.5">
-            <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <span className="eyebrow text-muted-foreground flex items-center gap-1.5">
               <Icon className={cn("size-3.5", c.value > 0 && c.tone)} aria-hidden="true" />
               {c.label}
             </span>
-            <span className={cn("block text-2xl font-semibold tabular-nums", c.value > 0 && c.tone)}>
+            <span className={cn("numeral mt-1.5 block text-5xl", c.value > 0 && c.tone)}>
               {c.value}
             </span>
           </Link>
@@ -121,7 +121,7 @@ export function WeekStrip({ orgSlug, days }: { orgSlug: string; days: WeekDay[] 
           key={d.key}
           className={cn("min-h-24 rounded-lg border p-2", d.isToday && "border-primary/50 bg-primary/5")}
         >
-          <p className={cn("text-xs font-medium", d.isToday ? "text-primary" : "text-muted-foreground")}>
+          <p className={cn("eyebrow", d.isToday ? "text-primary" : "text-muted-foreground")}>
             {d.label}
           </p>
           <ul className="mt-1.5 space-y-1">

@@ -20,11 +20,46 @@ export interface ThemePreset {
 
 export const CUSTOM_PRESET_ID = "custom";
 export const DEFAULT_PRESET_ID = "default";
+export const GRAPHITE_PRESET_ID = "graphite";
 
+/**
+ * "Bananasplit", the app's built-in look, printed like a two-ink riso zine:
+ * vanilla paper, fudge ink, a raspberry primary (h≈0, kept clear of the
+ * destructive red at h≈27 so a Save never reads as a Delete) and banana as
+ * the highlighter (a fill only, 1.5:1 on paper, never text). Dark mode is
+ * the same sundae on chocolate: banana becomes the primary, with an ink
+ * label, and the highlighter turns strawberry.
+ */
 export const DEFAULT_PRESET: ThemePreset = {
   id: DEFAULT_PRESET_ID,
-  name: "Default",
-  description: "Neutral greys with a near-black primary. The app's built-in look.",
+  name: "Bananasplit",
+  description: "Vanilla paper, fudge ink, a raspberry primary and a banana highlighter.",
+  light: {
+    primary: "#b0135f",
+    accent: "#f2c230",
+    background: "#fbf6ea",
+    surface: "#fffdf7",
+    text: "#1f1611",
+  },
+  dark: {
+    primary: "#f4c84a",
+    accent: "#ee6f9e",
+    background: "#17110d",
+    surface: "#221a14",
+    text: "#f8f0e0",
+  },
+};
+
+/**
+ * "Graphite": neutral greys with a near-black primary, the built-in look
+ * before Bananasplit. Orgs that saved the old Default have exactly these
+ * palettes stored under the "default" id; resolve.ts reports them as
+ * Graphite so they keep their look under its real name.
+ */
+export const GRAPHITE_PRESET: ThemePreset = {
+  id: GRAPHITE_PRESET_ID,
+  name: "Graphite",
+  description: "Neutral greys with a near-black primary. Quiet, like plain newsprint.",
   light: {
     primary: "#171717",
     accent: "#737373",
@@ -168,21 +203,37 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
       text: "#e8e9fb",
     },
   },
+  GRAPHITE_PRESET,
 ];
 
 export function findPreset(id: string): ThemePreset | undefined {
   return THEME_PRESETS.find((preset) => preset.id === id);
 }
 
-/** The preset whose palettes equal these roles, if any (a custom theme can match one). */
-export function matchPreset(light: ThemeRoles, dark: ThemeRoles | null): ThemePreset | undefined {
-  const same = (a: ThemeRoles, b: ThemeRoles) =>
+function sameRoles(a: ThemeRoles, b: ThemeRoles): boolean {
+  return (
     a.primary === b.primary &&
     a.accent === b.accent &&
     a.background === b.background &&
     a.surface === b.surface &&
-    a.text === b.text;
-  return THEME_PRESETS.find(
-    (preset) => same(preset.light, light) && dark !== null && same(preset.dark, dark),
+    a.text === b.text
   );
+}
+
+/** The preset whose palettes equal these roles, if any (a custom theme can match one). */
+export function matchPreset(light: ThemeRoles, dark: ThemeRoles | null): ThemePreset | undefined {
+  return THEME_PRESETS.find(
+    (preset) => sameRoles(preset.light, light) && dark !== null && sameRoles(preset.dark, dark),
+  );
+}
+
+/**
+ * The preset id a saved row stands for. A row saved as "default" before the
+ * Default became Bananasplit stores the old greys: that is Graphite now.
+ */
+export function savedPresetId(id: string, light: ThemeRoles): string {
+  if (id === DEFAULT_PRESET_ID && sameRoles(light, GRAPHITE_PRESET.light)) {
+    return GRAPHITE_PRESET_ID;
+  }
+  return findPreset(id) ? id : CUSTOM_PRESET_ID;
 }

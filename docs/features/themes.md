@@ -9,11 +9,18 @@ pages wear the same theme and logo.
 
 1. Open **Settings > Theme**.
 2. **Palette.** Pick a preset, or **Custom** to choose the five colours yourself:
-   - **Default**: neutral greys, the app's built-in look.
-   - **Claude Builders Club**: warm paper, ink text, terracotta links and a coral
-     highlighter, from the club website's design system. In dark mode the coral
-     becomes the primary with an ink label.
-   - **Harbor** (blue), **Evergreen** (green), **Orchid** (violet).
+   - **Bananasplit** (the Default, id `default`): vanilla paper, fudge ink, a
+     raspberry primary and a banana highlighter; in dark mode, chocolate paper
+     with a banana primary and a strawberry highlighter.
+   - **Paper & Coral** (id `cbc`): warm paper, ink text, terracotta links and a
+     coral highlighter, from the Claude Builders Club website's design system. In
+     dark mode the coral becomes the primary with an ink label.
+   - **Harbor** (blue), **Evergreen** (green), **Orchid** (violet), **Sunset**
+     (orange), **Midnight** (indigo).
+   - **Graphite**: neutral greys with a near-black primary, the built-in look
+     before Bananasplit. An org that saved the old Default keeps it: those rows
+     still say `default` with the grey palettes, and `savedPresetId`
+     (`presets.ts`) reports them as Graphite.
 
    Every preset passes WCAG AA in light and dark.
 
@@ -43,7 +50,7 @@ pages wear the same theme and logo.
 8. **Save theme.** **Reset to default** returns the org to the Default preset,
    device mode and logo beside the name.
 
-Seeded data: the Claude Builders Club org starts on the Claude Builders Club preset.
+Seeded data: the Claude Builders Club org starts on the Paper & Coral preset.
 In production an admin picks it on the Theme page.
 
 ## How it works (developers)
@@ -56,8 +63,9 @@ In production an admin picks it on the Theme page.
   `bg-chart-3` and so on. The math is hand-rolled OKLab/OKLCH (`color.ts`), shared
   by the server and the browser, so the preview equals the saved result.
 - **Charts.** `chart.ts` builds `--chart-1..5` with the data-viz method: the
-  validated reference palette in its fixed order (Default light starts
-  `#2a78d6`, `#eb6834`; dark `#3987e5`, `#d95926`), each slot's lightness snapped
+  validated reference palette in its fixed order (an achromatic theme like
+  Graphite starts `#2a78d6`, `#eb6834` in light, `#3987e5`, `#d95926` in dark;
+  Bananasplit leads with its raspberry), each slot's lightness snapped
   (hue held) to 3:1 on the page and the cards, a chromatic brand primary as slot 1,
   and every adjacent pair checked for colour-blind separation (deltaE >= 8) and
   normal-vision separation (>= 15). Use the slots in order; never style text with
@@ -100,6 +108,47 @@ In production an admin picks it on the Theme page.
 - **Lint.** `theme/no-raw-colors` (eslint.config.mjs) is an `error` on Tailwind
   palette classes (`text-green-600`) and raw colour values in `.tsx` files. Every
   site is converted; the only exceptions are the two ignores below.
+
+## The look: "Riso bulletin" (developers)
+
+Every theme is printed like a two-ink risograph zine: the org's **primary** and
+**accent** are the two inks, so the same marks suit any preset or custom theme.
+The look lives in `src/app/globals.css` (after the token blocks) and never names
+a colour: utilities mix the tokens where they paint, so the scoped previews on
+Settings > Theme restyle them too. Only palette-free values sit on `:root` (the
+paper grain, the highlighter's strength per mode, the motion curve).
+
+- **Type** (`src/app/layout.tsx`, all variable): **Anybody** for headings and
+  figures, pushed to the ends of its width (50-150%) and weight (100-900) axes;
+  **Atkinson Hyperlegible Next** for body text; **Martian Mono** for labels,
+  dates and keyboard shortcuts.
+- **Utilities.** `page-title` (every page's `<h1>`: wide, heavy, over a
+  highlighter stroke drawn as a thick underline, so it moves no layout),
+  `heading` (card, dialog and sheet titles), `eyebrow` (mono caps labels),
+  `numeral` (thin, condensed big figures), `figure` (mono tabular money in
+  text), `ink-mark` (highlight inline words), `misregister` (the accent ink
+  printed off register), `halftone` (an accent dot screen; fade it with a mask),
+  `paper` (grain over an element's background), `sheet` (a card lifted off the
+  page), `ink-edge` (a primary button's darker bottom edge) and `crop-marks`
+  (printer's marks outside an element's corners; not on an `overflow-hidden`
+  element, which would clip them).
+- **Motion.** `reveal` staggers its children in on mount; the app's `<main>`
+  has `reveal-page`, which staggers the blocks of whatever page is inside it.
+  Both are zero-specificity base styles (an `animate-*` utility on a block wins)
+  and switch off under `prefers-reduced-motion`. The landing wordmark's
+  ink-register and split animations are `motion-safe:` only.
+- **Pieces.** `src/components/print-marks.tsx` (`RegistrationMark`,
+  `SplitWordmark`), `src/components/auth/auth-frame.tsx` (sign-in and sign-up),
+  `src/app/not-found.tsx`.
+- **Logo.** A banana, split, in two inks. `src/components/bananasplit-mark.tsx`
+  draws the mark inline in the tokens (`--mark-top`, default the primary;
+  `--mark-under`, default the accent), so in a club it prints in the club's
+  inks: the sidebar's signature under Settings, and the sign-in and sign-up
+  pages. The fixed-colour files are in `public/brand/` (the mark, which follows
+  the viewer's light or dark mode; the app icon; the lockup for light and dark
+  backgrounds, with Anybody embedded). `src/app/icon.svg`, `apple-icon.png` and
+  `favicon.ico` are the app icon. The paper grain's alpha is sparse on purpose: a denser
+  grain would darken the page under the text and undo the measured contrast.
 
 ## Converted colours
 

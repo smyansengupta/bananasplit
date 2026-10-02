@@ -1,5 +1,5 @@
 import { deriveDarkRoles, deriveTheme, type DerivedTheme } from "./derive";
-import { CUSTOM_PRESET_ID, DEFAULT_PRESET, findPreset } from "./presets";
+import { DEFAULT_PRESET, savedPresetId } from "./presets";
 import {
   LOGO_DISPLAYS,
   THEME_MODES,
@@ -73,7 +73,7 @@ export function resolveTheme(row: OrgThemeRowLike | null | undefined): ResolvedT
   const light = parseRoles(row.light);
   if (!light) return DEFAULT_RESOLVED_THEME;
   const mode = asMode(row.mode);
-  const preset = findPreset(row.preset) ? row.preset : CUSTOM_PRESET_ID;
+  const preset = savedPresetId(row.preset, light);
   return buildResolved({
     preset,
     mode,

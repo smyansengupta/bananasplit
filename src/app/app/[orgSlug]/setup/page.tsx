@@ -148,7 +148,7 @@ export default async function SetupPage({
       )}
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="min-w-0 space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Set up {organization.name}</h1>
+          <h1 className="page-title">Set up {organization.name}</h1>
           <p className="text-muted-foreground max-w-xl text-sm">
             Four connections, one at a time. About {SETUP_TOTAL_MINUTES} minutes end to end if you
             have the credentials in front of you — and you can stop after any step and pick it up

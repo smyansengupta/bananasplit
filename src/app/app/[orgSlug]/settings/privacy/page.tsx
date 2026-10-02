@@ -39,7 +39,7 @@ export default async function PrivacySettingsPage({
 
   return (
     <div className="max-w-3xl space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Privacy</h1>
+      <h1 className="page-title">Privacy</h1>
 
       <section className="space-y-3">
         <h2 className="font-medium">Ballots</h2>

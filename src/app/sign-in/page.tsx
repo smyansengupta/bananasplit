@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { AuthFrame } from "@/components/auth/auth-frame";
 import { GoogleIcon } from "@/components/google-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,10 +44,10 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
   const googleEnabled = googleSignInEnabled();
 
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
+    <AuthFrame>
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle>Sign in to Bananasplit</CardTitle>
+          <CardTitle className="text-2xl">Sign in to Bananasplit</CardTitle>
           <CardDescription>
             {googleEnabled
               ? "Use your Google account or your email and password."
@@ -84,6 +85,6 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
           <PasswordSignInForm callbackUrl={callbackUrl} />
         </CardContent>
       </Card>
-    </div>
+    </AuthFrame>
   );
 }

@@ -236,8 +236,8 @@ export default async function OrgOverviewPage({ params, searchParams }: PageProp
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-muted-foreground text-sm">{dateLine}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <p className="eyebrow text-muted-foreground mb-2">{dateLine}</p>
+          <h1 className="page-title">
             {greeting(now, timeZone)}
             {data.firstName ? `, ${data.firstName}` : ""}
           </h1>
