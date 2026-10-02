@@ -147,11 +147,6 @@ export function AppShell({
             id="main-content"
             className="reveal-page relative isolate min-w-0 flex-1 p-4 md:p-6"
           >
-            {/* The accent ink's dot screen, fading out from the top corner. */}
-            <div
-              aria-hidden="true"
-              className="halftone pointer-events-none absolute top-0 right-0 -z-10 h-64 w-[min(34rem,90%)] [mask-image:radial-gradient(ellipse_at_top_right,black,transparent_68%)] opacity-70 dark:opacity-50"
-            />
             <SectionGate orgSlug={orgSlug} sectionPaths={sectionPaths} isAdmin={isAdmin}>
               {children}
             </SectionGate>

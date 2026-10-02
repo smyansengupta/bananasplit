@@ -13,10 +13,6 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid flex-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       <aside className="bg-primary text-primary-foreground paper relative isolate hidden flex-col justify-between gap-10 overflow-hidden p-10 lg:flex">
-        <div
-          aria-hidden="true"
-          className="halftone absolute -bottom-40 -left-40 -z-10 size-[38rem] max-w-none [mask-image:radial-gradient(circle,black_10%,transparent_64%)] motion-safe:animate-[dots-in_1.4s_var(--ease-ink)_backwards]"
-        />
         <div className="flex items-start justify-between gap-4">
           {/* On the primary ink, the app icon's inking: an accent banana, a paper split. */}
           <BananasplitMark className="size-16 [--mark-top:var(--brand-accent)] [--mark-under:var(--primary-foreground)]" />

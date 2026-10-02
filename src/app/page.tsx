@@ -28,10 +28,6 @@ export default async function Home() {
   return (
     <PublicThemeRoot>
       <div className="relative isolate flex min-h-svh flex-1 flex-col overflow-hidden">
-        <div
-          aria-hidden="true"
-          className="halftone absolute -top-40 -right-40 -z-10 size-[28rem] max-w-none [mask-image:radial-gradient(circle,black_10%,transparent_68%)] motion-safe:animate-[dots-in_1.4s_var(--ease-ink)_backwards] sm:size-[44rem] dark:opacity-60"
-        />
         <RegistrationMark className="absolute top-4 left-4 hidden sm:block" />
         <RegistrationMark className="absolute top-4 right-4 hidden sm:block" />
         <RegistrationMark className="absolute bottom-4 left-4 hidden sm:block" />

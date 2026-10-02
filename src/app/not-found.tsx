@@ -8,11 +8,7 @@ import { Button } from "@/components/ui/button";
 export default function NotFound() {
   return (
     <PublicThemeRoot>
-      <main className="reveal relative isolate flex flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
-        <div
-          aria-hidden="true"
-          className="halftone absolute inset-0 -z-10 [mask-image:radial-gradient(circle_at_center,black,transparent_55%)] opacity-60"
-        />
+      <main className="reveal flex flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
         <RegistrationMark className="size-7" />
         <p className="eyebrow text-muted-foreground">Error 404 · Misprint</p>
         <p
