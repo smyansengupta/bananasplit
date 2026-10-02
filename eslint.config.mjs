@@ -319,9 +319,11 @@ const eslintConfig = defineConfig([
     files: ["src/**/*.tsx"],
     ignores: [
       ...TESTS,
-      // Brand marks with fixed colours, and email HTML (no CSS variables in mail clients).
+      // Brand marks with fixed colours, email HTML (no CSS variables in mail
+      // clients) and the note PDF (react-pdf styles are not CSS).
       "src/components/google-icon.tsx",
       "src/server/email/**",
+      "src/server/notes/pdf.tsx",
     ],
     plugins: { theme: themePlugin },
     rules: { "theme/no-raw-colors": "error" },
