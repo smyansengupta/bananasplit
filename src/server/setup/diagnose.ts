@@ -54,7 +54,7 @@ const RULES: Record<SetupStepId, Rule[]> = {
     },
     {
       match: /certificate could not be verified/i,
-      fix: "This one is for whoever runs the platform, not for you: SUPABASE_ROOT_CA_PEM has to be set on the deployment. Send them this message.",
+      fix: "This one is for whoever runs the platform, not for you: Supabase may have changed its root certificate, which then has to be set as SUPABASE_ROOT_CA_PEM on the deployment. Send them this message.",
     },
     {
       match: /export is version/i,

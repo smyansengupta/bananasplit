@@ -169,7 +169,7 @@ listed in the organization switcher and on `/onboarding`). Its URL is never reus
 | Org creation | `PLATFORM_ADMIN_EMAILS`, `PLATFORM_ORG_CREATION_ENABLED`, `ORG_CREATION_MODE` (below) |
 | Secrets keyring | `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT`, `SECRETS_FINGERPRINT_KEY` |
 | Google Calendar | `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` |
-| Supabase TLS | `SUPABASE_ROOT_CA_PEM` (optional) |
+| Supabase TLS | nothing; `SUPABASE_ROOT_CA_PEM` only if Supabase rotates its root CA |
 | Platform sender | `RESEND_API_KEY`, `EMAIL_FROM` (see platform-services.md) |
 | Jobs | `/api/cron/jobs` with `CRON_SECRET`; locally `pnpm jobs:drain --watch` |
 

@@ -85,13 +85,15 @@ verified, and statements time out after 10 seconds. The password is
 encrypted at rest and never shown again. Press **Test connection**: it
 checks the contract version and nothing else.
 
-> **Connection spike, still open.** The pooler hostname family (`aws-0` vs
-> `aws-1`), the `role.projectRef` username format and whether Node's trust
-> store accepts the pooler's certificate are inferred from Supabase's
-> documentation, not yet confirmed against the real project. If the
-> certificate is rejected, set `SUPABASE_ROOT_CA_PEM` to the Supabase root
-> CA (the suite then pins it). Record the results here once someone with
-> dashboard access has run the test.
+> **Connection spike.** TLS, confirmed 2026-10-02: both `aws-0` and `aws-1`
+> pooler hosts exist, and each presents `*.pooler.supabase.com`, signed by
+> Supabase Intermediate 2021 CA, signed by Supabase Root 2021 CA. That root
+> is in no public trust store, so Node rejects the chain on its own; the
+> suite pins the root from `src/server/sync/supabase-root-ca.ts` (valid to
+> 2031). `SUPABASE_ROOT_CA_PEM` replaces it if Supabase rotates first.
+> Still open: the `role.projectRef` username format, inferred from
+> Supabase's documentation. Record it here once someone with dashboard
+> access has run the test.
 
 ### What the sync does
 
