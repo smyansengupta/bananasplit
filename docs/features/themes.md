@@ -127,8 +127,7 @@ paper grain, the highlighter's strength per mode, the motion curve).
   `heading` (card, dialog and sheet titles), `eyebrow` (mono caps labels),
   `numeral` (thin, condensed big figures), `figure` (mono tabular money in
   text), `ink-mark` (highlight inline words), `misregister` (the accent ink
-  printed off register), `halftone` (an accent dot screen; fade it with a mask),
-  `paper` (grain over an element's background), `sheet` (a card lifted off the
+  printed off register), `paper` (grain over an element's background), `sheet` (a card lifted off the
   page), `ink-edge` (a primary button's darker bottom edge) and `crop-marks`
   (printer's marks outside an element's corners; not on an `overflow-hidden`
   element, which would clip them).

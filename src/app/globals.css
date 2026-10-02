@@ -156,8 +156,8 @@
 /*
  * "Riso bulletin": the look on top of the tokens. Every club's workspace is
  * printed like a two-ink risograph zine: the org's primary and accent are the
- * two inks, so the same marks (the highlighter under titles, halftone dots,
- * misregistered wordmarks) suit any theme an org picks or builds. Nothing
+ * two inks, so the same marks (the highlighter under titles, the paper
+ * grain, misregistered wordmarks) suit any theme an org picks or builds. Nothing
  * here names a colour: utilities mix the tokens where they paint, so the
  * scoped theme previews (tokenStyle on a wrapper) restyle them too.
  *
@@ -251,15 +251,6 @@
   text-shadow: 0.055em 0.045em 0 var(--brand-accent);
 }
 
-/* A dot screen in the accent ink; fade it with a mask-* utility. */
-@utility halftone {
-  background-image: radial-gradient(
-    color-mix(in oklab, var(--brand-accent) 85%, transparent) 32%,
-    transparent 34%
-  );
-  background-size: 7px 7px;
-}
-
 /* A primary button's bottom edge: its own ink, a shade darker, in any theme. */
 @utility ink-edge {
   box-shadow: inset 0 -2px 0 oklch(from var(--primary) calc(l - 0.09) c h);
@@ -316,13 +307,6 @@
 @keyframes ink-register {
   from {
     text-shadow: 0 0 0 transparent;
-  }
-}
-
-@keyframes dots-in {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
   }
 }
 
