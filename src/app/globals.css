@@ -156,7 +156,7 @@
 /*
  * "Riso bulletin": the look on top of the tokens. Every club's workspace is
  * printed like a two-ink risograph zine: the org's primary and accent are the
- * two inks, so the same marks (the highlighter under titles, the paper
+ * two inks, so the same marks (the highlighter on inline words, the paper
  * grain, misregistered wordmarks) suit any theme an org picks or builds. Nothing
  * here names a colour: utilities mix the tokens where they paint, so the
  * scoped theme previews (tokenStyle on a wrapper) restyle them too.
@@ -176,7 +176,7 @@
   --highlight-strength: 48%;
 }
 
-/* Page titles: the display face wide and heavy, over a highlighter stroke. */
+/* Page titles: the display face wide and heavy. */
 @utility page-title {
   font-family: var(--font-heading);
   font-size: clamp(1.75rem, 1.3rem + 1.5vw, 2.5rem);
@@ -185,17 +185,6 @@
   line-height: 1.02;
   letter-spacing: -0.025em;
   text-wrap: balance;
-  /* An underline paints beneath the glyphs: a thick one pulled up into the
-     letters is a highlighter that follows the words and moves no layout. */
-  text-decoration-line: underline;
-  text-decoration-color: color-mix(
-    in oklab,
-    var(--brand-accent) var(--highlight-strength),
-    transparent
-  );
-  text-decoration-thickness: 0.3em;
-  text-underline-offset: -0.16em;
-  text-decoration-skip-ink: none;
 }
 
 /* Section and card headings: the same face, narrower and lighter. */

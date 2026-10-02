@@ -122,8 +122,7 @@ paper grain, the highlighter's strength per mode, the motion curve).
   figures, pushed to the ends of its width (50-150%) and weight (100-900) axes;
   **Atkinson Hyperlegible Next** for body text; **Martian Mono** for labels,
   dates and keyboard shortcuts.
-- **Utilities.** `page-title` (every page's `<h1>`: wide, heavy, over a
-  highlighter stroke drawn as a thick underline, so it moves no layout),
+- **Utilities.** `page-title` (every page's `<h1>`: wide and heavy),
   `heading` (card, dialog and sheet titles), `eyebrow` (mono caps labels),
   `numeral` (thin, condensed big figures), `figure` (mono tabular money in
   text), `ink-mark` (highlight inline words), `misregister` (the accent ink
