@@ -68,7 +68,7 @@ describe("templates", () => {
       acceptUrl: "https://portal.example.org/invite/abc",
       expiresAt: new Date("2026-10-01T00:00:00Z"),
     });
-    expect(email.subject).toBe("Jackson invited you to Claude Builders Club on CBC Portal");
+    expect(email.subject).toBe("Jackson invited you to Claude Builders Club on Bananasplit");
     expect(email.html).toContain('href="https://portal.example.org/invite/abc"');
     expect(email.text).toContain("https://portal.example.org/invite/abc");
     expect(email.html).toContain("as admin");

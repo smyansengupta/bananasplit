@@ -6,10 +6,18 @@
 // Connection settings come from run.mjs through the environment:
 //   RLS_HOST, RLS_PORT, RLS_DB        the throwaway database
 //   OWNER_USER, OWNER_PASSWORD        the migration owner (rls_owner by default)
+//   ADMIN_USER, ADMIN_PASSWORD        the role run.mjs created the database with
 //   RLS_ROLE_PASSWORD                 runtime role password (default 'test')
 import pg from "pg";
 
 export const ROLES = ["app_user", "app_service", "app_auth"];
+
+/** The admin run.mjs connected as, for the cases that need a superuser. */
+export async function connectAdmin() {
+  if (!process.env.ADMIN_USER)
+    throw new Error("ADMIN_USER is not set: run through `pnpm test:rls`");
+  return connectAs(process.env.ADMIN_USER, process.env.ADMIN_PASSWORD);
+}
 
 export function dbConfig() {
   const database = process.env.RLS_DB;

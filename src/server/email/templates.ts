@@ -25,7 +25,7 @@ export interface LayoutInput {
   footer?: string;
 }
 
-const PRODUCT = "CBC Portal";
+const PRODUCT = "Bananasplit";
 
 export function layout(input: LayoutInput): RenderedEmail {
   const subject = subjectLine(input.subject);
@@ -70,7 +70,7 @@ export function notificationEmail(input: {
     eyebrow: input.orgName,
     bodyHtml: `<p style="margin:0 0 12px;font-size:16px;font-weight:600">${escapeHtml(input.title)}</p>${input.body ? paragraph(input.body) : ""}`,
     bodyText: [input.title, input.body].filter(Boolean).join("\n\n"),
-    cta: input.url ? { label: "Open in CBC Portal", url: input.url } : undefined,
+    cta: input.url ? { label: "Open in Bananasplit", url: input.url } : undefined,
     footer: "Change which notifications email you in Settings > Notifications.",
   });
 }

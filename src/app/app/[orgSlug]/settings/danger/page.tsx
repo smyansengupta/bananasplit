@@ -1,3 +1,5 @@
+import { getUserIdentity } from "@/lib/auth/email-verification";
+import { isPlatformAdmin } from "@/lib/auth/org-creation";
 import { can } from "@/lib/auth/permissions";
 import { CBC_PEOPLE } from "@/server/bootstrap/cbc-template";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
@@ -9,12 +11,15 @@ import { BootstrapCard } from "./bootstrap-card";
 import { DeleteCard } from "./delete-card";
 import { ExportCard, type ExportRow } from "./export-card";
 
-/** Settings > Danger zone: export all data, bootstrap the CBC workspace, delete. OWNER only. */
+/**
+ * Settings > Danger zone: export all data, delete. OWNER only. Platform
+ * admins also see the CBC template (the platform's own club).
+ */
 export default async function DangerZonePage({
   params,
 }: PageProps<"/app/[orgSlug]/settings/danger">) {
   const { orgSlug } = await params;
-  const { organization, role, settings } = await getOrgContextBySlug(orgSlug);
+  const { organization, role, settings, user } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "org.delete")) {
     return <SettingsNoAccess title="Danger zone" who="owners" />;
   }
@@ -58,14 +63,14 @@ export default async function DangerZonePage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Danger zone</h1>
+      <h1 className="page-title">Danger zone</h1>
       <ExportCard
         orgId={orgId}
         orgSlug={organization.slug}
         exports={exportRows}
         expiryDays={EXPORT_EXPIRY_DAYS}
       />
-      {can({ role }, "workspace.bootstrap") && (
+      {can({ role }, "workspace.bootstrap") && isPlatformAdmin(await getUserIdentity(user.id)) && (
         <BootstrapCard
           orgId={orgId}
           people={CBC_PEOPLE.map((p) => ({ key: p.key, name: p.name, title: p.title }))}

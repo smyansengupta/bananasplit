@@ -30,6 +30,9 @@
  * included. A <style> needs no nonce.
  */
 
+// Relative, not "@/...": next.config.ts loads this file too.
+import { collabConfig } from "../collab/config";
+
 export type CspMode = "enforce" | "report-only";
 
 /** Paths under the nonce policy (the proxy matcher lists the same set). */
@@ -86,14 +89,20 @@ interface PolicyOptions {
 
 function sharedDirectives(env: NodeJS.ProcessEnv): string[] {
   const isProduction = env.NODE_ENV === "production";
-  const sentry = sentryOrigin(env);
+  const connect = [
+    "'self'",
+    sentryOrigin(env),
+    // The live-collaboration WebSocket, only while collaboration is on
+    // (docs/features/collaboration.md).
+    collabConfig(env)?.origin,
+  ].filter(Boolean);
   return [
     "default-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' blob: data: ${IMAGE_HOSTS.join(" ")}`,
     // FullCalendar ships its icon font inline as a data: URI in its CSS.
     "font-src 'self' data:",
-    `connect-src 'self'${sentry ? ` ${sentry}` : ""}`,
+    `connect-src ${connect.join(" ")}`,
     `form-action 'self' ${FORM_TARGETS.join(" ")}`,
     "frame-ancestors 'none'",
     "object-src 'none'",
@@ -144,12 +153,20 @@ export const STATIC_SECURITY_HEADERS: { key: string; value: string }[] = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
   },
-  { key: "X-Frame-Options", value: "DENY" },
 ];
+
+/**
+ * X-Frame-Options: DENY, on every path except the Notes files route, whose
+ * PDFs the in-app preview shows in a same-origin frame (that route sends
+ * SAMEORIGIN and its own frame-ancestors 'self').
+ */
+export const FRAME_DENY_HEADER = { key: "X-Frame-Options", value: "DENY" };
+const FRAMABLE = "api/orgs/[^/]+/files/";
+export const NOT_FRAMABLE_SOURCE = `/((?!${FRAMABLE}).*)`;
 
 /**
  * next.config.ts `source` for the static CSP: every path EXCEPT the nonce
  * routes (so a matched route never carries two policies).
  */
 export const STATIC_CSP_SOURCE =
-  "/((?!app/|app$|poll/|poll$|invite/|invite$|sign-in|sign-up|verify-email|onboarding).*)";
+  `/((?!app/|app$|poll/|poll$|invite/|invite$|sign-in|sign-up|verify-email|onboarding|${FRAMABLE}).*)`;

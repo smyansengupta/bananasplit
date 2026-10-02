@@ -14,6 +14,8 @@ const RESEND_LIMIT = { limit: 3, windowSec: 60 * 60 } as const;
 export interface ResendState {
   error?: string;
   sent?: boolean;
+  /** Already verified (e.g. in another tab): nothing was sent. */
+  verified?: boolean;
 }
 
 /**
@@ -26,7 +28,7 @@ export async function resendVerificationEmailAction(_prev: ResendState): Promise
   const user = await requireUser();
   const identity = await getUserIdentity(user.id);
   if (!identity) return { error: "Account not found." };
-  if (identity.emailVerified) return { sent: false };
+  if (identity.emailVerified) return { verified: true };
 
   const limited = await checkRateLimit(
     rateLimitKey("verify-resend", user.id),
@@ -40,6 +42,14 @@ export async function resendVerificationEmailAction(_prev: ResendState): Promise
     };
   }
 
-  await enqueueVerificationEmail(user.id);
+  try {
+    await enqueueVerificationEmail(user.id);
+  } catch (error) {
+    console.error(
+      "[verify-email] could not queue the verification email",
+      error instanceof Error ? error.message : error,
+    );
+    return { error: "We couldn't send a new link right now. Try again in a few minutes." };
+  }
   return { sent: true };
 }

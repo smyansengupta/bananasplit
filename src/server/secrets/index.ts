@@ -61,6 +61,7 @@ const PROVIDER_LABEL: Record<IntegrationProvider, string> = {
   EMAIL_RESEND: "email sender (Resend) key",
   SUPABASE_SOURCE: "website data source password",
   NETLIFY_BUILD_HOOK: "website build hook",
+  OPENAI_COMPATIBLE: "AI model API key",
 };
 
 interface SecretRow {

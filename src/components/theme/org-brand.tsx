@@ -39,7 +39,7 @@ export function OrgBrand({
 
   let content: React.ReactNode;
   if (display === "NAME_ONLY") {
-    content = <span className="truncate font-semibold">{name}</span>;
+    content = <span className="heading truncate text-[0.95rem]">{name}</span>;
   } else if (wide) {
     content = (
       // eslint-disable-next-line @next/next/no-img-element -- pre-sized public WebP variants
@@ -66,14 +66,15 @@ export function OrgBrand({
             decoding="async"
           />
         ) : (
+          // A two-ink monogram: initials in the primary, the accent off register.
           <span
             aria-hidden="true"
-            className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-semibold"
+            className="bg-primary text-primary-foreground misregister font-heading flex size-8 shrink-0 items-center justify-center rounded-md text-[0.8rem] font-black font-stretch-[125%]"
           >
             {orgInitials(name)}
           </span>
         )}
-        <span className="truncate font-semibold">{name}</span>
+        <span className="heading truncate text-[0.95rem]">{name}</span>
       </>
     );
   }

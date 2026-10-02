@@ -15,9 +15,7 @@ export function OrgPendingDeletion({ org }: { org: PendingDeletionOrg }) {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md space-y-4 rounded-lg border p-6">
-        <h1 className="text-xl font-semibold tracking-tight">
-          {org.name} is scheduled for deletion
-        </h1>
+        <h1 className="page-title">{org.name} is scheduled for deletion</h1>
         <p className="text-muted-foreground text-sm">
           {org.deleteScheduledFor
             ? `On ${dateFmt.format(org.deleteScheduledFor)} its members, tasks, notes, events, files and settings are deleted for good.`

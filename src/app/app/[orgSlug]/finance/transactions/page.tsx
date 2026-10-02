@@ -1,11 +1,13 @@
 import { Download } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { NewTransactionButton, TransactionTable } from "@/components/finance/transaction-table";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
-import { requirePermission } from "@/lib/auth/permissions";
+import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
+import { FinanceAccessGate } from "../finance-access-gate";
 import {
   getCategoriesForPeriods,
   getOrgMembersForPicker,
@@ -23,8 +25,10 @@ export default async function TransactionsPage({
   const query = await searchParams;
 
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
-  // ForbiddenError renders the segment's "no access" state (error.tsx).
-  requirePermission({ role }, "finance.manage");
+  // Not an owner or treasurer: who is, and what to do instead (never an error page).
+  if (!can({ role }, "finance.manage")) {
+    return <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} />;
+  }
 
   const filters: TransactionFilters = {
     budgetPeriodId: typeof query.period === "string" ? query.period : undefined,
@@ -37,6 +41,7 @@ export default async function TransactionsPage({
     dateTo: typeof query.dateTo === "string" ? query.dateTo : undefined,
     reconciled:
       query.reconciled === "yes" || query.reconciled === "no" ? query.reconciled : undefined,
+    deleted: query.deleted === "show" ? "show" : undefined,
   };
 
   const { transactions, periods, categories, memberships } = await withOrgTx(
@@ -54,6 +59,12 @@ export default async function TransactionsPage({
     name: m.user.name,
     email: m.user.email,
   }));
+
+  const toggleDeleted = new URLSearchParams(
+    Object.entries(query).filter(([k, v]) => typeof v === "string" && k !== "deleted") as [string, string][],
+  );
+  if (filters.deleted !== "show") toggleDeleted.set("deleted", "show");
+  const toggleDeletedQuery = toggleDeleted.toString();
 
   const exportQuery = new URLSearchParams(
     Object.entries(query).filter(([, v]) => typeof v === "string") as [string, string][],
@@ -78,6 +89,15 @@ export default async function TransactionsPage({
             currentUserId={user.id}
           />
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Link
+          href={`/app/${orgSlug}/finance/transactions?${toggleDeletedQuery}`}
+          className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline"
+        >
+          {filters.deleted === "show" ? "Hide deleted transactions" : "Show deleted transactions"}
+        </Link>
       </div>
 
       <TransactionTable

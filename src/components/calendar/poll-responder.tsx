@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PollAvailability } from "@/generated/prisma/enums";
-import type { PollView } from "@/lib/polls/poll-view";
+import type { PollAnswer, PollView } from "@/lib/polls/poll-view";
 import { cn } from "@/lib/utils";
 
 import { useViewerTimeZone } from "./hooks";
@@ -76,7 +76,7 @@ import {
  * viewer's timezone, which the page says, with a switch to the poll's own.
  */
 
-const BRUSHES = [PollAvailability.YES, PollAvailability.IF_NEEDED, PollAvailability.NO] as const;
+const BRUSHES = [PollAvailability.YES, PollAvailability.IF_NEEDED] as const;
 const KEYBOARD_SAVE_DELAY_MS = 700;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -84,8 +84,9 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 interface Stroke {
   anchor: GridPosition;
   last: GridPosition;
-  base: Record<string, PollAvailability>;
-  value: PollAvailability;
+  base: Record<string, PollAnswer>;
+  /** Null clears. */
+  value: PollAnswer | null;
 }
 
 export function PollResponder({
@@ -132,10 +133,10 @@ export function PollResponder({
   const isClosed = isFinalized || (poll.closesAt ? poll.closesAt.getTime() < now : false);
 
   // --- my answers ----------------------------------------------------------
-  const [myResponses, setMyResponses] = useState<Record<string, PollAvailability>>(() => ({
+  const [myResponses, setMyResponses] = useState<Record<string, PollAnswer>>(() => ({
     ...poll.myResponses,
   }));
-  const [brush, setBrush] = useState<PollAvailability>(PollAvailability.YES);
+  const [brush, setBrush] = useState<PollAnswer>(PollAvailability.YES);
   const [guestName, setGuestName] = useState(poll.myGuestName ?? "");
   const [savedName, setSavedName] = useState(poll.myGuestName ?? "");
   const [needsName, setNeedsName] = useState(false);
@@ -207,7 +208,7 @@ export function PollResponder({
     [],
   );
 
-  async function save(next: Record<string, PollAvailability>, name = guestName) {
+  async function save(next: Record<string, PollAnswer>, name = guestName) {
     if (isGuest && !name.trim()) {
       setDirty(true);
       setNeedsName(true);
@@ -263,12 +264,12 @@ export function PollResponder({
 
   function paintWithKeyboard(
     slot: PollSlotLite,
-    _position: GridPosition,
+    position: GridPosition,
     { extend }: { extend: boolean },
   ) {
     if (!canEdit) return;
     const value = extend ? brush : strokeValue(myResponses[slot.id], brush);
-    const next = { ...myResponses, [slot.id]: value };
+    const next = paintRect(myResponses, grid, position, position, value);
     setMyResponses(next);
     if (keyboardTimer.current) clearTimeout(keyboardTimer.current);
     keyboardTimer.current = setTimeout(() => void save(next), KEYBOARD_SAVE_DELAY_MS);
@@ -329,7 +330,6 @@ export function PollResponder({
     const names = [
       s.yes.length ? `Available: ${s.yes.map((r) => r.label).join(", ")}` : "",
       s.ifNeeded.length ? `If needed: ${s.ifNeeded.map((r) => r.label).join(", ")}` : "",
-      s.no.length ? `Unavailable: ${s.no.map((r) => r.label).join(", ")}` : "",
     ]
       .filter(Boolean)
       .join(". ");
@@ -415,7 +415,7 @@ export function PollResponder({
       {/* Not a <header>: on the public link the org frame owns the page header. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight break-words">{poll.title}</h1>
+          <h1 className="page-title break-words">{poll.title}</h1>
           {poll.description && (
             <p className="text-muted-foreground max-w-prose text-sm whitespace-pre-wrap">
               {poll.description}
@@ -557,7 +557,7 @@ export function PollResponder({
                 </div>
                 <p id="poll-paint-help" className="text-muted-foreground text-xs">
                   Click a time, or drag across several, to mark them. Start on a time you&apos;ve
-                  already marked to undo. Empty boxes are times you haven&apos;t answered.
+                  already marked to clear it. Leave the times you can&apos;t make empty.
                   <span className="hidden pointer-coarse:inline">
                     {" "}
                     Drag the time column to scroll.
@@ -763,8 +763,8 @@ function BrushPicker({
   value,
   onChange,
 }: {
-  value: PollAvailability;
-  onChange: (v: PollAvailability) => void;
+  value: PollAnswer;
+  onChange: (v: PollAnswer) => void;
 }) {
   return (
     <fieldset className="flex w-full flex-wrap items-center gap-2 sm:w-auto">

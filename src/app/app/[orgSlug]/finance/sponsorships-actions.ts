@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   SponsorshipStatus,
+  SponsorshipType,
   TransactionDirection,
   TransactionKind,
 } from "@/generated/prisma/client";
@@ -68,6 +69,7 @@ const SPONSORSHIP_STATUS_VALUES = Object.values(SponsorshipStatus) as [
 const sponsorshipInputSchema = z.object({
   sponsorId: z.string(),
   budgetPeriodId: z.string(),
+  type: z.enum([SponsorshipType.CASH, SponsorshipType.CREDITS]).default(SponsorshipType.CASH),
   amountCents: z.number().int().positive("Amount must be greater than zero."),
   tier: z.string().max(100).nullable().optional(),
   deliverables: z.string().max(2000).nullable().optional(),
@@ -108,6 +110,7 @@ export const createSponsorship = withOrgAction(
         organizationId,
         sponsorId: data.sponsorId,
         budgetPeriodId: data.budgetPeriodId,
+        type: data.type,
         amountCents: data.amountCents,
         tier: data.tier || null,
         deliverables: data.deliverables || null,
@@ -130,7 +133,8 @@ export const createSponsorship = withOrgAction(
  * Reaching RECEIVED generates the corresponding IN transaction; nothing
  * before that touches the ledger. Moving back out of RECEIVED voids that
  * transaction rather than deleting it (spec 5.6) — pledged money never
- * silently disappears from the audit trail.
+ * silently disappears from the audit trail. Credits never touch the ledger:
+ * no money changes hands, so their status is all that changes.
  */
 export const updateSponsorshipStatus = withOrgAction(
   async (ctx, sponsorshipId: string, status: string): Promise<ActionResult> => {
@@ -150,8 +154,9 @@ export const updateSponsorshipStatus = withOrgAction(
     if (nextStatus === sponsorship.status) return { sponsorshipId };
 
     let transactionId = sponsorship.transactionId;
+    const isCash = sponsorship.type === SponsorshipType.CASH;
 
-    if (nextStatus === SponsorshipStatus.RECEIVED) {
+    if (isCash && nextStatus === SponsorshipStatus.RECEIVED) {
       const existing = transactionId
         ? await db.transaction.findFirst({ where: { id: transactionId, organizationId } })
         : null;
@@ -195,7 +200,7 @@ export const updateSponsorshipStatus = withOrgAction(
           after: transaction,
         });
       }
-    } else if (sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
+    } else if (isCash && sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
       const existing = await db.transaction.findFirst({
         where: { id: transactionId, organizationId },
       });
@@ -233,3 +238,51 @@ export const updateSponsorshipStatus = withOrgAction(
     return { sponsorshipId };
   },
 );
+
+/**
+ * Deletes a sponsorship (a wrong entry, a deal that never happened). Money
+ * already received is its own transaction and stays in the books; delete
+ * that under Transactions if it was a mistake too. The audit log keeps the
+ * deleted row.
+ */
+export const deleteSponsorship = withOrgAction(
+  async (ctx, sponsorshipId: string): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
+    const organizationId = ctx.organizationId;
+    const sponsorship = await ctx.db.sponsorship.findFirst({
+      where: { id: sponsorshipId, organizationId },
+      include: { sponsor: { select: { name: true } } },
+    });
+    if (!sponsorship) return { error: "Sponsorship not found." };
+    await ctx.db.sponsorship.delete({ where: { id: sponsorship.id } });
+    await writeFinanceAuditLog(ctx.db, {
+      organizationId,
+      transactionId: sponsorship.transactionId ?? undefined,
+      action: "SPONSORSHIP_DELETE",
+      before: sponsorship,
+    });
+    return {};
+  },
+);
+
+/** Deletes a sponsor with no sponsorships left (delete those first). */
+export const deleteSponsor = withOrgAction(async (ctx, sponsorId: string): Promise<ActionResult> => {
+  requirePermission(ctx, "finance.manage");
+  const organizationId = ctx.organizationId;
+  const sponsor = await ctx.db.sponsor.findFirst({
+    where: { id: sponsorId, organizationId },
+    include: { _count: { select: { sponsorships: true } } },
+  });
+  if (!sponsor) return { error: "Sponsor not found." };
+  if (sponsor._count.sponsorships > 0) {
+    const n = sponsor._count.sponsorships;
+    return { error: `${sponsor.name} still has ${n} sponsorship${n === 1 ? "" : "s"}. Delete ${n === 1 ? "it" : "them"} first.` };
+  }
+  await ctx.db.sponsor.delete({ where: { id: sponsor.id } });
+  await writeFinanceAuditLog(ctx.db, {
+    organizationId,
+    action: "SPONSOR_DELETE",
+    before: { id: sponsor.id, name: sponsor.name },
+  });
+  return {};
+});

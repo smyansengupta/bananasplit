@@ -649,19 +649,17 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, versionId));
       expect(draft?.version).toMatchObject({ source: "MANUAL", parseMethod: "TEMPLATE" });
       expect(draft?.positions.map((p) => p.title).sort()).toEqual([
+        "Events Lead",
         "Faculty Advisor",
-        "Graphic Designer",
-        "Head of Finance",
-        "Head of Programs",
-        "Head of Social & Membership",
-        "Head of Tech",
+        "Marketing Lead",
         "President",
-        "VP Growth",
-        "VP Operations",
+        "Secretary",
+        "Treasurer",
+        "Vice President",
       ]);
       // Roles and reporting lines are filled in; the people are not.
       expect(draft?.positions.every((p) => p.personName === null && p.userId === null)).toBe(true);
-      expect(draft?.positions.find((p) => p.key === "graphic-designer")?.isOpen).toBe(true);
+      expect(draft?.positions.find((p) => p.key === "marketing-lead")?.isOpen).toBe(true);
       expect(draft?.positions.find((p) => p.key === "faculty-advisor")?.isAdvisor).toBe(true);
       expect(draft?.positions.filter((p) => p.reportsToId === null)).toHaveLength(1);
       expect(draft?.positions.find((p) => p.key === "president")?.responsibilities.length).toBeGreaterThan(2);
@@ -671,7 +669,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       expect(published).toMatchObject({ ok: true });
       const live = await getPublishedOrgChart(s.cbcId);
       expect(live?.versionId).toBe(versionId);
-      expect(live?.positions).toHaveLength(9);
+      expect(live?.positions).toHaveLength(7);
       await withSystemOrgTx(s.cbcId, async ({ db }) => {
         await db.orgChartVersion.update({ where: { id: versionId }, data: { status: "DISCARDED" } });
         await db.orgChartVersion.update({ where: { id: restoreTo }, data: { status: "PUBLISHED" } });

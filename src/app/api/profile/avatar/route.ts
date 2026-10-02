@@ -2,8 +2,9 @@ import { getSession } from "@/lib/auth/session";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { ImageRejectedError, sniffImageType } from "@/server/images";
 import { removeOwnAvatar, replaceOwnAvatar } from "@/server/profiles/service";
-import { MAX_UPLOAD_BYTES } from "@/server/storage";
+import { MAX_UPLOAD_BYTES, STORAGE_NOT_SET_UP, StorageConfigError } from "@/server/storage";
 import { readUpload, UploadError } from "@/server/storage/upload";
+import { isCrossSite } from "@/lib/http/cross-site";
 
 /**
  * /api/profile/avatar: the signed-in user's profile picture (Phase 2).
@@ -36,20 +37,6 @@ const TOO_LARGE = "Profile pictures are limited to 4 MB. Try a smaller photo.";
 
 function json(status: number, body: Record<string, unknown>): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-}
-
-/**
- * Route handlers get no built-in CSRF check (Server Actions do): refuse a
- * browser request whose Origin is another site.
- */
-function isCrossSite(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== new URL(request.url).host;
-  } catch {
-    return true;
-  }
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -93,6 +80,10 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     if (error instanceof ImageRejectedError) {
       return json(error.reason === "type" ? 415 : 422, { error: error.message });
+    }
+    if (error instanceof StorageConfigError) {
+      console.error("[avatar] storage not configured:", error.message);
+      return json(503, { error: STORAGE_NOT_SET_UP });
     }
     console.error("[avatar] upload failed", error instanceof Error ? error.message : error);
     return json(500, { error: "Couldn't save your picture. Try again." });

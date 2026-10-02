@@ -35,6 +35,21 @@ export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
+/** What the Notes page takes (after sniffing; see src/lib/files/types.ts). */
+export const NOTE_FILE_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+] as const;
+
 export const STORAGE_KINDS = {
   receipts: {
     store: "private",
@@ -62,6 +77,13 @@ export const STORAGE_KINDS = {
     maxUploadBytes: 0,
     contentTypes: ["application/zip", "application/x-ndjson", "text/csv"],
     description: "OWNER data exports: exports/{orgId}/{exportId}.zip and its parts (server-made)",
+  },
+  files: {
+    store: "private",
+    scope: "org",
+    maxUploadBytes: MAX_UPLOAD_BYTES,
+    contentTypes: NOTE_FILE_TYPES,
+    description: "Files on the Notes page (PDF, Word, slides, images...): files/{orgId}/{randomId}",
   },
   logos: {
     store: "public",

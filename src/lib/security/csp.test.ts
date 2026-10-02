@@ -10,6 +10,7 @@ import {
   isNonceRoute,
   NONCE_ROUTE_PREFIXES,
   sentryOrigin,
+  NOT_FRAMABLE_SOURCE,
   STATIC_CSP_SOURCE,
   STATIC_SECURITY_HEADERS,
 } from "./csp";
@@ -68,6 +69,20 @@ describe("nonce policy (0A Fix 13)", () => {
     );
     expect(policy.get("connect-src")).toBe("'self'");
   });
+
+  it("allows the live-collaboration WebSocket only while collaboration is on", () => {
+    const collab = {
+      NODE_ENV: "production",
+      COLLAB_SERVER_URL: "wss://collab.example.org/ws",
+      COLLAB_SECRET: "s".repeat(40),
+    };
+    const connect = (vars: Record<string, string>) =>
+      directives(buildNonceCsp("n", { env: env(vars) })).get("connect-src");
+    expect(connect({ ...collab, COLLAB_ENABLED: "true" })).toBe("'self' wss://collab.example.org");
+    expect(connect(collab)).toBe("'self'");
+    // Enabled but unusable (no secret): collaboration stays off, and so does the origin.
+    expect(connect({ ...collab, COLLAB_ENABLED: "true", COLLAB_SECRET: "" })).toBe("'self'");
+  });
 });
 
 describe("static policy for every other route", () => {
@@ -97,6 +112,20 @@ describe("static policy for every other route", () => {
       expect(regex.test(path), path).toBe(true);
       expect(isNonceRoute(path), path).toBe(false);
     }
+  });
+});
+
+describe("the Notes files route", () => {
+  it("is the only path left framable (same origin), and carries no static CSP", () => {
+    const deny = new RegExp(`^${NOT_FRAMABLE_SOURCE}$`);
+    const staticCsp = new RegExp(`^${STATIC_CSP_SOURCE}$`);
+    const file = "/api/orgs/org_1/files/f_1";
+    expect(deny.test(file)).toBe(false);
+    expect(staticCsp.test(file)).toBe(false);
+    for (const path of ["/", "/api/health", "/api/orgs/org_1/logo", "/api/orgs/org_1/receipts", "/app/cbc"]) {
+      expect(deny.test(path), path).toBe(true);
+    }
+    expect(staticCsp.test("/api/orgs/org_1/logo")).toBe(true);
   });
 });
 

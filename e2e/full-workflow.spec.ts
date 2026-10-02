@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  completeProfileSetup,
+  createOrgViaOnboarding,
   dayButtonName,
   makeUser,
   signIn,
@@ -20,20 +22,21 @@ test("full workspace workflow", async ({ page }) => {
   const member = makeUser("Member");
   const orgName = `E2E Robotics ${uniqueSuffix()}`;
 
-  // --- sign-up leaves the account unverified: no org until the email is ---
+  // --- sign-up leaves the account unverified: profile setup first, no org
+  // until the email is verified ---
   await signUp(page, owner);
-  await expect(page).toHaveURL(/\/onboarding/);
+  await expect(page).toHaveURL(/\/onboarding\/profile\/basics/);
   await expect(page.getByText("Check your email")).toBeVisible();
   await expect(page.getByLabel("Organization name")).toHaveCount(0);
 
   await verifyEmail(page, owner.email);
-  await expect(page).toHaveURL(/\/onboarding/);
   await expect(page.getByText("Check your email")).toHaveCount(0);
 
-  await page.getByLabel("Organization name").fill(orgName);
-  await page.getByRole("button", { name: "Create organization" }).click();
-  await expect(page).toHaveURL(/\/app\/[^/]+$/);
-  const orgSlug = new URL(page.url()).pathname.split("/")[2];
+  // --- profile setup (Flow A), then create the org (Flow B) ---
+  await completeProfileSetup(page, "create");
+  const orgSlug = await createOrgViaOnboarding(page, orgName);
+  // The end of org setup shows the invite code to share.
+  await expect(page.getByText(`${orgName} is ready`)).toBeVisible();
 
   // --- invite a member and have them join ---
   await page.goto(`/app/${orgSlug}/settings/members`);
@@ -48,7 +51,8 @@ test("full workspace workflow", async ({ page }) => {
   await expect(page).toHaveURL(/\/onboarding/);
   await expect(page.getByRole("button", { name: "Join" })).toHaveCount(0);
   await verifyEmail(page, member.email);
-  await page.getByRole("button", { name: "Join" }).click();
+  await completeProfileSetup(page, "join");
+  await page.getByRole("button", { name: "Join", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}$`));
 
   await signOut(page);
@@ -57,7 +61,7 @@ test("full workspace workflow", async ({ page }) => {
   // --- create a task, then drag it to a different status column ---
   await page.goto(`/app/${orgSlug}/tasks`);
   const taskTitle = `E2E task ${uniqueSuffix()}`;
-  await page.getByRole("button", { name: "Add task to Not started" }).click();
+  await page.getByRole("button", { name: "Add a task to Not started" }).click();
   await page.getByLabel("Title").fill(taskTitle);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
@@ -82,7 +86,8 @@ test("full workspace workflow", async ({ page }) => {
 
   // --- write and share a note ---
   await page.goto(`/app/${orgSlug}/notes`);
-  await page.getByRole("button", { name: "New note" }).click();
+  await page.getByRole("button", { name: "New" }).click();
+  await page.getByRole("menuitem", { name: "Blank note" }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}/notes/`));
   const noteTitle = `E2E note ${uniqueSuffix()}`;
   await page.getByPlaceholder("Untitled note").fill(noteTitle);

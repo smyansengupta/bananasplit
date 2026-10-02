@@ -144,6 +144,34 @@ describe("submitPollResponse", () => {
     expect(cookieJar.set).not.toHaveBeenCalled();
   });
 
+  it("clears a member's times left out of the answer, or sent as NO", async () => {
+    getSessionMock.mockResolvedValue({ user: { id: "u_member", email: "m@example.edu", name: "M" } });
+    db.membership.count.mockResolvedValue(1);
+    db.availabilityPoll.findFirst.mockResolvedValue({
+      id: "poll_1",
+      finalizedEventId: null,
+      closesAt: null,
+      slots: [{ id: "slot_1" }, { id: "slot_2" }],
+    });
+    await submitPollResponse({
+      pollId: "poll_1",
+      entries: [
+        { slotId: "slot_1", availability: "YES" },
+        { slotId: "slot_2", availability: "NO" },
+      ],
+    });
+    expect(db.pollResponse.deleteMany).toHaveBeenCalledWith({
+      where: { organizationId: "org_1", pollId: "poll_1", userId: "u_member", slotId: { notIn: ["slot_1"] } },
+    });
+    expect(db.pollResponse.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores no NO for a guest either", async () => {
+    await submitPollResponse({ pollId: "poll_1", guestName: "Ada", entries: [{ slotId: "slot_1", availability: "NO" }] });
+    expect(db.pollResponse.deleteMany).toHaveBeenCalledTimes(1);
+    expect(db.pollResponse.createMany).not.toHaveBeenCalled();
+  });
+
   it("rejects a slot from another poll, a closed poll and a finalized poll", async () => {
     expect((await submitPollResponse({ pollId: "poll_1", guestName: "A", entries: [{ slotId: "slot_x", availability: "YES" }] })).error).toMatch(
       /isn't part/,

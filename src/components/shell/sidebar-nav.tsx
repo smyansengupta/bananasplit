@@ -1,46 +1,241 @@
 "use client";
 
+import {
+  CalendarCheck,
+  CalendarDays,
+  CheckSquare,
+  Database,
+  FileText,
+  LayoutDashboard,
+  Network,
+  NotebookText,
+  Pin,
+  Plus,
+  Settings,
+  Users,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTransition } from "react";
 
+import { unpinAction } from "@/app/app/[orgSlug]/_shell/pin-actions";
+import { BananasplitMark } from "@/components/bananasplit-mark";
+import { isLinkActive, type NavLink, type NavSection } from "@/components/shell/nav-config";
+import { usePinDrop } from "@/components/pins/pin-dnd";
+import { usePins } from "@/components/pins/pins-context";
+import { canonicalHref } from "@/lib/pins/pages";
+import { PIN_ICONS } from "@/components/shell/pin-icons";
+import type { PinKind } from "@/lib/pins/pages";
 import { cn } from "@/lib/utils";
-import { isNavItemActive, type NavItem } from "@/components/shell/nav-config";
 
-export function SidebarNav({
-  items,
-  orgSlug,
+export interface SidebarPin {
+  id: string;
+  href: string;
+  label: string;
+  kind: PinKind;
+}
+
+const NAV_ICONS: Record<string, LucideIcon> = {
+  CalendarCheck,
+  CalendarDays,
+  CheckSquare,
+  Database,
+  LayoutDashboard,
+  Network,
+  NotebookText,
+  Settings,
+  Users,
+  Wallet,
+};
+
+const itemClass = (active: boolean) =>
+  cn(
+    "focus-visible:ring-ring relative flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
+    active
+      ? // The page you're on: a highlighter tint, with the primary ink's notch.
+        "bg-sidebar-accent text-sidebar-accent-foreground before:bg-sidebar-primary font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full"
+      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+  );
+
+function NavItemLink({
+  link,
+  pathname,
+  all,
   onNavigate,
 }: {
-  items: NavItem[];
-  orgSlug: string;
+  link: NavLink;
+  pathname: string;
+  all: readonly NavLink[];
+  onNavigate?: () => void;
+}) {
+  const isActive = isLinkActive(link, pathname, all);
+  const Icon = NAV_ICONS[link.icon] ?? FileText;
+  return (
+    <Link
+      href={link.href}
+      onClick={onNavigate}
+      aria-current={pathname === link.href ? "page" : isActive ? "true" : undefined}
+      title="Drag onto Pinned to pin it"
+      className={itemClass(isActive)}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      {link.label}
+    </Link>
+  );
+}
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="eyebrow text-sidebar-foreground/60 px-3 pt-4 pb-1.5">
+      {children}
+    </span>
+  );
+}
+
+function PinnedList({
+  pins,
+  orgId,
+  pathname,
+  onNavigate,
+}: {
+  pins: SidebarPin[];
+  orgId: string;
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  const router = useRouter();
+  const pinsCtx = usePins();
+  const search = useSearchParams().toString();
+  const current = pinsCtx ? canonicalHref(pinsCtx.orgSlug, search ? `${pathname}?${search}` : pathname) : pathname;
+  const [pending, start] = useTransition();
+  const { over, error, zone, pinProps } = usePinDrop(
+    orgId,
+    pins.map((p) => p.id),
+  );
+  return (
+    <div
+      {...zone}
+      className={cn(
+        "-mx-1 flex flex-col rounded-lg px-1 pb-1 transition-colors",
+        over && "bg-sidebar-accent/60 ring-sidebar-ring ring-1",
+      )}
+    >
+      <div className="flex items-center justify-between pr-1">
+        <GroupLabel>
+          <span className="inline-flex items-center gap-1">
+            <Pin className="size-3" aria-hidden="true" />
+            Pinned
+          </span>
+        </GroupLabel>
+        {pinsCtx && (
+          <button
+            type="button"
+            onClick={() => pinsCtx.openPicker()}
+            aria-label="Pin something"
+            title="Pin something"
+            className="text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent mt-2 rounded p-0.5"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      {pins.length === 0 ? (
+        <p
+          className={cn(
+            "text-sidebar-foreground/50 mx-1 rounded-md border border-dashed px-2 py-2 text-xs leading-snug",
+            over && "border-sidebar-ring text-sidebar-foreground",
+          )}
+        >
+          Drag any page here, press Pin at the top of a page, or use + to pin anything.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-0.5">
+          {pins.map((pin) => {
+            const Icon = PIN_ICONS[pin.kind] ?? FileText;
+            const active = current === pin.href;
+            return (
+              <li key={pin.id} className="group relative" {...pinProps(pin.id)}>
+                <Link
+                  href={pin.href}
+                  onClick={onNavigate}
+                  draggable={false}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(itemClass(active), "pr-8 font-normal")}
+                >
+                  <Icon className="size-4 shrink-0 opacity-70" aria-hidden="true" />
+                  <span className="truncate">{pin.label}</span>
+                </Link>
+                <button
+                  type="button"
+                  disabled={pending}
+                  aria-label={`Unpin ${pin.label}`}
+                  onClick={() =>
+                    start(async () => {
+                      await unpinAction(orgId, pin.id);
+                      router.refresh();
+                    })
+                  }
+                  className="text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent focus-visible:ring-ring absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              </li>
+            );
+          })}
+          {over && (
+            <li className="text-sidebar-foreground/70 mx-1 rounded-md border border-dashed px-2 py-1.5 text-xs">
+              Drop to pin
+            </li>
+          )}
+        </ul>
+      )}
+      {error && <p className="text-destructive px-3 pt-1 text-xs">{error}</p>}
+    </div>
+  );
+}
+
+export function SidebarNav({
+  sections,
+  settings,
+  orgId,
+  pins = [],
+  onNavigate,
+}: {
+  sections: NavSection[];
+  settings: NavLink;
+  orgId: string;
+  pins?: SidebarPin[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const all = [...sections.flatMap((s) => s.items), settings];
 
   return (
-    <nav aria-label="Main" className="flex flex-col gap-1">
-      {items.map((item) => {
-        const href = item.href(orgSlug);
-        const isActive = isNavItemActive(item, orgSlug, pathname, items);
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.label}
-            href={href}
-            onClick={onNavigate}
-            aria-current={pathname === href ? "page" : isActive ? "true" : undefined}
-            className={cn(
-              "focus-visible:ring-ring flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none",
-              isActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            )}
-          >
-            <Icon className="size-4 shrink-0" aria-hidden="true" />
-            {item.label}
-          </Link>
-        );
-      })}
+    <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col">
+      <div className="flex flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto">
+        {sections.map((section) => (
+          <div key={section.id} className="flex flex-col gap-0.5">
+            {section.label && <GroupLabel>{section.label}</GroupLabel>}
+            {section.items.map((link) => (
+              <NavItemLink key={link.id} link={link} pathname={pathname} all={all} onNavigate={onNavigate} />
+            ))}
+          </div>
+        ))}
+        <PinnedList pins={pins} orgId={orgId} pathname={pathname} onNavigate={onNavigate} />
+      </div>
+      <div className="border-sidebar-border mt-3 border-t pt-3">
+        <NavItemLink link={settings} pathname={pathname} all={all} onNavigate={onNavigate} />
+        {/* The platform's signature, under the club's own nav: quiet, not a link. */}
+        <p className="text-sidebar-foreground/60 mt-3 flex items-center gap-2 px-3">
+          <BananasplitMark className="size-5" />
+          <span className="font-heading text-[0.7rem] font-black tracking-[-0.02em] font-stretch-[150%]">
+            Bananasplit
+          </span>
+        </p>
+      </div>
     </nav>
   );
 }

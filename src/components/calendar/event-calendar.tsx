@@ -260,7 +260,7 @@ export function EventCalendar({
         {range.kinds.length > 0 || range.visibility
           ? "No event here matches the filters. Clear them to see everything in this window."
           : canManage
-            ? "Add a workshop, a social or a board meeting, and it appears here and on the website if you make it public."
+            ? "Add a meeting, a social or any event. It shows here, and on your website if you make it public."
             : "Sessions the board schedules show up here. You will be notified when you are invited to one."}
       </p>
       <div className="mt-1 flex gap-2">

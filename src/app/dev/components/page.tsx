@@ -60,7 +60,7 @@ export default function ComponentsDevPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-10 p-6 pb-24">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Component primitives</h1>
+        <h1 className="page-title">Component primitives</h1>
         <p className="text-muted-foreground text-sm">
           Every shadcn/ui primitive currently installed, for visual review and manual a11y checks.
         </p>

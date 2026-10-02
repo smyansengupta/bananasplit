@@ -1,11 +1,12 @@
 import Link from "next/link";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
-import { GoogleIcon } from "@/components/google-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { signIn } from "@/lib/auth/config";
+import { signInPath } from "@/lib/auth/callback-url";
 import { getUserIdentity } from "@/lib/auth/email-verification";
+import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 import { sameEmail } from "@/lib/auth/normalize-email";
 import { getSession } from "@/lib/auth/session";
 import { findInvitationByRawToken } from "@/server/settings/invitations";
@@ -56,28 +57,36 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
         title={`Join ${invitation.orgName}`}
         description={`Sign in as ${invitation.email} to accept this invite.`}
       >
-        <form
-          action={async () => {
-            "use server";
-            await signIn("google", { redirectTo: `/invite/${token}` });
-          }}
-        >
-          <Button type="submit" variant="outline" className="w-full">
-            <GoogleIcon className="size-4" />
-            Continue with Google
-          </Button>
-        </form>
-        <p className="text-muted-foreground mt-3 text-center text-sm">
-          Or{" "}
-          <Link href="/sign-in" className="underline underline-offset-4">
-            sign in
-          </Link>{" "}
-          or{" "}
-          <Link href="/sign-up" className="underline underline-offset-4">
-            create an account
-          </Link>{" "}
-          with your email, verify it, then open this link again.
-        </p>
+        {googleSignInEnabled() ? (
+          <>
+            <GoogleSignInButton redirectTo={`/invite/${token}`} />
+            <p className="text-muted-foreground mt-3 text-center text-sm">
+              Or{" "}
+              <Link href={signInPath(`/invite/${token}`)} className="underline underline-offset-4">
+                sign in
+              </Link>{" "}
+              or{" "}
+              <Link href="/sign-up" className="underline underline-offset-4">
+                create an account
+              </Link>{" "}
+              with your email, verify it, then open this link again.
+            </p>
+          </>
+        ) : (
+          <>
+            {/* Without a Google client configured, email and password only. */}
+            <Button asChild className="w-full">
+              <Link href={signInPath(`/invite/${token}`)}>Sign in</Link>
+            </Button>
+            <p className="text-muted-foreground mt-3 text-center text-sm">
+              New here?{" "}
+              <Link href="/sign-up" className="underline underline-offset-4">
+                Create an account
+              </Link>{" "}
+              with this email, verify it, then open this link again.
+            </p>
+          </>
+        )}
       </InviteCard>
     );
   }

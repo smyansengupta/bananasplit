@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { deriveDarkRoles, deriveTheme } from "./derive";
-import { CBC_PRESET, DEFAULT_PRESET } from "./presets";
+import { CBC_PRESET, DEFAULT_PRESET, GRAPHITE_PRESET } from "./presets";
 import { buildThemeRecord } from "./record";
 import { DEFAULT_RESOLVED_THEME, resolveTheme, themeProviderMode } from "./resolve";
 
@@ -39,6 +39,30 @@ describe("resolveTheme", () => {
     expect(theme.logoDisplay).toBe("LOGO_AND_NAME");
     expect(theme.dark).toBeNull();
     expect(theme.effectiveDark).toEqual(deriveDarkRoles(CBC_PRESET.light));
+  });
+
+  it("reports a row saved with the old Default greys as Graphite, keeping its look", () => {
+    const theme = resolveTheme({
+      preset: "default",
+      mode: "SYSTEM",
+      lockMode: false,
+      light: GRAPHITE_PRESET.light,
+      dark: GRAPHITE_PRESET.dark,
+    });
+    expect(theme.preset).toBe("graphite");
+    expect(theme.light).toEqual(GRAPHITE_PRESET.light);
+    expect(theme.isDefault).toBe(false);
+  });
+
+  it("keeps a row saved with today's Default as Default", () => {
+    const theme = resolveTheme({
+      preset: "default",
+      mode: "SYSTEM",
+      lockMode: false,
+      light: DEFAULT_PRESET.light,
+      dark: DEFAULT_PRESET.dark,
+    });
+    expect(theme.preset).toBe("default");
   });
 
   it("never locks the SYSTEM mode, and survives unknown enum values", () => {

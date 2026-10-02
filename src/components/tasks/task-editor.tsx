@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { ExternalLink, UserMinus, UserPlus } from "lucide-react";
+import { ExternalLink, Trash2, UserMinus, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 
@@ -9,10 +9,12 @@ import {
   acknowledgeTaskFlag,
   createTask,
   deleteTask,
+  restoreTask,
   selfAssignTask,
   updateTask,
 } from "@/app/app/[orgSlug]/tasks/actions";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskPriority, TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
 import { canAcknowledgeFlag, canEditTask, canTriage } from "@/lib/tasks/access";
@@ -94,6 +97,7 @@ export function TaskEditor({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
+  const [confirmEl, confirm] = useConfirm();
 
   const initialProjectId = task?.projectId ?? defaults?.projectId ?? null;
   const initialProject = initialProjectId ? projectById.get(initialProjectId) : undefined;
@@ -226,15 +230,27 @@ export function TaskEditor({
     });
   }
 
-  function remove() {
+  async function remove() {
     if (!task) return;
-    startTransition(async () => {
-      const result = await deleteTask(org.id, task.id);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      (onDeleted ?? onDone)?.();
+    const subtasks = task.subtasks?.length ?? 0;
+    const ok = await confirm({
+      title: `Delete “${task.title}”?`,
+      description:
+        subtasks > 0
+          ? `Its ${subtasks} subtask${subtasks === 1 ? "" : "s"} go${subtasks === 1 ? "es" : ""} with it. You can undo this right after.`
+          : "You can undo this right after.",
+      confirmLabel: "Delete task",
+      run: async () => (await deleteTask(org.id, task.id)).error,
+    });
+    if (!ok) return;
+    (onDeleted ?? onDone)?.();
+    toast({
+      title: "Task deleted",
+      description: task.title,
+      action: {
+        label: "Undo",
+        run: async () => (await restoreTask(org.id, task.id)).error,
+      },
     });
   }
 
@@ -286,6 +302,7 @@ export function TaskEditor({
   return (
     <div className="space-y-5">
       {confirmElement}
+      {confirmEl}
       {task?.parentTask && (
         <p className="text-muted-foreground text-sm">
           Subtask of{" "}
@@ -594,7 +611,14 @@ export function TaskEditor({
 
       <div className="flex items-center justify-between gap-2">
         {task && canEdit ? (
-          <Button type="button" variant="ghost" onClick={remove} disabled={isPending}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => void remove()}
+            disabled={isPending}
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
             Delete
           </Button>
         ) : (

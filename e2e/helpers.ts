@@ -100,15 +100,69 @@ export async function verifyEmail(page: Page, email: string): Promise<void> {
   await page.getByRole("link", { name: /^(Continue|Sign in)$/ }).click();
 }
 
-/** Sign up, then verify the address: the state every org-level flow needs. */
-export async function signUpVerified(page: Page, user: TestUser): Promise<void> {
+/**
+ * Profile setup (onboarding Flow A): Continue through the six steps with
+ * what sign-up already filled in, then A7's choice. "join" lands on
+ * /onboarding/join (invite code, and any emailed invites with a Join
+ * button); "create" on B1, /onboarding/organization.
+ */
+export async function completeProfileSetup(page: Page, next: "join" | "create"): Promise<void> {
+  await page.waitForURL(/\/onboarding\/profile\/basics/);
+  for (const step of ["school", "bio", "theme", "availability", "review"]) {
+    await page.getByRole("button", { name: /^(Continue|Use .+)$/ }).click();
+    await page.waitForURL(new RegExp(`/onboarding/profile/${step}$`));
+  }
+  await page
+    .getByRole("button", {
+      name: next === "join" ? "Join with invite code" : "Create an organization",
+    })
+    .click();
+  await page.waitForURL(next === "join" ? /\/onboarding\/join/ : /\/onboarding\/organization$/);
+}
+
+/**
+ * Org setup (onboarding Flow B) with the defaults: name the org, skip the
+ * connections, keep the labels, finance and starter teams, and land on the
+ * new org's home as its OWNER. Returns the org's slug.
+ */
+export async function createOrgViaOnboarding(page: Page, orgName: string): Promise<string> {
+  if (!/\/onboarding\/organization$/.test(new URL(page.url()).pathname))
+    await page.goto("/onboarding/organization");
+  await page.getByLabel("Organization name").fill(orgName);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.waitForURL(/\/onboarding\/organization\/[^/]+\/data$/);
+  const slug = new URL(page.url()).pathname.split("/")[3]!;
+  await page.getByRole("button", { name: "Skip for now" }).click();
+  await page.waitForURL(/\/labels$/);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.waitForURL(/\/finance$/);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.waitForURL(/\/teams$/);
+  await page.getByRole("button", { name: "Finish setup" }).click();
+  await page.waitForURL(new RegExp(`/app/${slug}\\?welcome=1$`));
+  return slug;
+}
+
+/**
+ * Sign up, verify the address and finish profile setup: the state every
+ * org-level flow needs. Ends on /onboarding/join ("join", the default) or
+ * on B1 ("create").
+ */
+export async function signUpVerified(
+  page: Page,
+  user: TestUser,
+  next: "join" | "create" = "join",
+): Promise<void> {
   await signUp(page, user);
   await page.waitForURL(/\/onboarding/);
   await verifyEmail(page, user.email);
-  await page.waitForURL(/\/onboarding/);
+  await completeProfileSetup(page, next);
 }
 
-export async function signIn(page: Page, user: Pick<TestUser, "email" | "password">): Promise<void> {
+export async function signIn(
+  page: Page,
+  user: Pick<TestUser, "email" | "password">,
+): Promise<void> {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(user.email);
   await page.getByLabel("Password").fill(user.password);

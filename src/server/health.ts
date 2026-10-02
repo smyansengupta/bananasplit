@@ -22,8 +22,9 @@ import { blobStoreIdFromToken } from "@/server/storage/drivers";
  *   is not live; the Blob stores and the KEK keyring are the preview ones
  *   (PREVIEW_BLOB_STORE_ID, PREVIEW_PUBLIC_BLOB_STORE_ID,
  *   PREVIEW_KEK_FINGERPRINT, SECRETS_KEK_ENV=preview).
- * On VERCEL_ENV=production: email is configured (or deliberately off), and
- *   CRON_SECRET and the secrets keyring are present.
+ * On VERCEL_ENV=production: email is configured (or deliberately off);
+ *   CRON_SECRET, the Auth.js secret (AUTH_SECRET) and the secrets keyring
+ *   are present; links resolve to an https app URL.
  */
 
 export interface HealthCheck {
@@ -208,6 +209,18 @@ async function previewChecks(probes: HealthProbes, env: Env): Promise<HealthChec
   return checks;
 }
 
+/**
+ * Where Auth.js (next-auth v5) looks for its signing secret; AUTH_SECRET_1..3
+ * are its rotation slots.
+ */
+const AUTH_SECRET_VARS = [
+  "AUTH_SECRET",
+  "NEXTAUTH_SECRET",
+  "AUTH_SECRET_1",
+  "AUTH_SECRET_2",
+  "AUTH_SECRET_3",
+] as const;
+
 function productionChecks(env: Env): HealthCheck[] {
   const checks: HealthCheck[] = [];
   const email = emailConfigProblems(env);
@@ -216,6 +229,15 @@ function productionChecks(env: Env): HealthCheck[] {
     name: "production:cron_secret",
     ok: Boolean(env.CRON_SECRET),
     detail: env.CRON_SECRET ? undefined : "CRON_SECRET is not set",
+  });
+  // Without a secret Auth.js answers every auth request (session, sign-in)
+  // with a 500 "problem with the server configuration" (MissingSecret), and
+  // nobody can sign in.
+  const hasAuthSecret = AUTH_SECRET_VARS.some((name) => Boolean(env[name]?.trim()));
+  checks.push({
+    name: "production:auth_secret",
+    ok: hasAuthSecret,
+    detail: hasAuthSecret ? undefined : "AUTH_SECRET is not set (nor NEXTAUTH_SECRET)",
   });
   try {
     loadKeyring(env);
@@ -232,12 +254,20 @@ function productionChecks(env: Env): HealthCheck[] {
   } catch (error) {
     checks.push({ name: "production:secrets", ok: false, detail: describe(error) });
   }
+  // Links in mail and feeds: NEXT_PUBLIC_APP_URL, else the project's
+  // production domain (VERCEL_PROJECT_PRODUCTION_URL); appOrigin throws
+  // when neither is usable.
   try {
     const origin = appOrigin(env);
+    const https = origin.startsWith("https://");
     checks.push({
       name: "production:app_url",
-      ok: Boolean(env.NEXT_PUBLIC_APP_URL) && origin.startsWith("https://"),
-      detail: env.NEXT_PUBLIC_APP_URL ? undefined : "NEXT_PUBLIC_APP_URL is not set",
+      ok: https,
+      detail: !https
+        ? `the app URL ${origin} is not https`
+        : env.NEXT_PUBLIC_APP_URL?.trim()
+          ? undefined
+          : `NEXT_PUBLIC_APP_URL is not set; links use ${origin} (VERCEL_PROJECT_PRODUCTION_URL)`,
     });
   } catch (error) {
     checks.push({ name: "production:app_url", ok: false, detail: describe(error) });

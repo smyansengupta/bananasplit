@@ -1,11 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { computeRunway } from "@/lib/finance/stats";
-
 /**
- * The org overview, at the page level: who sees the club's money, what "my
- * tasks" asks for and how it reads, and which timezone the events use. The
+ * The org overview, at the page level: that no one sees the club's money
+ * here, what "my tasks" asks for and how it reads, which timezone the events
+ * use, and the member's own board of widgets. The
  * queries themselves run under RLS (private tasks and other people's private
  * notes are not there); here they are mocked, so this pins the page's own
  * decisions.
@@ -16,16 +15,21 @@ const mocks = vi.hoisted(() => ({
   getMyOpenTasks: vi.fn(),
   getUpcomingEvents: vi.fn(),
   getViewerRsvps: vi.fn(),
-  getRecentNotes: vi.fn(),
-  getDashboardData: vi.fn(),
-  getMoneyOwedToUser: vi.fn(),
+  listPins: vi.fn(),
+  listRecent: vi.fn(),
   loadSetupState: vi.fn(),
+  loadSavedBoard: vi.fn(),
 }));
 
 const db = {
   user: { findUnique: vi.fn() },
   task: { count: vi.fn() },
   event: { count: vi.fn() },
+  availabilityPoll: { findMany: vi.fn() },
+  poll: { findMany: vi.fn() },
+  membership: { findMany: vi.fn(), count: vi.fn() },
+  budgetPeriod: { count: vi.fn() },
+  note: { count: vi.fn() },
 };
 
 vi.mock("@/server/db/context", () => ({
@@ -33,17 +37,29 @@ vi.mock("@/server/db/context", () => ({
   withOrgTx: (_orgId: string, fn: (ctx: { db: typeof db }) => unknown) =>
     Promise.resolve(fn({ db })),
 }));
-vi.mock("@/server/tasks/queries", () => ({ getMyOpenTasks: mocks.getMyOpenTasks }));
+vi.mock("@/server/tasks/queries", () => ({
+  getMyOpenTasks: mocks.getMyOpenTasks,
+  taskFilterWhere: () => ({}),
+}));
 vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({
   getUpcomingEvents: mocks.getUpcomingEvents,
   getViewerRsvps: mocks.getViewerRsvps,
 }));
-vi.mock("@/app/app/[orgSlug]/notes/queries", () => ({ getRecentNotes: mocks.getRecentNotes }));
-vi.mock("@/app/app/[orgSlug]/finance/queries", () => ({
-  getDashboardData: mocks.getDashboardData,
-  getMoneyOwedToUser: mocks.getMoneyOwedToUser,
+vi.mock("@/server/pins", () => ({ listPins: mocks.listPins, listRecent: mocks.listRecent }));
+vi.mock("@/app/app/[orgSlug]/notes/queries", () => ({ getRecentNotes: vi.fn().mockResolvedValue([]) }));
+vi.mock("@/server/notes/files", () => ({ listNoteFiles: vi.fn().mockResolvedValue([]) }));
+vi.mock("@/server/boards", () => ({ loadSavedBoard: mocks.loadSavedBoard }));
+vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({ saveBoardAction: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/_shell/pin-actions", () => ({
+  pinPathAction: vi.fn(),
+  reorderPinsAction: vi.fn(),
+  togglePinAction: vi.fn(),
+  unpinAction: vi.fn(),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/server/setup/progress", () => ({ loadSetupState: mocks.loadSetupState }));
+vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
+vi.mock("@/components/onboarding/join-code-card", () => ({ JoinCodeCard: () => null }));
 
 const { default: OverviewPage } = await import("./page");
 
@@ -56,6 +72,7 @@ const org = {
 };
 const props = {
   params: Promise.resolve({ orgSlug: "cbc" }),
+  searchParams: Promise.resolve({}),
 } as unknown as PageProps<"/app/[orgSlug]">;
 
 // 10:00 on Monday, Oct 5 in Los Angeles, where the viewer lives.
@@ -69,14 +86,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
   mocks.getOrgContextBySlug.mockResolvedValue({ user: viewer, organization: org, role: "MEMBER" });
-  db.user.findUnique.mockResolvedValue({ timezone: "America/Los_Angeles" });
+  db.user.findUnique.mockResolvedValue({ timezone: "America/Los_Angeles", name: "Viewer" });
   db.task.count.mockResolvedValue(0);
   db.event.count.mockResolvedValue(0);
   mocks.getMyOpenTasks.mockResolvedValue({ tasks: [], total: 0, overdue: 0 });
   mocks.getUpcomingEvents.mockResolvedValue([]);
   mocks.getViewerRsvps.mockResolvedValue(new Map());
-  mocks.getRecentNotes.mockResolvedValue([]);
-  mocks.getMoneyOwedToUser.mockResolvedValue(1_250);
+  mocks.listPins.mockResolvedValue([]);
+  mocks.listRecent.mockResolvedValue([]);
+  mocks.loadSavedBoard.mockResolvedValue(null);
+  db.availabilityPoll.findMany.mockResolvedValue([]);
+  db.poll.findMany.mockResolvedValue([]);
+  db.membership.findMany.mockResolvedValue([]);
+  db.membership.count.mockResolvedValue(1);
 });
 
 afterEach(() => {
@@ -84,42 +106,26 @@ afterEach(() => {
 });
 
 describe("org overview", () => {
-  it("shows a member what the club owes them, and never reads the club's finances", async () => {
+  it("shows no one the club's money, not even a treasurer", async () => {
+    mocks.getOrgContextBySlug.mockResolvedValue({ user: viewer, organization: org, role: "TREASURER" });
     const html = await render();
-    expect(mocks.getDashboardData).not.toHaveBeenCalled();
-    expect(html).toContain("Money owed to you");
-    expect(html).toContain("$12.50");
+    expect(html).not.toContain("Money owed to you");
     expect(html).not.toContain("Club balance");
+    // Greets them by first name, in their own timezone (10:00 in Los Angeles).
+    expect(html).toContain("Good morning, Viewer");
   });
 
-  it("shows a treasurer the balance and when it runs out", async () => {
-    mocks.getOrgContextBySlug.mockResolvedValue({
-      user: viewer,
-      organization: org,
-      role: "TREASURER",
-    });
-    const period = { startsOn: new Date("2026-07-01"), endsOn: new Date("2027-06-30") };
-    mocks.getDashboardData.mockResolvedValue({
-      period: { id: "p_1", label: "FY 2026-27", ...period },
-      balanceCents: 30_000,
-      runway: computeRunway({
-        period,
-        balanceCents: 30_000,
-        spending: [{ amountCents: 90_000, occurredAt: new Date("2026-09-01") }],
-        expectedIncomeCents: 0,
-        meetingStarts: [],
-        now: NOW,
-      }),
-    });
-
+  it("builds the member's own board, and offers every widget but the admin ones", async () => {
+    mocks.loadSavedBoard.mockResolvedValue([
+      { id: "week", type: "week", w: 4, h: null },
+      { id: "task-stats", type: "task-stats", w: 1, h: 240 },
+    ]);
     const html = await render();
-    expect(mocks.getDashboardData).toHaveBeenCalledWith(db, "org_cbc", NOW);
-    expect(html).toContain("Club balance");
-    expect(html).toContain("$300.00 · FY 2026-27");
-    // $900 over the 90-day window is $10 a day: $300 lasts 30 days.
-    expect(html).toContain("Runs out Nov 4, 2026");
-    expect(html).toContain("$12.50 owed to you");
-    expect(html).not.toContain("Money owed to you");
+    expect(html).toContain("This week");
+    expect(html).toContain("My week at a glance");
+    expect(html).toContain("height:240px");
+    // Not on this member's board.
+    expect(html).not.toContain(">Meetings<");
   });
 
   it("asks for my open tasks against my own today, and links each one to its page", async () => {
@@ -154,7 +160,7 @@ describe("org overview", () => {
 
     const html = await render();
     expect(mocks.getMyOpenTasks).toHaveBeenCalledWith(db, "org_cbc", "u_viewer", {
-      limit: 6,
+      limit: 8,
       today: new Date("2026-10-05T00:00:00Z"),
     });
     expect(html).toContain('href="/app/cbc/tasks/t_late"');
@@ -186,7 +192,8 @@ describe("org overview", () => {
     mocks.getViewerRsvps.mockResolvedValue(new Map([["e_1", "YES"]]));
 
     const html = await render();
-    expect(mocks.getUpcomingEvents).toHaveBeenCalledWith(db, "org_cbc", NOW, 5);
+    expect(mocks.getUpcomingEvents).toHaveBeenCalledWith(db, "org_cbc", NOW, 6, "events");
+    expect(mocks.getUpcomingEvents).toHaveBeenCalledWith(db, "org_cbc", NOW, 6, "meetings");
     expect(html).toContain('href="/app/cbc/calendar/e_1"');
     expect(html).toContain("Today, 6:00 PM – 8:00 PM");
     expect(html).toContain("Workshop");
@@ -194,21 +201,54 @@ describe("org overview", () => {
     expect(html).toContain("Going");
   });
 
-  it("lists recently edited notes the viewer may read", async () => {
-    mocks.getRecentNotes.mockResolvedValue([
+  it("lists the viewer's pins and the pages they opened recently", async () => {
+    mocks.listPins.mockResolvedValue([
+      { id: "pin_1", href: "/app/cbc/notes/n_1", label: "E-board minutes", kind: "note" },
+    ]);
+    mocks.listRecent.mockResolvedValue([
       {
-        id: "n_1",
-        title: "E-board minutes",
-        visibility: "ORGANIZATION",
-        updatedAt: new Date("2026-10-05T15:00:00Z"),
-        updatedBy: { id: "u_2", name: "Oliver Ward", image: null, avatar: null },
+        href: "/app/cbc/databases/sessions",
+        label: "Sessions",
+        kind: "database",
+        visitedAt: new Date("2026-10-05T15:00:00Z"),
       },
     ]);
 
     const html = await render();
-    expect(mocks.getRecentNotes).toHaveBeenCalledWith(db, "org_cbc", "u_viewer", 5);
+    expect(mocks.listPins).toHaveBeenCalledWith(db, "org_cbc", "cbc", "u_viewer");
+    expect(mocks.listRecent).toHaveBeenCalledWith(db, "org_cbc", "cbc", "u_viewer", 8);
     expect(html).toContain('href="/app/cbc/notes/n_1"');
     expect(html).toContain("E-board minutes");
-    expect(html).toContain("Oliver Ward · about 2 hours ago");
+    expect(html).toContain('href="/app/cbc/databases/sessions"');
+    expect(html).toContain("2 hours ago");
+  });
+
+  it("lists open polls of both kinds, newest first", async () => {
+    mocks.loadSavedBoard.mockResolvedValue([{ id: "polls", type: "polls", w: 1, h: null }]);
+    db.availabilityPoll.findMany.mockResolvedValue([
+      { id: "ap_1", title: "Exec sync time", closesAt: null, createdAt: new Date("2026-10-01T12:00:00Z") },
+    ]);
+    db.poll.findMany.mockResolvedValue([
+      { id: "qp_1", question: "Pizza or tacos?", closesAt: null, createdAt: new Date("2026-10-04T12:00:00Z") },
+    ]);
+
+    const html = await render();
+    expect(db.poll.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ organizationId: "org_cbc", closedAt: null }),
+      }),
+    );
+    expect(html.indexOf("Pizza or tacos?")).toBeLessThan(html.indexOf("Exec sync time"));
+    expect(html).toContain('href="/app/cbc/calendar/polls/qp_1"');
+    expect(html).toContain('href="/app/cbc/calendar/polls/ap_1"');
+    expect(html).toContain("Question · Open");
+    expect(html).toContain("Find a time · Open");
+  });
+
+  it("shows a next step when there is nothing pinned or coming up", async () => {
+    const html = await render();
+    expect(html).toContain("Nothing pinned yet");
+    expect(html).toContain("No meetings coming up");
+    expect(html).toContain("No events coming up");
   });
 });

@@ -5,10 +5,11 @@ import { notFound } from "next/navigation";
 import { majorAndYear, ProfileLinks } from "@/components/profile/profile-links";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BusyGrid } from "@/components/onboarding/availability-editor";
 import { UserAvatar } from "@/components/user-avatar";
 import { peopleHref, personTasksHref, profileHref } from "@/lib/profile/href";
 import { getOrgContextBySlug } from "@/server/db/context";
-import { getOrgPerson } from "@/server/profiles/queries";
+import { getOrgPerson, getPersonBusyHours } from "@/server/profiles/queries";
 
 /**
  * One member's page (Phase 2). Membership-checked twice: the viewer must be
@@ -24,6 +25,9 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
   if (!person) notFound();
 
   const isSelf = person.id === user.id;
+  // Busy hours, never the reasons. The database decides who may see them
+  // (app.member_busy_hours: the org's setting, admins, the person).
+  const busy = await getPersonBusyHours(organization.id, person.id);
   const detail = majorAndYear(person.major, person.gradYear);
   const displayName = person.name ?? "Unnamed member";
 
@@ -41,7 +45,7 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <UserAvatar user={person} size="2xl" decorative={false} />
           <div className="min-w-0 flex-1 space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight break-words">
+            <h1 className="page-title break-words">
               {displayName}
               {person.pronouns && (
                 <span className="text-muted-foreground ml-2 text-base font-normal">{person.pronouns}</span>
@@ -74,6 +78,27 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
         {person.links.length > 0 && (
           <section aria-label="Links">
             <ProfileLinks links={person.links} />
+          </section>
+        )}
+
+        {busy && busy.length > 0 && (
+          <section aria-labelledby="busy-title" className="max-w-sm space-y-2">
+            <h2 id="busy-title" className="text-sm font-medium">
+              Busy in a typical week
+            </h2>
+            <BusyGrid busy={busy} />
+            <p className="text-muted-foreground text-xs">
+              {isSelf ? (
+                <>
+                  Others see only busy or free.{" "}
+                  <Link href={profileHref(orgSlug, "availability")} className="text-primary underline-offset-4 hover:underline">
+                    Edit
+                  </Link>
+                </>
+              ) : (
+                `Shaded hours ${displayName.split(" ")[0]} can't meet. Times in their own time zone.`
+              )}
+            </p>
           </section>
         )}
 

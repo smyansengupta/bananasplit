@@ -16,7 +16,8 @@ From there:
 ### 1. Events
 
 - **Who:** owners and admins create, edit, drag and delete events. Members
-  see the calendar, answer invitations (RSVP) and run availability polls.
+  see the calendar, answer invitations (RSVP) and run polls (availability
+  polls and question polls).
   Finalizing a poll creates an event, so an admin does it.
 - **Type:** workshop, info session, hackathon, social, board meeting or
   other. The website uses the type for its colors and labels.
@@ -72,7 +73,9 @@ events that are still syncing to Google or whose sync failed.
 
 ### 1b. Availability polls
 
-Calendar > **Availability polls** finds a meeting time (when2meet-style).
+Calendar > **Availability polls** finds a meeting time (when2meet-style). It
+is one of the two kinds of poll on the **Polls** page (sidebar > Polls), with
+question polls (1c); **New poll > Find a time** starts one.
 
 - **Creating one** (any member): a title, the days to offer, the daily hours
   and the time zone those hours are in (the organization's by default; the
@@ -104,6 +107,65 @@ Calendar > **Availability polls** finds a meeting time (when2meet-style).
   poll. Guests can't be invited; the confirmation says how many there are.
 - The poll's creator, or an owner or admin, can delete it; an event it
   scheduled stays on the calendar.
+
+### 1c. Question polls
+
+**Polls > New poll > Ask a question** asks the club anything: a question and
+the options people vote on. Members only: there is no guest link.
+
+- **Creating one** (any member): the question (up to 200 characters), an
+  optional description, and 2 to 20 options (up to 120 characters each, no
+  two the same, ignoring case and spacing). Blank option rows are ignored;
+  Enter moves to the next row or adds one, and pasting a list (one per line,
+  bullets and numbers stripped) fills several rows at once. Settings:
+  - *Allow more than one choice*: people tick several options instead of one.
+  - *Anonymous voting*: only the counts are ever shown. Nobody, not the
+    creator and not an owner or admin, can see who voted for what, and the
+    setting can't be changed afterwards (see *Anonymity* below).
+  - *Members can add options*: anyone can add an option while it is open
+    (the creator and admins always can).
+  - *Hide results until the poll closes*: voters see only their own choice
+    until then; the creator and admins see the counts all along. The number
+    of people who voted is always shown.
+  - *When it closes*: no end, 1 day, 3 days, 1 week, or a date and time.
+- **Voting:** pick an option (or several). The vote shows at once and is
+  saved a moment later; change it or **Clear my vote** any time while the
+  poll is open. Each option shows its share of the voters as a bar, its count
+  and, unless the poll is anonymous, the faces of who picked it (hover for
+  the names). The leading option is highlighted, your own choices are marked
+  *You voted*, and a closed poll marks its *Top choice*.
+- **Closing:** at its closing time, or by hand: its creator or an owner/admin
+  closes and reopens it from the poll's "…" menu (reopening a poll whose
+  closing time has passed drops that time). A closed poll takes no votes and
+  its votes can't be withdrawn, so the result stays put.
+- **Options:** the creator or an owner/admin can remove an option while the
+  poll is open (its votes go with it; a poll keeps at least two).
+- **Deleting:** the creator or an owner/admin deletes a poll from its "…"
+  menu or from the Polls list, after a confirmation. Its votes go with it.
+- **Where else it shows:** the Polls page lists both kinds, newest first,
+  split into open and closed; the Overview's *Open polls* widget; *Pin
+  something*; pins and *Recently visited* (under the poll's question). The
+  org export (Settings > Danger zone) includes `Poll`, `PollOption` and
+  `PollVote`, the votes without who cast them.
+
+**Anonymity** is enforced by the database, not just hidden in the page:
+
+- `PollVote` RLS lets a member read another member's vote only when the poll
+  is not anonymous. On an anonymous poll each member reads their own votes
+  and nothing else, whatever their role.
+- Everyone gets the results from `app.poll_vote_counts(pollIds)`, a
+  `SECURITY DEFINER` function that returns counts per option and the number of
+  voters, never who, and only for polls in the caller's own org.
+- `app_user` may update only `closedAt` and `closesAt` on a poll (a column
+  grant), so a poll can't be switched from anonymous to named once people
+  have voted.
+- The page's data is built on the server (`src/lib/polls/question-poll.ts`),
+  which leaves voters out of an anonymous poll's view even if it were handed
+  them, and the export drops `PollVote.userId`.
+
+Votes are also checked by the database: as yourself, for an option of the
+same poll, while it is open. The RLS cases are `P-QPOLL-01`..`06` in
+`prisma/rls/phases.mjs`.
 
 ### 2. Connect Google Calendar (optional, recommended)
 

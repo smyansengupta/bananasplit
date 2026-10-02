@@ -51,7 +51,7 @@ test("a handed-down task emails a deep link that survives sign-in", async ({ pag
 
   await signIn(page, oliver);
   await page.goto(`/app/${ORG}/tasks?view=board`);
-  await page.getByRole("button", { name: "Add task to Not started" }).click();
+  await page.getByRole("button", { name: "Add a task to Not started" }).click();
   await page.getByLabel("Title").fill(title);
   await page.getByLabel("Owner").click();
   await page.getByRole("option", { name: /Alex Green/ }).click();
@@ -76,5 +76,6 @@ test("a handed-down task emails a deep link that survives sign-in", async ({ pag
 
   // Alex owns it now; clean up.
   await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete task" }).click();
   await page.waitForURL(new RegExp(`/app/${ORG}/tasks$`));
 });

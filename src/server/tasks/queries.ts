@@ -2,6 +2,7 @@ import { Prisma, TaskStatus, TaskVisibility } from "@/generated/prisma/client";
 import { OPEN_STATUSES } from "@/lib/tasks/status";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
+import { everyWord } from "@/server/search/where";
 
 /**
  * Task reads for the tasks pages. Every function takes the page's ctx.db
@@ -248,7 +249,9 @@ export function taskFilterWhere(
   if (f.peopleIds && f.peopleIds.length > 0) and.push(involving(f.peopleIds));
   if (f.visibility) and.push({ visibility: f.visibility });
   if (f.labelId) and.push({ labels: { some: { labelId: f.labelId } } });
-  if (f.q) and.push({ title: { contains: f.q, mode: "insensitive" } });
+  // Every word, in the title or the description (as the ⌘K palette finds them).
+  const words = everyWord<Prisma.TaskWhereInput>(f.q, (c) => [{ title: c }, { description: c }]);
+  if (words) and.push(words);
   if (f.dueFrom || f.dueTo) {
     and.push({
       dueDate: { ...(f.dueFrom ? { gte: f.dueFrom } : {}), ...(f.dueTo ? { lte: f.dueTo } : {}) },

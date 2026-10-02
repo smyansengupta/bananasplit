@@ -14,8 +14,10 @@ with `LOGIN PASSWORD`, see RUNBOOK):
 | `app_auth` | `authDb` | the Auth.js adapter, credentials sign-in, sign-up, ICS token lookup, the rate limiter |
 
 URLs come from `src/server/db/urls.ts`: explicit `DATABASE_URL_APP` /
-`_SERVICE` / `_AUTH`, or derived from `DATABASE_URL` plus the three role
-passwords (Neon previews). There is no fallback to the owner URL.
+`_SERVICE` / `_AUTH` (local, CI, and production on Supabase, whose pooler
+wants `role.<project-ref>` usernames), or derived from `DATABASE_URL` plus
+the three role passwords (Neon and its preview branches). There is no
+fallback to the owner URL.
 
 **Transaction-bound context.** Every unit of work is one interactive
 transaction whose first statement is `SELECT app.set_context(user, org)`: it
@@ -31,6 +33,9 @@ org equality. The wrappers in `src/server/db/context.ts`:
   cannot start);
 - `withUserTx(userId, fn)` for the user's own cross-org rows;
 - `withSystemOrgTx(orgId, { userId? }, fn)` for the fail-closed service path;
+- `withOrgTxAs(userId, orgId, fn)`, app_user for a member named by a
+  verified signed request instead of a session: the collaboration bridge
+  only (see "Live collaboration" below);
 - `getOrgContextBySlug(slug)`, React `cache()`-deduped, for the org layout.
 
 `ctx = { user, organizationId, role, db, afterCommit }`. No network I/O inside
@@ -60,6 +65,20 @@ user's own row. Everything else gets `AND (SELECT app.is_org_admin())` (or
 `is_org_owner`, `is_finance`) beside the tenant test. Adding an entry to the
 allowlist is a security review item.
 
+**What the manifest covers.** Its object checks (RLS off, views without
+`security_invoker`, readable materialized views and foreign tables, policy
+gaps, permissive policies, PUBLIC `EXECUTE`, definer search paths) look only
+at what a runtime role can reach: objects in a schema one of them has
+`USAGE` on, plus whatever those objects lead to through `pg_depend` (an
+invoker view over a table elsewhere, a default or trigger calling a function
+elsewhere, casts), plus every event-trigger function for the definer check.
+Its role checks (attributes, memberships, ownership, `TEMP`, `CREATE` on any
+schema, `TRUNCATE`/`TRIGGER`/`REFERENCES` grants) cover every schema. So a
+Supabase project's own schemas (`auth`, `storage`, `realtime`, ...), which
+the runtime roles cannot use, stay out of it, and a schema enters it the
+moment a migration grants a runtime role `USAGE` on it (migration
+`20260927120000_security_manifest_reachable_schemas`, RLS cases T27j-n).
+
 **Known limitation.** RLS contains logic bugs, not SQL injection: SQL that
 runs as a runtime role can call `set_config()` itself and forge the context
 (test T29). The injection control is the ban on `$queryRawUnsafe`,
@@ -67,8 +86,9 @@ runs as a runtime role can call `set_config()` itself and forge the context
 enforced by ESLint (see "Lint" below).
 
 **Tests.** `pnpm test:rls` creates a throwaway database owned by a
-non-superuser role (like `neondb_owner`), applies every migration,
-`prisma/rls/local-roles.sql` and `prisma/rls/fixtures.sql`, and runs the
+non-superuser role (like Supabase's `postgres` or Neon's `neondb_owner`),
+applies every migration, `prisma/rls/local-roles.sql` and
+`prisma/rls/fixtures.sql`, and runs the
 regression suite (`tests.mjs`), the executed attack suite (`attacks.mjs`) and
 the Phase 1-9 suite with the catalog checks (`phases.mjs`).
 
@@ -122,9 +142,11 @@ generic `email` kind (templated org mail such as the treasurer digest).
 Routing: the org's own verified Resend sender, else the platform sender "on
 behalf of" the org while `OrgSettings.platformMailFallback` is on, else
 in-app only. Templates escape every value and link absolutely to
-`NEXT_PUBLIC_APP_URL`. Without a Resend key (and on previews) mail goes to the
-console and `.data/mail/`. `@/lib/email` remains as thin wrappers that send
-immediately through the platform sender; new code should not use it.
+`NEXT_PUBLIC_APP_URL` (in production, else the project's production domain,
+never localhost; `src/lib/app-url.ts`). Without a Resend key (and on
+previews) mail goes to the console and `.data/mail/`. `@/lib/email` remains
+as thin wrappers that send immediately through the platform sender; new
+code should not use it.
 
 **Secrets.** AES-256-GCM envelope encryption: a fresh data key per secret,
 wrapped by the current KEK (`SECRETS_KEK_V{n}`, `SECRETS_KEK_CURRENT`), with
@@ -170,7 +192,10 @@ Google profile whose address Google has not verified, and for a verified one
 purges such an account (`src/lib/auth/purge-squatter.ts`) and strips the
 password of an unverified account the purge had to keep, before Auth.js looks
 the address up. It fails closed, because the Google provider allows email
-account linking. The 'check your email' notice (onboarding, invite page) and
+account linking. The provider is always configured, but `/sign-in` and
+`/invite/[token]` offer "Continue with Google" only when `AUTH_GOOGLE_ID` and
+`AUTH_GOOGLE_SECRET` are both set (`src/lib/auth/google-sign-in.ts`).
+The 'check your email' notice (onboarding, invite page) and
 the link page share one resend limit per account.
 
 **Lint** (`eslint.config.mjs`). ESLint bans:
@@ -182,9 +207,41 @@ the link page share one resend limit per account.
 - importing `serviceDb`, `authDb` or `getClient` outside
   `CLIENT_ALLOWLIST` (the identity plane, the rate limiter, the ICS feed, the
   cron routes and job runner, the health check, scripts and the data layer;
-  adding a path is a security review item);
+  adding a path is a security review item), and `withOrgTxAs` outside
+  `COLLAB_BRIDGE` (the collaboration bridge routes; same review rule);
 - `redirect`/`notFound` in `src/server` services (except `context.ts`), and
   request-context imports in cached loaders.
+
+## Live collaboration (notes)
+
+Off unless `COLLAB_ENABLED`, `COLLAB_SERVER_URL` and `COLLAB_SECRET` are all
+set; the setup, hosting choices and trade-offs are in
+`docs/features/collaboration.md`. Vercel functions cannot hold WebSockets, so
+the realtime part is a separate long-lived process (Hocuspocus,
+`src/collab-server/`, `pnpm collab:start`) that holds no database
+credentials. The rules that matter here:
+
+- **Nothing from the browser is trusted.** The app mints a 5-minute HS256
+  token (`src/lib/collab/token.ts`) only after reading the note through RLS
+  as the user; it carries the user, org, document and `perm`. The
+  collaboration server verifies it, makes `read` connections read-only,
+  stamps presence with the token's user, refreshes it before expiry and
+  drops the connection without a valid one. `/revoke` (signed, after commit)
+  closes a note's sessions when it turns PRIVATE or is deleted, and refuses
+  every token for it minted before then.
+- **Persistence goes through the app, as the user.** The collaboration
+  server loads and saves via `/api/collab/load` and `/store`, HMAC-signed
+  with a key derived from the same secret. Those routes open the named
+  user's own context with `withOrgTxAs`, so the Note policies (6.8) decide,
+  exactly as for an autosave. The Yjs state lives in `Note.yjsState`
+  (no new table, no new policy; RLS case P-COLLAB-01); `contentJson` and
+  `contentText` are rewritten on every save, so search and the list are
+  unchanged.
+- **One lineage per note.** Seeds are deterministic and every later write
+  (live save or autosave) builds on the stored Yjs state, so two copies of a
+  note never merge into duplicated text (`src/lib/collab/note-doc.ts`).
+- **Fallback.** With the flag off, or the server unreachable at load, the
+  editor is the autosave editor, unchanged.
 
 ## 0C: legacy modules on the RLS path (done)
 
@@ -248,13 +305,14 @@ Roles are cluster-global while a migration is per-database, and Postgres
 checks only the current database before `DROP ROLE`: dropping it while
 another database still grants it leaves dangling ACL entries there. So the
 migration drops the role only when it is the cluster's single application
-database (a Neon project, CI). On a shared cluster it raises a notice and
+database (a Neon project, CI; RUNBOOK step 2.6 has the check for a
+Supabase project). On a shared cluster it raises a notice and
 leaves the role with nothing granted; drop it by hand once every database
 has run the migration.
 
 ## Tenancy model
 
-CBC Portal is multi-tenant at the **organization** level: one deployment can
+Bananasplit is multi-tenant at the **organization** level: one deployment can
 host many clubs, and every piece of data (tasks, notes, events, transactions,
 labels, projects...) belongs to exactly one `Organization` via an
 `organizationId` foreign key. There is no schema-per-tenant or

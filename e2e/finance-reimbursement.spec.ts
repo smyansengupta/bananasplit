@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { makeUser, signIn, signOut, signUpVerified, uniqueSuffix } from "./helpers";
+import {
+  createOrgViaOnboarding,
+  makeUser,
+  signIn,
+  signOut,
+  signUpVerified,
+  uniqueSuffix,
+} from "./helpers";
 
 // Spec 6.5, flow (b): member submits an expense with a receipt -> treasurer
 // (here, the org owner, who also carries finance access) approves -> marks
@@ -12,20 +19,17 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   const orgName = `E2E Finance ${uniqueSuffix()}`;
   const expenseDescription = `E2E pizza run ${uniqueSuffix()}`;
 
-  await signUpVerified(page, owner);
-  await page.getByLabel("Organization name").fill(orgName);
-  await page.getByRole("button", { name: "Create organization" }).click();
-  await expect(page).toHaveURL(/\/app\/[^/]+$/);
-  const orgSlug = new URL(page.url()).pathname.split("/")[2];
+  await signUpVerified(page, owner, "create");
+  const orgSlug = await createOrgViaOnboarding(page, orgName);
 
   await page.goto(`/app/${orgSlug}/finance/budget`);
-  await page.getByRole("button", { name: "New period" }).click();
-  await page.getByPlaceholder("Label, e.g. FY 2026–27").fill("E2E fiscal year");
+  await page.getByRole("button", { name: "New period" }).first().click();
+  await page.getByLabel("Name").fill("E2E fiscal year");
   const endsOn = new Date();
   endsOn.setFullYear(endsOn.getFullYear() + 1);
-  await page.locator("input[type='date']").nth(1).fill(endsOn.toISOString().slice(0, 10));
-  await page.getByRole("button", { name: "Create and activate" }).click();
-  await expect(page.getByText("E2E fiscal year")).toBeVisible();
+  await page.getByLabel("Ends").fill(endsOn.toISOString().slice(0, 10));
+  await page.getByRole("button", { name: "Create and make active" }).click();
+  await expect(page.getByText("E2E fiscal year").first()).toBeVisible();
 
   await page.goto(`/app/${orgSlug}/settings/members`);
   await page.getByLabel("Email").fill(member.email);
@@ -34,18 +38,18 @@ test("expense reimbursement lifecycle", async ({ page }) => {
 
   await signOut(page);
   await signUpVerified(page, member);
-  await page.getByRole("button", { name: "Join" }).click();
+  await page.getByRole("button", { name: "Join", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}$`));
 
-  // Baseline: nothing owed yet.
-  await page.goto(`/app/${orgSlug}`);
+  // Baseline: nothing owed yet (My reimbursements carries the total).
+  await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
   await expect(
     page.getByText("Money owed to you", { exact: true }).locator("..").first(),
   ).toContainText("$0.00");
 
   // --- member submits an expense with a receipt ---
   await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
-  await page.getByRole("button", { name: "New transaction" }).click();
+  await page.getByRole("button", { name: "Add transaction" }).click();
   await page.getByLabel("Description").fill(expenseDescription);
   await page.getByLabel("Amount").fill("42.50");
   await page.getByRole("button", { name: "Create", exact: true }).click();
@@ -68,7 +72,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   await expect(page.getByRole("dialog").getByText("Submitted", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).first().click();
 
-  await page.goto(`/app/${orgSlug}`);
+  await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
   await expect(
     page.getByText("Money owed to you", { exact: true }).locator("..").first(),
   ).toContainText("$42.50");
@@ -103,7 +107,7 @@ test("expense reimbursement lifecycle", async ({ page }) => {
   // --- the submitter's "owed to you" clears back to zero ---
   await signOut(page);
   await signIn(page, member);
-  await page.goto(`/app/${orgSlug}`);
+  await page.goto(`/app/${orgSlug}/finance/my-reimbursements`);
   await expect(
     page.getByText("Money owed to you", { exact: true }).locator("..").first(),
   ).toContainText("$0.00");

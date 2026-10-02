@@ -11,12 +11,12 @@ const HELP: Record<string, { columns: string; example: string }> = {
   ATTENDANCE: {
     columns:
       "session (the session's id, or its exact title), email and/or name, and optionally checked_in_at (your org's local time, e.g. 2026-09-16 18:05) and method (qr, form or manual).",
-    example: "session,email,name,checked_in_at,method\nWorkshop 3: Tool Use and Function Calling,ada@husky.neu.edu,Ada Park,2026-09-10 18:02,manual",
+    example: "session,email,name,checked_in_at,method\nWeek 3 meeting,ada@example.edu,Ada Park,2026-09-10 18:02,manual",
   },
   SIGNUPS: {
     columns:
       "name, and optionally email, class_year, signed_up_at (local time; the term follows from it unless a term column says fall-YYYY or spring-YYYY), colleges, meet_days and interests (separated by ; ).",
-    example: "name,email,class_year,signed_up_at,colleges,interests\nAda Park,ada@husky.neu.edu,second,2026-09-05,khoury;dmsb,workshops;hackathons",
+    example: "name,email,class_year,signed_up_at,colleges,interests\nAda Park,ada@example.edu,second,2026-09-05,engineering;business,events;volunteering",
   },
 };
 
@@ -44,7 +44,7 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/d
           <ChevronLeft className="size-3" aria-hidden="true" />
           {database.name}
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Import {database.name.toLowerCase()} from CSV</h1>
+        <h1 className="page-title">Import {database.name.toLowerCase()} from CSV</h1>
         <p className="text-muted-foreground text-sm">
           Up to 5,000 rows and 4 MB. Columns: {help.columns} People are matched by email; someone already
           checked in to a session, or already signed up that term, is skipped. Imported rows can be edited and

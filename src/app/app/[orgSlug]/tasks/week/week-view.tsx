@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
+import { GroupHeader, TASK_PANEL } from "@/components/tasks/layout-ui";
 import { TaskRow } from "@/components/tasks/task-row";
 import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
@@ -227,27 +228,22 @@ export function WeekView({
           className="scroll-mt-4"
         >
           {/* More space above a heading than below it. */}
-          <div className="mb-2 flex items-baseline gap-2">
-            <h2
-              id={`bucket-${bucket.key}-title`}
-              className={cn(
-                "text-sm font-semibold tracking-tight",
-                bucket.tone === "overdue" && "text-destructive",
-                bucket.tone === "today" && "text-warning",
-              )}
-            >
-              {bucket.label}
-            </h2>
-            <span className="text-muted-foreground text-xs tabular-nums">
-              {bucket.tasks.length}
-            </span>
-            {bucket.description && (
-              <span className="text-muted-foreground hidden text-xs sm:inline">
-                {bucket.description}
-              </span>
-            )}
-          </div>
-          <ul className="divide-border bg-card divide-y overflow-hidden rounded-lg border">
+          <GroupHeader
+            id={`bucket-${bucket.key}-title`}
+            className="mb-2"
+            title={bucket.label}
+            count={bucket.tasks.length}
+            dot={
+              bucket.tone === "overdue"
+                ? "var(--destructive)"
+                : bucket.tone === "today"
+                  ? "var(--warning)"
+                  : "var(--muted-foreground)"
+            }
+            tone={bucket.tone === "overdue" ? "danger" : bucket.tone === "today" ? "warning" : undefined}
+            description={bucket.description}
+          />
+          <ul className={cn("divide-border divide-y", TASK_PANEL)}>
             {bucket.tasks.map((task) => (
               <TaskRow key={task.id} task={task} showOwner={!mine} />
             ))}
@@ -277,7 +273,7 @@ export function WeekView({
             <span className="text-xs tabular-nums">{completed.length}</span>
           </button>
           {showDone && (
-            <ul className="divide-border bg-card mt-1.5 divide-y overflow-hidden rounded-lg border">
+            <ul className={cn("divide-border mt-1.5 divide-y", TASK_PANEL)}>
               {completed.map((task) => (
                 <TaskRow key={task.id} task={task} showOwner={!mine} />
               ))}

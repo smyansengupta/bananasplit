@@ -80,6 +80,8 @@ vi.mock("./mailer", () => ({
   getOrgMailer: vi.fn(),
 }));
 
+import { AppUrlConfigError } from "@/lib/app-url";
+
 import { verifyEmailJob } from "./jobs";
 import { consumeVerificationToken, peekVerificationToken } from "./verification";
 
@@ -146,6 +148,29 @@ describe("email verification", () => {
     expect(await peekVerificationToken(second)).toBe("expired");
     expect(await consumeVerificationToken(second)).toEqual({ ok: false, reason: "expired" });
     expect(store.users[0].emailVerified).toBeNull();
+  });
+
+  it("fails in production without an app URL, sending no localhost link and keeping the current one", async () => {
+    await run("u1");
+    const current = tokenFromLastMail();
+
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "");
+    try {
+      await expect(run("u1")).rejects.toThrow(AppUrlConfigError);
+      expect(store.sent).toHaveLength(1);
+      expect(await peekVerificationToken(current)).toBe("valid");
+
+      // On Vercel the production domain stands in for NEXT_PUBLIC_APP_URL.
+      vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "bananasplit.fyi");
+      await run("u1");
+      expect(store.sent.at(-1)?.text).toContain(
+        `https://bananasplit.fyi/verify-email/${tokenFromLastMail()}`,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("does nothing for a verified or deleted user, and rejects malformed tokens", async () => {

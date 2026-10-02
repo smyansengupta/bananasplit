@@ -7,7 +7,7 @@ import { SettingsNoAccess } from "../settings-no-access";
 import { LogoForm, NameForm, SlugForm, TimezoneForm } from "./general-forms";
 
 /**
- * Settings > General: name and timezone (OWNER/ADMIN), logo (OWNER/ADMIN),
+ * Settings > General: name and timezone (OWNER/ADMIN), the club picture (OWNER/ADMIN),
  * and the URL (OWNER only; old URLs redirect and stay reserved).
  */
 export default async function GeneralSettingsPage({
@@ -22,19 +22,19 @@ export default async function GeneralSettingsPage({
 
   return (
     <div className="max-w-2xl space-y-8">
-      <h1 className="text-2xl font-semibold tracking-tight">General</h1>
+      <h1 className="page-title">General</h1>
+      <LogoForm
+        orgId={organization.id}
+        orgName={organization.name}
+        logoUrl={orgLogoUrl(organization.logo, 256)}
+        canEdit={can({ role }, "org.logo.write")}
+      />
       <NameForm orgId={organization.id} name={organization.name} canEdit={canWrite} />
       <SlugForm
         orgId={organization.id}
         slug={organization.slug}
         canEdit={can({ role }, "org.slug.write")}
         appOrigin={appOrigin()}
-      />
-      <LogoForm
-        orgId={organization.id}
-        orgName={organization.name}
-        logoUrl={orgLogoUrl(organization.logo, 256)}
-        canEdit={can({ role }, "org.logo.write")}
       />
       <TimezoneForm orgId={organization.id} timezone={organization.timezone} canEdit={canWrite} />
     </div>

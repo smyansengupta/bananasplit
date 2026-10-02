@@ -5,6 +5,7 @@ import {
   TransactionStatus,
 } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
+import { DELETED_TRANSACTION_REASON } from "@/lib/finance/deleted";
 import { computeRunway, countsTowardBalance, type Runway } from "@/lib/finance/stats";
 import type { TxClient } from "@/server/db/context";
 
@@ -87,6 +88,27 @@ export interface TransactionFilters {
   dateFrom?: string;
   dateTo?: string;
   reconciled?: "yes" | "no";
+  /** Deleted transactions (voided as "Deleted") are hidden unless "show". */
+  deleted?: "show";
+}
+
+/** Everything but deleted transactions (a NULL voidReason must count as kept). */
+const NOT_DELETED: Prisma.TransactionWhereInput = {
+  OR: [{ voidReason: null }, { voidReason: { not: DELETED_TRANSACTION_REASON } }],
+};
+
+/**
+ * The end of a date filter. A date-only end ("2026-09-21", the filter's date
+ * input) includes that whole day, whatever time a transaction carries
+ * (imports and the seed store times); anything else is taken as an instant.
+ */
+function dateToBound(dateTo: string): Prisma.DateTimeFilter {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    const next = new Date(`${dateTo}T00:00:00.000Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return { lt: next };
+  }
+  return { lte: new Date(dateTo) };
 }
 
 export function buildTransactionWhere(
@@ -95,6 +117,7 @@ export function buildTransactionWhere(
 ): Prisma.TransactionWhereInput {
   return {
     organizationId,
+    ...(filters.deleted === "show" ? {} : NOT_DELETED),
     ...(filters.budgetPeriodId ? { budgetPeriodId: filters.budgetPeriodId } : {}),
     ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
     ...(filters.kind ? { kind: filters.kind } : {}),
@@ -106,7 +129,7 @@ export function buildTransactionWhere(
       ? {
           occurredAt: {
             ...(filters.dateFrom ? { gte: new Date(filters.dateFrom) } : {}),
-            ...(filters.dateTo ? { lte: new Date(filters.dateTo) } : {}),
+            ...(filters.dateTo ? dateToBound(filters.dateTo) : {}),
           },
         }
       : {}),
@@ -125,9 +148,19 @@ export function getTransactions(
   });
 }
 
+/**
+ * The member's own expense requests. An expense nobody is owed (NOT_APPLICABLE:
+ * paid with the club's money, or imported from past records) isn't one.
+ */
 export function getMyReimbursements(db: TxClient, organizationId: string, userId: string) {
   return db.transaction.findMany({
-    where: { organizationId, kind: TransactionKind.EXPENSE, submittedById: userId },
+    where: {
+      organizationId,
+      kind: TransactionKind.EXPENSE,
+      submittedById: userId,
+      status: { not: TransactionStatus.NOT_APPLICABLE },
+      ...NOT_DELETED,
+    },
     include: transactionInclude,
     orderBy: { occurredAt: "desc" },
   });
@@ -155,11 +188,49 @@ export interface DashboardData {
   totalAllocatedCents: number;
   categories: { id: string; name: string; allocatedCents: number; spentCents: number }[];
   outstandingReimbursementsCents: number;
+  /** Cash sponsorships, committed or invoiced and still to come. */
   sponsorshipCommittedCents: number;
+  /** Cash sponsorships received (already ledger income). */
   sponsorshipReceivedCents: number;
+  /** The value of credit sponsorships committed, invoiced or received: never on the ledger. */
+  sponsorshipCreditsCents: number;
   burnByMonth: { month: string; inCents: number; outCents: number }[];
   unreconciledOver60DaysCount: number;
   runway: Runway | null;
+  /** Money in and out this period (the ledger: what counts toward the balance). */
+  inTotalCents: number;
+  outTotalCents: number;
+  /** Expenses submitted and waiting for approval. */
+  pendingApproval: { count: number; cents: number };
+  /** Money out by transaction type. */
+  spendByKind: { kind: TransactionKind; cents: number }[];
+  /** The running balance after each day with activity. */
+  balanceTrend: { date: string; balanceCents: number }[];
+  /** The latest ledger transactions, newest first. */
+  recent: DashboardTransaction[];
+  /** This period's largest money out. */
+  topExpenses: DashboardTransaction[];
+  /** Money in by transaction type. */
+  incomeByKind: { kind: TransactionKind; cents: number }[];
+  /** Expenses waiting to be approved or paid back, oldest first. */
+  reimbursementQueue: {
+    id: string;
+    description: string;
+    amountCents: number;
+    status: TransactionStatus;
+    submitter: string;
+    occurredAt: Date;
+  }[];
+}
+
+export interface DashboardTransaction {
+  id: string;
+  description: string;
+  amountCents: number;
+  direction: TransactionDirection;
+  kind: TransactionKind;
+  occurredAt: Date;
+  categoryName: string | null;
 }
 
 /**
@@ -184,9 +255,19 @@ export async function getDashboardData(
       outstandingReimbursementsCents: 0,
       sponsorshipCommittedCents: 0,
       sponsorshipReceivedCents: 0,
+      sponsorshipCreditsCents: 0,
       burnByMonth: [],
       unreconciledOver60DaysCount: 0,
       runway: null,
+      inTotalCents: 0,
+      outTotalCents: 0,
+      pendingApproval: { count: 0, cents: 0 },
+      spendByKind: [],
+      balanceTrend: [],
+      recent: [],
+      topExpenses: [],
+      incomeByKind: [],
+      reimbursementQueue: [],
     };
   }
 
@@ -203,6 +284,8 @@ export async function getDashboardData(
   const allTransactions = await db.transaction.findMany({
     where: { organizationId, budgetPeriodId: period.id, voidedAt: null },
     select: {
+      id: true,
+      description: true,
       direction: true,
       kind: true,
       status: true,
@@ -210,6 +293,7 @@ export async function getDashboardData(
       occurredAt: true,
       reconciledAt: true,
       categoryId: true,
+      submittedBy: { select: { name: true, email: true } },
     },
   });
   const meetings = await db.event.findMany({
@@ -275,7 +359,42 @@ export async function getDashboardData(
   ).length;
 
   const balanceCents = inTotal - outTotal;
-  const sponsorshipCommittedCents = sponsorships
+
+  const categoryName = new Map(categories.map((c) => [c.id, c.name]));
+  const toRow = (t: (typeof ledger)[number]): DashboardTransaction => ({
+    id: t.id,
+    description: t.description,
+    amountCents: t.amountCents,
+    direction: t.direction,
+    kind: t.kind,
+    occurredAt: t.occurredAt,
+    categoryName: t.categoryId ? (categoryName.get(t.categoryId) ?? null) : null,
+  });
+  const byDate = [...ledger].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  const trend = new Map<string, number>();
+  let running = 0;
+  for (const t of byDate) {
+    running += t.direction === TransactionDirection.IN ? t.amountCents : -t.amountCents;
+    trend.set(t.occurredAt.toISOString().slice(0, 10), running);
+  }
+  const kindTotals = new Map<TransactionKind, number>();
+  for (const t of spending) kindTotals.set(t.kind, (kindTotals.get(t.kind) ?? 0) + t.amountCents);
+  const incomeTotals = new Map<TransactionKind, number>();
+  for (const t of ledger) {
+    if (t.direction === TransactionDirection.IN) incomeTotals.set(t.kind, (incomeTotals.get(t.kind) ?? 0) + t.amountCents);
+  }
+  const queue = allTransactions
+    .filter(
+      (t) =>
+        t.kind === TransactionKind.EXPENSE &&
+        (t.status === TransactionStatus.SUBMITTED || t.status === TransactionStatus.APPROVED),
+    )
+    .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
+  const pending = allTransactions.filter(
+    (t) => t.kind === TransactionKind.EXPENSE && t.status === TransactionStatus.SUBMITTED,
+  );
+  const cashSponsorships = sponsorships.filter((s) => s.type === "CASH");
+  const sponsorshipCommittedCents = cashSponsorships
     .filter((s) => s.status === "COMMITTED" || s.status === "INVOICED")
     .reduce((sum, s) => sum + s.amountCents, 0);
 
@@ -291,8 +410,15 @@ export async function getDashboardData(
     categories: categorySpent,
     outstandingReimbursementsCents,
     sponsorshipCommittedCents,
-    sponsorshipReceivedCents: sponsorships
+    sponsorshipReceivedCents: cashSponsorships
       .filter((s) => s.status === "RECEIVED")
+      .reduce((sum, s) => sum + s.amountCents, 0),
+    sponsorshipCreditsCents: sponsorships
+      .filter(
+        (s) =>
+          s.type === "CREDITS" &&
+          (s.status === "COMMITTED" || s.status === "INVOICED" || s.status === "RECEIVED"),
+      )
       .reduce((sum, s) => sum + s.amountCents, 0),
     burnByMonth,
     unreconciledOver60DaysCount,
@@ -305,6 +431,32 @@ export async function getDashboardData(
       meetingStarts: meetings.map((m) => m.startsAt),
       now,
     }),
+    inTotalCents: inTotal,
+    outTotalCents: outTotal,
+    pendingApproval: {
+      count: pending.length,
+      cents: pending.reduce((sum, t) => sum + t.amountCents, 0),
+    },
+    spendByKind: [...kindTotals.entries()]
+      .map(([kind, cents]) => ({ kind, cents }))
+      .sort((a, b) => b.cents - a.cents),
+    balanceTrend: [...trend.entries()].map(([date, balanceCents]) => ({ date, balanceCents })),
+    recent: byDate.slice(-8).reverse().map(toRow),
+    topExpenses: [...spending]
+      .sort((a, b) => b.amountCents - a.amountCents)
+      .slice(0, 5)
+      .map(toRow),
+    incomeByKind: [...incomeTotals.entries()]
+      .map(([kind, cents]) => ({ kind, cents }))
+      .sort((a, b) => b.cents - a.cents),
+    reimbursementQueue: queue.slice(0, 12).map((t) => ({
+      id: t.id,
+      description: t.description,
+      amountCents: t.amountCents,
+      status: t.status,
+      submitter: t.submittedBy.name?.trim() || t.submittedBy.email,
+      occurredAt: t.occurredAt,
+    })),
   };
 }
 

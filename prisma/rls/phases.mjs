@@ -36,8 +36,11 @@ const GRANTS = {
   Invitation: ["SIUD", "SIUD", ""],
   Job: ["S", "S", ""],
   Label: ["SIUD", "SIUD", ""],
+  MemberPrefs: ["SIU", "", ""],
   Membership: ["SUD", "SIUD", ""],
   Note: ["SIUD", "SIUD", ""],
+  // Notes page folders: members create; the creator or an admin edits.
+  NoteFolder: ["SIUD", "S", ""],
   Notification: ["SIu", "SIUD", ""],
   OrgAuditLog: ["S", "S", ""],
   // DELETE only on DRAFT positions (b3_org_chart_draft_delete; P-CAT5, P3-05).
@@ -46,22 +49,37 @@ const GRANTS = {
   OrgCreationCode: ["", "", ""],
   OrgDeletionLog: ["", "", ""],
   OrgExport: ["SI", "SIUD", ""],
+  // Notes page files: shared or private to the uploader; no DELETE (soft).
+  OrgFile: ["SIU", "S", ""],
   OrgIntegration: ["SIUD", "SIUD", ""],
+  // Onboarding invite code: admins manage it, no DELETE (rotate or turn off).
+  OrgJoinCode: ["SIU", "SU", ""],
   OrgMemberHistory: ["S", "S", ""],
   OrgSecret: ["", "", ""],
   OrgSettings: ["SU", "SIUD", ""],
   OrgSlugHistory: ["", "", ""],
   OrgTheme: ["SIUD", "SIUD", ""],
   Organization: ["SU", "SIUD", ""],
+  // A member's own pins and recent pages in one org (owner-only).
+  Pin: ["SIUD", "", ""],
+  // Question polls: UPDATE is a column grant (closedAt, closesAt) for the
+  // creator or an admin; votes are insert/delete; the service role reads
+  // them for the export (P-QPOLL-*).
+  Poll: ["SIuD", "S", ""],
+  PollOption: ["SID", "S", ""],
   PollResponse: ["SIUD", "SIUD", ""],
   PollSlot: ["SIUD", "SIUD", ""],
+  PollVote: ["SID", "S", ""],
   Project: ["SIUD", "SIUD", ""],
   RateLimitBucket: ["", "", ""],
   Receipt: ["SID", "SID", ""],
+  RecentVisit: ["SIUD", "", ""],
   Session: ["", "", "SIUD"],
   Signup: ["SIUD", "SIUD", ""],
   Sponsor: ["SIUD", "SIUD", ""],
   Sponsorship: ["SIUD", "SIUD", ""],
+  // File bytes when there's no Blob store: definer functions only (P-BLOB-*).
+  StoredBlob: ["", "", ""],
   Task: ["SIUD", "SIUD", ""],
   TaskActivity: ["SI", "SI", ""],
   TaskAssignee: ["SIUD", "SIUD", ""],
@@ -70,6 +88,8 @@ const GRANTS = {
   TaskMention: ["SIUD", "SIUD", ""],
   Transaction: ["SIU", "SIU", ""],
   User: ["Su", "S", "SIUD"],
+  // Owner-only; other members reach busy hours through app.member_busy_hours.
+  UserAvailability: ["SIU", "", ""],
   UserCredential: ["", "", "SIUD"],
   VerificationToken: ["", "", "SIUD"],
   WeeklyUpdate: ["SIUD", "SIUD", ""],
@@ -83,7 +103,10 @@ const NO_ORG_ID = [
   "Organization",
   "RateLimitBucket",
   "Session",
+  // Keys carry the org ({kind}/{orgId}/...); the purge deletes by prefix.
+  "StoredBlob",
   "User",
+  "UserAvailability",
   "UserCredential",
   "VerificationToken",
   "_prisma_migrations",
@@ -118,6 +141,12 @@ const NEW_TENANT_TABLES = [
   "TaskAssignee",
   "TaskLabel",
   "Receipt",
+  "OrgJoinCode",
+  "OrgFile",
+  "NoteFolder",
+  "Poll",
+  "PollOption",
+  "PollVote",
 ];
 
 /**
@@ -242,7 +271,10 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         "links",
         "major",
         "name",
+        "onboardedAt",
+        "preferredTitle",
         "pronouns",
+        "themePreference",
         "timezone",
       ],
     },
@@ -825,6 +857,62 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       return s;
     },
     { value: { clears_own_skip: 1, cannot_touch_other_org: 0, sees_only_own: 1 } },
+  );
+
+  // ======================= Live collaboration on notes =======================
+  // Note.yjsState (20260926120000_note_yjs_state) is a column, not a table,
+  // so the GRANTS matrix keeps its Note row and there is no new policy: the
+  // collaboration bridge writes it as app_user in the editing user's own
+  // context (withOrgTxAs), and the 6.8 Note policies must cover it exactly
+  // as they cover the body.
+  await tcase(
+    "P-COLLAB-01",
+    "Note.yjsState follows the Note policies: members read an ORGANIZATION note's state but only the author or an OWNER/ADMIN writes it, a PRIVATE note's state is its author's alone, and nothing crosses orgs",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const state = `decode('0102', 'hex')`;
+      const s = {};
+      s.member_reads_org = await count(
+        q,
+        `SELECT count(*) n FROM "Note" WHERE "id" = 'n_A_org' AND "yjsState" IS NULL`,
+      );
+      s.member_writes_org = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_org'`,
+      );
+      s.member_sees_private = await count(
+        q,
+        `SELECT count(*) n FROM "Note" WHERE "id" = 'n_A_priv'`,
+      );
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_writes_others_private = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_priv'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_writes_org = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_org'`,
+      );
+      s.author_writes_own_private = await rc(
+        q,
+        `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_A_priv'`,
+      );
+      s.admin_cross_org = await rc(q, `UPDATE "Note" SET "yjsState" = ${state} WHERE "id" = 'n_B'`);
+      return s;
+    },
+    {
+      value: {
+        member_reads_org: 1,
+        member_writes_org: 0,
+        member_sees_private: 0,
+        owner_writes_others_private: 0,
+        admin_writes_org: 1,
+        author_writes_own_private: 1,
+        admin_cross_org: 0,
+      },
+    },
   );
 
   // ======================= Phase 2: profiles =======================
@@ -2559,6 +2647,684 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       return { own, foreign, none };
     },
     { value: { own: 1, foreign: 0, none: 0 } },
+  );
+
+  // ======================= Pins, recent pages, files =======================
+  await tcase(
+    "P-PIN-01",
+    "Pin, RecentVisit, MemberPrefs: a member reads and writes only their own rows in their current org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.own_pin = await rc(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_1','org_A','u_memberA','page','/app/org-a/tasks','Tasks')`,
+      );
+      s.pin_for_other = await tryq(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_2','org_A','u_treasA','page','/app/org-a/tasks','Tasks')`,
+      );
+      s.pin_other_org = await tryq(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_3','org_B','u_memberA','page','/app/org-b/tasks','Tasks')`,
+      );
+      s.outside_href = await tryq(
+        q,
+        `INSERT INTO "Pin" ("id","organizationId","userId","kind","href","label") VALUES ('pin_4','org_A','u_memberA','page','https://evil.example','X')`,
+      );
+      s.own_visit = await rc(
+        q,
+        `INSERT INTO "RecentVisit" ("organizationId","userId","kind","href","label") VALUES ('org_A','u_memberA','page','/app/org-a/notes','Notes')`,
+      );
+      s.own_prefs = await rc(
+        q,
+        `INSERT INTO "MemberPrefs" ("organizationId","userId","financeWidgets") VALUES ('org_A','u_memberA','[]')`,
+      );
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_sees_pins = await count(q, `SELECT count(*) n FROM "Pin"`);
+      s.owner_sees_visits = await count(q, `SELECT count(*) n FROM "RecentVisit"`);
+      s.owner_sees_prefs = await count(q, `SELECT count(*) n FROM "MemberPrefs"`);
+      s.owner_deletes_pin = await rc(q, `DELETE FROM "Pin" WHERE "id" = 'pin_1'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_sees_pins = await count(q, `SELECT count(*) n FROM "Pin"`);
+      s.member_deletes_pin = await rc(q, `DELETE FROM "Pin" WHERE "id" = 'pin_1'`);
+      return s;
+    },
+    {
+      value: {
+        own_pin: 1,
+        pin_for_other: "42501",
+        pin_other_org: "42501",
+        outside_href: "23514",
+        own_visit: 1,
+        own_prefs: 1,
+        owner_sees_pins: 0,
+        owner_sees_visits: 0,
+        owner_sees_prefs: 0,
+        owner_deletes_pin: 0,
+        member_sees_pins: 1,
+        member_deletes_pin: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-PIN-02",
+    "OrgFile: shared files reach every member, private ones only the uploader; only the uploader or an admin changes one",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.shared = await rc(
+        q,
+        `INSERT INTO "OrgFile" ("id","organizationId","name","contentType","sizeBytes","storageKey","visibility","uploadedById") VALUES ('f_1','org_A','Plan.pdf','application/pdf',10,'files/org_A/a','ORGANIZATION','u_memberA')`,
+      );
+      s.private = await rc(
+        q,
+        `INSERT INTO "OrgFile" ("id","organizationId","name","contentType","sizeBytes","storageKey","visibility","uploadedById") VALUES ('f_2','org_A','Mine.pdf','application/pdf',10,'files/org_A/b','PRIVATE','u_memberA')`,
+      );
+      s.as_someone_else = await tryq(
+        q,
+        `INSERT INTO "OrgFile" ("id","organizationId","name","contentType","sizeBytes","storageKey","uploadedById") VALUES ('f_3','org_A','X.pdf','application/pdf',10,'files/org_A/c','u_treasA')`,
+      );
+      s.delete = await tryq(q, `DELETE FROM "OrgFile"`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.treas_sees = await count(q, `SELECT count(*) n FROM "OrgFile"`);
+      s.treas_renames = await rc(q, `UPDATE "OrgFile" SET "name" = 'Mine now.pdf' WHERE "id" = 'f_1'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_sees = await count(q, `SELECT count(*) n FROM "OrgFile"`);
+      s.admin_removes = await rc(q, `UPDATE "OrgFile" SET "deletedAt" = now() WHERE "id" = 'f_1'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_sees = await count(q, `SELECT count(*) n FROM "OrgFile"`);
+      return s;
+    },
+    {
+      value: {
+        shared: 1,
+        private: 1,
+        as_someone_else: "42501",
+        delete: "42501",
+        treas_sees: 1,
+        treas_renames: 0,
+        admin_sees: 1,
+        admin_removes: 1,
+        other_org_sees: 0,
+      },
+    },
+  );
+
+  await tcase(
+    "P-PIN-03",
+    "NoteFolder: members create folders; only the creator or an admin changes one; nothing crosses orgs",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.create = await rc(
+        q,
+        `INSERT INTO "NoteFolder" ("id","organizationId","name","createdById") VALUES ('fo_1','org_A','Minutes','u_memberA')`,
+      );
+      s.as_other = await tryq(
+        q,
+        `INSERT INTO "NoteFolder" ("id","organizationId","name","createdById") VALUES ('fo_2','org_A','X','u_treasA')`,
+      );
+      s.note_into_folder = await rc(
+        q,
+        `INSERT INTO "Note" ("id","organizationId","title","contentJson","contentText","authorId","updatedById","updatedAt","folderId") VALUES ('n_fo','org_A','T','{}','','u_memberA','u_memberA',now(),'fo_1')`,
+      );
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.treas_sees = await count(q, `SELECT count(*) n FROM "NoteFolder"`);
+      s.treas_renames = await rc(q, `UPDATE "NoteFolder" SET "name" = 'Mine' WHERE "id" = 'fo_1'`);
+      s.treas_deletes = await rc(q, `DELETE FROM "NoteFolder" WHERE "id" = 'fo_1'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_sees = await count(q, `SELECT count(*) n FROM "NoteFolder"`);
+      s.cross_org_folder = await tryq(
+        q,
+        `INSERT INTO "Note" ("id","organizationId","title","contentJson","contentText","authorId","updatedById","updatedAt","folderId") VALUES ('n_x','org_B','T','{}','','u_memberB','u_memberB',now(),'fo_1')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_deletes = await rc(q, `DELETE FROM "NoteFolder" WHERE "id" = 'fo_1'`);
+      // The (private) note is still there for its author, out of the folder.
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.note_kept = await count(q, `SELECT count(*) n FROM "Note" WHERE "id" = 'n_fo' AND "folderId" IS NULL`);
+      return s;
+    },
+    {
+      value: {
+        create: 1,
+        as_other: "42501",
+        note_into_folder: 1,
+        treas_sees: 1,
+        treas_renames: 0,
+        treas_deletes: 0,
+        other_org_sees: 0,
+        cross_org_folder: "23503",
+        admin_deletes: 1,
+        note_kept: 1,
+      },
+    },
+  );
+
+  // ======================= Question polls =======================
+  const qpoll = (id, question, createdById, allowMemberOptions = false) =>
+    `INSERT INTO "Poll" ("id","organizationId","question","createdById","allowMemberOptions","updatedAt")
+     VALUES ('${id}','org_A','${question}','${createdById}',${allowMemberOptions},now())`;
+  const qoption = (id, pollId, label, addedById, org = "org_A") =>
+    `INSERT INTO "PollOption" ("id","organizationId","pollId","label","addedById") VALUES ('${id}','${org}','${pollId}','${label}','${addedById}')`;
+  const qvote = (id, pollId, optionId, userId, org = "org_A") =>
+    `INSERT INTO "PollVote" ("id","organizationId","pollId","optionId","userId") VALUES ('${id}','${org}','${pollId}','${optionId}','${userId}')`;
+
+  await tcase(
+    "P-QPOLL-01",
+    "Poll: any member asks one as themselves; only its creator or an admin closes, reopens or deletes it; its question and settings never change; nothing crosses orgs",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.create = await rc(q, qpoll("qp_1", "Where should we go?", "u_memberA"));
+      s.as_someone_else = await tryq(q, qpoll("qp_2", "X", "u_treasA"));
+      s.other_org = await tryq(
+        q,
+        `INSERT INTO "Poll" ("id","organizationId","question","createdById","updatedAt") VALUES ('qp_3','org_B','X','u_memberA',now())`,
+      );
+      s.blank_question = await tryq(q, qpoll("qp_4", "   ", "u_memberA"));
+      s.options = await rc(
+        q,
+        `INSERT INTO "PollOption" ("id","organizationId","pollId","label","addedById") VALUES ('qo_1','org_A','qp_1','Here','u_memberA'),('qo_2','org_A','qp_1','There','u_memberA')`,
+      );
+      s.creator_closes = await rc(q, `UPDATE "Poll" SET "closedAt" = app.utc_now() WHERE "id" = 'qp_1'`);
+      s.creator_flips_anonymous = await tryq(q, `UPDATE "Poll" SET "anonymous" = true WHERE "id" = 'qp_1'`);
+      s.creator_rewords = await tryq(q, `UPDATE "Poll" SET "question" = 'Other' WHERE "id" = 'qp_1'`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.member_sees = await count(q, `SELECT count(*) n FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.member_reopens = await rc(q, `UPDATE "Poll" SET "closedAt" = NULL WHERE "id" = 'qp_1'`);
+      s.member_deletes = await rc(q, `DELETE FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.member_removes_option = await rc(q, `DELETE FROM "PollOption" WHERE "id" = 'qo_2'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reopens = await rc(q, `UPDATE "Poll" SET "closedAt" = NULL WHERE "id" = 'qp_1'`);
+      s.admin_removes_option = await rc(q, `DELETE FROM "PollOption" WHERE "id" = 'qo_2'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_sees = await count(q, `SELECT count(*) n FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.other_org_options = await count(q, `SELECT count(*) n FROM "PollOption" WHERE "pollId" = 'qp_1'`);
+      s.other_org_deletes = await rc(q, `DELETE FROM "Poll" WHERE "id" = 'qp_1'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_deletes = await rc(q, `DELETE FROM "Poll" WHERE "id" = 'qp_1'`);
+      s.options_gone = await count(q, `SELECT count(*) n FROM "PollOption" WHERE "pollId" = 'qp_1'`);
+      return s;
+    },
+    {
+      value: {
+        create: 1,
+        as_someone_else: "42501",
+        other_org: "42501",
+        blank_question: "23514",
+        options: 2,
+        creator_closes: 1,
+        creator_flips_anonymous: "42501",
+        creator_rewords: "42501",
+        member_sees: 1,
+        member_reopens: 0,
+        member_deletes: 0,
+        member_removes_option: 0,
+        admin_reopens: 1,
+        admin_removes_option: 1,
+        other_org_sees: 0,
+        other_org_options: 0,
+        other_org_deletes: 0,
+        admin_deletes: 1,
+        options_gone: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-02",
+    "PollOption: the creator and admins add options; members only when the poll allows it, and always as themselves",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      await q(qpoll("qp_c", "Creator only", "u_memberA"));
+      await q(qpoll("qp_o", "Anyone adds", "u_memberA", true));
+      s.creator_adds = await rc(q, qoption("qo_c1", "qp_c", "First", "u_memberA"));
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.member_adds_closed = await tryq(q, qoption("qo_c2", "qp_c", "Mine", "u_treasA"));
+      s.member_adds_open = await rc(q, qoption("qo_o1", "qp_o", "Mine", "u_treasA"));
+      s.member_adds_as_other = await tryq(q, qoption("qo_o2", "qp_o", "Theirs", "u_memberA"));
+      s.blank_label = await tryq(q, qoption("qo_o3", "qp_o", "  ", "u_treasA"));
+      s.foreign_poll = await tryq(q, qoption("qo_o4", "qp_B", "Sneaky", "u_treasA"));
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_adds_closed = await rc(q, qoption("qo_c3", "qp_c", "From an admin", "u_adminA"));
+      return s;
+    },
+    {
+      value: {
+        creator_adds: 1,
+        member_adds_closed: "42501",
+        member_adds_open: 1,
+        member_adds_as_other: "42501",
+        blank_label: "23514",
+        foreign_poll: "42501",
+        admin_adds_closed: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-03",
+    "PollVote: a member votes as themselves for an option of the same poll while it is open, withdraws only their own vote, and sees everyone's on a named poll",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      await q(qpoll("qp_v", "Vote here", "u_memberA"));
+      await q(qpoll("qp_w", "Elsewhere", "u_memberA"));
+      await q(qoption("qo_v1", "qp_v", "One", "u_memberA"));
+      await q(qoption("qo_v2", "qp_v", "Two", "u_memberA"));
+      await q(qoption("qo_w1", "qp_w", "Other", "u_memberA"));
+      s.own = await rc(q, qvote("qv_1", "qp_v", "qo_v1", "u_memberA"));
+      s.for_someone_else = await tryq(q, qvote("qv_2", "qp_v", "qo_v2", "u_treasA"));
+      s.other_polls_option = await tryq(q, qvote("qv_3", "qp_v", "qo_w1", "u_memberA"));
+      s.twice = await tryq(q, qvote("qv_4", "qp_v", "qo_v1", "u_memberA"));
+      s.other_org = await tryq(q, qvote("qv_5", "qp_B", "qo_B1", "u_memberA", "org_B"));
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.member_votes = await rc(q, qvote("qv_6", "qp_v", "qo_v2", "u_treasA"));
+      s.sees_every_vote = await count(q, `SELECT count(*) n FROM "PollVote" WHERE "pollId" = 'qp_v'`);
+      s.withdraws_others = await rc(q, `DELETE FROM "PollVote" WHERE "pollId" = 'qp_v' AND "userId" = 'u_memberA'`);
+      s.update = await tryq(q, `UPDATE "PollVote" SET "optionId" = 'qo_v1' WHERE "id" = 'qv_6'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.creator_closes = await rc(q, `UPDATE "Poll" SET "closedAt" = app.utc_now() WHERE "id" = 'qp_v'`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.vote_when_closed = await tryq(q, qvote("qv_7", "qp_v", "qo_v1", "u_treasA"));
+      s.withdraw_when_closed = await rc(q, `DELETE FROM "PollVote" WHERE "id" = 'qv_6'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.past_deadline = await rc(
+        q,
+        `UPDATE "Poll" SET "closedAt" = NULL, "closesAt" = app.utc_now() - interval '1 minute' WHERE "id" = 'qp_v'`,
+      );
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.vote_past_deadline = await tryq(q, qvote("qv_8", "qp_v", "qo_v1", "u_treasA"));
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.reopened = await rc(q, `UPDATE "Poll" SET "closesAt" = NULL WHERE "id" = 'qp_v'`);
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.withdraw_own = await rc(q, `DELETE FROM "PollVote" WHERE "id" = 'qv_6'`);
+      return s;
+    },
+    {
+      value: {
+        own: 1,
+        for_someone_else: "42501",
+        other_polls_option: "42501",
+        twice: "23505",
+        other_org: "42501",
+        member_votes: 1,
+        sees_every_vote: 2,
+        withdraws_others: 0,
+        update: "42501",
+        creator_closes: 1,
+        vote_when_closed: "42501",
+        withdraw_when_closed: 0,
+        past_deadline: 1,
+        vote_past_deadline: "42501",
+        reopened: 1,
+        withdraw_own: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-04",
+    "anonymous poll: nobody reads another member's vote, not its creator and not an owner; app.poll_vote_counts still counts every vote, for the caller's own org only",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const counts = async (poll) =>
+        (
+          await q(
+            `SELECT "optionId", "votes"::int AS votes, "voters"::int AS voters FROM app.poll_vote_counts(ARRAY['${poll}']) ORDER BY 1`,
+          )
+        ).rows;
+      const votes = () => count(q, `SELECT count(*) n FROM "PollVote" WHERE "pollId" = 'qp_A'`);
+      const s = {};
+      // u_memberA asked it and voted; so did u_adminA and u_treasA (fixtures).
+      s.creator_reads = await votes();
+      s.creator_reads_others = await count(
+        q,
+        `SELECT count(*) n FROM "PollVote" WHERE "pollId" = 'qp_A' AND "userId" <> 'u_memberA'`,
+      );
+      s.counts = await counts("qp_A");
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_reads = await votes();
+      s.owner_counts = (await counts("qp_A")).length;
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads = await votes();
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_counts = (await counts("qp_A")).length;
+      s.own_org_counts = (await counts("qp_B")).length;
+      await q(`SELECT app.set_context('u_memberB','org_A')`);
+      s.spoofed_counts = (await counts("qp_A")).length;
+      return s;
+    },
+    {
+      value: {
+        creator_reads: 1,
+        creator_reads_others: 0,
+        counts: [
+          { optionId: "qo_A1", votes: 2, voters: 3 },
+          { optionId: "qo_A2", votes: 1, voters: 3 },
+        ],
+        owner_reads: 0,
+        owner_counts: 2,
+        admin_reads: 1,
+        other_org_counts: 0,
+        own_org_counts: 2,
+        spoofed_counts: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-05",
+    "question polls on the service path: the export reads its own org's polls, options and votes, and writes nothing",
+    "app_service",
+    { org: "org_A" },
+    async (q) => ({
+      polls: await count(q, `SELECT count(*) n FROM "Poll"`),
+      options: await count(q, `SELECT count(*) n FROM "PollOption"`),
+      votes: await count(q, `SELECT count(*) n FROM "PollVote"`),
+      insert: await tryq(q, qpoll("qp_s", "X", "u_adminA")),
+      vote: await tryq(q, qvote("qv_s", "qp_A", "qo_A2", "u_adminA")),
+      remove: await tryq(q, `DELETE FROM "PollVote"`),
+      counts: await tryv(q, `SELECT count(*) FROM app.poll_vote_counts(ARRAY['qp_A'])`),
+    }),
+    {
+      value: {
+        polls: 1,
+        options: 2,
+        votes: 3,
+        insert: "42501",
+        vote: "42501",
+        remove: "42501",
+        counts: "error:42501",
+      },
+    },
+  );
+  await tcase(
+    "P-QPOLL-06",
+    "question polls: the identity role reaches neither the tables nor the counts",
+    "app_auth",
+    null,
+    async (q) => ({
+      read: await tryq(q, `SELECT 1 FROM "PollVote"`),
+      counts: await tryv(q, `SELECT count(*) FROM app.poll_vote_counts(ARRAY['qp_A'])`),
+    }),
+    { value: { read: "42501", counts: "error:42501" } },
+  );
+
+  // ======================= File bytes in the database =======================
+  await tcase(
+    "P-BLOB-01",
+    "StoredBlob: request and auth code cannot touch the table or its functions",
+    "app_user",
+    A("u_memberA"),
+    async (q) => ({
+      read: await tryq(q, `SELECT 1 FROM "StoredBlob"`),
+      put: await tryq(q, `SELECT app.blob_put('private','files/org_A/x','text/plain','\\x61'::bytea)`),
+      get: await tryq(q, `SELECT * FROM app.blob_get('private','files/org_A/x')`),
+      del: await tryq(q, `SELECT app.blob_delete('private', ARRAY['files/org_A/x'])`),
+      list: await tryq(q, `SELECT * FROM app.blob_list('private','files/',NULL,10)`),
+    }),
+    { value: { read: "42501", put: "42501", get: "42501", del: "42501", list: "42501" } },
+  );
+  await tcase(
+    "P-BLOB-02",
+    "StoredBlob: app_service stores once, reads, lists by prefix and deletes; bad keys and stores are refused",
+    "app_service",
+    null,
+    async (q) => {
+      const v = async (sql) => (await q(sql)).rows[0];
+      return {
+        first: (await v(`SELECT app.blob_put('private','files/org_A/f1','text/plain','\\x6869'::bytea) AS r`)).r,
+        again: (await v(`SELECT app.blob_put('private','files/org_A/f1','text/plain','\\x00'::bytea) AS r`)).r,
+        body: (await v(`SELECT encode("body",'escape') AS r FROM app.blob_get('private','files/org_A/f1')`)).r,
+        other_store: await count(q, `SELECT count(*) n FROM app.blob_get('public','files/org_A/f1')`),
+        listed: await count(q, `SELECT count(*) n FROM app.blob_list('private','files/org_A/',NULL,10)`),
+        traversal: await tryq(q, `SELECT app.blob_put('private','files/../x','text/plain','\\x00'::bytea)`),
+        bad_store: await tryq(q, `SELECT app.blob_put('elsewhere','files/org_A/f2','text/plain','\\x00'::bytea)`),
+        deleted: (await v(`SELECT app.blob_delete('private', ARRAY['files/org_A/f1','files/org_A/nope']) AS r`)).r,
+      };
+    },
+    {
+      value: {
+        first: true,
+        again: null,
+        body: "hi",
+        other_store: 0,
+        listed: 1,
+        traversal: "23514",
+        bad_store: "23514",
+        deleted: 1,
+      },
+    },
+  );
+  await tcase(
+    "P-BLOB-03",
+    "StoredBlob: the identity role cannot reach the file functions either",
+    "app_auth",
+    null,
+    async (q) => ({
+      put: await tryq(q, `SELECT app.blob_put('private','files/org_A/x','text/plain','\\x61'::bytea)`),
+      get: await tryq(q, `SELECT * FROM app.blob_get('private','files/org_A/x')`),
+    }),
+    { value: { put: "42501", get: "42501" } },
+  );
+
+  // ======================= Onboarding flows =======================
+  await tcase(
+    "P-ONB-01",
+    "OrgJoinCode: only OWNER/ADMIN read, create or change their org's invite code; no DELETE",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_insert = await tryq(
+        q,
+        `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_A','ABCD-EFGH')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_insert = await tryq(
+        q,
+        `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_A','ABCD-EFGH')`,
+      );
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "OrgJoinCode"`);
+      s.admin_update = await rc(q, `UPDATE "OrgJoinCode" SET "enabled" = false`);
+      s.admin_delete = await tryq(q, `DELETE FROM "OrgJoinCode"`);
+      s.other_org = await tryq(
+        q,
+        `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_B','WXYZ-2345')`,
+      );
+      s.bad_format = await tryq(q, `UPDATE "OrgJoinCode" SET "code" = 'nope'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_reads = await count(q, `SELECT count(*) n FROM "OrgJoinCode"`);
+      s.member_update = await rc(q, `UPDATE "OrgJoinCode" SET "enabled" = true`);
+      return s;
+    },
+    {
+      value: {
+        member_insert: "42501",
+        admin_insert: 1,
+        admin_reads: 1,
+        admin_update: 1,
+        admin_delete: "42501",
+        other_org: "42501",
+        bad_format: "23514",
+        member_reads: 0,
+        member_update: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-ONB-02",
+    "app.org_by_join_code answers a verified caller with no org, and nobody unverified",
+    "app_user",
+    B("u_ownerB"),
+    async (q) => {
+      await q(`INSERT INTO "OrgJoinCode" ("organizationId","code","allowedDomain") VALUES ('org_B','WXYZ-2345','example.edu')`);
+      await q(`SELECT app.set_context('u_invitee','')`);
+      const s = {};
+      s.verified = (
+        await q(`SELECT "orgSlug" IS NOT NULL AS ok, "allowedDomain" FROM app.org_by_join_code(' wxyz-2345 ')`)
+      ).rows;
+      s.unknown = await count(q, `SELECT count(*) n FROM app.org_by_join_code('AAAA-AAAA')`);
+      s.direct_table = await count(q, `SELECT count(*) n FROM "OrgJoinCode"`);
+      // A caller with no verified user row (unknown or unverified id) gets nothing.
+      await q(`SELECT app.set_context('u_nobody','')`);
+      s.no_user = await count(q, `SELECT count(*) n FROM app.org_by_join_code('WXYZ-2345')`);
+      return s;
+    },
+    {
+      value: {
+        verified: [{ ok: true, allowedDomain: "example.edu" }],
+        unknown: 0,
+        direct_table: 0,
+        no_user: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-ONB-02b",
+    "app.org_by_join_code: an unverified caller gets no row",
+    "owner",
+    null,
+    async (q) => {
+      await q(`INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_B','WXYZ-2345')`);
+      await q(`SELECT app.set_context('u_invitee','')`);
+      const verified = await count(q, `SELECT count(*) n FROM app.org_by_join_code('WXYZ-2345')`);
+      await q(`UPDATE "User" SET "emailVerified" = NULL WHERE "id" = 'u_invitee'`);
+      const unverified = await count(q, `SELECT count(*) n FROM app.org_by_join_code('WXYZ-2345')`);
+      return { verified, unverified };
+    },
+    { value: { verified: 1, unverified: 0 } },
+  );
+  await tcase(
+    "P-ONB-03",
+    "a joiner on the service path counts a use; app_service cannot create or delete codes",
+    "app_service",
+    { org: "org_A" },
+    async (q) => ({
+      insert: await tryq(q, `INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_A','QQQQ-QQQQ')`),
+      delete: await tryq(q, `DELETE FROM "OrgJoinCode"`),
+      update_other_org: await rc(q, `UPDATE "OrgJoinCode" SET "useCount" = "useCount" + 1 WHERE "organizationId" = 'org_B'`),
+    }),
+    { value: { insert: "42501", delete: "42501", update_other_org: 0 } },
+  );
+  await tcase(
+    "P-ONB-04",
+    "User: a user writes their own onboarding columns, never another member's",
+    "app_user",
+    A("u_memberA"),
+    async (q) => ({
+      own: await rc(
+        q,
+        `UPDATE "User" SET "onboardedAt" = now(), "preferredTitle" = 'PM', "themePreference" = '{"preset":"harbor"}' WHERE "id" = 'u_memberA'`,
+      ),
+      other: await rc(q, `UPDATE "User" SET "preferredTitle" = 'x' WHERE "id" = 'u_adminA'`),
+    }),
+    { value: { own: 1, other: 0 } },
+  );
+  await tcase(
+    "P-ONB-06",
+    "UserAvailability: a user reads and writes only their own row, even inside a shared org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.own_insert = await tryq(
+        q,
+        `INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA','{"rules":[{"label":"Therapy"}]}',ARRAY['1-9'])`,
+      );
+      s.other_insert = await tryq(
+        q,
+        `INSERT INTO "UserAvailability" ("userId","rules") VALUES ('u_adminA','{}')`,
+      );
+      s.own_reads = await count(q, `SELECT count(*) n FROM "UserAvailability"`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads_member = await count(q, `SELECT count(*) n FROM "UserAvailability" WHERE "userId" = 'u_memberA'`);
+      s.admin_updates_member = await rc(q, `UPDATE "UserAvailability" SET "busy" = '{}' WHERE "userId" = 'u_memberA'`);
+      s.bad_busy = await tryq(
+        q,
+        `INSERT INTO "UserAvailability" ("userId","busy") VALUES ('u_adminA',ARRAY['9-99'])`,
+      );
+      return s;
+    },
+    {
+      value: {
+        own_insert: 1,
+        other_insert: "42501",
+        own_reads: 1,
+        admin_reads_member: 0,
+        admin_updates_member: 0,
+        bad_busy: "23514",
+      },
+    },
+  );
+  await tcase(
+    "P-ONB-07",
+    "app.member_busy_hours: busy cells only, for members of the same org, as the org allows",
+    "owner",
+    null,
+    async (q) => {
+      await q(`INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA','{"secret":"Therapy"}',ARRAY['1-9','2-10'])`);
+      await q(`INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_bothAB','{}',ARRAY['0-8'])`);
+      const busy = async (user, org, target) => {
+        await q(`SELECT app.set_context($1, $2)`, [user, org]);
+        return (await q(`SELECT app.member_busy_hours($1) AS b`, [target])).rows[0]?.b ?? null;
+      };
+      const s = {};
+      s.co_member = await busy("u_treasA", "org_A", "u_memberA");
+      s.self_no_org = await busy("u_memberA", "", "u_memberA");
+      s.other_org = await busy("u_memberB", "org_B", "u_memberA");
+      s.shared_member_via_b = await busy("u_memberB", "org_B", "u_bothAB");
+      s.no_row = await busy("u_treasA", "org_A", "u_adminA");
+      await q(`UPDATE "OrgSettings" SET "showMemberAvailability" = false WHERE "organizationId" = 'org_A'`);
+      s.hidden_member = await busy("u_treasA", "org_A", "u_memberA");
+      s.hidden_admin = await busy("u_adminA", "org_A", "u_memberA");
+      s.hidden_self = await busy("u_memberA", "org_A", "u_memberA");
+      // org_B still shares, so u_bothAB stays visible there.
+      s.b_still_shares = await busy("u_memberB", "org_B", "u_bothAB");
+      return s;
+    },
+    {
+      value: {
+        co_member: ["1-9", "2-10"],
+        self_no_org: ["1-9", "2-10"],
+        other_org: null,
+        shared_member_via_b: ["0-8"],
+        no_row: [],
+        hidden_member: null,
+        hidden_admin: ["1-9", "2-10"],
+        hidden_self: ["1-9", "2-10"],
+        b_still_shares: ["0-8"],
+      },
+    },
+  );
+  await tcase(
+    "P-ONB-05",
+    "DatabaseDefinition.tag and the new OrgSettings columns: admins write, members cannot",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_tag = await rc(q, `UPDATE "DatabaseDefinition" SET "tag" = 'Finance'`);
+      s.member_settings = await rc(q, `UPDATE "OrgSettings" SET "showMemberAvailability" = false`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_tag = (await rc(q, `UPDATE "DatabaseDefinition" SET "tag" = 'People'`)) > 0;
+      s.admin_settings = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "showMemberAvailability" = false, "financeDashboardCards" = ARRAY['runway']`,
+      );
+      s.bad_tag = await tryq(q, `UPDATE "DatabaseDefinition" SET "tag" = ''`);
+      return s;
+    },
+    {
+      value: { member_tag: 0, member_settings: 0, admin_tag: true, admin_settings: 1, bad_tag: "23514" },
+    },
   );
   await tcase(
     "P-A3-06",

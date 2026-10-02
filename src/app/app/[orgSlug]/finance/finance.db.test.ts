@@ -133,19 +133,13 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     const categories = await withOrgTx(orgId, ({ db }) =>
       db.budgetCategory.findMany({ where: { budgetPeriodId: periodId }, orderBy: { sortOrder: "asc" } }),
     );
-    expect(categories.map((c) => c.name)).toEqual([
-      "Food",
-      "Materials",
-      "Travel",
-      "Marketing",
-      "Speaker Fees",
-    ]);
+    expect(categories.map((c) => c.name)).toEqual(["Food", "Supplies", "Events", "Travel", "Marketing"]);
 
     expect(await createCategory(orgId, periodId, { name: "Swag", allocatedCents: 5000 })).toEqual({});
     const swag = await withOrgTx(orgId, ({ db }) =>
       db.budgetCategory.findFirstOrThrow({ where: { budgetPeriodId: periodId, name: "Swag" } }),
     );
-    expect(await deleteCategory(orgId, swag.id)).toEqual({});
+    expect(await deleteCategory(orgId, swag.id)).toEqual({ moved: 0 });
   });
 
   it("an expense: submitter submits, a treasurer approves (outbox email), nobody self-approves", async () => {
@@ -262,6 +256,42 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
         })
       ).error,
     ).toMatch(/member of this organization/);
+  });
+
+  it("sponsorships: credits never touch the ledger, even when received", async () => {
+    as(people.treasurer);
+    const { sponsorId } = await createSponsor(orgId, { name: "Cloud Co" });
+    const { sponsorshipId, error } = await createSponsorship(orgId, {
+      sponsorId,
+      budgetPeriodId: periodId,
+      type: "CREDITS",
+      amountCents: 500_000,
+      ownerId: people.owner.id,
+    });
+    expect(error).toBeUndefined();
+    expect(await updateSponsorshipStatus(orgId, sponsorshipId!, "RECEIVED")).toEqual({ sponsorshipId });
+    await updateSponsorshipStatus(orgId, sponsorshipId!, "COMMITTED");
+    await updateSponsorshipStatus(orgId, sponsorshipId!, "RECEIVED");
+
+    const after = await withOrgTx(orgId, async ({ db }) => ({
+      sponsorship: await db.sponsorship.findUniqueOrThrow({ where: { id: sponsorshipId! } }),
+      booked: await db.transaction.count({ where: { organizationId: orgId, amountCents: 500_000 } }),
+    }));
+    expect(after.sponsorship).toMatchObject({ type: "CREDITS", status: "RECEIVED", transactionId: null });
+    expect(after.booked).toBe(0);
+
+    // Anything else is refused before any write.
+    expect(
+      (
+        await createSponsorship(orgId, {
+          sponsorId,
+          budgetPeriodId: periodId,
+          type: "GIFT_CARDS",
+          amountCents: 1,
+          ownerId: people.owner.id,
+        })
+      ).error,
+    ).toBeTruthy();
   });
 
   it("receipts are visible to the submitter and finance only", async () => {

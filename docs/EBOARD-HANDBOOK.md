@@ -31,7 +31,7 @@ deployment/restore procedures.
    treasurer, and remove it from the outgoing one if they're leaving the
    e-board entirely.
 4. **Rotate anything the outgoing treasurer had access to** that isn't
-   role-based in-app: if they ever had the Vercel/Neon account password, the
+   role-based in-app: if they ever had the Vercel/Supabase account password, the
    Blob storage token, or the Google Cloud project access, rotate or
    transfer it. Losing a graduating treasurer's access is the single most
    common way these tools go stale.
@@ -83,7 +83,7 @@ Decide this in writing, now, while everyone involved is still around to ask:
 
 - Who owns the Vercel account (and pays for it, if it's ever upgraded off
   the free tier)?
-- Who owns the Neon (database) account?
+- Who owns the Supabase (database) account and the portal's project in it?
 - Who owns the Google Cloud project the OAuth client lives in?
 - Who owns the domain, if you have a custom one?
 - Who gets paged (or just gets the email) when something breaks and the
@@ -97,9 +97,10 @@ reconstructing access later.
 
 1. An OWNER or ADMIN invites them from Settings → Members with their school
    email and a role.
-2. They accept the invite by signing up (or signing in with Google) using
-   that same email — the pending invite shows up automatically on their
-   onboarding screen.
+2. They accept the invite by signing up (or signing in with Google, when the
+   sign-in page offers it) using that same email, and verifying the address
+   if they signed up with a password — the pending invite shows up
+   automatically on their onboarding screen.
 3. Point them at this document and at the app itself; there's no separate
    training environment, but a `MEMBER` account can't see or touch finance
    data, so it's safe to let new members explore.

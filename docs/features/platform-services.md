@@ -33,7 +33,7 @@ change is recorded in the org's audit log and emailed to all owners.
 | Job drain | `/api/cron/jobs` with `CRON_SECRET`: Vercel Cron (Pro, every 5 min) or the `Jobs pinger` GitHub workflow (Hobby, every 15 min); see RUNBOOK step 8 |
 | Platform sender | `RESEND_API_KEY`, `EMAIL_FROM` on the app's own verified domain; `EMAIL_DELIVERY` = `live`, `sink` or `off` |
 | Secrets keyring | `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT`, `SECRETS_FINGERPRINT_KEY`; rotation with `pnpm secrets:rotate-kek` (RUNBOOK step 9) |
-| File storage | `BLOB_READ_WRITE_TOKEN` (private: receipts, exports, org-chart sources), `BLOB_PUBLIC_READ_WRITE_TOKEN` (public: avatars, logos) |
+| File storage | Optional. `BLOB_READ_WRITE_TOKEN` (private: receipts, exports, org-chart sources, Notes files), `BLOB_PUBLIC_READ_WRITE_TOKEN` (public: avatars, logos). Without them files are kept in Postgres (`StoredBlob`, reached only through `app.blob_*`, app_service); `FILE_STORAGE=database` forces that |
 | Previews | their own Blob stores, KEK and `CRON_SECRET`; no live mail; `PREVIEW_BLOB_STORE_ID`, `PREVIEW_PUBLIC_BLOB_STORE_ID`, `PREVIEW_KEK_FINGERPRINT`, `SECRETS_KEK_ENV=preview`; jobs drain only on a database marked `app.fixture_only = 'on'` |
 | Health | `GET /api/health` (details with the `CRON_SECRET` bearer); RUNBOOK step 7 |
 

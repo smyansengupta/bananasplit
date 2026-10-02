@@ -95,7 +95,7 @@ describe("mail routing", () => {
     orgRow.current = cbc();
     const mailer = await getOrgMailer("org1");
     expect(mailer?.kind).toBe("platform-fallback");
-    expect(mailer?.from).toBe('"Claude Builders Club via CBC Portal" <no-reply@example.com>');
+    expect(mailer?.from).toBe('"Claude Builders Club via Bananasplit" <no-reply@example.com>');
     expect(getSecret).not.toHaveBeenCalled();
   });
 
@@ -153,7 +153,7 @@ describe("mail routing", () => {
   });
 
   it("the platform mailer uses EMAIL_FROM", () => {
-    vi.stubEnv("EMAIL_FROM", "CBC Portal <no-reply@claudeneu.com>");
-    expect(getPlatformMailer().from).toBe("CBC Portal <no-reply@claudeneu.com>");
+    vi.stubEnv("EMAIL_FROM", "Bananasplit <no-reply@claudeneu.com>");
+    expect(getPlatformMailer().from).toBe("Bananasplit <no-reply@claudeneu.com>");
   });
 });

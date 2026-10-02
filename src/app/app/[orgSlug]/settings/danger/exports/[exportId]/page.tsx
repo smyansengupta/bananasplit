@@ -39,7 +39,7 @@ export default async function ExportLandingPage({
 
   return (
     <div className="max-w-xl space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Data export</h1>
+      <h1 className="page-title">Data export</h1>
       <p className="text-muted-foreground text-sm">
         Requested {fmt.format(row.createdAt)}
         {row.expiresAt ? ` · available until ${fmt.format(row.expiresAt)}` : ""}

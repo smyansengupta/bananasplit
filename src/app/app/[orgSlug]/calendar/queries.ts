@@ -88,9 +88,26 @@ export function getEventsInRange(db: TxClient, organizationId: string, f: RangeF
 }
 
 /** The next `limit` events that have not ended yet (one under way included), for the overview. */
-export function getUpcomingEvents(db: TxClient, organizationId: string, now: Date, limit: number) {
+export function getUpcomingEvents(
+  db: TxClient,
+  organizationId: string,
+  now: Date,
+  limit: number,
+  only?: "meetings" | "events",
+) {
+  // A meeting: a board meeting, or anything titled "... meeting" (the team
+  // meetings org setup adds). The Overview lists them apart from events.
+  const meeting: Prisma.EventWhereInput = {
+    OR: [{ kind: "BOARD_MEETING" }, { title: { contains: "meeting", mode: "insensitive" } }],
+  };
   return db.event.findMany({
-    where: { organizationId, deletedAt: null, mergedIntoId: null, endsAt: { gt: now } },
+    where: {
+      organizationId,
+      deletedAt: null,
+      mergedIntoId: null,
+      endsAt: { gt: now },
+      ...(only === "meetings" ? meeting : only === "events" ? { NOT: meeting } : {}),
+    },
     select: calendarEventSelect,
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     take: limit,
@@ -176,25 +193,26 @@ export async function getOrgPolls(db: TxClient, organizationId: string) {
       finalizedEventId: true,
       finalizedEvent: { select: { startsAt: true, endsAt: true } },
       createdById: true,
+      createdAt: true,
     },
     orderBy: { createdAt: "desc" },
   });
   if (polls.length === 0) return [];
   const pollIds = polls.map((p) => p.id);
-  const [spans, respondents] = await Promise.all([
-    db.pollSlot.groupBy({
-      by: ["pollId"],
-      where: { organizationId, pollId: { in: pollIds } },
-      _min: { startsAt: true },
-      _max: { endsAt: true },
-    }),
-    // One row per (poll, person): members by user id, guests by key (or, for
-    // rows from before guest keys, by name).
-    db.pollResponse.groupBy({
-      by: ["pollId", "userId", "guestKeyHash", "guestName"],
-      where: { organizationId, pollId: { in: pollIds } },
-    }),
-  ]);
+  // One after another: a transaction has one connection.
+  const spans = await db.pollSlot.groupBy({
+    by: ["pollId"],
+    where: { organizationId, pollId: { in: pollIds } },
+    _min: { startsAt: true },
+    _max: { endsAt: true },
+  });
+  // One row per (poll, person): members by user id, guests by key (or, for
+  // rows from before guest keys, by name). A NO reads as unmarked
+  // (src/lib/polls/poll-view.ts), so someone with only those hasn't responded.
+  const respondents = await db.pollResponse.groupBy({
+    by: ["pollId", "userId", "guestKeyHash", "guestName"],
+    where: { organizationId, pollId: { in: pollIds }, availability: { not: "NO" } },
+  });
   const spanOf = new Map(spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]));
   const respondentCount = new Map<string, number>();
   for (const r of respondents) respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);

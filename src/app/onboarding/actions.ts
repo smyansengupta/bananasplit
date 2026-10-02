@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
 import { requireUser } from "@/lib/auth/session";
 import { ACCEPT_ERROR_MESSAGES } from "@/lib/invitations";
+import { orgStepHref } from "@/lib/onboarding/steps";
 import { acceptInvitation, findPendingInvitationsForMe } from "@/server/settings/invitations";
 import { createOrganization, isSlugAvailable } from "@/server/settings/org-creation";
 
@@ -39,6 +40,8 @@ export async function createOrganizationAction(
   if (!result.ok) return { error: result.error };
 
   await setActiveOrgCookie(result.orgId);
+  // From onboarding, org setup continues with B2 (connect data).
+  if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, "data"));
   redirect(`/app/${result.slug}`);
 }
 

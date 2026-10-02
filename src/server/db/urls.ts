@@ -1,12 +1,14 @@
 /**
  * Runtime connection URLs for the four database roles.
  *
- * The runtime never connects as the table owner: that URL (DATABASE_URL on
- * Neon, or MIGRATE_DATABASE_URL) is for migrations and the seed only, and
- * anything running as the owner bypasses RLS because it owns the tables.
+ * The runtime never connects as the table owner: that URL (MIGRATE_DATABASE_URL,
+ * or DATABASE_URL on Neon) is for migrations and the seed only, and anything
+ * running as the owner bypasses RLS because it owns the tables.
  *
  * Resolution, per role:
- *   1. An explicit DATABASE_URL_APP / _SERVICE / _AUTH (local, CI).
+ *   1. An explicit DATABASE_URL_APP / _SERVICE / _AUTH (local, CI, and
+ *      production on Supabase, whose pooler wants role.<project-ref>
+ *      usernames that step 2 cannot produce).
  *   2. Otherwise derived from the base DATABASE_URL (the per-branch URL the
  *      Neon Vercel integration injects, so previews work without per-branch
  *      configuration): same host, port, database and query string, with the

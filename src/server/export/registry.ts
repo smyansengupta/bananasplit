@@ -8,7 +8,8 @@
  * Each table is read on the service path (withSystemOrgTx(orgId)) in keyset
  * pages ordered by `key`, and written as data/{Model}.ndjson plus
  * data/{Model}.csv. `omit` drops columns that are secrets, hashes of
- * secrets or internal storage keys: ciphertext is never exported.
+ * secrets, internal storage keys or internal copies of exported data:
+ * ciphertext is never exported.
  */
 
 export interface ExportTable {
@@ -45,13 +46,21 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "TaskMention", key: ID },
   { model: "TaskActivity", key: ID },
   { model: "WeeklyUpdate", key: ID },
-  { model: "Note", key: ID },
+  // yjsState: the live editor's binary copy of the body contentJson carries.
+  { model: "Note", key: ID, omit: ["yjsState"] },
+  { model: "OrgFile", key: ID, omit: ["storageKey"] },
+  { model: "NoteFolder", key: ID },
   { model: "Event", key: ID },
   { model: "EventAttendee", key: ["eventId", "userId"] },
   { model: "EventLinkLog", key: ID },
   { model: "AvailabilityPoll", key: ID },
   { model: "PollSlot", key: ID },
   { model: "PollResponse", key: ID, omit: ["guestKeyHash"] },
+  { model: "Poll", key: ID },
+  { model: "PollOption", key: ID },
+  // Question-poll votes without who cast them, so an anonymous poll stays
+  // anonymous in the export too (the counts per option are still there).
+  { model: "PollVote", key: ID, omit: ["userId"] },
   { model: "BudgetPeriod", key: ID },
   { model: "BudgetCategory", key: ID },
   { model: "Transaction", key: ID },
@@ -76,10 +85,14 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
 /** Org tables that are deliberately not exported, and why. */
 export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   OrgSecret: "Encrypted integration secrets: ciphertext is never exported.",
+  OrgJoinCode: "The live invite code is a credential for joining the org; an export must not carry it.",
   Job: "Background job bookkeeping (ids and sanitized errors), not org data.",
   OrgSlugHistory:
     "Retired slugs; no runtime role can read the table (the manifest lists the current slug).",
   OrgDeletionLog: "Written only when an org is purged.",
+  Pin: "Each member's own shortcuts; the service role cannot read them.",
+  RecentVisit: "Each member's own browsing history in the app; private, and not org data.",
+  MemberPrefs: "Each member's own display settings; the service role cannot read them.",
 };
 
 /** The Prisma client property for a model name ("OrgChartPosition" -> "orgChartPosition"). */

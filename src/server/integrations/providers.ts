@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
 
+import { aiVendor } from "@/lib/ai/vendors";
 import { assertNoTx } from "@/server/db/context";
 import type { IntegrationTestContext, IntegrationTestResult } from "@/server/secrets";
 
@@ -63,6 +64,51 @@ export async function claudeConnectionTest(
     };
   }
   return { ok: true, config: model ? { model } : {} };
+}
+
+// ---------------------------------------------------------------- Other AI models
+
+/** The ids a vendor's GET /models lists ({data: [{id}]}), or null when it lists none. */
+function listedModelIds(body: unknown): string[] | null {
+  const data = (body as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return null;
+  const ids = data
+    .map((m) => (typeof (m as { id?: unknown })?.id === "string" ? (m as { id: string }).id : null))
+    .filter((id): id is string => Boolean(id))
+    .map((id) => id.replace(/^models\//, ""));
+  return ids.length > 0 ? ids : null;
+}
+
+/**
+ * The OpenAI-compatible key's "Test connection": one authenticated read at
+ * the vendor's fixed address (GET /models; OpenRouter's /models needs no key,
+ * so its GET /key), and, where the vendor lists its models, a check that
+ * the configured one is among them. No model is run, so a test costs nothing.
+ */
+export async function aiModelConnectionTest(ctx: IntegrationTestContext): Promise<IntegrationTestResult> {
+  assertNoTx("ai model test");
+  if (!ctx.secret) return { ok: false, reason: "Add an API key first." };
+  const vendor = aiVendor(typeof ctx.config.vendor === "string" ? ctx.config.vendor : null);
+  if (!vendor) return { ok: false, reason: "Pick a provider first." };
+  const model = typeof ctx.config.model === "string" ? ctx.config.model.replace(/^models\//, "") : null;
+  const url = vendor.id === "openrouter" ? `${vendor.baseUrl}/key` : `${vendor.baseUrl}/models`;
+  const res = await clients.fetch(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${ctx.secret}`, Accept: "application/json" },
+    signal: ctx.signal,
+    redirect: "error",
+    cache: "no-store",
+  });
+  if (res.status === 401 || res.status === 403) return { ok: false, reason: `${vendor.label} rejected this API key.` };
+  if (res.status === 429) return { ok: false, reason: `${vendor.label} rate-limited the test. Try again shortly.` };
+  if (!res.ok) return { ok: false, reason: `${vendor.label} answered ${res.status}.` };
+  if (vendor.id !== "openrouter" && model) {
+    const ids = listedModelIds(await res.json().catch(() => null));
+    if (ids && !ids.some((id) => id === model || id.endsWith(`/${model}`))) {
+      return { ok: false, reason: `The key works, but ${vendor.label} doesn't list ${model}. Check the model id.` };
+    }
+  }
+  return { ok: true, config: { vendor: vendor.id, ...(model ? { model } : {}) } };
 }
 
 // ---------------------------------------------------------------- Resend
@@ -133,7 +179,7 @@ export async function testNetlifyHook(ctx: IntegrationTestContext): Promise<Inte
   if (!ctx.secret || !isNetlifyHookUrl(ctx.secret))
     return { ok: false, reason: "Add a valid Netlify build hook URL first." };
   const res = await clients.fetch(
-    `${ctx.secret}?trigger_title=${encodeURIComponent("CBC Portal test build")}`,
+    `${ctx.secret}?trigger_title=${encodeURIComponent("Bananasplit test build")}`,
     {
       method: "POST",
       signal: ctx.signal,

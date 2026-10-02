@@ -13,7 +13,9 @@ import {
   storeImage,
   type StoredImage,
 } from "@/server/images";
+import { STORAGE_NOT_SET_UP, StorageConfigError } from "@/server/storage";
 import { readUpload, uploadErrorResponse } from "@/server/storage/upload";
+import { isCrossSite } from "@/lib/http/cross-site";
 
 /**
  * POST /api/orgs/{orgId}/logo   multipart `file` (JPEG, PNG or WebP, 4 MB)
@@ -35,16 +37,6 @@ function json(status: number, body: Record<string, unknown>) {
 }
 
 /** Route handlers get no built-in CSRF check (Server Actions do). */
-function isCrossSite(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== new URL(request.url).host;
-  } catch {
-    return true;
-  }
-}
-
 type Guard = { ok: true; userId: string } | { ok: false; response: Response };
 
 async function guard(request: Request, orgId: string): Promise<Guard> {
@@ -107,6 +99,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     stored = await storeImage("logos", orgId, "logo", upload.file.bytes);
   } catch (error) {
     if (error instanceof ImageRejectedError) return json(415, { error: error.message });
+    if (error instanceof StorageConfigError) {
+      console.error("[logo] storage not configured:", error.message);
+      return json(503, { error: STORAGE_NOT_SET_UP });
+    }
     throw error;
   }
 

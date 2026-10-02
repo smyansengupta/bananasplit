@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 
+import { AuthFrame } from "@/components/auth/auth-frame";
+import { AuthOrDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth/config";
+import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 
 import { SignUpForm } from "./sign-up-form";
 
@@ -11,17 +14,33 @@ export default async function SignUpPage() {
     redirect("/");
   }
 
+  // Only offered when the Google client is configured (as on /sign-in).
+  const googleEnabled = googleSignInEnabled();
+
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
+    <AuthFrame>
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle>Create your account</CardTitle>
-          <CardDescription>Sign up with an email and password.</CardDescription>
+          <CardTitle className="text-2xl">Create your account</CardTitle>
+          <CardDescription>
+            {googleEnabled
+              ? "Use your Google account, or sign up with an email and password."
+              : "Sign up with an email and password."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <SignUpForm />
+          <SignUpForm
+            google={
+              googleEnabled ? (
+                <>
+                  <GoogleSignInButton />
+                  <AuthOrDivider />
+                </>
+              ) : null
+            }
+          />
         </CardContent>
       </Card>
-    </div>
+    </AuthFrame>
   );
 }

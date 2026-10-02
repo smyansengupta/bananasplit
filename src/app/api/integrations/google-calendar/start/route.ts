@@ -11,6 +11,7 @@ import {
   beginGoogleAuth,
   isGoogleConfigured,
 } from "@/server/integrations/google";
+import { isCrossSite } from "@/lib/http/cross-site";
 
 /**
  * POST /api/integrations/google-calendar/start (form field `orgId`)
@@ -21,16 +22,6 @@ import {
  * same-origin check, so a prefetch or a cross-site link cannot start it.
  */
 export const dynamic = "force-dynamic";
-
-function isCrossSite(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  try {
-    return new URL(origin).host !== new URL(request.url).host;
-  } catch {
-    return true;
-  }
-}
 
 function deny(status: number, error: string) {
   return NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } });

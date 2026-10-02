@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { EventCalendar, type CalendarItem } from "@/components/calendar/event-calendar";
+import { CalendarShotButton } from "@/components/ai/calendar-shot-button";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { allDaySpan, safeTimeZone, zonedDateKey } from "@/lib/calendar/dates";
@@ -55,10 +56,11 @@ export default async function CalendarPage({ params, searchParams }: PageProps<"
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
+        <h1 className="page-title">Calendar</h1>
         <div className="flex flex-wrap gap-2">
+          {can({ role }, "events.write") && <CalendarShotButton orgId={org.id} orgSlug={orgSlug} />}
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/app/${orgSlug}/calendar/polls`}>Availability polls</Link>
+            <Link href={`/app/${orgSlug}/calendar/polls`}>Polls</Link>
           </Button>
           {can({ role }, "integrations.view") && (
             <Button variant="outline" size="sm" asChild>

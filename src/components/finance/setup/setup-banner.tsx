@@ -1,0 +1,107 @@
+"use client";
+
+import { ArrowRight, Check, Sparkles, X } from "lucide-react";
+import Link from "next/link";
+import { useState, useSyncExternalStore } from "react";
+
+import { Button } from "@/components/ui/button";
+import { SETUP_STEPS, setupProgress, stepDone, type FinanceSetupState } from "@/lib/finance/setup";
+import { cn } from "@/lib/utils";
+
+/**
+ * The dashboard's nudge until the budget basics are in place: how far setup
+ * is, and the way back into it. "Hide" is remembered in this browser only
+ * (a convenience; the setup guide stays under Finance › Set up).
+ */
+
+const noSubscribe = () => () => undefined;
+
+function readHidden(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function FinanceSetupBanner({
+  orgId,
+  orgSlug,
+  state,
+}: {
+  orgId: string;
+  orgSlug: string;
+  state: FinanceSetupState;
+}) {
+  const key = `bananasplit:finance-setup-hidden:${orgId}`;
+  const storedHidden = useSyncExternalStore(noSubscribe, () => readHidden(key), () => false);
+  const [hiddenNow, setHiddenNow] = useState(false);
+  const { done, total, next } = setupProgress(state);
+  const fresh = state.period === null;
+  if ((storedHidden || hiddenNow) && !fresh) return null;
+  const nextStep = SETUP_STEPS.find((s) => s.id === next);
+
+  return (
+    <section className="bg-primary/5 border-primary/20 relative overflow-hidden rounded-xl border p-4 sm:p-5">
+      <div className="flex flex-wrap items-start gap-4">
+        <span className="bg-primary text-primary-foreground grid size-11 shrink-0 place-items-center rounded-xl">
+          <Sparkles className="size-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1 space-y-2">
+          <div>
+            <h2 className="font-semibold">{fresh ? "Set up your club's finances" : "Finish setting up finance"}</h2>
+            <p className="text-muted-foreground text-sm">
+              {fresh
+                ? "Pick your budget year, enter what the club has, set a budget, and bring in last year's spreadsheet. About five minutes."
+                : `${done} of ${total} steps done.${nextStep ? ` Next: ${nextStep.title.toLowerCase()}.` : ""}`}
+            </p>
+          </div>
+          <ol className="flex flex-wrap gap-1.5" aria-label="Setup steps">
+            {SETUP_STEPS.map((s) => {
+              const ok = stepDone(state, s.id);
+              return (
+                <li
+                  key={s.id}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
+                    ok ? "border-success/40 text-success" : "text-muted-foreground",
+                  )}
+                >
+                  {ok && <Check className="size-3" aria-hidden="true" />}
+                  {s.short}
+                  <span className="sr-only">{ok ? " (done)" : " (to do)"}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <div className="flex items-center gap-2 self-center">
+          <Button asChild>
+            <Link href={`/app/${orgSlug}/finance/setup`}>
+              {fresh ? "Start setup" : "Continue setup"}
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+          </Button>
+          {!fresh && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Hide the setup reminder"
+              onClick={() => {
+                try {
+                  window.localStorage.setItem(key, "1");
+                } catch {
+                  // Private windows may refuse storage: it just hides until the next visit.
+                }
+                setHiddenNow(true);
+              }}
+            >
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

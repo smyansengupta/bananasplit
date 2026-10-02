@@ -158,7 +158,7 @@ export default async function DatabaseViewPage({
             <ChevronLeft className="size-3" aria-hidden="true" />
             Databases
           </Link>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <h1 className="page-title flex items-center gap-2">
             {database.name}
             {database.memberVisibility !== "MEMBERS" && <Badge variant="outline">{database.memberVisibility === "ADMINS" ? "Owners and admins" : database.memberVisibility === "OWNER" ? "Owners only" : "Hidden from members"}</Badge>}
           </h1>

@@ -30,6 +30,7 @@ import {
 
 import {
   PROVIDERS,
+  aiModelConfigSchema,
   claudeConfigSchema,
   emailSenderConfigSchema,
   googleCalendarConfigSchema,
@@ -45,6 +46,7 @@ import {
   GoogleApiError,
 } from "./google";
 import {
+  aiModelConnectionTest,
   domainOfAddress,
   isNetlifyHookUrl,
   claudeConnectionTest,
@@ -169,6 +171,48 @@ export async function saveClaude(
   if (!(await updateConfig(orgId, actor, "CLAUDE", parsed.data)))
     return fail("Add an API key first.");
   return { ok: true, message: "Default model saved." };
+}
+
+// ---------------------------------------------------------------- Other AI models
+
+/**
+ * An OpenAI-compatible model API for the AI imports: a vendor from the
+ * fixed list (never a URL), a model id, and the key. A new key is tested
+ * at once (one free GET at the vendor), like Claude's.
+ */
+export async function saveAiModel(
+  orgId: string,
+  actor: OrgActor,
+  input: { apiKey?: string; vendor?: string; model?: string },
+): Promise<IntegrationResult> {
+  requirePermission(actor, "integrations.write");
+  const parsed = aiModelConfigSchema.safeParse({ vendor: input.vendor, model: input.model });
+  if (!parsed.success) {
+    return fail(
+      parsed.error.issues[0]?.path[0] === "vendor"
+        ? "Pick one of the listed providers."
+        : (parsed.error.issues[0]?.message ?? "Enter the model id."),
+    );
+  }
+  const apiKey = input.apiKey?.trim();
+  if (apiKey) {
+    if (!/^[!-~]{16,512}$/.test(apiKey)) return fail("That doesn't look like an API key.");
+    await setSecret({
+      orgId,
+      actor,
+      provider: "OPENAI_COMPATIBLE",
+      kind: "API_KEY",
+      value: apiKey,
+      config: parsed.data,
+    });
+    return fromTest(
+      await testIntegration({ orgId, actor, provider: "OPENAI_COMPATIBLE", test: aiModelConnectionTest }),
+      "Saved. The key works and the model is available.",
+    );
+  }
+  if (!(await updateConfig(orgId, actor, "OPENAI_COMPATIBLE", parsed.data)))
+    return fail("Add an API key first.");
+  return { ok: true, message: "Provider and model saved." };
 }
 
 // ---------------------------------------------------------------- Email sender (Resend)
@@ -582,6 +626,11 @@ export async function testProvider(
       );
     case "GOOGLE_CALENDAR":
       return testGoogle(orgId, actor);
+    case "OPENAI_COMPATIBLE":
+      return fromTest(
+        await testIntegration({ orgId, actor, provider, test: aiModelConnectionTest }),
+        "The key works and the model is available.",
+      );
   }
 }
 

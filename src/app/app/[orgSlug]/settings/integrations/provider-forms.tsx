@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { AI_VENDORS, aiVendor } from "@/lib/ai/vendors";
 import { claudeModel, estimateParseCostUsd, formatUsd } from "@/lib/org-chart/models";
 import {
   CLAUDE_MODELS,
@@ -17,6 +18,7 @@ import {
 
 import {
   disconnectGoogleAction,
+  saveAiModelAction,
   saveClaudeAction,
   saveEmailSenderAction,
   saveGoogleCalendarsAction,
@@ -47,6 +49,91 @@ function useSubmit() {
     });
   }
   return { feedback, isPending, submit };
+}
+
+// ---------------------------------------------------------------- Other AI models
+
+/**
+ * An OpenAI-compatible model API: a provider from the fixed list, the model
+ * id as the provider writes it, and the key (write-only, like every key).
+ */
+export function AiModelForm({
+  orgId,
+  dto,
+  canWrite,
+}: {
+  orgId: string;
+  dto: IntegrationDto;
+  canWrite: boolean;
+}) {
+  const [apiKey, setApiKey] = useState("");
+  const [vendorId, setVendorId] = useState(str(dto.config.vendor) || AI_VENDORS[0].id);
+  const [model, setModel] = useState(str(dto.config.model));
+  const { feedback, isPending, submit } = useSubmit();
+  const vendor = aiVendor(vendorId) ?? AI_VENDORS[0];
+  return (
+    <form
+      className="space-y-4 rounded-lg border p-4"
+      onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        submit(
+          () => saveAiModelAction(orgId, { apiKey: apiKey || undefined, vendor: vendorId, model }),
+          () => setApiKey(""),
+        );
+      }}
+    >
+      <div className="grid gap-1.5">
+        <Label htmlFor="ai-vendor">Provider</Label>
+        <select
+          id="ai-vendor"
+          className={selectClass}
+          value={vendorId}
+          onChange={(e) => setVendorId(e.target.value)}
+          disabled={!canWrite}
+        >
+          {AI_VENDORS.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-muted-foreground text-xs">
+          Bananasplit only ever calls the provider&apos;s official address ({vendor.baseUrl.replace("https://", "")}).
+        </p>
+      </div>
+      <SecretInput
+        id="ai-key"
+        label="API key"
+        hasSecret={dto.hasSecret}
+        last4={dto.last4}
+        value={apiKey}
+        onChange={setApiKey}
+        placeholder={vendor.keyHint}
+        help={`Create one at ${vendor.keysUrl}, on an account your club pays for. Changing the provider needs that provider's key.`}
+      />
+      <div className="grid gap-1.5">
+        <Label htmlFor="ai-model">Model</Label>
+        <Input
+          id="ai-model"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          placeholder={`e.g. ${vendor.exampleModel}`}
+          maxLength={120}
+          disabled={!canWrite}
+        />
+        <p className="text-muted-foreground text-xs">
+          The model id exactly as {vendor.label} lists it. Pick one that can read images if you&apos;ll import calendar
+          screenshots. Usage is billed to your {vendor.label} account.
+        </p>
+      </div>
+      {canWrite && (
+        <Button type="submit" disabled={isPending || !model.trim()}>
+          {isPending ? "Saving and testing…" : dto.hasSecret ? "Save" : "Save and test"}
+        </Button>
+      )}
+      <FeedbackLine feedback={feedback} />
+    </form>
+  );
 }
 
 // ---------------------------------------------------------------- Claude
@@ -473,7 +560,7 @@ export function GoogleCalendarPanel({
               : "Sign in with the Google account that owns your club's calendars."}
           </p>
           <p className="text-muted-foreground mb-3 text-xs">
-            CBC Portal asks only to manage the events it creates and to list your calendars. It
+            Bananasplit asks only to manage the events it creates and to list your calendars. It
             never reads other events.
           </p>
           <Button type="submit" disabled={!configured}>

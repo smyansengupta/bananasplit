@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import StarterKit from "@tiptap/starter-kit";
-import TaskItem from "@tiptap/extension-task-item";
-import TaskList from "@tiptap/extension-task-list";
-import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
+import type { Awareness } from "y-protocols/awareness";
+import type * as Y from "yjs";
 import {
   Bold,
   Code,
@@ -18,7 +18,11 @@ import {
   Underline as UnderlineIcon,
 } from "lucide-react";
 
+import { NOTE_FIELD, type CollabUser } from "@/lib/collab/protocol";
+import { noteSchemaExtensions } from "@/lib/notes/schema-extensions";
 import { cn } from "@/lib/utils";
+import { renderCaret, renderSelection } from "./carets";
+import { EditorToolbar, NoteOutline } from "./editor-toolbar";
 import { SlashCommand } from "./slash-command-extension";
 
 export interface NoteEditorHandle {
@@ -26,36 +30,55 @@ export interface NoteEditorHandle {
   getText: () => string;
 }
 
+/**
+ * A live note (docs/features/collaboration.md): the editor binds to this
+ * Y.Doc instead of `content`, and shows other editors' carets from the
+ * provider's awareness. The body is saved by the collaboration server.
+ */
+export interface NoteEditorCollaboration {
+  doc: Y.Doc;
+  provider: { awareness: Awareness };
+  user: CollabUser;
+}
+
 export function NoteEditor({
   content,
   editable,
   onChange,
+  collaboration,
 }: {
-  content: JSONContent;
+  content?: JSONContent;
   editable: boolean;
-  onChange: (contentJson: JSONContent, contentText: string) => void;
+  onChange?: (contentJson: JSONContent, contentText: string) => void;
+  collaboration?: NoteEditorCollaboration;
 }) {
   const editor = useEditor({
     editable,
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({
-        link: { openOnClick: false, autolink: true },
-      }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Table.configure({ resizable: false }),
-      TableRow,
-      TableCell,
-      TableHeader,
+      ...noteSchemaExtensions({ collaborative: Boolean(collaboration) }),
       Placeholder.configure({ placeholder: "Write something, or press “/” for commands…" }),
       Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: false }),
       SlashCommand,
+      ...(collaboration
+        ? [
+            Collaboration.configure({ document: collaboration.doc, field: NOTE_FIELD }),
+            CollaborationCaret.configure({
+              provider: collaboration.provider,
+              user: collaboration.user,
+              render: renderCaret,
+              selectionRender: renderSelection,
+            }),
+          ]
+        : []),
     ],
-    content,
+    // A live editor takes its content from the Y.Doc; passing content too
+    // would insert it a second time.
+    content: collaboration ? undefined : content,
     editorProps: {
       attributes: {
-        class: "tiptap prose prose-sm dark:prose-invert max-w-none focus:outline-none",
+        class:
+          "tiptap prose prose-sm sm:prose-base dark:prose-invert max-w-none focus:outline-none prose-headings:tracking-tight prose-a:text-primary prose-li:my-0.5",
       },
     },
     onUpdate: ({ editor, transaction }) => {
@@ -63,25 +86,69 @@ export function NoteEditor({
       // from plugin initialization (e.g. decoration setup) that never touch
       // the document — only autosave on transactions that actually changed it.
       if (!transaction.docChanged) return;
-      onChange(editor.getJSON(), editor.getText());
+      onChange?.(editor.getJSON(), editor.getText());
     },
   });
 
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editable, editor]);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState("");
 
-  if (!editor) return null;
+  if (!editor) return <div className="bg-muted/30 h-64 animate-pulse rounded-lg" />;
 
   return (
-    <div>
-      <BubbleMenu
-        editor={editor}
-        className="flex items-center gap-1 rounded-md border p-1 shadow-md"
-      >
-        <BubbleMenuContent editor={editor} />
-      </BubbleMenu>
-      <EditorContent editor={editor} />
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_12rem]">
+      <div className="min-w-0 space-y-4">
+        {editable && (
+          <EditorToolbar
+            editor={editor}
+            showHistory={!collaboration}
+            onLink={() => {
+              setLinkValue(editor.getAttributes("link").href ?? "");
+              setLinkOpen(true);
+            }}
+          />
+        )}
+        {linkOpen && (
+          <form
+            className="flex items-center gap-2 rounded-lg border p-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const url = linkValue.trim();
+              if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+              else editor.chain().focus().extendMarkRange("link").unsetLink().run();
+              setLinkOpen(false);
+            }}
+          >
+            <LinkIcon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+            <input
+              autoFocus
+              value={linkValue}
+              onChange={(e) => setLinkValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setLinkOpen(false);
+              }}
+              placeholder="Paste a link, then press Enter (empty removes it)"
+              aria-label="Link address"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+            />
+          </form>
+        )}
+        <BubbleMenu
+          editor={editor}
+          className="bg-popover flex items-center gap-1 rounded-md border p-1 shadow-md"
+        >
+          <BubbleMenuContent editor={editor} />
+        </BubbleMenu>
+        <EditorContent editor={editor} className="min-h-[40vh]" />
+      </div>
+      <div className="hidden xl:block">
+        <div className="sticky top-20">
+          <NoteOutline editor={editor} />
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Check } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { PollAvailability } from "@/generated/prisma/enums";
+import type { PollAnswer } from "@/lib/polls/poll-view";
 import { cn } from "@/lib/utils";
 
 import { intervalParts } from "./poll-format";
@@ -52,7 +52,7 @@ export const IF_NEEDED_STYLE: CSSProperties = {
 };
 
 export const AVAILABILITY_META: Record<
-  PollAvailability,
+  PollAnswer,
   { label: string; spoken: string; cellClass: string; style?: CSSProperties; icon?: typeof Check }
 > = {
   YES: {
@@ -67,12 +67,6 @@ export const AVAILABILITY_META: Record<
     cellClass: "text-foreground",
     style: IF_NEEDED_STYLE,
   },
-  NO: {
-    label: "Unavailable",
-    spoken: "unavailable",
-    cellClass: "border-transparent bg-muted text-muted-foreground",
-    icon: X,
-  },
 };
 
 /** A small swatch drawn exactly like a cell in the "your availability" grid. */
@@ -80,7 +74,7 @@ export function AnswerSwatch({
   value,
   className,
 }: {
-  value: PollAvailability | null;
+  value: PollAnswer | null;
   className?: string;
 }) {
   const meta = value ? AVAILABILITY_META[value] : null;
@@ -221,17 +215,6 @@ export function SlotDetails({
             <dd>
               <span className="sr-only">If needed: </span>
               <Names people={summary.ifNeeded} empty="" />
-            </dd>
-          </>
-        )}
-        {summary.no.length > 0 && (
-          <>
-            <dt className="flex items-center gap-1.5 font-medium">
-              <AnswerSwatch value="NO" className="size-3.5" /> {summary.no.length}
-            </dt>
-            <dd>
-              <span className="sr-only">Unavailable: </span>
-              <Names people={summary.no} empty="" />
             </dd>
           </>
         )}

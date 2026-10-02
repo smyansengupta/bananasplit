@@ -4,7 +4,14 @@
  * Pure and client-safe.
  */
 
-export type ProfileSection = "details" | "photo" | "links" | "notifications" | "calendar";
+export type ProfileSection =
+  | "details"
+  | "photo"
+  | "links"
+  | "theme"
+  | "availability"
+  | "notifications"
+  | "calendar";
 
 /** The signed-in user's own profile, optionally at one section. */
 export function profileHref(orgSlug: string, section?: ProfileSection): string {

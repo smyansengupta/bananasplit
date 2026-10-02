@@ -5,11 +5,13 @@ import { z } from "zod";
 import { TransactionDirection, TransactionKind } from "@/generated/prisma/client";
 import { can, requirePermission } from "@/lib/auth/permissions";
 import { writeFinanceAuditLog } from "@/lib/finance/audit";
+import { DELETED_TRANSACTION_REASON } from "@/lib/finance/deleted";
 import {
   nextExpenseStatus,
   type ExpenseTransition,
 } from "@/lib/finance/reimbursement-state-machine";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
+import { ensureActivePeriod } from "@/server/finance/periods";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
 /**
@@ -48,7 +50,8 @@ const EXPECTED_DIRECTION: Partial<Record<TransactionKind, TransactionDirection>>
 };
 
 const transactionInputSchema = z.object({
-  budgetPeriodId: z.string(),
+  /** Empty or missing: the active period (a treasurer's first one is made on the spot). */
+  budgetPeriodId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   direction: z.enum(DIRECTION_VALUES),
   kind: z.enum(KIND_VALUES),
@@ -122,8 +125,30 @@ export const createTransaction = withOrgAction(
       return { error: `${data.kind} transactions must be ${expectedDirection}.` };
     }
 
+    // No period picked: the active one. Finance never dead-ends on "create a
+    // budget period first": for a treasurer the first one is made here
+    // (this school year, starter categories). A member's request needs one
+    // that a treasurer set up, since only they can create periods.
+    let periodId = data.budgetPeriodId || null;
+    if (!periodId) {
+      if (can(ctx, "finance.manage")) {
+        periodId = (await ensureActivePeriod(ctx.db, ctx.organizationId)).id;
+      } else {
+        const active = await ctx.db.budgetPeriod.findFirst({
+          where: { organizationId: ctx.organizationId, isActive: true },
+          select: { id: true },
+        });
+        if (!active) {
+          return {
+            error: "Your club's treasurer hasn't set up the budget yet, so requests can't be filed. Ask them to open Finance once.",
+          };
+        }
+        periodId = active.id;
+      }
+    }
+
     const period = await ctx.db.budgetPeriod.findFirst({
-      where: { id: data.budgetPeriodId, organizationId: ctx.organizationId },
+      where: { id: periodId, organizationId: ctx.organizationId },
     });
     if (!period) return { error: "Budget period not found." };
 
@@ -136,7 +161,7 @@ export const createTransaction = withOrgAction(
     const created = await ctx.db.transaction.create({
       data: {
         organizationId: ctx.organizationId,
-        budgetPeriodId: data.budgetPeriodId,
+        budgetPeriodId: period.id,
         categoryId: data.categoryId ?? null,
         direction: data.direction,
         kind: data.kind,
@@ -255,6 +280,77 @@ export const voidTransaction = withOrgAction(
       after: updated,
     });
 
+    return { transactionId };
+  },
+);
+
+/**
+ * "Delete": takes a transaction out of every list and total. Money rows are
+ * never erased (no DELETE grant; the audit trail keeps them): it is voided
+ * with the reason "Deleted", and restoreTransaction brings it back.
+ * Treasurers and owners delete any unlocked transaction; a member deletes
+ * their own expense while it's still a draft or waiting for approval.
+ */
+export const deleteTransaction = withOrgAction(
+  async (ctx, transactionId: string): Promise<ActionResult> => {
+    const existing = await ctx.db.transaction.findFirst({
+      where: { id: transactionId, organizationId: ctx.organizationId },
+    });
+    if (!existing) return { error: "Transaction not found." };
+    if (existing.voidedAt) return { transactionId };
+    const ownOpen =
+      existing.submittedById === ctx.userId &&
+      existing.kind === TransactionKind.EXPENSE &&
+      (existing.status === "DRAFT" || existing.status === "SUBMITTED");
+    if (!can(ctx, "finance.manage") && !ownOpen) {
+      return { error: "Only a treasurer or owner can delete this. You can delete your own requests until they're approved." };
+    }
+    if (existing.reconciledAt) {
+      return { error: "This transaction is reconciled against a bank statement and locked. Unlock it first." };
+    }
+
+    const updated = await ctx.db.transaction.update({
+      where: { id: transactionId },
+      data: { voidedAt: new Date(), voidReason: DELETED_TRANSACTION_REASON },
+    });
+    await writeFinanceAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      transactionId,
+      action: "VOID",
+      before: existing,
+      after: updated,
+    });
+    return { transactionId };
+  },
+);
+
+/** Undoes deleteTransaction (or a void): back in the lists and totals. */
+export const restoreTransaction = withOrgAction(
+  async (ctx, transactionId: string): Promise<ActionResult> => {
+    const existing = await ctx.db.transaction.findFirst({
+      where: { id: transactionId, organizationId: ctx.organizationId },
+    });
+    if (!existing) return { error: "Transaction not found." };
+    if (!existing.voidedAt) return { transactionId };
+    const ownOpen =
+      existing.submittedById === ctx.userId &&
+      existing.kind === TransactionKind.EXPENSE &&
+      (existing.status === "DRAFT" || existing.status === "SUBMITTED");
+    if (!can(ctx, "finance.manage") && !ownOpen) {
+      return { error: "Only a treasurer or owner can restore this." };
+    }
+
+    const updated = await ctx.db.transaction.update({
+      where: { id: transactionId },
+      data: { voidedAt: null, voidReason: null },
+    });
+    await writeFinanceAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      transactionId,
+      action: "RESTORE",
+      before: existing,
+      after: updated,
+    });
     return { transactionId };
   },
 );

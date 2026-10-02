@@ -79,7 +79,7 @@ export default async function DuplicatesPage({ params }: PageProps<"/app/[orgSlu
           <ChevronLeft className="size-3" aria-hidden="true" />
           {data.database.name}
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Possible duplicates</h1>
+        <h1 className="page-title">Possible duplicates</h1>
         <p className="text-muted-foreground text-sm">
           A session that exists twice (for example once from the website and once on the calendar) splits its
           check-ins. Merge keeps one and moves check-ins, RSVPs, notes, expenses and the website link to it. It

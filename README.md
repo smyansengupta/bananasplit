@@ -1,4 +1,4 @@
-# CBC Portal
+# Bananasplit
 
 A multi-tenant workspace for student club executive boards: task management, notes, meeting
 scheduling, and finance tracking.
@@ -10,6 +10,10 @@ password), Tailwind CSS + shadcn/ui. See the project spec for the full rationale
 
 Sign-in supports both Google OAuth and email/password (bcrypt-hashed, `/sign-up` to register).
 Email/password is a deliberate addition beyond the original spec, which scoped v1 to Google-only.
+"Continue with Google" (on `/sign-in` and `/invite/[token]`) appears only when `AUTH_GOOGLE_ID`
+and `AUTH_GOOGLE_SECRET` are both set (`src/lib/auth/google-sign-in.ts`); without them the pages
+offer email and password only. Google Calendar sync (Settings > Integrations) is a separate OAuth
+client.
 
 ## Local setup
 
@@ -25,7 +29,8 @@ Email/password is a deliberate addition beyond the original spec, which scoped v
    cp .env.example .env
    ```
 
-   Fill in `DATABASE_URL` (a local or Neon Postgres instance) and `AUTH_SECRET`
+   Fill in `DATABASE_URL` (a local Postgres instance; production runs on
+   Supabase, see `RUNBOOK.md`) and `AUTH_SECRET`
    (`npx auth secret`). The app also connects at runtime as three non-owner,
    row-level-security-scoped roles (`app_user` / `app_service` / `app_auth`,
    see `docs/ARCHITECTURE.md`) instead of the owner; locally, set
@@ -36,11 +41,13 @@ Email/password is a deliberate addition beyond the original spec, which scoped v
    which the secrets-at-rest keyring (integrations settings, `/api/health`)
    needs. `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` need a real
    Google Cloud OAuth client (spec section 11, item 1) — request only
-   `openid email profile`. Until that exists, placeholder values let the app
-   boot; Google sign-in itself won't work, but every seeded user (see below)
-   can sign in with email/password instead, so you don't need real Google
-   credentials for local development. See `.env.example` for what each
-   variable is for.
+   `openid email profile`, with `http://localhost:3000` as an authorized
+   JavaScript origin and `http://localhost:3000/api/auth/callback/google` as
+   a redirect URI. Leave both empty unless you have one: "Continue with
+   Google" only appears when both are set, so placeholder values would show
+   a button that fails. You don't need Google for local development: every
+   seeded user (see below) signs in with email/password. See `.env.example`
+   for what each variable is for.
 
 3. **Set up the database** (from Phase 0.3 onward)
 
@@ -96,7 +103,7 @@ Email/password is a deliberate addition beyond the original spec, which scoped v
   how authorization is enforced.
 - [`docs/features/`](docs/features/) — one doc per feature area (calendar,
   tasks, org chart, databases, reports, settings, themes, onboarding,
-  profiles, platform services).
+  profiles, search, platform services).
 - [`docs/EBOARD-HANDBOOK.md`](docs/EBOARD-HANDBOOK.md) — for the club's
   e-board, not developers: treasurer handoff, ongoing habits, continuity.
 - [`RUNBOOK.md`](RUNBOOK.md) — deploying for the first time and restoring

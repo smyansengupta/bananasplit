@@ -1,7 +1,16 @@
 "use client";
 
+import { Building2, Camera, ImageUp, Loader2, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useMemo, useRef, useState, useTransition } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
+
+import {
+  ACCEPTED_IMAGE_TYPES,
+  cropToSquare,
+  MAX_SOURCE_BYTES,
+  type PixelArea,
+} from "@/components/images/crop-image";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +31,9 @@ import { SUCCESS_TEXT } from "@/lib/status-tones";
 import { renameOrgSlug, updateOrgName, updateOrgTimezone } from "./actions";
 
 type Status = { tone: "ok" | "error"; text: string } | null;
+
+const loadCropDialog = () => import("@/components/images/crop-dialog");
+const CropDialog = dynamic(loadCropDialog, { ssr: false });
 
 function StatusLine({ status }: { status: Status }) {
   if (!status) return null;
@@ -259,6 +271,11 @@ export function SlugForm({
   );
 }
 
+/**
+ * The club picture (Organization.logo): pick a file, crop it to a square,
+ * upload the 512px result. Shown in the sidebar, the org switcher, invite
+ * and join pages.
+ */
 export function LogoForm({
   orgId,
   logoUrl,
@@ -272,91 +289,164 @@ export function LogoForm({
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [cropError, setCropError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
 
-  async function send(method: "POST" | "DELETE", file?: File) {
+  useEffect(() => {
+    if (!source) return;
+    return () => URL.revokeObjectURL(source);
+  }, [source]);
+
+  async function send(method: "POST" | "DELETE", file?: Blob): Promise<string | null> {
     setBusy(true);
     setStatus(null);
     try {
       let body: FormData | undefined;
       if (file) {
         body = new FormData();
-        body.set("file", file);
+        body.set("file", file, file.type === "image/webp" ? "club.webp" : "club.jpg");
       }
       const res = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/logo`, { method, body });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setStatus({ tone: "error", text: data.error ?? "The upload failed." });
-      } else {
-        setStatus({ tone: "ok", text: method === "POST" ? "Logo updated." : "Logo removed." });
-        router.refresh();
-      }
+      if (!res.ok) return data.error ?? "The upload failed.";
+      setStatus({ tone: "ok", text: method === "POST" ? "Club picture updated." : "Club picture removed." });
+      router.refresh();
+      return null;
     } catch {
-      setStatus({ tone: "error", text: "The upload failed. Check your connection." });
+      return "The upload failed. Check your connection.";
     } finally {
       setBusy(false);
-      if (input.current) input.current.value = "";
     }
   }
 
+  function pick(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
+      setStatus({ tone: "error", text: "Choose a JPEG, PNG or WebP image." });
+      return;
+    }
+    if (file.size > MAX_SOURCE_BYTES) {
+      setStatus({ tone: "error", text: "That file is too large. Choose one under 25 MB." });
+      return;
+    }
+    setStatus(null);
+    setCropError(null);
+    setSource(URL.createObjectURL(file));
+  }
+
+  async function confirm(area: PixelArea) {
+    if (!source) return;
+    try {
+      const blob = await cropToSquare(source, area);
+      const error = await send("POST", blob);
+      if (error) setCropError(error);
+      else setSource(null);
+    } catch (error) {
+      setCropError(error instanceof Error ? error.message : "The upload failed.");
+    }
+  }
+
+  const initials = orgName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+
   return (
-    <div className="space-y-2">
-      <Label htmlFor="org-logo">Logo</Label>
-      <div className="flex flex-wrap items-center gap-3">
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- pre-sized WebP variant
-          <img
-            src={logoUrl}
-            alt={`${orgName} logo`}
-            width={64}
-            height={64}
-            className="size-16 rounded border object-contain"
-          />
-        ) : (
-          <div className="text-muted-foreground flex size-16 items-center justify-center rounded border border-dashed text-xs">
-            No logo
-          </div>
-        )}
-        {canEdit && (
-          <>
-            <input
-              ref={input}
-              id="org-logo"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                if (file.size > 4 * 1024 * 1024) {
-                  setStatus({ tone: "error", text: "Logos are limited to 4 MB." });
-                  return;
-                }
-                void send("POST", file);
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => input.current?.click()}
-            >
-              {busy ? "Uploading…" : logoUrl ? "Replace" : "Upload"}
-            </Button>
-            {logoUrl && (
-              <Button variant="ghost" size="sm" disabled={busy} onClick={() => void send("DELETE")}>
-                Remove
-              </Button>
-            )}
-          </>
-        )}
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-sm font-medium">Club picture</h2>
+        <p className="text-muted-foreground text-xs">
+          Your club&apos;s profile picture: the sidebar, the organization switcher, and the page
+          people see when they join.
+        </p>
       </div>
-      <p className="text-muted-foreground text-xs">
-        PNG, JPEG or WebP up to 4 MB. It is resized and re-encoded (location data removed). Shown in
-        the sidebar and the organization switcher.
-      </p>
+      <div className="flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          disabled={!canEdit || busy}
+          onClick={() => input.current?.click()}
+          onPointerEnter={() => void loadCropDialog()}
+          aria-label={logoUrl ? "Change the club picture" : "Upload a club picture"}
+          className="group focus-visible:ring-ring/50 relative size-20 shrink-0 overflow-hidden rounded-2xl border outline-none focus-visible:ring-3 disabled:cursor-default"
+        >
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- pre-sized WebP variant
+            <img src={logoUrl} alt="" width={80} height={80} className="size-full object-cover" />
+          ) : (
+            <span className="bg-primary/10 text-primary grid size-full place-items-center text-xl font-semibold">
+              {initials || <Building2 className="size-6" aria-hidden="true" />}
+            </span>
+          )}
+          {canEdit && (
+            <span className="bg-foreground/50 text-background absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+              <Camera className="size-5" aria-hidden="true" />
+            </span>
+          )}
+        </button>
+        {canEdit ? (
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => input.current?.click()}
+                onFocus={() => void loadCropDialog()}
+              >
+                {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <ImageUp className="size-3.5" aria-hidden="true" />}
+                {logoUrl ? "Change picture" : "Upload picture"}
+              </Button>
+              {logoUrl && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={async () => {
+                    const error = await send("DELETE");
+                    if (error) setStatus({ tone: "error", text: error });
+                  }}
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                  Remove
+                </Button>
+              )}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              JPEG, PNG or WebP. You&apos;ll crop it to a square; location data is removed.
+            </p>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-xs">Owners and admins can change it.</p>
+        )}
+        <input
+          ref={input}
+          id="org-logo"
+          type="file"
+          accept={ACCEPTED_IMAGE_TYPES.join(",")}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={pick}
+        />
+      </div>
       <StatusLine status={status} />
-    </div>
+      {source && (
+        <CropDialog
+          imageSrc={source}
+          busy={busy}
+          error={cropError}
+          title="Crop the club picture"
+          shape="rect"
+          onCancel={() => setSource(null)}
+          onConfirm={confirm}
+        />
+      )}
+    </section>
   );
 }

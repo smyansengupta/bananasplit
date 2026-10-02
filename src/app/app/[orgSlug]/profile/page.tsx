@@ -8,19 +8,24 @@ import { UserAvatar } from "@/components/user-avatar";
 import { parseNotificationPreferences } from "@/lib/notifications/preferences";
 import { personHref, type ProfileSection } from "@/lib/profile/href";
 import { effectiveTimezone } from "@/lib/profile/timezone";
+import { parsePersonalTheme } from "@/lib/theme/personal";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { getOwnProfile } from "@/server/profiles/queries";
 
+import { AvailabilityForm } from "./availability-form";
 import { AvatarEditor } from "./avatar-editor";
 import { CalendarFeedCard } from "./calendar-feed-card";
 import { DetailsForm } from "./details-form";
 import { LinksForm } from "./links-form";
 import { NotificationPreferencesForm } from "./notification-preferences-form";
+import { ThemeForm } from "./theme-form";
 
 const SECTIONS: { id: ProfileSection; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "photo", label: "Picture" },
   { id: "links", label: "Links" },
+  { id: "theme", label: "Theme" },
+  { id: "availability", label: "Availability" },
   { id: "notifications", label: "Notifications" },
   { id: "calendar", label: "Calendar feed" },
 ];
@@ -37,7 +42,8 @@ function roleLabel(role: string): string {
  */
 export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/profile">) {
   const { orgSlug } = await params;
-  const { user, organization } = await getOrgContextBySlug(orgSlug);
+  const { user, organization, theme: orgTheme } = await getOrgContextBySlug(orgSlug);
+  const clubMode = orgTheme?.mode === "LIGHT" ? "light" : orgTheme?.mode === "DARK" ? "dark" : "system";
   const profile = await getOwnProfile(user.id);
   if (!profile) notFound();
 
@@ -51,7 +57,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <UserAvatar user={profile} size="xl" className="shrink-0" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
+            <h1 className="page-title">Your profile</h1>
             <p className="text-muted-foreground text-sm">
               Members of your organizations see your name, picture, pronouns, major, bio and links.
               Your email is not shown on people pages.
@@ -142,6 +148,35 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           </CardHeader>
           <CardContent>
             <LinksForm initial={profile.links} />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section id="theme" aria-labelledby="theme-title" className="scroll-mt-20">
+        <Card>
+          <CardHeader>
+            <CardTitle id="theme-title">Theme</CardTitle>
+            <CardDescription>
+              Only changes your view, in every organization. An organization that locks light or dark keeps its lock.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ThemeForm initial={parsePersonalTheme(profile.themePreference)} clubMode={clubMode} />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section id="availability" aria-labelledby="availability-title" className="scroll-mt-20">
+        <Card>
+          <CardHeader>
+            <CardTitle id="availability-title">When you can&apos;t meet</CardTitle>
+            <CardDescription>
+              Click or drag to block hours in a typical week, or add rules. Teammates see &ldquo;busy,&rdquo; never
+              the reason.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AvailabilityForm initial={profile.availability} />
           </CardContent>
         </Card>
       </section>
