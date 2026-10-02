@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
@@ -42,30 +42,24 @@ export function FinanceSetupBanner({
   const nextStep = SETUP_STEPS.find((s) => s.id === next);
 
   return (
-    <section className="bg-primary/5 border-primary/20 relative overflow-hidden rounded-xl border p-4 sm:p-5">
+    <section className="bg-card rounded-xl border p-4 sm:p-5">
       <div className="flex flex-wrap items-start gap-4">
-        <span className="bg-primary text-primary-foreground grid size-11 shrink-0 place-items-center rounded-xl">
-          <Sparkles className="size-5" aria-hidden="true" />
-        </span>
         <div className="min-w-0 flex-1 space-y-2">
           <div>
-            <h2 className="font-semibold">{fresh ? "Set up your club's finances" : "Finish setting up finance"}</h2>
+            <h2 className="heading">{fresh ? "Set up your club's finances" : "Finish setting up finance"}</h2>
             <p className="text-muted-foreground text-sm">
               {fresh
                 ? "Pick your budget year, enter what the club has, set a budget, and bring in last year's spreadsheet. About five minutes."
                 : `${done} of ${total} steps done.${nextStep ? ` Next: ${nextStep.title.toLowerCase()}.` : ""}`}
             </p>
           </div>
-          <ol className="flex flex-wrap gap-1.5" aria-label="Setup steps">
+          <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label="Setup steps">
             {SETUP_STEPS.map((s) => {
               const ok = stepDone(state, s.id);
               return (
                 <li
                   key={s.id}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
-                    ok ? "border-success/40 text-success" : "text-muted-foreground",
-                  )}
+                  className={cn("flex items-center gap-1", ok ? "text-success" : "text-muted-foreground")}
                 >
                   {ok && <Check className="size-3" aria-hidden="true" />}
                   {s.short}

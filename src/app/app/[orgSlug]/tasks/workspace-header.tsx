@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Inbox, NotebookPen, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, ClipboardPaste, Inbox, NotebookPen, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ActionItemsImport } from "@/components/ai/action-items-import";
@@ -105,9 +105,9 @@ export function WorkspaceHeader({
           className="gap-1.5"
           title="Paste a to-do list or meeting notes; AI turns it into tasks and events for you to check"
         >
-          <Sparkles className="size-4" aria-hidden="true" />
-          <span className="hidden sm:inline">Import with AI</span>
-          <span className="sm:hidden">Import</span>
+          <ClipboardPaste className="size-4" aria-hidden="true" />
+          <span className="hidden sm:inline">Paste a list</span>
+          <span className="sm:hidden">Paste</span>
         </Button>
         <Button
           size="sm"

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Search, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import Form from "next/form";
 import Link from "next/link";
 
@@ -63,7 +63,6 @@ export default async function PeoplePage({ params, searchParams }: PageProps<"/a
 
       {people.length === 0 ? (
         <EmptyState
-          icon={Users}
           title={q ? "No one matches that search" : "No members yet"}
           description={q ? "Try a name, a title like “VP”, or a major." : undefined}
           action={

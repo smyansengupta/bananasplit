@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, CheckCircle2, CircleAlert, ImageUp, Loader2, Repeat, Sparkles, Video, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleAlert, ImageUp, Loader2, Repeat, Video, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -232,8 +232,7 @@ export function CalendarShotImport({
     >
       <DialogContent className="flex max-h-[90vh] flex-col gap-4 sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="text-primary size-5" aria-hidden="true" />
+          <DialogTitle>
             {phase === "done" ? "Added to the calendar" : "Add events from a screenshot"}
           </DialogTitle>
           <DialogDescription>
@@ -395,8 +394,8 @@ export function CalendarShotImport({
                 Cancel
               </Button>
               <Button type="button" onClick={() => void readImage()} disabled={reading || !file || !ai.selected}>
-                {reading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
-                {reading ? "Reading…" : "Read with AI"}
+                {reading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                {reading ? "Reading…" : ai.selected ? `Read it with ${ai.selected.label}` : "Read it"}
               </Button>
             </>
           )}

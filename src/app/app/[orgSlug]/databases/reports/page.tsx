@@ -1,6 +1,5 @@
 import { Suspense, type ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { ChartColumn } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { RangePicker } from "@/components/reports/range-picker";
@@ -136,7 +135,6 @@ export default async function ReportsPage({ params, searchParams }: PageProps<"/
 
         {ids.length === 0 ? (
           <EmptyState
-            icon={ChartColumn}
             title="No reports to show"
             description="The databases these reports read are not visible to your role in this organization."
           />

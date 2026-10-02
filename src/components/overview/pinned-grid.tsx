@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Pin, Plus, X } from "lucide-react";
+import { FileText, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -45,9 +45,6 @@ export function PinnedGrid({
             over && "border-primary text-foreground",
           )}
         >
-          <span className="bg-primary/10 text-primary grid size-9 place-items-center rounded-full">
-            <Pin className="size-4" aria-hidden="true" />
-          </span>
           <p className="text-foreground font-medium">{over ? "Drop to pin it" : "Nothing pinned yet"}</p>
           <p className="max-w-sm text-balance">
             Drag any page from the sidebar here, press <strong>Pin</strong> at the top of a page, or
@@ -71,9 +68,7 @@ export function PinnedGrid({
                   draggable={false}
                   className="hover:bg-accent/60 hover:border-foreground/15 flex cursor-grab items-center gap-3 rounded-lg border p-2.5 pr-9 transition-colors active:cursor-grabbing"
                 >
-                  <span className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-md">
-                    <Icon className="size-4" aria-hidden="true" />
-                  </span>
+                  <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{pin.label}</span>
                     <span className="text-muted-foreground block text-xs">{PIN_KIND_LABELS[pin.kind]}</span>

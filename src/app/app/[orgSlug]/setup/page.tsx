@@ -1,4 +1,3 @@
-import { Lock } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -49,7 +48,6 @@ export default async function SetupPage({
     return (
       <div className="mx-auto max-w-lg py-10">
         <EmptyState
-          icon={Lock}
           title="Setup is for owners and admins"
           description="Connecting a club's accounts means handling its credentials, so it is limited to owners and admins. Ask one of them to run it."
           action={

@@ -160,9 +160,7 @@ function PickerRow({ item }: { item: PinnableItem }) {
           on && "bg-primary/5",
         )}
       >
-        <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-md">
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
+        <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{item.label}</span>
           <span className="text-muted-foreground block truncate text-xs">

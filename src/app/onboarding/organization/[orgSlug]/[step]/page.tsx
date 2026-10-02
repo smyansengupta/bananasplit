@@ -56,7 +56,6 @@ export default async function OrgSetupStepPage({
   const card = (body: React.ReactNode) => (
     <OnboardingFrame wide>
       <StepCard
-        icon={meta.icon}
         tone="warning"
         step={{ index, total: ORG_STEP_COUNT }}
         title={meta.title}

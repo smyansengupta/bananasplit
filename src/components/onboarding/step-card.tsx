@@ -54,7 +54,6 @@ export function ProgressSegments({
 }
 
 export function StepCard({
-  icon: Icon,
   step,
   tone = "primary",
   title,
@@ -62,7 +61,6 @@ export function StepCard({
   children,
   className,
 }: {
-  icon: LucideIcon;
   /** Progress through the flow, when the card is one of its numbered steps. */
   step?: { index: number; total: number };
   tone?: "primary" | "warning";
@@ -79,16 +77,8 @@ export function StepCard({
       )}
     >
       {step && <ProgressSegments total={step.total} done={step.index} tone={tone} />}
-      <header className="flex items-start gap-3.5">
-        <span
-          className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
-            tone === "warning" ? "bg-warning/10 text-warning ring-warning/20" : "bg-primary/10 text-primary ring-primary/15",
-          )}
-        >
-          <Icon className="size-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
+      <header>
+        <div className="min-w-0">
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="heading text-xl">{title}</h1>
             {step && (
@@ -213,26 +203,18 @@ export function ChoiceTileBody({
   title,
   detail,
   primary = false,
-  accentStyle,
 }: {
   icon: LucideIcon;
   title: ReactNode;
   detail: ReactNode;
   primary?: boolean;
-  /** The member's picked theme colours, on the primary choice. */
-  accentStyle?: React.CSSProperties;
 }) {
   return (
     <>
-      <span
-        className={cn(
-          "grid size-10 shrink-0 place-items-center rounded-lg",
-          primary ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
-        )}
-        style={primary ? accentStyle : undefined}
-      >
-        <Icon className="size-5" aria-hidden="true" />
-      </span>
+      <Icon
+        className={cn("size-5 shrink-0", primary ? "text-foreground" : "text-muted-foreground")}
+        aria-hidden="true"
+      />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{title}</span>
         <span className="text-muted-foreground block text-xs leading-snug">{detail}</span>

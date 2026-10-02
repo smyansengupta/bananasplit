@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Handshake, Ticket, Trash2 } from "lucide-react";
+import { Banknote, Ticket, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -391,7 +391,6 @@ export function SponsorshipsView({
           {sponsorships.length === 0 && (
             <EmptyState
               size="compact"
-              icon={Handshake}
               title="No sponsorships yet"
               description="Add a sponsor, then record what they committed, in cash or credits. Cash only counts toward the balance once it's received; credits never do."
             />

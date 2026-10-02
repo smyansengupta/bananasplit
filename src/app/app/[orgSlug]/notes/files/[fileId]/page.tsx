@@ -88,9 +88,7 @@ export default async function NoteFilePage({
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="bg-primary/10 text-primary grid size-11 shrink-0 place-items-center rounded-lg">
-            <Icon className="size-5" aria-hidden="true" />
-          </span>
+          <Icon className="text-muted-foreground mt-1 size-5 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
             <h1 className="heading truncate text-xl">{row.name}</h1>
             <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
@@ -164,7 +162,6 @@ export default async function NoteFilePage({
         ) : (
           <EmptyState
             size="compact"
-            icon={Icon}
             title={`${FILE_LABELS[family]} files don't have a preview yet`}
             description="Download it to open it in its own app."
           />

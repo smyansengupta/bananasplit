@@ -1,7 +1,5 @@
 "use client";
 
-import { ShieldAlert } from "lucide-react";
-
 import { EmptyState } from "@/components/empty-state";
 
 export default function OrgSegmentError({ error }: { error: Error & { digest?: string } }) {
@@ -10,7 +8,6 @@ export default function OrgSegmentError({ error }: { error: Error & { digest?: s
   return (
     <div className="p-6">
       <EmptyState
-        icon={ShieldAlert}
         title={isForbidden ? "You don't have access to this" : "Something went wrong"}
         description={
           isForbidden

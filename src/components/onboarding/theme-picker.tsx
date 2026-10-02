@@ -349,9 +349,7 @@ export function ThemePicker({
           onClick={() => onChange({ ...value, preset: FOLLOW_ORG })}
           className={cn(tile(followOrg), "flex-row items-center gap-3 p-3")}
         >
-          <span className="bg-primary/10 text-primary grid size-9 shrink-0 place-items-center rounded-lg">
-            <Building2 className="size-4.5" aria-hidden="true" />
-          </span>
+          <Building2 className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold">
               Match my club{" "}

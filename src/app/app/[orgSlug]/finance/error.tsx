@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCcw, ShieldAlert } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -18,7 +18,6 @@ export default function FinanceError({ error, retry }: { error: Error & { digest
   const { orgSlug } = useParams<{ orgSlug: string }>();
   return (
     <EmptyState
-      icon={ShieldAlert}
       title="This finance page couldn't load"
       description={
         <>

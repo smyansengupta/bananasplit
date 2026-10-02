@@ -4,7 +4,7 @@ Two ways to skip typing things in, using whichever AI model the club has
 connected:
 
 1. **Action items into tasks and events.** Paste a to-do list or meeting
-   notes (Tasks › **Import with AI**, or a note's **…** › **Make tasks from
+   notes (Tasks › **Paste a list**, or a note's **…** › **Make tasks from
    this note**). The model proposes tasks with owners, helpers, due dates
    and priorities, plus calendar events for meetings with a time.
 2. **A screenshot into calendar events.** Drop, paste (Ctrl+V) or pick a

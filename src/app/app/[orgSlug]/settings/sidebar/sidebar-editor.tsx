@@ -196,9 +196,7 @@ export function SidebarEditor({
                         <GripVertical className="size-4" aria-hidden="true" />
                       </span>
                     )}
-                    <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-md">
-                      <Icon className="size-4" aria-hidden="true" />
-                    </span>
+                    <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
                     <div className="min-w-0 flex-1">
                       <Input
                         value={item.label}

@@ -1,4 +1,4 @@
-import { ArrowLeft, Vote } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -74,7 +74,6 @@ export default async function PollsListPage({
 
       {all.length === 0 ? (
         <EmptyState
-          icon={Vote}
           title="No polls yet"
           description="Ask a question and let people vote, or offer some days and hours and see when most people are free."
           action={<NewPollButtons orgSlug={orgSlug} />}

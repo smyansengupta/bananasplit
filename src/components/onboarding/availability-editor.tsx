@@ -350,9 +350,9 @@ function Row({
 type AddKind = "weekly" | "never" | "date" | null;
 
 const RULE_STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
-  NEVER: { icon: Ban, tone: "bg-destructive/10 text-destructive" },
-  WEEKLY: { icon: Repeat, tone: "bg-chart-1/10 text-chart-1" },
-  DATE: { icon: CalendarX, tone: "bg-muted text-muted-foreground" },
+  NEVER: { icon: Ban, tone: "text-destructive" },
+  WEEKLY: { icon: Repeat, tone: "text-chart-1" },
+  DATE: { icon: CalendarX, tone: "text-muted-foreground" },
 };
 
 function RuleList({ value, onChange }: { value: Availability; onChange: (next: Availability) => void }) {
@@ -380,9 +380,7 @@ function RuleList({ value, onChange }: { value: Availability; onChange: (next: A
             const Icon = style.icon;
             return (
               <li key={i} className="group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm">
-                <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", style.tone)}>
-                  <Icon className="size-4" aria-hidden="true" />
-                </span>
+                <Icon className={cn("size-4 shrink-0", style.tone)} aria-hidden="true" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{d.title}</span>
                   <span className="text-muted-foreground block truncate text-xs">{d.when}</span>

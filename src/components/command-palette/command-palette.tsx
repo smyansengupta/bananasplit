@@ -368,14 +368,7 @@ export function CommandPalette({
                     onSelect={() => run(item)}
                     className={cn("gap-3 py-1.5", item.more && "text-muted-foreground")}
                   >
-                    <span
-                      className={cn(
-                        "grid size-8 shrink-0 place-items-center rounded-md",
-                        item.more ? "text-muted-foreground" : "bg-muted text-foreground",
-                      )}
-                    >
-                      <Icon className="size-4" aria-hidden="true" />
-                    </span>
+                    <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">
                         <Highlight text={item.title} terms={terms} />

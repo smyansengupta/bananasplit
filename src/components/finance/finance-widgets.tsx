@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Check,
   FileSpreadsheet,
-  HandCoins,
   ListChecks,
   PiggyBank,
   ReceiptText,
@@ -87,8 +86,8 @@ function Big({ value, sub, tone }: { value: ReactNode; sub?: ReactNode; tone?: "
   );
 }
 
-function ChartEmpty({ icon, text }: { icon?: LucideIcon; text: string }) {
-  return <EmptyState size="compact" icon={icon} title={text} className="py-8" />;
+function ChartEmpty({ text }: { text: string }) {
+  return <EmptyState size="compact" title={text} className="py-8" />;
 }
 
 function TxList({ rows, orgSlug }: { rows: DashboardTransaction[]; orgSlug: string }) {
@@ -134,9 +133,7 @@ function TxList({ rows, orgSlug }: { rows: DashboardTransaction[]; orgSlug: stri
 function Shortcut({ href, icon: Icon, label, detail }: { href: string; icon: LucideIcon; label: string; detail: string }) {
   return (
     <Link href={href} className="hover:bg-accent/60 flex items-center gap-3 rounded-lg border p-2.5 transition-colors">
-      <span className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-md">
-        <Icon className="size-4" aria-hidden="true" />
-      </span>
+      <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{label}</span>
         <span className="text-muted-foreground block truncate text-xs">{detail}</span>
@@ -443,7 +440,7 @@ export function WidgetBody({
     }
     case "reimbursements":
       if (data.reimbursementQueue.length === 0) {
-        return <ChartEmpty icon={HandCoins} text="Nobody is waiting to be paid back" />;
+        return <ChartEmpty text="Nobody is waiting to be paid back" />;
       }
       return (
         <ul className="divide-y">

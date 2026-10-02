@@ -112,7 +112,6 @@ export function FinanceSetup(props: FinanceSetupProps) {
   };
   const doneCount = SETUP_STEPS.filter((s) => stepDone(state, s.id)).length;
   const meta = SETUP_STEPS[index];
-  const Icon = STEP_ICON[step];
   const strip = useRef<HTMLOListElement>(null);
 
   // On a phone the steps are a strip that scrolls sideways: keep the current one in view.
@@ -173,10 +172,7 @@ export function FinanceSetup(props: FinanceSetupProps) {
       </nav>
 
       <section aria-labelledby="setup-step-title" className="min-w-0 space-y-5 rounded-xl border p-5 sm:p-6">
-        <header className="flex items-start gap-3">
-          <span className="bg-primary/10 text-primary grid size-10 shrink-0 place-items-center rounded-xl">
-            <Icon className="size-5" aria-hidden="true" />
-          </span>
+        <header>
           <div className="min-w-0">
             <p className="text-muted-foreground text-xs font-medium">
               Step {index + 1} of {SETUP_STEPS.length}

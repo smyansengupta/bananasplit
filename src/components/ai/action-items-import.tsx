@@ -8,7 +8,6 @@ import {
   ListChecks,
   Loader2,
   Quote,
-  Sparkles,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,7 +40,7 @@ import { parseZonedDateTimeLocal } from "@/lib/calendar/dates";
 import { cn } from "@/lib/utils";
 
 /**
- * "Import with AI": paste action items or meeting notes, the club's
+ * "Paste a list": paste action items or meeting notes, the club's
  * connected model proposes tasks (with owners, helpers, due dates and
  * priorities) and calendar events, and the member checks and edits every
  * row before anything is created. Creation goes through the ordinary task
@@ -256,9 +255,8 @@ export function ActionItemsImport({
     >
       <DialogContent className="flex max-h-[90vh] flex-col gap-4 sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="text-primary size-5" aria-hidden="true" />
-            {phase === "done" ? "Imported" : "Import action items with AI"}
+          <DialogTitle>
+            {phase === "done" ? "Imported" : "Import action items"}
           </DialogTitle>
           <DialogDescription>
             {phase === "input"
@@ -369,12 +367,8 @@ export function ActionItemsImport({
                 onClick={() => void readText()}
                 disabled={reading || !text.trim() || !ai.selected}
               >
-                {reading ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Sparkles className="size-4" aria-hidden="true" />
-                )}
-                {reading ? "Reading…" : "Read with AI"}
+                {reading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                {reading ? "Reading…" : ai.selected ? `Read it with ${ai.selected.label}` : "Read it"}
               </Button>
             </>
           )}

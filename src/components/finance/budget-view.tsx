@@ -143,7 +143,6 @@ export function BudgetView({
           <div className="p-4">
             <EmptyState
               size="compact"
-              icon={CalendarRange}
               title="No budget period yet"
               description="Start one for this school year in a click, or pick your own dates."
               action={

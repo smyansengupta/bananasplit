@@ -914,18 +914,20 @@
 
 /* ---------------------------------------------------------- empty states */
 
+/* Set like EmptyState (src/components/empty-state.tsx): left-aligned text, no icon. */
 .cal-empty {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 3rem 1.5rem;
-  text-align: center;
+  align-items: flex-start;
+  gap: 0.375rem;
+  padding: 2rem 1.25rem;
 }
 
 .cal-empty__title {
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 

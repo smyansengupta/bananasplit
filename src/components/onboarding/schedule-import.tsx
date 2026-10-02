@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, ImageUp, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { Camera, ImageUp, Loader2, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -108,10 +108,7 @@ export function ScheduleImport({
       <Dialog open={drafts !== null} onOpenChange={(open) => !open && close()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="text-primary size-4" aria-hidden="true" />
-              Check what we found
-            </DialogTitle>
+            <DialogTitle>Check what we found</DialogTitle>
             <DialogDescription>
               Fix anything that&apos;s off, untick what shouldn&apos;t count, then add them to your
               week. You can still change them after, and nothing is saved until you save your week.

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Building2, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
@@ -64,8 +64,12 @@ export function JoinForm({ initialCode, email }: { initialCode: string; email: s
             // eslint-disable-next-line @next/next/no-img-element -- a stored 64px WebP variant
             <img src={org.logoUrl} alt="" className="size-10 rounded-lg object-cover" />
           ) : (
-            <span className="bg-primary/10 text-primary grid size-10 place-items-center rounded-lg">
-              <Building2 className="size-5" aria-hidden="true" />
+            <span className="heading bg-background grid size-10 place-items-center rounded-lg border text-sm">
+              {org.name
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((w) => w[0]?.toUpperCase())
+                .join("")}
             </span>
           )}
           <div className="min-w-0 flex-1">

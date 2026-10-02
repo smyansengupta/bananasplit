@@ -1,6 +1,6 @@
 "use client";
 
-import { ArchiveRestore, PanelRightOpen, Plus, ReceiptText, Trash2 } from "lucide-react";
+import { ArchiveRestore, PanelRightOpen, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -91,7 +91,6 @@ export function TransactionTable({
   if (transactions.length === 0) {
     return (
       <EmptyState
-        icon={ReceiptText}
         title="No transactions here"
         description="Nothing matches these filters yet. Use “Add transaction” to record money in or out: an expense, a sponsorship, dues or other income."
       />

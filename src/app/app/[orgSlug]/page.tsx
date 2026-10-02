@@ -173,7 +173,6 @@ export default async function OrgOverviewPage({ params, searchParams }: PageProp
   const eventEmpty = (title: string, description: string, cta: string) => (
     <EmptyState
       size="compact"
-      icon={CalendarDays}
       title={title}
       description={description}
       action={
@@ -229,7 +228,7 @@ export default async function OrgOverviewPage({ params, searchParams }: PageProp
     files: <FileList orgSlug={orgSlug} files={data.files} />,
     people: <PeopleList orgSlug={orgSlug} people={data.people} total={data.memberCount} />,
     shortcuts: <Shortcuts links={shortcuts} />,
-    ...(data.started ? { "getting-started": <GettingStartedCard bare orgSlug={orgSlug} state={data.started} /> } : {}),
+    ...(data.started ? { "getting-started": <GettingStartedCard orgSlug={orgSlug} state={data.started} /> } : {}),
   };
 
   return (

@@ -4,7 +4,6 @@ import {
   CalendarRange,
   CalendarX2,
   CheckCircle2,
-  Clock,
   FileText,
   Lock,
   Sun,
@@ -40,7 +39,6 @@ export function RecentList({
     return (
       <EmptyState
         size="compact"
-        icon={Clock}
         title="Nothing here yet"
         description="The pages you open show up here, so you can jump back in."
       />
@@ -149,7 +147,6 @@ export function PollList({
     return (
       <EmptyState
         size="compact"
-        icon={Vote}
         title="No open polls"
         description="Questions to vote on and times to find show here."
         action={
@@ -198,7 +195,6 @@ export function NoteList({
     return (
       <EmptyState
         size="compact"
-        icon={FileText}
         title="No notes yet"
         action={
           <Link href={`/app/${orgSlug}/notes`} className="text-primary text-sm hover:underline">
@@ -235,7 +231,7 @@ export function FileList({
   files: { id: string; name: string; contentType: string; createdAt: Date }[];
 }) {
   if (files.length === 0) {
-    return <EmptyState size="compact" icon={FileText} title="No files yet" description="Upload PDFs, slides and images on the Notes page." />;
+    return <EmptyState size="compact" title="No files yet" description="Upload PDFs, slides and images on the Notes page." />;
   }
   return (
     <ul className="divide-y">

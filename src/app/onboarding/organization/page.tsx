@@ -1,4 +1,3 @@
-import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -26,7 +25,6 @@ export default async function NameOrgPage() {
   return (
     <OnboardingFrame>
       <StepCard
-        icon={Building2}
         tone="warning"
         step={{ index: 1, total: ORG_STEP_COUNT }}
         title="Set up your organization"

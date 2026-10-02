@@ -55,9 +55,7 @@ export function NewPollMenu({ orgSlug }: { orgSlug: string }) {
               className="items-start gap-3 rounded-lg p-2.5"
             >
               <Link href={`/app/${orgSlug}${choice.path}`}>
-                <span className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-md">
-                  <Icon aria-hidden className="size-4" />
-                </span>
+                <Icon aria-hidden className="text-muted-foreground mt-0.5 size-4 shrink-0" />
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-medium">{choice.label}</span>
                   <span className="text-muted-foreground text-xs">{choice.description}</span>

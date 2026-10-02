@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CalendarX2, CheckCircle2, ChevronRight, TriangleAlert } from "lucide-react";
+import { Ban, CalendarX2, ChevronRight, TriangleAlert } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -120,7 +120,6 @@ export function WeekView({
   if (open.length === 0 && completed.length === 0) {
     return (
       <EmptyState
-        icon={CheckCircle2}
         title={
           ws.filterCount > 0
             ? "Nothing matches those filters"
