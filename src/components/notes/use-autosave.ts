@@ -25,34 +25,48 @@ export function useAutosave<T>({
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<T | null>(null);
-  const savingRef = useRef(false);
+  const savingRef = useRef<Promise<void> | null>(null);
 
-  const flush = useCallback(async () => {
-    if (savingRef.current) return;
-    savingRef.current = true;
-    try {
-      // Loop instead of recursing: if another edit lands while this save is
-      // in flight, pick it up on the next iteration rather than dropping it.
-      while (pendingRef.current !== null) {
-        const payload = pendingRef.current;
-        pendingRef.current = null;
-        setStatus("saving");
-
-        const result = await save(payload);
-
-        if (result.conflict) {
-          setStatus("conflict");
-          return;
-        }
-        if (result.error) {
-          setStatus("error");
-          return;
-        }
-        setStatus("saved");
-      }
-    } finally {
-      savingRef.current = false;
+  /**
+   * Saves the pending snapshot now instead of after the debounce. Resolves
+   * once nothing is left to save (or a save failed), so callers can await it
+   * before reading the note back, e.g. for a download.
+   */
+  const flush = useCallback((): Promise<void> => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
+    // A save in flight already picks up the pending snapshot when it
+    // finishes, so wait for that one rather than starting a second.
+    if (savingRef.current) return savingRef.current;
+    if (pendingRef.current === null) return Promise.resolve();
+    savingRef.current = (async () => {
+      try {
+        // Loop instead of recursing: if another edit lands while this save is
+        // in flight, pick it up on the next iteration rather than dropping it.
+        while (pendingRef.current !== null) {
+          const payload = pendingRef.current;
+          pendingRef.current = null;
+          setStatus("saving");
+
+          const result = await save(payload);
+
+          if (result.conflict) {
+            setStatus("conflict");
+            return;
+          }
+          if (result.error) {
+            setStatus("error");
+            return;
+          }
+          setStatus("saved");
+        }
+      } finally {
+        savingRef.current = null;
+      }
+    })();
+    return savingRef.current;
   }, [save]);
 
   const schedule = useCallback(

@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { updateNote, deleteNote } from "@/app/app/[orgSlug]/notes/actions";
+import { DownloadPdfButton } from "@/components/notes/download-pdf-button";
 import { NoteEditor } from "@/components/notes/editor/note-editor";
 import { EventLinkPicker, type EventOption } from "@/components/notes/event-link-picker";
 import { useAutosave } from "@/components/notes/use-autosave";
@@ -47,7 +48,7 @@ export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteE
   const versionRef = useRef(note.version);
   const contentRef = useRef({ json: note.contentJson, text: note.contentText });
 
-  const { status, schedule } = useAutosave<NotePayload>({
+  const { status, schedule, flush } = useAutosave<NotePayload>({
     save: async (payload) => {
       const result = await updateNote(orgId, note.id, payload, versionRef.current);
       if (result.version) versionRef.current = result.version;
@@ -120,19 +121,22 @@ export function NoteEditorShell({ orgId, orgSlug, note, canEdit, events }: NoteE
             queueSave({ eventId: id });
           }}
         />
-        {canEdit && (
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-destructive ml-auto"
-            onClick={async () => {
-              await deleteNote(orgId, note.id);
-              router.push(`/app/${orgSlug}/notes`);
-            }}
-          >
-            Delete
-          </Button>
-        )}
+        <div className="ml-auto flex items-center gap-1">
+          <DownloadPdfButton href={`/app/${orgSlug}/notes/${note.id}/pdf`} beforeDownload={flush} />
+          {canEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive"
+              onClick={async () => {
+                await deleteNote(orgId, note.id);
+                router.push(`/app/${orgSlug}/notes`);
+              }}
+            >
+              Delete
+            </Button>
+          )}
+        </div>
       </div>
 
       <NoteEditor
