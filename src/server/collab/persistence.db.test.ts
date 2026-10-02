@@ -26,7 +26,7 @@ import { authDb, disconnectAll, serviceDb } from "@/server/db/clients";
 import { withOrgTxAs, withSystemOrgTx } from "@/server/db/context";
 
 import { createNote, updateNote, updateNoteDetails } from "@/app/app/[orgSlug]/notes/actions";
-import { searchWorkspace } from "@/app/app/[orgSlug]/search/actions";
+import { searchWorkspaceAction } from "@/app/app/[orgSlug]/search/actions";
 
 import { loadNoteState, storeNoteState } from "./persistence";
 
@@ -148,7 +148,10 @@ describe.skipIf(!seeded)("collaboration bridge on the RLS path (seeded CBC)", ()
 
     // The live save feeds search (searchVector over contentText).
     as(s.kristine);
-    expect((await searchWorkspace(s.cbcId, `${WORD}zz`)).notes.map((n) => n.id)).toContain(id);
+    const found = await searchWorkspaceAction(s.cbcId, { query: `${WORD}zz`, scope: "notes" });
+    expect(found.groups.find((g) => g.id === "notes")?.hits.map((h) => h.key)).toContain(
+      `note:${id}`,
+    );
     const row = await withSystemOrgTx(s.cbcId, ({ db }) =>
       db.note.findUnique({ where: { id }, select: { contentText: true, updatedById: true } }),
     );

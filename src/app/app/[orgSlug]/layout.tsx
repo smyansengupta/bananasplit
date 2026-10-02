@@ -115,7 +115,16 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         settings={settingsLink(ctx.organization.slug)}
         sectionPaths={resolveSidebar(ctx.settings?.sidebar)
           .flatMap((g) => g.items)
-          .map((i) => ({ path: i.path, hidden: i.hidden }))}
+          .map((i) => ({
+            id: i.id,
+            label: i.label,
+            defaultLabel: i.defaultLabel,
+            path: i.path,
+            hidden: i.hidden,
+            icon: i.icon,
+            description: i.description,
+          }))}
+        role={ctx.role}
         isAdmin={can({ role: ctx.role }, "settings.view")}
         brand={
           <OrgBrand

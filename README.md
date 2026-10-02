@@ -103,7 +103,7 @@ client.
   how authorization is enforced.
 - [`docs/features/`](docs/features/) — one doc per feature area (calendar,
   tasks, org chart, databases, reports, settings, themes, onboarding,
-  profiles, platform services).
+  profiles, search, platform services).
 - [`docs/EBOARD-HANDBOOK.md`](docs/EBOARD-HANDBOOK.md) — for the club's
   e-board, not developers: treasurer handoff, ongoing habits, continuity.
 - [`RUNBOOK.md`](RUNBOOK.md) — deploying for the first time and restoring

@@ -97,6 +97,20 @@ const NOT_DELETED: Prisma.TransactionWhereInput = {
   OR: [{ voidReason: null }, { voidReason: { not: DELETED_TRANSACTION_REASON } }],
 };
 
+/**
+ * The end of a date filter. A date-only end ("2026-09-21", the filter's date
+ * input) includes that whole day, whatever time a transaction carries
+ * (imports and the seed store times); anything else is taken as an instant.
+ */
+function dateToBound(dateTo: string): Prisma.DateTimeFilter {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+    const next = new Date(`${dateTo}T00:00:00.000Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    return { lt: next };
+  }
+  return { lte: new Date(dateTo) };
+}
+
 export function buildTransactionWhere(
   organizationId: string,
   filters: TransactionFilters,
@@ -115,7 +129,7 @@ export function buildTransactionWhere(
       ? {
           occurredAt: {
             ...(filters.dateFrom ? { gte: new Date(filters.dateFrom) } : {}),
-            ...(filters.dateTo ? { lte: new Date(filters.dateTo) } : {}),
+            ...(filters.dateTo ? dateToBound(filters.dateTo) : {}),
           },
         }
       : {}),

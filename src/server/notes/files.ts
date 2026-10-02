@@ -1,9 +1,11 @@
 import mammoth from "mammoth";
 
+import type { Prisma } from "@/generated/prisma/client";
 import { DOCX, googleDocId, sniffNoteFile } from "@/lib/files/types";
 import { trashCutoff } from "@/lib/notes/trash";
 import { withOrgTx, type TxClient } from "@/server/db/context";
 import { readZipDirectory, verifyZipEntries, SourceRejectedError } from "@/server/org-chart/extract";
+import { everyWord } from "@/server/search/where";
 import { deleteBlobs, getBlob, MAX_UPLOAD_BYTES, putBlob, randomKeyId } from "@/server/storage";
 
 /**
@@ -113,9 +115,8 @@ export function listNoteFiles(
       organizationId: orgId,
       deletedAt: null,
       ...(filters.folderId ? { folderId: filters.folderId === "none" ? null : filters.folderId } : {}),
-      ...(q
-        ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { excerpt: { contains: q, mode: "insensitive" } }] }
-        : {}),
+      // Every word, in the name, the excerpt or the folder's name (as the ⌘K palette finds them).
+      ...everyWord<Prisma.OrgFileWhereInput>(q, (c) => [{ name: c }, { excerpt: c }, { folder: { name: c } }]),
     },
     orderBy: { createdAt: "desc" },
     select: fileSelect,

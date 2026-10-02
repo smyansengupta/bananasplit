@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { trashCutoff } from "@/lib/notes/trash";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
+import { everyWord } from "@/server/search/where";
 
 /**
  * Note reads. Every helper takes the caller's transaction client (ctx.db
@@ -51,14 +52,8 @@ export function getNotesForList(
         filters.visibility ? { visibility: filters.visibility } : {},
         filters.authorId ? { authorId: filters.authorId } : {},
         filters.folderId ? { folderId: filters.folderId === "none" ? null : filters.folderId } : {},
-        q
-          ? {
-              OR: [
-                { title: { contains: q, mode: "insensitive" } },
-                { contentText: { contains: q, mode: "insensitive" } },
-              ],
-            }
-          : {},
+        // Every word, in the title or the body (as the ⌘K palette finds them).
+        everyWord<Prisma.NoteWhereInput>(q, (c) => [{ title: c }, { contentText: c }]) ?? {},
       ],
     },
     include: noteListInclude,
@@ -161,48 +156,5 @@ export function getOrgEventsForPicker(db: TxClient, organizationId: string) {
     select: { id: true, title: true, startsAt: true },
     orderBy: { startsAt: "desc" },
     take: 100,
-  });
-}
-
-interface NoteSearchRow {
-  id: string;
-  title: string;
-  visibility: "PRIVATE" | "ORGANIZATION";
-  updatedAt: Date;
-}
-
-/**
- * Full-text search over the note's searchVector. A tagged-template $queryRaw:
- * every value is a bound parameter, never spliced into the SQL.
- */
-export async function searchNotes(
-  db: TxClient,
-  organizationId: string,
-  userId: string,
-  query: string,
-) {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
-
-  return db.$queryRaw<NoteSearchRow[]>`
-    SELECT id, title, visibility, "updatedAt"
-    FROM "Note"
-    WHERE "organizationId" = ${organizationId}
-      AND "deletedAt" IS NULL
-      AND (visibility = 'ORGANIZATION' OR "authorId" = ${userId})
-      AND "searchVector" @@ plainto_tsquery('english', ${trimmed})
-    ORDER BY ts_rank("searchVector", plainto_tsquery('english', ${trimmed})) DESC
-    LIMIT 10
-  `;
-}
-
-export async function searchTasks(db: TxClient, organizationId: string, query: string) {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
-
-  return db.task.findMany({
-    where: { organizationId, deletedAt: null, title: { contains: trimmed, mode: "insensitive" } },
-    select: { id: true, title: true, status: true },
-    take: 10,
   });
 }

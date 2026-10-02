@@ -5,6 +5,7 @@ import { parseAvailability, type Availability } from "@/lib/availability";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
 import { withOrgTx, withUserTx } from "@/server/db/context";
 import { userPublicSelect, type UserPublic } from "@/server/members";
+import { everyWord } from "@/server/search/where";
 
 /**
  * Profile reads (Phase 2).
@@ -198,15 +199,12 @@ export async function listOrgPeople(
   const q = options.q?.trim() ?? "";
   const where: Prisma.MembershipWhereInput = {
     organizationId,
-    ...(q
-      ? {
-          OR: [
-            { user: { name: { contains: q, mode: "insensitive" } } },
-            { title: { contains: q, mode: "insensitive" } },
-            { user: { major: { contains: q, mode: "insensitive" } } },
-          ],
-        }
-      : {}),
+    // Every word, in the name, this org's title or the major (as the ⌘K palette finds them).
+    ...everyWord<Prisma.MembershipWhereInput>(q, (c) => [
+      { user: { name: c } },
+      { title: c },
+      { user: { major: c } },
+    ]),
   };
   return withOrgTx(organizationId, async ({ db }) => {
     const total = await db.membership.count({ where });
