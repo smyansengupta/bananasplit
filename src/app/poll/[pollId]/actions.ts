@@ -45,6 +45,8 @@ interface ActionResult {
  *   - a guest is identified by the httpOnly poll_guest_<pollId> cookie, and
  *     their delete-then-recreate is scoped to its hash, so no visitor can
  *     overwrite another guest's answers by typing the same name.
+ * The entries are the respondent's whole answer: a time left out is cleared.
+ * A NO (sent by a page loaded before the grid dropped it) clears too.
  */
 export async function submitPollResponse(input: unknown): Promise<ActionResult> {
   const rateLimit = await checkRateLimit(
@@ -84,13 +86,17 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
     if (data.entries.some((e) => !validSlotIds.has(e.slotId))) {
       return { error: "That slot isn't part of this poll." };
     }
+    const answers = data.entries.filter((e) => e.availability !== PollAvailability.NO);
 
     const isMember = userId
       ? (await db.membership.count({ where: { organizationId, userId } })) > 0
       : false;
 
     if (userId && isMember) {
-      for (const e of data.entries) {
+      await db.pollResponse.deleteMany({
+        where: { organizationId, pollId: poll.id, userId, slotId: { notIn: answers.map((e) => e.slotId) } },
+      });
+      for (const e of answers) {
         await db.pollResponse.upsert({
           where: { slotId_userId: { slotId: e.slotId, userId } },
           update: { availability: e.availability },
@@ -113,9 +119,9 @@ export async function submitPollResponse(input: unknown): Promise<ActionResult> 
     // Only this guest's own rows: legacy rows (NULL hash) and other guests'
     // rows never match, whatever name was typed.
     await db.pollResponse.deleteMany({ where: { organizationId, pollId: poll.id, userId: null, guestKeyHash } });
-    if (data.entries.length > 0) {
+    if (answers.length > 0) {
       await db.pollResponse.createMany({
-        data: data.entries.map((e) => ({
+        data: answers.map((e) => ({
           organizationId,
           pollId: poll.id,
           slotId: e.slotId,
