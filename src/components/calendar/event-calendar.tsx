@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, CalendarPlus, CalendarX2, ChevronLeft, ChevronRight, Globe } from "lucide-react";
+import { CalendarClock, CalendarX2, ChevronLeft, ChevronRight, Globe } from "lucide-react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
@@ -254,7 +254,6 @@ export function EventCalendar({
 
   const emptyState = (
     <div className="cal-empty">
-      <CalendarPlus aria-hidden className="text-muted-foreground size-6" />
       <p className="cal-empty__title">{emptyTitle(range)}</p>
       <p className="cal-empty__body">
         {range.kinds.length > 0 || range.visibility

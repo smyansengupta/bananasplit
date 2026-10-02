@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -41,10 +41,7 @@ export default async function SettingsPage({ params }: PageProps<"/app/[orgSlug]
       </div>
 
       {can({ role }, "integrations.write") && (
-        <div className="from-primary/10 border-primary/20 flex flex-wrap items-center gap-4 rounded-xl border bg-gradient-to-r to-transparent p-4">
-          <span className="bg-primary/15 text-primary grid size-10 shrink-0 place-items-center rounded-lg">
-            <Sparkles className="size-5" aria-hidden="true" />
-          </span>
+        <div className="bg-card flex flex-wrap items-center gap-4 rounded-xl border p-4">
           <div className="min-w-0 flex-1">
             <p className="font-medium">Guided setup</p>
             <p className="text-muted-foreground text-sm">
@@ -77,14 +74,12 @@ export default async function SettingsPage({ params }: PageProps<"/app/[orgSlug]
                       href={`/app/${orgSlug}/settings/${section.segment}`}
                       className="hover:bg-muted/50 focus-visible:bg-muted/50 flex items-center gap-4 px-4 py-3 transition-colors focus-visible:outline-none"
                     >
-                      <span
-                        className={cn(
-                          "grid size-9 shrink-0 place-items-center rounded-lg",
-                          danger ? "bg-destructive/10 text-destructive" : "bg-muted text-foreground",
-                        )}
-                      >
-                        {Icon && <Icon className="size-4" aria-hidden="true" />}
-                      </span>
+                      {Icon && (
+                        <Icon
+                          className={cn("size-4 shrink-0", danger ? "text-destructive" : "text-muted-foreground")}
+                          aria-hidden="true"
+                        />
+                      )}
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-medium">{section.label}</span>
                         <span className="text-muted-foreground block text-sm">{section.description}</span>

@@ -169,9 +169,7 @@ function Toggle({
 }) {
   return (
     <label className="flex cursor-pointer items-center gap-3 px-3 py-3">
-      <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-lg">
-        <Icon className="size-4" aria-hidden="true" />
-      </span>
+      <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{title}</span>
         <span className="text-muted-foreground block text-xs">{detail}</span>
@@ -200,14 +198,7 @@ function TeamRow({
   return (
     <div className={cn("bg-card space-y-2.5 rounded-xl border p-3", top && "border-warning/40 bg-warning/5")}>
       <div className="flex items-center gap-2.5">
-        <span
-          className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-lg",
-            top ? "bg-warning/15 text-warning" : "bg-muted text-foreground",
-          )}
-        >
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
+        <Icon className={cn("size-4 shrink-0", top ? "text-warning" : "text-muted-foreground")} aria-hidden="true" />
         <Input
           aria-label="Team name"
           placeholder="Team name"

@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  ClipboardPaste,
-  Download,
-  FileSpreadsheet,
-  FileText,
-  Loader2,
-  ShieldCheck,
-  Upload,
-} from "lucide-react";
+import { ClipboardPaste, Download, FileText, Loader2, ShieldCheck, Upload } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
 import { useAiConnections } from "@/components/ai/connection-picker";
@@ -257,9 +249,6 @@ export function FinanceImport(props: FinanceImportProps) {
               dragging ? "border-primary bg-primary/5" : "bg-muted/30",
             )}
           >
-            <span className="bg-primary/10 text-primary grid size-12 place-items-center rounded-full">
-              <FileSpreadsheet className="size-6" aria-hidden="true" />
-            </span>
             <div className="space-y-1">
               <p className="font-medium">Drop a spreadsheet, a bank export, a PDF or a photo</p>
               <p className="text-muted-foreground text-sm">

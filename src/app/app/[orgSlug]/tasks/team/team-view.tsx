@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Plus, UserRoundSearch } from "lucide-react";
+import { Network, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -53,7 +53,6 @@ export function TeamView({ data }: { data: TeamViewData }) {
   if (data.offChart) {
     return (
       <EmptyState
-        icon={UserRoundSearch}
         title="You're not on the org chart yet"
         description="The Team view follows reporting lines. Once an admin places you on the published chart, your team shows up here."
         action={

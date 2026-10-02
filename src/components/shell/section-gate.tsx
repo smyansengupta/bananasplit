@@ -47,7 +47,6 @@ export function SectionGate({
   }
   return (
     <EmptyState
-      icon={EyeOff}
       title="This section is turned off"
       description="Your club's admins turned it off for this organization."
       action={

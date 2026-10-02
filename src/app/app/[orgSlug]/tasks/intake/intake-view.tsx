@@ -1,6 +1,6 @@
 "use client";
 
-import { Inbox, Plus, Settings2 } from "lucide-react";
+import { Plus, Settings2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -62,7 +62,6 @@ export function IntakeView({
     return (
       <>
         <EmptyState
-          icon={Inbox}
           title="No intake queue yet"
           description="An intake queue lets anyone file requests (like design requests) while one triage owner sets their priority and owner."
           action={

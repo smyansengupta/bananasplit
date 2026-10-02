@@ -1,4 +1,4 @@
-import { Building2, KeyRound, Mail, Sparkles } from "lucide-react";
+import { Building2, KeyRound, Mail } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -44,7 +44,6 @@ export default async function OnboardingPage() {
   return (
     <OnboardingFrame>
       <StepCard
-        icon={Sparkles}
         title={`Welcome${profile.name ? `, ${profile.name.split(" ")[0]}` : ""}`}
         description="Your profile is set. Now find your club, or start one."
       >

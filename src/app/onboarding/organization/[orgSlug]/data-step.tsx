@@ -7,10 +7,10 @@ import {
   CircleDashed,
   Database,
   Info,
+  KeyRound,
   Mail,
   Plug,
   SkipForward,
-  Sparkles,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
@@ -38,7 +38,7 @@ const ICONS: Record<string, LucideIcon> = {
   data: Database,
   calendar: CalendarDays,
   email: Mail,
-  claude: Sparkles,
+  claude: KeyRound,
 };
 
 const STATUS: Record<SetupStepStatus, { text: string; tone: string; icon: LucideIcon }> = {
@@ -86,14 +86,10 @@ export function DataStep({
                 connected && "border-success/30 bg-success/5",
               )}
             >
-              <span
-                className={cn(
-                  "grid size-9 shrink-0 place-items-center rounded-lg",
-                  connected ? "bg-success/15 text-success" : "bg-muted text-foreground",
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-              </span>
+              <Icon
+                className={cn("size-4 shrink-0", connected ? "text-success" : "text-muted-foreground")}
+                aria-hidden="true"
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">{c.title}</span>

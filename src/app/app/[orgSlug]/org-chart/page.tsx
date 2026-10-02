@@ -134,7 +134,6 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
         </Suspense>
       ) : (
         <EmptyState
-          icon={Network}
           title="No org chart yet"
           description={
             canEdit

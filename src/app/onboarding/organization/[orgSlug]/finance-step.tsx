@@ -113,14 +113,10 @@ export function FinanceStep({
                   on ? "border-warning/50 bg-warning/5" : "hover:border-foreground/25",
                 )}
               >
-                <span
-                  className={cn(
-                    "grid size-9 shrink-0 place-items-center rounded-lg transition-colors",
-                    on ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                </span>
+                <Icon
+                  className={cn("mt-0.5 size-4 shrink-0 transition-colors", on ? "text-warning" : "text-muted-foreground")}
+                  aria-hidden="true"
+                />
                 <span className="min-w-0 flex-1 pr-5">
                   <span className="block text-sm font-medium">{card.title}</span>
                   <span className="text-muted-foreground block text-xs leading-snug">{card.detail}</span>

@@ -536,9 +536,7 @@ export function WidgetBoard({
                               onClick={() => add(t.type)}
                               className="hover:bg-accent/60 hover:border-foreground/15 flex h-full w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors"
                             >
-                              <span className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-md">
-                                <Icon className="size-4" aria-hidden="true" />
-                              </span>
+                              <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden="true" />
                               <span className="min-w-0">
                                 <span className="flex items-center gap-2 text-sm font-medium">
                                   {t.title}

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, CheckCircle2, Info, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { ConnectionPicker, type useAiConnections } from "@/components/ai/connection-picker";
@@ -179,11 +179,7 @@ export function ImportColumns({
           />
           {ai.selected && (
             <Button type="button" onClick={() => void readWithAi()} disabled={reading}>
-              {reading ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Sparkles className="size-4" aria-hidden="true" />
-              )}
+              {reading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
               {reading ? "Reading…" : readBy ? "Read it again" : `Read it with ${ai.selected.label}`}
             </Button>
           )}

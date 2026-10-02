@@ -1,4 +1,4 @@
-import { FileText, Search, Sparkles, type LucideIcon } from "lucide-react";
+import { Command, FileText, Search, type LucideIcon } from "lucide-react";
 
 import { parseQuery, type ParsedQuery } from "@/lib/search/text";
 import type { SearchGroup, SearchResponse, SearchScope } from "@/lib/search/types";
@@ -51,7 +51,7 @@ function fromEntry(entry: CatalogEntry, score: number, highlight: boolean): Pale
     key: entry.key,
     title: entry.title,
     detail: entry.detail,
-    icon: NAMED_ICONS[entry.icon] ?? (entry.group === "actions" ? Sparkles : FileText),
+    icon: NAMED_ICONS[entry.icon] ?? (entry.group === "actions" ? Command : FileText),
     command: entry.command,
     score,
     highlight,

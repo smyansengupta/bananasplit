@@ -1,4 +1,4 @@
-import { Landmark, Receipt, UserCog } from "lucide-react";
+import { Receipt, UserCog } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -55,11 +55,8 @@ export function FinanceAccessNotice({
         compact ? "p-3" : "p-5 sm:p-6",
       )}
     >
-      <span className={cn("bg-primary/10 text-primary grid shrink-0 place-items-center rounded-xl", compact ? "size-9" : "size-11")}>
-        <Landmark className={compact ? "size-4" : "size-5"} aria-hidden="true" />
-      </span>
       <div className="min-w-0 flex-1 space-y-1">
-        <h2 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>
+        <h2 className={cn("heading", compact ? "text-sm" : "text-base")}>
           {compact ? "The club's money is managed by its owners and treasurers" : "Only owners and treasurers see the club's money"}
         </h2>
         <p className="text-muted-foreground text-sm">

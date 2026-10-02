@@ -1,4 +1,4 @@
-import { KeyRound, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -33,7 +33,6 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
   return (
     <OnboardingFrame>
       <StepCard
-        icon={KeyRound}
         title="Join your organization"
         description="Enter the invite code an admin shared with you. We check it with the organization before you join."
       >

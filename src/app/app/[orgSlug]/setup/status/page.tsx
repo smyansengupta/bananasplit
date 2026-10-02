@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Lock } from "lucide-react";
+import { AlertTriangle, Clock } from "lucide-react";
 import Link from "next/link";
 
 import { SyncPanel } from "@/components/databases/sync-panel";
@@ -58,7 +58,6 @@ export default async function SetupStatusPage({
     return (
       <div className="mx-auto max-w-lg py-10">
         <EmptyState
-          icon={Lock}
           title="Connection status is for owners and admins"
           description="It shows credentials and the errors services return, so it is limited to owners and admins."
           action={

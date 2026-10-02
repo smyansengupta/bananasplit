@@ -1,4 +1,4 @@
-import { CalendarX2, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { cookies } from "next/headers";
 
 import { EmptyState } from "@/components/empty-state";
@@ -16,7 +16,6 @@ function Missing() {
   return (
     <div className="flex flex-1 items-center justify-center p-6">
       <EmptyState
-        icon={CalendarX2}
         title="This poll isn't available"
         description="The link may be mistyped, or the poll was deleted. Ask whoever sent it for a new one."
         className="w-full max-w-md"

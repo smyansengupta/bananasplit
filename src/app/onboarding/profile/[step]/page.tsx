@@ -89,7 +89,6 @@ export default async function ProfileStepPage({ params }: PageProps<"/onboarding
         />
       )}
       <StepCard
-        icon={meta.icon}
         step={{ index, total: PROFILE_STEPS.length }}
         title={PROFILE_STEP_TITLES[step]}
         description={meta.description}
@@ -143,7 +142,6 @@ function Review({ profile }: { profile: OnboardingProfile }) {
   const theme = profile.themePreference;
   const palettes = theme ? personalPalettes(theme) : null;
   const colors = palettes && theme ? previewTokens(palettes, theme.mode === "light" ? "light" : "dark") : null;
-  const accentStyle = colors ? { background: colors.primary, color: colors.onPrimary } : undefined;
   const themeName = theme
     ? theme.preset === "custom"
       ? "Custom"
@@ -224,7 +222,6 @@ function Review({ profile }: { profile: OnboardingProfile }) {
               <ChoiceTileBody
                 icon={Building2}
                 primary
-                accentStyle={accentStyle}
                 title={`Go to ${home.name}`}
                 detail="You're already a member."
               />
@@ -237,7 +234,6 @@ function Review({ profile }: { profile: OnboardingProfile }) {
                 <ChoiceTileBody
                   icon={KeyRound}
                   primary
-                  accentStyle={accentStyle}
                   title="Join with invite code"
                   detail="Your club's admin shared a code or a link, or emailed you an invite."
                 />

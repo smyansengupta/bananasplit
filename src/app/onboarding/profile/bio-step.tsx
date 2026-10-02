@@ -43,11 +43,7 @@ const KIND_ICONS: Record<LinkKind, LucideIcon> = {
 function LinkKindIcon({ kind, small = false }: { kind: LinkKind; small?: boolean }) {
   const Icon = KIND_ICONS[kind];
   if (small) return <Icon className="size-3.5" aria-hidden="true" />;
-  return (
-    <span className="bg-background text-foreground grid size-7 shrink-0 place-items-center rounded-md border">
-      <Icon className="size-3.5" aria-hidden="true" />
-    </span>
-  );
+  return <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />;
 }
 
 /** "https://www.linkedin.com/in/ada" -> "linkedin.com/in/ada" */

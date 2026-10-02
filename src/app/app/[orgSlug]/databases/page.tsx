@@ -1,13 +1,9 @@
 import {
-  ArrowRight,
   CalendarDays,
   ChevronRight,
   ClipboardCheck,
   Database,
-  FileSpreadsheet,
   Lock,
-  Plug,
-  Sparkles,
   Upload,
   UserPlus,
   Users,
@@ -145,14 +141,7 @@ export default async function DatabasesPage({
         >
           <span className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-2.5 font-medium">
-              <span
-                className={cn(
-                  "grid size-8 place-items-center rounded-lg",
-                  muted ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary",
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-              </span>
+              <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
               {d.name}
             </span>
             {d.memberVisibility !== "MEMBERS" && (
@@ -182,93 +171,76 @@ export default async function DatabasesPage({
 
       {databases.length === 0 ? (
         <EmptyState
-          icon={Database}
           title="No databases are visible to you"
           description="Your club's owners decide who sees which data, in Settings › Privacy."
         />
       ) : needsSetup && !isAdmin ? (
         <EmptyState
-          icon={Database}
           title="No data yet"
           description="When your club's admins connect a data source or import a spreadsheet, it shows up here."
         />
       ) : needsSetup ? (
         <section aria-labelledby="db-setup" className="space-y-4">
-          <div className="bg-primary/5 border-primary/20 rounded-xl border p-5">
-            <div className="flex items-start gap-3">
-              <span className="bg-primary/15 text-primary grid size-10 shrink-0 place-items-center rounded-lg">
-                <Sparkles className="size-5" aria-hidden="true" />
-              </span>
-              <div className="space-y-1">
-                <h2 id="db-setup" className="font-semibold">
-                  Let&apos;s get your data in
-                </h2>
-                <p className="text-muted-foreground text-sm">
-                  Nothing has been added yet. Pick how your club keeps its data; you can use more
-                  than one, and change it later.
-                </p>
-              </div>
-            </div>
+          <div className="space-y-1">
+            <h2 id="db-setup" className="heading text-lg">
+              Add your club&apos;s data
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              Nothing has been added yet. Use any of these, or more than one; you can change it
+              later.
+            </p>
           </div>
 
-          <ol className="grid gap-3 md:grid-cols-3">
-            <li>
-              <Link
-                href={`/app/${orgSlug}/databases?connect=1#connect`}
-                scroll={false}
-                aria-current={connecting ? "step" : undefined}
-                className={cn(
-                  "hover:bg-muted/50 flex h-full flex-col gap-2 rounded-xl border p-4 transition-colors",
-                  connecting && "border-primary ring-primary/20 ring-2",
-                )}
-              >
-                <Plug className="text-primary size-5" aria-hidden="true" />
-                <span className="font-medium">Connect a website database</span>
-                <span className="text-muted-foreground text-sm">
+          <ul className="divide-y rounded-xl border">
+            <li className={cn("flex flex-wrap items-center gap-x-6 gap-y-3 p-4", connecting && "bg-muted/40")}>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="font-medium">Connect a website database</p>
+                <p className="text-muted-foreground text-sm">
                   Your club site keeps check-ins, sign-ups and votes in Supabase. Connect it once;
                   it syncs every few minutes.
-                </span>
-                <span className="text-primary mt-auto inline-flex items-center gap-1 text-sm font-medium">
-                  Connect <ArrowRight className="size-3.5" aria-hidden="true" />
-                </span>
-              </Link>
-            </li>
-            <li>
-              <div className="flex h-full flex-col gap-2 rounded-xl border p-4">
-                <FileSpreadsheet className="text-primary size-5" aria-hidden="true" />
-                <span className="font-medium">Import a spreadsheet</span>
-                <span className="text-muted-foreground text-sm">
-                  Have a sign-in sheet or interest form export? Bring in a CSV.
-                </span>
-                <span className="mt-auto flex flex-wrap gap-2">
-                  {importable.map((d) => (
-                    <Button key={d.id} asChild size="sm" variant="outline">
-                      <Link href={`/app/${orgSlug}/databases/${d.key}/import`}>
-                        <Upload className="size-3.5" aria-hidden="true" />
-                        {d.name}
-                      </Link>
-                    </Button>
-                  ))}
-                </span>
+                </p>
               </div>
+              <Button asChild size="sm" variant={connecting ? "default" : "outline"}>
+                <Link
+                  href={`/app/${orgSlug}/databases?connect=1#connect`}
+                  scroll={false}
+                  aria-current={connecting ? "step" : undefined}
+                >
+                  Connect
+                </Link>
+              </Button>
             </li>
-            <li>
-              <Link
-                href={`/app/${orgSlug}/calendar`}
-                className="hover:bg-muted/50 flex h-full flex-col gap-2 rounded-xl border p-4 transition-colors"
-              >
-                <CalendarDays className="text-primary size-5" aria-hidden="true" />
-                <span className="font-medium">Start from the calendar</span>
-                <span className="text-muted-foreground text-sm">
+            <li className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="font-medium">Import a spreadsheet</p>
+                <p className="text-muted-foreground text-sm">
+                  Have a sign-in sheet or interest form export? Bring in a CSV.
+                </p>
+              </div>
+              <span className="flex flex-wrap gap-2">
+                {importable.map((d) => (
+                  <Button key={d.id} asChild size="sm" variant="outline">
+                    <Link href={`/app/${orgSlug}/databases/${d.key}/import`}>
+                      <Upload className="size-3.5" aria-hidden="true" />
+                      {d.name}
+                    </Link>
+                  </Button>
+                ))}
+              </span>
+            </li>
+            <li className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="font-medium">Start from the calendar</p>
+                <p className="text-muted-foreground text-sm">
                   No website? Every event you add to the calendar becomes a session here, ready
                   for check-ins.
-                </span>
-                <span className="text-primary mt-auto inline-flex items-center gap-1 text-sm font-medium">
-                  Open the calendar <ArrowRight className="size-3.5" aria-hidden="true" />
-                </span>
-              </Link>
+                </p>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/app/${orgSlug}/calendar`}>Open the calendar</Link>
+              </Button>
             </li>
-          </ol>
+          </ul>
 
           {connecting && dataStep && (
             <div id="connect" className="scroll-mt-20 rounded-xl border p-5">

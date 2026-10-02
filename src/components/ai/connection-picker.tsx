@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -80,7 +80,6 @@ export function ConnectionPicker({
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Sparkles className="text-primary size-4" aria-hidden="true" />
         {list.length > 1 ? (
           <label className="flex items-center gap-2">
             <span className="text-muted-foreground">Read with</span>

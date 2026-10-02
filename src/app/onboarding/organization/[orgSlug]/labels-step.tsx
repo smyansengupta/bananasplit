@@ -104,9 +104,7 @@ export function LabelsStep({
           return (
             <li key={row.id} className="space-y-2.5 rounded-xl border p-3">
               <div className="flex items-center gap-3">
-                <span className="bg-muted grid size-9 shrink-0 place-items-center rounded-lg">
-                  <KindIcon className="size-4" aria-hidden="true" />
-                </span>
+                <KindIcon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <Input
                     aria-label={`Label for ${row.key}`}

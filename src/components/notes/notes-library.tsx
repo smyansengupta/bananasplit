@@ -469,16 +469,10 @@ export function NotesLibrary({
                   </p>
                 </div>
               ) : (
-                <span
-                  className={cn(
-                    "grid size-14 place-items-center rounded-2xl",
-                    family === "pdf"
-                      ? "bg-destructive/10 text-destructive"
-                      : "bg-primary/10 text-primary",
-                  )}
-                >
-                  <Icon className="size-7" aria-hidden="true" />
-                </span>
+                <Icon
+                  className={cn("size-8", family === "pdf" ? "text-destructive" : "text-muted-foreground")}
+                  aria-hidden="true"
+                />
               )}
               <span className="bg-background/90 absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase shadow-xs">
                 {FILE_LABELS[family]}
@@ -864,7 +858,6 @@ export function NotesLibrary({
 
             {items.length === 0 ? (
               <EmptyState
-                icon={tab === "notes" ? NotebookText : FolderOpen}
                 title={
                   params.get("q")
                     ? "Nothing matches that search"
@@ -1023,7 +1016,6 @@ function TrashView({
       </p>
       {rows.length === 0 ? (
         <EmptyState
-          icon={Trash2}
           title="Nothing here"
           description="When you delete a note or a file, it waits here for a while in case you change your mind."
         />
