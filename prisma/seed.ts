@@ -422,7 +422,6 @@ async function main() {
             PollAvailability.YES,
             PollAvailability.YES,
             PollAvailability.IF_NEEDED,
-            PollAvailability.NO,
           ]),
         },
       });

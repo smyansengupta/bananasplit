@@ -97,7 +97,7 @@ describe("PollResponder: your availability", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("paints as it moves with Shift and an arrow, and undoes from a marked time", async () => {
+  it("paints as it moves with Shift and an arrow, and clears from a marked time", async () => {
     render(<PollResponder poll={makePoll()} respondAs="member" canFinalize={false} />);
     const cells = () => mineCells();
 
@@ -107,7 +107,23 @@ describe("PollResponder: your availability", () => {
     expect(cells()[1].getAttribute("tabindex")).toBe("0");
 
     fireEvent.keyDown(cells()[1], { key: " " });
-    expect(cells()[1].getAttribute("aria-label")).toMatch(/: unavailable$/);
+    expect(cells()[1].getAttribute("aria-label")).toMatch(/: not answered$/);
+    expect(cells()[1].textContent).toBe("");
+
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+    // Cleared, not saved as "unavailable": the save carries only what's marked.
+    expect(submitMock).toHaveBeenLastCalledWith({ pollId: "poll_1", guestName: null, entries: [] });
+  });
+
+  it("offers no unavailable brush", () => {
+    render(<PollResponder poll={makePoll()} respondAs="member" canFinalize={false} />);
+
+    expect(screen.getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual([
+      "YES",
+      "IF_NEEDED",
+    ]);
   });
 
   it("paints with the brush that is picked", () => {
@@ -155,7 +171,6 @@ describe("PollResponder: everyone", () => {
         isGuest: true,
         availability: "IF_NEEDED",
       },
-      { slotId: "d2a", respondentKey: "r2", label: "Sam", isGuest: true, availability: "NO" },
     ],
   });
 
@@ -168,7 +183,7 @@ describe("PollResponder: everyone", () => {
     expect(d1a.getAttribute("aria-label")).toMatch(
       /2 of 2 available, 1 only if needed\. Available: You\. If needed: Sam\./,
     );
-    expect(d2a.getAttribute("aria-label")).toMatch(/0 of 2 available\. Unavailable: Sam\./);
+    expect(d2a.getAttribute("aria-label")).toMatch(/: 0 of 2 available\.$/);
   });
 
   it("schedules a best time only after the confirmation", async () => {

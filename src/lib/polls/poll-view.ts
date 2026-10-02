@@ -10,8 +10,14 @@ import type { PollAvailability } from "@/generated/prisma/enums";
  * the others' names, the page may pass `memberNames` so members show by
  * name; it is ignored for a guest viewer.
  *
+ * A time someone can't make is one they left unmarked: stored NO answers
+ * (from before the grid dropped its "unavailable" mark) read as unmarked.
+ *
  * Client-safe: no server imports.
  */
+
+/** What a respondent can mark a time as. */
+export type PollAnswer = Exclude<PollAvailability, "NO">;
 
 export interface PollViewSlot {
   id: string;
@@ -25,7 +31,7 @@ export interface PollViewResponse {
   respondentKey: string;
   label: string;
   isGuest: boolean;
-  availability: PollAvailability;
+  availability: PollAnswer;
 }
 
 export interface PollView {
@@ -43,7 +49,7 @@ export interface PollView {
   slots: PollViewSlot[];
   responses: PollViewResponse[];
   /** The viewer's own answers, by slot id. */
-  myResponses: Record<string, PollAvailability>;
+  myResponses: Record<string, PollAnswer>;
   /** The name a returning guest answered under, to prefill the form. */
   myGuestName: string | null;
   /** The viewer's own opaque key in `responses`, once they have answered. */
@@ -95,8 +101,11 @@ export function buildPollView(poll: PollSource, viewer: PollViewer, options: Pol
   const memberNames = viewer.kind === "member" ? options.memberNames : undefined;
   const opaque = new Map<string, { key: string; label: string; isGuest: boolean }>();
   const nameCounts = new Map<string, number>();
+  const answers = poll.responses.filter(
+    (r): r is typeof r & { availability: PollAnswer } => r.availability !== "NO",
+  );
 
-  for (const r of poll.responses) {
+  for (const r of answers) {
     const id = sourceKey(r);
     if (opaque.has(id)) continue;
     const isGuest = !r.userId;
@@ -115,10 +124,10 @@ export function buildPollView(poll: PollSource, viewer: PollViewer, options: Pol
       ? r.userId === viewer.userId
       : viewer.guestKeyHash !== null && !r.userId && r.guestKeyHash === viewer.guestKeyHash;
 
-  const myResponses: Record<string, PollAvailability> = {};
+  const myResponses: Record<string, PollAnswer> = {};
   let myGuestName: string | null = null;
   let myRespondentKey: string | null = null;
-  for (const r of poll.responses) {
+  for (const r of answers) {
     if (!isMine(r)) continue;
     myResponses[r.slotId] = r.availability;
     myRespondentKey ??= opaque.get(sourceKey(r))!.key;
@@ -139,7 +148,7 @@ export function buildPollView(poll: PollSource, viewer: PollViewer, options: Pol
         ? { startsAt: poll.finalizedEvent.startsAt, endsAt: poll.finalizedEvent.endsAt }
         : null,
     slots: poll.slots.map((s) => ({ id: s.id, startsAt: s.startsAt, endsAt: s.endsAt })),
-    responses: poll.responses.map((r) => {
+    responses: answers.map((r) => {
       const who = opaque.get(sourceKey(r))!;
       return {
         slotId: r.slotId,

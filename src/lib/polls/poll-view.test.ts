@@ -63,8 +63,26 @@ describe("buildPollView — the public poll DTO (0A Fix 6)", () => {
   it("marks a returning guest's own answers from their key only", () => {
     const view = buildPollView(poll, { kind: "guest", guestKeyHash: hashA });
 
-    expect(view.myResponses).toEqual({ slot_1: "YES", slot_2: "NO" });
+    expect(view.myResponses).toEqual({ slot_1: "YES" });
     expect(view.myGuestName).toBe("Alex");
+  });
+
+  it("reads a stored NO as unmarked, so someone with only those hasn't responded", () => {
+    const view = buildPollView(
+      {
+        ...poll,
+        responses: [
+          ...poll.responses,
+          { slotId: "slot_1", userId: "user_no", guestName: null, guestKeyHash: null, availability: "NO" },
+        ],
+      },
+      { kind: "member", userId: "user_no" },
+    );
+
+    expect(view.responses.some((r) => (r.availability as string) === "NO")).toBe(false);
+    expect(new Set(view.responses.map((r) => r.respondentKey)).size).toBe(4);
+    expect(view.myResponses).toEqual({});
+    expect(view.myRespondentKey).toBeNull();
   });
 
   it("gives a guest without a key nothing of their own, legacy rows included", () => {

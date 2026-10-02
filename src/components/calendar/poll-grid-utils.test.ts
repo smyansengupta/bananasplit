@@ -160,12 +160,16 @@ describe("summarizeSlots", () => {
     const summaries = summarizeSlots([
       { slotId: "s1", respondentKey: "a", availability: "YES" },
       { slotId: "s1", respondentKey: "b", availability: "IF_NEEDED" },
-      { slotId: "s1", respondentKey: "c", availability: "NO" },
     ]);
 
     const s1 = summaryFor(summaries, "s1");
-    expect([s1.yes.length, s1.ifNeeded.length, s1.no.length, s1.available]).toEqual([1, 1, 1, 2]);
+    expect([s1.yes.length, s1.ifNeeded.length, s1.available]).toEqual([1, 1, 2]);
     expect(summaryFor(summaries, "unanswered").available).toBe(0);
+  });
+
+  it("reads a stored NO as unmarked", () => {
+    const summaries = summarizeSlots([{ slotId: "s1", respondentKey: "c", availability: "NO" }]);
+    expect(summaries.has("s1")).toBe(false);
   });
 });
 
@@ -212,23 +216,40 @@ describe("painting", () => {
   );
 
   it("fills the rectangle between two cells, from either corner", () => {
-    const next = paintRect({ wed9: "NO" }, grid, { day: 2, time: 1 }, { day: 0, time: 0 }, "YES");
+    const next = paintRect(
+      { wed9: "IF_NEEDED" },
+      grid,
+      { day: 2, time: 1 },
+      { day: 0, time: 0 },
+      "YES",
+    );
 
     expect(next).toEqual({ mon9: "YES", mon10: "YES", tue9: "YES", tue10: "YES", wed9: "YES" });
   });
 
-  it("leaves the answers it started from untouched", () => {
-    const base = { mon9: "NO" as const };
-    paintRect(base, grid, { day: 0, time: 0 }, { day: 0, time: 0 }, "YES");
-    expect(base).toEqual({ mon9: "NO" });
+  it("clears the rectangle, leaving those times unmarked", () => {
+    const next = paintRect(
+      { mon9: "YES", mon10: "IF_NEEDED", tue9: "YES" },
+      grid,
+      { day: 0, time: 0 },
+      { day: 0, time: 1 },
+      null,
+    );
+
+    expect(next).toEqual({ tue9: "YES" });
   });
 
-  it("undoes when the stroke starts on a cell already marked with the brush", () => {
+  it("leaves the answers it started from untouched", () => {
+    const base = { mon9: "IF_NEEDED" as const };
+    paintRect(base, grid, { day: 0, time: 0 }, { day: 0, time: 0 }, "YES");
+    paintRect(base, grid, { day: 0, time: 0 }, { day: 0, time: 0 }, null);
+    expect(base).toEqual({ mon9: "IF_NEEDED" });
+  });
+
+  it("clears when the stroke starts on a cell already marked with the brush", () => {
     expect(strokeValue(undefined, "YES")).toBe("YES");
-    expect(strokeValue("NO", "YES")).toBe("YES");
-    expect(strokeValue("YES", "YES")).toBe("NO");
-    expect(strokeValue("IF_NEEDED", "IF_NEEDED")).toBe("NO");
+    expect(strokeValue("YES", "YES")).toBeNull();
+    expect(strokeValue("IF_NEEDED", "IF_NEEDED")).toBeNull();
     expect(strokeValue("YES", "IF_NEEDED")).toBe("IF_NEEDED");
-    expect(strokeValue("NO", "NO")).toBe("NO");
   });
 });

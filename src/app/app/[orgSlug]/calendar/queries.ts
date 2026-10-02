@@ -207,10 +207,11 @@ export async function getOrgPolls(db: TxClient, organizationId: string) {
     _max: { endsAt: true },
   });
   // One row per (poll, person): members by user id, guests by key (or, for
-  // rows from before guest keys, by name).
+  // rows from before guest keys, by name). A NO reads as unmarked
+  // (src/lib/polls/poll-view.ts), so someone with only those hasn't responded.
   const respondents = await db.pollResponse.groupBy({
     by: ["pollId", "userId", "guestKeyHash", "guestName"],
-    where: { organizationId, pollId: { in: pollIds } },
+    where: { organizationId, pollId: { in: pollIds }, availability: { not: "NO" } },
   });
   const spanOf = new Map(spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]));
   const respondentCount = new Map<string, number>();

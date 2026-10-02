@@ -1,5 +1,6 @@
 import type { PollAvailability } from "@/generated/prisma/enums";
 import { zonedDateKey, zonedDateTimeLocal } from "@/lib/calendar/dates";
+import type { PollAnswer } from "@/lib/polls/poll-view";
 
 export interface PollSlotLite {
   id: string;
@@ -97,28 +98,28 @@ export function distinctRespondents(
   return [...seen.values()];
 }
 
-/** Who answered what for one slot. Counts drive the heatmap; names the details panel. */
+/** Who marked one slot, and how. Counts drive the heatmap; names the details panel. */
 export interface SlotSummary {
   yes: PollResponseLite[];
   ifNeeded: PollResponseLite[];
-  no: PollResponseLite[];
   /** YES + IF_NEEDED: the number the heatmap shades by, as the ranking counts it. */
   available: number;
 }
 
-const EMPTY_SUMMARY: SlotSummary = { yes: [], ifNeeded: [], no: [], available: 0 };
+const EMPTY_SUMMARY: SlotSummary = { yes: [], ifNeeded: [], available: 0 };
 
+/** A NO reads as an unmarked slot (src/lib/polls/poll-view.ts). */
 export function summarizeSlots(responses: PollResponseLite[]): Map<string, SlotSummary> {
   const map = new Map<string, SlotSummary>();
   for (const r of responses) {
+    if (r.availability === "NO") continue;
     let s = map.get(r.slotId);
     if (!s) {
-      s = { yes: [], ifNeeded: [], no: [], available: 0 };
+      s = { yes: [], ifNeeded: [], available: 0 };
       map.set(r.slotId, s);
     }
     if (r.availability === "YES") s.yes.push(r);
-    else if (r.availability === "IF_NEEDED") s.ifNeeded.push(r);
-    else s.no.push(r);
+    else s.ifNeeded.push(r);
     s.available = s.yes.length + s.ifNeeded.length;
   }
   return map;
@@ -169,34 +170,36 @@ export function legendSteps(total: number): number[] {
 /**
  * The value one stroke paints, decided by the cell it starts on (the
  * when2meet gesture): starting on a cell already marked with the brush
- * undoes it (marks it unavailable); anything else takes the brush.
+ * clears it (null: back to unmarked); anything else takes the brush.
  */
 export function strokeValue(
-  existing: PollAvailability | undefined,
-  brush: PollAvailability,
-): PollAvailability {
-  return existing === brush && brush !== "NO" ? "NO" : brush;
+  existing: PollAnswer | undefined,
+  brush: PollAnswer,
+): PollAnswer | null {
+  return existing === brush ? null : brush;
 }
 
 /**
  * `base` with every slot in the rectangle between `from` and `to` (inclusive,
- * any corner order) set to `value`. Gaps in the grid (a time that doesn't
- * exist on a day) are skipped.
+ * any corner order) set to `value`, or cleared when it is null. Gaps in the
+ * grid (a time that doesn't exist on a day) are skipped.
  */
 export function paintRect(
-  base: Record<string, PollAvailability>,
+  base: Record<string, PollAnswer>,
   grid: PollGrid,
   from: GridPosition,
   to: GridPosition,
-  value: PollAvailability,
-): Record<string, PollAvailability> {
+  value: PollAnswer | null,
+): Record<string, PollAnswer> {
   const next = { ...base };
   const [d0, d1] = from.day <= to.day ? [from.day, to.day] : [to.day, from.day];
   const [t0, t1] = from.time <= to.time ? [from.time, to.time] : [to.time, from.time];
   for (let d = d0; d <= d1; d++) {
     for (let t = t0; t <= t1; t++) {
       const slot = grid.cellFor(grid.days[d], grid.times[t]);
-      if (slot) next[slot.id] = value;
+      if (!slot) continue;
+      if (value) next[slot.id] = value;
+      else delete next[slot.id];
     }
   }
   return next;
