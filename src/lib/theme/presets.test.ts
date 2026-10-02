@@ -5,8 +5,16 @@ import { describe, expect, it } from "vitest";
 
 import { CBC_THEME } from "@/server/bootstrap/cbc-template";
 
+import { contrastRatio, hexToOklch } from "./color";
 import { deriveTokens, TOKEN_NAMES } from "./derive";
-import { CBC_PRESET, DEFAULT_PRESET, findPreset, matchPreset, THEME_PRESETS } from "./presets";
+import {
+  CBC_PRESET,
+  DEFAULT_PRESET,
+  findPreset,
+  GRAPHITE_PRESET,
+  matchPreset,
+  THEME_PRESETS,
+} from "./presets";
 import { HEX_RE } from "./validate";
 
 describe("presets", () => {
@@ -46,6 +54,32 @@ describe("presets", () => {
     expect(CBC_PRESET.dark).toMatchObject({ background: "#141413", primary: "#d97757" });
     // Dark mode: coral primary with an ink label.
     expect(deriveTokens(CBC_PRESET.dark)["primary-foreground"]).toBe("#141413");
+  });
+
+  it("keep the pre-Bananasplit Default greys as Graphite", () => {
+    expect(findPreset("graphite")).toBe(GRAPHITE_PRESET);
+    expect(GRAPHITE_PRESET.light).toEqual({
+      primary: "#171717",
+      accent: "#737373",
+      background: "#ffffff",
+      surface: "#ffffff",
+      text: "#0a0a0a",
+    });
+    expect(GRAPHITE_PRESET.dark).toMatchObject({ background: "#0a0a0a", primary: "#e5e5e5" });
+  });
+
+  it("keep the Bananasplit highlighter a fill and its primary clear of the destructive red", () => {
+    // Banana on vanilla is a highlighter, never text; raspberry reads as a link.
+    expect(
+      contrastRatio(DEFAULT_PRESET.light.accent, DEFAULT_PRESET.light.background),
+    ).toBeLessThan(3);
+    expect(
+      contrastRatio(DEFAULT_PRESET.light.primary, DEFAULT_PRESET.light.background),
+    ).toBeGreaterThan(4.5);
+    const light = deriveTokens(DEFAULT_PRESET.light);
+    const hue = (hex: string) => hexToOklch(hex).h;
+    const gap = Math.abs(((hue(light.primary) - hue(light.destructive) + 540) % 360) - 180);
+    expect(gap).toBeGreaterThan(20);
   });
 
   it("match a palette back to its preset", () => {

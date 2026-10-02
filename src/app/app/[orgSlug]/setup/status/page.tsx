@@ -90,7 +90,7 @@ export default async function SetupStatusPage({
     <div className="max-w-3xl space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="min-w-0 space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Connection status</h1>
+          <h1 className="page-title">Connection status</h1>
           <p className="text-muted-foreground text-sm">
             What {organization.name} is connected to, and what to do when one of them stops.
           </p>

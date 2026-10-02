@@ -63,7 +63,7 @@ export default async function PollsListPage({
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">Polls</h1>
+            <h1 className="page-title">Polls</h1>
             <p className="text-muted-foreground mt-1 text-sm">
               Ask the club a question, or find a time that works for everyone.
             </p>

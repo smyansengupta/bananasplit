@@ -1,18 +1,35 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Anybody, Atkinson_Hyperlegible_Next, Martian_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth/config";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/*
+ * The type system (globals.css, "Riso bulletin"): one expressive display
+ * face pushed to the ends of its width and weight axes for headings and
+ * figures, a body face built for legibility in dense tables and forms, and
+ * a mono for money, dates and labels. All three are variable.
+ */
+const display = Anybody({
+  variable: "--font-anybody",
   subsets: ["latin"],
+  axes: ["wdth"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const body = Atkinson_Hyperlegible_Next({
+  variable: "--font-atkinson",
   subsets: ["latin"],
+  // next/font has no metrics for this face yet, so it can't size-match a
+  // fallback; say so instead of warning on every compile.
+  adjustFontFallback: false,
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
+});
+
+const mono = Martian_Mono({
+  variable: "--font-martian",
+  subsets: ["latin"],
+  axes: ["wdth"],
 });
 
 export const metadata: Metadata = {
@@ -27,7 +44,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${display.variable} ${body.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         {/*

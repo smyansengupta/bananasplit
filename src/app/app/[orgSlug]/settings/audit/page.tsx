@@ -143,7 +143,7 @@ export default async function AuditLogPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Audit log</h1>
+        <h1 className="page-title">Audit log</h1>
         <p className="text-muted-foreground text-sm">
           Who changed what, and when. Entries can&apos;t be edited or deleted.
         </p>

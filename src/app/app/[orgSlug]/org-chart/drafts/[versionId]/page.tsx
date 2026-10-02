@@ -36,7 +36,7 @@ export default async function DraftPage({ params }: PageProps<"/app/[orgSlug]/or
         <ChevronLeft className="size-4" aria-hidden="true" />
         Org Chart
       </Link>
-      <h1 className="text-2xl font-semibold tracking-tight">Review draft v{version.number}</h1>
+      <h1 className="page-title">Review draft v{version.number}</h1>
       <p className="text-muted-foreground text-sm">
         {version.source === "UPLOAD" && version.sourceFilename ? (
           <>

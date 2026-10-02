@@ -100,7 +100,7 @@ export default async function MembersPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Members</h1>
+        <h1 className="page-title">Members</h1>
         <p className="text-muted-foreground text-sm">
           {members.length} member{members.length === 1 ? "" : "s"}
           {canInvite && inviteRows.length > 0

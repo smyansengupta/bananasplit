@@ -70,7 +70,8 @@ export function AppShell({
           Skip to content
         </a>
 
-        <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden flex-col gap-4 border-r p-4 md:sticky md:top-0 md:flex md:h-screen">
+        {/* The zine's spine: grained paper, with a second rule inside the fold. */}
+        <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border paper hidden flex-col gap-4 border-r p-4 shadow-[inset_-4px_0_0_var(--sidebar),inset_-5px_0_0_var(--sidebar-border)] md:sticky md:top-0 md:flex md:h-screen">
           {brand}
           <OrgSwitcher orgs={orgs} activeSlug={orgSlug} />
           <SidebarNav sections={sections} settings={settings} orgId={orgId} pins={pins} />
@@ -91,7 +92,7 @@ export function AppShell({
               </SheetTrigger>
               <SheetContent
                 side="left"
-                className="bg-sidebar text-sidebar-foreground flex w-72 flex-col p-4"
+                className="bg-sidebar text-sidebar-foreground paper flex w-72 flex-col p-4"
               >
                 <SheetHeader className="gap-3 p-0">
                   <SheetTitle className="sr-only">Navigation</SheetTitle>
@@ -118,7 +119,9 @@ export function AppShell({
             >
               <Search className="size-4" />
               <span className="hidden sm:inline">Search</span>
-              <kbd className="bg-muted hidden rounded px-1.5 py-0.5 text-xs sm:inline">⌘K</kbd>
+              <kbd className="bg-muted hidden rounded-sm px-1.5 py-0.5 text-[0.625rem] sm:inline">
+                ⌘K
+              </kbd>
             </Button>
 
             <div className="flex-1" />
@@ -127,7 +130,15 @@ export function AppShell({
             <UserMenu user={user} />
           </header>
 
-          <main id="main-content" className="min-w-0 flex-1 p-4 md:p-6">
+          <main
+            id="main-content"
+            className="reveal-page relative isolate min-w-0 flex-1 p-4 md:p-6"
+          >
+            {/* The accent ink's dot screen, fading out from the top corner. */}
+            <div
+              aria-hidden="true"
+              className="halftone pointer-events-none absolute top-0 right-0 -z-10 h-64 w-[min(34rem,90%)] [mask-image:radial-gradient(ellipse_at_top_right,black,transparent_68%)] opacity-70 dark:opacity-50"
+            />
             <SectionGate orgSlug={orgSlug} sectionPaths={sectionPaths} isAdmin={isAdmin}>
               {children}
             </SectionGate>

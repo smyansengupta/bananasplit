@@ -229,10 +229,7 @@ export function QuestionPoll({
                 {shortDay(poll.createdAt, zone)}
               </span>
             </p>
-            <h1
-              id={headingId}
-              className="text-xl font-semibold tracking-tight break-words sm:text-2xl"
-            >
+            <h1 id={headingId} className="page-title break-words">
               {poll.question}
             </h1>
             {poll.description && (

@@ -33,7 +33,7 @@ export default async function SettingsPage({ params }: PageProps<"/app/[orgSlug]
           </span>
         )}
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <h1 className="page-title">Settings</h1>
           <p className="text-muted-foreground text-sm">
             {organization.name} · {role ? role.charAt(0) + role.slice(1).toLowerCase() : "Member"}
           </p>

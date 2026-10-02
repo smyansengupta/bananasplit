@@ -6,7 +6,7 @@ export default function Loading() {
   return (
     <div className="space-y-6" aria-busy="true">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+        <h1 className="page-title">Reports</h1>
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
       <div className="flex gap-2">

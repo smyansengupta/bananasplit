@@ -92,7 +92,7 @@ export default async function NoteFilePage({
             <Icon className="size-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight">{row.name}</h1>
+            <h1 className="heading truncate text-xl">{row.name}</h1>
             <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-sm">
               <span>
                 {FILE_LABELS[family]} · {formatBytes(row.sizeBytes)}

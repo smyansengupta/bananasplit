@@ -64,7 +64,7 @@ export default async function OrgChartPage({ params, searchParams }: PageProps<"
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">Org Chart</h1>
+          <h1 className="page-title">Org Chart</h1>
           {chart && (
             <p className="text-muted-foreground text-sm">
               Version {chart.number}

@@ -166,7 +166,7 @@ export function PollForm({
           Polls
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">New availability poll</h1>
+          <h1 className="page-title">New availability poll</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             Offer some days and hours; people mark when they&apos;re free, and an admin schedules
             the best time.

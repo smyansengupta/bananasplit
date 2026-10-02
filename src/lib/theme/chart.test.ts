@@ -8,7 +8,7 @@ import {
 } from "./chart";
 import { contrastRatio, hexToOklch, oklchToHex } from "./color";
 import { deriveTokens } from "./derive";
-import { DEFAULT_PRESET } from "./presets";
+import { DEFAULT_PRESET, GRAPHITE_PRESET } from "./presets";
 
 describe("chart palette", () => {
   it("validates the reference palette's first five slots on its own surfaces", () => {
@@ -24,10 +24,10 @@ describe("chart palette", () => {
     expect(light.lowContrast.length).toBeGreaterThan(0);
   });
 
-  it("gives the Default theme the validated default slots", () => {
-    const light = deriveTokens(DEFAULT_PRESET.light);
+  it("gives an achromatic theme (Graphite) the validated default slots", () => {
+    const light = deriveTokens(GRAPHITE_PRESET.light);
     expect([light["chart-1"], light["chart-2"]]).toEqual(["#2a78d6", "#eb6834"]);
-    const dark = deriveTokens(DEFAULT_PRESET.dark);
+    const dark = deriveTokens(GRAPHITE_PRESET.dark);
     expect([
       dark["chart-1"],
       dark["chart-2"],
@@ -35,6 +35,13 @@ describe("chart palette", () => {
       dark["chart-4"],
       dark["chart-5"],
     ]).toEqual(REFERENCE_CHART_PALETTE.dark.slice(0, 5));
+  });
+
+  it("leads the Default (Bananasplit) charts with its raspberry, passing every gate", () => {
+    const { primary, background, surface } = DEFAULT_PRESET.light;
+    const palette = deriveChartPalette(primary, "light", [background, surface]);
+    expect(palette[0]).toBe(primary);
+    expect(checkChartPalette(palette, "light", [background, surface]).ok).toBe(true);
   });
 
   it("snaps a slot's lightness (hue held) until it reads on the surface", () => {

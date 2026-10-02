@@ -44,7 +44,7 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/d
           <ChevronLeft className="size-3" aria-hidden="true" />
           {database.name}
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Import {database.name.toLowerCase()} from CSV</h1>
+        <h1 className="page-title">Import {database.name.toLowerCase()} from CSV</h1>
         <p className="text-muted-foreground text-sm">
           Up to 5,000 rows and 4 MB. Columns: {help.columns} People are matched by email; someone already
           checked in to a session, or already signed up that term, is skipped. Imported rows can be edited and

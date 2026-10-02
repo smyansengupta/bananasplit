@@ -89,7 +89,7 @@ export default async function TaskPage({ params }: PageProps<"/app/[orgSlug]/tas
             </>
           )}
         </nav>
-        <h1 className="text-2xl font-semibold tracking-tight">{task.title}</h1>
+        <h1 className="page-title">{task.title}</h1>
         <div className="rounded-lg border p-4 sm:p-6">
           <TaskPageEditor task={task} initialComments={data.comments} />
         </div>

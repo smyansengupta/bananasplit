@@ -57,7 +57,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <UserAvatar user={profile} size="xl" className="shrink-0" />
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Your profile</h1>
+            <h1 className="page-title">Your profile</h1>
             <p className="text-muted-foreground text-sm">
               Members of your organizations see your name, picture, pronouns, major, bio and links.
               Your email is not shown on people pages.

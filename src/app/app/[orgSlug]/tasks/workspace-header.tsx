@@ -66,7 +66,7 @@ export function WorkspaceHeader({
   return (
     <div className="mb-5 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="font-heading mr-auto text-xl font-semibold tracking-tight">Tasks</h1>
+        <h1 className="page-title mr-auto">Tasks</h1>
 
         {inDestination ? (
           <Button variant="ghost" size="sm" onClick={() => ws.setView("week")} className="gap-1.5">

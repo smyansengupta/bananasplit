@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { AuthFrame } from "@/components/auth/auth-frame";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth/config";
 
@@ -12,16 +13,16 @@ export default async function SignUpPage() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
+    <AuthFrame>
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle>Create your account</CardTitle>
+          <CardTitle className="text-2xl">Create your account</CardTitle>
           <CardDescription>Sign up with an email and password.</CardDescription>
         </CardHeader>
         <CardContent>
           <SignUpForm />
         </CardContent>
       </Card>
-    </div>
+    </AuthFrame>
   );
 }

@@ -45,7 +45,7 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <UserAvatar user={person} size="2xl" decorative={false} />
           <div className="min-w-0 flex-1 space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight break-words">
+            <h1 className="page-title break-words">
               {displayName}
               {person.pronouns && (
                 <span className="text-muted-foreground ml-2 text-base font-normal">{person.pronouns}</span>

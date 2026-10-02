@@ -99,7 +99,7 @@ export function StepCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
-            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+            <h1 className="heading text-xl">{title}</h1>
             {step && (
               <span className="text-muted-foreground shrink-0 font-mono text-[11px] tabular-nums">
                 {step.index} / {step.total}

@@ -75,7 +75,7 @@ export default async function NotesPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Notes</h1>
+        <h1 className="page-title">Notes</h1>
         <NotesNewMenu
           orgId={org.id}
           orgSlug={orgSlug}

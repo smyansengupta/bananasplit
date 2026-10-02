@@ -56,7 +56,7 @@ export default async function CalendarPage({ params, searchParams }: PageProps<"
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
+        <h1 className="page-title">Calendar</h1>
         <div className="flex flex-wrap gap-2">
           {can({ role }, "events.write") && <CalendarShotButton orgId={org.id} orgSlug={orgSlug} />}
           <Button variant="outline" size="sm" asChild>

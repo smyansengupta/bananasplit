@@ -32,7 +32,7 @@ export default async function PeoplePage({ params, searchParams }: PageProps<"/a
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">People</h1>
+          <h1 className="page-title">People</h1>
           <p className="text-muted-foreground text-sm">
             {q
               ? `${total} ${total === 1 ? "match" : "matches"} for “${q}”`

@@ -72,10 +72,10 @@ const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numer
 
 function Big({ value, sub, tone }: { value: ReactNode; sub?: ReactNode; tone?: "good" | "bad" }) {
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
       <p
         className={cn(
-          "text-2xl font-semibold tabular-nums",
+          "numeral text-[2.5rem] break-all",
           tone === "good" && "text-success",
           tone === "bad" && "text-destructive",
         )}
@@ -172,7 +172,8 @@ export function WidgetBody({
       );
     case "in-out":
       return (
-        <div className="grid grid-cols-2 gap-3">
+        // Side by side when the widget is wide enough, stacked when not.
+        <div className="flex flex-wrap gap-x-6 gap-y-3">
           <Big value={money(data.inTotalCents)} sub="In" tone="good" />
           <Big value={money(data.outTotalCents)} sub="Out" />
         </div>

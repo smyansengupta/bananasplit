@@ -60,7 +60,7 @@ export default async function VersionsPage({ params }: PageProps<"/app/[orgSlug]
           <ChevronLeft className="size-4" aria-hidden="true" />
           Org Chart
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Version history</h1>
+        <h1 className="page-title">Version history</h1>
         <p className="text-muted-foreground text-sm">
           Every import and edit is a numbered version. Restoring copies an old version forward and publishes it; nothing is
           deleted.
