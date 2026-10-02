@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { AuthFrame } from "@/components/auth/auth-frame";
-import { GoogleIcon } from "@/components/google-icon";
-import { Button } from "@/components/ui/button";
+import { AuthOrDivider, GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
-import { auth, signIn } from "@/lib/auth/config";
+import { auth } from "@/lib/auth/config";
 import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 
 import { PasswordSignInForm } from "./password-sign-in-form";
@@ -62,23 +60,8 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
           )}
           {googleEnabled && (
             <>
-              <form
-                action={async () => {
-                  "use server";
-                  await signIn("google", callbackUrl ? { redirectTo: callbackUrl } : undefined);
-                }}
-              >
-                <Button type="submit" variant="outline" className="w-full">
-                  <GoogleIcon className="size-4" />
-                  Continue with Google
-                </Button>
-              </form>
-
-              <div className="flex items-center gap-3">
-                <Separator className="flex-1" />
-                <span className="text-muted-foreground text-xs">or</span>
-                <Separator className="flex-1" />
-              </div>
+              <GoogleSignInButton redirectTo={callbackUrl} />
+              <AuthOrDivider />
             </>
           )}
 

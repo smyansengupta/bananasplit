@@ -6,6 +6,7 @@ import {
   ChevronDown,
   FileText,
   FileUp,
+  FolderPlus,
   Globe,
   ListChecks,
   Loader2,
@@ -22,6 +23,7 @@ import { useRef, useState, useTransition } from "react";
 
 import { importNote } from "@/app/app/[orgSlug]/notes/actions";
 import { DocumentPreview } from "@/components/notes/file-preview";
+import { NewFolderForm } from "@/components/notes/new-folder-form";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,12 +42,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toaster";
 import { NOTE_FILE_ACCEPT } from "@/lib/files/types";
 import { noteSchemaExtensions } from "@/lib/notes/schema-extensions";
 import { NOTE_TEMPLATES } from "@/lib/notes/templates";
 import { cn } from "@/lib/utils";
 
-type Dialogs = "word" | "google" | "upload" | null;
+type Dialogs = "word" | "google" | "upload" | "folder" | null;
 type Visibility = "ORGANIZATION" | "PRIVATE";
 
 const TEMPLATE_ICONS: Record<string, LucideIcon> = { Users, CalendarDays, Target, ListChecks };
@@ -122,8 +125,8 @@ function FolderSelect({
 /**
  * Notes › New: a blank note or one from a template, a Word document or
  * Google Doc turned into a note (with a preview first, so you see what
- * came across before it's made), or a file for the Files tab. Everything
- * lands in the folder you're looking at unless you pick another.
+ * came across before it's made), a file for the Files tab, or a folder.
+ * Everything lands in the folder you're looking at unless you pick another.
  */
 export function NotesNewMenu({
   orgId,
@@ -372,8 +375,33 @@ export function NotesNewMenu({
             <Upload className="size-4" aria-hidden="true" />
             Upload a file (PDF, slides, images…)
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => show("folder")}>
+            <FolderPlus className="size-4" aria-hidden="true" />
+            Folder
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={open === "folder"} onOpenChange={(o) => setOpen(o ? "folder" : null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>New folder</DialogTitle>
+            <DialogDescription>
+              Folders are shared with the club. Drag notes and files onto one to file them.
+            </DialogDescription>
+          </DialogHeader>
+          <NewFolderForm
+            orgId={orgId}
+            autoFocus
+            onCreated={(folder) => {
+              setOpen(null);
+              toast({ title: `Folder “${folder.name}” created`, tone: "success", duration: 4_000 });
+              router.push(`/app/${orgSlug}/notes?folder=${encodeURIComponent(folder.id)}`);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open === "word"} onOpenChange={(o) => !busy && setOpen(o ? "word" : null)}>
         <DialogContent className={cn("max-h-[92vh] overflow-y-auto", draft ? "sm:max-w-4xl" : "sm:max-w-md")}>

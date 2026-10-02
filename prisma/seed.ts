@@ -18,6 +18,7 @@ import {
   Role,
   RSVPStatus,
   SponsorshipStatus,
+  SponsorshipType,
   TaskPriority,
   TaskStatus,
   TransactionDirection,
@@ -552,7 +553,7 @@ async function main() {
     });
   }
 
-  // --- Sponsorships (three lifecycle stages) ---
+  // --- Sponsorships (three lifecycle stages, plus credits) ---
   const acme = await prisma.sponsor.create({
     data: {
       organizationId: orgA.id,
@@ -575,6 +576,14 @@ async function main() {
       name: "Local Eatery",
       contactName: "Robin Ortiz",
       contactEmail: "robin@localeatery.example",
+    },
+  });
+  const cloudNine = await prisma.sponsor.create({
+    data: {
+      organizationId: orgA.id,
+      name: "CloudNine Hosting",
+      contactName: "Avery Chen",
+      contactEmail: "avery@cloudnine.example",
     },
   });
 
@@ -630,6 +639,19 @@ async function main() {
       deliverables: "Catering discount for members",
       status: SponsorshipStatus.PROSPECT,
       ownerId: bob.id,
+    },
+  });
+  // Credits: valued for the pipeline, never on the ledger (no transaction).
+  await prisma.sponsorship.create({
+    data: {
+      organizationId: orgA.id,
+      sponsorId: cloudNine.id,
+      budgetPeriodId: orgAPeriod.id,
+      type: SponsorshipType.CREDITS,
+      amountCents: 500_000,
+      deliverables: "Hosting credits for the hackathon; logo on the project page",
+      status: SponsorshipStatus.RECEIVED,
+      ownerId: alice.id,
     },
   });
 

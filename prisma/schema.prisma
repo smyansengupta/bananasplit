@@ -1188,11 +1188,20 @@ enum SponsorshipStatus {
   WRITTEN_OFF
 }
 
+/// CASH is money paid to the club. CREDITS are a sponsor's platform credits
+/// (cloud, API, software): valued in dollars for the pipeline, but never on
+/// the ledger, so marking them received records no transaction.
+enum SponsorshipType {
+  CASH
+  CREDITS
+}
+
 model Sponsorship {
   id             String            @id @default(cuid())
   organizationId String
   sponsorId      String
   budgetPeriodId String
+  type           SponsorshipType   @default(CASH)
   amountCents    Int
   tier           String?
   deliverables   String?

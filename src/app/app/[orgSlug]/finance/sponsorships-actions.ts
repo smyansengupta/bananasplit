@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   SponsorshipStatus,
+  SponsorshipType,
   TransactionDirection,
   TransactionKind,
 } from "@/generated/prisma/client";
@@ -68,6 +69,7 @@ const SPONSORSHIP_STATUS_VALUES = Object.values(SponsorshipStatus) as [
 const sponsorshipInputSchema = z.object({
   sponsorId: z.string(),
   budgetPeriodId: z.string(),
+  type: z.enum([SponsorshipType.CASH, SponsorshipType.CREDITS]).default(SponsorshipType.CASH),
   amountCents: z.number().int().positive("Amount must be greater than zero."),
   tier: z.string().max(100).nullable().optional(),
   deliverables: z.string().max(2000).nullable().optional(),
@@ -108,6 +110,7 @@ export const createSponsorship = withOrgAction(
         organizationId,
         sponsorId: data.sponsorId,
         budgetPeriodId: data.budgetPeriodId,
+        type: data.type,
         amountCents: data.amountCents,
         tier: data.tier || null,
         deliverables: data.deliverables || null,
@@ -130,7 +133,8 @@ export const createSponsorship = withOrgAction(
  * Reaching RECEIVED generates the corresponding IN transaction; nothing
  * before that touches the ledger. Moving back out of RECEIVED voids that
  * transaction rather than deleting it (spec 5.6) — pledged money never
- * silently disappears from the audit trail.
+ * silently disappears from the audit trail. Credits never touch the ledger:
+ * no money changes hands, so their status is all that changes.
  */
 export const updateSponsorshipStatus = withOrgAction(
   async (ctx, sponsorshipId: string, status: string): Promise<ActionResult> => {
@@ -150,8 +154,9 @@ export const updateSponsorshipStatus = withOrgAction(
     if (nextStatus === sponsorship.status) return { sponsorshipId };
 
     let transactionId = sponsorship.transactionId;
+    const isCash = sponsorship.type === SponsorshipType.CASH;
 
-    if (nextStatus === SponsorshipStatus.RECEIVED) {
+    if (isCash && nextStatus === SponsorshipStatus.RECEIVED) {
       const existing = transactionId
         ? await db.transaction.findFirst({ where: { id: transactionId, organizationId } })
         : null;
@@ -195,7 +200,7 @@ export const updateSponsorshipStatus = withOrgAction(
           after: transaction,
         });
       }
-    } else if (sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
+    } else if (isCash && sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
       const existing = await db.transaction.findFirst({
         where: { id: transactionId, organizationId },
       });

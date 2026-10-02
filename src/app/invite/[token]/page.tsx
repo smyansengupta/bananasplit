@@ -1,11 +1,10 @@
 import Link from "next/link";
 
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
-import { GoogleIcon } from "@/components/google-icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { signInPath } from "@/lib/auth/callback-url";
-import { signIn } from "@/lib/auth/config";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 import { sameEmail } from "@/lib/auth/normalize-email";
@@ -60,17 +59,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
       >
         {googleSignInEnabled() ? (
           <>
-            <form
-              action={async () => {
-                "use server";
-                await signIn("google", { redirectTo: `/invite/${token}` });
-              }}
-            >
-              <Button type="submit" variant="outline" className="w-full">
-                <GoogleIcon className="size-4" />
-                Continue with Google
-              </Button>
-            </form>
+            <GoogleSignInButton redirectTo={`/invite/${token}`} />
             <p className="text-muted-foreground mt-3 text-center text-sm">
               Or{" "}
               <Link href={signInPath(`/invite/${token}`)} className="underline underline-offset-4">

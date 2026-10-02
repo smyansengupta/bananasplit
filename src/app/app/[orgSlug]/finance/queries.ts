@@ -174,8 +174,12 @@ export interface DashboardData {
   totalAllocatedCents: number;
   categories: { id: string; name: string; allocatedCents: number; spentCents: number }[];
   outstandingReimbursementsCents: number;
+  /** Cash sponsorships, committed or invoiced and still to come. */
   sponsorshipCommittedCents: number;
+  /** Cash sponsorships received (already ledger income). */
   sponsorshipReceivedCents: number;
+  /** The value of credit sponsorships committed, invoiced or received: never on the ledger. */
+  sponsorshipCreditsCents: number;
   burnByMonth: { month: string; inCents: number; outCents: number }[];
   unreconciledOver60DaysCount: number;
   runway: Runway | null;
@@ -237,6 +241,7 @@ export async function getDashboardData(
       outstandingReimbursementsCents: 0,
       sponsorshipCommittedCents: 0,
       sponsorshipReceivedCents: 0,
+      sponsorshipCreditsCents: 0,
       burnByMonth: [],
       unreconciledOver60DaysCount: 0,
       runway: null,
@@ -374,7 +379,8 @@ export async function getDashboardData(
   const pending = allTransactions.filter(
     (t) => t.kind === TransactionKind.EXPENSE && t.status === TransactionStatus.SUBMITTED,
   );
-  const sponsorshipCommittedCents = sponsorships
+  const cashSponsorships = sponsorships.filter((s) => s.type === "CASH");
+  const sponsorshipCommittedCents = cashSponsorships
     .filter((s) => s.status === "COMMITTED" || s.status === "INVOICED")
     .reduce((sum, s) => sum + s.amountCents, 0);
 
@@ -390,8 +396,15 @@ export async function getDashboardData(
     categories: categorySpent,
     outstandingReimbursementsCents,
     sponsorshipCommittedCents,
-    sponsorshipReceivedCents: sponsorships
+    sponsorshipReceivedCents: cashSponsorships
       .filter((s) => s.status === "RECEIVED")
+      .reduce((sum, s) => sum + s.amountCents, 0),
+    sponsorshipCreditsCents: sponsorships
+      .filter(
+        (s) =>
+          s.type === "CREDITS" &&
+          (s.status === "COMMITTED" || s.status === "INVOICED" || s.status === "RECEIVED"),
+      )
       .reduce((sum, s) => sum + s.amountCents, 0),
     burnByMonth,
     unreconciledOver60DaysCount,

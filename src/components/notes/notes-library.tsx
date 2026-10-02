@@ -39,6 +39,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { ItemMenu } from "@/components/item-menu";
 import { FILE_ICONS, FILE_LABELS } from "@/components/notes/file-card";
+import { NewFolderForm } from "@/components/notes/new-folder-form";
 import { PinToggle } from "@/components/pins/pins-context";
 import {
   DropdownMenu,
@@ -735,7 +736,16 @@ export function NotesLibrary({
               <FolderPlus className="size-4" aria-hidden="true" />
               Make a folder, then drag notes into it
             </button>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNewFolder("")}
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/60 flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors"
+            >
+              <FolderPlus className="size-4 shrink-0" aria-hidden="true" />
+              New folder
+            </button>
+          )}
         </div>
         <div
           {...trashDropProps}
@@ -895,15 +905,18 @@ export function NotesLibrary({
       </div>
       {confirmEl}
       <MoveDialog
+        orgId={orgId}
         item={moving}
         folders={folders}
         onClose={() => setMoving(null)}
-        onMove={(item, folderId) => {
+        onMove={(item, folderId, newName) => {
           setMoving(null);
           run(() =>
             moveToFolderAction(orgId, item.kind === "note" ? { noteIds: [item.id] } : { fileIds: [item.id] }, folderId),
           );
-          const name = folderId ? (folders.find((f) => f.id === folderId)?.name ?? "the folder") : "Not in a folder";
+          const name = folderId
+            ? (newName ?? folders.find((f) => f.id === folderId)?.name ?? "the folder")
+            : "Not in a folder";
           toast({ title: `Moved to ${name}`, description: item.name, duration: 4_000 });
         }}
       />
@@ -912,15 +925,18 @@ export function NotesLibrary({
 }
 
 function MoveDialog({
+  orgId,
   item,
   folders,
   onClose,
   onMove,
 }: {
+  orgId: string;
   item: Item | null;
   folders: LibraryFolder[];
   onClose: () => void;
-  onMove: (item: Item, folderId: string | null) => void;
+  /** `name`: the folder's name, when it was just made (it isn't in `folders` yet). */
+  onMove: (item: Item, folderId: string | null, name?: string) => void;
 }) {
   const choices: { id: string | null; name: string; color: string | null }[] = [
     { id: null, name: "Not in a folder", color: null },
@@ -956,9 +972,16 @@ function MoveDialog({
             );
           })}
         </ul>
-        {folders.length === 0 && (
-          <p className="text-muted-foreground text-xs">No folders yet: make one with the + next to Folders.</p>
-        )}
+        <div className="space-y-1.5 border-t pt-3">
+          <p className="text-muted-foreground text-xs font-medium">
+            {folders.length === 0 ? "No folders yet. Make one and move it there:" : "Or into a new folder:"}
+          </p>
+          <NewFolderForm
+            orgId={orgId}
+            submitLabel="Create and move"
+            onCreated={(folder) => item && onMove(item, folder.id, folder.name)}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );
