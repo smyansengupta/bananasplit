@@ -7,7 +7,8 @@ import type { ComponentProps, FC, ReactNode } from "react";
  * src/components/icons/README.md.
  *
  * No hooks and no context, so an icon renders in a server component without
- * a client boundary.
+ * a client boundary. Each icon is its own module (./glyphs), so a page's
+ * JavaScript carries only the icons it uses.
  */
 
 export type IconProps = ComponentProps<"svg"> & {
@@ -27,9 +28,11 @@ function isLabelled(props: Record<string, unknown>) {
 
 /**
  * An icon component from its drawing. `glyph` is the SVG's children on the
- * 24-unit grid; a filled detail is a seed() below.
+ * 24-unit grid; a filled detail (a seed) sets fill="currentColor"
+ * stroke="none" itself. `motion` names the whole icon's click animation
+ * (motion.css); a part that moves on its own carries data-m itself.
  */
-export function createIcon(name: string, glyph: ReactNode): IconComponent {
+export function createIcon(name: string, glyph: ReactNode, motion?: string): IconComponent {
   const slug = name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 
   function Icon({
@@ -46,7 +49,6 @@ export function createIcon(name: string, glyph: ReactNode): IconComponent {
       : strokeWidth;
     return (
       <svg
-        xmlns="http://www.w3.org/2000/svg"
         width={size}
         height={size}
         viewBox="0 0 24 24"
@@ -57,6 +59,7 @@ export function createIcon(name: string, glyph: ReactNode): IconComponent {
         strokeLinejoin="round"
         color={color === "currentColor" ? undefined : color}
         className={className ? `bs-icon bs-icon-${slug} ${className}` : `bs-icon bs-icon-${slug}`}
+        data-m={motion}
         aria-hidden={children != null || isLabelled(rest) ? undefined : true}
         {...rest}
       >
@@ -68,12 +71,4 @@ export function createIcon(name: string, glyph: ReactNode): IconComponent {
 
   Icon.displayName = name;
   return Icon;
-}
-
-/**
- * A filled dot, the set's detail mark (an "i"'s dot, a list bullet, a
- * window), after the seeds in the logo. Built once, with the glyph.
- */
-export function seed(cx: number, cy: number, r = 1.25) {
-  return <circle cx={cx} cy={cy} r={r} fill="currentColor" stroke="none" />;
 }
