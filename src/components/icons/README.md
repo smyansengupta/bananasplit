@@ -27,7 +27,8 @@ import { CalendarDays, type IconComponent } from "@/components/icons";
   purpose: it matches Bricolage's soft terminals.
 - **Circles:** a full circle is r9 at the centre.
 - **Seeds:** a detail dot (an "i"'s dot, a bullet, a window, the sun's rays) is a filled circle,
-  `seed(cx, cy, r)`, r1–1.75. They're the seeds in the logo.
+  `<circle … r="1.25" fill="currentColor" stroke="none" />`, r1–1.75. They're the seeds in the
+  logo.
 - **Arrowheads** are 5 units on each side, **chevrons** 5.5: shorter than Lucide's 7 and 6.
 - **Badges** (a plus, a check, a clock, a sync) sit in a corner, and the base shape stops short of
   them instead of running underneath ("the split").
@@ -35,19 +36,47 @@ import { CalendarDays, type IconComponent } from "@/components/icons";
 - **Brand glyphs:** `Core` (the logo as a one-colour icon), `Banana`, and `Loader` (the logo's
   three seeds; spin it with `animate-spin`).
 
+## Click animations
+
+Every icon acts out what it means when you click the button or link it sits in: the bell rings,
+Send flies off, History turns back, Merge's branches join, a letter drops into the Inbox. One
+listener on the document (`<IconMotion />` in the root layout) marks the control you clicked with
+`data-icon-play`; `motion.css` does the rest. Nothing plays when the visitor has reduced motion on.
+
+An icon carries its own choreography, so a page ships only the choreography of the icons it uses:
+
+- `data-m` names a movement from `motion.css` (`draw`, `ring`, `fly-ur`, `deliver`...), on a part
+  of the icon or, as `createIcon`'s third argument, on the whole icon. A `draw` part also sets
+  `pathLength="1"`.
+- `data-d="1"`–`"7"` delays a part by 70ms steps, so parts can play in turn.
+- `data-o` sets the pivot: `t`, `b`, `l`, `r`, `bl`, `c` (the icon's centre), or `v` with an inline
+  `transformOrigin` for any other point.
+- A part with `opacity="0"` is only seen while it plays (the letter dropping into the Inbox).
+
+To add a movement, add a line to `motion.css` that sets its keyframe (`--m-k`) and the direction
+or amount it plays with. Keep to transform, opacity and stroke-dashoffset, under a second, and
+ending where the icon started.
+
 ## Adding an icon
 
-Add it to the file in `glyphs/` it belongs with:
+Each icon is its own file in `glyphs/`, named after it in kebab case, and `index.ts` exports it:
 
 ```tsx
+// glyphs/ladle.tsx
+import { createIcon } from "../create-icon";
+
 export const Ladle = /* @__PURE__ */ createIcon(
   "Ladle",
   <>
     <path d="M…" />
-    {seed(12, 7)}
+    <circle cx="12" cy="7" r="1.25" fill="currentColor" stroke="none" />
   </>,
 );
 ```
 
-Keep the `/* @__PURE__ */` mark so unused icons drop out of the bundle. Check it at 16px as well as
-24px: details closer than 2 units fill in at small sizes.
+One file per icon, plain JSX and the `/* @__PURE__ */` mark are what keep a page's JavaScript down
+to the icons it uses. So does `package.json` in this folder: its `"sideEffects"` tells the bundler
+that importing an icon file does nothing but define the icon, so a page that imports two icons from
+`index.ts` gets those two and not the other 263. Keep the glyph files free of shared helpers and of
+imports from one another. Check a new icon at 16px as well as 24px: details closer
+than 2 units fill in at small sizes.

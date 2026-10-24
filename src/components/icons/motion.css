@@ -1,0 +1,1538 @@
+/*
+ * The icons' click animations. Clicking a link or button marks it with
+ * data-icon-play (./motion.ts), and every icon inside it acts out what it
+ * means once: the bell rings, Send flies off, History turns back.
+ *
+ * An icon carries its own choreography: data-m names a movement on the
+ * whole icon or on one part (data-d delays it in 70ms steps, data-o sets
+ * the pivot), so a page ships only the choreography of the icons it uses.
+ * This file holds the movements. Each sets a keyframe (--m-k) and the
+ * direction or amount it plays with; keyframes come back to rest, and
+ * nothing outside transform, opacity and stroke-dashoffset moves, so the
+ * layout never does. With reduced motion on, nothing plays.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-icon-play] [data-m] {
+    animation: var(--m-k) var(--m-t, 520ms) var(--m-e, cubic-bezier(0.34, 1.56, 0.64, 1))
+      calc(var(--m-d, 0) * 70ms) backwards;
+  }
+  [data-icon-play] :where(:not(svg)[data-m]) {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  [data-icon-play] [data-d="1"] {
+    --m-d: 1;
+  }
+  [data-icon-play] [data-d="2"] {
+    --m-d: 2;
+  }
+  [data-icon-play] [data-d="3"] {
+    --m-d: 3;
+  }
+  [data-icon-play] [data-d="4"] {
+    --m-d: 4;
+  }
+  [data-icon-play] [data-d="5"] {
+    --m-d: 5;
+  }
+  [data-icon-play] [data-d="6"] {
+    --m-d: 6;
+  }
+  [data-icon-play] [data-d="7"] {
+    --m-d: 7;
+  }
+  [data-icon-play] [data-o="t"] {
+    transform-origin: 50% 0;
+  }
+  [data-icon-play] [data-o="b"] {
+    transform-origin: 50% 100%;
+  }
+  [data-icon-play] [data-o="l"] {
+    transform-origin: 0 50%;
+  }
+  [data-icon-play] [data-o="r"] {
+    transform-origin: 100% 50%;
+  }
+  [data-icon-play] [data-o="bl"] {
+    transform-origin: 0 100%;
+  }
+  [data-icon-play] [data-o="c"] {
+    transform-box: view-box;
+    transform-origin: 12px 12px;
+  }
+  [data-icon-play] [data-o="v"] {
+    transform-box: view-box;
+  }
+
+  /* Moving across: a nudge goes and comes back, an entry arrives from an offset. */
+  [data-m="nudge-r"] {
+    --m-k: m-nudge;
+    --x: 3px;
+  }
+  [data-m="nudge-l"] {
+    --m-k: m-nudge;
+    --x: -3px;
+  }
+  [data-m="nudge-u"] {
+    --m-k: m-nudge;
+    --y: -3px;
+  }
+  [data-m="nudge-d"] {
+    --m-k: m-nudge;
+    --y: 3px;
+  }
+  [data-m="nudge-ur"] {
+    --m-k: m-nudge;
+    --x: 2.5px;
+    --y: -2.5px;
+  }
+  [data-m="nudge-dl"] {
+    --m-k: m-nudge;
+    --x: -2.5px;
+    --y: 2.5px;
+  }
+  [data-m="swap-u"] {
+    --m-k: m-nudge;
+    --y: -2.5px;
+  }
+  [data-m="swap-d"] {
+    --m-k: m-nudge;
+    --y: 2.5px;
+  }
+  [data-m="retract-u"] {
+    --m-k: m-nudge;
+    --y: -3px;
+  }
+  [data-m="retract-d"] {
+    --m-k: m-nudge;
+    --y: 3px;
+  }
+  [data-m="slide-knob-l"] {
+    --m-k: m-nudge;
+    --x: -3.5px;
+    --m-t: 640ms;
+  }
+  [data-m="slide-knob-r"] {
+    --m-k: m-nudge;
+    --x: 3.5px;
+    --m-t: 640ms;
+  }
+  [data-m="shutter"] {
+    --m-k: m-nudge;
+    --x: 2.5px;
+  }
+  [data-m="recoil"] {
+    --m-k: m-nudge;
+    --x: -2px;
+    --m-t: 360ms;
+  }
+  [data-m="recoil-dl"] {
+    --m-k: m-nudge;
+    --x: -2px;
+    --y: 2px;
+    --m-t: 360ms;
+  }
+  [data-m="press-d"] {
+    --m-k: m-nudge;
+    --y: 1.5px;
+    --m-t: 300ms;
+  }
+  [data-m="press-ul"] {
+    --m-k: m-nudge;
+    --x: -2px;
+    --y: -2px;
+    --m-t: 360ms;
+  }
+  [data-m="sink"] {
+    --m-k: m-nudge;
+    --y: 1.5px;
+    --m-t: 360ms;
+  }
+  [data-m="catch"] {
+    --m-k: m-nudge;
+    --y: 1.5px;
+    --m-t: 360ms;
+  }
+  [data-m="lid"] {
+    --m-k: m-nudge;
+    --y: -3.5px;
+  }
+  [data-m="lid-lift"] {
+    --m-k: m-nudge;
+    --y: -3px;
+  }
+  [data-m="unlatch"] {
+    --m-k: m-nudge;
+    --y: -2.5px;
+  }
+  [data-m="roll"] {
+    --m-k: m-nudge;
+    --x: 2px;
+  }
+  [data-m="bob"] {
+    --m-k: m-nudge;
+    --y: -2.5px;
+    --m-t: 440ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="hop"] {
+    --m-k: m-hop;
+    --m-t: 560ms;
+    --m-e: ease-out;
+  }
+  [data-m="slide-r"] {
+    --m-k: m-enter;
+    --x: -4px;
+  }
+  [data-m="slide-l"] {
+    --m-k: m-enter;
+    --x: 4px;
+  }
+  [data-m="slide-u"] {
+    --m-k: m-enter;
+    --y: 4px;
+  }
+  [data-m="slide-d"] {
+    --m-k: m-enter;
+    --y: -4px;
+  }
+  [data-m="drop"] {
+    --m-k: m-enter;
+    --y: -5px;
+  }
+  [data-m="rise"] {
+    --m-k: m-enter;
+    --y: 5px;
+  }
+  [data-m="sunrise"] {
+    --m-k: m-enter;
+    --y: 4px;
+  }
+  [data-m="count"] {
+    --m-k: m-enter;
+    --y: -4px;
+  }
+  [data-m="feed"] {
+    --m-k: m-enter;
+    --y: -4px;
+  }
+  [data-m="print"] {
+    --m-k: m-enter;
+    --y: 5px;
+  }
+  [data-m="coin-drop"] {
+    --m-k: m-enter;
+    --y: -6px;
+  }
+  [data-m="latch"] {
+    --m-k: m-from;
+    --y: -2.5px;
+  }
+  [data-m="plug-in"] {
+    --m-k: m-from;
+    --y: -3px;
+  }
+  [data-m="cast"] {
+    --m-k: m-from;
+    --y: -4px;
+  }
+  [data-m="glide"] {
+    --m-k: m-from;
+    --x: -4px;
+  }
+  [data-m="join-l"] {
+    --m-k: m-from;
+    --x: -3px;
+  }
+  [data-m="join-r"] {
+    --m-k: m-from;
+    --x: 3px;
+  }
+  [data-m="join-dl"] {
+    --m-k: m-from;
+    --x: -2.5px;
+    --y: 2.5px;
+  }
+  [data-m="join-ur"] {
+    --m-k: m-from;
+    --x: 2.5px;
+    --y: -2.5px;
+  }
+  [data-m="clone"] {
+    --m-k: m-enter;
+    --x: -5px;
+    --y: -5px;
+  }
+
+  /* Flying off one side and coming back in from the other. */
+  [data-m^="fly-"] {
+    --m-k: m-fly;
+    --m-t: 620ms;
+    --m-e: cubic-bezier(0.5, 0, 0.3, 1);
+  }
+  [data-m="fly-r"] {
+    --x: 3px;
+  }
+  [data-m="fly-l"] {
+    --x: -3px;
+  }
+  [data-m="fly-u"] {
+    --y: -3px;
+  }
+  [data-m="fly-d"] {
+    --y: 3px;
+  }
+  [data-m="fly-ur"] {
+    --x: 2.5px;
+    --y: -2.5px;
+  }
+  [data-m="fly-dl"] {
+    --x: -2.5px;
+    --y: 2.5px;
+  }
+  [data-m="fly-dr"] {
+    --x: 2.5px;
+    --y: 2.5px;
+  }
+  [data-m="send"] {
+    --m-k: m-send;
+    --m-t: 760ms;
+    --m-e: cubic-bezier(0.5, 0, 0.3, 1);
+  }
+  [data-m="launch"] {
+    --m-k: m-send;
+    --m-t: 820ms;
+    --m-e: cubic-bezier(0.6, 0, 0.3, 1);
+  }
+  [data-m="emit"] {
+    --m-k: m-emit;
+    --m-t: 640ms;
+    --m-e: ease-out;
+  }
+  [data-m="scan"] {
+    --m-k: m-scan;
+    --m-t: 760ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="look"] {
+    --m-k: m-look;
+    --m-t: 760ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="drift"] {
+    --m-k: m-drift;
+    --m-t: 700ms;
+    --m-e: ease-in-out;
+  }
+
+  /* Things that appear for a moment and leave (they rest at opacity 0). */
+  [data-m="deliver"] {
+    --m-k: m-deliver;
+    --m-t: 760ms;
+    --m-e: ease-in;
+  }
+  [data-m="trickle"] {
+    --m-k: m-trickle;
+    --m-t: 760ms;
+    --m-e: ease-in;
+  }
+  [data-m="typing"] {
+    --m-k: m-typing;
+    --m-t: 760ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="glow"] {
+    --m-k: m-glow;
+    --m-t: 700ms;
+    --m-e: ease-out;
+  }
+
+  /* Turning: a turn arrives from an angle, a wag swings and settles. */
+  [data-m="spin"] {
+    --m-k: m-turn;
+    --a: -360deg;
+    --m-t: 680ms;
+    --m-e: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  [data-m="spin-ccw"] {
+    --m-k: m-turn;
+    --a: 360deg;
+    --m-t: 680ms;
+    --m-e: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  [data-m="spin-slow"] {
+    --m-k: m-turn;
+    --a: -360deg;
+    --m-t: 1100ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="spin-half"] {
+    --m-k: m-turn;
+    --a: -180deg;
+    --m-t: 600ms;
+  }
+  [data-m="spin-pie"] {
+    --m-k: m-turn;
+    --a: -90deg;
+  }
+  [data-m="spin-seeds"] {
+    --m-k: m-turn;
+    --a: -120deg;
+    --m-t: 640ms;
+  }
+  [data-m="rewind"] {
+    --m-k: m-turn;
+    --a: 360deg;
+    --m-t: 760ms;
+    --m-e: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  [data-m="rewind-fast"] {
+    --m-k: m-turn;
+    --a: 720deg;
+    --m-t: 760ms;
+    --m-e: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  [data-m="sweep"] {
+    --m-k: m-turn;
+    --a: -300deg;
+    --m-t: 760ms;
+    --m-e: cubic-bezier(0.45, 0, 0.2, 1);
+  }
+  [data-m="needle"] {
+    --m-k: m-turn;
+    --a: -110deg;
+    --m-t: 760ms;
+  }
+  [data-m="quarter"] {
+    --m-k: m-turn;
+    --a: -90deg;
+  }
+  [data-m="eighth"] {
+    --m-k: m-turn;
+    --a: -45deg;
+  }
+  [data-m="cog"] {
+    --m-k: m-turn;
+    --a: -120deg;
+    --m-t: 640ms;
+  }
+  [data-m="turn-over"] {
+    --m-k: m-turn;
+    --a: 180deg;
+    --m-t: 700ms;
+  }
+  [data-m="star"] {
+    --m-k: m-star;
+    --m-t: 620ms;
+  }
+  [data-m="twist"] {
+    --m-k: m-twist;
+  }
+  [data-m="power-down"] {
+    --m-k: m-twist;
+  }
+  [data-m="fan"] {
+    --m-k: m-turn;
+    --a: -14deg;
+    transform-origin: 0 100%;
+  }
+  [data-m="lean"] {
+    --m-k: m-turn;
+    --a: -16deg;
+  }
+  [data-m="tilt"] {
+    --m-k: m-wag;
+    --a: -12deg;
+  }
+  [data-m="wiggle"] {
+    --m-k: m-wag;
+    --a: 12deg;
+    --m-t: 440ms;
+  }
+  [data-m="tear"] {
+    --m-k: m-wag;
+    --a: -16deg;
+  }
+  [data-m="rock"] {
+    --m-k: m-wag;
+    --a: -22deg;
+    --m-t: 820ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="sway"] {
+    --m-k: m-wag;
+    --a: 18deg;
+    --m-t: 760ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="dangle"] {
+    --m-k: m-wag;
+    --a: 18deg;
+    --m-t: 820ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="carry"] {
+    --m-k: m-wag;
+    --a: 9deg;
+    --m-t: 820ms;
+    --m-e: ease-in-out;
+    transform-origin: 50% 20%;
+  }
+  [data-m="sweep-brush"] {
+    --m-k: m-wag;
+    --a: 16deg;
+    --m-t: 700ms;
+    --m-e: ease-in-out;
+    transform-origin: 50% 10%;
+  }
+  [data-m="key-turn"] {
+    --m-k: m-wag;
+    --a: 35deg;
+    --m-t: 700ms;
+  }
+  [data-m="nib"] {
+    --m-k: m-wag;
+    --a: 14deg;
+  }
+  [data-m="wag"] {
+    --m-k: m-wag;
+    --a: 22deg;
+    --m-t: 700ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="dance"] {
+    --m-k: m-dance;
+    --m-t: 760ms;
+    --m-e: ease-in-out;
+    transform-origin: 40% 90%;
+  }
+  [data-m="nod"] {
+    --m-k: m-nod;
+  }
+  [data-m="ring"] {
+    --m-k: m-ring;
+    --m-t: 820ms;
+    --m-e: ease-out;
+  }
+  [data-m="clap"] {
+    --m-k: m-clap;
+    --m-t: 820ms;
+    --m-e: ease-out;
+  }
+  [data-m="buzz"] {
+    --m-k: m-buzz;
+    --m-t: 620ms;
+    --m-e: linear;
+  }
+  [data-m="alarm"] {
+    --m-k: m-alarm;
+    --m-t: 620ms;
+    --m-e: linear;
+  }
+  [data-m="shake"] {
+    --m-k: m-shake;
+    --m-t: 440ms;
+    --m-e: ease-out;
+  }
+  [data-m="rub"] {
+    --m-k: m-rub;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="scribble"] {
+    --m-k: m-scribble;
+    --m-t: 620ms;
+    --m-e: linear;
+  }
+  [data-m="write"] {
+    --m-k: m-write;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="tap"] {
+    --m-k: m-tap;
+    --m-t: 560ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="pump"] {
+    --m-k: m-pump;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="hum"] {
+    --m-k: m-hum;
+    --m-t: 420ms;
+    --m-e: linear;
+  }
+  [data-m="oink"] {
+    --m-k: m-oink;
+    --m-t: 560ms;
+  }
+  [data-m="snip"] {
+    --m-k: m-snip;
+    --a: -16deg;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="snip-rev"] {
+    --m-k: m-snip;
+    --a: 16deg;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+
+  /* Bigger moves for one icon each. */
+  [data-m="toss"] {
+    --m-k: m-toss;
+    --m-t: 760ms;
+  }
+  [data-m="cheer"] {
+    --m-k: m-cheer;
+    --m-t: 640ms;
+  }
+  [data-m="crown"] {
+    --m-k: m-crown;
+  }
+  [data-m="slip"] {
+    --m-k: m-slip;
+    --m-t: 640ms;
+  }
+  [data-m="pin"] {
+    --m-k: m-pin;
+  }
+  [data-m="stamp"] {
+    --m-k: m-stamp;
+    --m-t: 560ms;
+  }
+  [data-m="thud"] {
+    --m-k: m-thud;
+    --m-t: 560ms;
+  }
+  [data-m="slap"] {
+    --m-k: m-slap;
+  }
+  [data-m="lid-tip"] {
+    --m-k: m-lid-tip;
+    --m-t: 620ms;
+  }
+  [data-m="lid-pop"] {
+    --m-k: m-lid-pop;
+    --m-t: 620ms;
+  }
+  [data-m="chirp"] {
+    --m-k: m-chirp;
+  }
+  [data-m="settle"] {
+    --m-k: m-settle;
+  }
+  [data-m="guard"] {
+    --m-k: m-pulse;
+    --s: 1.08;
+  }
+  [data-m="bolden"] {
+    --m-k: m-pulse;
+    --s: 1.18;
+  }
+  [data-m="listen"] {
+    --m-k: m-pulse;
+    --s: 1.15;
+  }
+  [data-m="glow-core"] {
+    --m-k: m-pulse;
+    --s: 1.2;
+  }
+  [data-m="gleam"] {
+    --m-k: m-gleam;
+  }
+  [data-m="flutter"] {
+    --m-k: m-flutter;
+    --m-t: 760ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="flutter-note"] {
+    --m-k: m-ruffle;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="ruffle"] {
+    --m-k: m-ruffle;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="slant"] {
+    --m-k: m-slant;
+  }
+
+  /* Scaling: things that grow in, stretch, open or blink. */
+  [data-m="grow"] {
+    --m-k: m-grow;
+  }
+  [data-m="grow-x"] {
+    --m-k: m-grow-x;
+    --m-t: 440ms;
+    --m-e: cubic-bezier(0.2, 0.75, 0.15, 1);
+  }
+  [data-m="grow-y"] {
+    --m-k: m-grow-y;
+    --m-t: 440ms;
+    --m-e: cubic-bezier(0.2, 0.75, 0.15, 1);
+  }
+  [data-m="stretch"] {
+    --m-k: m-stretch;
+  }
+  [data-m="stretch-r"] {
+    --m-k: m-stretch;
+    transform-origin: 0 50%;
+  }
+  [data-m="thump"] {
+    --m-k: m-thump;
+    --m-t: 420ms;
+  }
+  [data-m="sift"] {
+    --m-k: m-sift;
+  }
+  [data-m="eq"] {
+    --m-k: m-eq;
+    --m-t: 640ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="spread"] {
+    --m-k: m-spread;
+  }
+  [data-m="unroll"] {
+    --m-k: m-unroll;
+  }
+  [data-m="unfurl"] {
+    --m-k: m-unroll;
+    transform-origin: 50% 0;
+  }
+  [data-m="fold-open"] {
+    --m-k: m-unroll;
+  }
+  [data-m="flap"] {
+    --m-k: m-flap;
+    --m-t: 620ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="hinge"] {
+    --m-k: m-hinge;
+    --m-t: 680ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="flip"] {
+    --m-k: m-flip;
+    --m-t: 560ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="coin"] {
+    --m-k: m-coin;
+    --m-t: 640ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="globe"] {
+    --m-k: m-coin;
+    --m-t: 900ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="blink"] {
+    --m-k: m-blink;
+    --m-t: 360ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="wink"] {
+    --m-k: m-blink;
+    --m-t: 360ms;
+    --m-e: ease-in-out;
+    --m-d: 3;
+  }
+  [data-m="smile"] {
+    --m-k: m-smile;
+  }
+  [data-m="pop"] {
+    --m-k: m-pop;
+  }
+  [data-m="ray"] {
+    --m-k: m-pop;
+    --m-t: 440ms;
+  }
+  [data-m="dab"] {
+    --m-k: m-pop;
+  }
+  [data-m="burst"] {
+    --m-k: m-burst;
+  }
+  [data-m="confetti"] {
+    --m-k: m-confetti;
+  }
+  [data-m="twinkle"] {
+    --m-k: m-twinkle;
+    --m-t: 620ms;
+  }
+  [data-m="hit"] {
+    --m-k: m-hit;
+    --m-t: 440ms;
+  }
+  [data-m="heartbeat"] {
+    --m-k: m-heartbeat;
+    --m-t: 760ms;
+    --m-e: ease-in-out;
+  }
+  [data-m="converge"] {
+    --m-k: m-converge;
+  }
+  [data-m="iris"] {
+    --m-k: m-iris;
+  }
+  [data-m="zoom"] {
+    --m-k: m-pulse;
+    --s: 1.2;
+  }
+  [data-m="shrink"] {
+    --m-k: m-pulse;
+    --s: 0.8;
+  }
+  [data-m="press"] {
+    --m-k: m-pulse;
+    --s: 0.88;
+    --m-t: 380ms;
+  }
+  [data-m="pinch"] {
+    --m-k: m-pinch;
+  }
+  [data-m="crt"] {
+    --m-k: m-crt;
+    --m-t: 560ms;
+  }
+  [data-m="tile"] {
+    --m-k: m-tile;
+  }
+  [data-m="keypress"] {
+    --m-k: m-key;
+    --m-t: 300ms;
+    --m-e: ease-out;
+  }
+  [data-m="snap"] {
+    --m-k: m-key;
+    --m-t: 300ms;
+    --m-e: ease-out;
+    --y: -2px;
+  }
+
+  /* Light: fading in, blinking, flashing. */
+  [data-m="fade"] {
+    --m-k: m-fade;
+    --m-t: 300ms;
+    --m-e: ease-out;
+  }
+  [data-m="light"] {
+    --m-k: m-fade;
+    --m-t: 360ms;
+    --m-e: ease-out;
+  }
+  [data-m="blinkdot"] {
+    --m-k: m-blinkdot;
+    --m-t: 700ms;
+    --m-e: steps(1);
+  }
+  [data-m="flicker"] {
+    --m-k: m-flicker;
+    --m-t: 620ms;
+    --m-e: linear;
+  }
+  [data-m="flash"] {
+    --m-k: m-flash;
+    --m-t: 560ms;
+    --m-e: linear;
+  }
+
+  /* Drawing a stroke from its start. */
+  [data-m="draw"] {
+    --m-k: m-draw;
+    --m-t: 440ms;
+    --m-e: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  [data-m="draw-slow"] {
+    --m-k: m-draw;
+    --m-t: 820ms;
+    --m-e: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  [data-m="draw-rev"] {
+    --m-k: m-draw-rev;
+    --m-t: 520ms;
+    --m-e: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@keyframes m-nudge {
+  40% {
+    transform: translate(var(--x, 0), var(--y, 0));
+  }
+}
+@keyframes m-enter {
+  from {
+    transform: translate(var(--x, 0), var(--y, 0));
+    opacity: 0;
+  }
+}
+@keyframes m-from {
+  from {
+    transform: translate(var(--x, 0), var(--y, 0));
+  }
+}
+@keyframes m-fly {
+  40% {
+    transform: translate(calc(var(--x, 0) * 2.4), calc(var(--y, 0) * 2.4));
+    opacity: 0;
+  }
+  41% {
+    transform: translate(calc(var(--x, 0) * -2), calc(var(--y, 0) * -2));
+    opacity: 0;
+  }
+}
+@keyframes m-send {
+  40% {
+    transform: translate(8px, -8px) scale(0.6);
+    opacity: 0;
+  }
+  41% {
+    transform: translate(-6px, 6px) scale(0.8);
+    opacity: 0;
+  }
+}
+@keyframes m-emit {
+  45% {
+    transform: translateX(3px) scale(1.2);
+    opacity: 0;
+  }
+  46% {
+    transform: translateX(-1px);
+    opacity: 0;
+  }
+}
+@keyframes m-scan {
+  30% {
+    transform: translateY(-5px);
+  }
+  70% {
+    transform: translateY(5px);
+  }
+}
+@keyframes m-look {
+  25% {
+    transform: translate(-2px, -1px);
+  }
+  55% {
+    transform: translate(2px, -1.5px);
+  }
+  80% {
+    transform: translate(0, 1px);
+  }
+}
+@keyframes m-drift {
+  35% {
+    transform: translateX(-1.5px);
+  }
+  70% {
+    transform: translateX(1.5px);
+  }
+}
+@keyframes m-deliver {
+  0% {
+    transform: translateY(-7px);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(3px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+}
+@keyframes m-trickle {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  85% {
+    transform: translateY(14px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+}
+@keyframes m-typing {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  40%,
+  70% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+@keyframes m-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+@keyframes m-turn {
+  from {
+    transform: rotate(var(--a));
+  }
+}
+@keyframes m-wag {
+  25% {
+    transform: rotate(var(--a));
+  }
+  55% {
+    transform: rotate(calc(var(--a) * -0.6));
+  }
+  80% {
+    transform: rotate(calc(var(--a) * 0.25));
+  }
+}
+@keyframes m-star {
+  from {
+    transform: rotate(-72deg) scale(0.6);
+  }
+  60% {
+    transform: rotate(8deg) scale(1.12);
+  }
+}
+@keyframes m-twist {
+  from {
+    transform: rotate(-45deg) scale(0.75);
+  }
+}
+@keyframes m-dance {
+  25% {
+    transform: rotate(-12deg) translateY(-1.5px);
+  }
+  50% {
+    transform: rotate(10deg);
+  }
+  75% {
+    transform: rotate(-6deg) translateY(-1px);
+  }
+}
+@keyframes m-nod {
+  35% {
+    transform: translateY(1.5px) rotate(-8deg);
+  }
+}
+@keyframes m-ring {
+  10% {
+    transform: rotate(18deg);
+  }
+  25% {
+    transform: rotate(-16deg);
+  }
+  40% {
+    transform: rotate(12deg);
+  }
+  55% {
+    transform: rotate(-8deg);
+  }
+  70% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes m-clap {
+  15% {
+    transform: translateX(-1.6px);
+  }
+  30% {
+    transform: translateX(1.6px);
+  }
+  45% {
+    transform: translateX(-1.2px);
+  }
+  60% {
+    transform: translateX(0.8px);
+  }
+}
+@keyframes m-buzz {
+  10%,
+  30%,
+  50%,
+  70% {
+    transform: rotate(-11deg);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: rotate(11deg);
+  }
+}
+@keyframes m-alarm {
+  10%,
+  30%,
+  50%,
+  70% {
+    transform: translate(-1px, -1px) rotate(-6deg);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translate(1px, -1px) rotate(6deg);
+  }
+}
+@keyframes m-shake {
+  20%,
+  60% {
+    transform: translateX(-2px);
+  }
+  40%,
+  80% {
+    transform: translateX(2px);
+  }
+}
+@keyframes m-rub {
+  25%,
+  75% {
+    transform: translateX(-3px) rotate(-4deg);
+  }
+  50% {
+    transform: translateX(3px) rotate(4deg);
+  }
+}
+@keyframes m-scribble {
+  15% {
+    transform: translate(-1.5px, 1px);
+  }
+  30% {
+    transform: translate(1.5px, -1px);
+  }
+  45% {
+    transform: translate(-1px, 1.5px);
+  }
+  60% {
+    transform: translate(1.5px, 0);
+  }
+  75% {
+    transform: translate(-1px, -1px);
+  }
+}
+@keyframes m-write {
+  30%,
+  70% {
+    transform: translate(-2px, 2px) rotate(-8deg);
+  }
+  50% {
+    transform: none;
+  }
+}
+@keyframes m-tap {
+  25%,
+  75% {
+    transform: translate(-1.5px, 1.5px);
+  }
+  50% {
+    transform: none;
+  }
+}
+@keyframes m-pump {
+  25%,
+  75% {
+    transform: translateY(2px) rotate(3deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+}
+@keyframes m-hum {
+  25%,
+  75% {
+    transform: translateY(0.6px);
+  }
+  50% {
+    transform: translateY(-0.6px);
+  }
+}
+@keyframes m-oink {
+  30% {
+    transform: rotate(-6deg) scale(1.06);
+  }
+  60% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes m-snip {
+  30%,
+  70% {
+    transform: rotate(var(--a));
+  }
+  50% {
+    transform: none;
+  }
+}
+@keyframes m-toss {
+  40% {
+    transform: translateY(-6px) rotate(-20deg);
+  }
+  70% {
+    transform: translateY(0) rotate(4deg);
+  }
+}
+@keyframes m-cheer {
+  35% {
+    transform: translateY(-3px) rotate(-8deg);
+  }
+  65% {
+    transform: rotate(6deg);
+  }
+}
+@keyframes m-crown {
+  from {
+    transform: translateY(-5px) rotate(-12deg);
+    opacity: 0.3;
+  }
+}
+@keyframes m-slip {
+  35% {
+    transform: translateX(-3px) rotate(-25deg);
+  }
+  65% {
+    transform: translateX(1px) rotate(8deg);
+  }
+}
+@keyframes m-pin {
+  from {
+    transform: translateY(-6px) rotate(-20deg);
+    opacity: 0.3;
+  }
+}
+@keyframes m-stamp {
+  35% {
+    transform: translateY(-4px) scale(0.95);
+  }
+  55% {
+    transform: translateY(1px) scale(1.12, 0.86);
+  }
+}
+@keyframes m-thud {
+  30% {
+    transform: translateY(-5px);
+  }
+  55% {
+    transform: scale(1.12, 0.86);
+  }
+}
+@keyframes m-slap {
+  from {
+    transform: translate(-3px, -3px) rotate(-20deg);
+    opacity: 0.3;
+  }
+}
+@keyframes m-lid-tip {
+  40% {
+    transform: translateY(-2px) rotate(-20deg);
+  }
+}
+@keyframes m-lid-pop {
+  40% {
+    transform: translateY(-4px) rotate(-8deg);
+  }
+}
+@keyframes m-chirp {
+  30% {
+    transform: scale(0.85) rotate(-6deg);
+  }
+  65% {
+    transform: scale(1.08) rotate(3deg);
+  }
+}
+@keyframes m-settle {
+  35% {
+    transform: scale(1.06, 0.92);
+  }
+  65% {
+    transform: scale(0.97, 1.04);
+  }
+}
+@keyframes m-pulse {
+  40% {
+    transform: scale(var(--s, 1.15));
+  }
+}
+@keyframes m-gleam {
+  40% {
+    transform: scale(1.08) rotate(6deg);
+  }
+}
+@keyframes m-flutter {
+  25% {
+    transform: skewY(-10deg);
+  }
+  50% {
+    transform: skewY(8deg);
+  }
+  75% {
+    transform: skewY(-4deg);
+  }
+}
+@keyframes m-ruffle {
+  25% {
+    transform: skewX(8deg);
+  }
+  55% {
+    transform: skewX(-6deg);
+  }
+  80% {
+    transform: skewX(2deg);
+  }
+}
+@keyframes m-slant {
+  from {
+    transform: skewX(-18deg);
+  }
+}
+@keyframes m-grow {
+  from {
+    transform: scale(0);
+  }
+}
+@keyframes m-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes m-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes m-stretch {
+  from {
+    transform: scaleX(0.2);
+  }
+  60% {
+    transform: scaleX(1.15);
+  }
+}
+@keyframes m-thump {
+  30% {
+    transform: scaleX(1.3) scaleY(1.4);
+  }
+}
+@keyframes m-sift {
+  40% {
+    transform: scaleX(0.5);
+  }
+}
+@keyframes m-eq {
+  25% {
+    transform: scaleY(0.4);
+  }
+  55% {
+    transform: scaleY(1.2);
+  }
+  80% {
+    transform: scaleY(0.85);
+  }
+}
+@keyframes m-spread {
+  from {
+    transform: scaleX(0.3);
+  }
+}
+@keyframes m-unroll {
+  from {
+    transform: scaleY(0.25);
+  }
+}
+@keyframes m-hop {
+  30% {
+    transform: translateY(-4px);
+  }
+  55% {
+    transform: none;
+  }
+  72% {
+    transform: translateY(-1.5px);
+  }
+}
+@keyframes m-flap {
+  45% {
+    transform: scaleY(-0.6);
+  }
+}
+@keyframes m-hinge {
+  45% {
+    transform: scaleX(0.35);
+  }
+}
+@keyframes m-flip {
+  50% {
+    transform: scaleX(0);
+  }
+}
+@keyframes m-coin {
+  50% {
+    transform: scaleX(-1);
+  }
+}
+@keyframes m-blink {
+  50% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes m-smile {
+  from {
+    transform: scale(0.5, 0.2);
+  }
+}
+@keyframes m-pop {
+  from {
+    transform: scale(0.3);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+}
+@keyframes m-burst {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+@keyframes m-confetti {
+  from {
+    transform: translate(-3px, 3px) scale(0);
+    opacity: 0;
+  }
+}
+@keyframes m-twinkle {
+  from {
+    transform: scale(0) rotate(-90deg);
+  }
+}
+@keyframes m-hit {
+  from {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+@keyframes m-heartbeat {
+  20%,
+  60% {
+    transform: scale(1.3);
+  }
+  40% {
+    transform: scale(0.95);
+  }
+}
+@keyframes m-converge {
+  from {
+    transform: scale(1.6);
+    opacity: 0.2;
+  }
+}
+@keyframes m-iris {
+  from {
+    transform: scale(0.3);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+}
+@keyframes m-pinch {
+  40% {
+    transform: scale(0.8, 1.05);
+  }
+}
+@keyframes m-crt {
+  from {
+    transform: scale(1, 0.05);
+    opacity: 0.4;
+  }
+}
+@keyframes m-tile {
+  30% {
+    transform: scale(0.55);
+  }
+}
+@keyframes m-key {
+  40% {
+    transform: translateY(var(--y, 1.5px));
+  }
+}
+@keyframes m-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes m-blinkdot {
+  25%,
+  75% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes m-flicker {
+  20%,
+  60% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.6;
+  }
+}
+@keyframes m-flash {
+  15%,
+  45% {
+    opacity: 0.15;
+    transform: scale(1.1);
+  }
+  30% {
+    opacity: 1;
+  }
+}
+@keyframes m-draw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes m-draw-rev {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: -1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
