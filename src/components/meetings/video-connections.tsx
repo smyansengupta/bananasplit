@@ -24,20 +24,51 @@ export function VideoConnections({
   canConnect,
   /** How the last connect attempt went, if the page came back from one. */
   notice = null,
+  /**
+   * Whoever runs this Bananasplit (PLATFORM_ADMIN_EMAILS). Only they can
+   * switch a provider on, so only they are told what is missing.
+   */
+  platformAdmin = false,
   className,
 }: {
   orgId: string;
   connections: readonly MeetingConnection[];
   canConnect: boolean;
   notice?: { ok: boolean; text: string } | null;
+  platformAdmin?: boolean;
   className?: string;
 }) {
   const live = connections.filter((c) => c.connected);
+  // Only what a club can actually connect. A provider this platform has no
+  // OAuth app for is not something a club admin can fix - it is set up once,
+  // for everyone, by whoever runs Bananasplit - so it is not offered here as
+  // if it were one button away.
   const offerable = connections.filter((c) => c.connected || c.available);
   const unavailable = connections.filter((c) => !c.connected && !c.available);
 
   // Nothing connected and nothing an admin could do about it: say nothing.
   if (!canConnect && live.length === 0) return null;
+  // Nothing switched on for the platform yet: one honest line, and for the
+  // person who can switch them on, exactly what is missing.
+  if (offerable.length === 0) {
+    return (
+      <section
+        className={cn(
+          "bg-card text-card-foreground edge rounded-card flex flex-col gap-1 px-4.5 py-3",
+          className,
+        )}
+      >
+        <span className="text-sm font-semibold">Video calls</span>
+        <span className="text-muted-foreground text-[13px]">
+          {platformAdmin
+            ? `Google Meet, Zoom and Teams need an app with each provider before any club can connect them. Add ${unavailable
+                .flatMap((c) => c.missingEnv.slice(0, 1))
+                .join(", ")} and their secrets to this deployment (docs/setup/meeting-providers.md has the steps).`
+            : "Joining links for Google Meet, Zoom and Teams aren't switched on for Bananasplit yet. You can still paste a link into any meeting."}
+        </span>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -117,10 +148,12 @@ export function VideoConnections({
           </form>
         ))}
 
-        {unavailable.length > 0 && (
-          <span className="text-muted-foreground text-[13px]">
-            {unavailable.map((c) => c.label).join(", ")}{" "}
-            {unavailable.length === 1 ? "isn't set up yet" : "aren't set up yet"}
+        {platformAdmin && unavailable.length > 0 && (
+          <span
+            className="text-muted-foreground text-[13px]"
+            title={unavailable.flatMap((c) => c.missingEnv).join(", ")}
+          >
+            {unavailable.map((c) => c.label).join(", ")}: no app yet
           </span>
         )}
       </div>

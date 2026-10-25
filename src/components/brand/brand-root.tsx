@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * Bananasplit's own pages (the home page, sign-in, sign-up, password help,
- * email confirmation, checkout, the 404): Moonstone, never a club's theme.
+ * email confirmation, checkout, the 404): Graphite, never a club's theme.
  * They use the app's own tokens (globals.css), so a page here and a page
- * in the app are built from the same colours, and they default to dark
- * (redesign guide 17). A visitor's stored choice (the footer's switch, or
+ * in the app are built from the same colours, and they open light, as the
+ * app does. A visitor's stored choice (the footer's switch, or
  * the user menu in the app) still wins, and "system" follows the device.
  * `.corona` lights the top of the page with the drifting banana glow.
  *
@@ -35,7 +35,7 @@ export async function BrandRoot({
     );
   }
   return (
-    <ThemeProvider defaultTheme="dark" nonce={nonce}>
+    <ThemeProvider defaultTheme="light" nonce={nonce}>
       <div className={cn("brand corona flex min-h-svh flex-1 flex-col", className)}>{children}</div>
     </ThemeProvider>
   );

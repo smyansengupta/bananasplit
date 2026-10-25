@@ -13,7 +13,7 @@ import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { VisitTracker } from "@/components/shell/pin-button";
 import { SectionGate } from "@/components/shell/section-gate";
 import { type SidebarState } from "@/components/shell/sidebar-mode-context";
-import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
+import { SidebarNav, type SidebarFolder, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { SidebarPanel } from "@/components/shell/sidebar-panel";
 import { SpaceList } from "@/components/shell/space-list";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
@@ -50,6 +50,7 @@ export function AppShell({
   user,
   brand,
   pins = [],
+  folders = [],
   sections,
   sectionPaths = [],
   role = null,
@@ -71,6 +72,8 @@ export function AppShell({
   brand?: React.ReactNode;
   /** The member's pins in this org (sidebar, and the pin button's state). */
   pins?: SidebarPin[];
+  /** The space's Files folders, nested under Files in the sidebar. */
+  folders?: SidebarFolder[];
   /** The org's sidebar (Admin panel › Sidebar). */
   sections: NavSection[];
   /**
@@ -145,6 +148,7 @@ export function AppShell({
       sections={sections}
       orgId={orgId}
       pins={pins}
+      folders={folders}
       onNavigate={onNavigate}
       spaces={<SpaceList orgs={orgs} activeSlug={orgSlug} user={user} onNavigate={onNavigate} />}
     />

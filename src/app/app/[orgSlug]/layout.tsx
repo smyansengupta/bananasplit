@@ -19,6 +19,7 @@ import { getSidebarMode } from "@/lib/sidebar-mode-cookie";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { listFolders } from "@/server/notes/folders";
 import { listPins } from "@/server/pins";
 import { guestPollRedirect } from "@/server/polls/guest-redirect";
 import { getShellUser, getViewerPrefs } from "@/server/profiles/queries";
@@ -116,6 +117,23 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   // Someone who joined through an emailed invite before finishing profile
   // setup finishes it first (the flowchart's "Profile complete?").
   const prefs = await getViewerPrefs(ctx.user.id);
+
+  // The Files folders, for the links under Files in the sidebar. Only when the
+  // space has Files at all, and read as the member (folders are shared, so
+  // everyone in the space sees the same list).
+  const sidebarFolders = spaceIncludes(ctx.organization, "files")
+    ? await withOrgTx(ctx.organization.id, ({ db }) =>
+        listFolders(db, ctx.organization.id, ctx.user.id),
+      ).then((rows) =>
+        rows.map((f) => ({
+          id: f.id,
+          name: f.name,
+          color: f.color,
+          href: `/app/${ctx.organization.slug}/notes?folder=${encodeURIComponent(f.id)}`,
+        })),
+      )
+    : [];
+
   if (!prefs.onboardedAt) redirect("/onboarding");
   // The org's OrgTheme row rides along with the per-request org context
   // (React cache()), resolved and re-validated as strict hex before render;
@@ -134,6 +152,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   return (
     <OrgThemeRoot key={ctx.organization.id} theme={theme}>
       <AppShell
+        folders={sidebarFolders}
         orgSlug={ctx.organization.slug}
         orgId={ctx.organization.id}
         orgs={orgs}

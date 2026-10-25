@@ -124,6 +124,8 @@ export interface WorkspaceQuery {
   dueFrom?: string;
   dueTo?: string;
   flagged: boolean;
+  /** Open and due before today (?overdue=1), from the Overdue stat. */
+  overdue: boolean;
   blockers: boolean;
   visibility?: TaskVisibility;
 }
@@ -173,6 +175,7 @@ export function parseWorkspaceQuery(
     dueFrom: str(query.dueFrom),
     dueTo: str(query.dueTo),
     flagged: str(query.flagged) === "1",
+    overdue: str(query.overdue) === "1",
     blockers: str(query.blockers) === "1",
     visibility,
   };
@@ -189,6 +192,7 @@ export function activeFilterCount(q: WorkspaceQuery): number {
     q.dueFrom,
     q.dueTo,
     q.flagged || undefined,
+    q.overdue || undefined,
     q.blockers || undefined,
     q.visibility,
   ].filter(Boolean).length;
@@ -211,6 +215,7 @@ export function workspaceHref(
   if (q.dueFrom) p.set("dueFrom", q.dueFrom);
   if (q.dueTo) p.set("dueTo", q.dueTo);
   if (q.flagged) p.set("flagged", "1");
+  if (q.overdue) p.set("overdue", "1");
   if (q.blockers) p.set("blockers", "1");
   if (q.visibility) p.set("visibility", q.visibility);
   for (const [k, v] of Object.entries(extra ?? {})) {

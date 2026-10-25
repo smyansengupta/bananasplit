@@ -166,6 +166,7 @@ export default async function TasksPage({
     dueFrom: dateParam(ws.dueFrom),
     dueTo: dateParam(ws.dueTo),
     flagged: ws.flagged,
+    overdue: ws.overdue,
     blockers: ws.blockers,
     visibility: ws.visibility,
   };

@@ -8,7 +8,9 @@ import {
   CircleDot,
   ClipboardPaste,
   Layers,
+  ListFilter,
   Plus,
+  X,
 } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -176,13 +178,34 @@ export function WorkspaceHeader({
             value={stats.overdue}
             label="Overdue"
             chip={
-              stats.overdue > 0 ? (
+              stats.overdue > 0 || ws.query.overdue ? (
+                // One control that says what it does, and undoes itself: the
+                // list narrows to exactly the tasks this stat counted, and the
+                // same chip takes the filter off again.
                 <button
                   type="button"
-                  onClick={() => ws.setFilters({ blockers: true })}
+                  aria-pressed={ws.query.overdue}
+                  onClick={() => ws.setFilters({ overdue: !ws.query.overdue })}
                   className="focus-glow rounded-full"
+                  title={
+                    ws.query.overdue
+                      ? "Show every task again"
+                      : "Show only the tasks that are overdue"
+                  }
                 >
-                  <Badge variant="destructive">Show them</Badge>
+                  <Badge variant={ws.query.overdue ? "secondary" : "destructive"} className="gap-1">
+                    {ws.query.overdue ? (
+                      <>
+                        <X className="size-3" aria-hidden="true" />
+                        Clear
+                      </>
+                    ) : (
+                      <>
+                        <ListFilter className="size-3" aria-hidden="true" />
+                        Filter
+                      </>
+                    )}
+                  </Badge>
                 </button>
               ) : undefined
             }
