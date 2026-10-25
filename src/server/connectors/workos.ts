@@ -64,12 +64,22 @@ export interface ConsentChoice {
   label: string;
 }
 
-/** One question on AuthKit's consent screen; the chosen value lands in the token as `claim`. */
+/** Choices under a heading on the consent screen. */
+export interface ConsentChoiceGroup {
+  group: string;
+  choices: ConsentChoice[];
+}
+
+/**
+ * One question on AuthKit's consent screen; the chosen value lands in the
+ * token as `claim`. Choices are all flat or all grouped (the docs show no
+ * mix of the two).
+ */
 export interface ConsentOption {
   claim: string;
   type: "enum";
   label: string;
-  choices: ConsentChoice[];
+  choices: ConsentChoice[] | ConsentChoiceGroup[];
 }
 
 export interface CompleteInput {

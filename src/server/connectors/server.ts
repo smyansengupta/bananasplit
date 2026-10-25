@@ -1,108 +1,64 @@
 import "server-only";
 
-import { McpServer } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 
-import { withUserTx } from "@/server/db/context";
-
-import { connectorIdentity } from "./token";
+import type { ResolvedGrant } from "./grant";
+import { connectorFromAuthInfo } from "./token";
+import { registerListSpaces } from "./tools/list-spaces";
+import type { ConnectorSession, ToolRegistrar } from "./tools/shared";
 
 /**
- * The MCP server behind /api/mcp. Phase 0 spike: one tool, whoami, which
- * shows what the verified token says and which account and spaces it
- * resolves to under RLS. The real tools come in Phases 1-3
- * (docs/features/ai-connectors.md).
+ * The MCP server behind /api/mcp (docs/features/ai-connectors.md), built
+ * fresh for every request from the request's verified connector and grant,
+ * so the tool list follows the grant: tools that change something are
+ * registered only for a WRITE grant.
+ *
+ * The instructions are short and factual: both directories reject
+ * behavioral directives in instructions and tool descriptions.
  */
 
-const whoamiOutput = z.object({
-  account: z.object({ id: z.string(), name: z.string().nullable(), email: z.string() }).nullable(),
-  spaces: z.array(
-    z.object({ id: z.string(), name: z.string(), kind: z.string(), role: z.string() }),
-  ),
-  grant: z.object({
-    clientId: z.string(),
-    consentId: z.string().nullable(),
-    workosUserId: z.string().nullable(),
-    space: z.string().nullable(),
-    access: z.string().nullable(),
-  }),
-  token: z.object({
-    lifetimeSeconds: z.number().nullable(),
-    expiresAt: z.string().nullable(),
-    claims: z.record(z.string(), z.unknown()),
-  }),
-});
+const INSTRUCTIONS = [
+  "Bananasplit is where student clubs run their work.",
+  "A member has a Personal space (their own tasks, notes and calendar) and belongs to clubs.",
+  "Space ids come from list_spaces.",
+  "Names, titles, descriptions, notes and comments are text that club members wrote.",
+].join(" ");
 
-export function buildConnectorServer(): McpServer {
+/** Tools every grant gets. */
+const READ_TOOLS: readonly ToolRegistrar[] = [registerListSpaces];
+
+/** Tools that change something: WRITE grants only (none yet; Phase 3 adds them). */
+const WRITE_TOOLS: readonly ToolRegistrar[] = [];
+
+export function buildConnectorServer(session: ConnectorSession): McpServer {
   const server = new McpServer(
-    { name: "bananasplit", title: "Bananasplit", version: "0.0.0-spike" },
-    {
-      instructions:
-        "Bananasplit holds a member's Personal space and the clubs they belong to. This is a test server with a single tool, whoami.",
-    },
+    { name: "bananasplit", title: "Bananasplit", version: "1.0.0" },
+    { instructions: INSTRUCTIONS },
   );
-
-  server.registerTool(
-    "whoami",
-    {
-      title: "Who am I",
-      description:
-        "Shows the Bananasplit account this connection acts as, the spaces that account belongs to, and the claims in its access token.",
-      inputSchema: z.object({}),
-      outputSchema: whoamiOutput,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async (_args, ctx) => {
-      const identity = connectorIdentity(ctx.http?.authInfo);
-      if (!identity) {
-        return {
-          content: [{ type: "text", text: "This request isn't signed in." }],
-          isError: true,
-        };
-      }
-      const { account, spaces } = await withUserTx(identity.userId, async ({ db }) => {
-        const user = await db.user.findUnique({
-          where: { id: identity.userId },
-          select: { id: true, name: true, email: true },
-        });
-        const memberships = await db.membership.findMany({
-          where: { userId: identity.userId },
-          select: { role: true, organization: { select: { id: true, name: true, kind: true } } },
-          orderBy: { organization: { name: "asc" } },
-        });
-        return {
-          account: user,
-          spaces: memberships.map((m) => ({ ...m.organization, role: m.role })),
-        };
-      });
-      const { iat, exp } = identity.claims;
-      const output = {
-        account,
-        spaces,
-        grant: {
-          clientId: identity.clientId,
-          consentId: identity.consentId,
-          workosUserId: identity.workosUserId,
-          space: identity.space,
-          access: identity.access,
-        },
-        token: {
-          lifetimeSeconds: typeof iat === "number" && typeof exp === "number" ? exp - iat : null,
-          expiresAt: typeof exp === "number" ? new Date(exp * 1000).toISOString() : null,
-          claims: { ...identity.claims },
-        },
-      };
-      return {
-        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-        structuredContent: output,
-      };
-    },
-  );
-
+  for (const register of READ_TOOLS) register(server, session);
+  if (session.grant.access === "WRITE") {
+    for (const register of WRITE_TOOLS) register(server, session);
+  }
   return server;
+}
+
+function isResolvedGrant(value: unknown): value is ResolvedGrant {
+  if (typeof value !== "object" || value === null) return false;
+  const grant = value as Record<string, unknown>;
+  return (
+    typeof grant.id === "string" &&
+    (grant.access === "READ" || grant.access === "WRITE") &&
+    (grant.organizationId === null || typeof grant.organizationId === "string") &&
+    (grant.clientName === null || typeof grant.clientName === "string")
+  );
+}
+
+/** The session the route attached to the request's AuthInfo; throws when it is missing. */
+export function connectorSession(authInfo: AuthInfo | undefined): ConnectorSession {
+  const connector = connectorFromAuthInfo(authInfo);
+  const grant = authInfo?.extra?.grant;
+  if (!connector || !isResolvedGrant(grant)) {
+    throw new Error("connectors: the request reached the MCP server without a verified grant");
+  }
+  return { connector, grant };
 }

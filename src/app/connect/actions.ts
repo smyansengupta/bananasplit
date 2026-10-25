@@ -6,8 +6,8 @@ import { signInPath } from "@/lib/auth/callback-url";
 import { getSession } from "@/lib/auth/session";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { connectorsConfig } from "@/server/connectors/config";
-import { ACCESS_CLAIM, ALL_SPACES, SPACE_CLAIM } from "@/server/connectors/token";
-import { completeExternalAuth, type ConsentOption } from "@/server/connectors/workos";
+import { consentOptions, consentSpaces } from "@/server/connectors/consent";
+import { completeExternalAuth } from "@/server/connectors/workos";
 import { withUserTx } from "@/server/db/context";
 
 import { connectPath } from "./paths";
@@ -24,8 +24,9 @@ function splitName(name: string | null): { firstName?: string; lastName?: string
 /**
  * Continue on /connect: hands the signed-in member to AuthKit (Standalone
  * Connect's complete call, outside any transaction), with the two consent
- * questions AuthKit asks next: which spaces, and read or change. Every
- * refusal comes back to /connect with a result the page explains.
+ * questions AuthKit asks next (src/server/connectors/consent.ts): which
+ * spaces, offering only clubs with AI connectors on, and read or change.
+ * Every refusal comes back to /connect with a result the page explains.
  */
 export async function continueConnectAction(externalAuthId: string): Promise<void> {
   const session = await getSession();
@@ -42,49 +43,20 @@ export async function continueConnectAction(externalAuthId: string): Promise<voi
   );
   if (!limited.allowed) return back("limited");
 
-  const account = await withUserTx(session.user.id, async ({ db }) => {
-    const user = await db.user.findUnique({
+  const user = await withUserTx(session.user.id, ({ db }) =>
+    db.user.findUnique({
       where: { id: session.user.id },
       select: { email: true, name: true, emailVerified: true },
-    });
-    const memberships = await db.membership.findMany({
-      where: { userId: session.user.id },
-      select: { organization: { select: { id: true, name: true, kind: true } } },
-      orderBy: { organization: { name: "asc" } },
-    });
-    return { user, spaces: memberships.map((m) => m.organization) };
-  });
-  if (!account.user) return back("failed");
-  if (!account.user.emailVerified) return back("unverified");
-
-  const personal = account.spaces.filter((s) => s.kind === "PERSONAL");
-  const clubs = account.spaces.filter((s) => s.kind !== "PERSONAL");
-  const consentOptions: ConsentOption[] = [
-    {
-      claim: SPACE_CLAIM,
-      type: "enum",
-      label: "Which spaces it can use",
-      choices: [
-        { value: ALL_SPACES, label: "Personal and all my clubs" },
-        ...personal.map((s) => ({ value: s.id, label: "Personal only" })),
-        ...clubs.map((s) => ({ value: s.id, label: `${s.name} only` })),
-      ],
-    },
-    {
-      claim: ACCESS_CLAIM,
-      type: "enum",
-      label: "What it can do",
-      choices: [
-        { value: "read", label: "Read only" },
-        { value: "write", label: "Read and make changes" },
-      ],
-    },
-  ];
+    }),
+  );
+  if (!user) return back("failed");
+  if (!user.emailVerified) return back("unverified");
+  const spaces = await consentSpaces(session.user.id);
 
   const result = await completeExternalAuth(config, {
     externalAuthId,
-    user: { id: session.user.id, email: account.user.email, ...splitName(account.user.name) },
-    consentOptions,
+    user: { id: session.user.id, email: user.email, ...splitName(user.name) },
+    consentOptions: consentOptions(spaces),
   });
   if (!result.ok) {
     console.warn("[connectors] complete refused", {

@@ -1,14 +1,15 @@
 /**
- * The Phase 0 spike's WorkOS grant tool (docs/features/ai-connectors.md):
- * list or revoke the AI apps a user authorized, through WorkOS's
+ * WorkOS's side of AI connections (docs/features/ai-connectors.md): list
+ * or revoke the AI apps a user authorized, through WorkOS's
  * authorized-applications API. Reads WORKOS_API_KEY and
- * WORKOS_AUTHKIT_DOMAIN from .env; touches no database.
+ * WORKOS_AUTHKIT_DOMAIN from .env (CONNECTORS_ENABLED need not be set);
+ * touches no database, so it doesn't revoke our ConnectorGrant row: the
+ * member's Disconnect on their profile does both.
  *
  *   pnpm tsx --tsconfig tsconfig.scripts.json scripts/connectors-grants.ts list <our user id>
  *   pnpm tsx --tsconfig tsconfig.scripts.json scripts/connectors-grants.ts revoke <our user id> <application id or client id>
  *
- * Our user id is the `account.id` whoami shows (WorkOS keeps it as the
- * user's external_id).
+ * Our user id is User.id (WorkOS keeps it as the user's external_id).
  */
 import "dotenv/config";
 
@@ -34,7 +35,7 @@ function unwrap<T>(label: string, result: WorkosResult<T>): T {
 
 async function main(): Promise<void> {
   const [command, userId, applicationId] = process.argv.slice(2);
-  const config = connectorsConfig();
+  const config = connectorsConfig({ ...process.env, CONNECTORS_ENABLED: "true" });
   if (!config) fail("Set WORKOS_API_KEY and WORKOS_AUTHKIT_DOMAIN in .env first.");
   if ((command !== "list" && command !== "revoke") || !userId) {
     fail(

@@ -6,6 +6,7 @@ import { pill } from "@/components/brand/pill";
 import { signInPath } from "@/lib/auth/callback-url";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
+import { connectorsConfig } from "@/server/connectors/config";
 
 import { continueConnectAction } from "./actions";
 import { connectPath } from "./paths";
@@ -14,7 +15,8 @@ import { connectPath } from "./paths";
  * AuthKit's External Sign-in URI (docs/features/ai-connectors.md): an AI
  * app asked to connect, AuthKit sent the member here with an
  * external_auth_id, and Continue hands them back (a POST, never on load).
- * AuthKit's own consent screen comes next.
+ * AuthKit's own consent screen comes next. With AI connectors off
+ * (src/server/connectors/config.ts) it only says so.
  */
 export const dynamic = "force-dynamic";
 
@@ -75,6 +77,10 @@ export default async function ConnectPage({ searchParams }: PageProps<"/connect"
   const { external_auth_id: rawId, result } = await searchParams;
   const externalAuthId =
     typeof rawId === "string" && rawId.length > 0 && rawId.length <= 512 ? rawId : null;
+
+  if (!connectorsConfig()) {
+    return <Shell title={RESULTS.off.title} description={RESULTS.off.description} />;
+  }
 
   if (!externalAuthId) {
     return (
