@@ -2,6 +2,11 @@ import type { Adapter, AdapterUser } from "next-auth/adapters";
 
 import { normalizeEmail, sameEmail } from "@/lib/auth/normalize-email";
 import { squatterStore, verifiedGoogleEmail } from "@/lib/auth/purge-squatter";
+import {
+  forgetAtWorkosAfterResponse,
+  revokeAllConnectorGrants,
+  type RevokedGrant,
+} from "@/server/connectors/revoke";
 import { authDb } from "@/server/db/clients";
 
 /**
@@ -89,11 +94,19 @@ export async function googleSignInGate(params: {
   if (purged > 0) {
     console.info("[auth] removed an unverified password account before a verified Google sign-in");
   }
-  // Taking the password away also ends any session it opened.
-  await authDb.userCredential.updateMany({
-    where: { passwordHash: { not: null }, user: { email, emailVerified: null } },
-    data: { passwordHash: null, sessionVersion: { increment: 1 } },
+  // Taking the password away also ends any session it opened, and any AI
+  // app it connected (docs/features/ai-connectors.md).
+  const revoked = await authDb.$transaction(async (tx) => {
+    const stripped = await tx.userCredential.updateManyAndReturn({
+      where: { passwordHash: { not: null }, user: { email, emailVerified: null } },
+      data: { passwordHash: null, sessionVersion: { increment: 1 } },
+      select: { userId: true },
+    });
+    const grants: RevokedGrant[] = [];
+    for (const { userId } of stripped) grants.push(...(await revokeAllConnectorGrants(tx, userId)));
+    return grants;
   });
+  forgetAtWorkosAfterResponse(revoked);
   return true;
 }
 

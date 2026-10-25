@@ -11,7 +11,8 @@ export type ProfileSection =
   | "theme"
   | "availability"
   | "notifications"
-  | "calendar";
+  | "calendar"
+  | "ai-apps";
 
 /** The signed-in user's own profile, optionally at one section. */
 export function profileHref(orgSlug: string, section?: ProfileSection): string {
