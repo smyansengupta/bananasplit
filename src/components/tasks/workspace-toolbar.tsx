@@ -112,7 +112,15 @@ export function WorkspaceToolbar() {
         onCommitSearch={commitSearch}
         clearAll={() => router.push(`/app/${org.slug}/tasks?view=${ws.query.view}`)}
       />
-      <div className="flex flex-wrap items-center gap-2 max-md:hidden">
+      {/*
+        A container, not a viewport breakpoint. What makes this bar wrap is
+        the room it actually has, and that is not the window: docking or
+        railing the sidebar moves it by 150px, and a MacBook with the sidebar
+        out had the filters pushed onto a second row while the same window on
+        a desktop was fine. Everything below steps down on @[…]/toolbar.
+      */}
+      <div className="@container/toolbar max-md:hidden">
+        <div className="flex flex-nowrap items-center gap-2 overflow-visible">
         {/* Layout: three shapes of the same question (none on the Free plan). */}
         {ws.layouts.length > 0 && (
           <Segmented
@@ -126,6 +134,10 @@ export function WorkspaceToolbar() {
               compact: true,
               title: `${layout.label}: ${layout.hint} (${index + 1})`,
             }))}
+            // The first thing to go when the bar tightens: five layout names
+            // is most of its width, and each one keeps its icon and its title.
+            labelsFrom="sr-only @[52rem]/toolbar:not-sr-only"
+            className="shrink-0"
           />
         )}
 
@@ -133,7 +145,7 @@ export function WorkspaceToolbar() {
           Scope: whose work, as icons that open up to say what they are on
           hover or focus. The team option only exists if you have reports.
         */}
-        <div className="flex items-center gap-1" role="group" aria-label="Whose tasks">
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Whose tasks">
           {ws.scopes.map((scope) => (
             <ExpandChip
               key={scope.value}
@@ -154,7 +166,7 @@ export function WorkspaceToolbar() {
           <StatusFilter />
         </FiltersMenu>
 
-        <div className="ms-auto flex flex-1 items-center justify-end gap-2 sm:flex-none">
+        <div className="ms-auto flex min-w-0 flex-1 items-center justify-end gap-2">
           {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
           {ws.query.view === "board" && <GroupMenu />}
           <TaskSearch
@@ -163,6 +175,7 @@ export function WorkspaceToolbar() {
             initial={ws.query.q ?? ""}
             onCommit={commitSearch}
           />
+          </div>
         </div>
       </div>
 
@@ -871,6 +884,7 @@ function FiltersMenu({ count, children }: { count: number; children: React.React
   const pills = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
+  const [packed, setPacked] = useState(false);
   const pillList = Children.toArray(children);
   const show = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -887,18 +901,14 @@ function FiltersMenu({ count, children }: { count: number; children: React.React
     if (timer.current) return;
     timer.current = setTimeout(() => {
       timer.current = null;
-      if (pillMenuOpen()) return;
-      setOpen(false);
-    }, 120);
+      if (!pillMenuOpen()) setOpen(false);
+    }, 240);
   };
 
-  // While it's out: once the pointer is anywhere but the chip, the pills or
-  // an open pill menu, fold it away (also after a pill's menu closes with
-  // the pointer already elsewhere, when no pointerleave would fire).
   useEffect(() => {
     if (!open) return;
-    const onMove = (e: PointerEvent) => {
-      const target = e.target as Element | null;
+    const onMove = (event: PointerEvent) => {
+      const target = event.target as Element | null;
       if (!target) return;
       if (ref.current?.contains(target)) return show();
       if (target.closest("[data-radix-popper-content-wrapper]")) return;
@@ -909,54 +919,86 @@ function FiltersMenu({ count, children }: { count: number; children: React.React
     // show/hideSoon only touch refs and state setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  const chip = (expanded: boolean) => (
+    <>
+      <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+      Filters
+      {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
+      <span className="sr-only">{expanded ? " (open)" : ""}</span>
+    </>
+  );
+
   return (
-    <div
-      ref={ref}
-      className="flex items-center gap-1"
-      onPointerEnter={show}
-      onPointerLeave={hideSoon}
-      onFocus={show}
-      onBlur={(e) => {
-        if (!ref.current?.contains(e.relatedTarget as Node | null)) hideSoon();
-      }}
-    >
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
-        onClick={() => setOpen((v) => !v)}
-        className={chipClass(open || count > 0)}
-      >
-        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-        Filters
-        {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
-      </button>
-      <div
-        inert={!open}
-        className={cn(
-          "grid transition-[grid-template-columns] duration-[380ms] ease-(--ease-ink) motion-reduce:transition-none",
-          open ? "grid-cols-[1fr]" : "pointer-events-none grid-cols-[0fr]",
-        )}
-      >
-        {/*
-          The pills slide out one after another, and fold back in the other
-          order (last one first) while the row closes up behind them.
-        */}
-        <div ref={pills} className="flex min-w-0 items-center gap-1 overflow-hidden p-0.5">
+    <div ref={ref} className="flex shrink-0 items-center gap-1">
+      {/*
+        A tight bar (a laptop, or any window with the sidebar docked): the
+        pills have nowhere to slide to, and sliding them anyway is what used
+        to push the whole row onto a second line. They go in a popover
+        instead, stacked, which needs no room in the bar at all.
+      */}
+      <Popover open={packed} onOpenChange={setPacked}>
+        <PopoverTrigger
+          aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
+          className={cn(chipClass(packed || count > 0), "@[64rem]/toolbar:hidden")}
+        >
+          {chip(packed)}
+        </PopoverTrigger>
+        <PopoverContent align="start" className="grid w-64 gap-1.5 p-2">
           {pillList.map((pill, i) => (
-            <span
-              key={i}
-              className={cn(
-                "flex transition-[opacity,transform] duration-200 ease-(--ease-ink) motion-reduce:transition-none",
-                open ? "translate-x-0 opacity-100" : "-translate-x-3 opacity-0",
-              )}
-              style={{
-                transitionDelay: `${(open ? i : pillList.length - 1 - i) * 40}ms`,
-              }}
-            >
+            <div key={i} className="[&>*]:w-full">
               {pill}
-            </span>
+            </div>
           ))}
+        </PopoverContent>
+      </Popover>
+
+      {/* A roomy bar keeps the pills sliding out beside the chip. */}
+      <div
+        className="hidden items-center gap-1 @[64rem]/toolbar:flex"
+        onPointerEnter={show}
+        onPointerLeave={hideSoon}
+        onFocus={show}
+        onBlur={(e) => {
+          if (!ref.current?.contains(e.relatedTarget as Node | null)) hideSoon();
+        }}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
+          onClick={() => setOpen((v) => !v)}
+          className={chipClass(open || count > 0)}
+        >
+          {chip(open)}
+        </button>
+        <div
+          inert={!open}
+          className={cn(
+            "grid transition-[grid-template-columns] duration-[380ms] ease-(--ease-ink) motion-reduce:transition-none",
+            open ? "grid-cols-[1fr]" : "pointer-events-none grid-cols-[0fr]",
+          )}
+        >
+          {/*
+            The pills slide out one after another, and fold back in the other
+            order (last one first) while the row closes up behind them.
+          */}
+          <div ref={pills} className="flex min-w-0 items-center gap-1 overflow-hidden p-0.5">
+            {pillList.map((pill, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "flex transition-[opacity,transform] duration-200 ease-(--ease-ink) motion-reduce:transition-none",
+                  open ? "translate-x-0 opacity-100" : "-translate-x-3 opacity-0",
+                )}
+                style={{
+                  transitionDelay: `${(open ? i : pillList.length - 1 - i) * 40}ms`,
+                }}
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </div>

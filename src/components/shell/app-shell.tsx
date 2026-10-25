@@ -17,6 +17,8 @@ import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { SidebarPanel } from "@/components/shell/sidebar-panel";
 import { SpaceList } from "@/components/shell/space-list";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
+import { CAPSULE_VARIANTS, type CapsuleNext } from "@/components/shell/capsule-variants";
+import type { CapsuleVariant } from "@/lib/shell/capsule-variant";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
 import { Toaster } from "@/components/ui/toaster";
 import type { Role } from "@/generated/prisma/enums";
@@ -61,6 +63,14 @@ export function AppShell({
   sidebarMode = "docked",
   sidebarCookie,
   banner,
+  /**
+   * Which shape the floating bar takes. Three are being compared
+   * (capsule-variants.tsx); "current" is what ships. Picked with ?capsule= so
+   * they can be clicked through side by side, and the losers get deleted.
+   */
+  capsule = "current",
+  /** The next thing happening, for the variant that leads with it. */
+  capsuleNext = null,
   children,
 }: {
   orgSlug: string;
@@ -95,6 +105,8 @@ export function AppShell({
   sidebarCookie?: string;
   /** Above every page: the club's trial or paused notice (SpaceBanner). */
   banner?: React.ReactNode;
+  capsule?: CapsuleVariant;
+  capsuleNext?: CapsuleNext | null;
   children: React.ReactNode;
 }) {
   const [mode, setMode] = useState<SidebarState>(sidebarMode);
@@ -186,14 +198,32 @@ export function AppShell({
         </SidebarPanel>
 
         <div className="flex min-w-0 flex-col">
-          <ToolCapsule
-            menuButton={<NavMenu sections={sections} clubMenu={clubMenu} />}
-            orgId={orgId}
-            orgSlug={orgSlug}
-            user={user}
-            createActions={creatable}
-            onSearch={() => setCommandOpen(true)}
-          />
+          {(() => {
+            const Variant = CAPSULE_VARIANTS[capsule];
+            const props = {
+              menuButton: <NavMenu sections={sections} clubMenu={clubMenu} />,
+              orgId,
+              orgSlug,
+              user,
+              createActions: creatable,
+              onSearch: () => setCommandOpen(true),
+            };
+            return (
+              <div className="pointer-events-none sticky top-0 z-30 flex justify-end pt-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:px-6 md:pt-3.5">
+                {Variant ? <Variant {...props} next={capsuleNext} /> : null}
+              </div>
+            );
+          })()}
+          {capsule === "current" && (
+            <ToolCapsule
+              menuButton={<NavMenu sections={sections} clubMenu={clubMenu} />}
+              orgId={orgId}
+              orgSlug={orgSlug}
+              user={user}
+              createActions={creatable}
+              onSearch={() => setCommandOpen(true)}
+            />
+          )}
           <main
             id="main-content"
             className="reveal-page relative isolate min-w-0 flex-1 py-4 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] max-md:overflow-x-clip md:p-6"
