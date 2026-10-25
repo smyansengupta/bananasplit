@@ -44,6 +44,8 @@ const DAY = 24 * 60 * 60 * 1000;
 
 let adminId = "";
 let reachable = true;
+/** Whether a database answered at all, as opposed to the fixture failing. */
+let databaseUp = false;
 
 /** One run of the job, with the signal and deadline the runner would pass. */
 function runJob(eventId: string, attempt = 1) {
@@ -154,6 +156,22 @@ function readEvent(id: string) {
 }
 
 beforeAll(async () => {
+  // Two different things, and conflating them cost a CI run: a machine with no
+  // database (CI's lint job sets a DATABASE_URL that cannot connect, and every
+  // .db.test.ts is expected to skip) versus a database that is up while this
+  // file's own setup is broken. The second must fail loudly - it is how a whole
+  // suite ends up green without having run.
+  try {
+    await ownerDb.$queryRaw`select 1`;
+    databaseUp = true;
+  } catch {
+    databaseUp = false;
+  }
+  if (!databaseUp) {
+    reachable = false;
+    return;
+  }
+
   // The platform's OAuth client, which a real deployment sets in the
   // environment. The fake Zoom below is what it actually talks to.
   process.env.GOOGLE_MEET_CLIENT_ID = "test-meet-client";
@@ -224,8 +242,16 @@ afterAll(async () => {
 });
 
 describe("the test setup itself", () => {
-  it("is actually talking to the database (or this whole file is a lie)", () => {
-    expect(reachable, "the local database must be up for this file to mean anything").toBe(true);
+  it("either skips because there is no database, or is really talking to one", () => {
+    if (!databaseUp) {
+      // No database here (CI's lint job, a laptop with Postgres stopped).
+      // Every test below returns early, the same as the other .db.test.ts.
+      expect(reachable).toBe(false);
+      return;
+    }
+    // A database answered, so the fixture had no excuse: if it threw, these
+    // tests would all have "passed" without running.
+    expect(reachable, "the database is up, so this file's setup must have built").toBe(true);
     expect(adminId).not.toBe("");
   });
 });

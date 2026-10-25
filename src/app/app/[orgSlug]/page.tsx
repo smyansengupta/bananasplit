@@ -61,6 +61,7 @@ import {
   rsvpSeatsTaken,
 } from "@/server/overview/queries";
 import { buildUpNext } from "@/server/overview/up-next";
+import { hideUpNextCard, showHiddenUpNextCards } from "./up-next-actions";
 import { listPins, listRecent } from "@/server/pins";
 import { listOpenPolls } from "@/server/polls/open-polls";
 import {
@@ -142,10 +143,16 @@ export default async function OrgOverviewPage({
     const myTasks = await getMyOpenTasks(db, org.id, user.id, { limit: MY_TASKS_LIMIT, today });
     const memberCount = await db.membership.count({ where: { organizationId: org.id } });
     const polls = await listOpenPolls(db, org.id, now, 5);
+    // Cards this member hid from their own Up next (own-row RLS).
+    const dismissed = await db.upNextDismissal.findMany({
+      where: { organizationId: org.id, userId: user.id },
+      select: { kind: true, refId: true },
+    });
     const upcomingSend = upcomingPulseSend(now, orgZone, pulseDay, pulseHour);
     return {
       timeZone: tz,
       todayKey: dayKey,
+      hiddenUpNext: dismissed.map((d) => `${d.kind}:${d.refId}`),
       firstName: me?.name?.trim().split(/\s+/)[0] ?? null,
       myTasks,
       taskExtras: await loadTaskExtras(
@@ -319,6 +326,7 @@ export default async function OrgOverviewPage({
     rsvps: data.rsvps,
     going: data.going,
     polls: data.polls,
+    hidden: new Set(data.hiddenUpNext),
   });
 
   const pulseHref = `${base}/pulse`;
@@ -498,7 +506,13 @@ export default async function OrgOverviewPage({
         stats={
           <div className="space-y-[30px]">
             {stats}
-            <UpNext slots={upNext} calendarHref={calendarHref} />
+            <UpNext
+              slots={upNext}
+              calendarHref={calendarHref}
+              onHide={hideUpNextCard.bind(null, org.id)}
+              onShowAll={showHiddenUpNextCards.bind(null, org.id)}
+              hiddenCount={data.hiddenUpNext.length}
+            />
             {started}
           </div>
         }

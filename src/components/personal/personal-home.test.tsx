@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PersonalHomeData } from "@/server/personal/home";
 
+// Up next is a client component: hiding a card redraws the Overview.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
 /**
  * The Personal dashboard as rendered: each section with data, and the empty
  * states that teach what goes there and how to start.

@@ -52,6 +52,8 @@ const db = {
   budgetPeriod: { count: vi.fn() },
   note: { count: vi.fn() },
   databaseDefinition: { count: vi.fn() },
+  // Cards the viewer hid from their own Up next; nobody has hidden any here.
+  upNextDismissal: { findMany: vi.fn(async () => []) },
 };
 
 vi.mock("@/app/app/[orgSlug]/getting-started-actions", () => ({
@@ -61,6 +63,11 @@ vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.getOrgContextBySlug,
   withOrgTx: (_orgId: string, fn: (ctx: { db: typeof db }) => unknown) =>
     Promise.resolve(fn({ db })),
+  // Up next's Hide pulls the server action in through the component.
+  withOrgAction:
+    (handler: (...a: unknown[]) => unknown) =>
+    (...args: unknown[]) =>
+      handler({ db, userId: "u_me", organizationId: "org_cbc" }, ...args.slice(1)),
 }));
 vi.mock("@/server/tasks/queries", () => ({
   getMyOpenTasks: mocks.getMyOpenTasks,
