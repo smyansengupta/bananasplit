@@ -17,6 +17,7 @@ import {
   Plus,
   Ticket,
   Users,
+  Video,
   Wallet,
   X,
   type IconComponent,
@@ -60,6 +61,7 @@ export const NAV_ICONS: Record<string, IconComponent> = {
   NotebookText,
   Ticket,
   Users,
+  Video,
   Wallet,
 };
 

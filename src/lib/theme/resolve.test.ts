@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { deriveDarkRoles, deriveTheme } from "./derive";
-import { CBC_PRESET, DEFAULT_PRESET, GRAPHITE_PRESET, LEGACY_DEFAULT_LIGHT } from "./presets";
+import {
+  CBC_PRESET,
+  DEFAULT_PRESET,
+  GRAPHITE_PRESET,
+  LEGACY_DEFAULT_LIGHT,
+  UNTHEMED_PRESET,
+} from "./presets";
 import { buildThemeRecord } from "./record";
 import { DEFAULT_RESOLVED_THEME, resolveTheme, themeProviderMode } from "./resolve";
 
@@ -9,7 +15,7 @@ describe("resolveTheme", () => {
   it("resolves no row to the default theme, which injects nothing", () => {
     expect(resolveTheme(null)).toBe(DEFAULT_RESOLVED_THEME);
     expect(DEFAULT_RESOLVED_THEME.isDefault).toBe(true);
-    expect(DEFAULT_RESOLVED_THEME.light).toEqual(DEFAULT_PRESET.light);
+    expect(DEFAULT_RESOLVED_THEME.light).toEqual(UNTHEMED_PRESET.light);
     expect(DEFAULT_RESOLVED_THEME.mode).toBe("DARK");
   });
 

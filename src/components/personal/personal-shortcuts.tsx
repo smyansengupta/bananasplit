@@ -6,7 +6,7 @@ import {
   CheckSquare,
   Database,
   FolderOpen,
-  Ticket,
+  Video,
   type IconComponent,
 } from "@/components/icons";
 import Link from "next/link";
@@ -20,7 +20,7 @@ const SHORTCUTS: readonly { path: string; label: string; icon: IconComponent }[]
   { path: "/notes", label: "Files", icon: FolderOpen },
   { path: "/databases", label: "Databases", icon: Database },
   { path: "/calendar/find-a-time", label: "Find a time", icon: CalendarClock },
-  { path: "/calendar/rsvp", label: "RSVPs", icon: Ticket },
+  { path: "/meetings", label: "Meetings", icon: Video },
 ];
 
 /**

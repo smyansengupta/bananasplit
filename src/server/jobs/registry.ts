@@ -240,6 +240,20 @@ export const JOB_KINDS = {
     handler: () => import("@/server/google-calendar/sync").then((m) => m.gcalJob),
     description: "Mirror one Event to Google Calendar (the event service enqueues it).",
   }),
+  // ---- Meetings (docs/features/meetings.md) ----
+  "conference-sync": kind({
+    payload: z.object({ eventId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 30_000,
+    leaseSeconds: 90,
+    tier: "fast",
+    // Runs right after the save that queued it, so the join link appears
+    // within a second or two of creating the meeting.
+    afterEligible: true,
+    handler: () => import("@/server/conference/sync").then((m) => m.conferenceSyncJob),
+    description:
+      "Create, move or cancel one Event's online meeting at Google Meet, Zoom or Teams (key conference-sync:{eventId}; the event service enqueues it).",
+  }),
   "site-rebuild": kind({
     payload: z.object({}).strict(),
     scope: "org",

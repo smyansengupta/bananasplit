@@ -66,7 +66,7 @@ const SUBPAGES: Record<string, string> = {
   "calendar/polls": "Polls",
   "calendar/polls/ask": "Ask a question",
   "calendar/polls/new": "New find-a-time poll",
-  "calendar/rsvp": "RSVPs",
+  "meetings": "Meetings",
   "calendar/sync": "Calendar sync",
   "databases/reports": "Reports",
   "finance/budget": "Budget",

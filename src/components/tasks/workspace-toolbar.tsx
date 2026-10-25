@@ -382,7 +382,7 @@ function MobileToolbar({
         </div>
         {/* The header's Epics button, which a phone's header has no room for. */}
         <Link
-          href={`/app/${org.slug}/tasks/epics`}
+          href={`/app/${org.slug}/tasks?view=roadmap`}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline"
         >
           <Layers className="size-4" aria-hidden="true" />

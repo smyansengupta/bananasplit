@@ -11,7 +11,7 @@ import { TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
  *
  * So the workspace is now one filtered question asked four ways:
  *
- *   LAYOUT  board · week · table · dashboard         (how it is drawn)
+ *   LAYOUT  board · list · table · roadmap · dashboard   (how it is drawn)
  *   SCOPE   mine · team · all                        (whose work)
  *   FILTERS project, status, label, search, due range, flagged, blockers,
  *           visibility                               (which tasks)
@@ -33,8 +33,8 @@ import { TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
  *
  *   ?view=table&owner={id}&status=open   that person's open tasks
  *   ?view=table&assignee={id}            tasks involving that person
- *   ?view=mine                           now the Week layout, scope mine
- *   ?view=board | week | table | dashboard | updates
+ *   ?view=mine | week                    now the List, scope mine
+ *   ?view=board | list | table | roadmap | dashboard | updates
  *   ?view=intake                         the board (Requests is retired)
  *   ?view=calendar                       the Calendar, tasks shown
  *   ?view=team                           the board
@@ -44,10 +44,9 @@ import { TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
 export const TASK_LAYOUTS = [
   { value: "dashboard", label: "Dashboard", hint: "Where things stand" },
   { value: "board", label: "Board", hint: "Move work along" },
-  { value: "week", label: "Week", hint: "What is due, by when" },
   { value: "list", label: "List", hint: "Grouped by epic" },
   { value: "table", label: "Table", hint: "Filter and bulk-edit" },
-  { value: "roadmap", label: "Roadmap", hint: "Epics on a timeline" },
+  { value: "roadmap", label: "Epics", hint: "The big pieces, and where they stand" },
 ] as const;
 
 export type TaskLayout = (typeof TASK_LAYOUTS)[number]["value"];
@@ -94,13 +93,14 @@ export function isDestination(value: unknown): value is TaskDestination {
 }
 
 /**
- * `view=mine` is the old name for "the week, just my work"; the retired
- * team layout, the retired request queue (?view=intake) and the old
- * calendar one open the board. A requested ?view=calendar is sent to the
- * Calendar by the page before this runs.
+ * `view=mine` and `view=week` are the old names for "what is due, just my
+ * work"; the Week layout is gone and the List, scoped to you, is what it was
+ * for. The retired team layout, the retired request queue (?view=intake) and
+ * the old calendar one open the board. A requested ?view=calendar is sent to
+ * the Calendar by the page before this runs.
  */
 export function parseTaskView(value: unknown): TaskView | null {
-  if (value === "mine") return "week";
+  if (value === "mine" || value === "week") return "list";
   if (value === "team" || value === "calendar" || value === "intake") return "board";
   if (isLayout(value) || isDestination(value)) return value;
   return null;
@@ -156,9 +156,10 @@ export function parseWorkspaceQuery(
   // The week is personal by default; every other layout opens on the whole
   // club. An explicit ?owner= or ?assignee= (the deep links other sections
   // publish) also means "this person", so the scope steps out of the way.
-  const defaultScope: TaskScope =
-    raw === "mine" ? "mine" : ownerId || assigneeId ? "all" : view === "week" ? "mine" : "all";
-  const scope = raw === "mine" ? "mine" : (parseScope(str(query.scope)) ?? defaultScope);
+  // The old week links were personal by default, so they stay personal.
+  const personal = raw === "mine" || raw === "week";
+  const defaultScope: TaskScope = personal ? "mine" : ownerId || assigneeId ? "all" : "all";
+  const scope = personal ? "mine" : (parseScope(str(query.scope)) ?? defaultScope);
 
   return {
     view,

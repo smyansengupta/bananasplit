@@ -21,6 +21,7 @@ import {
 import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { SearchField } from "@/components/ui/search-field";
 import { Segmented, chipClass } from "@/components/ui/segmented";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toaster";
@@ -301,7 +302,7 @@ export function PeopleDirectory({
   );
 
   return (
-    <div className={cn("grid items-start gap-[18px]", selectedId && isDesktop && "grid-cols-[minmax(0,1fr)_380px]")}>
+    <div className="grid items-start gap-[18px]">
       <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
         {/* A phone: the one list toolbar (as on Tasks and Files), with the sort on its left (grid and list are one and the same there). */}
         <PhoneToolbar
@@ -515,30 +516,30 @@ export function PeopleDirectory({
         </div>
       </section>
 
-      {selectedId && isDesktop && (
-        <aside
-          aria-labelledby={sheet ? "person-sheet-title" : undefined}
-          aria-label={sheet ? undefined : "Profile"}
-          className="bg-raised rounded-card border-foreground/6 shadow-e2 sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto border"
+      {/*
+        A centred dialog, like the task editor and New event, rather than a
+        panel down the right: a profile is something you open, read and close,
+        not something you work alongside, and the list no longer has to give
+        up a third of its width whenever one is open.
+      */}
+      {isDesktop && (
+        <Dialog
+          open={Boolean(selectedId)}
+          onOpenChange={(open) => {
+            if (open) return;
+            const id = selectedId;
+            update({ person: null });
+            if (id) focusCard(id);
+          }}
         >
-          <div className="relative">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close the profile"
-              className="absolute top-3 right-3 z-10"
-              onClick={() => {
-                const id = selectedId;
-                update({ person: null });
-                focusCard(id);
-              }}
-            >
-              <X aria-hidden="true" />
-            </Button>
-            {profile}
-          </div>
-        </aside>
+          <DialogContent
+            className="max-h-[calc(100dvh-4rem)] overflow-y-auto p-0 sm:max-w-lg"
+            aria-describedby={undefined}
+          >
+            <DialogTitle className="sr-only">{sheet?.name ?? "Profile"}</DialogTitle>
+            {selectedId && profile}
+          </DialogContent>
+        </Dialog>
       )}
 
       {!isDesktop && (

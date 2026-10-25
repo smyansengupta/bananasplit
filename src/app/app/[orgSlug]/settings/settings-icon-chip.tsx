@@ -9,6 +9,7 @@ import {
   Mail,
   Plug,
   Sparkles,
+  Video,
   type IconComponent,
 } from "@/components/icons";
 
@@ -26,6 +27,7 @@ const ICONS: Record<string, IconComponent> = {
   Mail,
   Plug,
   Sparkles,
+  Video,
 };
 
 /**

@@ -10,7 +10,6 @@ import {
   Layers,
   Plus,
 } from "@/components/icons";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -120,7 +119,7 @@ export function WorkspaceHeader({
 
   return (
     <div className="mb-[30px] space-y-[30px] max-md:mb-5 max-md:space-y-4">
-      {/* On a phone: the title, and New task at the top right (Epics is in Filters). */}
+      {/* On a phone: the title, and New task at the top right. */}
       <div className="flex flex-wrap items-end gap-x-4 gap-y-3 max-md:flex-nowrap max-md:items-center">
         <h1 className="page-title mr-auto max-md:min-w-0">{title}</h1>
 
@@ -130,14 +129,7 @@ export function WorkspaceHeader({
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to tasks
             </Button>
-          ) : (
-            <Button variant="outline" className="max-md:hidden" asChild>
-              <Link href={`/app/${org.slug}/tasks/epics`}>
-                <Layers className="size-4" aria-hidden="true" />
-                Epics
-              </Link>
-            </Button>
-          )}
+          ) : null}
 
           {/* New task (the screen's one create), with more ways in its menu. */}
           <CreateSplitButton

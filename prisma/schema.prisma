@@ -100,6 +100,8 @@ model User {
   notificationsActed     Notification[]       @relation("NotificationActor")
   createdJoinCodes       OrgJoinCode[]        @relation("OrgJoinCodeCreatedBy")
   availability           UserAvailability?
+  reminderSends          EventReminderSend[]
+  upNextDismissals       UpNextDismissal[]
   pins                   Pin[]
   recentVisits           RecentVisit[]
   memberPrefs            MemberPrefs[]
@@ -386,6 +388,7 @@ model Organization {
   memberHistory     OrgMemberHistory[]
   secrets           OrgSecret[]
   settings          OrgSettings?
+  upNextDismissals  UpNextDismissal[]
   integrations      OrgIntegration[]
   slugHistory       OrgSlugHistory[]
   exports           OrgExport[]
@@ -566,8 +569,6 @@ enum TaskPriority {
   MEDIUM
   HIGH
 }
-
-
 
 /// The task hierarchy (app.task_hierarchy_guard): an EPIC is always
 /// top-level; a STORY sits at the top or under an EPIC; a TASK at the top,
@@ -1001,6 +1002,18 @@ enum ConferenceProvider {
   OTHER
 }
 
+/**
+ * How a meeting happens (docs/features/meetings.md). Explicit rather than
+ * derived from conferenceProvider and location, because an in-person meeting
+ * with no room picked yet is still in person, and a hybrid one wants both
+ * halves of the form whether or not both are filled in.
+ */
+enum MeetingFormat {
+  ONLINE
+  IN_PERSON
+  HYBRID
+}
+
 model Event {
   id                 String             @id @default(cuid())
   organizationId     String
@@ -1093,6 +1106,43 @@ model Event {
   /// {venmo?, cashapp?, paypal?, zelle?}: where guests pay the host (src/lib/rsvp/pay.ts).
   rsvpPayTo          Json?
 
+  // Meetings (docs/features/meetings.md). `conferenceProvider` and
+  // `conferenceUrl` are older than this and keep their meaning: the provider
+  // and the link people join at. What is new is that Bananasplit can now make
+  // that meeting itself, through the org's connected Meet, Zoom or Teams
+  // account, instead of only labelling a link someone pasted.
+  /// Online, in person, or both.
+  format                 MeetingFormat       @default(IN_PERSON)
+  /// True when we created the meeting through the provider's API, so we may
+  /// also move and cancel it. False for a link someone pasted: we never touch
+  /// a meeting we did not make.
+  conferenceManaged      Boolean             @default(false)
+  /// The provider's own id for the meeting (a Meet space name, a Zoom
+  /// meeting id, a Graph onlineMeeting id), for update and delete.
+  conferenceMeetingId    String?
+  /// WHERE the managed meeting actually lives, which is not always what
+  /// `conferenceProvider` now says: turning the call off, or switching from
+  /// Zoom to Meet, changes what is wanted before the old meeting has been
+  /// cancelled. The job cancels at this one, then clears it.
+  conferenceManagedAt    ConferenceProvider?
+  /// The host's start link, where the provider gives one (Zoom). Never shown
+  /// to guests.
+  conferenceHostUrl      String?
+  /// The passcode, where the meeting has one.
+  conferencePasscode     String?
+  /// Dial-in numbers as the provider returned them: [{country, number, pin?}].
+  conferenceDialIn       Json?
+  /// Same compare-and-set on syncVersion as the Google mirror above.
+  conferenceSyncState    CalendarSyncState   @default(NOT_APPLICABLE)
+  conferenceSyncAttempts Int                 @default(0)
+  conferenceSyncedAt     DateTime?
+  /// Sanitized: no tokens, no email addresses.
+  conferenceSyncError    String?
+  /// How long before it starts to remind people, in minutes, largest first.
+  /// Empty means no reminders. Defaults to the org's
+  /// OrgSettings.meetingReminderMinutes when a meeting is created.
+  reminderMinutes        Int[]               @default([1440, 60])
+
   organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy         User                @relation("EventCreatedBy", fields: [createdById], references: [id])
   host              User?               @relation("EventHost", fields: [hostUserId], references: [id], onDelete: SetNull)
@@ -1107,6 +1157,7 @@ model Event {
   ballotDefinitions BallotDefinition[]
   registrations     EventRegistration[]
   rsvpItems         RsvpItem[]
+  reminderSends     EventReminderSend[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, sourceSessionId])
@@ -1116,6 +1167,7 @@ model Event {
   @@index([organizationId, visibility, deletedAt, startsAt])
   @@index([organizationId, term, startsAt])
   @@index([googleSyncState])
+  @@index([conferenceSyncState])
 }
 
 /// State of an Event's Google Calendar mirror (Phase 7).
@@ -1201,12 +1253,13 @@ model EventRegistration {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  event      Event               @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
-  user       User?               @relation("EventRegistrationUser", fields: [userId], references: [id], onDelete: SetNull)
-  invitedBy  EventRegistration?  @relation("RegistrationInvites", fields: [invitedById], references: [id], onDelete: SetNull)
-  invited    EventRegistration[] @relation("RegistrationInvites")
-  attendance Attendance?         @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
-  itemClaims RsvpItemClaim[]
+  event         Event               @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
+  user          User?               @relation("EventRegistrationUser", fields: [userId], references: [id], onDelete: SetNull)
+  invitedBy     EventRegistration?  @relation("RegistrationInvites", fields: [invitedById], references: [id], onDelete: SetNull)
+  invited       EventRegistration[] @relation("RegistrationInvites")
+  attendance    Attendance?         @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  itemClaims    RsvpItemClaim[]
+  reminderSends EventReminderSend[]
 
   @@unique([eventId, email])
   @@unique([eventId, inviteCode])
@@ -1261,6 +1314,68 @@ model RsvpItemClaim {
 
   @@id([itemId, registrationId])
   @@index([organizationId, registrationId])
+}
+
+/**
+ * One reminder, sent once (docs/features/meetings.md).
+ * Reminders used to be two columns on EventRegistration, which meant exactly
+ * two of them (a day and an hour) and only for public sign-ups. A meeting can
+ * now set any offsets it likes and remind members too, so each send gets a
+ * row instead: the unique key is the idempotency guard, so a retried job can
+ * never send the same reminder twice.
+ * userId is set for a member (EventAttendee), registrationId for a public
+ * sign-up; exactly one of the two.
+ */
+model EventReminderSend {
+  id             String   @id @default(cuid())
+  organizationId String
+  eventId        String
+  /// How far before the start this reminder was for, in minutes.
+  offsetMinutes  Int
+  userId         String?
+  registrationId String?
+  /// The recipient as one non-null value, "u:{userId}" or "g:{registrationId}".
+  /// The idempotency guard is unique on this rather than on the two nullable
+  /// columns, because under Postgres's default NULLS DISTINCT a row with a
+  /// null userId is distinct from itself, and a retried job could send twice.
+  recipientKey   String
+  /// email | sms | app
+  channel        String
+  sentAt         DateTime @default(now())
+
+  event        Event              @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Cascade)
+  user         User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registration EventRegistration? @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  /// The guard: one send per recipient, per offset, per channel.
+  @@unique([eventId, offsetMinutes, channel, recipientKey])
+  @@index([organizationId, eventId])
+  @@index([userId])
+  @@index([registrationId])
+}
+
+/**
+ * A member hid one card from their Overview's "Up next"
+ * (src/server/overview/up-next.ts). Per member, not per org: hiding the stale
+ * poll everyone can see is a personal choice.
+ * kind + refId name the block, the same pair Up next already builds its blocks
+ * from (task, meeting, event, rsvp, poll), so nothing needs a foreign key
+ * here: a dismissal for a deleted thing is simply never matched, and the
+ * maintenance job clears them out.
+ */
+model UpNextDismissal {
+  organizationId String
+  userId         String
+  /// task | meeting | event | rsvp | poll
+  kind           String
+  refId          String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId, kind, refId])
+  @@index([organizationId, userId])
 }
 
 /// organizationId is denormalized from Event (Phase 7) and kept equal by the
@@ -1823,6 +1938,10 @@ model OrgSettings {
   /// covers the seven days ending that day (Sunday: Monday to Sunday).
   weeklyUpdateDay               Int              @default(0)
   reminderLeadDaysDefault       Int              @default(1)
+  /// Default reminder offsets for a new meeting, in minutes, largest
+  /// first (docs/features/meetings.md). A day and an hour, as the RSVP
+  /// reminders were before meetings could set their own.
+  meetingReminderMinutes        Int[]            @default([1440, 60])
   bootstrapTemplate             String?
   bootstrappedAt                DateTime?
   // Phase C1 (guided setup). Progress itself is DERIVED from the
@@ -1870,6 +1989,14 @@ enum IntegrationProvider {
   NETLIFY_BUILD_HOOK
   /// An OpenAI-compatible model API at a fixed vendor address (src/lib/ai/vendors.ts).
   OPENAI_COMPATIBLE
+  // Meeting providers (docs/features/meetings.md). Each is its own
+  // connection, so an org can have Meet without mirroring its calendar, or
+  // Zoom without a Google account at all. Google Meet is a second Google
+  // consent rather than extra scopes on GOOGLE_CALENDAR, so connecting one
+  // never re-prompts for the other.
+  GOOGLE_MEET
+  ZOOM
+  MICROSOFT_TEAMS
 }
 
 enum IntegrationStatus {
@@ -2066,7 +2193,7 @@ model OrgChartVersion {
   editVersion      Int                   @default(1)
   /// The teams this chart names, [{ id, name }] in order (src/lib/org-chart/teams.ts).
   /// Positions pick one (OrgChartPosition.teamId); copied with the positions.
-  teams                Json      @default("[]")
+  teams            Json                  @default("[]")
   createdById      String
   publishedById    String?
   publishedAt      DateTime?

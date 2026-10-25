@@ -62,6 +62,9 @@ const PROVIDER_LABEL: Record<IntegrationProvider, string> = {
   SUPABASE_SOURCE: "website data source password",
   NETLIFY_BUILD_HOOK: "website build hook",
   OPENAI_COMPATIBLE: "AI model API key",
+  GOOGLE_MEET: "Google Meet connection",
+  ZOOM: "Zoom connection",
+  MICROSOFT_TEAMS: "Microsoft Teams connection",
 };
 
 interface SecretRow {
