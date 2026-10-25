@@ -63,6 +63,13 @@ export const PLAN_FEATURES = {
    * ones it makes (LISTED_DEFINITIONS, src/server/databases/types.ts).
    */
   databases: "FREE",
+  /**
+   * AI connectors: the member's own AI app (Claude, ChatGPT, Cursor, VS
+   * Code) reads and changes what they can see here, over MCP
+   * (docs/features/ai-connectors.md). Every plan: the member's app pays for
+   * the model, and a club switches it off in Admin panel > Privacy.
+   */
+  connectors: "FREE",
 
   /** The Overview board of widgets (Personal has its own home). */
   overview: "CLUB",
@@ -261,6 +268,7 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
   people: "People and the org chart",
   finance: "Finance",
   databases: "Databases",
+  connectors: "AI connectors",
   reports: "Reports",
   integrations: "Data connections",
   sidebar: "Arranging the sidebar",
@@ -273,7 +281,12 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
 };
 
 /** Labels that read as plural ("Notes and files are ..."). */
-const PLURAL_FEATURES: ReadonlySet<PlanFeature> = new Set(["taskViews", "teamwork", "files"]);
+const PLURAL_FEATURES: ReadonlySet<PlanFeature> = new Set([
+  "taskViews",
+  "teamwork",
+  "files",
+  "connectors",
+]);
 
 /** Whether a feature's label takes "are" rather than "is". */
 export function isPluralFeature(feature: PlanFeature): boolean {
@@ -294,6 +307,7 @@ export const FEATURE_PITCH: Record<PlanFeature, string> = {
   people: "A member directory with profiles, and an org chart for your officers.",
   finance: "A budget, transactions and reimbursements your treasurer can run.",
   databases: "Attendance, sign-ups and votes, with CSV import.",
+  connectors: "Use your Personal space and clubs from Claude, ChatGPT and other AI apps.",
   reports: "Charts and summaries from your club's databases.",
   integrations: "Google Calendar sync, your own email sender and your website's data.",
   sidebar: "Choose which sections your club uses, their order and their names.",

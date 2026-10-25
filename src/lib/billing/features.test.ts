@@ -23,7 +23,7 @@ const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
 describe("what each plan includes", () => {
-  it("gives Personal Free RSVP pages, tasks, polls, notes and files, databases, and settings", () => {
+  it("gives Personal Free RSVP pages, tasks, polls, notes and files, databases, settings and AI connectors", () => {
     expect(featuresOf("FREE")).toEqual([
       "rsvp",
       "tasks",
@@ -32,6 +32,7 @@ describe("what each plan includes", () => {
       "admin",
       "files",
       "databases",
+      "connectors",
     ]);
     for (const f of ["teamwork", "people", "finance", "reports", "overview", "themes"] as const) {
       expect(planIncludes("FREE", f)).toBe(false);
