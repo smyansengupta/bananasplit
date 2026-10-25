@@ -1,9 +1,15 @@
 # AI connectors: Phase 0 spike runbook
 
 Throwaway harness on `claude/mcp-spike` for the WorkOS questions in the
-plan's Phase 0. The plan itself (`docs/features/ai-connectors.md`) is on
-`claude/personal-files-databases`, not committed yet. Copy the answers
-there when the spike is done, then delete this branch.
+plan's Phase 0. Copy the answers into `docs/features/ai-connectors.md` when
+the spike is done.
+
+**Run these checks on `claude/mcp-spike` (commit `8474061`).** Phase 1
+(`claude/connectors-phase-1-c4119f`) grew the harness into the real
+feature: `whoami`, which the checks below read the claims from, is replaced
+by `list_spaces`, and the endpoint needs `CONNECTORS_ENABLED=true` too. On
+the Phase 1 branch, the `ConnectorGrant` row shows a connection's `sid`
+(`consentId`), access and space instead.
 
 ## What the harness is
 
@@ -104,5 +110,4 @@ Fill in the result column as you go.
 - No plan gating and no club switch.
 - No tools beyond whoami.
 
-Those are Phase 1, built fresh from the plan rather than grown from this
-harness.
+Phase 1 added those, growing this harness rather than starting over.
