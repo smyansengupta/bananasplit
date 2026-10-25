@@ -185,6 +185,7 @@ export const CBC_PRESET: ThemePreset = {
  * no longer the one you get by default.
  */
 export const UNTHEMED_PRESET: ThemePreset = GRAPHITE_PRESET;
+export const UNTHEMED_PRESET_ID = GRAPHITE_PRESET_ID;
 
 export const THEME_PRESETS: readonly ThemePreset[] = [
   GRAPHITE_PRESET,

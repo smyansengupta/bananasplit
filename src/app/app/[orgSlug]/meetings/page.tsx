@@ -16,6 +16,8 @@ import type {
   EventKind,
   MeetingFormat,
 } from "@/generated/prisma/enums";
+import { getUserIdentity } from "@/lib/auth/email-verification";
+import { isPlatformAdmin } from "@/lib/auth/org-creation";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { newRsvpEventHref } from "@/lib/calendar/range";
@@ -100,6 +102,9 @@ export default async function MeetingsPage({
   // Connecting a video account is the same right as any other integration:
   // owners and admins, not everyone who can make an event.
   const canConnectVideo = can(ctx, "integrations.write");
+  // Switching a provider on is platform setup, not club setup: only the
+  // people who run Bananasplit are told what is missing.
+  const platformAdmin = isPlatformAdmin(await getUserIdentity(user.id));
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
@@ -374,6 +379,7 @@ export default async function MeetingsPage({
           orgId={org.id}
           connections={connections}
           canConnect={canConnectVideo}
+          platformAdmin={platformAdmin}
           notice={
             connectCode
               ? connectCode === "connected"

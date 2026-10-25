@@ -1,10 +1,9 @@
 import type { Viewport } from "next";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { SpaceBanner } from "@/components/billing/space-banner";
 import { AppShell } from "@/components/shell/app-shell";
-import { CAPSULE_COOKIE, isCapsuleVariant } from "@/lib/shell/capsule-variant";
 import { navSections } from "@/components/shell/nav-config";
 import type { OrgSummary } from "@/components/shell/types";
 import { OrgBrand } from "@/components/theme/org-brand";
@@ -20,6 +19,7 @@ import { getSidebarMode } from "@/lib/sidebar-mode-cookie";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { listFolders } from "@/server/notes/folders";
 import { listPins } from "@/server/pins";
 import { guestPollRedirect } from "@/server/polls/guest-redirect";
 import { getShellUser, getViewerPrefs } from "@/server/profiles/queries";
@@ -118,34 +118,22 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   // setup finishes it first (the flowchart's "Profile complete?").
   const prefs = await getViewerPrefs(ctx.user.id);
 
-  // TEMPORARY, with capsule-variants.tsx: which shape of the floating bar to
-  // draw, and the next thing happening for the one that leads with it. Both
-  // go when a shape is chosen.
-  const capsuleCookie = (await cookies()).get(CAPSULE_COOKIE)?.value;
-  const capsule = isCapsuleVariant(capsuleCookie) ? capsuleCookie : "current";
-  const capsuleNext =
-    capsule === "context"
-      ? await withOrgTx(ctx.organization.id, async ({ db }) => {
-          const soonest = await db.event.findFirst({
-            where: {
-              organizationId: ctx.organization.id,
-              deletedAt: null,
-              mergedIntoId: null,
-              startsAt: { gte: new Date() },
-            },
-            orderBy: { startsAt: "asc" },
-            select: { id: true, title: true, startsAt: true, conferenceUrl: true },
-          });
-          return soonest
-            ? {
-                title: soonest.title,
-                startsAt: soonest.startsAt.toISOString(),
-                href: `/app/${ctx.organization.slug}/calendar/${soonest.id}`,
-                joinUrl: soonest.conferenceUrl,
-              }
-            : null;
-        })
-      : null;
+  // The Files folders, for the links under Files in the sidebar. Only when the
+  // space has Files at all, and read as the member (folders are shared, so
+  // everyone in the space sees the same list).
+  const sidebarFolders = spaceIncludes(ctx.organization, "files")
+    ? await withOrgTx(ctx.organization.id, ({ db }) =>
+        listFolders(db, ctx.organization.id, ctx.user.id),
+      ).then((rows) =>
+        rows.map((f) => ({
+          id: f.id,
+          name: f.name,
+          color: f.color,
+          href: `/app/${ctx.organization.slug}/notes?folder=${encodeURIComponent(f.id)}`,
+        })),
+      )
+    : [];
+
   if (!prefs.onboardedAt) redirect("/onboarding");
   // The org's OrgTheme row rides along with the per-request org context
   // (React cache()), resolved and re-validated as strict hex before render;
@@ -164,8 +152,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   return (
     <OrgThemeRoot key={ctx.organization.id} theme={theme}>
       <AppShell
-        capsule={capsule}
-        capsuleNext={capsuleNext}
+        folders={sidebarFolders}
         orgSlug={ctx.organization.slug}
         orgId={ctx.organization.id}
         orgs={orgs}

@@ -218,6 +218,10 @@ export function NotesLibrary({
   const [q, setQ] = useState(params.get("q") ?? "");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const folder = params.get("folder");
+  // The root of the tree (Everything, not searching): folders shown as tiles,
+  // and the list below them is only what is in no folder (the page asks for
+  // exactly that).
+  const atRoot = !folder && !params.get("q");
   const view = params.get("layout") === "list" ? "list" : "grid";
   const base = `/app/${orgSlug}/notes`;
   const pinned = new Set(pinnedHrefs);
@@ -1015,10 +1019,62 @@ export function NotesLibrary({
           )}
         </div>
 
+        {/*
+          Everything is the root of the tree: its folders first, as tiles you
+          open or drop a file onto, then whatever is in no folder. A search
+          looks everywhere instead, so the tiles step aside for it.
+        */}
+        {atRoot && folders.length > 0 && (
+          <section aria-labelledby="files-folders-heading" className="space-y-2.5">
+            <h3 id="files-folders-heading" className="text-muted-foreground text-[13px] font-medium">
+              Folders
+            </h3>
+            <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(12rem,1fr))] gap-3">
+              {folders.map((f) => {
+                const count = f.noteCount + f.fileCount;
+                return (
+                  <li key={f.id}>
+                    <button
+                      type="button"
+                      onClick={() => go({ folder: f.id })}
+                      {...dropProps(f.id)}
+                      className={cn(
+                        "bg-card text-card-foreground edge rounded-tile focus-glow flex w-full items-center gap-3 p-3.5 text-left outline-none",
+                        "hover:shadow-e1 transition-[box-shadow,transform] duration-200 hover:-translate-y-px motion-reduce:transform-none",
+                        overFolder === f.id && "ring-primary bg-primary/10 ring-2",
+                      )}
+                    >
+                      <span
+                        className="grid size-9 shrink-0 place-items-center rounded-lg"
+                        style={{
+                          // Stored as a token name (chart-1…chart-5), not a colour.
+                          backgroundColor: `color-mix(in oklab, ${folderDot(f.color)} 16%, transparent)`,
+                          color: folderDot(f.color),
+                        }}
+                      >
+                        <Folder className="size-4.5" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{f.name}</span>
+                        <span className="text-muted-foreground block text-[12px]">
+                          {count === 0 ? "Empty" : `${count} ${count === 1 ? "item" : "items"}`}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {entries.length > 0 && (
+              <h3 className="text-muted-foreground pt-2 text-[13px] font-medium">Not in a folder</h3>
+            )}
+          </section>
+        )}
+
         {inTrash ? (
           <TrashView trash={trash} pending={pending} onRestore={restore} />
         ) : entries.length === 0 ? (
-          <EmptyState {...emptyCopy()} />
+          atRoot && folders.length > 0 ? null : <EmptyState {...emptyCopy()} />
         ) : (
           <ul
             className={cn(

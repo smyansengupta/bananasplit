@@ -58,6 +58,13 @@ export default async function NotesPage({
   const inTrash = query.folder === "trash";
   const folderId = inTrash ? undefined : str(query.folder);
   const q = str(query.q);
+  // Everything is the root of the Files tree: its folders at the top, then
+  // only what is in no folder. It used to list every item wherever it was
+  // filed, so moving a file into a folder left it showing in Everything as
+  // well - which looked exactly like the move had made a copy. A search still
+  // looks everywhere, folders included.
+  const atRoot = !inTrash && !folderId && !q;
+  const listFolderId = atRoot ? "none" : folderId;
   const sort = (NOTE_SORTS as readonly string[]).includes(String(query.sort))
     ? (query.sort as NoteSort)
     : "edited";
@@ -66,7 +73,7 @@ export default async function NotesPage({
     const notes = await getNotesForList(db, org.id, user.id, {
       visibility,
       authorId: author,
-      folderId,
+      folderId: listFolderId,
       q,
       sort,
     });
@@ -77,7 +84,7 @@ export default async function NotesPage({
         org.id,
         notes.map((n) => n.id),
       ),
-      files: await listNoteFiles(db, org.id, { folderId, q }),
+      files: await listNoteFiles(db, org.id, { folderId: listFolderId, q }),
       memberships: await getOrgMembersForFilter(db, org.id),
       folders: await listFolders(db, org.id, user.id),
       pins: await listPins(db, org.id, org.slug, user.id),

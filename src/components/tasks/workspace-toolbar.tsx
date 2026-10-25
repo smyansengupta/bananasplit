@@ -233,6 +233,9 @@ export function WorkspaceToolbar() {
           {ws.query.blockers && (
             <FilterPill label="Blockers" onClear={() => ws.setFilters({ blockers: false })} />
           )}
+          {ws.query.overdue && (
+            <FilterPill label="Overdue" onClear={() => ws.setFilters({ overdue: false })} />
+          )}
           {ws.query.flagged && (
             <FilterPill label="Flagged" onClear={() => ws.setFilters({ flagged: false })} />
           )}

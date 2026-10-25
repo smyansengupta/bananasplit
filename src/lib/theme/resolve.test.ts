@@ -16,7 +16,8 @@ describe("resolveTheme", () => {
     expect(resolveTheme(null)).toBe(DEFAULT_RESOLVED_THEME);
     expect(DEFAULT_RESOLVED_THEME.isDefault).toBe(true);
     expect(DEFAULT_RESOLVED_THEME.light).toEqual(UNTHEMED_PRESET.light);
-    expect(DEFAULT_RESOLVED_THEME.mode).toBe("DARK");
+    // Light first: Graphite is a white page. Dark-first was Moonstone's rule.
+    expect(DEFAULT_RESOLVED_THEME.mode).toBe("LIGHT");
   });
 
   it("resolves the seeded CBC row", () => {
@@ -79,9 +80,10 @@ describe("resolveTheme", () => {
       light: LEGACY_DEFAULT_LIGHT,
       dark: { ...DEFAULT_PRESET.dark, primary: "#f4c84a", accent: "#ee6f9e" },
     });
-    expect(theme.preset).toBe("default");
-    expect(theme.light).toEqual(DEFAULT_PRESET.light);
-    expect(theme.dark).toEqual(DEFAULT_PRESET.dark);
+    // Onto today's default, which is Graphite, and named as such.
+    expect(theme.preset).toBe("graphite");
+    expect(theme.light).toEqual(UNTHEMED_PRESET.light);
+    expect(theme.dark).toEqual(UNTHEMED_PRESET.dark);
     // The org's own choices stay.
     expect(theme.mode).toBe("LIGHT");
     expect(theme.lockMode).toBe(true);

@@ -251,6 +251,12 @@ export interface TaskFilters {
   dueTo?: Date;
   flagged?: boolean;
   blockers?: boolean;
+  /**
+   * Open and due before today: exactly what the Overdue stat counts, so
+   * pressing it shows the same number of tasks it said. (It used to turn on
+   * `blockers`, which also takes in blocked work, so the list never matched.)
+   */
+  overdue?: boolean;
   /** C4: narrow to private tasks, or to the open ones. */
   visibility?: TaskVisibility;
 }
@@ -311,6 +317,9 @@ export function taskFilterWhere(
       ],
     });
   }
+  if (f.overdue && today) {
+    and.push({ status: { in: [...OPEN_STATUSES] }, dueDate: { lt: today } });
+  }
   if (f.blockers && today) {
     // The exec-sync agenda: blocked, or open and overdue.
     and.push({
@@ -351,6 +360,7 @@ export function hasActiveFilters(f: TaskFilters): boolean {
     f.dueFrom ||
     f.dueTo ||
     f.flagged ||
+    f.overdue ||
     f.blockers ||
     f.visibility,
   );
