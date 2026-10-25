@@ -90,11 +90,12 @@ const FORM_TARGETS = ["https://accounts.google.com"];
 
 /**
  * /connect's Continue redirects to AuthKit (docs/features/ai-connectors.md),
- * which a form posted without JavaScript follows under form-action.
+ * which a form posted without JavaScript follows under form-action. Only
+ * while AI connectors are on (CONNECTORS_ENABLED, src/server/connectors/config.ts).
  */
 function authkitOrigin(env: NodeJS.ProcessEnv): string | null {
   const domain = env.WORKOS_AUTHKIT_DOMAIN?.trim();
-  if (!domain) return null;
+  if (!domain || env.CONNECTORS_ENABLED?.trim() !== "true") return null;
   try {
     return new URL(domain).origin;
   } catch {

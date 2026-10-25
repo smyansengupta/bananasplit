@@ -58,6 +58,7 @@ describe("nonce policy (0A Fix 13)", () => {
       buildNonceCsp("n", {
         env: env({
           NODE_ENV: "production",
+          CONNECTORS_ENABLED: "true",
           WORKOS_AUTHKIT_DOMAIN: "https://club-123.authkit.app/",
         }),
       }),
@@ -66,9 +67,25 @@ describe("nonce policy (0A Fix 13)", () => {
       "'self' https://accounts.google.com https://club-123.authkit.app",
     );
     const malformed = directives(
-      buildNonceCsp("n", { env: env({ NODE_ENV: "production", WORKOS_AUTHKIT_DOMAIN: "nope" }) }),
+      buildNonceCsp("n", {
+        env: env({
+          NODE_ENV: "production",
+          CONNECTORS_ENABLED: "true",
+          WORKOS_AUTHKIT_DOMAIN: "nope",
+        }),
+      }),
     );
     expect(malformed.get("form-action")).toBe("'self' https://accounts.google.com");
+    // The flag off: AuthKit stays out, whatever the domain says.
+    const off = directives(
+      buildNonceCsp("n", {
+        env: env({
+          NODE_ENV: "production",
+          WORKOS_AUTHKIT_DOMAIN: "https://club-123.authkit.app/",
+        }),
+      }),
+    );
+    expect(off.get("form-action")).toBe("'self' https://accounts.google.com");
   });
 
   it("adds 'unsafe-eval' in development only", () => {
