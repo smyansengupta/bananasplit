@@ -67,6 +67,8 @@ import { familyOf, formatBytes } from "@/lib/files/types";
 import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
 import { cn } from "@/lib/utils";
 
+import { FolderCard, folderTone, type FolderCardPeek } from "./folder-card";
+
 const NOTE_MIME = "application/x-bananasplit-note";
 const FILE_MIME = "application/x-bananasplit-file";
 
@@ -88,6 +90,8 @@ export interface LibraryFolder {
   color: string | null;
   noteCount: number;
   fileCount: number;
+  /** Its newest few items, for the folder card on Everything (empty elsewhere). */
+  peek?: FolderCardPeek[];
   canEdit: boolean;
 }
 
@@ -155,7 +159,7 @@ function downloadFrom(url: string) {
 }
 
 function folderDot(color: string | null) {
-  return color ? `var(--${color})` : "var(--muted-foreground)";
+  return folderTone(color);
 }
 
 /** Grid or list, as icons only (the names are read out and shown on hover). */
@@ -823,19 +827,18 @@ export function NotesLibrary({
                             <button
                               key={c ?? "none"}
                               type="button"
-                              aria-label={c ? `Colour ${c}` : "No colour"}
+                              aria-label={
+                                c ? `Colour ${c.replace("chart-", "")}` : "Match the theme"
+                              }
                               aria-pressed={f.color === c}
                               onClick={() =>
                                 run(() => updateFolderAction(orgId, f.id, { color: c }))
                               }
                               className="grid size-5 place-items-center rounded-md border"
-                              style={{ background: c ? `var(--${c})` : undefined }}
+                              style={{ background: folderTone(c) }}
                             >
                               {f.color === c && (
-                                <Check
-                                  className={cn("size-3", c && "text-background")}
-                                  aria-hidden="true"
-                                />
+                                <Check className="text-background size-3" aria-hidden="true" />
                               )}
                             </button>
                           ))}
@@ -1025,48 +1028,33 @@ export function NotesLibrary({
           looks everywhere instead, so the tiles step aside for it.
         */}
         {atRoot && folders.length > 0 && (
-          <section aria-labelledby="files-folders-heading" className="space-y-2.5">
-            <h3 id="files-folders-heading" className="text-muted-foreground text-[13px] font-medium">
-              Folders
-            </h3>
-            <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(12rem,1fr))] gap-3">
-              {folders.map((f) => {
-                const count = f.noteCount + f.fileCount;
-                return (
-                  <li key={f.id}>
-                    <button
-                      type="button"
-                      onClick={() => go({ folder: f.id })}
-                      {...dropProps(f.id)}
-                      className={cn(
-                        "bg-card text-card-foreground edge rounded-tile focus-glow flex w-full items-center gap-3 p-3.5 text-left outline-none",
-                        "hover:shadow-e1 transition-[box-shadow,transform] duration-200 hover:-translate-y-px motion-reduce:transform-none",
-                        overFolder === f.id && "ring-primary bg-primary/10 ring-2",
-                      )}
-                    >
-                      <span
-                        className="grid size-9 shrink-0 place-items-center rounded-lg"
-                        style={{
-                          // Stored as a token name (chart-1…chart-5), not a colour.
-                          backgroundColor: `color-mix(in oklab, ${folderDot(f.color)} 16%, transparent)`,
-                          color: folderDot(f.color),
-                        }}
-                      >
-                        <Folder className="size-4.5" aria-hidden="true" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{f.name}</span>
-                        <span className="text-muted-foreground block text-[12px]">
-                          {count === 0 ? "Empty" : `${count} ${count === 1 ? "item" : "items"}`}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
+          <section aria-label="Folders" className="space-y-6">
+            <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))] gap-x-4 gap-y-5">
+              {folders.map((f) => (
+                <li key={f.id}>
+                  <FolderCard
+                    name={f.name}
+                    color={f.color}
+                    noteCount={f.noteCount}
+                    fileCount={f.fileCount}
+                    peek={f.peek ?? []}
+                    colors={COLORS}
+                    onColor={
+                      f.canEdit
+                        ? (c) => run(() => updateFolderAction(orgId, f.id, { color: c }))
+                        : undefined
+                    }
+                    dropping={overFolder === f.id}
+                    onOpen={() => go({ folder: f.id })}
+                    dropProps={dropProps(f.id)}
+                  />
+                </li>
+              ))}
             </ul>
             {entries.length > 0 && (
-              <h3 className="text-muted-foreground pt-2 text-[13px] font-medium">Not in a folder</h3>
+              <h3 className="heading flex items-center gap-2 text-[17px]">
+                Not in a folder <Badge variant="secondary">{entries.length}</Badge>
+              </h3>
             )}
           </section>
         )}
@@ -1074,7 +1062,9 @@ export function NotesLibrary({
         {inTrash ? (
           <TrashView trash={trash} pending={pending} onRestore={restore} />
         ) : entries.length === 0 ? (
-          atRoot && folders.length > 0 ? null : <EmptyState {...emptyCopy()} />
+          atRoot && folders.length > 0 ? null : (
+            <EmptyState {...emptyCopy()} />
+          )
         ) : (
           <ul
             className={cn(
