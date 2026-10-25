@@ -4,7 +4,13 @@ import { exportJWK, generateKeyPair, SignJWT, type JWK } from "jose";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { ConnectorsConfig } from "./config";
-import { connectorIdentity, SPACE_CLAIM, UID_CLAIM, verifyConnectorToken } from "./token";
+import {
+  connectorAuthInfo,
+  connectorFromAuthInfo,
+  SPACE_CLAIM,
+  UID_CLAIM,
+  verifyConnectorToken,
+} from "./token";
 
 // The verifier fetches AuthKit's JWKS; this stands in for it with a local key.
 const config: ConnectorsConfig = {
@@ -70,22 +76,37 @@ function token({
 
 describe("verifyConnectorToken", () => {
   it("accepts an AuthKit token for this MCP URL and carries our user id", async () => {
-    const auth = await verifyConnectorToken(
-      await token({ claims: { [SPACE_CLAIM]: "all" } }),
-      config,
-    );
-    expect(auth.clientId).toBe("https://claude.ai/oauth/claude-code-client-metadata");
-    expect(auth.resource?.href).toBe(config.resourceUrl);
-    expect(auth.scopes).toEqual(["openid", "profile", "email", "offline_access"]);
-    expect(typeof auth.expiresAt).toBe("number");
-    const identity = connectorIdentity(auth);
-    expect(identity).toMatchObject({
+    const raw = await token({ claims: { [SPACE_CLAIM]: "all" } });
+    const connector = await verifyConnectorToken(raw, config);
+    expect(connector).toMatchObject({
       userId: "user_ours_1",
+      clientId: "https://claude.ai/oauth/claude-code-client-metadata",
       consentId: "app_consent_1",
       workosUserId: "user_01WORKOS",
       space: "all",
       access: null,
     });
+    expect(connector.expiresAt).toBeGreaterThan(Date.now() / 1000);
+
+    // Through the SDK's AuthInfo and back, as the route and the server factory do.
+    const auth = connectorAuthInfo(connector, raw, config, { grant: { id: "g1" } });
+    expect(auth.resource?.href).toBe(config.resourceUrl);
+    expect(auth.expiresAt).toBe(connector.expiresAt);
+    expect(auth.extra?.grant).toEqual({ id: "g1" });
+    expect(connectorFromAuthInfo(auth)).toBe(connector);
+  });
+
+  it("recognises only a connector this module built", async () => {
+    const forged = { userId: "user_other", clientId: "x", consentId: "y", workosUserId: "z" };
+    expect(
+      connectorFromAuthInfo({
+        token: "t",
+        clientId: "x",
+        scopes: [],
+        extra: { connector: forged },
+      }),
+    ).toBeNull();
+    expect(connectorFromAuthInfo(undefined)).toBeNull();
   });
 
   it("refuses a token from another issuer", async () => {
@@ -111,6 +132,15 @@ describe("verifyConnectorToken", () => {
     await expect(
       verifyConnectorToken(await token({ claims: { [UID_CLAIM]: undefined } }), config),
     ).rejects.toThrow("doesn't name a Bananasplit account");
+  });
+
+  it("refuses a token without a consent (sid) or a client, which a grant needs", async () => {
+    await expect(
+      verifyConnectorToken(await token({ claims: { sid: undefined } }), config),
+    ).rejects.toBeInstanceOf(OAuthError);
+    await expect(
+      verifyConnectorToken(await token({ claims: { client_id: undefined } }), config),
+    ).rejects.toBeInstanceOf(OAuthError);
   });
 
   it("refuses an HS256 token signed with a shared secret", async () => {

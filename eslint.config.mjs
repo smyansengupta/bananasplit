@@ -42,7 +42,18 @@ const AS_USER_TX = {
   importNames: ["withOrgTxAs"],
   message: "withOrgTxAs trusts a caller-supplied user id: only the collaboration bridge routes (COLLAB_BRIDGE in eslint.config.mjs) may use it.",
 };
-const PRIVILEGED_CLIENTS = [...PRIVILEGED_DB_CLIENTS, AS_USER_TX];
+/**
+ * The connector wrappers open a member's RLS context for an AI app's
+ * verified AuthKit token (no session): only the AI connectors module, which
+ * verifies the token and resolves the grant first, may import them
+ * (CONNECTORS).
+ */
+const CONNECTOR_TX = {
+  name: "@/server/db/context",
+  importNames: ["withConnectorUserTx", "withConnectorOrgTx"],
+  message: "The connector wrappers act for an AI app's verified token: only src/server/connectors (CONNECTORS in eslint.config.mjs) may use them.",
+};
+const PRIVILEGED_CLIENTS = [...PRIVILEGED_DB_CLIENTS, AS_USER_TX, CONNECTOR_TX];
 /** Navigation belongs to the action and page layer, not to services. */
 const NAVIGATION = {
   name: "next/navigation",
@@ -94,6 +105,15 @@ const CLIENT_ALLOWLIST = [
  * names through withOrgTxAs. Adding a path here is a security review item.
  */
 const COLLAB_BRIDGE = ["src/app/api/collab/**"];
+
+/**
+ * AI connectors (docs/features/ai-connectors.md): they verify an AuthKit
+ * token (a VerifiedConnector), resolve its grant, then act as the member it
+ * names through withConnectorUserTx / withConnectorOrgTx. The MCP route
+ * reaches them only through this module. Adding a path here is a security
+ * review item.
+ */
+const CONNECTORS = ["src/server/connectors/**"];
 
 /** Directories written after the 0B cutover (the record of post-0B layout). */
 const NEW_CODE = [
@@ -274,16 +294,24 @@ const eslintConfig = defineConfig([
   // The client allowlist: the service and auth clients are allowed.
   {
     files: CLIENT_ALLOWLIST,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE) },
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, CONNECTOR_TX) },
   },
   // The collaboration bridge: withOrgTxAs, and still no service or auth client.
   {
     files: COLLAB_BRIDGE,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS) },
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS, CONNECTOR_TX) },
+  },
+  // AI connectors: the connector wrappers, and still no service or auth
+  // client, no withOrgTxAs and (a service) no navigation.
+  {
+    files: CONNECTORS,
+    rules: {
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS, AS_USER_TX, NAVIGATION),
+    },
   },
   {
     files: ["src/server/jobs/**", "src/server/email/**", "src/server/health.ts"],
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, NAVIGATION) },
+    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, NAVIGATION, CONNECTOR_TX) },
   },
   // Re-apply the stricter rules to the non-allowlisted email modules.
   {

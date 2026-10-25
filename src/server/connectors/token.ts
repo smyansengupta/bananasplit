@@ -8,8 +8,15 @@ import type { ConnectorsConfig } from "./config";
 /**
  * Access tokens from AuthKit (RS256 JWTs). The checks: our AuthKit issuer,
  * the exact MCP URL as audience (WorkOS sets the environment's client id
- * when no Resource Indicator matches, which fails here), expiry, and our
- * user id in the JWT-template claim. `sub` is the WorkOS user id, not ours.
+ * when no Resource Indicator matches, which fails here), expiry with 30
+ * seconds of leeway, and the claims a grant needs: our user id from the
+ * JWT template, the client, the consent (sid) and the WorkOS user (sub,
+ * which is not our user id).
+ *
+ * A verified token becomes a VerifiedConnector, the only identity the
+ * connector RLS wrappers (withConnectorUserTx, withConnectorOrgTx in
+ * src/server/db/context.ts) accept. It is branded with a symbol this module
+ * keeps to itself, so nothing else can build one without a cast.
  */
 
 /** JWT template `{"urn:bananasplit:uid": {{ user.external_id }}}`: our User.id. */
@@ -19,22 +26,34 @@ export const SPACE_CLAIM = "urn:bananasplit:space";
 export const ACCESS_CLAIM = "urn:bananasplit:access";
 /** SPACE_CLAIM's value for "Personal and all my clubs" (any other value is one space's id). */
 export const ALL_SPACES = "all";
+/** ACCESS_CLAIM's values. */
+export const READ_ACCESS = "read";
+export const WRITE_ACCESS = "write";
 
-export interface ConnectorIdentity {
-  userId: string;
+const VERIFIED: unique symbol = Symbol("VerifiedConnector");
+
+/** A member, through one AI app, as a verified AuthKit token says. */
+export interface VerifiedConnector {
+  readonly [VERIFIED]: true;
+  /** Our User.id (the JWT-template claim). */
+  readonly userId: string;
   /** The OAuth client the token was issued to (a CIMD URL or a DCR id). */
-  clientId: string;
+  readonly clientId: string;
   /** The consent the token belongs to (`sid`, app_consent_...). */
-  consentId: string | null;
-  workosUserId: string | null;
-  space: string | null;
-  access: string | null;
-  /** Every claim, for the spike's whoami tool. Claims are not secrets; the token is. */
-  claims: JWTPayload;
+  readonly consentId: string;
+  /** The WorkOS user (`sub`), for revoking the app at WorkOS. */
+  readonly workosUserId: string;
+  /** SPACE_CLAIM, when AuthKit put the consent choice in the token. */
+  readonly space: string | null;
+  /** ACCESS_CLAIM, likewise. */
+  readonly access: string | null;
+  /** The token's exp, in seconds since the epoch. */
+  readonly expiresAt: number;
 }
 
 const keySets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
+/** AuthKit's key set, one per origin for the life of the instance (jose caches and refreshes the keys). */
 function keySet(authkitOrigin: string): ReturnType<typeof createRemoteJWKSet> {
   let set = keySets.get(authkitOrigin);
   if (!set) {
@@ -46,23 +65,24 @@ function keySet(authkitOrigin: string): ReturnType<typeof createRemoteJWKSet> {
 
 function stringClaim(payload: JWTPayload, name: string): string | null {
   const value = payload[name];
-  return typeof value === "string" && value.length > 0 ? value : null;
+  return typeof value === "string" && value.length > 0 && value.length <= 512 ? value : null;
 }
 
-/** What the spike logs when a token is refused: the claims that decide it, never the token. */
+/** What is logged when a token is refused: the claims that decide it, never the token. */
 function describeRefusedToken(token: string): Record<string, unknown> {
   try {
-    const { iss, aud, sub, exp, client_id: clientId } = decodeJwt(token);
-    return { iss, aud, sub, exp, clientId };
+    const { iss, aud, exp, client_id: clientId } = decodeJwt(token);
+    return { iss, aud, exp, clientId };
   } catch {
     return { malformed: true };
   }
 }
 
+/** Throws OAuthError(InvalidToken), which the route answers with the 401 challenge. */
 export async function verifyConnectorToken(
   token: string,
   config: ConnectorsConfig,
-): Promise<AuthInfo> {
+): Promise<VerifiedConnector> {
   let payload: JWTPayload;
   try {
     ({ payload } = await jwtVerify(token, keySet(config.authkitOrigin), {
@@ -70,6 +90,7 @@ export async function verifyConnectorToken(
       audience: config.resourceUrl,
       algorithms: ["RS256"],
       clockTolerance: 30,
+      requiredClaims: ["exp"],
     }));
   } catch (error) {
     console.warn("[connectors] token refused", {
@@ -82,10 +103,14 @@ export async function verifyConnectorToken(
 
   const userId = stringClaim(payload, UID_CLAIM);
   const clientId = stringClaim(payload, "client_id");
-  if (!userId || !clientId) {
+  const consentId = stringClaim(payload, "sid");
+  const workosUserId = stringClaim(payload, "sub");
+  if (!userId || !clientId || !consentId || !workosUserId) {
     console.warn("[connectors] token missing claims", {
       hasUid: Boolean(userId),
       hasClientId: Boolean(clientId),
+      hasSid: Boolean(consentId),
+      hasSub: Boolean(workosUserId),
       claimNames: Object.keys(payload),
     });
     throw new OAuthError(
@@ -94,27 +119,45 @@ export async function verifyConnectorToken(
     );
   }
 
-  const identity: ConnectorIdentity = {
+  return {
+    [VERIFIED]: true,
     userId,
     clientId,
-    consentId: stringClaim(payload, "sid"),
-    workosUserId: stringClaim(payload, "sub"),
+    consentId,
+    workosUserId,
     space: stringClaim(payload, SPACE_CLAIM),
     access: stringClaim(payload, ACCESS_CLAIM),
-    claims: payload,
-  };
-  return {
-    token,
-    clientId,
-    scopes: typeof payload.scope === "string" ? payload.scope.split(" ").filter(Boolean) : [],
-    expiresAt: payload.exp,
-    resource: new URL(config.resourceUrl),
-    extra: { identity },
+    // requiredClaims made jose check it is there and in the future.
+    expiresAt: payload.exp as number,
   };
 }
 
-/** The identity verifyConnectorToken attached, from a tool's ctx.http.authInfo. */
-export function connectorIdentity(authInfo: AuthInfo | undefined): ConnectorIdentity | null {
-  const identity = authInfo?.extra?.identity;
-  return identity && typeof identity === "object" ? (identity as ConnectorIdentity) : null;
+/** The verified connector as the MCP SDK's AuthInfo, for requireBearerAuth and createMcpHandler. */
+export function connectorAuthInfo(
+  connector: VerifiedConnector,
+  token: string,
+  config: ConnectorsConfig,
+  extra: Record<string, unknown> = {},
+): AuthInfo {
+  return {
+    token,
+    clientId: connector.clientId,
+    // Self-registered clients only get the OpenID scopes; access is the grant's.
+    scopes: [],
+    expiresAt: connector.expiresAt,
+    resource: new URL(config.resourceUrl),
+    extra: { ...extra, connector },
+  };
+}
+
+function isVerifiedConnector(value: unknown): value is VerifiedConnector {
+  return (
+    typeof value === "object" && value !== null && (value as VerifiedConnector)[VERIFIED] === true
+  );
+}
+
+/** The connector connectorAuthInfo attached, or null (never one built anywhere else). */
+export function connectorFromAuthInfo(authInfo: AuthInfo | undefined): VerifiedConnector | null {
+  const connector = authInfo?.extra?.connector;
+  return isVerifiedConnector(connector) ? connector : null;
 }
