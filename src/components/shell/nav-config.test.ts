@@ -20,7 +20,7 @@ describe("sidebar navigation", () => {
       "People",
       "Polls",
       "Find a time",
-      "RSVPs",
+      "Meetings",
       "Files",
       "Databases",
       "Finance",
@@ -68,7 +68,10 @@ describe("sidebar navigation", () => {
     expect(active("Find a time", "/app/cbc/calendar/find-a-time/new")).toBe(true);
     expect(active("Find a time", "/app/cbc/calendar/find-a-time/p1")).toBe(true);
     expect(active("Calendar", "/app/cbc/calendar/find-a-time")).toBe(false);
-    expect(active("RSVPs", "/app/cbc/calendar/rsvp")).toBe(true);
+    expect(active("Meetings", "/app/cbc/meetings")).toBe(true);
+    // The old RSVP path still belongs to Meetings, so a pasted link lights
+    // the right section up.
+    expect(active("Meetings", "/app/cbc/calendar/rsvp")).toBe(true);
     expect(active("Calendar", "/app/cbc/calendar/rsvp")).toBe(false);
     // An event's own RSVP page is part of that event, on the Calendar.
     expect(active("Calendar", "/app/cbc/calendar/e1/rsvp")).toBe(true);
@@ -99,10 +102,10 @@ describe("sidebar navigation", () => {
       "People",
       "Polls",
       "Find a time",
-      "RSVPs",
+      "Meetings",
     ]);
     expect(club.items.find((i) => i.id === "find-a-time")!.hidden).toBe(true);
-    expect(club.items.find((i) => i.id === "rsvps")!.hidden).toBe(false);
+    expect(club.items.find((i) => i.id === "meetings")!.hidden).toBe(false);
     expect(links(saved).map((i) => i.label)).not.toContain("Find a time");
   });
 
@@ -110,11 +113,11 @@ describe("sidebar navigation", () => {
     expect(sectionLabel(null, "notes")).toBe("Files");
     const groups = resolveSidebar(null);
     groups.find((g) => g.id === "data")!.items.find((i) => i.id === "notes")!.label = "Docs";
-    groups.find((g) => g.id === "club")!.items.find((i) => i.id === "rsvps")!.hidden = true;
+    groups.find((g) => g.id === "club")!.items.find((i) => i.id === "meetings")!.hidden = true;
     const config = toConfig(groups);
     expect(sectionLabel(config, "notes")).toBe("Docs");
     // A hidden section keeps its name: admins can still open it.
-    expect(sectionLabel(config, "rsvps")).toBe("RSVPs");
+    expect(sectionLabel(config, "meetings")).toBe("Meetings");
     expect(sectionLabel({ junk: true }, "people")).toBe("People");
   });
 
@@ -173,7 +176,7 @@ describe("the sidebar in each space", () => {
       "Files",
       "Databases",
       "Find a time",
-      "RSVPs",
+      "Meetings",
     ]);
     expect(items.map((i) => i.href)).toEqual([
       "/app/me",
@@ -182,7 +185,7 @@ describe("the sidebar in each space", () => {
       "/app/me/notes",
       "/app/me/databases",
       "/app/me/calendar/find-a-time",
-      "/app/me/calendar/rsvp",
+      "/app/me/meetings",
     ]);
     expect(items.some((i) => i.locked)).toBe(false);
     const all = items;
@@ -193,7 +196,7 @@ describe("the sidebar in each space", () => {
         all,
         search,
       );
-    expect(is("RSVPs", "/app/me/calendar/rsvp/e1")).toBe(true);
+    expect(is("Meetings", "/app/me/calendar/rsvp/e1")).toBe(true);
     expect(is("Calendar", "/app/me/calendar/rsvp/e1")).toBe(false);
     expect(is("Find a time", "/app/me/calendar/find-a-time/p1")).toBe(true);
     expect(is("Home", "/app/me/tasks")).toBe(false);

@@ -2291,6 +2291,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "TaskMention:DELETE",
         "TaskMention:INSERT",
         "TaskMention:UPDATE",
+        // Each member hides and un-hides cards on their own Overview; the
+        // policies pin userId to the actor, a stronger test than a role check.
+        "UpNextDismissal:DELETE",
+        "UpNextDismissal:INSERT",
         "User:UPDATE",
         "UserAvailability:INSERT",
         "UserAvailability:UPDATE",
@@ -2456,6 +2460,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // Moonstone gaps: "Free now" asks whether availability was shared at
       // all (member path only).
       member_availability_shared: "u",
+      // A CHECK on the reminder offsets (meetings): both roles insert rows
+      // the constraint has to evaluate.
+      reminder_offsets_ok: "us",
     };
     await tcase(
       "T27f",

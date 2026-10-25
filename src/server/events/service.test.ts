@@ -160,7 +160,12 @@ describe("event service", () => {
     await expect(createEvent(ctx, { ...base, rsvpUrl: "javascript:alert(1)" })).rejects.toBeInstanceOf(
       EventValidationError,
     );
-    await expect(createEvent(ctx, { ...base, conferenceProvider: "ZOOM" })).rejects.toThrow(/meeting link/);
+    // An empty link against a provider we can call is not a mistake: it
+    // means "make the meeting for me" (docs/features/meetings.md). OTHER
+    // still needs one pasted, because there is nothing for us to call.
+    await expect(createEvent(ctx, { ...base, conferenceProvider: "OTHER" })).rejects.toThrow(
+      /meeting link/,
+    );
     await expect(
       createEvent(ctx, { ...base, conferenceProvider: "OTHER", conferenceUrl: "http://insecure.example" }),
     ).rejects.toThrow(/https/);

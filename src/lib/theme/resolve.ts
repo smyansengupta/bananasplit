@@ -3,6 +3,7 @@ import { deriveDarkRoles, deriveTheme, type DerivedTheme } from "./derive";
 import {
   DEFAULT_PRESET,
   DEFAULT_PRESET_ID,
+  UNTHEMED_PRESET,
   isFormerDefault,
   presetGlow,
   savedPresetId,
@@ -70,12 +71,12 @@ function asLogoDisplay(value: string | null | undefined): LogoDisplayValue {
 
 // Moonstone is dark first: an org with no theme row opens in dark mode.
 export const DEFAULT_RESOLVED_THEME: ResolvedTheme = buildResolved({
-  preset: DEFAULT_PRESET.id,
+  preset: UNTHEMED_PRESET.id,
   mode: "DARK",
   lockMode: false,
   logoDisplay: "LOGO_AND_NAME",
-  light: DEFAULT_PRESET.light,
-  dark: DEFAULT_PRESET.dark,
+  light: UNTHEMED_PRESET.light,
+  dark: UNTHEMED_PRESET.dark,
   style: DEFAULT_THEME_STYLE,
   isDefault: true,
 });

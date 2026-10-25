@@ -16,7 +16,7 @@ export const GO_TO_KEYS: Record<SectionId, string> = {
   tasks: "t",
   calendar: "c",
   "find-a-time": "a",
-  rsvps: "r",
+  meetings: "r",
   notes: "f",
   people: "p",
   polls: "v",

@@ -114,7 +114,7 @@ export default async function OrgOverviewPage({
   // A club whose plan has no Overview board lands on its events.
   if (!spaceIncludes(org, "overview")) {
     if (!can({ role }, "events.write")) redirect(`/app/${org.slug}/calendar`);
-    redirect(`/app/${org.slug}/${welcome ? "settings/members" : "calendar/rsvp"}`);
+    redirect(`/app/${org.slug}/${welcome ? "settings/members" : "meetings"}`);
   }
   const canSetUp = can({ role }, "integrations.write");
   const isAdmin = can({ role }, "settings.view");
@@ -384,7 +384,7 @@ export default async function OrgOverviewPage({
         }
         taken={seats}
         href={goal ? `${base}/calendar/${goal.id}` : null}
-        createHref={canAddEvents ? `${base}/calendar/rsvp` : null}
+        createHref={canAddEvents ? `${base}/meetings` : null}
       />
     ),
     week: <WeekStrip orgSlug={orgSlug} days={week} />,

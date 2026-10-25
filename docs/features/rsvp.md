@@ -1,5 +1,9 @@
 # RSVP pages
 
+> The RSVP page is now one of three shapes a meeting can take, and it is
+> reached from the **Meetings** section rather than a section of its own. See
+> `docs/features/meetings.md`. The page itself, below, is unchanged.
+
 A public sign-up page for an event. An owner or admin turns it on for any
 event (every club has them, the Free plan included); anyone with
 the link signs up with a name, an email and a phone number. Guests get a

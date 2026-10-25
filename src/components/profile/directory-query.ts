@@ -7,7 +7,8 @@
 
 export const DIRECTORY_SORTS = ["team", "name", "new"] as const;
 export type DirectorySort = (typeof DIRECTORY_SORTS)[number];
-export const DIRECTORY_VIEWS = ["grid", "list"] as const;
+/** The dense list is the default: the directory is mostly a list of names. */
+export const DIRECTORY_VIEWS = ["list", "grid"] as const;
 export type DirectoryView = (typeof DIRECTORY_VIEWS)[number];
 export const DIRECTORY_ROLES = ["OWNER", "ADMIN", "TREASURER", "MEMBER"] as const;
 export type DirectoryRole = (typeof DIRECTORY_ROLES)[number];
@@ -34,7 +35,7 @@ export const EMPTY_QUERY: DirectoryQuery = {
   year: null,
   free: false,
   sort: "team",
-  view: "grid",
+  view: "list",
   person: null,
 };
 
@@ -63,7 +64,7 @@ export function parseDirectoryQuery(raw: Raw): DirectoryQuery {
     year: Number.isFinite(year) && year >= 1900 && year <= 2200 ? year : null,
     free: get(raw, "free") === "1",
     sort: (DIRECTORY_SORTS as readonly string[]).includes(sort ?? "") ? (sort as DirectorySort) : "team",
-    view: (DIRECTORY_VIEWS as readonly string[]).includes(view ?? "") ? (view as DirectoryView) : "grid",
+    view: (DIRECTORY_VIEWS as readonly string[]).includes(view ?? "") ? (view as DirectoryView) : "list",
     person: person && ID.test(person) ? person : null,
   };
 }
@@ -77,7 +78,7 @@ export function directorySearch(state: DirectoryQuery): string {
   if (state.year) p.set("year", String(state.year));
   if (state.free) p.set("free", "1");
   if (state.sort !== "team") p.set("sort", state.sort);
-  if (state.view !== "grid") p.set("view", state.view);
+  if (state.view !== "list") p.set("view", state.view);
   if (state.person) p.set("person", state.person);
   return p.toString();
 }

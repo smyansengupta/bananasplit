@@ -39,7 +39,7 @@ export interface NavSection {
  * A Personal space's sidebar: Home (the Personal dashboard), Tasks,
  * Calendar, Files (notes and uploads together, the one library at /notes),
  * Databases (only the ones you make), Find a time (availability polls anyone
- * answers from a link) and RSVPs (its event pages and your tickets). No
+ * answers from a link) and Meetings (its calls, event pages and tickets). No
  * question polls: only members vote on those, and Personal has one. Not
  * arrangeable: there is no team to arrange it for.
  */
@@ -65,7 +65,7 @@ export const PERSONAL_NAV: readonly {
     path: "/calendar/find-a-time",
     exact: false,
   },
-  { id: "rsvps", label: "RSVPs", icon: "Ticket", path: "/calendar/rsvp", exact: false },
+  { id: "meetings", label: "Meetings", icon: "Video", path: "/meetings", also: ["/calendar/rsvp"], exact: false },
 ];
 
 /**

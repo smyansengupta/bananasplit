@@ -6,6 +6,7 @@ import {
   EventKind,
   EventVisibility,
   IntegrationProvider,
+  MeetingFormat,
   IntegrationStatus,
   Prisma,
   type Role,
@@ -16,6 +17,11 @@ import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
 import { publicEvents, reports } from "@/server/cache/tags";
 import type { TxClient, TxKind } from "@/server/db/context";
+import {
+  isMeetingIntegration,
+  MEETING_INTEGRATIONS,
+  providerForConference,
+} from "@/server/conference/providers";
 import { parseGoogleConfig } from "@/server/google-calendar/config";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import {
@@ -183,6 +189,9 @@ export const EVENT_SELECT = {
   mergedIntoId: true,
   googleEventId: true,
   googleSyncState: true,
+  format: true,
+  conferenceManaged: true,
+  conferenceMeetingId: true,
   syncVersion: true,
   updatedAt: true,
 } satisfies Prisma.EventSelect;
@@ -246,7 +255,14 @@ function checkShape(e: EventShape): void {
       throw new EventValidationError("Remove the link or choose a conferencing provider.");
     return;
   }
-  if (!e.conferenceUrl) throw new EventValidationError("Paste a meeting link for this provider.");
+  // An empty link against Meet, Zoom or Teams is not a mistake: it means
+  // "make the meeting for me", and the conference-sync job fills it in a
+  // moment later (docs/features/meetings.md). Only OTHER still needs one
+  // pasted, because there is nothing for us to call.
+  if (!e.conferenceUrl) {
+    if (providerForConference(e.conferenceProvider)) return;
+    throw new EventValidationError("Paste a meeting link for this provider.");
+  }
   let url: URL;
   try {
     url = new URL(e.conferenceUrl);
@@ -254,6 +270,19 @@ function checkShape(e: EventShape): void {
     throw new EventValidationError("That meeting link doesn't look like a valid URL.");
   }
   if (url.protocol !== "https:") throw new EventValidationError("Meeting links must use https.");
+}
+
+/**
+ * How a meeting happens, from what was chosen (docs/features/meetings.md).
+ *
+ * Stored rather than computed at read time, so the Meetings list and the
+ * sync job can filter on it, but always derived here so the column cannot
+ * drift from the provider and the place it describes. Without this every
+ * event kept the IN_PERSON default and no online meeting would ever be made.
+ */
+function formatOf(e: { conferenceProvider: ConferenceProvider; location: string | null }): MeetingFormat {
+  if (e.conferenceProvider === ConferenceProvider.NONE) return MeetingFormat.IN_PERSON;
+  return e.location?.trim() ? MeetingFormat.HYBRID : MeetingFormat.ONLINE;
 }
 
 async function checkHost(
@@ -271,6 +300,8 @@ async function checkHost(
 interface Integrations {
   google: { connected: boolean; hasPublicCalendar: boolean; hasInternalCalendar: boolean };
   buildHook: boolean;
+  /** Meeting providers this org has connected (docs/features/meetings.md). */
+  conference: ReadonlySet<IntegrationProvider>;
 }
 
 async function loadIntegrations(ctx: EventServiceContext): Promise<Integrations> {
@@ -278,7 +309,11 @@ async function loadIntegrations(ctx: EventServiceContext): Promise<Integrations>
     where: {
       organizationId: ctx.organizationId,
       provider: {
-        in: [IntegrationProvider.GOOGLE_CALENDAR, IntegrationProvider.NETLIFY_BUILD_HOOK],
+        in: [
+          IntegrationProvider.GOOGLE_CALENDAR,
+          IntegrationProvider.NETLIFY_BUILD_HOOK,
+          ...MEETING_INTEGRATIONS,
+        ],
       },
       status: IntegrationStatus.CONNECTED,
     },
@@ -295,7 +330,33 @@ async function loadIntegrations(ctx: EventServiceContext): Promise<Integrations>
       hasInternalCalendar: calendars.internalCalendarId !== null,
     },
     buildHook: rows.some((r) => r.provider === IntegrationProvider.NETLIFY_BUILD_HOOK),
+    conference: new Set(rows.map((r) => r.provider).filter(isMeetingIntegration)),
   };
+}
+
+/**
+ * Whether the conference-sync job has work to do for this event state
+ * (docs/features/meetings.md).
+ *
+ * Three cases: a meeting we made needs moving or cancelling; a meeting we
+ * made is being taken away (the format went in-person, or the provider
+ * changed); or an online meeting is wanted and does not exist yet. A link
+ * someone pasted by hand is none of these - we never touch it.
+ */
+function needsConferenceSync(
+  integrations: Integrations,
+  after: ServiceEvent,
+  before: ServiceEvent | null,
+): boolean {
+  if (after.conferenceManaged || before?.conferenceManaged) return true;
+  const gone = after.deletedAt !== null || after.mergedIntoId !== null;
+  if (gone) return false;
+  if (after.format === MeetingFormat.IN_PERSON) return false;
+  const def = providerForConference(after.conferenceProvider);
+  if (!def) return false;
+  // A pasted link is the member's own; only an empty one asks us to make it.
+  if (after.conferenceUrl) return false;
+  return integrations.conference.has(def.integration);
 }
 
 /** Whether the Google mirror has work to do for this event state. */
@@ -324,6 +385,21 @@ async function afterSave(
     await enqueueJob(ctx.db, {
       orgId: ctx.organizationId,
       kind: "gcal",
+      key: after.id,
+      payload: { eventId: after.id },
+    });
+  }
+  if (needsConferenceSync(integrations, after, before)) {
+    // PENDING first, so the Meetings list can say "getting the link" rather
+    // than showing an online meeting with nowhere to join. Raw, like the
+    // Google backfill: marking a row PENDING is not an edit, so updatedAt
+    // stays where it was.
+    await ctx.db.$executeRaw`
+      UPDATE "Event" SET "conferenceSyncState" = 'PENDING'::"CalendarSyncState"
+       WHERE "organizationId" = ${ctx.organizationId} AND "id" = ${after.id}`;
+    await enqueueJob(ctx.db, {
+      orgId: ctx.organizationId,
+      kind: "conference-sync",
       key: after.id,
       payload: { eventId: after.id },
     });
@@ -398,6 +474,10 @@ export async function createEvent(
       createdById: ctx.userId,
       conferenceUrl:
         data.conferenceProvider === ConferenceProvider.NONE ? null : data.conferenceUrl,
+      format: formatOf({
+        conferenceProvider: data.conferenceProvider,
+        location: data.location ?? null,
+      }),
       hostName: data.hostUserId ? null : data.hostName,
       suiteEditedAt: (options.origin ?? "suite") === "suite" ? new Date() : null,
       syncVersion: 1,
@@ -452,6 +532,10 @@ export async function updateEvent(
     data: {
       ...changes,
       conferenceUrl,
+      format: formatOf({
+        conferenceProvider: merged.conferenceProvider,
+        location: merged.location ?? null,
+      }),
       ...(changes.hostUserId ? { hostName: null } : {}),
       ...((options.origin ?? "suite") === "suite" ? { suiteEditedAt: new Date() } : {}),
       syncVersion: { increment: 1 },
