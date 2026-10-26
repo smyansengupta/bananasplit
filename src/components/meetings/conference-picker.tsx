@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ConferenceProvider } from "@/generated/prisma/enums";
+import { CONFERENCE_PROVIDER_OF as PROVIDER_OF } from "@/lib/meetings/connected-provider";
 import type { MeetingConnection } from "@/server/conference/connections";
 import { cn } from "@/lib/utils";
 
@@ -31,13 +32,11 @@ import { cn } from "@/lib/utils";
  * page first". Consent opens in a NEW TAB on purpose - a redirect would throw
  * away the half-filled meeting behind this dialog - and coming back re-reads
  * the connections, so the provider you just connected is simply there.
+ *
+ * The form reads the connections (`useMeetingConnections`) and hands them in,
+ * because it needs them too: a new online meeting starts on the first
+ * provider that is connected.
  */
-
-const PROVIDER_OF: Record<string, ConferenceProvider> = {
-  GOOGLE_MEET: ConferenceProvider.MEET,
-  ZOOM: ConferenceProvider.ZOOM,
-  MICROSOFT_TEAMS: ConferenceProvider.TEAMS,
-};
 
 /** Re-reads the org's connections, and again whenever this tab regains focus. */
 export function useMeetingConnections(orgId: string): MeetingConnection[] | null {
@@ -65,7 +64,7 @@ export function useMeetingConnections(orgId: string): MeetingConnection[] | null
 }
 
 export function ConferencePicker({
-  orgId,
+  connections,
   provider,
   onProviderChange,
   conferenceUrl,
@@ -74,7 +73,8 @@ export function ConferencePicker({
   managed,
   disabled,
 }: {
-  orgId: string;
+  /** The organization's connections (`useMeetingConnections`); null while they load. */
+  connections: MeetingConnection[] | null;
   provider: ConferenceProvider;
   onProviderChange: (next: ConferenceProvider) => void;
   conferenceUrl: string;
@@ -82,7 +82,6 @@ export function ConferencePicker({
   managed?: boolean;
   disabled?: boolean;
 }) {
-  const connections = useMeetingConnections(orgId);
   const rows = connections ?? [];
   const pasting = provider === ConferenceProvider.OTHER;
   const chosen = rows.find((c) => PROVIDER_OF[c.provider] === provider) ?? null;

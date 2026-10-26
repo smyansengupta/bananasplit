@@ -188,7 +188,7 @@ export function isExactPage(href: string, pathname: string, search: string = "")
   return true;
 }
 
-export type CreateActionId = "task" | "event" | "note" | "poll" | "find-a-time";
+export type CreateActionId = "task" | "event" | "meeting" | "note" | "poll" | "find-a-time";
 
 export interface CreateAction {
   id: CreateActionId;
@@ -206,6 +206,9 @@ export interface CreateAction {
  * - New task: Tasks with ?new=1, which starts one there (as `c` does).
  * - New event: the Calendar with ?new=1, which opens the event form; only
  *   for those who may create events.
+ * - New meeting: Meetings with ?new=1, which opens the same form there, so a
+ *   meeting made from anywhere lands on its own page; only when Meetings is
+ *   in the sidebar, and for those who may create events.
  * - New note: a blank private note, made by the menu, then opened.
  * - New poll: Polls' "Ask a question" (clubs only; Personal has no polls).
  * - Find a time: a new availability poll.
@@ -236,6 +239,14 @@ export function createActions(
       label: "New event",
       icon: "CalendarPlus",
       href: `${path("calendar")}?${NEW_EVENT_PARAM}=1`,
+    });
+  }
+  if (links.has("meetings") && canCreateEvents) {
+    actions.push({
+      id: "meeting",
+      label: "New meeting",
+      icon: "Video",
+      href: `${path("meetings")}?${NEW_EVENT_PARAM}=1`,
     });
   }
   if (links.has("notes")) actions.push({ id: "note", label: "New note", icon: "NotebookPen" });

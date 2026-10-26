@@ -38,11 +38,12 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { allDaySpan } from "@/lib/calendar/dates";
+import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
 import { DEFAULT_REMINDER_MINUTES, sameReminderOffsets } from "@/lib/meetings/reminders";
 import { SHAPES, SHAPE_META, shapeFields, type MeetingShape } from "@/lib/meetings/shape";
 import { cn } from "@/lib/utils";
 
-import { ConferencePicker } from "@/components/meetings/conference-picker";
+import { ConferencePicker, useMeetingConnections } from "@/components/meetings/conference-picker";
 import { ReminderPicker } from "@/components/meetings/reminder-picker";
 import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
 import { MemberMultiPicker, type CalendarMember } from "./member-picker";
@@ -72,7 +73,13 @@ import { toDateInputValue, toDateTimeLocalValue } from "./utils";
  *   shape does not ask are kept while the form is open, so switching back finds
  *   them, but Save never sends them. EDITING asks everything, so a meeting
  *   can gain a call or a place later.
+ * - Online starts on the first video call the organization has connected, and
+ *   will not save without one (a link to paste counts): a meeting with no call
+ *   and no place would be stored as In person and say nothing about where it is.
  */
+
+/** Said when an online meeting would be saved with no call. */
+const NO_CALL_ERROR = "Choose a video call or paste a link, or pick In person.";
 
 /** The event as the form edits it (serializable from a server component). */
 export interface EventFormEvent {
@@ -130,6 +137,12 @@ interface Props {
    */
   defaultReminderMinutes?: number[];
   members: CalendarMember[];
+  /**
+   * Where a newly created meeting goes next (Meetings: its own page), or null
+   * to stay and refresh, as the Calendar does. Not asked for an edit. A new
+   * Event goes on to its sign-up settings instead, before this is asked.
+   */
+  afterCreate?: (eventId: string) => string | null;
   onSaved?: () => void;
   onDeleted?: () => void;
 }
@@ -213,6 +226,7 @@ function EventForm({
   defaultShape,
   defaultReminderMinutes = [...DEFAULT_REMINDER_MINUTES],
   members,
+  afterCreate,
   onSaved,
   onDeleted,
 }: Omit<Props, "open">) {
@@ -248,6 +262,19 @@ function EventForm({
     event?.conferenceProvider ?? ConferenceProvider.NONE,
   );
   const [conferenceUrl, setConferenceUrl] = useState(event?.conferenceUrl ?? "");
+  // The picker draws these, and a new online meeting starts on the first one
+  // that is connected: when Online is chosen (below), or, if the form opened
+  // on Online, once the connections arrive. Only that once; after it, a call
+  // you took off (or a provider you connected in another tab) is left alone.
+  const connections = useMeetingConnections(orgId);
+  const connected = firstConnectedProvider(connections);
+  const [connectionsSeen, setConnectionsSeen] = useState(false);
+  if (!connectionsSeen && connections !== null) {
+    setConnectionsSeen(true);
+    if (!event && shape === "online" && provider === ConferenceProvider.NONE && connected) {
+      setProvider(connected);
+    }
+  }
   const [host, setHost] = useState<string>(
     event?.hostUserId ?? (event?.hostName ? GUEST_HOST : NO_HOST),
   );
@@ -272,6 +299,25 @@ function EventForm({
   // it up. Whatever was typed for a question that is not asked is not sent.
   const fields = event ? EDIT_FIELDS : shapeFields(shape);
   const callProvider = fields.call ? provider : ConferenceProvider.NONE;
+
+  /** The error that asks for a call goes once there is one to choose (or another shape). */
+  function dropNoCallError() {
+    setError((current) => (current === NO_CALL_ERROR ? null : current));
+  }
+
+  function chooseShape(next: MeetingShape) {
+    setShape(next);
+    dropNoCallError();
+    // Online with no call chosen starts on the one the organization has connected.
+    if (next === "online" && provider === ConferenceProvider.NONE && connected) {
+      setProvider(connected);
+    }
+  }
+
+  function chooseProvider(next: ConferenceProvider) {
+    setProvider(next);
+    dropNoCallError();
+  }
 
   function toggleAllDay(next: boolean) {
     setAllDay(next);
@@ -346,6 +392,11 @@ function EventForm({
       setError("The event ends before it starts. Check the end time.");
       return;
     }
+    // An online meeting with no call would be saved as In person, with no place.
+    if (!event && shape === "online" && callProvider === ConferenceProvider.NONE) {
+      setError(NO_CALL_ERROR);
+      return;
+    }
     startTransition(async () => {
       const result = event
         ? await updateEvent(orgId, event.id, payload())
@@ -365,7 +416,11 @@ function EventForm({
       }
       onOpenChange(false);
       onSaved?.();
-      router.refresh();
+      // A new meeting goes where the page that opened this says; with nowhere
+      // to go (the Calendar, or an edit) the page stays and is refreshed.
+      const next = !event && result.eventId ? afterCreate?.(result.eventId) : null;
+      if (next) router.push(next);
+      else router.refresh();
     });
   }
 
@@ -405,7 +460,7 @@ function EventForm({
       </DialogHeader>
 
       <div className="space-y-4">
-        {!event && <ShapePicker value={shape} onChange={setShape} />}
+        {!event && <ShapePicker value={shape} onChange={chooseShape} />}
 
         <div className="grid gap-1.5">
           <Label htmlFor="event-title">Title</Label>
@@ -561,9 +616,9 @@ function EventForm({
         */}
         {fields.call && (
           <ConferencePicker
-            orgId={orgId}
+            connections={connections}
             provider={provider}
-            onProviderChange={setProvider}
+            onProviderChange={chooseProvider}
             conferenceUrl={conferenceUrl}
             onUrlChange={setConferenceUrl}
             managed={event?.conferenceManaged ?? false}

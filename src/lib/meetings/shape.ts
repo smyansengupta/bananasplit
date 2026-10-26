@@ -60,3 +60,17 @@ export function shapeFromParam(value: string | null | undefined): MeetingShape |
   if (value === "rsvp") return "event";
   return SHAPES.find((shape) => shape === value) ?? null;
 }
+
+/**
+ * What a `?new=` value asks for: nothing (null), a new meeting with nothing
+ * preset (`1`, the create menu's), or a new meeting on a shape (`online`,
+ * `in-person`, `event`, and the old `rsvp`). The Calendar and Meetings both
+ * read it, so a link that opens the form means the same in either.
+ */
+export function newMeetingAsk(
+  value: string | null | undefined,
+): { shape: MeetingShape | null } | null {
+  if (value === "1") return { shape: null };
+  const shape = shapeFromParam(value);
+  return shape ? { shape } : null;
+}

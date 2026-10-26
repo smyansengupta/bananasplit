@@ -16,7 +16,17 @@ const mocks = vi.hoisted(() => ({
   createEvent: vi.fn(),
   updateEvent: vi.fn(),
   turnOnRsvpPage: vi.fn(),
+  /** What the organization has connected; null is "still loading". */
+  connections: {
+    current: [] as { provider: string; connected: boolean }[] | null,
+  },
 }));
+
+const ZOOM_CONNECTED = [
+  { provider: "GOOGLE_MEET", connected: false },
+  { provider: "ZOOM", connected: true },
+  { provider: "MICROSOFT_TEAMS", connected: false },
+];
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
@@ -33,13 +43,18 @@ vi.mock("@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions", () => ({
 vi.mock("@/components/ui/confirm-dialog", () => ({ useConfirm: () => [null, vi.fn()] }));
 // The real picker reads the organization's connections; this one only reports what was chosen.
 vi.mock("@/components/meetings/conference-picker", () => ({
+  useMeetingConnections: () => mocks.connections.current,
   ConferencePicker: (props: {
+    provider: string;
     onProviderChange: (provider: string) => void;
     onUrlChange: (url: string) => void;
   }) => (
-    <div data-testid="conference-picker">
+    <div data-testid="conference-picker" data-provider={props.provider}>
       <button type="button" onClick={() => props.onProviderChange("ZOOM")}>
         Use Zoom
+      </button>
+      <button type="button" onClick={() => props.onProviderChange("NONE")}>
+        No video call
       </button>
       <button
         type="button"
@@ -91,8 +106,8 @@ function event(overrides: Partial<EventFormEvent> = {}): EventFormEvent {
   };
 }
 
-function open(props: Partial<Parameters<typeof EventFormDialog>[0]> = {}) {
-  return render(
+function dialog(props: Partial<Parameters<typeof EventFormDialog>[0]> = {}) {
+  return (
     <EventFormDialog
       orgId="org_1"
       timeZone="America/New_York"
@@ -101,8 +116,13 @@ function open(props: Partial<Parameters<typeof EventFormDialog>[0]> = {}) {
       event={null}
       members={[]}
       {...props}
-    />,
+    />
   );
+}
+
+function open(props: Partial<Parameters<typeof EventFormDialog>[0]> = {}) {
+  const view = render(dialog(props));
+  return { ...view, again: () => view.rerender(dialog(props)) };
 }
 
 const pressed = (name: string) =>
@@ -125,6 +145,7 @@ beforeEach(() => {
   mocks.createEvent.mockReset();
   mocks.updateEvent.mockReset();
   mocks.turnOnRsvpPage.mockReset();
+  mocks.connections.current = [];
 });
 afterEach(() => cleanup());
 
@@ -230,6 +251,133 @@ describe("EventFormDialog: the shape of a new meeting", () => {
       });
       expect(mocks.turnOnRsvpPage).not.toHaveBeenCalled();
     });
+
+    it("Online preselects the connected provider", async () => {
+      mocks.connections.current = ZOOM_CONNECTED;
+      mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+      open({ defaultShape: "online" });
+
+      expect(picker()?.getAttribute("data-provider")).toBe("ZOOM");
+      typeTitle("Standup");
+      save();
+
+      await waitFor(() => expect(mocks.createEvent).toHaveBeenCalled());
+      expect(mocks.createEvent.mock.calls[0]![1]).toMatchObject({
+        conferenceProvider: "ZOOM",
+        location: null,
+      });
+    });
+
+    it("preselects it when Online is picked after the form opened on another shape", async () => {
+      mocks.connections.current = ZOOM_CONNECTED;
+      mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+      open();
+
+      fireEvent.click(shape("Online"));
+
+      expect(picker()?.getAttribute("data-provider")).toBe("ZOOM");
+      typeTitle("Standup");
+      save();
+      await waitFor(() => expect(mocks.createEvent).toHaveBeenCalled());
+      expect(mocks.createEvent.mock.calls[0]![1]).toMatchObject({ conferenceProvider: "ZOOM" });
+    });
+
+    it("preselects it when the connections arrive after the form opened on Online", () => {
+      mocks.connections.current = null;
+      const view = open({ defaultShape: "online" });
+      expect(picker()?.getAttribute("data-provider")).toBe("NONE");
+
+      mocks.connections.current = ZOOM_CONNECTED;
+      view.again();
+
+      expect(picker()?.getAttribute("data-provider")).toBe("ZOOM");
+    });
+
+    it("does not choose a call for an Event, which may have none", async () => {
+      mocks.connections.current = ZOOM_CONNECTED;
+      mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+      mocks.turnOnRsvpPage.mockResolvedValue({});
+      open({ defaultShape: "event" });
+
+      expect(picker()?.getAttribute("data-provider")).toBe("NONE");
+      typeTitle("Open house");
+      save();
+
+      await waitFor(() => expect(mocks.createEvent).toHaveBeenCalled());
+      expect(mocks.createEvent.mock.calls[0]![1]).toMatchObject({ conferenceProvider: "NONE" });
+    });
+
+    it("keeps a call that was chosen over the connected one", () => {
+      mocks.connections.current = [
+        { provider: "GOOGLE_MEET", connected: true },
+        { provider: "ZOOM", connected: true },
+      ];
+      open({ defaultShape: "online" });
+      expect(picker()?.getAttribute("data-provider")).toBe("MEET");
+
+      fireEvent.click(screen.getByRole("button", { name: "Use Zoom" }));
+      fireEvent.click(shape("In person"));
+      fireEvent.click(shape("Online"));
+
+      expect(picker()?.getAttribute("data-provider")).toBe("ZOOM");
+    });
+
+    it("Online with no call and nothing connected asks for one", async () => {
+      mocks.connections.current = [
+        { provider: "GOOGLE_MEET", connected: false },
+        { provider: "ZOOM", connected: false },
+      ];
+      open({ defaultShape: "online" });
+
+      typeTitle("Standup");
+      save();
+
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toBe("Choose a video call or paste a link, or pick In person.");
+      expect(mocks.createEvent).not.toHaveBeenCalled();
+      expect(mocks.refresh).not.toHaveBeenCalled();
+    });
+
+    it("asks for a call when it was cleared, even with a provider connected", async () => {
+      mocks.connections.current = ZOOM_CONNECTED;
+      open({ defaultShape: "online" });
+
+      typeTitle("Standup");
+      fireEvent.click(screen.getByRole("button", { name: "No video call" }));
+      save();
+
+      expect((await screen.findByRole("alert")).textContent).toBe(
+        "Choose a video call or paste a link, or pick In person.",
+      );
+      expect(mocks.createEvent).not.toHaveBeenCalled();
+    });
+
+    it("saves once a call is chosen after being asked", async () => {
+      mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+      open({ defaultShape: "online" });
+
+      typeTitle("Standup");
+      save();
+      await screen.findByRole("alert");
+      fireEvent.click(screen.getByRole("button", { name: "Paste a link" }));
+      save();
+
+      await waitFor(() => expect(mocks.createEvent).toHaveBeenCalled());
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(mocks.createEvent.mock.calls[0]![1]).toMatchObject({ conferenceProvider: "OTHER" });
+    });
+
+    it("lets an In person or Event meeting save with no call", async () => {
+      mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+      open({ defaultShape: "online" });
+
+      typeTitle("Standup");
+      fireEvent.click(shape("In person"));
+      save();
+
+      await waitFor(() => expect(mocks.createEvent).toHaveBeenCalled());
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
   });
 
   describe("In person", () => {
@@ -293,6 +441,8 @@ describe("EventFormDialog: the shape of a new meeting", () => {
         target: { value: "Second floor." },
       });
       fireEvent.click(shape("Online"));
+      // An online meeting needs its call (see "Online" above); the place is what is under test.
+      fireEvent.click(screen.getByRole("button", { name: "Use Zoom" }));
       save();
 
       await waitFor(() => expect(mocks.createEvent).toHaveBeenCalled());
@@ -483,6 +633,112 @@ describe("EventFormDialog: the shape of a new meeting", () => {
       await waitFor(() => expect(mocks.updateEvent).toHaveBeenCalled());
       expect(mocks.updateEvent.mock.calls[0]![2]).toMatchObject({ locationDetails: null });
     });
+  });
+});
+
+describe("EventFormDialog: after a create", () => {
+  it("goes where afterCreate says, instead of refreshing", async () => {
+    mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+    const afterCreate = vi.fn(() => "/app/acme/meetings/evt_new");
+    open({ afterCreate });
+
+    typeTitle("Workshop");
+    save();
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(afterCreate).toHaveBeenCalledExactlyOnceWith("evt_new");
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/app/acme/meetings/evt_new");
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it("closes the form and tells onSaved first", async () => {
+    mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+    const onOpenChange = vi.fn();
+    const onSaved = vi.fn();
+    open({ afterCreate: () => "/app/acme/meetings/evt_new", onOpenChange, onSaved });
+
+    typeTitle("Workshop");
+    save();
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes, as it always did, when afterCreate has nowhere to send it", async () => {
+    mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+    const afterCreate = vi.fn(() => null);
+    open({ afterCreate });
+
+    typeTitle("Workshop");
+    save();
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    expect(afterCreate).toHaveBeenCalledExactlyOnceWith("evt_new");
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("refreshes when there is no afterCreate, as on the Calendar", async () => {
+    mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+    open();
+
+    typeTitle("Workshop");
+    save();
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("goes to the sign-up settings first for an Event, and afterCreate has no say", async () => {
+    mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+    mocks.turnOnRsvpPage.mockResolvedValue({});
+    const afterCreate = vi.fn(() => "/app/acme/meetings/evt_new");
+    open({ defaultShape: "event", afterCreate });
+
+    typeTitle("Open house");
+    save();
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/app/acme/meetings/evt_new/rsvp?new=1");
+    expect(afterCreate).not.toHaveBeenCalled();
+  });
+
+  it("uses afterCreate when an Event was switched to another shape before saving", async () => {
+    mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+    open({ defaultShape: "event", afterCreate: (id) => `/app/acme/meetings/${id}` });
+
+    typeTitle("Open house");
+    fireEvent.click(shape("In person"));
+    save();
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/app/acme/meetings/evt_new");
+    expect(mocks.turnOnRsvpPage).not.toHaveBeenCalled();
+  });
+
+  it("does not run when the meeting was not saved", async () => {
+    mocks.createEvent.mockResolvedValue({ error: "That did not save." });
+    const afterCreate = vi.fn(() => "/app/acme/meetings/evt_new");
+    open({ afterCreate });
+
+    typeTitle("Workshop");
+    save();
+
+    expect(await screen.findByText("That did not save.")).toBeTruthy();
+    expect(afterCreate).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("does not run for an edit, which refreshes", async () => {
+    mocks.updateEvent.mockResolvedValue({ eventId: "evt_1" });
+    const afterCreate = vi.fn(() => "/app/acme/meetings/evt_1");
+    open({ event: event(), afterCreate });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    expect(afterCreate).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 });
 

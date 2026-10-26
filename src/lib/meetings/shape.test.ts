@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SHAPES, SHAPE_META, shapeFields, shapeFromParam } from "./shape";
+import { SHAPES, SHAPE_META, newMeetingAsk, shapeFields, shapeFromParam } from "./shape";
 
 /**
  * The three shapes a new meeting starts as (docs/features/meetings.md): what
@@ -61,5 +61,26 @@ describe("shapeFromParam", () => {
     expect(shapeFromParam("in_person")).toBeNull();
     expect(shapeFromParam(null)).toBeNull();
     expect(shapeFromParam(undefined)).toBeNull();
+  });
+});
+
+describe("newMeetingAsk", () => {
+  it("reads ?new=1 as a new meeting with no shape picked", () => {
+    expect(newMeetingAsk("1")).toEqual({ shape: null });
+  });
+
+  it("reads a shape, and the old ?new=rsvp as an event", () => {
+    expect(newMeetingAsk("online")).toEqual({ shape: "online" });
+    expect(newMeetingAsk("in-person")).toEqual({ shape: "in-person" });
+    expect(newMeetingAsk("event")).toEqual({ shape: "event" });
+    expect(newMeetingAsk("rsvp")).toEqual({ shape: "event" });
+  });
+
+  it("reads anything else as no ask at all", () => {
+    expect(newMeetingAsk("")).toBeNull();
+    expect(newMeetingAsk("yes")).toBeNull();
+    expect(newMeetingAsk("Online")).toBeNull();
+    expect(newMeetingAsk(null)).toBeNull();
+    expect(newMeetingAsk(undefined)).toBeNull();
   });
 });

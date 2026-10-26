@@ -1,8 +1,9 @@
-import { Plus, Ticket, Video } from "@/components/icons";
+import { Ticket, Video } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
 import { Cover, listWhen, MeetingCard, type MeetingRow } from "@/components/meetings/meeting-card";
+import { NewMeetingButton } from "@/components/meetings/new-meeting-button";
 import { VideoConnections } from "@/components/meetings/video-connections";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -11,10 +12,13 @@ import { getUserIdentity } from "@/lib/auth/email-verification";
 import { isPlatformAdmin } from "@/lib/auth/org-creation";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
-import { newRsvpEventHref } from "@/lib/calendar/range";
+import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
 import { conferenceStatus } from "@/lib/meetings/conference-status";
+import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
+import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { getOrgMembersForPicker } from "@/server/members";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
 import {
@@ -31,6 +35,11 @@ const CONNECT_NOTICES: Record<string, string> = {
 /** Your sign-ups read for this page (the lookup's own ceiling). */
 const MY_TICKETS = 50;
 
+/** A query parameter given twice is read as its first. */
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 /**
  * Meetings, its own sidebar section in Personal and in every organization:
  * - Your tickets: events you're going to or waitlisted for. In Personal,
@@ -41,6 +50,9 @@ const MY_TICKETS = 50;
  *   page taking sign-ups, still to come.
  * Every card opens the meeting's page (`/meetings/{id}`); Join and Copy link
  * are on the card for the one thing most people come here to do.
+ * - New meeting (whoever can create events) opens the create form in place.
+ *   `?new=1` opens it on arrival, and `?new=online|in-person|event` on that
+ *   shape, which is how the + menu and other pages start one here.
  */
 export default async function MeetingsPage({
   params,
@@ -54,6 +66,12 @@ export default async function MeetingsPage({
   const { organization: org, user } = ctx;
   const personal = org.kind === "PERSONAL";
   const canManage = can(ctx, "events.write");
+  // ?new= opens New meeting on arrival (and only for someone who can make one).
+  const askedNew = canManage ? newMeetingAsk(first(sp[NEW_EVENT_PARAM])) : null;
+  // A new meeting starts with the organization's reminders (Settings > General).
+  const defaultReminderMinutes = ctx.settings?.meetingReminderMinutes ?? [
+    ...DEFAULT_REMINDER_MINUTES,
+  ];
   // Connecting a video account is the same right as any other integration:
   // owners and admins, not everyone who can make an event.
   const canConnectVideo = can(ctx, "integrations.write");
@@ -63,7 +81,7 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts }, registrations, connections] = await Promise.all([
+  const [{ events, counts }, registrations, connections, members] = await Promise.all([
     withOrgTx(org.id, async ({ db }) => {
       const rows: MeetingRow[] = await db.event.findMany({
         where: {
@@ -124,6 +142,8 @@ export default async function MeetingsPage({
     }),
     myRsvpRegistrations(user.id, MY_TICKETS),
     canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
+    // The create form's host and invite pickers, for whoever can make a meeting.
+    canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
   ]);
 
   const countOf = (eventId: string, status: string) =>
@@ -133,17 +153,21 @@ export default async function MeetingsPage({
   const ticketFor = new Map(tickets.map((r) => [r.eventId, r]));
   const upcoming = events.filter((e) => e.endsAt > now);
   const past = events.filter((e) => e.endsAt <= now).reverse();
-  // Whoever can make events: the Calendar's New event, with the RSVP page on.
+  // Whoever can make events: New meeting, which opens the create form here.
   // The header's is the screen's one create button; the empty state repeats
-  // it quietly.
-  const newEvent = (variant: "create" | "secondary") =>
+  // it quietly. Only the header's opens on arrival (?new=), so there is one
+  // dialog and one param to drop.
+  const newMeeting = (variant: "create" | "secondary", opensOnArrival = false) =>
     canManage ? (
-      <Button variant={variant} asChild>
-        <Link href={newRsvpEventHref(orgSlug)}>
-          <Plus aria-hidden="true" />
-          New event
-        </Link>
-      </Button>
+      <NewMeetingButton
+        orgId={org.id}
+        timeZone={timeZone}
+        members={members}
+        defaultReminderMinutes={defaultReminderMinutes}
+        initialShape={opensOnArrival ? (askedNew?.shape ?? null) : null}
+        startOpen={opensOnArrival && askedNew !== null}
+        variant={variant}
+      />
     ) : null;
 
   // The live line: what's taking sign-ups now, and who's coming.
@@ -203,7 +227,7 @@ export default async function MeetingsPage({
               ? "Set up a call, an in-person meeting, or an event with a sign-up page."
               : "What's coming up that you can join or sign up for.")
         }
-        actions={newEvent("create")}
+        actions={newMeeting("create", true)}
       />
 
       {canManage && (
@@ -249,7 +273,7 @@ export default async function MeetingsPage({
                 made for you.
               </>
             }
-            action={newEvent("secondary")}
+            action={newMeeting("secondary")}
           />
         ) : (
           <EmptyState

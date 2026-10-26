@@ -17,7 +17,12 @@ const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   toast: vi.fn(),
   formProps: {
-    current: null as null | { onDeleted?: () => void; defaultReminderMinutes?: number[] },
+    current: null as null | {
+      open?: boolean;
+      event?: { id: string } | null;
+      onDeleted?: () => void;
+      defaultReminderMinutes?: number[];
+    },
   },
 }));
 
@@ -35,7 +40,12 @@ vi.mock("@/components/ui/confirm-dialog", () => ({
 }));
 vi.mock("@/components/ui/toaster", () => ({ toast: mocks.toast }));
 vi.mock("./event-form-dialog", () => ({
-  EventFormDialog: (props: { onDeleted?: () => void; defaultReminderMinutes?: number[] }) => {
+  EventFormDialog: (props: {
+    open?: boolean;
+    event?: { id: string } | null;
+    onDeleted?: () => void;
+    defaultReminderMinutes?: number[];
+  }) => {
     mocks.formProps.current = props;
     return null;
   },
@@ -241,11 +251,31 @@ describe("EventDetailView: managing sign-ups", () => {
   const sections = ["calendar", "meetings"] as const;
   const live = { enabled: true, url: "https://app.test/e/abc12345", going: 3, waitlist: 1 };
 
-  it.each(sections)("offers the meeting's sign-up screen to set up a page (%s)", (section) => {
-    view({ canEdit: true, section });
+  it("offers the meeting's sign-up screen to set up a page, as 'Set up an RSVP page' on the Calendar", () => {
+    view({ canEdit: true, section: "calendar" });
 
     const set = screen.getByRole("link", { name: /Set up an RSVP page/ });
     expect(set.getAttribute("href")).toBe("/app/club/meetings/evt_1/rsvp");
+    expect(screen.queryByRole("link", { name: /Add a sign-up page/ })).toBeNull();
+  });
+
+  it("calls it 'Add a sign-up page' under Meetings, to the same screen", () => {
+    view({ canEdit: true, section: "meetings" });
+
+    const set = screen.getByRole("link", { name: /Add a sign-up page/ });
+    expect(set.getAttribute("href")).toBe("/app/club/meetings/evt_1/rsvp");
+    expect(screen.queryByRole("link", { name: /Set up an RSVP page/ })).toBeNull();
+  });
+
+  it("keeps 'Manage guests and page' for a page that is already on, in both sections", () => {
+    view({
+      canEdit: true,
+      section: "meetings",
+      rsvp: { ...live, capacity: null },
+    });
+
+    expect(screen.getByRole("link", { name: /Manage guests and page/ })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Add a sign-up page/ })).toBeNull();
   });
 
   it.each(sections)("sends the guest-list button to the meeting's sign-ups (%s)", (section) => {
@@ -375,5 +405,67 @@ describe("EventDetailView: a meeting's reminders", () => {
     view({ section: "meetings", canEdit: true, defaultReminderMinutes: [120] });
 
     expect(mocks.formProps.current?.defaultReminderMinutes).toEqual([120]);
+  });
+});
+
+describe("EventDetailView: adding a call to an in-person meeting", () => {
+  const NO_CALL = { conferenceProvider: "NONE", conferenceUrl: null } as const;
+  const addCall = () => screen.queryByRole("button", { name: "Add a video call" });
+
+  it("offers an editor of a meeting with no call a way to add one", () => {
+    view({ section: "meetings", canEdit: true }, NO_CALL);
+
+    expect(addCall()).toBeTruthy();
+  });
+
+  it("opens the edit form, which asks for the call", () => {
+    view({ section: "meetings", canEdit: true }, NO_CALL);
+    expect(mocks.formProps.current?.open).toBe(false);
+
+    fireEvent.click(addCall()!);
+
+    expect(mocks.formProps.current?.open).toBe(true);
+    expect(mocks.formProps.current?.event?.id).toBe("evt_1");
+  });
+
+  it("is the same form 'Edit event' opens", () => {
+    view({ section: "meetings", canEdit: true }, NO_CALL);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit event" }));
+
+    expect(mocks.formProps.current?.open).toBe(true);
+    expect(mocks.formProps.current?.event?.id).toBe("evt_1");
+  });
+
+  it("is not offered to someone who cannot edit the meeting", () => {
+    view({ section: "meetings", canEdit: false }, NO_CALL);
+
+    expect(addCall()).toBeNull();
+  });
+
+  it("is not on the Calendar's page", () => {
+    view({ section: "calendar", canEdit: true }, NO_CALL);
+
+    expect(addCall()).toBeNull();
+  });
+
+  it("is not offered once the meeting has a call, even one whose link is still on its way", () => {
+    view(
+      {
+        section: "meetings",
+        canEdit: true,
+        joinCard: <div data-testid="join-card">the join card</div>,
+      },
+      { conferenceProvider: "ZOOM", conferenceUrl: null },
+    );
+
+    expect(screen.getByTestId("join-card")).toBeTruthy();
+    expect(addCall()).toBeNull();
+  });
+
+  it("is not offered beside a call that has a link", () => {
+    view({ section: "meetings", canEdit: true });
+
+    expect(addCall()).toBeNull();
   });
 });

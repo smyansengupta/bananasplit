@@ -34,6 +34,7 @@ import {
   windowDays,
 } from "@/lib/calendar/grid";
 import { calendarSearch, NEW_EVENT_PARAM, type CalendarView } from "@/lib/calendar/range";
+import { newMeetingAsk, shapeFromParam, type MeetingShape } from "@/lib/meetings/shape";
 import { cn } from "@/lib/utils";
 
 import { AgendaList } from "./agenda-list";
@@ -130,26 +131,25 @@ export function EventCalendar({
   const [isPending, startTransition] = useTransition();
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // ?new=1 (the create menu's "New event") and ?new=rsvp (the RSVPs page's
-  // "New event", its RSVP page switched on) arrive with New event
-  // open. The state is adjusted while rendering, not in an effect, so it
-  // also works when the calendar is already on screen.
+  // ?new=1 (the create menu's "New event") arrives with New event open, and
+  // so does ?new=online|in-person|event (or the old ?new=rsvp, an event) on
+  // that shape. The state is adjusted while rendering, not in an effect, so
+  // it also works when the calendar is already on screen.
   const asked = canManage ? searchParams.get(NEW_EVENT_PARAM) : null;
-  const askedNew = asked === "1" || asked === "rsvp" ? asked : null;
+  const askedNew = newMeetingAsk(asked) ? asked : null;
+  const askedShape = shapeFromParam(askedNew) ?? undefined;
   const [peek, setPeek] = useState<PeekAnchor | null>(null);
   const [dialog, setDialog] = useState<
-    | { mode: "create"; start: Date | null; allDay: boolean; rsvp?: boolean }
+    | { mode: "create"; start: Date | null; allDay: boolean; shape?: MeetingShape }
     | { mode: "edit"; event: EventFormEvent }
     | null
-  >(() =>
-    askedNew ? { mode: "create", start: null, allDay: false, rsvp: askedNew === "rsvp" } : null,
-  );
+  >(() => (askedNew ? { mode: "create", start: null, allDay: false, shape: askedShape } : null));
   const [openedNew, setOpenedNew] = useState(askedNew);
   if (askedNew !== openedNew) {
     setOpenedNew(askedNew);
     if (askedNew) {
       setPeek(null);
-      setDialog({ mode: "create", start: null, allDay: false, rsvp: askedNew === "rsvp" });
+      setDialog({ mode: "create", start: null, allDay: false, shape: askedShape });
     }
   }
 
@@ -638,7 +638,7 @@ export function EventCalendar({
           event={null}
           defaultStart={dialog.start}
           defaultAllDay={dialog.allDay}
-          defaultRsvpPage={dialog.rsvp}
+          defaultShape={dialog.shape}
           defaultReminderMinutes={defaultReminderMinutes}
           members={members}
           onSaved={() => setDialog(null)}

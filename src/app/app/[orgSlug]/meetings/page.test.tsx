@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   groupBy: vi.fn(),
   registrations: vi.fn(),
   connections: vi.fn(),
+  members: vi.fn(),
   Card: () => null,
+  NewButton: () => null,
 }));
 
 vi.mock("@/server/db/context", () => ({
@@ -37,6 +39,8 @@ vi.mock("@/components/meetings/meeting-card", () => ({
   listWhen: () => "",
 }));
 vi.mock("@/components/meetings/video-connections", () => ({ VideoConnections: () => null }));
+vi.mock("@/components/meetings/new-meeting-button", () => ({ NewMeetingButton: mocks.NewButton }));
+vi.mock("@/server/members", () => ({ getOrgMembersForPicker: mocks.members }));
 
 const { default: MeetingsPage } = await import("./page");
 
@@ -66,30 +70,45 @@ function stored(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function signIn(role: "OWNER" | "ADMIN" | "MEMBER") {
+function signIn(
+  role: "OWNER" | "ADMIN" | "MEMBER",
+  settings: { meetingReminderMinutes: number[] } | null = null,
+) {
   mocks.context.mockResolvedValue({
     organization: { id: "org_1", kind: "CLUB", timezone: "America/New_York" },
     user: { id: "user_1" },
     role,
-    settings: null,
+    settings,
   });
 }
 
-/** Every MeetingCard's props, wherever the page put it. */
-function cardProps(node: ReactNode): Record<string, unknown>[] {
-  if (Array.isArray(node)) return node.flatMap(cardProps);
+/**
+ * The props of every element of `type`, wherever the page put it: in its
+ * children, or in a prop that takes an element (the header's actions).
+ */
+function propsOf(node: ReactNode, type: unknown): Record<string, unknown>[] {
+  if (Array.isArray(node)) return node.flatMap((child) => propsOf(child, type));
   if (!isValidElement(node)) return [];
-  const el = node as ReactElement<{ children?: ReactNode }>;
-  const own = el.type === mocks.Card ? [el.props as Record<string, unknown>] : [];
-  return [...own, ...cardProps(el.props.children)];
+  const el = node as ReactElement<Record<string, ReactNode>>;
+  const own = el.type === type ? [el.props as Record<string, unknown>] : [];
+  return [...own, ...Object.values(el.props).flatMap((value) => propsOf(value, type))];
 }
 
-async function cards() {
-  const tree = await MeetingsPage({
+async function render(search: Record<string, string | string[]> = {}) {
+  return MeetingsPage({
     params: Promise.resolve({ orgSlug: "club" }),
-    searchParams: Promise.resolve({}),
+    searchParams: Promise.resolve(search),
   } as unknown as PageProps<"/app/[orgSlug]/meetings">);
-  return cardProps(tree);
+}
+
+/** Every MeetingCard's props. */
+async function cards() {
+  return propsOf(await render(), mocks.Card);
+}
+
+/** Every New meeting button's props, header first. */
+async function newButtons(search: Record<string, string | string[]> = {}) {
+  return propsOf(await render(search), mocks.NewButton);
 }
 
 beforeEach(() => {
@@ -99,6 +118,7 @@ beforeEach(() => {
   mocks.groupBy.mockResolvedValue([]);
   mocks.registrations.mockResolvedValue([]);
   mocks.connections.mockResolvedValue([]);
+  mocks.members.mockResolvedValue([]);
 });
 
 describe("the Meetings list: what it loads", () => {
@@ -227,5 +247,102 @@ describe("the Meetings list: sign-ups on the card", () => {
 
     const [member] = await cards();
     expect(member).toMatchObject({ going: 0, waiting: 0, mine: "WAITLIST" });
+  });
+});
+
+describe("the Meetings list: New meeting", () => {
+  const MEMBERS = [{ id: "u1", name: "Ada", image: null, avatar: null, title: null }];
+
+  it("hands the button what the form needs: the members, the timezone and the reminders", async () => {
+    mocks.members.mockResolvedValue(MEMBERS);
+
+    const [button] = await newButtons();
+
+    expect(mocks.members).toHaveBeenCalledExactlyOnceWith("org_1");
+    expect(button).toMatchObject({
+      orgId: "org_1",
+      timeZone: "America/New_York",
+      members: MEMBERS,
+      // The built-in default, when the organization has not set its own.
+      defaultReminderMinutes: [1440, 60],
+    });
+  });
+
+  it("starts a new meeting from the organization's own reminders", async () => {
+    signIn("ADMIN", { meetingReminderMinutes: [10080, 30] });
+
+    const [button] = await newButtons();
+
+    expect(button?.defaultReminderMinutes).toEqual([10080, 30]);
+  });
+
+  it("is in the header, and again in the empty state", async () => {
+    mocks.findMany.mockResolvedValue([]);
+
+    const buttons = await newButtons();
+
+    expect(buttons).toHaveLength(2);
+    expect(buttons.map((b) => b.variant)).toEqual(["create", "secondary"]);
+  });
+
+  it("is only in the header once there are meetings", async () => {
+    const buttons = await newButtons();
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.variant).toBe("create");
+  });
+
+  it("is not offered to a member, and the members are not loaded for one", async () => {
+    signIn("MEMBER");
+    mocks.findMany.mockResolvedValue([]);
+
+    expect(await newButtons()).toEqual([]);
+    expect(await newButtons({ new: "1" })).toEqual([]);
+    expect(mocks.members).not.toHaveBeenCalled();
+  });
+
+  it("does not open on its own", async () => {
+    const [button] = await newButtons();
+
+    expect(button).toMatchObject({ startOpen: false, initialShape: null });
+  });
+
+  it("opens with no shape for ?new=1", async () => {
+    const [button] = await newButtons({ new: "1" });
+
+    expect(button).toMatchObject({ startOpen: true, initialShape: null });
+  });
+
+  it.each([
+    ["online", "online"],
+    ["in-person", "in-person"],
+    ["event", "event"],
+    // The RSVPs page's old link.
+    ["rsvp", "event"],
+  ])("opens on the shape for ?new=%s", async (asked, shape) => {
+    const [button] = await newButtons({ new: asked });
+
+    expect(button).toMatchObject({ startOpen: true, initialShape: shape });
+  });
+
+  it("does not open for a value it does not know", async () => {
+    const [button] = await newButtons({ new: "maybe" });
+
+    expect(button).toMatchObject({ startOpen: false, initialShape: null });
+  });
+
+  it("reads the first when ?new= is given twice", async () => {
+    const [button] = await newButtons({ new: ["online", "event"] });
+
+    expect(button).toMatchObject({ startOpen: true, initialShape: "online" });
+  });
+
+  it("opens only the header's button, not the empty state's copy of it", async () => {
+    mocks.findMany.mockResolvedValue([]);
+
+    const [header, empty] = await newButtons({ new: "event" });
+
+    expect(header).toMatchObject({ startOpen: true, initialShape: "event" });
+    expect(empty).toMatchObject({ startOpen: false, initialShape: null });
   });
 });

@@ -173,6 +173,8 @@ export function EventDetailView({
   const zone = useViewerTimeZone(timeZone);
   const going = event.attendees.filter((a) => a.rsvp === "YES");
   const capacityPct = rsvp.capacity ? (rsvp.going / rsvp.capacity) * 100 : 0;
+  // A meeting with no call (stored as In person), on its own page, for those who can edit it.
+  const canAddCall = section === "meetings" && canEdit && event.conferenceProvider === "NONE";
 
   return (
     <div className="mx-auto max-w-5xl space-y-7">
@@ -307,6 +309,13 @@ export function EventDetailView({
                       </a>
                     </Button>
                   ))}
+                {/* An in-person meeting can gain its call later: the edit form asks for it. */}
+                {canAddCall && (
+                  <Button variant="secondary" onClick={() => setEditOpen(true)}>
+                    <Video aria-hidden className="size-4" />
+                    Add a video call
+                  </Button>
+                )}
                 <Button variant="outline" asChild>
                   <a href={`/api/calendar/${event.id}/ics`} download>
                     <CalendarPlus className="size-4" />
@@ -472,7 +481,11 @@ export function EventDetailView({
                     >
                       <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}>
                         {rsvp.enabled ? <Settings2 aria-hidden /> : <Ticket aria-hidden />}
-                        {rsvp.enabled ? "Manage guests and page" : "Set up an RSVP page"}
+                        {rsvp.enabled
+                          ? "Manage guests and page"
+                          : section === "meetings"
+                            ? "Add a sign-up page"
+                            : "Set up an RSVP page"}
                       </Link>
                     </Button>
                   )}
