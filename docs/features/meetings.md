@@ -150,23 +150,29 @@ is worse than none, because every meeting under it would fail one at a time.
 
 ### Reconnecting picks up waiting meetings
 
-Two kinds of meeting wait for a provider. One was saved before the provider was
-connected: the save path only queues the sync job for a provider that is
+Three kinds of meeting wait for a provider. One was saved before the provider
+was connected: the save path only queues the sync job for a provider that is
 connected, so with nothing else to wake it the meeting would stay without a
-link for good. The other was left `FAILED` by a connection that expired: the
+link for good. Another was left `FAILED` by a connection that expired: the
 job stopped, saying that reconnecting would queue the work again, so
-connecting has to.
+connecting has to. The third is a meeting we made at that provider whose
+cancellation `FAILED` while it was disconnected: the event was deleted or
+merged away, became in person, or moved to another provider. Disconnect
+promises that changes reach the provider once it is connected again, and for
+these the change is calling our meeting off.
 
 `completeConferenceConnect` (`src/server/conference/connect.ts`) calls
 `requeueWaitingMeetings` (`src/server/conference/requeue.ts`) as soon as the
 new connection is stored. It queues a meeting only if the sync job could act
-on it:
+on it, and only one that has not ended yet:
 
-- it is live (not deleted, not merged away), has not ended yet, and is not in
-  person;
-- its provider is the one just connected;
-- it is `FAILED`, or it has no link of any kind. A pasted link is never ours
-  to replace, the same rule the job applies, so it is left alone.
+- waiting for a link: it is live (not deleted, not merged away), not in
+  person, its provider is the one just connected, and it is `FAILED` or has no
+  link of any kind. A pasted link is never ours to replace, the same rule the
+  job applies, so it is left alone;
+- a failed cancellation: we made it (`conferenceManaged`) at the provider just
+  connected (`conferenceManagedAt`) and it is `FAILED`, whatever the event
+  wants now. The job reads `conferenceManagedAt` to know where to cancel.
 
 The rows are set `PENDING` with raw SQL, as the save does, so `updatedAt`
 stays where it was and the meeting does not jump up "recently changed" lists.
@@ -214,9 +220,10 @@ takes the shape of the Google Calendar disconnect, without its revoke job:
 **Teams has no revoke endpoint.** Its connection has nothing to ask, so it
 counts as revoked for step 4 and an owner's disconnect deletes the token, but
 its message says so plainly: remove Bananasplit from that Microsoft account's
-connected apps to revoke access too. A Meet or Zoom revoke that failed still
-disconnects; the message says what is left to do. The result is a sentence and
-never carries a token.
+connected apps to revoke access too. Its audit row records
+`revokedInline: false`, because nothing was revoked. A Meet or Zoom revoke
+that failed still disconnects; the message says what is left to do. The result
+is a sentence and never carries a token.
 
 Nothing here touches an event.
 
@@ -249,7 +256,10 @@ a valid token sits in the store.
   signal, so one caller giving up fails only that caller, and a refresh under
   way still stores what the provider rotated.
 - Across processes, on `invalid_grant` the stored token is read again. If it
-  changed, the refresh is retried once with it. If it did not, the winner may
+  changed, the refresh is retried once with it, through the same cache and
+  single refresh as a caller here that read the newer token itself, so the
+  retry and that caller never refresh it twice (the provider would honour one
+  and refuse the other). If it did not, the winner may
   not have committed yet, so it waits `ROTATION_SETTLE_MS` (one second) and
   reads once more. Only a token that is still unchanged becomes a real
   `NEEDS_REAUTH`: the grant is gone.
@@ -282,17 +292,23 @@ transaction open, and a compare-and-set on `syncVersion` so a save that lands
 mid-flight wins and leaves the row `PENDING` for the job that save queued.
 
 `conferenceManaged` is the line we do not cross: we only move or cancel a
-meeting **we** made. A link someone pasted by hand is never touched.
+meeting **we** made. A link someone pasted by hand is never touched. That
+includes a link pasted in place of a meeting we made: editing a Zoom meeting
+we made to "A link I'll paste" cancels the Zoom meeting, and the cancellation
+clears only our meeting's own fields (`clearedFields` keeps the URL when the
+provider is now `OTHER`), so the pasted link stays.
 
 Two columns, not one, because they answer different questions:
 `conferenceProvider` is what is **wanted now**, and `conferenceManagedAt` is
 **where the meeting actually lives**. They differ for exactly as long as a
 teardown takes. Turning the call off, or switching from Zoom to Meet, changes
 the want first; the Zoom meeting is still out there and has to be called off.
-A switch cancels at the old provider on one run and queues itself again, so
-the next run creates at the new one. Without that split, turning a meeting
-in person left a row the database rightly refused (`conferenceManaged` with no
-provider), and switching would have sent a Zoom id to Google.
+A switch cancels at the old provider on one run and queues itself again, in
+the same transaction that clears our copy and leaves the row `PENDING`
+(`commitAndRecreate`), so the next run creates at the new one. Without that
+split, turning a meeting in person left a row the database rightly refused
+(`conferenceManaged` with no provider), and switching would have sent a Zoom
+id to Google.
 
 `Event.format` is **derived on every save** from the provider and the place
 (`formatOf` in the event service), never set by hand. It was briefly a column
@@ -301,7 +317,16 @@ decided there was nothing to do - the whole feature was a silent no-op.
 
 Saving a meeting with a provider and **no link** is the normal case, not an
 error: it means "make it for me". Only `OTHER` still demands a pasted link,
-because there is nothing for us to call.
+because there is nothing for us to call. The calendar actions
+(`conferenceUrlError`, `src/lib/calendar/event-input.ts`) and the event
+service (`checkShape`) both hold to this. A link that is there for Meet, Zoom
+or Teams (one we made, or one pasted before we could make them) must be https
+on a host that provider owns, checked with the same `isAllowedJoinUrl` and
+host list as the provider's own answers, so the action and the stored-link
+rule cannot drift apart (`teams.live.com` passes for Teams). The picker drops
+the link whenever the provider changes, ours or a pasted one, so a Zoom link
+never rides into a save for Meet, and a link pasted over a meeting we made is
+the only link in that save.
 
 Failure handling:
 
@@ -316,7 +341,13 @@ Failure handling:
   for this organization", and the job is `DEAD` rather than burning its
   retries.
 - Not configured → `DEAD` at once.
-- A 404 on an update or cancel → the meeting is already gone; clear our copy.
+- A 404 on a cancel → the meeting is already gone, which is what was wanted;
+  clear our copy.
+- A 404 on an update (its host deleted it at the provider, or the connection
+  now belongs to another account) → the event still wants a call, so forget
+  the dead meeting, leave the row `PENDING` and queue a create, as a switch
+  does. The next run makes a new meeting, rather than leaving one with no link
+  and nothing to try again.
 - 408, 429 and 5xx → retry with the queue's backoff.
 
 ## The create flow
@@ -358,7 +389,8 @@ another tab, is left alone afterwards. With nothing connected, or with "No
 video call" chosen, Save will not go ahead: "Choose a video call or paste a
 link, or pick In person." A meeting with no call and no place would be stored
 as In person and say nothing about where it happens. The message goes as soon
-as a call is chosen or the shape changes.
+as a call is chosen (by hand, or by the connections arriving after Save was
+pressed) or the shape changes.
 
 **How to find it** is `Event.locationDetails` ("Second floor, past the
 elevators"), asked under Location by the shapes that ask for a place. The
@@ -412,11 +444,16 @@ card. Every card on the Meetings list opens it.
 - **The state of the call** (`conferenceStatus`,
   `src/lib/meetings/conference-status.ts`) is ready, pending, failed, or
   nothing to say. While the sync job is making it the card says "Getting the
-  Zoom link..." with a spinner. If the job gave up it says "Couldn't make the
-  Zoom meeting.", and people who can edit also get the stored, already
-  sanitized reason and **Try again**. A pasted link is always ready, whatever
-  the sync state says: the job never touches one, so a `PENDING` or `FAILED`
-  left from before the paste would offer to retry something we will not do.
+  Zoom link..." with a spinner, and refreshes the page every 2.5 seconds for
+  up to 30 (`PENDING_REFRESH_MS`, `PENDING_REFRESH_FOR_MS`), so a meeting made
+  a moment ago shows its link without a reload. It stops as soon as the state
+  changes or the page is left; one still pending after half a minute is
+  retrying, and shows its link on the next visit. If the job gave up it says
+  "Couldn't make the Zoom meeting.", and people who can edit also get the
+  stored, already sanitized reason and **Try again**. A pasted link is always
+  ready, whatever the sync state says: the job never touches one, so a
+  `PENDING` or `FAILED` left from before the paste would offer to retry
+  something we will not do.
 - **Try again** is `retryConferenceSync`
   (`src/app/app/[orgSlug]/meetings/actions.ts`), for people with
   `events.write`. It marks the row `PENDING` and queues the same
