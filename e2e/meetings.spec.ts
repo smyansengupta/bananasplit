@@ -10,8 +10,19 @@ import { createOrgViaOnboarding, makeUser, signUpVerified, uniqueSuffix } from "
 // A meeting made at a provider (Zoom, Meet, Teams) is not covered here: that
 // would need a fake provider inside the dev server, and the conference-sync
 // job is tested against mocked HTTP (src/server/conference/sync.db.test.ts).
-// This environment has no provider credentials, which is also what the Video
-// calls bar test below relies on.
+// The Video calls bar test relies on this environment having no provider
+// credentials, and skips itself when a client id is set (see the end).
+//
+// To run it (the dev server's own `.env` is used for the database):
+//
+//   PLAYWRIGHT_CHANNEL=chrome AUTH_REQUIRE_EMAIL_VERIFICATION=true \
+//     pnpm test:e2e e2e/meetings.spec.ts
+//
+// - AUTH_REQUIRE_EMAIL_VERIFICATION=true: local development otherwise treats
+//   every new address as confirmed and sends no mail, and `signUpVerified`
+//   reads the confirmation link from the dev mail sink (.data/mail).
+// - PLAYWRIGHT_CHANNEL=chrome: use the installed Google Chrome when
+//   Playwright's own Chromium has not been downloaded.
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
 /**
@@ -173,6 +184,16 @@ test("Event: its sign-up page hides the join link until someone signs up", async
 });
 
 test("Video calls: with no provider set up, none can be connected", async () => {
+  // The runner and the dev server it starts share this environment. With a
+  // provider's OAuth client present the bar offers Connect, by design.
+  test.skip(
+    Boolean(
+      process.env.GOOGLE_MEET_CLIENT_ID ||
+      process.env.ZOOM_CLIENT_ID ||
+      process.env.MICROSOFT_TEAMS_CLIENT_ID,
+    ),
+    "provider OAuth clients are configured in this environment",
+  );
   await page.goto(`/app/${orgSlug}/meetings`);
   // The e2e environment has no Google Meet, Zoom or Teams client, so the bar
   // is one honest line, with nothing to press, rather than three Connect buttons.
