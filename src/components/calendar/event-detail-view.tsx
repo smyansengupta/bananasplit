@@ -401,7 +401,7 @@ export function EventDetailView({
                 tone="goal"
                 kicker="RSVP page · Live"
                 title="Sign-ups"
-                href={`/app/${orgSlug}/calendar/${event.id}/rsvp`}
+                href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}
                 figure={rsvp.going}
                 figureLabel={`of ${rsvp.capacity} spots${rsvp.waitlist > 0 ? ` · ${rsvp.waitlist} waitlisted` : ""}`}
                 aside={<Gauge value={capacityPct} size={132} />}
@@ -456,7 +456,7 @@ export function EventDetailView({
                       variant={rsvp.enabled ? "outline" : "secondary"}
                       className="w-full"
                     >
-                      <Link href={`/app/${orgSlug}/calendar/${event.id}/rsvp`}>
+                      <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}>
                         {rsvp.enabled ? <Settings2 aria-hidden /> : <Ticket aria-hidden />}
                         {rsvp.enabled ? "Manage guests and page" : "Set up an RSVP page"}
                       </Link>

@@ -73,8 +73,11 @@ describe("sidebar navigation", () => {
     // the right section up.
     expect(active("Meetings", "/app/cbc/calendar/rsvp")).toBe(true);
     expect(active("Calendar", "/app/cbc/calendar/rsvp")).toBe(false);
-    // An event's own RSVP page is part of that event, on the Calendar.
-    expect(active("Calendar", "/app/cbc/calendar/e1/rsvp")).toBe(true);
+    // A meeting's sign-up screens are part of that meeting, so Meetings stays
+    // lit on them (the Calendar's old /calendar/{id}/rsvp only forwards).
+    expect(active("Meetings", "/app/cbc/meetings/e1/rsvp")).toBe(true);
+    expect(active("Meetings", "/app/cbc/meetings/e1/rsvp/door")).toBe(true);
+    expect(active("Calendar", "/app/cbc/meetings/e1/rsvp")).toBe(false);
   });
 
   it("puts sections added since a club saved its sidebar after the one before them, hidden with what they came from", () => {

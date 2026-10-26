@@ -295,7 +295,7 @@ function EventForm({
         onOpenChange(false);
         // The event exists either way; the RSVP screen offers the page again if this failed.
         router.push(
-          `/app/${params.orgSlug}/calendar/${result.eventId}/rsvp${page.error ? "" : "?new=1"}`,
+          `/app/${params.orgSlug}/meetings/${result.eventId}/rsvp${page.error ? "" : "?new=1"}`,
         );
         return;
       }

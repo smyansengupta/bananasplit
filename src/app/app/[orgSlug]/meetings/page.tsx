@@ -189,7 +189,7 @@ export default async function MeetingsPage({
 
   const hrefOf = (e: PageRow) =>
     canManage
-      ? `/app/${orgSlug}/calendar/${e.id}/rsvp`
+      ? `/app/${orgSlug}/meetings/${e.id}/rsvp`
       : e.rsvpSlug
         ? `/e/${e.rsvpSlug}`
         : `/app/${orgSlug}/calendar/${e.id}`;

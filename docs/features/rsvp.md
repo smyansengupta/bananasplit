@@ -32,8 +32,8 @@ in the club's People and Attendance databases.
   - Each event's page has an **RSVP page** card.
   - _New event_ has **Take RSVPs with a public page**, which creates the
     page and opens its settings.
-  - The management screen (`/app/{slug}/calendar/{eventId}/rsvp`) has two
-    tabs:
+  - The management screen (`/app/{slug}/meetings/{id}/rsvp`; the old
+    `/calendar/{id}/rsvp` redirects there) has two tabs:
     - **Guests:** search, filter, check-in, move guests between going and
       the waitlist, cancel or delete a sign-up, add a guest by hand, and
       export to CSV.
@@ -224,7 +224,8 @@ link; the host's list shows "Invited by" and who brought the most friends.
   a host of the event (signed in, owner or admin) who opens the same URL,
   for instance by scanning it with the phone's camera, gets a one-tap
   check-in (and "Mark paid"). `app.rsvp_ticket` finds it on the service path.
-- **Door mode** (`/app/{slug}/calendar/{id}/rsvp/door`):
+- **Door mode** (`/app/{slug}/meetings/{id}/rsvp/door`; the old
+  `/calendar/{id}/rsvp/door` redirects there):
   search and tap, or scan tickets in the browser where it has
   `BarcodeDetector`. Scanning a waitlisted guest's ticket doesn't check
   them in: it warns they're on the waitlist, and the host can tap their name

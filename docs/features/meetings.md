@@ -257,6 +257,13 @@ they gave it. `/app/{slug}/calendar/rsvp` redirects to `/app/{slug}/meetings`,
 and the old path stays in the section's `also` list so a pasted link still
 lights up the right sidebar row.
 
+Sign-up management lives under the meeting: `/app/{slug}/meetings/{id}/rsvp`
+(the guest list and page settings) and `.../rsvp/door` (door mode, the one
+route that may use the camera). The old `/calendar/{id}/rsvp` and
+`/calendar/{id}/rsvp/door` forward there. They carry `?new=1` and nothing else,
+and check no permission themselves: the new page sends anyone without
+`events.write` to the meeting.
+
 The list is not a second calendar. The Calendar is a grid you read by date;
 this is the list you work from: the join link one click away, the head count on
 whatever is taking sign-ups, and the connections at the top. Hosts see

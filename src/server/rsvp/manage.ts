@@ -9,7 +9,7 @@ import type { RsvpManagerProps } from "@/components/rsvp/rsvp-manager";
 import type { TxClient } from "@/server/db/context";
 
 /**
- * What the host's RSVP screen needs (the suite's /calendar/{id}/rsvp), read
+ * What the host's RSVP screen needs (the suite's /meetings/{id}/rsvp), read
  * in the host's own transaction: RLS lets only
  * owners and admins see sign-ups. Null when the event is gone.
  */

@@ -228,3 +228,31 @@ describe("EventDetailView: a meeting's page", () => {
     expect(screen.queryByText("Where")).toBeNull();
   });
 });
+
+describe("EventDetailView: managing sign-ups", () => {
+  // Sign-up management lives under Meetings only, whichever section shows the event.
+  const sections = ["calendar", "meetings"] as const;
+  const live = { enabled: true, url: "https://app.test/e/abc12345", going: 3, waitlist: 1 };
+
+  it.each(sections)("offers the meeting's sign-up screen to set up a page (%s)", (section) => {
+    view({ canEdit: true, section });
+
+    const set = screen.getByRole("link", { name: /Set up an RSVP page/ });
+    expect(set.getAttribute("href")).toBe("/app/club/meetings/evt_1/rsvp");
+  });
+
+  it.each(sections)("sends the guest-list button to the meeting's sign-ups (%s)", (section) => {
+    view({ canEdit: true, section, rsvp: { ...live, capacity: null } });
+
+    const manage = screen.getByRole("link", { name: /Manage guests and page/ });
+    expect(manage.getAttribute("href")).toBe("/app/club/meetings/evt_1/rsvp");
+  });
+
+  it.each(sections)("sends the capacity tile to the meeting's sign-ups (%s)", (section) => {
+    view({ canEdit: true, section, rsvp: { ...live, capacity: 10 } });
+
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/app/club/meetings/evt_1/rsvp");
+    expect(hrefs.some((h) => h?.includes("/calendar/evt_1/rsvp"))).toBe(false);
+  });
+});

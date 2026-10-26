@@ -21,7 +21,7 @@ test("RSVP page: create, sign up, waitlist, check in and move up", async ({ page
   await dialog.getByLabel("Location").fill("Engineering Hall 112, 1 Main St");
   await dialog.getByRole("switch", { name: /Take RSVPs with a public page/ }).click();
   await dialog.getByRole("button", { name: "Create event", exact: true }).click();
-  await expect(page).toHaveURL(/\/calendar\/[^/]+\/rsvp/);
+  await expect(page).toHaveURL(/\/meetings\/[^/]+\/rsvp/);
   await expect(page.getByRole("heading", { name: "RSVP page" })).toBeVisible();
 
   await page.getByRole("button", { name: "Page settings" }).click();
