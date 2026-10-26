@@ -263,11 +263,28 @@ describe("times", () => {
   });
 });
 
-describe("conference links (paste-only, per provider)", () => {
+describe("conference links", () => {
+  /** The row an edit starts from: a meeting Bananasplit made at this provider. */
+  function managed(conferenceProvider: string, conferenceUrl: string | null) {
+    db.event.findFirst.mockResolvedValue({
+      title: "Board meeting",
+      allDay: false,
+      startsAt: new Date(timed.startsAt),
+      endsAt: new Date(timed.endsAt),
+      location: null,
+      conferenceProvider,
+      conferenceUrl,
+      attendees: [],
+    });
+  }
+
   it.each([
     ["MEET", "https://zoom.us/j/1", /meet\.google\.com/],
+    ["ZOOM", "https://zoom.us.example.com/j/1", /zoom\.us/],
+    ["TEAMS", "https://example.com/teams.microsoft.com", /teams\.microsoft\.com/],
+    ["ZOOM", "http://zoom.us/j/1", /https/],
     ["OTHER", "http://example.com/m", /https/],
-    ["ZOOM", "", /paste a meeting link/i],
+    ["OTHER", "", /paste a meeting link/i],
     ["NONE", "https://meet.google.com/x", /remove the link/i],
   ])("%s with %s is refused", async (provider, url, message) => {
     const result = await createEvent(ORG, { ...timed, conferenceProvider: provider as never, conferenceUrl: url });
@@ -275,13 +292,98 @@ describe("conference links (paste-only, per provider)", () => {
     expect(service.createEvent).not.toHaveBeenCalled();
   });
 
-  it("accepts a zoom.us subdomain", async () => {
-    const result = await createEvent(ORG, {
-      ...timed,
-      conferenceProvider: "ZOOM",
-      conferenceUrl: "https://us02web.zoom.us/j/123",
-    });
+  it.each([
+    ["ZOOM", "https://us02web.zoom.us/j/123"],
+    ["MEET", "https://meet.google.com/abc-defg-hij"],
+    ["TEAMS", "https://teams.microsoft.com/l/meetup-join/1"],
+    // providers.ts allows both of Microsoft's hosts; the action must agree.
+    ["TEAMS", "https://teams.live.com/meet/9876543210"],
+  ])("accepts %s with a link on its own host (%s)", async (provider, url) => {
+    const result = await createEvent(ORG, { ...timed, conferenceProvider: provider as never, conferenceUrl: url });
     expect(result.error).toBeUndefined();
+  });
+
+  describe("an empty link with a provider that makes the meeting means make it for me", () => {
+    it.each(["ZOOM", "MEET", "TEAMS"])("creates a %s meeting with no link", async (provider) => {
+      for (const conferenceUrl of ["", null, undefined]) {
+        service.createEvent.mockClear();
+        const result = await createEvent(ORG, {
+          ...timed,
+          conferenceProvider: provider as never,
+          conferenceUrl,
+        });
+        expect(result).toEqual({ eventId: "evt_1" });
+        expect(service.createEvent).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ conferenceProvider: provider }),
+        );
+      }
+    });
+
+    it.each(["ZOOM", "MEET", "TEAMS"])("adds a %s call to an existing meeting with no link", async (provider) => {
+      // The default row: in person, no call.
+      const result = await updateEvent(ORG, "evt_1", {
+        conferenceProvider: provider as never,
+        conferenceUrl: null,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+      expect(service.updateEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        "evt_1",
+        expect.objectContaining({ conferenceProvider: provider, conferenceUrl: null }),
+      );
+    });
+
+    it("saves a title change on a meeting whose link is still being made", async () => {
+      // PENDING (or FAILED): the job has not filled the link in yet. The edit
+      // form sends the provider and the empty link back with every save.
+      managed("ZOOM", null);
+      const result = await updateEvent(ORG, "evt_1", {
+        title: "Board meeting (renamed)",
+        conferenceProvider: "ZOOM",
+        conferenceUrl: null,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+      expect(service.updateEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        "evt_1",
+        expect.objectContaining({ title: "Board meeting (renamed)" }),
+      );
+    });
+
+    it("saves an edit of a Teams meeting made on teams.live.com", async () => {
+      const link = "https://teams.live.com/meet/9876543210?p=abc";
+      managed("TEAMS", link);
+      const result = await updateEvent(ORG, "evt_1", {
+        title: "Board meeting (renamed)",
+        conferenceProvider: "TEAMS",
+        conferenceUrl: link,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+    });
+
+    it("switches a meeting we made to another provider", async () => {
+      // The picker drops the old provider's link on a switch, so the form
+      // sends the new provider with no link: make one there.
+      managed("ZOOM", "https://us02web.zoom.us/j/98765432100");
+      const result = await updateEvent(ORG, "evt_1", {
+        conferenceProvider: "MEET",
+        conferenceUrl: null,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+      expect(service.updateEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        "evt_1",
+        expect.objectContaining({ conferenceProvider: "MEET", conferenceUrl: null }),
+      );
+    });
+
+    it("still refuses another provider's link left on a switch", async () => {
+      managed("ZOOM", "https://us02web.zoom.us/j/98765432100");
+      const result = await updateEvent(ORG, "evt_1", { conferenceProvider: "MEET" });
+      expect(result.error).toMatch(/meet\.google\.com/);
+      expect(service.updateEvent).not.toHaveBeenCalled();
+    });
   });
 });
 

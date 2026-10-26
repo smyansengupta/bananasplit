@@ -88,8 +88,12 @@ export function ConferencePicker({
 
   const pick = (next: ConferenceProvider) => {
     onProviderChange(next);
-    // A provider that makes the meeting for us fills the link itself.
-    if (next !== ConferenceProvider.OTHER && !managed) onUrlChange("");
+    // A link belongs to the provider it was made or pasted for, ours or not.
+    // Kept across a switch, it would be saved against the new provider: a
+    // Zoom link on a Meet meeting, or the Zoom meeting we are about to cancel
+    // passed off as the link someone pasted. A provider that makes the
+    // meeting fills its own in; a link to paste starts empty.
+    if (next !== provider) onUrlChange("");
   };
 
   const triggerLabel = pasting
