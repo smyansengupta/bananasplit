@@ -14,7 +14,12 @@ import { getSecret, rotateSecret } from "@/server/secrets";
 
 import { refreshTokens, type ProviderTokens } from "./oauth";
 import { providerOf } from "./providers";
-import { clearAccessToken, clearAllAccessTokens, getAccessToken } from "./token";
+import {
+  ROTATION_SETTLE_MS,
+  clearAccessToken,
+  clearAllAccessTokens,
+  getAccessToken,
+} from "./token";
 import { ConferenceApiError, ConferenceReauthError } from "./types";
 
 /**
@@ -99,7 +104,7 @@ describe("the access-token cache", () => {
     expect(await getAccessToken(ORG, ZOOM)).toBe("at-1");
     expect(await getAccessToken(ORG, ZOOM)).toBe("at-9");
     expect(refreshTokens).toHaveBeenCalledTimes(2);
-    expect(refreshTokens).toHaveBeenNthCalledWith(2, zoom, "r9", undefined);
+    expect(refreshTokens).toHaveBeenNthCalledWith(2, zoom, "r9");
   });
 
   it("clearAccessToken forgets the cached token", async () => {
@@ -149,13 +154,37 @@ describe("a rotated refresh token", () => {
   });
 
   it("invalid_grant with an unchanged stored token throws ConferenceReauthError", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
     stored("r1");
     vi.mocked(refreshTokens).mockRejectedValue(invalidGrant());
 
-    await expect(getAccessToken(ORG, ZOOM)).rejects.toBeInstanceOf(ConferenceReauthError);
-    // It looked again, found the same token, and did not retry.
+    const refused = expect(getAccessToken(ORG, ZOOM)).rejects.toBeInstanceOf(ConferenceReauthError);
+    await vi.advanceTimersByTimeAsync(ROTATION_SETTLE_MS);
+    await refused;
+    // It looked again, then once more after the settle wait, found the same
+    // token both times, and did not retry.
+    expect(getSecret).toHaveBeenCalledTimes(3);
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalid_grant before the other server's rotation commits still retries with the newer token", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
+    // The first look is too early; the one after the settle wait sees r2.
+    stored("r1", "r1", "r2");
+    vi.mocked(refreshTokens)
+      .mockRejectedValueOnce(invalidGrant())
+      .mockResolvedValueOnce(tokens({ accessToken: "at-2" }));
+
+    const result = getAccessToken(ORG, ZOOM);
+    await vi.advanceTimersByTimeAsync(ROTATION_SETTLE_MS - 1);
     expect(getSecret).toHaveBeenCalledTimes(2);
     expect(refreshTokens).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await result).toBe("at-2");
+    expect(getSecret).toHaveBeenCalledTimes(3);
+    expect(refreshTokens).toHaveBeenCalledTimes(2);
+    expect(refreshTokens).toHaveBeenNthCalledWith(2, zoom, "r2");
   });
 
   it("invalid_grant after someone else rotated retries once with the newer token", async () => {
@@ -166,8 +195,8 @@ describe("a rotated refresh token", () => {
 
     expect(await getAccessToken(ORG, ZOOM)).toBe("at-2");
     expect(refreshTokens).toHaveBeenCalledTimes(2);
-    expect(refreshTokens).toHaveBeenNthCalledWith(1, zoom, "r1", undefined);
-    expect(refreshTokens).toHaveBeenNthCalledWith(2, zoom, "r2", undefined);
+    expect(refreshTokens).toHaveBeenNthCalledWith(1, zoom, "r1");
+    expect(refreshTokens).toHaveBeenNthCalledWith(2, zoom, "r2");
     // The retry's own rotation is checked against the token it used.
     expect(rotateSecret).toHaveBeenCalledTimes(1);
     expect(rotateSecret).toHaveBeenCalledWith(
@@ -181,6 +210,8 @@ describe("a rotated refresh token", () => {
 
     await expect(getAccessToken(ORG, ZOOM)).rejects.toBeInstanceOf(ConferenceReauthError);
     expect(refreshTokens).toHaveBeenCalledTimes(2);
+    // The first look already found a newer token, so there was no wait.
+    expect(getSecret).toHaveBeenCalledTimes(2);
     expect(rotateSecret).not.toHaveBeenCalled();
   });
 
@@ -206,6 +237,32 @@ describe("a rotated refresh token", () => {
     );
   });
 
+  it("one caller aborting does not fail the others sharing the refresh", async () => {
+    stored("r1");
+    let release: (value: ProviderTokens) => void = () => {};
+    vi.mocked(refreshTokens).mockImplementationOnce(
+      () => new Promise<ProviderTokens>((resolve) => (release = resolve)),
+    );
+
+    // The caller that starts the shared refresh is the one that gives up.
+    const quitter = new AbortController();
+    const first = getAccessToken(ORG, ZOOM, { signal: quitter.signal });
+    const second = getAccessToken(ORG, ZOOM, { signal: new AbortController().signal });
+    const third = getAccessToken(ORG, ZOOM);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    // No caller's signal rides on the shared refresh.
+    expect(vi.mocked(refreshTokens).mock.calls[0]![2]).toBeUndefined();
+
+    const deadline = new Error("job deadline");
+    quitter.abort(deadline);
+    await expect(first).rejects.toBe(deadline);
+
+    release(tokens({ accessToken: "at-2" }));
+    expect(await Promise.all([second, third])).toEqual(["at-2", "at-2"]);
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+  });
+
   it("a failed rotateSecret does not fail the call", async () => {
     const OLD = "zoom-rt-OLD-0001";
     const NEW = "zoom-rt-NEW-0002";
@@ -226,5 +283,10 @@ describe("a rotated refresh token", () => {
     expect(logged).not.toContain(NEW);
     expect(logged).not.toContain(OLD);
     expect(logged).not.toContain(ACCESS);
+
+    // The store still holds OLD, so the access token stays cached under it
+    // instead of forcing a refresh with a token the provider may have retired.
+    expect(await getAccessToken(ORG, ZOOM)).toBe(ACCESS);
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
   });
 });
