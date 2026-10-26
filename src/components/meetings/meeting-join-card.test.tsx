@@ -9,20 +9,27 @@ import type { ConferenceStatus } from "@/lib/meetings/conference-status";
  * numbers, and what to do when making the meeting failed.
  */
 
-const mocks = vi.hoisted(() => ({
-  refresh: vi.fn(),
-  retry: vi.fn(),
-  toast: vi.fn(),
-  writeText: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const refresh = vi.fn();
+  return {
+    refresh,
+    // One router for the life of the page, as Next.js hands out.
+    router: { refresh },
+    retry: vi.fn(),
+    toast: vi.fn(),
+    writeText: vi.fn(),
+  };
+});
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
 vi.mock("@/app/app/[orgSlug]/meetings/actions", () => ({
   retryConferenceSync: mocks.retry,
 }));
 vi.mock("@/components/ui/toaster", () => ({ toast: mocks.toast }));
 
-const { MeetingJoinCard } = await import("./meeting-join-card");
+const { MeetingJoinCard, PENDING_REFRESH_MS, PENDING_REFRESH_FOR_MS } = await import(
+  "./meeting-join-card"
+);
 
 const JOIN = "https://us02web.zoom.us/j/98765432100?pwd=abc";
 const HOST = "https://us02web.zoom.us/s/98765432100?zak=host";
@@ -62,7 +69,10 @@ beforeEach(() => {
     configurable: true,
   });
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("MeetingJoinCard: joining", () => {
   it("opens the join link in a new tab, without handing the page to the provider", () => {
@@ -194,6 +204,93 @@ describe("MeetingJoinCard: while the link is on its way", () => {
 
     expect(screen.getByText("Getting the Zoom link…")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+});
+
+describe("MeetingJoinCard: picking up the link once it is made", () => {
+  const PENDING: ConferenceStatus = { kind: "pending", line: "Getting the Zoom link…" };
+
+  function props(status: ConferenceStatus, joinUrl: string | null = null): Props {
+    return {
+      orgId: "org_1",
+      eventId: "evt_1",
+      providerLabel: "Zoom",
+      joinUrl,
+      hostUrl: null,
+      passcode: null,
+      dialIn: [],
+      status,
+      canEdit: true,
+    };
+  }
+
+  it("asks the page again every couple of seconds while the link is on its way", () => {
+    vi.useFakeTimers();
+    card({ joinUrl: null, status: PENDING });
+
+    expect(PENDING_REFRESH_MS).toBe(2_500);
+    vi.advanceTimersByTime(PENDING_REFRESH_MS - 1);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(PENDING_REFRESH_MS);
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after half a minute, when the job is plainly taking longer", () => {
+    vi.useFakeTimers();
+    card({ joinUrl: null, status: PENDING });
+
+    expect(PENDING_REFRESH_FOR_MS).toBe(30_000);
+    vi.advanceTimersByTime(PENDING_REFRESH_FOR_MS);
+    const asked = mocks.refresh.mock.calls.length;
+    expect(asked).toBe(PENDING_REFRESH_FOR_MS / PENDING_REFRESH_MS);
+
+    vi.advanceTimersByTime(5 * 60_000);
+    expect(mocks.refresh).toHaveBeenCalledTimes(asked);
+  });
+
+  it("stops once the link has arrived", () => {
+    vi.useFakeTimers();
+    const view = render(<MeetingJoinCard {...props(PENDING)} />);
+    vi.advanceTimersByTime(PENDING_REFRESH_MS);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+
+    // The refresh brought the link: the page renders the card as ready.
+    view.rerender(<MeetingJoinCard {...props({ kind: "ready" }, JOIN)} />);
+    vi.advanceTimersByTime(PENDING_REFRESH_FOR_MS);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps counting the same half minute across refreshes that find it still pending", () => {
+    vi.useFakeTimers();
+    const view = render(<MeetingJoinCard {...props(PENDING)} />);
+    vi.advanceTimersByTime(PENDING_REFRESH_FOR_MS / 2);
+    view.rerender(<MeetingJoinCard {...props({ ...PENDING })} />);
+    vi.advanceTimersByTime(PENDING_REFRESH_FOR_MS);
+
+    expect(mocks.refresh).toHaveBeenCalledTimes(PENDING_REFRESH_FOR_MS / PENDING_REFRESH_MS);
+  });
+
+  it("stops when the card goes away", () => {
+    vi.useFakeTimers();
+    const view = render(<MeetingJoinCard {...props(PENDING)} />);
+    view.unmount();
+
+    vi.advanceTimersByTime(PENDING_REFRESH_FOR_MS);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, ConferenceStatus]>([
+    ["ready", { kind: "ready" }],
+    ["failed", FAILED],
+    ["none", { kind: "none" }],
+  ])("does not ask while the link is %s", (_name, status) => {
+    vi.useFakeTimers();
+    card({ status });
+
+    vi.advanceTimersByTime(PENDING_REFRESH_FOR_MS);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 });
 

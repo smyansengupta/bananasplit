@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { retryConferenceSync } from "@/app/app/[orgSlug]/meetings/actions";
 import { Copy, KeyRound, Loader2, Mic, Phone, RefreshCw, Video } from "@/components/icons";
@@ -10,6 +10,16 @@ import { Button } from "@/components/ui/button";
 import { Fact } from "@/components/ui/fact";
 import type { ConferenceStatus } from "@/lib/meetings/conference-status";
 import type { ConferenceDialIn } from "@/server/conference/types";
+
+/** How often a card whose link is on its way asks the page again. */
+export const PENDING_REFRESH_MS = 2_500;
+/**
+ * How long it keeps asking. The job usually lands the link in a second or
+ * two; one still pending after half a minute is retrying or stuck, and a
+ * reload (or the FAILED state the job leaves) is the honest answer then,
+ * not a page that re-renders forever.
+ */
+export const PENDING_REFRESH_FOR_MS = 30_000;
 
 /**
  * How to get into a meeting, on its page (docs/features/meetings.md): the
@@ -25,6 +35,11 @@ import type { ConferenceDialIn } from "@/server/conference/types";
  * is never in this component's props, or the page's markup, for a member. It
  * is only ever the target of the Start as host link: never printed, and never
  * put in a toast.
+ *
+ * While the link is being made (`pending`), the card refreshes the page every
+ * PENDING_REFRESH_MS for up to PENDING_REFRESH_FOR_MS, so a meeting created a
+ * moment ago shows its link without a reload. It stops as soon as the status
+ * is anything else, and when the card goes away.
  */
 export function MeetingJoinCard({
   orgId,
@@ -51,6 +66,20 @@ export function MeetingJoinCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const pending = status.kind === "pending";
+  useEffect(() => {
+    if (!pending) return;
+    // A refresh that finds it still pending re-renders with the same status,
+    // so this does not restart: the half minute counts from when it began.
+    let asked = 0;
+    const timer = window.setInterval(() => {
+      asked += 1;
+      router.refresh();
+      if (asked * PENDING_REFRESH_MS >= PENDING_REFRESH_FOR_MS) window.clearInterval(timer);
+    }, PENDING_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [pending, router]);
 
   function retry() {
     setError(null);
