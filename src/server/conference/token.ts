@@ -30,7 +30,8 @@ import { ConferenceApiError, ConferenceReauthError } from "./types";
  * the winner has already replaced, so on invalid_grant we read the stored
  * token again; if it is unchanged (the winner may not have committed yet) we
  * wait ROTATION_SETTLE_MS and read once more. If it changed, we retry once
- * with it.
+ * with it, through the same cache and single flight as a caller that read the
+ * newer token itself, so the retry and that caller never refresh it twice.
  *
  * The shared refresh carries no caller's abort signal (the token request has
  * its own 10 s timeout): each caller races the shared promise against its own
@@ -106,27 +107,52 @@ export async function getAccessToken(
   assertNoTx(`${integration} token refresh`);
 
   const refreshToken = await getRefreshToken(orgId, integration);
-  const fp = fingerprint(refreshToken);
-  const key = cacheKey(orgId, integration);
-  const hit = cache.get(key);
-  if (hit && hit.fingerprint === fp && hit.expiresAt - 60_000 > Date.now()) return hit.accessToken;
+  const hit = cachedToken(orgId, integration, refreshToken);
+  if (hit) return hit;
 
-  // A second refresh of a token Zoom has just retired would come back
-  // invalid_grant, so callers here wait for the one already under way.
   options.signal?.throwIfAborted();
-  const flightKey = `${key}:${fp}`;
-  let flight = inflight.get(flightKey);
-  if (!flight) {
-    const started = refresh(def, orgId, refreshToken).finally(() => {
-      if (inflight.get(flightKey) === started) inflight.delete(flightKey);
-    });
-    // Every caller may have given up by the time it settles; that is not an
-    // unhandled rejection. Callers still waiting get the error as usual.
-    started.catch(() => {});
-    inflight.set(flightKey, started);
-    flight = started;
-  }
+  const flight = flightFor(def, orgId, refreshToken, true);
   return options.signal ? untilAborted(flight, options.signal) : flight;
+}
+
+/** The cached access token for this refresh token, while it has a minute left. */
+function cachedToken(
+  orgId: string,
+  integration: IntegrationProvider,
+  refreshToken: string,
+): string | null {
+  const hit = cache.get(cacheKey(orgId, integration));
+  if (hit && hit.fingerprint === fingerprint(refreshToken) && hit.expiresAt - 60_000 > Date.now()) {
+    return hit.accessToken;
+  }
+  return null;
+}
+
+/**
+ * The refresh of this refresh token: the one already under way here, or a
+ * new one. A second refresh of a token Zoom has just retired would come back
+ * invalid_grant, so everyone holding the same token waits for one refresh.
+ *
+ * `mayRetry` is whether this refresh may retry once on invalid_grant. A
+ * caller's own refresh may; the retry may not, which is what bounds it.
+ */
+function flightFor(
+  def: ProviderDef,
+  orgId: string,
+  refreshToken: string,
+  mayRetry: boolean,
+): Promise<string> {
+  const flightKey = `${cacheKey(orgId, def.integration)}:${fingerprint(refreshToken)}`;
+  const flight = inflight.get(flightKey);
+  if (flight) return flight;
+  const started = refresh(def, orgId, refreshToken, mayRetry).finally(() => {
+    if (inflight.get(flightKey) === started) inflight.delete(flightKey);
+  });
+  // Every caller may have given up by the time it settles; that is not an
+  // unhandled rejection. Callers still waiting get the error as usual.
+  started.catch(() => {});
+  inflight.set(flightKey, started);
+  return started;
 }
 
 /** `promise`, or the signal's reason once it aborts. Only this caller gives up. */
@@ -148,18 +174,49 @@ function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
-async function refresh(def: ProviderDef, orgId: string, refreshToken: string): Promise<string> {
-  const integration = def.integration;
-  const key = cacheKey(orgId, integration);
-
-  let used: string;
-  let tokens: ProviderTokens;
+/**
+ * One refresh, and on invalid_grant at most one more: only when the stored
+ * token has changed since we read it, i.e. another refresh rotated it.
+ *
+ * The retry asks for the newer token's access token the way any caller
+ * holding it would: from the cache, or from the refresh of it already under
+ * way here. Sent straight to the provider instead, it would race that
+ * caller's own refresh of the same token; the provider honours one and
+ * refuses the other, and the refused one could end in NEEDS_REAUTH while a
+ * valid token sits in the store.
+ */
+async function refresh(
+  def: ProviderDef,
+  orgId: string,
+  refreshToken: string,
+  mayRetry: boolean,
+): Promise<string> {
   try {
-    ({ used, tokens } = await refreshOrRetry(def, orgId, refreshToken));
+    return await refreshOnce(def, orgId, refreshToken);
   } catch (error) {
-    cache.delete(key);
-    throw refreshError(def, error);
+    if (!mayRetry || !isInvalidGrant(error)) throw failed(def, orgId, error);
+    let newer: string | null;
+    try {
+      newer = await newerRefreshToken(orgId, def.integration, refreshToken);
+    } catch (lookup) {
+      throw failed(def, orgId, lookup);
+    }
+    if (newer === null) throw failed(def, orgId, error);
+    // A failure of the retry was already put through failed() by its own refresh.
+    return cachedToken(orgId, def.integration, newer) ?? flightFor(def, orgId, newer, false);
   }
+}
+
+/** Forgets the cached access token and says what went wrong in the provider's terms. */
+function failed(def: ProviderDef, orgId: string, error: unknown): unknown {
+  cache.delete(cacheKey(orgId, def.integration));
+  return refreshError(def, error);
+}
+
+/** Exchanges one refresh token, keeps what the provider rotated, and caches the result. */
+async function refreshOnce(def: ProviderDef, orgId: string, used: string): Promise<string> {
+  const integration = def.integration;
+  const tokens: ProviderTokens = await refreshTokens(def, used);
 
   // The token the store holds now, which is what the next call will read.
   let current = used;
@@ -186,31 +243,12 @@ async function refresh(def: ProviderDef, orgId: string, refreshToken: string): P
     }
   }
 
-  cache.set(key, {
+  cache.set(cacheKey(orgId, integration), {
     accessToken: tokens.accessToken,
     expiresAt: Date.now() + tokens.expiresInSeconds * 1000,
     fingerprint: fingerprint(current),
   });
   return tokens.accessToken;
-}
-
-/**
- * One refresh, and on invalid_grant at most one more: only when the stored
- * token has changed since we read it, i.e. another refresh rotated it.
- */
-async function refreshOrRetry(
-  def: ProviderDef,
-  orgId: string,
-  refreshToken: string,
-): Promise<{ used: string; tokens: ProviderTokens }> {
-  try {
-    return { used: refreshToken, tokens: await refreshTokens(def, refreshToken) };
-  } catch (error) {
-    if (!isInvalidGrant(error)) throw error;
-    const newer = await newerRefreshToken(orgId, def.integration, refreshToken);
-    if (newer === null) throw error;
-    return { used: newer, tokens: await refreshTokens(def, newer) };
-  }
 }
 
 /**

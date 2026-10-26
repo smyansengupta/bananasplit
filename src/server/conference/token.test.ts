@@ -237,6 +237,69 @@ describe("a rotated refresh token", () => {
     );
   });
 
+  it("callers racing a rotation share the retry on the newer token: one refresh of it, no reauth", async () => {
+    // The store and the provider as they really behave: a refresh token is
+    // good for one refresh (Zoom rotates it and retires the old one), and
+    // rotateSecret is a compare-and-set.
+    let store = "r1";
+    vi.mocked(getSecret).mockImplementation(async () => store);
+    vi.mocked(rotateSecret).mockImplementation(async ({ previous, value }) => {
+      if (store !== previous) return false;
+      store = value;
+      return true;
+    });
+    const spent = new Set<string>();
+    let release: (value: ProviderTokens) => void = () => {};
+    vi.mocked(refreshTokens).mockImplementation(async (_def, token) => {
+      if (token === "r1") {
+        // Another server refreshed r1 first and has stored the r2 it got.
+        store = "r2";
+        throw invalidGrant();
+      }
+      if (spent.has(token)) throw invalidGrant();
+      spent.add(token);
+      return new Promise<ProviderTokens>((resolve) => (release = resolve));
+    });
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Two callers here read r1 and hit invalid_grant on it...
+    const a = getAccessToken(ORG, ZOOM);
+    const b = getAccessToken(ORG, ZOOM);
+    // ...and a third reads r2, the token the retry is already using.
+    await tick();
+    const c = getAccessToken(ORG, ZOOM);
+    const settled = Promise.allSettled([a, b, c]);
+    await tick();
+
+    const withR2 = vi.mocked(refreshTokens).mock.calls.filter(([, token]) => token === "r2");
+    expect(withR2).toHaveLength(1);
+
+    release(tokens({ accessToken: "at-2", refreshToken: "r3" }));
+    expect(await settled).toEqual([
+      { status: "fulfilled", value: "at-2" },
+      { status: "fulfilled", value: "at-2" },
+      { status: "fulfilled", value: "at-2" },
+    ]);
+    expect(store).toBe("r3");
+  });
+
+  it("a caller that hit invalid_grant on r1 after another's retry finished reuses the token r2 already got", async () => {
+    // Both read r1; the second's read was just slow enough to come back after
+    // the first had retried on r2. r2 was not rotated (Microsoft does not
+    // always), so the store still holds it and the access token is cached.
+    stored("r1", "r2", "r1", "r2");
+    vi.mocked(refreshTokens).mockImplementation(async (_def, token) => {
+      if (token === "r1") throw invalidGrant();
+      return tokens({ accessToken: "at-2", refreshToken: null });
+    });
+
+    expect(await getAccessToken(ORG, ZOOM)).toBe("at-2");
+    expect(await getAccessToken(ORG, ZOOM)).toBe("at-2");
+
+    const withR2 = vi.mocked(refreshTokens).mock.calls.filter(([, token]) => token === "r2");
+    expect(withR2).toHaveLength(1);
+  });
+
   it("one caller aborting does not fail the others sharing the refresh", async () => {
     stored("r1");
     let release: (value: ProviderTokens) => void = () => {};
