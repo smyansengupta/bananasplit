@@ -173,6 +173,38 @@ async function commit(
   });
 }
 
+/**
+ * Forgets the meeting we made and leaves the row PENDING for a new one, with
+ * the job that makes it queued in the same transaction, so the row is never
+ * PENDING with nothing coming to resolve it. Two paths need it: a switch to
+ * another provider (cancelled at the old one, made at the new one), and a
+ * move the provider answered 404 to (the meeting is gone there, but this
+ * event still wants one).
+ *
+ * The job key is fresh because the job running now holds the plain one. A
+ * commit that lost the compare-and-set queues nothing: the newer save queued
+ * its own job, which sees the same state and does the same.
+ */
+async function commitAndRecreate(
+  orgId: string,
+  event: Snapshot,
+  why: "switch" | "recreate",
+): Promise<void> {
+  await withSystemOrgTx(orgId, async ({ db }) => {
+    const moved = await db.event.updateMany({
+      where: { organizationId: orgId, id: event.id, syncVersion: event.syncVersion },
+      data: { ...clearedFields(event), conferenceSyncState: CalendarSyncState.PENDING },
+    });
+    if (moved.count !== 1) return;
+    await enqueueJob(db, {
+      orgId,
+      kind: "conference-sync",
+      key: `${event.id}:${why}:${Date.now()}`,
+      payload: { eventId: event.id },
+    });
+  });
+}
+
 async function recordFailure(
   orgId: string,
   eventId: string,
@@ -261,20 +293,8 @@ export const conferenceSyncJob: JobHandler<{ eventId: string }> = async (run) =>
         event.format !== MeetingFormat.IN_PERSON &&
         providerForConference(event.conferenceProvider) !== null &&
         event.conferenceProvider !== event.conferenceManagedAt;
-      await commit(orgId, eventId, event.syncVersion, {
-        ...clearedFields(event),
-        ...(switching ? { conferenceSyncState: CalendarSyncState.PENDING } : {}),
-      });
-      if (switching) {
-        await withSystemOrgTx(orgId, async ({ db }) => {
-          await enqueueJob(db, {
-            orgId,
-            kind: "conference-sync",
-            key: `${eventId}:switch:${Date.now()}`,
-            payload: { eventId },
-          });
-        });
-      }
+      if (switching) await commitAndRecreate(orgId, event, "switch");
+      else await commit(orgId, eventId, event.syncVersion, clearedFields(event));
       return { status: "DONE" };
     }
     const draft = draftOf(event, timeZone);
@@ -297,9 +317,18 @@ export const conferenceSyncJob: JobHandler<{ eventId: string }> = async (run) =>
       throw error; // PermanentJobError: DEAD at once
     }
     if (error instanceof ConferenceApiError && !error.retryable) {
+      if (error.status === 404 && intent === "update") {
+        // We were moving a meeting the provider no longer has: its host
+        // deleted it there, or the connection now belongs to another account.
+        // The event still wants a call, so forget the dead one and make a
+        // new one, rather than leaving the meeting with no link and nothing
+        // to retry.
+        await commitAndRecreate(orgId, event, "recreate");
+        return { status: "DONE" };
+      }
       // A meeting the provider says is gone is the state a cancellation
       // wanted anyway: clear our copy instead of failing forever.
-      if (error.status === 404 && intent !== "create") {
+      if (error.status === 404 && intent === "remove") {
         await commit(orgId, eventId, event.syncVersion, clearedFields(event));
         return { status: "DONE" };
       }
