@@ -23,7 +23,8 @@ import { clearAccessToken, getRefreshToken } from "./token";
  *   1. ADMIN+ (integrations.write).
  *   2. Revoke at the provider, best effort, with no transaction open. A
  *      provider with no revoke call (Microsoft) has nothing to ask and counts
- *      as revoked for step 5, but its message says nothing was revoked.
+ *      as revoked for step 5, but its message and its audit row
+ *      (`revokedInline: false`) say nothing was revoked.
  *   3. One system transaction: DISCONNECTED, config.disconnectedAt, and the
  *      audit row. This is what stops new meetings: the sync job will not
  *      create or move one through a provider that is not CONNECTED.
@@ -80,7 +81,9 @@ export async function disconnectMeetingProvider(
       action: "integration.disconnected",
       targetType: "OrgIntegration",
       targetId: row.id,
-      diff: { provider: integration, revokedInline: revoked },
+      // A provider with no revoke call counts as revoked for deleting the
+      // token (step 5), but nothing was revoked, and the audit says so.
+      diff: { provider: integration, revokedInline: revoked && def.revoke !== null },
     });
     return true;
   });

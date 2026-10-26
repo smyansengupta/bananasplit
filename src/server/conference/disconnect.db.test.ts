@@ -387,6 +387,10 @@ describe("disconnecting a meeting provider", () => {
     // Zoom, next to it, is not touched.
     expect((await readIntegration("ZOOM")).status).toBe(IntegrationStatus.CONNECTED);
     expect(teamsToken).not.toBe(storedToken);
+    // The audit says what happened: nothing was revoked at Microsoft.
+    expect(await disconnectedAudit()).toMatchObject([
+      { diffJson: { provider: "MICROSOFT_TEAMS", revokedInline: false } },
+    ]);
   });
 
   it("a provider with no revoke endpoint, disconnected by an admin, keeps the token and says what is left", async () => {
@@ -405,6 +409,9 @@ describe("disconnecting a meeting provider", () => {
     expect((await readIntegration("MICROSOFT_TEAMS")).status).toBe(IntegrationStatus.DISCONNECTED);
     const kept = await getSecret({ orgId, provider: "MICROSOFT_TEAMS", kind: "REFRESH_TOKEN" });
     expect(kept === teamsToken).toBe(true);
+    expect(await disconnectedAudit()).toMatchObject([
+      { diffJson: { provider: "MICROSOFT_TEAMS", revokedInline: false } },
+    ]);
   });
 
   it("a provider with a revoke endpoint says it was revoked, in its own name", async () => {
