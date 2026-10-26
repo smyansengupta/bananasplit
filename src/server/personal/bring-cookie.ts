@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 /**
- * "Start a club with this": the Personal event or poll someone was looking
+ * "Start a club with this": the Personal item someone was looking
  * at when they chose to start a club (Move to a club, an upgrade prompt).
  * It waits in a short-lived cookie through club setup, and the last step
  * ("Bring anything in?") starts with it checked. Only an id: the step

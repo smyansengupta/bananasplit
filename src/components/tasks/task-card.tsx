@@ -15,6 +15,7 @@ import {
   isTaskFlagged,
   isTaskPrivate,
 } from "./task-badges";
+import { TaskTitle } from "./task-title";
 import { ProgressBar, TaskTypeChip } from "./task-type";
 import type { TaskItem } from "./types";
 
@@ -97,7 +98,7 @@ export function TaskCard({
             done && "text-muted-foreground font-medium",
           )}
         >
-          {task.title}
+          <TaskTitle>{task.title}</TaskTitle>
         </p>
       </div>
 

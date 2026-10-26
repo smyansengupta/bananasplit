@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { serialized } from "@/test/serialized-request";
+
 /**
  * The receipt upload route against fake wrappers: withOrgTx / withOrgAction
  * hand the handler a mocked transaction client and the caller's role (or
@@ -72,7 +74,7 @@ function jpegOfSize(bytes: number): Uint8Array<ArrayBuffer> {
   return data;
 }
 
-function upload(
+async function upload(
   file: { bytes: Uint8Array<ArrayBuffer>; name: string; type: string } | null,
   opts: { transactionId?: string; origin?: string } = {},
 ) {
@@ -86,7 +88,7 @@ function upload(
     body: form,
     headers,
   });
-  return POST(request, { params: Promise.resolve({ orgId: "org_1" }) });
+  return POST(await serialized(request), { params: Promise.resolve({ orgId: "org_1" }) });
 }
 
 beforeEach(() => {

@@ -3,8 +3,9 @@
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
+import { bringSections, type BringSection } from "@/lib/onboarding/bring";
 import { clearBring, isBringId, rememberBring } from "@/server/personal/bring-cookie";
-import { movedSummary, movePersonalItems } from "@/server/personal/move";
+import { loadBringable, movedSummary, movePersonalItems } from "@/server/personal/move";
 
 /**
  * "Bring anything in?" (B7 of club setup, and Move to a club). The move
@@ -13,7 +14,14 @@ import { movedSummary, movePersonalItems } from "@/server/personal/move";
  * this directly gets the same answers as the page.
  */
 
-export type BringResult = { ok: true; summary: string } | { ok: false; error: string };
+export type BringResult =
+  | {
+      ok: true;
+      summary: string;
+      /** What's left to bring: what came along (a folder's notes, a poll's event) is gone too. */
+      sections: BringSection[];
+    }
+  | { ok: false; error: string };
 
 const SLUG = /^[a-z0-9-]{1,60}$/;
 
@@ -26,7 +34,12 @@ export async function bringIntoClubAction(
   const result = await movePersonalItems(user.id, organizationId, selection);
   if (!result.ok) return result;
   await clearBring();
-  return { ok: true, summary: movedSummary(result.moved) };
+  const left = await loadBringable(user.id);
+  return {
+    ok: true,
+    summary: movedSummary(result.moved),
+    sections: left ? bringSections(left) : [],
+  };
 }
 
 /** Skip or Finish: into the club (as its admin after setup). */

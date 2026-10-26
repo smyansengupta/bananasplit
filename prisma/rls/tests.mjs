@@ -2076,6 +2076,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "cancel_job",
         "claim_jobs",
         "clear_ics_token_hash",
+        // AI connectors: the caller's own spaces with each club's switch
+        // (OrgSettings is readable only in the current org).
+        "connector_spaces",
         "enqueue_job",
         "event_defaults",
         "explode_ballot",
@@ -2123,6 +2126,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "refresh_contact_rollups",
         "refresh_lapsed",
         "resolve_org_slug",
+        // AI connectors: the identity plane's revoke (app_auth only), for a
+        // password reset and the Google sign-in gate.
+        "revoke_connector_grants",
         // A bring list claim's item and sign-up are on the same event.
         "rsvp_claim_same_event",
         // Public RSVP pages: the org and event behind a live page's code.
@@ -2230,6 +2236,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "AvailabilityPoll:DELETE",
         "AvailabilityPoll:INSERT",
         "AvailabilityPoll:UPDATE",
+        // AI connectors: a user's own grants (userId pinned, no org involved).
+        "ConnectorGrant:DELETE",
+        "ConnectorGrant:INSERT",
+        "ConnectorGrant:UPDATE",
         // Club-made database rows: app.can_edit_database is the role check.
         "DatabaseRecord:INSERT",
         "DatabaseRecord:UPDATE",
@@ -2463,6 +2473,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // A CHECK on the reminder offsets (meetings): both roles insert rows
       // the constraint has to evaluate.
       reminder_offsets_ok: "us",
+      // AI connectors: every space's switch for the member path; the revoke
+      // for the identity plane alone.
+      connector_spaces: "u",
+      revoke_connector_grants: "a",
     };
     await tcase(
       "T27f",

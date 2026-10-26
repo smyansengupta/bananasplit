@@ -17,11 +17,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldSelect } from "@/components/ui/field-select";
 
 import { ContactSearch, type ContactOption } from "./contact-search";
-import { nativeSelectClass, notice } from "./styles";
-
-const selectClass = nativeSelectClass;
+import { notice } from "./styles";
 
 /** Manual check-in (ADMIN+): a suite-native row that can later be edited or deleted. */
 export function AddAttendanceDialog({
@@ -73,13 +72,13 @@ export function AddAttendanceDialog({
         <form action={submit} className="grid gap-4">
           <div className="grid gap-1.5">
             <Label htmlFor="att-session">Session</Label>
-            <select id="att-session" name="eventId" required className={selectClass}>
+            <FieldSelect id="att-session" name="eventId" required className="w-full">
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </div>
           <div className="grid gap-1.5">
             <Label>Person</Label>
@@ -118,11 +117,11 @@ export function AddAttendanceDialog({
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="att-method">Method</Label>
-            <select id="att-method" name="method" defaultValue="MANUAL" className={selectClass}>
+            <FieldSelect id="att-method" name="method" defaultValue="MANUAL" className="w-full">
               <option value="MANUAL">Manual</option>
               <option value="FORM">Form</option>
               <option value="QR">QR</option>
-            </select>
+            </FieldSelect>
           </div>
           {error && (
             <p role="alert" className={notice.error}>
@@ -197,14 +196,14 @@ export function AddSignupDialog({
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="sg-year">Year</Label>
-            <select id="sg-year" name="classYear" className={selectClass}>
+            <FieldSelect id="sg-year" name="classYear" className="w-full">
               <option value="">Not given</option>
               {years.map((y) => (
                 <option key={y.value} value={y.value}>
                   {y.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </div>
           {error && (
             <p role="alert" className={notice.error}>

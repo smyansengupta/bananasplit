@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { FieldSelect } from "@/components/ui/field-select";
 import { SUCCESS_TEXT } from "@/lib/status-tones";
 import { cn } from "@/lib/utils";
 import {
@@ -22,7 +23,6 @@ import {
   saveSetupCalendarsAction,
   type SetupResult,
 } from "./actions";
-import { nativeSelectClass } from "../settings/settings-card";
 import type { SetupStepView } from "./view";
 
 /**
@@ -36,8 +36,6 @@ import type { SetupStepView } from "./view";
  * Each form owns its failure: the reason the service gave, plus the one
  * thing to change (src/server/setup/diagnose), and the field to go back to.
  */
-
-const selectClass = nativeSelectClass;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -184,9 +182,9 @@ export function DataSourceForm({ orgId, view, onConnected }: FormProps) {
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="setup-sb-region">Pooler region</Label>
-          <select
+          <FieldSelect
             id="setup-sb-region"
-            className={selectClass}
+            className="w-full"
             value={poolerRegion}
             aria-invalid={fieldInvalid(failure, "poolerRegion") || undefined}
             onChange={(e) => setPoolerRegion(e.target.value)}
@@ -196,19 +194,19 @@ export function DataSourceForm({ orgId, view, onConnected }: FormProps) {
                 {r}
               </option>
             ))}
-          </select>
+          </FieldSelect>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="setup-sb-prefix">Pooler host prefix</Label>
-          <select
+          <FieldSelect
             id="setup-sb-prefix"
-            className={selectClass}
+            className="w-full"
             value={poolerPrefix}
             onChange={(e) => setPoolerPrefix(e.target.value)}
           >
             <option value="aws-0">aws-0</option>
             <option value="aws-1">aws-1</option>
-          </select>
+          </FieldSelect>
         </div>
       </div>
       <p className="text-muted-foreground bg-muted/60 rounded-field px-3.5 py-2.5 text-[13px]">
@@ -294,9 +292,9 @@ export function CalendarForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor="setup-gcal-public">Public events go to</Label>
-              <select
+              <FieldSelect
                 id="setup-gcal-public"
-                className={selectClass}
+                className="w-full"
                 value={publicId}
                 onChange={(e) => setPublicId(e.target.value)}
               >
@@ -307,13 +305,13 @@ export function CalendarForm({
                     {c.primary ? " (primary)" : ""}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="setup-gcal-internal">Internal events go to</Label>
-              <select
+              <FieldSelect
                 id="setup-gcal-internal"
-                className={selectClass}
+                className="w-full"
                 value={internalId}
                 onChange={(e) => setInternalId(e.target.value)}
               >
@@ -324,7 +322,7 @@ export function CalendarForm({
                     {c.primary ? " (primary)" : ""}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             </div>
           </div>
           {failure ? <FailureNote reason={failure.error} fix={failure.fix} /> : null}
@@ -367,9 +365,9 @@ export function ClaudeForm({ orgId, view, onConnected }: FormProps) {
       />
       <div className="grid gap-1.5">
         <Label htmlFor="setup-claude-model">Model</Label>
-        <select
+        <FieldSelect
           id="setup-claude-model"
-          className={selectClass}
+          className="w-full"
           value={model}
           aria-invalid={fieldInvalid(failure, "model") || undefined}
           onChange={(e) => setModel(e.target.value)}
@@ -379,7 +377,7 @@ export function ClaudeForm({ orgId, view, onConnected }: FormProps) {
               {m.label}
             </option>
           ))}
-        </select>
+        </FieldSelect>
         <p className="text-muted-foreground text-[13px]">
           The test checks your key can actually use this one. Haiku is the cheapest and is usually
           enough for a one-page chart.

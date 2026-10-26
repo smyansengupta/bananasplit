@@ -30,11 +30,17 @@ export function RoadmapView({ epics }: { epics: RoadmapEpic[] }) {
   const ws = useWorkspace();
 
   if (epics.length === 0) {
+    // No epic at all: the cards section under this one says so, once. The
+    // timeline has nothing to draw and nothing to add that the empty state
+    // below doesn't already say, so it stands aside. With filters on it is a
+    // different sentence — the club has epics, this view just has none — and
+    // the cards below are showing them, so that one is worth saying here.
+    if (ws.filterCount === 0) return null;
     return (
       <div className="bg-card edge rounded-card">
         <EmptyState
           icon={Layers}
-          title={ws.filterCount > 0 ? "No epics match that" : "No epics yet"}
+          title="No epics match that"
           description="An epic is a big outcome that spans weeks, like “Venue and logistics”. Its stories and tasks roll up into it."
           action={
             <Button variant="create" onClick={() => newTask({ type: "EPIC" })}>

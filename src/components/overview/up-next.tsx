@@ -1,10 +1,17 @@
 "use client";
 
-import { ArrowUpRight, CalendarCheck2, EyeOff, MoreHorizontal, RotateCcw } from "@/components/icons";
+import {
+  ArrowUpRight,
+  CalendarCheck2,
+  EyeOff,
+  MoreHorizontal,
+  RotateCcw,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
+import { ContextActions } from "@/components/context-actions";
 import { BlockCard } from "@/components/ui/block-card";
 import {
   DropdownMenu,
@@ -71,7 +78,7 @@ export function UpNext({
             type="button"
             onClick={showAll}
             disabled={pending}
-            className="text-muted-foreground hover:text-foreground focus-glow inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] outline-none transition-colors disabled:opacity-50"
+            className="text-muted-foreground hover:text-foreground focus-glow inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] transition-colors outline-none disabled:opacity-50"
           >
             <RotateCcw className="size-3.5" aria-hidden="true" />
             Show {hiddenCount} hidden
@@ -88,57 +95,71 @@ export function UpNext({
         <div className="-mx-1 flex snap-x snap-mandatory [scrollbar-width:none] gap-3.5 overflow-x-auto px-1 pb-1.5 max-sm:-mx-4 max-sm:scroll-px-4 max-sm:px-4 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
           {/* A phone: just the next one, full width (the ↗ opens the rest). */}
           {slots.map(({ item, moreAlerts }, index) => (
-            <BlockCard
+            // Right-click a card for the same two things its "…" offers.
+            <ContextActions
               key={`${item.kind}:${item.id}`}
-              tone={item.tone}
-              kicker={item.kicker}
-              title={item.title}
-              subtitle={item.subtitle}
-              href={item.href}
-              figure={moreAlerts > 0 ? `+${moreAlerts}` : item.figure}
-              figureLabel={moreAlerts > 0 ? `more due today or overdue` : item.figureLabel}
-              aside={<FaceStack people={item.faces} total={item.facesTotal} />}
-              action={
-                !onHide ? (
-                  <Link
-                    href={item.href}
-                    aria-label={`Open ${item.title}`}
-                    className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 active:scale-[0.94]"
-                  >
-                    <ArrowUpRight className="size-4" aria-hidden="true" />
-                  </Link>
-                ) : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    aria-label={`What to do with ${item.title}`}
-                    className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 active:scale-[0.94] focus-visible:outline-none"
-                  >
-                    <MoreHorizontal className="size-4" aria-hidden="true" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem asChild>
-                      <Link href={item.href}>
-                        <ArrowUpRight aria-hidden="true" />
-                        Open
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={pending}
-                      onSelect={() => hide(item.kind, item.id)}
+              heading={item.title}
+              items={[
+                { label: "Open", icon: ArrowUpRight, href: item.href },
+                onHide && {
+                  label: "Hide this",
+                  icon: EyeOff,
+                  disabled: pending,
+                  onSelect: () => hide(item.kind, item.id),
+                },
+              ]}
+            >
+              <BlockCard
+                tone={item.tone}
+                kicker={item.kicker}
+                title={item.title}
+                subtitle={item.subtitle}
+                href={item.href}
+                figure={moreAlerts > 0 ? `+${moreAlerts}` : item.figure}
+                figureLabel={moreAlerts > 0 ? `more due today or overdue` : item.figureLabel}
+                aside={<FaceStack people={item.faces} total={item.facesTotal} />}
+                action={
+                  !onHide ? (
+                    <Link
+                      href={item.href}
+                      aria-label={`Open ${item.title}`}
+                      className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 active:scale-[0.94]"
                     >
-                      <EyeOff aria-hidden="true" />
-                      Hide this
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                )
-              }
-              className={cn(
-                "min-h-[13.75rem] w-[82%] shrink-0 snap-start max-sm:min-h-44 sm:w-auto",
-                "max-md:w-full",
-                index > 0 && "max-md:hidden",
-              )}
-            />
+                      <ArrowUpRight className="size-4" aria-hidden="true" />
+                    </Link>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={`What to do with ${item.title}`}
+                        className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 focus-visible:outline-none active:scale-[0.94]"
+                      >
+                        <MoreHorizontal className="size-4" aria-hidden="true" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem asChild>
+                          <Link href={item.href}>
+                            <ArrowUpRight aria-hidden="true" />
+                            Open
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={pending}
+                          onSelect={() => hide(item.kind, item.id)}
+                        >
+                          <EyeOff aria-hidden="true" />
+                          Hide this
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )
+                }
+                className={cn(
+                  "min-h-[13.75rem] w-[82%] shrink-0 snap-start max-sm:min-h-44 sm:w-auto",
+                  "max-md:w-full",
+                  index > 0 && "max-md:hidden",
+                )}
+              />
+            </ContextActions>
           ))}
         </div>
       )}

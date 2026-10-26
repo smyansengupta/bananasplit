@@ -2,7 +2,13 @@ import { Ticket, Video } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
-import { Cover, listWhen, MeetingCard, type MeetingRow } from "@/components/meetings/meeting-card";
+import {
+  Cover,
+  listWhen,
+  MeetingCard,
+  type MeetingCrowd,
+  type MeetingRow,
+} from "@/components/meetings/meeting-card";
 import { NewMeetingButton } from "@/components/meetings/new-meeting-button";
 import { VideoConnections } from "@/components/meetings/video-connections";
 import { PageHeader } from "@/components/page-header";
@@ -17,8 +23,9 @@ import { conferenceStatus } from "@/lib/meetings/conference-status";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
+import { rsvpCover } from "@/lib/rsvp/cover";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { getOrgMembersForPicker } from "@/server/members";
+import { getOrgMembersForPicker, userPublicSelect } from "@/server/members";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
 import {
@@ -81,7 +88,7 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts }, registrations, connections, members] = await Promise.all([
+  const [{ events, counts, attendees }, registrations, connections, members] = await Promise.all([
     withOrgTx(org.id, async ({ db }) => {
       const rows: MeetingRow[] = await db.event.findMany({
         where: {
@@ -138,7 +145,13 @@ export default async function MeetingsPage({
             _count: { _all: true },
           })
         : [];
-      return { events, counts };
+      // Who was invited from the organization and what they said, so a card can
+      // show the people rather than a blank picture.
+      const attendees = await db.eventAttendee.findMany({
+        where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
+        select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
+      });
+      return { events, counts, attendees };
     }),
     myRsvpRegistrations(user.id, MY_TICKETS),
     canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
@@ -148,6 +161,25 @@ export default async function MeetingsPage({
 
   const countOf = (eventId: string, status: string) =>
     counts.find((c) => c.eventId === eventId && c.status === status)?._count._all ?? 0;
+
+  /**
+   * Who is on a meeting: the faces of the people going, then the numbers.
+   * A meeting nobody was invited to has none, and the card leaves the row
+   * out rather than saying "0 going".
+   */
+  const FACES = 5;
+  const crowdOf = (eventId: string): MeetingCrowd | null => {
+    const rows = attendees.filter((a) => a.eventId === eventId);
+    if (rows.length === 0) return null;
+    const going = rows.filter((a) => a.rsvp === "YES");
+    const maybe = rows.filter((a) => a.rsvp === "MAYBE").length;
+    const awaited = rows.filter((a) => a.rsvp === "PENDING").length;
+    // The people who said yes lead; with none yet, show who was asked.
+    const faces = (going.length > 0 ? going : rows).slice(0, FACES).map((a) => a.user);
+    return { faces, going: going.length, maybe, awaited, invited: rows.length };
+  };
+  const myRsvp = (eventId: string) =>
+    attendees.find((a) => a.eventId === eventId && a.user.id === user.id)?.rsvp ?? null;
   const here = new Set(events.map((e) => e.id));
   const tickets = personal ? registrations : registrations.filter((r) => here.has(r.eventId));
   const ticketFor = new Map(tickets.map((r) => [r.eventId, r]));
@@ -187,7 +219,7 @@ export default async function MeetingsPage({
   // and everyone else finds the join details and the sign-up link there.
   const hrefOf = (e: MeetingRow) => `/app/${orgSlug}/meetings/${e.id}`;
 
-  const card = (e: MeetingRow, featured = false, ended = false) => (
+  const card = (e: MeetingRow, featured = false, leads = false, ended = false) => (
     <MeetingCard
       key={e.id}
       event={e}
@@ -196,20 +228,33 @@ export default async function MeetingsPage({
       href={hrefOf(e)}
       timeZone={timeZone}
       featured={featured}
+      first={leads}
       past={ended}
+      now={now}
       going={countOf(e.id, "GOING")}
       waiting={countOf(e.id, "WAITLIST")}
       mine={ticketFor.get(e.id)?.status ?? null}
+      myRsvp={myRsvp(e.id)}
+      crowd={crowdOf(e.id)}
     />
   );
 
   /**
-   * A grid of event cards, like Files; the first upcoming one is the wide
-   * "Next up". `ended` is the Past list: its cards have nothing left to join.
+   * A grid of event cards, like Files; the first upcoming one says "Next up".
+   * It is given the wide card ONLY when it has a picture to fill it: without
+   * one, a double-width card is a double-width gap, so it sits in the grid
+   * with the rest. `ended` is the Past list: its cards have nothing left to join.
    */
   const pageList = (items: MeetingRow[], feature = false, ended = false) => (
     <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
-      {items.map((e, i) => card(e, feature && i === 0 && items.length > 1, ended))}
+      {items.map((e, i) =>
+        card(
+          e,
+          feature && i === 0 && items.length > 1 && Boolean(rsvpCover(e.rsvpCover)),
+          feature && i === 0,
+          ended,
+        ),
+      )}
     </ul>
   );
   const coverOf = new Map(events.map((e) => [e.id, e.rsvpCover]));

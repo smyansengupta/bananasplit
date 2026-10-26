@@ -105,6 +105,7 @@ model User {
   pins                   Pin[]
   recentVisits           RecentVisit[]
   memberPrefs            MemberPrefs[]
+  connectorGrants        ConnectorGrant[]
   uploadedFiles          OrgFile[]            @relation("OrgFileUploadedBy")
   noteFolders            NoteFolder[]         @relation("NoteFolderCreatedBy")
   noteShares             NoteShare[]          @relation("NoteShareUser")
@@ -406,6 +407,7 @@ model Organization {
   files             OrgFile[]
   noteFolders       NoteFolder[]
   pulseIssues       PulseIssue[]
+  connectorGrants   ConnectorGrant[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -1977,6 +1979,10 @@ model OrgSettings {
   pulseInApp                    Boolean          @default(true)
   // What members (not only OWNER/ADMIN) may create; RLS reads these.
   memberCanCreateTags           Boolean          @default(true)
+  /// Members may use the club from AI apps they connect (Admin panel ›
+  /// Privacy › AI connectors; docs/features/ai-connectors.md). Off refuses
+  /// every connector call for the club; nothing is revoked.
+  connectorsEnabled             Boolean          @default(true)
   updatedById                   String?
   updatedAt                     DateTime         @default(now()) @updatedAt
 
@@ -2695,4 +2701,43 @@ model OrgTheme {
   updatedAt        DateTime         @default(now()) @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =====================================================================
+// AI connectors (docs/features/ai-connectors.md)
+// =====================================================================
+
+/// What a connected AI app may do: read, or read and make changes. Chosen by
+/// the member on AuthKit's consent screen.
+enum ConnectorAccess {
+  READ
+  WRITE
+}
+
+/// An AI app a user connected (docs/features/ai-connectors.md): one per
+/// user and OAuth client. Our record of the grant; WorkOS issues the tokens.
+model ConnectorGrant {
+  id             String          @id @default(cuid())
+  userId         String
+  /// The OAuth client the tokens were issued to (a CIMD URL or a DCR id).
+  clientId       String
+  /// Looked up from WorkOS after the first call; null until then.
+  clientName     String?
+  /// The token's sub, for revoking the grant at WorkOS.
+  workosUserId   String
+  /// The consent the current tokens belong to (the token's sid).
+  consentId      String
+  access         ConnectorAccess @default(READ)
+  /// Null: Personal and every club the user is in. Else that one space.
+  organizationId String?
+  createdAt      DateTime        @default(now())
+  lastUsedAt     DateTime        @default(now())
+  /// Set by Disconnect, a password reset or the Google sign-in gate; every
+  /// call with this consent is refused until the member connects again.
+  revokedAt      DateTime?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientId])
 }

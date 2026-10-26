@@ -8,15 +8,18 @@ import { CopyLinkButton } from "@/components/meetings/copy-link-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TickMeter } from "@/components/ui/meters";
+import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import type {
   CalendarSyncState,
   ConferenceProvider,
   EventKind,
   MeetingFormat,
   RegistrationStatus,
+  RSVPStatus,
 } from "@/generated/prisma/enums";
 import { CONFERENCE_LABELS, type ConferenceStatus } from "@/lib/meetings/conference-status";
 import { FORMAT_LABEL } from "@/lib/meetings/shape";
+import { until } from "@/lib/relative-time";
 import { rsvpCover } from "@/lib/rsvp/cover";
 import { timeLine } from "@/lib/rsvp/when";
 import { cn } from "@/lib/utils";
@@ -46,6 +49,20 @@ export interface MeetingRow {
   conferenceSyncError: string | null;
 }
 
+/**
+ * Who is on a meeting, from its invitees (EventAttendee): the faces of the
+ * people going (or, before anyone has said yes, of the people asked), then
+ * the numbers. The page works it out; a meeting nobody was invited to has
+ * none, and the card leaves the row out rather than saying "0 going".
+ */
+export interface MeetingCrowd {
+  faces: (UserAvatarUser & { id: string })[];
+  going: number;
+  maybe: number;
+  awaited: number;
+  invited: number;
+}
+
 /** The OrgIntegration behind an event's provider, for its logo. */
 function conferenceIntegration(provider: ConferenceProvider): string | null {
   if (provider === "MEET") return "GOOGLE_MEET";
@@ -56,6 +73,10 @@ function conferenceIntegration(provider: ConferenceProvider): string | null {
 
 /**
  * One meeting on the Meetings list (docs/features/meetings.md).
+ *
+ * A card with a sign-up picture shows it. One without gives that room to what
+ * a person wants off this list instead of a placeholder: when it is and how
+ * soon, what you join or where to be, and who is coming.
  *
  * The card is a plain container, and its title is the one link to the
  * meeting's page. That link is stretched over the whole card with an overlay,
@@ -72,10 +93,14 @@ export function MeetingCard({
   href,
   timeZone,
   featured = false,
+  first = false,
   past = false,
+  now,
   going,
   waiting,
   mine,
+  myRsvp,
+  crowd,
 }: {
   event: MeetingRow;
   /** Hosts see the head count; everyone else sees their own sign-up. */
@@ -85,18 +110,31 @@ export function MeetingCard({
   /** The meeting's page. */
   href: string;
   timeZone: string;
-  /** The first upcoming meeting is the wide "Next up". */
+  /**
+   * The wide "Next up": the first upcoming meeting, and only when it has a
+   * picture to fill the width (the page decides).
+   */
   featured?: boolean;
+  /** The first upcoming meeting, which says "Next up" even when not wide. */
+  first?: boolean;
   /** Already over: nothing left to join, so no Join and no Copy link. */
   past?: boolean;
+  /** The page's clock, for "in 2 hours". */
+  now: Date;
   going: number;
   waiting: number;
   /** Your own sign-up, if you have one. */
   mine: RegistrationStatus | null;
+  /** What you answered as an invitee, if you were invited. */
+  myRsvp: RSVPStatus | null;
+  /** Who is coming, or null when nobody was invited. */
+  crowd: MeetingCrowd | null;
 }) {
   const integration = conferenceIntegration(e.conferenceProvider);
   const place = e.location?.trim();
   const shape = shapeLine();
+  const hasCover = Boolean(rsvpCover(e.rsvpCover));
+  const soon = e.startsAt > now ? until(e.startsAt, now) : null;
 
   /**
    * What kind of call this is, and where it is, in one line. A pasted link
@@ -153,13 +191,10 @@ export function MeetingCard({
 
   /** On the right: the head count for hosts, your own sign-up for everyone else. */
   function signups() {
-    // No sign-up page means nobody to count. Offer to open one instead of
-    // showing "0 going" on every meeting in the list.
-    if (!e.rsvpSlug) {
-      return canManage ? (
-        <span className="text-muted-foreground text-[13px]">No sign-up page</span>
-      ) : null;
-    }
+    // No sign-up page means nobody to count here: the organization's own
+    // invitees are on the card already (the crowd), so this says nothing at
+    // all rather than "No sign-up page" on every internal meeting.
+    if (!e.rsvpSlug) return null;
     if (canManage) {
       return (
         <span className="flex min-w-0 flex-col gap-1.5 text-sm tabular-nums">
@@ -199,34 +234,60 @@ export function MeetingCard({
           "group bg-card text-card-foreground edge rounded-card hover:shadow-e2 relative flex h-full overflow-hidden transition-[transform,box-shadow] duration-200 ease-(--ease-ink) hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
           // The title's own outline would sit on the title; the card carries it.
           "has-[[data-card-link]:focus-visible]:outline-foreground has-[[data-card-link]:focus-visible]:outline-2 has-[[data-card-link]:focus-visible]:outline-offset-2",
-          featured ? "flex-col sm:flex-row" : "flex-col",
+          featured && hasCover ? "flex-col sm:flex-row" : "flex-col",
         )}
       >
-        <Cover
-          title={e.title}
-          cover={e.rsvpCover}
-          kind={e.kind}
-          startsAt={e.startsAt}
-          timeZone={timeZone}
-          className={
-            featured ? "aspect-[16/10] sm:aspect-auto sm:min-h-56 sm:w-1/2" : "aspect-[16/9]"
-          }
-        />
-        <div className={cn("flex min-w-0 flex-1 flex-col gap-3", featured ? "p-6" : "p-4.5")}>
+        {hasCover && (
+          <Cover
+            title={e.title}
+            cover={e.rsvpCover}
+            kind={e.kind}
+            startsAt={e.startsAt}
+            timeZone={timeZone}
+            className={
+              featured ? "aspect-[16/10] sm:aspect-auto sm:min-h-56 sm:w-1/2" : "aspect-[16/9]"
+            }
+          />
+        )}
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 flex-col gap-3",
+            featured ? "p-6" : "p-4.5",
+            featured && !hasCover && "sm:p-7",
+          )}
+        >
           <div className="space-y-1">
-            {featured && <span className="eyebrow block">Next up</span>}
-            <Link
-              href={href}
-              data-card-link=""
-              className={cn(
-                "min-w-0 font-semibold break-words underline-offset-4 group-hover:underline after:absolute after:inset-0 focus-visible:outline-none",
-                // line-clamp-2 is its own display (a -webkit-box, which is
-                // block-level), so `block` goes only where nothing clamps.
-                featured ? "display-title block text-2xl" : "line-clamp-2 text-[15px]",
-              )}
-            >
-              {e.title}
-            </Link>
+            {/* With no picture the date leads the card instead of sitting on one. */}
+            {!hasCover && (
+              <span className="mb-3 flex items-center gap-3">
+                <DateLeaf startsAt={e.startsAt} timeZone={timeZone} />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  {(featured || first) && <span className="eyebrow block">Next up</span>}
+                  {soon && (
+                    <span className="text-muted-foreground text-[13px] first-letter:uppercase">
+                      {soon}
+                    </span>
+                  )}
+                </span>
+              </span>
+            )}
+            {featured && hasCover && <span className="eyebrow block">Next up</span>}
+            <span className="flex items-start gap-2">
+              <Link
+                href={href}
+                data-card-link=""
+                className={cn(
+                  "min-w-0 font-semibold break-words underline-offset-4 group-hover:underline after:absolute after:inset-0 focus-visible:outline-none",
+                  // line-clamp-2 is its own display (a -webkit-box, which is
+                  // block-level), so `block` goes only where nothing clamps.
+                  featured ? "display-title block text-2xl" : "line-clamp-2 text-[15px]",
+                )}
+              >
+                {e.title}
+              </Link>
+              {myRsvp === "YES" && <Badge variant="success">You&apos;re going</Badge>}
+              {myRsvp === "MAYBE" && <Badge variant="outline">You said maybe</Badge>}
+            </span>
             <span className="text-muted-foreground block text-[13px]">
               {listWhen(e.startsAt, e.endsAt, timeZone, e.allDay)}
             </span>
@@ -242,11 +303,13 @@ export function MeetingCard({
             </span>
             {shape}
           </div>
+          {crowd && <Crowd {...crowd} />}
           <div className="mt-auto flex flex-col gap-3">
             <div className="flex items-end justify-between gap-3">
               {signups()}
               <ArrowUpRight
-                className="text-muted-foreground group-hover:text-foreground size-4 flex-none transition-colors"
+                // ms-auto: on the right even with no head count beside it.
+                className="text-muted-foreground group-hover:text-foreground ms-auto size-4 flex-none transition-colors"
                 aria-hidden="true"
               />
             </div>
@@ -283,6 +346,47 @@ export function listWhen(start: Date, end: Date, timeZone: string, allDay: boole
 
 const MONTH = (timeZone: string) => new Intl.DateTimeFormat("en-US", { month: "short", timeZone });
 const DAY = (timeZone: string) => new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone });
+
+/** The calendar leaf: the month over the day, as it reads on a cover. */
+function DateLeaf({ startsAt, timeZone }: { startsAt: Date; timeZone: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="bg-muted text-foreground rounded-tile flex w-12 shrink-0 flex-col items-center py-1.5 leading-none"
+    >
+      <span className="text-muted-foreground text-[11px] font-semibold uppercase">
+        {MONTH(timeZone).format(startsAt)}
+      </span>
+      <span className="numeral mt-0.5 text-lg">{DAY(timeZone).format(startsAt)}</span>
+    </span>
+  );
+}
+
+/**
+ * Who is coming: the faces of the people who said yes (or, before anyone
+ * has, of the people asked), and then the count in words. A meeting is
+ * people, and a list that doesn't say who is on them makes you open each one
+ * to find out.
+ */
+function Crowd({ faces, going, maybe, awaited, invited }: MeetingCrowd) {
+  const line = [
+    going > 0 ? `${going} going` : `${invited} invited`,
+    maybe > 0 && `${maybe} maybe`,
+    going > 0 && awaited > 0 && `${awaited} yet to answer`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="flex shrink-0">
+        {faces.map((u) => (
+          <UserAvatar key={u.id} user={u} size="xs" className="ring-card -me-1.5 ring-2" />
+        ))}
+      </span>
+      <span className="text-muted-foreground min-w-0 truncate ps-2 text-[13px]">{line}</span>
+    </span>
+  );
+}
 
 /**
  * The event's picture (its RSVP cover), with a calendar-leaf date on it.

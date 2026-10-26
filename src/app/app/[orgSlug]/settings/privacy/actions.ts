@@ -138,3 +138,34 @@ export const updateDatabaseVisibility = privacyAction(
     return {};
   },
 );
+
+/**
+ * Admin panel > Privacy > AI connectors (docs/features/ai-connectors.md):
+ * whether members may use the club from AI apps they connect. Off refuses
+ * every connector call for the club at once; nothing is revoked, so turning
+ * it back on restores access.
+ */
+export const updateConnectorsEnabled = privacyAction(
+  async (ctx, enabled: boolean): Promise<PrivacyResult> => {
+    requirePermission(ctx, "privacy.write");
+    const parsed = z.boolean().safeParse(enabled);
+    if (!parsed.success) return { error: "Choose on or off." };
+    const before = await ctx.db.orgSettings.findUniqueOrThrow({
+      where: { organizationId: ctx.organizationId },
+      select: { connectorsEnabled: true },
+    });
+    if (before.connectorsEnabled === parsed.data) return {};
+    await ctx.db.orgSettings.update({
+      where: { organizationId: ctx.organizationId },
+      data: { connectorsEnabled: parsed.data, updatedById: ctx.userId },
+    });
+    await writeOrgAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      action: "privacy.connectors_changed",
+      targetType: "OrgSettings",
+      targetId: ctx.organizationId,
+      diff: { from: before.connectorsEnabled, to: parsed.data },
+    });
+    return {};
+  },
+);

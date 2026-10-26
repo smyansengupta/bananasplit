@@ -55,11 +55,16 @@ This is deliberately a **separate client** from Google Calendar's
 (`GOOGLE_CALENDAR_CLIENT_ID`), so connecting one never re-prompts for the other.
 It can live in the same Cloud project.
 
-> **Check before launch:** while the consent screen is in *Testing*, only the
-> test users you list can connect, and their grants expire after seven days.
-> Moving it to *Production* may need Google to verify the app for this scope.
-> I have not confirmed which tier `meetings.space.created` falls in — Google's
-> console will say when you add it.
+> **Check before launch:** Google rates `meetings.space.created` as a
+> [*Sensitive* scope](https://developers.google.com/workspace/meet/api/guides/authenticate-authorize)
+> — not *Restricted*, so no third-party security assessment.
+>
+> - While the consent screen is in *Testing*, only the test users you list can
+>   connect, and their grants expire after seven days.
+> - Moving it to *Production* means submitting the app for Google's
+>   [verification](https://support.google.com/cloud/answer/7454865). Until that
+>   finishes, people who connect see an "unverified app" screen first, and the
+>   app stops at 100 new users.
 
 ## Zoom
 

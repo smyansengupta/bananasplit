@@ -13,8 +13,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldSelect } from "@/components/ui/field-select";
 
-import { fileInputClass, nativeSelectClass } from "./styles";
+import { fileInputClass } from "./styles";
 
 /** The line beside a card's Save: what happened, or what went wrong. */
 function Status({ error, notice }: { error: string | null; notice: string | null }) {
@@ -115,11 +116,11 @@ export function DefinitionImportForm({
         <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2">
           <div className="grid min-w-0 gap-1.5">
             <Label htmlFor="def-session">Linked session</Label>
-            <select
+            <FieldSelect
               id="def-session"
               value={linked}
               onChange={(e) => setLinked(e.target.value)}
-              className={nativeSelectClass}
+              className="w-full"
             >
               <option value="">None</option>
               {sessions.map((s) => (
@@ -127,7 +128,7 @@ export function DefinitionImportForm({
                   {s.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </div>
           <TestPollCheckbox id="def-test" checked={isTest} onCheckedChange={(v) => setIsTest(v)} />
         </div>
@@ -259,11 +260,11 @@ export function DefinitionEditForm({
           </div>
           <div className="grid min-w-0 gap-1.5">
             <Label htmlFor={`l-${definition.id}`}>Linked session</Label>
-            <select
+            <FieldSelect
               id={`l-${definition.id}`}
               name="linkedEventId"
               defaultValue={definition.linkedEventId ?? ""}
-              className={nativeSelectClass}
+              className="w-full"
             >
               <option value="">None</option>
               {sessions.map((s) => (
@@ -271,7 +272,7 @@ export function DefinitionEditForm({
                   {s.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </div>
           <div className="self-end">
             <TestPollCheckbox

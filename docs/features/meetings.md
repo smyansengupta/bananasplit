@@ -674,12 +674,19 @@ everything, split into Coming up and Past; everyone else sees what they can act
 on - something still to come that has a link to join or a page open for
 sign-ups.
 
-Each meeting is a card (`meeting-card.tsx`): its cover and date, its title, when
-it is, its format (Online, In person or Hybrid, `FORMAT_LABEL`), whether
-sign-ups are on, off or not set up, and where it is. For an online meeting it
-names the call, and while the link is being made, or if it could not be, says
-so on the card. For hosts the right-hand side is the head count; for everyone
-else it is their own sign-up.
+Each meeting is a card (`meeting-card.tsx`): its sign-up picture with the date
+on it, or, with no picture, a calendar-leaf date and how soon it is ("in 2
+hours") instead of a placeholder; its title, when it is, its format (Online, In
+person or Hybrid, `FORMAT_LABEL`), whether sign-ups are on, off or not set up,
+and where it is. For an online meeting it names the call, and while the link is
+being made, or if it could not be, says so on the card. Under that, who is
+coming from its invitees: the faces of the people going (or of the people
+asked, before anyone has said yes) and "2 going · 1 maybe · 1 yet to answer";
+a meeting nobody was invited to leaves the row out. Your own answer ("You're
+going", "You said maybe") sits beside the title. For hosts the right-hand side
+is the head count of a sign-up page; for everyone else it is their own sign-up.
+A meeting with no sign-up page says nothing there. The first upcoming meeting
+says **Next up**, and is the wide card only when it has a picture to fill it.
 
 The title is the one link to the meeting's page, stretched over the whole card
 so the card still clicks through. **Join** and **Copy link** sit above it as its

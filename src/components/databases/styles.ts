@@ -1,14 +1,10 @@
 import type { ChoiceColor } from "@/lib/databases/fields";
 
 /**
- * Shared Moonstone classes for the Databases area: the native select (40px,
- * like every other control), the file picker, the notices, and the colours
- * a value chip takes (theme tokens only, so a club theme restyles them).
+ * Shared Moonstone classes for the Databases area: the file picker, the
+ * notices, and the colours a value chip takes (theme tokens only, so a club
+ * theme restyles them). Drop-downs are FieldSelect, which carries its own.
  */
-
-/** A native <select>, lined up with Input and the Select trigger (40px, field corners). */
-export const nativeSelectClass =
-  "border-input bg-card text-foreground rounded-field h-10 w-full min-w-0 border px-3 text-sm outline-none transition-colors focus-visible:border-foreground focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--glow)_45%,transparent)] disabled:cursor-not-allowed disabled:opacity-50";
 
 /** A native file <input>: its button is an outline pill. */
 export const fileInputClass =

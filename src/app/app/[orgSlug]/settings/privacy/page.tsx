@@ -3,12 +3,18 @@ import { Database } from "@/components/icons";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { can } from "@/lib/auth/permissions";
+import { connectorsConfig } from "@/server/connectors/config";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { planGate } from "@/server/billing/plan-gate";
 
 import { SettingsCard } from "../settings-card";
 import { SettingsNoAccess } from "../settings-no-access";
-import { BallotVisibilityForm, DatabaseVisibilityRow, PrivacyForm } from "./privacy-forms";
+import {
+  BallotVisibilityForm,
+  ConnectorsSwitchForm,
+  DatabaseVisibilityRow,
+  PrivacyForm,
+} from "./privacy-forms";
 
 const VOTE_SUMMARY: Record<string, string> = {
   OWNER_ONLY: "votes visible to owners",
@@ -18,8 +24,9 @@ const VOTE_SUMMARY: Record<string, string> = {
 
 /**
  * Settings > Privacy (OWNER/ADMIN): ballot privacy, member and contact
- * emails, the public events feed and which databases members can see.
- * Individual-vote visibility is OWNER-only.
+ * emails, the public events feed, which databases members can see and,
+ * while AI connectors are on for the deployment, whether members may use
+ * the club from AI apps. Individual-vote visibility is OWNER-only.
  */
 export default async function PrivacySettingsPage({
   params,
@@ -42,6 +49,7 @@ export default async function PrivacySettingsPage({
         showMemberEmailsToMembers: true,
         publicEventsEnabled: true,
         contactEmailVisibility: true,
+        connectorsEnabled: true,
       },
     }),
     databases: await db.databaseDefinition.findMany({
@@ -51,12 +59,14 @@ export default async function PrivacySettingsPage({
     }),
   }));
 
+  const connectorsOn = connectorsConfig() !== null;
   const votes = VOTE_SUMMARY[settings.ballotIndividualVisibility] ?? "votes private";
   const hidden = databases.filter((d) => d.memberVisibility === "HIDDEN").length;
   const summary = [
     votes,
     settings.showMemberEmailsToMembers ? "member emails shown" : "member emails hidden",
     settings.publicEventsEnabled ? "public feed on" : "public feed off",
+    connectorsOn ? (settings.connectorsEnabled ? "AI apps allowed" : "AI apps off") : null,
     databases.length > 0
       ? `${hidden} of ${databases.length} database${databases.length === 1 ? "" : "s"} hidden`
       : null,
@@ -89,6 +99,14 @@ export default async function PrivacySettingsPage({
             contactEmailVisibility: settings.contactEmailVisibility,
           }}
         />
+
+        {connectorsOn && (
+          <ConnectorsSwitchForm
+            orgId={organization.id}
+            value={settings.connectorsEnabled}
+            canEdit
+          />
+        )}
 
         <SettingsCard
           title="Databases"

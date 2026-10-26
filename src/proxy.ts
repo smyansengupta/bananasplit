@@ -128,6 +128,13 @@ export const config = {
       ],
     },
     {
+      source: "/connect",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
+    {
       source: "/forgot-password",
       missing: [
         { type: "header", key: "next-router-prefetch" },

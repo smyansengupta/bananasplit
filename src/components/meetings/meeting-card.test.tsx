@@ -54,12 +54,21 @@ function base(overrides: Partial<Props> = {}): Props {
     status: { kind: "ready" },
     href: "/app/acme/meetings/e1",
     timeZone: "America/New_York",
+    // Two hours before the meeting in row().
+    now: new Date("2026-11-02T20:00:00Z"),
     going: 0,
     waiting: 0,
     mine: null,
+    myRsvp: null,
+    crowd: null,
     ...overrides,
   };
 }
+
+const COVER = { key: "k", s480: "/covers/k-480.webp", s960: "/covers/k-960.webp" };
+
+const ADA = { id: "u1", name: "Ada Lovelace", image: null, avatar: null };
+const GRACE = { id: "u2", name: "Grace Hopper", image: null, avatar: null };
 
 function card(overrides: Partial<Props> = {}) {
   return render(
@@ -96,6 +105,21 @@ describe("MeetingCard: the link to the meeting", () => {
     });
 
     expect(container.querySelectorAll("a a, a button").length).toBe(0);
+  });
+
+  it("has none with everything on it: a picture, the faces and your answer", () => {
+    const { container } = card({
+      event: row({ rsvpEnabled: true, rsvpSlug: "exec", rsvpCover: COVER }),
+      canManage: true,
+      featured: true,
+      going: 3,
+      myRsvp: "YES",
+      crowd: { faces: [ADA, GRACE], going: 2, maybe: 0, awaited: 0, invited: 2 },
+    });
+
+    expect(container.querySelectorAll("a a, a button").length).toBe(0);
+    // Your answer sits beside the title, not inside its link.
+    expect(screen.getByRole("link", { name: "Exec sync" }).textContent).toBe("Exec sync");
   });
 
   it("keeps Join and Copy out of the title's link", () => {
@@ -307,10 +331,11 @@ describe("MeetingCard: sign-ups on the right", () => {
     );
   });
 
-  it("offers hosts a sign-up page when there is none", () => {
+  it("says nothing about sign-ups on a meeting without a sign-up page", () => {
     card({ canManage: true });
 
-    expect(screen.getByText("No sign-up page")).toBeTruthy();
+    expect(screen.queryByText("No sign-up page")).toBeNull();
+    expect(screen.queryByText(/going/)).toBeNull();
   });
 
   it("tells a member they are going", () => {
@@ -366,5 +391,97 @@ describe("MeetingCard: the featured card", () => {
 
     const item = screen.getByText("Next up").closest("li") as HTMLElement;
     expect(within(item).getByRole("link", { name: "Exec sync" })).toBeTruthy();
+  });
+
+  it("says next up on a featured card with a picture", () => {
+    card({ featured: true, event: row({ rsvpCover: COVER }) });
+
+    expect(screen.getByText("Next up")).toBeTruthy();
+  });
+
+  it("says next up on the first card even when it is not wide", () => {
+    card({ first: true });
+
+    expect(screen.getByText("Next up")).toBeTruthy();
+  });
+
+  it("says nothing of the kind on the others", () => {
+    card();
+
+    expect(screen.queryByText("Next up")).toBeNull();
+  });
+});
+
+describe("MeetingCard: its picture", () => {
+  it("shows the sign-up picture when there is one", () => {
+    const { container } = card({ event: row({ rsvpCover: COVER }) });
+
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(COVER.s960);
+  });
+
+  it("shows no placeholder when there is none, and leads with the date and how soon", () => {
+    const { container } = card();
+
+    expect(container.querySelector("img")).toBeNull();
+    // No big first letter standing in for a picture.
+    expect(screen.queryByText("E")).toBeNull();
+    // The date leaf (Nov 2, in New York) and the time to go.
+    expect(screen.getByText("Nov")).toBeTruthy();
+    expect(screen.getByText("2")).toBeTruthy();
+    expect(screen.getByText("in 2 hours")).toBeTruthy();
+  });
+
+  it("says nothing about how soon once a meeting has started", () => {
+    card({ now: new Date("2026-11-02T22:30:00Z") });
+
+    expect(screen.queryByText(/^in /)).toBeNull();
+    expect(screen.queryByText("under way")).toBeNull();
+  });
+});
+
+describe("MeetingCard: who is coming", () => {
+  it("shows the faces of the people going, and the numbers", () => {
+    card({
+      crowd: { faces: [ADA, GRACE], going: 2, maybe: 1, awaited: 1, invited: 4 },
+    });
+
+    expect(screen.getByText("AL")).toBeTruthy();
+    expect(screen.getByText("GH")).toBeTruthy();
+    expect(screen.getByText("2 going · 1 maybe · 1 yet to answer")).toBeTruthy();
+  });
+
+  it("says how many were asked before anyone has said yes", () => {
+    card({ crowd: { faces: [ADA, GRACE], going: 0, maybe: 0, awaited: 2, invited: 2 } });
+
+    expect(screen.getByText("2 invited")).toBeTruthy();
+  });
+
+  it("leaves the row out when nobody was invited", () => {
+    card({ crowd: null });
+
+    expect(screen.queryByText(/invited|going/)).toBeNull();
+  });
+});
+
+describe("MeetingCard: your own answer", () => {
+  it("says you're going when you said yes", () => {
+    card({ myRsvp: "YES" });
+
+    expect(screen.getByText("You're going")).toBeTruthy();
+  });
+
+  it("says you said maybe", () => {
+    card({ myRsvp: "MAYBE" });
+
+    expect(screen.getByText("You said maybe")).toBeTruthy();
+  });
+
+  it("says nothing while you have not answered, or said no", () => {
+    for (const myRsvp of ["PENDING", "NO", null] as const) {
+      const { unmount } = card({ myRsvp });
+      expect(screen.queryByText("You're going")).toBeNull();
+      expect(screen.queryByText("You said maybe")).toBeNull();
+      unmount();
+    }
   });
 });

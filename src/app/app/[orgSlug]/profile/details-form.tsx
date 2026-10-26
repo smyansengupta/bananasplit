@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldSelect } from "@/components/ui/field-select";
 import { MajorInput } from "@/components/onboarding/major-input";
 import { gradYearChoices } from "@/lib/onboarding/steps";
 import { PROFILE_LIMITS, profileDetailsSchema, profileFieldErrors } from "@/lib/profile/schema";
 
-import { nativeSelectClass, SettingsCard } from "../settings/settings-card";
+import { SettingsCard } from "../settings/settings-card";
 
 import { saveProfileDetails } from "./actions";
 import { TimezoneSelect } from "./timezone-select";
@@ -162,13 +163,13 @@ export function DetailsForm({
 
           <div className="space-y-2">
             <Label htmlFor="profile-year">Graduation year</Label>
-            <select
+            <FieldSelect
               id="profile-year"
               value={values.gradYear}
               onChange={(e) => set("gradYear", e.target.value)}
               aria-invalid={Boolean(errors.gradYear) || undefined}
               aria-describedby={describedBy("gradYear")}
-              className={nativeSelectClass}
+              className="w-full"
             >
               <option value="">Not set</option>
               {/* A year already on the profile stays selectable, even once it has passed. */}
@@ -180,7 +181,7 @@ export function DetailsForm({
                   {y}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
             <FieldError id="gradYear-error" message={errors.gradYear} />
           </div>
 

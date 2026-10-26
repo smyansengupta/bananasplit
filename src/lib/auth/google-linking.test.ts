@@ -1,12 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authDbMock } = vi.hoisted(() => ({
-  authDbMock: {
+const { authDbMock, txMock } = vi.hoisted(() => {
+  const txMock = {
     $queryRaw: vi.fn(),
-    userCredential: { updateMany: vi.fn() },
-    user: { updateMany: vi.fn() },
-  },
-}));
+    userCredential: { updateManyAndReturn: vi.fn() },
+  };
+  return {
+    txMock,
+    authDbMock: {
+      $queryRaw: vi.fn(),
+      $transaction: vi.fn(async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)),
+      user: { updateMany: vi.fn() },
+    },
+  };
+});
 vi.mock("@/server/db/clients", () => ({ authDb: authDbMock }));
 
 const { googleProviderOptions, googleSignInGate, markGoogleEmailVerified, withNormalizedEmails } =
@@ -17,6 +24,8 @@ const google = { provider: "google" };
 beforeEach(() => {
   vi.clearAllMocks();
   authDbMock.$queryRaw.mockResolvedValue([{ n: 0 }]);
+  txMock.userCredential.updateManyAndReturn.mockResolvedValue([]);
+  txMock.$queryRaw.mockResolvedValue([]);
 });
 
 describe("Google sign-in gate (0A Fix 4(d))", () => {
@@ -46,13 +55,26 @@ describe("Google sign-in gate (0A Fix 4(d))", () => {
     expect(sql.join("?")).toMatch(/app\.purge_unverified_users\(\?\)/);
     expect(email).toBe("victim@example.edu");
     // A squatter the purge had to keep loses its password.
-    expect(authDbMock.userCredential.updateMany).toHaveBeenCalledWith({
+    expect(txMock.userCredential.updateManyAndReturn).toHaveBeenCalledWith({
       where: {
         passwordHash: { not: null },
         user: { email: "victim@example.edu", emailVerified: null },
       },
       data: { passwordHash: null, sessionVersion: { increment: 1 } },
+      select: { userId: true },
     });
+    expect(txMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("revokes the AI apps of an account whose password it strips, in the same transaction", async () => {
+    txMock.userCredential.updateManyAndReturn.mockResolvedValue([{ userId: "u_squatter" }]);
+    await googleSignInGate({
+      account: google,
+      profile: { email: "victim@example.edu", email_verified: true },
+    });
+    const [sql, userId] = txMock.$queryRaw.mock.calls[0] as [TemplateStringsArray, string];
+    expect(sql.join("?")).toMatch(/app\.revoke_connector_grants\(\?\)/);
+    expect(userId).toBe("u_squatter");
   });
 
   it("fails closed when the purge cannot run (email linking would reach the squatter)", async () => {
@@ -63,7 +85,7 @@ describe("Google sign-in gate (0A Fix 4(d))", () => {
         profile: { email: "victim@example.edu", email_verified: true },
       }),
     ).rejects.toThrow("db down");
-    expect(authDbMock.userCredential.updateMany).not.toHaveBeenCalled();
+    expect(txMock.userCredential.updateManyAndReturn).not.toHaveBeenCalled();
   });
 
   it("does not touch credentials sign-ins", async () => {

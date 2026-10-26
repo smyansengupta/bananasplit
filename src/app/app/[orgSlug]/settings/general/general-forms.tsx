@@ -24,13 +24,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldSelect } from "@/components/ui/field-select";
 import { ReminderPicker } from "@/components/meetings/reminder-picker";
 import { sameReminderOffsets } from "@/lib/meetings/reminders";
 import { slugify } from "@/lib/slug";
 import { WEEKDAY_NAMES } from "@/lib/tasks/dates";
 import { timeZoneOptions } from "@/lib/timezones";
 
-import { nativeSelectClass, SettingsCard, SettingsStatus } from "../settings-card";
+import { SettingsCard, SettingsStatus } from "../settings-card";
 import {
   renameOrgSlug,
   updateMeetingReminderDefault,
@@ -159,19 +160,19 @@ export function WeeklyUpdateDayForm({
         <Label htmlFor="org-weekly-day" className="sr-only">
           Weekly update day
         </Label>
-        <select
+        <FieldSelect
           id="org-weekly-day"
           value={value}
           disabled={!canEdit}
           onChange={(e) => setValue(Number(e.target.value))}
-          className={`${nativeSelectClass} max-w-md`}
+          className="w-full max-w-md"
         >
           {WEEKDAY_NAMES.map((name, i) => (
             <option key={name} value={i}>
               {name}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </SettingsCard>
     </form>
   );
@@ -278,12 +279,12 @@ export function TimezoneForm({
         <Label htmlFor="org-timezone" className="sr-only">
           Timezone
         </Label>
-        <select
+        <FieldSelect
           id="org-timezone"
           value={value}
           disabled={!canEdit}
           onChange={(e) => setValue(e.target.value)}
-          className={`${nativeSelectClass} max-w-md`}
+          className="w-full max-w-md"
         >
           {!zones.includes(value) && <option value={value}>{value}</option>}
           {zones.map((z) => (
@@ -291,7 +292,7 @@ export function TimezoneForm({
               {z}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </SettingsCard>
     </form>
   );

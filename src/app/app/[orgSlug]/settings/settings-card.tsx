@@ -12,14 +12,6 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * A native <select> that lines up with Input and SelectTrigger (40px, field
- * corners, the surface colour, the glow focus ring). For the settings forms
- * that keep a plain select (long lists such as timezones).
- */
-export const nativeSelectClass =
-  "border-input bg-card rounded-field focus-visible:border-foreground h-10 w-full min-w-0 border px-3 text-sm transition-colors outline-none focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--glow)_45%,transparent)] disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive";
-
-/**
  * One settings form card (Moonstone): a title and a line about it on space
  * (no rule), the fields, and a footer with the card's one primary Save on
  * the right and its status line on the left. Wrap it in the <form> so the

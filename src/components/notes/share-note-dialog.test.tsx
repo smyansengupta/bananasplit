@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { chosen, openSelect, stubPointerEvents } from "@/test/select";
+
 /**
  * The note's Share button and dialog: the author adds members as editors or
  * viewers and sets the club's access; anyone else only sees who has access.
@@ -20,7 +22,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 
 const { ShareNoteDialog } = await import("./share-note-dialog");
 
-const value = (el: HTMLElement) => (el as HTMLSelectElement).value;
+/** A themed drop-down says what is picked on its trigger. */
+const value = chosen;
 
 const me = { id: "me", name: "Maya Patel", image: null };
 const jay = { id: "jay", name: "Jay Chen", image: null };
@@ -50,6 +53,7 @@ function renderDialog(overrides: Partial<Parameters<typeof ShareNoteDialog>[0]["
 
 beforeEach(() => {
   vi.clearAllMocks();
+  stubPointerEvents();
   // cmdk measures its list.
   globalThis.ResizeObserver ??= class {
     observe() {}
@@ -68,7 +72,7 @@ describe("ShareNoteDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Share/ }));
     const dialog = screen.getByRole("dialog");
-    expect(value(within(dialog).getByLabelText("Their access"))).toBe("EDITOR");
+    expect(value(within(dialog).getByRole("combobox", { name: "Their access" }))).toBe("Editor");
 
     fireEvent.click(within(dialog).getByRole("combobox", { name: "Add people" }));
     // The picker lists everyone but the author.
@@ -82,16 +86,17 @@ describe("ShareNoteDialog", () => {
       userIds: ["jay"],
       role: "EDITOR",
     });
-    expect(value(within(dialog).getByLabelText("Jay Chen's access"))).toBe("EDITOR");
+    expect(value(within(dialog).getByRole("combobox", { name: "Jay Chen's access" }))).toBe(
+      "Editor",
+    );
   });
 
   it("sets what the rest of the club gets", async () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: /^Share/ }));
+    openSelect(screen.getByRole("combobox", { name: "Everyone else in the club" }));
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Everyone else in the club"), {
-        target: { value: "CLUB_EDIT" },
-      });
+      fireEvent.click(screen.getByRole("option", { name: "Everyone in the club can edit" }));
     });
     expect(actions.updateNoteAccess).toHaveBeenCalledWith("org_1", "note_1", "CLUB_EDIT");
   });
