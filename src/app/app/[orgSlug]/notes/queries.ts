@@ -29,37 +29,48 @@ export type NoteWithRelations = Prisma.NoteGetPayload<{
 /** Private notes are invisible to everyone but their author and their shares, regardless of role. */
 const visibleToUser = noteVisibleWhere;
 
+export interface NoteListFilters {
+  /** SHARED: the notes shared with the viewer by name. */
+  visibility?: "PRIVATE" | "ORGANIZATION" | "SHARED";
+  authorId?: string;
+  /** A folder id, or "none" for notes in no folder. */
+  folderId?: string;
+  q?: string;
+  sort?: NoteSort;
+}
+
+/** The notes list's filter (getNotesForList), for callers that page it themselves. */
+export function noteListWhere(
+  organizationId: string,
+  userId: string,
+  filters: NoteListFilters = {},
+): Prisma.NoteWhereInput {
+  const q = filters.q?.trim().slice(0, 100);
+  return {
+    AND: [
+      { organizationId, deletedAt: null },
+      visibleToUser(userId),
+      filters.visibility === "SHARED"
+        ? { shares: { some: { userId } } }
+        : filters.visibility
+          ? { visibility: filters.visibility }
+          : {},
+      filters.authorId ? { authorId: filters.authorId } : {},
+      filters.folderId ? { folderId: filters.folderId === "none" ? null : filters.folderId } : {},
+      // Every word, in the title or the body (as the ⌘K palette finds them).
+      everyWord<Prisma.NoteWhereInput>(q, (c) => [{ title: c }, { contentText: c }]) ?? {},
+    ],
+  };
+}
+
 export function getNotesForList(
   db: TxClient,
   organizationId: string,
   userId: string,
-  filters: {
-    /** SHARED: the notes shared with the viewer by name. */
-    visibility?: "PRIVATE" | "ORGANIZATION" | "SHARED";
-    authorId?: string;
-    /** A folder id, or "none" for notes in no folder. */
-    folderId?: string;
-    q?: string;
-    sort?: NoteSort;
-  } = {},
+  filters: NoteListFilters = {},
 ) {
-  const q = filters.q?.trim().slice(0, 100);
   return db.note.findMany({
-    where: {
-      AND: [
-        { organizationId, deletedAt: null },
-        visibleToUser(userId),
-        filters.visibility === "SHARED"
-          ? { shares: { some: { userId } } }
-          : filters.visibility
-            ? { visibility: filters.visibility }
-            : {},
-        filters.authorId ? { authorId: filters.authorId } : {},
-        filters.folderId ? { folderId: filters.folderId === "none" ? null : filters.folderId } : {},
-        // Every word, in the title or the body (as the ⌘K palette finds them).
-        everyWord<Prisma.NoteWhereInput>(q, (c) => [{ title: c }, { contentText: c }]) ?? {},
-      ],
-    },
+    where: noteListWhere(organizationId, userId, filters),
     include: noteListInclude,
     omit: noteListOmit,
     orderBy:
