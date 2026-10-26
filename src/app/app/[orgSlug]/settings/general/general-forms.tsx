@@ -24,12 +24,20 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ReminderPicker } from "@/components/meetings/reminder-picker";
+import { sameReminderOffsets } from "@/lib/meetings/reminders";
 import { slugify } from "@/lib/slug";
 import { WEEKDAY_NAMES } from "@/lib/tasks/dates";
 import { timeZoneOptions } from "@/lib/timezones";
 
 import { nativeSelectClass, SettingsCard, SettingsStatus } from "../settings-card";
-import { renameOrgSlug, updateOrgName, updateOrgTimezone, updateWeeklyUpdateDay } from "./actions";
+import {
+  renameOrgSlug,
+  updateMeetingReminderDefault,
+  updateOrgName,
+  updateOrgTimezone,
+  updateWeeklyUpdateDay,
+} from "./actions";
 
 type Status = { tone: "ok" | "error"; text: string } | null;
 
@@ -164,6 +172,62 @@ export function WeeklyUpdateDayForm({
             </option>
           ))}
         </select>
+      </SettingsCard>
+    </form>
+  );
+}
+
+/**
+ * When a new meeting reminds people (OrgSettings.meetingReminderMinutes).
+ * Meetings that exist keep their own; each can change them on its page.
+ */
+export function MeetingRemindersForm({
+  orgId,
+  minutes,
+  canEdit,
+}: {
+  orgId: string;
+  minutes: number[];
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(minutes);
+  const [status, setStatus] = useState<Status>(null);
+  const [isPending, startTransition] = useTransition();
+  return (
+    <form
+      onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        setStatus(null);
+        startTransition(async () => {
+          const result = await updateMeetingReminderDefault(orgId, value);
+          setStatus(
+            result.error
+              ? { tone: "error", text: result.error }
+              : { tone: "ok", text: "Meeting reminders saved." },
+          );
+          if (!result.error) router.refresh();
+        });
+      }}
+    >
+      <SettingsCard
+        title="Meeting reminders"
+        description="New meetings remind everyone going at these times. Each meeting can change its own."
+        status={status && <StatusLine status={status} />}
+        footer={
+          canEdit && (
+            <Button type="submit" disabled={isPending || sameReminderOffsets(value, minutes)}>
+              {isPending ? "Saving…" : "Save"}
+            </Button>
+          )
+        }
+      >
+        <ReminderPicker
+          id="org-meeting-reminders"
+          value={value}
+          onChange={setValue}
+          disabled={!canEdit || isPending}
+        />
       </SettingsCard>
     </form>
   );

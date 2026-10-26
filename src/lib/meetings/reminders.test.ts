@@ -8,6 +8,7 @@ import {
   reminderLabel,
   reminderLead,
   reminderOffsetsSchema,
+  sameReminderOffsets,
 } from "./reminders";
 
 /**
@@ -166,5 +167,24 @@ describe("reminderLead", () => {
   it("does not round to a unit it does not fill", () => {
     expect(reminderLead(2160)).toBe("in 36 hours");
     expect(reminderLead(10090)).toBe("in 10090 minutes");
+  });
+});
+
+describe("sameReminderOffsets", () => {
+  it("is true for the same times, in any order", () => {
+    expect(sameReminderOffsets([1440, 60], [60, 1440])).toBe(true);
+    expect(sameReminderOffsets([], [])).toBe(true);
+  });
+
+  it("is false for different times, or a different number of them", () => {
+    expect(sameReminderOffsets([1440, 60], [1440, 30])).toBe(false);
+    expect(sameReminderOffsets([1440], [1440, 60])).toBe(false);
+    expect(sameReminderOffsets([], [60])).toBe(false);
+  });
+
+  it("reads the default as it is, and leaves both lists as they were", () => {
+    const mine = [60, 1440];
+    expect(sameReminderOffsets(mine, DEFAULT_REMINDER_MINUTES)).toBe(true);
+    expect(mine).toEqual([60, 1440]);
   });
 });

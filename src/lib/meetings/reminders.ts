@@ -45,6 +45,16 @@ export const reminderOffsetsSchema = z
   )
   .transform((offsets) => [...offsets].sort((a, b) => b - a));
 
+/**
+ * Whether two lists are the same reminder times, whatever order they are in:
+ * "does this meeting differ from the default", "has the picker changed".
+ */
+export function sameReminderOffsets(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  const inB = new Set(b);
+  return a.every((minutes) => inB.has(minutes));
+}
+
 const HOUR = 60;
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;

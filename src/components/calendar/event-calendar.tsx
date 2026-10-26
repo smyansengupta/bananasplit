@@ -107,10 +107,13 @@ export function EventCalendar({
   window: range,
   orgTodayKey,
   tasksLayer = true,
+  defaultReminderMinutes,
 }: {
   orgId: string;
   orgSlug: string;
   timeZone: string;
+  /** The organization's reminder times, which a new event starts with. */
+  defaultReminderMinutes?: number[];
   items: CalendarItem[];
   members: CalendarMember[];
   /** OWNER/ADMIN: create, edit, drag and delete (the server re-checks every write). */
@@ -636,6 +639,7 @@ export function EventCalendar({
           defaultStart={dialog.start}
           defaultAllDay={dialog.allDay}
           defaultRsvpPage={dialog.rsvp}
+          defaultReminderMinutes={defaultReminderMinutes}
           members={members}
           onSaved={() => setDialog(null)}
         />

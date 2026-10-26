@@ -13,9 +13,12 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
   deleteEvent: vi.fn(),
+  updateEvent: vi.fn(),
   confirm: vi.fn(),
   toast: vi.fn(),
-  formProps: { current: null as null | { onDeleted?: () => void } },
+  formProps: {
+    current: null as null | { onDeleted?: () => void; defaultReminderMinutes?: number[] },
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -23,6 +26,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/app/app/[orgSlug]/calendar/actions", () => ({
   deleteEvent: mocks.deleteEvent,
+  updateEvent: mocks.updateEvent,
   rsvpToEvent: vi.fn(),
 }));
 vi.mock("@/app/app/[orgSlug]/notes/actions", () => ({ createNote: vi.fn() }));
@@ -31,7 +35,7 @@ vi.mock("@/components/ui/confirm-dialog", () => ({
 }));
 vi.mock("@/components/ui/toaster", () => ({ toast: mocks.toast }));
 vi.mock("./event-form-dialog", () => ({
-  EventFormDialog: (props: { onDeleted?: () => void }) => {
+  EventFormDialog: (props: { onDeleted?: () => void; defaultReminderMinutes?: number[] }) => {
     mocks.formProps.current = props;
     return null;
   },
@@ -62,6 +66,7 @@ function event(overrides: Partial<EventDetail> = {}): EventDetail {
     publicNote: null,
     stampSlot: null,
     attendeeIds: [],
+    reminderMinutes: [1440, 60],
     needsReview: false,
     googleSyncState: "NOT_APPLICABLE",
     googleHtmlLink: null,
@@ -94,6 +99,7 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.refresh.mockReset();
   mocks.deleteEvent.mockReset();
+  mocks.updateEvent.mockReset();
   mocks.confirm.mockReset();
   mocks.toast.mockReset();
   mocks.formProps.current = null;
@@ -254,5 +260,119 @@ describe("EventDetailView: managing sign-ups", () => {
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/app/club/meetings/evt_1/rsvp");
     expect(hrefs.some((h) => h?.includes("/calendar/evt_1/rsvp"))).toBe(false);
+  });
+});
+
+describe("EventDetailView: a meeting's reminders", () => {
+  it("lists them, latest first, on a meeting's page", () => {
+    view({ section: "meetings" }, { reminderMinutes: [1440, 60] });
+
+    expect(screen.getByText("Reminders")).toBeTruthy();
+    expect(screen.getByText("1 day before · 1 hour before")).toBeTruthy();
+  });
+
+  it("says so when there are none", () => {
+    view({ section: "meetings" }, { reminderMinutes: [] });
+
+    expect(screen.getByText("No reminders")).toBeTruthy();
+  });
+
+  it("is not on the Calendar's page", () => {
+    view({ canEdit: true }, { reminderMinutes: [1440, 60] });
+
+    expect(screen.queryByText("Reminders")).toBeNull();
+    expect(screen.queryByText("1 day before · 1 hour before")).toBeNull();
+  });
+
+  it("offers no Edit to someone who cannot edit the meeting", () => {
+    view({ section: "meetings", canEdit: false });
+
+    expect(screen.queryByRole("button", { name: "Edit reminders" })).toBeNull();
+  });
+
+  it("swaps in the picker on Edit, starting from the meeting's own reminders", () => {
+    view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 45] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
+
+    expect(screen.getByRole("button", { name: "1 day before" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "45 minutes before" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "1 hour before" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit reminders" })).toBeNull();
+  });
+
+  it("saves the new list for this meeting alone, then refreshes", async () => {
+    mocks.updateEvent.mockResolvedValue({ eventId: "evt_1" });
+    view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 60] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 week before" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 hour before" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    expect(mocks.updateEvent).toHaveBeenCalledExactlyOnceWith("org_1", "evt_1", {
+      reminderMinutes: [10080, 1440],
+    });
+    // Back to the read-only list.
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit reminders" })).toBeTruthy();
+  });
+
+  it("can save no reminders at all", async () => {
+    mocks.updateEvent.mockResolvedValue({ eventId: "evt_1" });
+    view({ section: "meetings", canEdit: true }, { reminderMinutes: [60] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 hour before" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    expect(mocks.updateEvent).toHaveBeenCalledExactlyOnceWith("org_1", "evt_1", {
+      reminderMinutes: [],
+    });
+  });
+
+  it("shows the error inline and keeps the picker open when saving fails", async () => {
+    mocks.updateEvent.mockResolvedValue({ error: "Use at most 8 reminders." });
+    view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 60] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Use at most 8 reminders.");
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    // Still editing, and free to try again once the save has settled.
+    expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
+  });
+
+  it("drops the change on Cancel, and starts over from the saved list next time", () => {
+    view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 60] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 week before" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(mocks.updateEvent).not.toHaveBeenCalled();
+    expect(screen.getByText("1 day before · 1 hour before")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
+    expect(screen.getByRole("button", { name: "1 week before" }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  it("passes the organization's default to the edit form", () => {
+    view({ section: "meetings", canEdit: true, defaultReminderMinutes: [120] });
+
+    expect(mocks.formProps.current?.defaultReminderMinutes).toEqual([120]);
   });
 });

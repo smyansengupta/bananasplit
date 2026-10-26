@@ -67,6 +67,7 @@ function stored(overrides: Record<string, unknown> = {}) {
     featured: false,
     publicNote: null,
     stampSlot: null,
+    reminderMinutes: [1440, 60],
     needsReview: false,
     googleSyncState: "FAILED",
     googleHtmlLink: null,
@@ -256,6 +257,39 @@ describe("the meeting page: what it passes on", () => {
 
   it("tells the edit form whether we made the meeting", async () => {
     expect((await page()).props.event.conferenceManaged).toBe(true);
+  });
+
+  it("hands on the meeting's own reminders, and the organization's for the edit form to compare", async () => {
+    mocks.getEventById.mockResolvedValue(stored({ reminderMinutes: [120, 10] }));
+    mocks.context.mockResolvedValue({
+      organization: { id: "org_1", timezone: "America/New_York" },
+      user: { id: "user_1" },
+      role: "ADMIN",
+      settings: { meetingReminderMinutes: [10080, 60] },
+    });
+
+    const { props } = await page();
+
+    expect(props.event.reminderMinutes).toEqual([120, 10]);
+    expect(props.defaultReminderMinutes).toEqual([10080, 60]);
+  });
+
+  it("falls back to a day's notice and an hour's when the organization has no settings row", async () => {
+    // signIn() leaves `settings` off, as a context with no OrgSettings row does.
+    const { props } = await page();
+
+    expect(props.defaultReminderMinutes).toEqual([1440, 60]);
+  });
+
+  it("hands on an organization default of no reminders as it is", async () => {
+    mocks.context.mockResolvedValue({
+      organization: { id: "org_1", timezone: "America/New_York" },
+      user: { id: "user_1" },
+      role: "ADMIN",
+      settings: { meetingReminderMinutes: [] },
+    });
+
+    expect((await page()).props.defaultReminderMinutes).toEqual([]);
   });
 
   it("passes ?edit=1 on as startInEdit, which the view honours only with canEdit", async () => {

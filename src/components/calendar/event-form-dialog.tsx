@@ -30,9 +30,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { allDaySpan } from "@/lib/calendar/dates";
+import { DEFAULT_REMINDER_MINUTES, sameReminderOffsets } from "@/lib/meetings/reminders";
 import { cn } from "@/lib/utils";
 
 import { ConferencePicker } from "@/components/meetings/conference-picker";
+import { ReminderPicker } from "@/components/meetings/reminder-picker";
 import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
 import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 import { toDateInputValue, toDateTimeLocalValue } from "./utils";
@@ -80,6 +82,8 @@ export interface EventFormEvent {
   publicNote: string | null;
   stampSlot: number | null;
   attendeeIds: string[];
+  /** Minutes before the start that people are reminded. */
+  reminderMinutes: number[];
 }
 
 interface Props {
@@ -93,6 +97,12 @@ interface Props {
   defaultAllDay?: boolean;
   /** A new event starts with "Take RSVPs with a public page" switched on. */
   defaultRsvpPage?: boolean;
+  /**
+   * The organization's reminder times (OrgSettings.meetingReminderMinutes): a
+   * new event starts with them, and an event whose own differ opens "More
+   * details". Left out, the built-in default.
+   */
+  defaultReminderMinutes?: number[];
   members: CalendarMember[];
   onSaved?: () => void;
   onDeleted?: () => void;
@@ -138,7 +148,10 @@ function initialTimes(
 }
 
 /** True when this event already uses something behind the disclosure. */
-function usesMoreDetails(event: EventFormEvent | null): boolean {
+function usesMoreDetails(
+  event: EventFormEvent | null,
+  defaultReminderMinutes: readonly number[],
+): boolean {
   if (!event) return false;
   return Boolean(
     event.description ||
@@ -149,7 +162,8 @@ function usesMoreDetails(event: EventFormEvent | null): boolean {
     event.stampSlot ||
     event.capacityFull ||
     event.featured ||
-    event.attendeeIds.length > 0,
+    event.attendeeIds.length > 0 ||
+    !sameReminderOffsets(event.reminderMinutes, defaultReminderMinutes),
   );
 }
 
@@ -161,6 +175,7 @@ function EventForm({
   defaultStart,
   defaultAllDay,
   defaultRsvpPage,
+  defaultReminderMinutes = [...DEFAULT_REMINDER_MINUTES],
   members,
   onSaved,
   onDeleted,
@@ -203,8 +218,12 @@ function EventForm({
   const [publicNote, setPublicNote] = useState(event?.publicNote ?? "");
   const [stampSlot, setStampSlot] = useState(event?.stampSlot ? String(event.stampSlot) : "");
   const [attendeeIds, setAttendeeIds] = useState<string[]>(event?.attendeeIds ?? []);
+  // A new event starts from the organization's reminders; an existing one keeps its own.
+  const [reminderMinutes, setReminderMinutes] = useState<number[]>(
+    () => event?.reminderMinutes ?? defaultReminderMinutes,
+  );
   const [notifyAttendees, setNotifyAttendees] = useState(true);
-  const [showMore, setShowMore] = useState(() => usesMoreDetails(event));
+  const [showMore, setShowMore] = useState(() => usesMoreDetails(event, defaultReminderMinutes));
   // New events only: also turn on a public RSVP page and go set it up.
   const [withRsvpPage, setWithRsvpPage] = useState(defaultRsvpPage ?? false);
   const params = useParams<{ orgSlug?: string }>();
@@ -263,6 +282,7 @@ function EventForm({
       publicNote: publicNote || null,
       stampSlot: stampSlot ? Number(stampSlot) : null,
       attendeeIds,
+      reminderMinutes,
       notifyAttendees,
     };
   }
@@ -520,7 +540,7 @@ function EventForm({
             {showMore ? "Fewer details" : "More details"}
             {!showMore && (
               <span className="text-muted-foreground/80 ml-1 text-xs font-normal">
-                host, RSVP link, invites, description
+                host, RSVP link, invites, description, reminders
               </span>
             )}
           </button>
@@ -630,6 +650,15 @@ function EventForm({
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 placeholder="What it covers, what to bring, anything the website should say."
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="event-reminders">Reminders</Label>
+              <ReminderPicker
+                id="event-reminders"
+                value={reminderMinutes}
+                onChange={setReminderMinutes}
               />
             </div>
 

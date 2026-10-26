@@ -17,10 +17,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
-import { deleteEvent, rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { deleteEvent, rsvpToEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
+import { ReminderPicker } from "@/components/meetings/reminder-picker";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { BlockCard } from "@/components/ui/block-card";
@@ -35,6 +36,7 @@ import { toast } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import type { CalendarSyncState, RSVPStatus } from "@/generated/prisma/enums";
 import { formatEventWhen } from "@/lib/calendar/format";
+import { reminderLabel } from "@/lib/meetings/reminders";
 import { cn } from "@/lib/utils";
 
 import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
@@ -95,6 +97,7 @@ export function EventDetailView({
   joinCard,
   locationDetails = null,
   showMapLink = false,
+  defaultReminderMinutes,
 }: {
   orgId: string;
   orgSlug: string;
@@ -121,6 +124,8 @@ export function EventDetailView({
   locationDetails?: string | null;
   /** Offer "Open in Maps" under the place. */
   showMapLink?: boolean;
+  /** The organization's reminder times, which the edit form compares this event's with. */
+  defaultReminderMinutes?: number[];
 }) {
   const router = useRouter();
   // The list this page belongs to: the back link, and where a delete lands.
@@ -317,6 +322,15 @@ export function EventDetailView({
               </div>
             </CardContent>
           </Card>
+
+          {section === "meetings" && (
+            <RemindersCard
+              orgId={orgId}
+              eventId={event.id}
+              minutes={event.reminderMinutes}
+              canEdit={canEdit}
+            />
+          )}
 
           <Card>
             <CardHeader className="flex flex-wrap items-center gap-2">
@@ -525,10 +539,100 @@ export function EventDetailView({
           onOpenChange={setEditOpen}
           event={event}
           members={members}
+          defaultReminderMinutes={defaultReminderMinutes}
           onDeleted={() => router.push(sectionHref)}
         />
       )}
     </div>
+  );
+}
+
+/**
+ * When this meeting reminds people: the times, or "No reminders". Whoever can
+ * edit the meeting can change them here without opening the whole form, with
+ * the same picker the form has. Saving sends only the reminders, so nothing
+ * else about the meeting is touched.
+ */
+function RemindersCard({
+  orgId,
+  eventId,
+  minutes,
+  canEdit,
+}: {
+  orgId: string;
+  eventId: string;
+  minutes: number[];
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<number[]>(minutes);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function startEditing() {
+    setDraft(minutes);
+    setError(null);
+    setEditing(true);
+  }
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateEvent(orgId, eventId, { reminderMinutes: draft });
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  const labels = [...minutes].sort((a, b) => b - a).map(reminderLabel);
+
+  return (
+    <Card>
+      <CardHeader className="flex items-center gap-2">
+        <CardTitle>Reminders</CardTitle>
+        <span className="flex-1" />
+        {canEdit && !editing && (
+          <Button variant="outline" size="sm" aria-label="Edit reminders" onClick={startEditing}>
+            <Pencil aria-hidden className="size-4" />
+            Edit
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {editing ? (
+          <>
+            <ReminderPicker value={draft} onChange={setDraft} disabled={isPending} />
+            {error && (
+              <p className="text-destructive text-sm" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button size="sm" onClick={save} disabled={isPending}>
+                {isPending ? "Saving…" : "Save"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing(false)}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </>
+        ) : labels.length > 0 ? (
+          <p className="text-sm">{labels.join(" · ")}</p>
+        ) : (
+          <p className="text-muted-foreground text-sm">No reminders</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

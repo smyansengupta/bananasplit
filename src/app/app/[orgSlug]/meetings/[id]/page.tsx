@@ -6,6 +6,7 @@ import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { CONFERENCE_LABELS, conferenceStatus } from "@/lib/meetings/conference-status";
 import { parseDialIn } from "@/lib/meetings/dial-in";
+import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
 
@@ -29,7 +30,7 @@ export default async function MeetingPage({
   searchParams,
 }: PageProps<"/app/[orgSlug]/meetings/[id]">) {
   const { orgSlug, id } = await params;
-  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const canEdit = can({ role }, "events.write");
   const loaded = await withOrgTx(org.id, async ({ db }) => {
     const event = await getEventById(db, org.id, id, user.id);
@@ -81,6 +82,7 @@ export default async function MeetingPage({
       joinCard={joinCard}
       locationDetails={event.locationDetails}
       showMapLink={Boolean(event.location)}
+      defaultReminderMinutes={settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES]}
       event={{
         id: event.id,
         title: event.title,
@@ -108,6 +110,7 @@ export default async function MeetingPage({
         host: event.host,
         attendees: event.attendees.map((a) => ({ userId: a.userId, rsvp: a.rsvp, user: a.user })),
         attendeeIds: event.attendees.map((a) => a.userId),
+        reminderMinutes: event.reminderMinutes,
         notes: event.notes,
       }}
       members={members.map((m) => ({
