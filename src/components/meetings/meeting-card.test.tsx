@@ -47,8 +47,8 @@ function row(overrides: Partial<Row> = {}): Row {
   };
 }
 
-function card(overrides: Partial<Props> = {}) {
-  const props: Props = {
+function base(overrides: Partial<Props> = {}): Props {
+  return {
     event: row(),
     canManage: false,
     status: { kind: "ready" },
@@ -59,9 +59,12 @@ function card(overrides: Partial<Props> = {}) {
     mine: null,
     ...overrides,
   };
+}
+
+function card(overrides: Partial<Props> = {}) {
   return render(
     <ul>
-      <MeetingCard {...props} />
+      <MeetingCard {...base(overrides)} />
     </ul>,
   );
 }
@@ -99,8 +102,10 @@ describe("MeetingCard: the link to the meeting", () => {
     card();
 
     const title = screen.getByRole("link", { name: "Exec sync" });
-    expect(title.contains(screen.getByRole("link", { name: "Join" }))).toBe(false);
-    expect(title.contains(screen.getByRole("button", { name: "Copy link" }))).toBe(false);
+    expect(title.contains(screen.getByRole("link", { name: "Join Exec sync" }))).toBe(false);
+    expect(title.contains(screen.getByRole("button", { name: "Copy link for Exec sync" }))).toBe(
+      false,
+    );
   });
 });
 
@@ -142,7 +147,7 @@ describe("MeetingCard: its shape", () => {
     });
 
     expect(screen.getByText("Curry 342")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Join" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /join/i })).toBeNull();
   });
 
   it("names the provider of an online meeting", () => {
@@ -162,7 +167,7 @@ describe("MeetingCard: joining and copying", () => {
   it("has a Join link to the call, in a new tab", () => {
     card();
 
-    const join = screen.getByRole("link", { name: "Join" });
+    const join = screen.getByRole("link", { name: "Join Exec sync" });
     expect(join.getAttribute("href")).toBe(JOIN);
     expect(join.getAttribute("target")).toBe("_blank");
     expect(join.getAttribute("rel")).toBe("noopener noreferrer");
@@ -171,7 +176,7 @@ describe("MeetingCard: joining and copying", () => {
   it("copies the link and says so", async () => {
     card();
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy link for Exec sync" }));
 
     await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith(JOIN));
     await waitFor(() =>
@@ -183,7 +188,7 @@ describe("MeetingCard: joining and copying", () => {
     mocks.writeText.mockRejectedValue(new Error("denied"));
     card();
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy link for Exec sync" }));
 
     await waitFor(() =>
       expect(mocks.toast).toHaveBeenCalledWith(
@@ -193,14 +198,48 @@ describe("MeetingCard: joining and copying", () => {
     expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Link copied" }));
   });
 
+  it("still reads Join and Copy link, and names each for its meeting", () => {
+    card();
+
+    const join = screen.getByRole("link", { name: "Join Exec sync" });
+    expect(join.textContent).toBe("Join");
+    const copy = screen.getByRole("button", { name: "Copy link for Exec sync" });
+    expect(copy.textContent).toBe("Copy link");
+  });
+
+  it("names them apart on a list of cards", () => {
+    render(
+      <ul>
+        <MeetingCard {...base({ event: row({ id: "e1", title: "Exec sync" }) })} />
+        <MeetingCard {...base({ event: row({ id: "e2", title: "Design review" }) })} />
+      </ul>,
+    );
+
+    expect(screen.getByRole("link", { name: "Join Exec sync" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Join Design review" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy link for Exec sync" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy link for Design review" })).toBeTruthy();
+  });
+
+  it("a past meeting has no Join or Copy link", () => {
+    card({ past: true });
+
+    expect(screen.queryByRole("link", { name: /join/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /copy link/i })).toBeNull();
+    // It is still a card for the meeting.
+    expect(screen.getByRole("link", { name: "Exec sync" }).getAttribute("href")).toBe(
+      "/app/acme/meetings/e1",
+    );
+  });
+
   it("offers neither while there is no link", () => {
     card({
       event: row({ conferenceUrl: null, conferenceSyncState: "PENDING" }),
       status: { kind: "pending", line: "Getting the Zoom link…" },
     });
 
-    expect(screen.queryByRole("link", { name: "Join" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Copy link" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /join/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /copy link/i })).toBeNull();
   });
 });
 
@@ -227,7 +266,7 @@ describe("MeetingCard: while the link is made, and when that fails", () => {
     });
 
     expect(screen.getByText("Couldn't make the Zoom meeting.")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Join" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /join/i })).toBeNull();
   });
 
   it("keeps the old link a failed update left behind", () => {
@@ -237,7 +276,7 @@ describe("MeetingCard: while the link is made, and when that fails", () => {
     });
 
     expect(screen.getByText("Couldn't make the Zoom meeting.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Join" }).getAttribute("href")).toBe(JOIN);
+    expect(screen.getByRole("link", { name: "Join Exec sync" }).getAttribute("href")).toBe(JOIN);
   });
 });
 

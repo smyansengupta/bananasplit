@@ -191,6 +191,26 @@ describe("the Meetings list: what each card says about its call", () => {
   });
 });
 
+describe("the Meetings list: meetings that are over", () => {
+  it("marks the Past list's cards, and only those, as past", async () => {
+    const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    mocks.findMany.mockResolvedValue([
+      stored({
+        id: "old",
+        startsAt: lastWeek,
+        endsAt: new Date(lastWeek.getTime() + 60 * 60 * 1000),
+      }),
+      stored({ id: "soon" }),
+    ]);
+
+    const found = await cards();
+
+    const pastOf = (id: string) => found.find((c) => (c.event as { id: string }).id === id)?.past;
+    expect(pastOf("old")).toBe(true);
+    expect(pastOf("soon")).toBe(false);
+  });
+});
+
 describe("the Meetings list: sign-ups on the card", () => {
   it("hands a host the head count and a member their own ticket", async () => {
     mocks.findMany.mockResolvedValue([stored({ rsvpEnabled: true, rsvpSlug: "exec" })]);

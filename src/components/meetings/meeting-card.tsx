@@ -72,6 +72,7 @@ export function MeetingCard({
   href,
   timeZone,
   featured = false,
+  past = false,
   going,
   waiting,
   mine,
@@ -86,6 +87,8 @@ export function MeetingCard({
   timeZone: string;
   /** The first upcoming meeting is the wide "Next up". */
   featured?: boolean;
+  /** Already over: nothing left to join, so no Join and no Copy link. */
+  past?: boolean;
   going: number;
   waiting: number;
   /** Your own sign-up, if you have one. */
@@ -245,16 +248,23 @@ export function MeetingCard({
                 aria-hidden="true"
               />
             </div>
-            {e.conferenceUrl && (
+            {e.conferenceUrl && !past && (
               // Above the title's overlay, so these are what a click lands on.
+              // Each is named for its meeting: a list of these would otherwise
+              // read "Join, Copy link, Join, Copy link" to a screen reader.
               <div className="relative z-10 flex flex-wrap gap-2">
                 <Button size="sm" asChild>
-                  <a href={e.conferenceUrl} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={e.conferenceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Join ${e.title}`}
+                  >
                     <Video aria-hidden />
                     Join
                   </a>
                 </Button>
-                <CopyLinkButton url={e.conferenceUrl} />
+                <CopyLinkButton url={e.conferenceUrl} title={e.title} />
               </div>
             )}
           </div>

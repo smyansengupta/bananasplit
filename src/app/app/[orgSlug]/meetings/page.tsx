@@ -163,7 +163,7 @@ export default async function MeetingsPage({
   // and everyone else finds the join details and the sign-up link there.
   const hrefOf = (e: MeetingRow) => `/app/${orgSlug}/meetings/${e.id}`;
 
-  const card = (e: MeetingRow, featured = false) => (
+  const card = (e: MeetingRow, featured = false, ended = false) => (
     <MeetingCard
       key={e.id}
       event={e}
@@ -172,16 +172,20 @@ export default async function MeetingsPage({
       href={hrefOf(e)}
       timeZone={timeZone}
       featured={featured}
+      past={ended}
       going={countOf(e.id, "GOING")}
       waiting={countOf(e.id, "WAITLIST")}
       mine={ticketFor.get(e.id)?.status ?? null}
     />
   );
 
-  /** A grid of event cards, like Files; the first upcoming one is the wide "Next up". */
-  const pageList = (items: MeetingRow[], feature = false) => (
+  /**
+   * A grid of event cards, like Files; the first upcoming one is the wide
+   * "Next up". `ended` is the Past list: its cards have nothing left to join.
+   */
+  const pageList = (items: MeetingRow[], feature = false, ended = false) => (
     <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
-      {items.map((e, i) => card(e, feature && i === 0 && items.length > 1))}
+      {items.map((e, i) => card(e, feature && i === 0 && items.length > 1, ended))}
     </ul>
   );
   const coverOf = new Map(events.map((e) => [e.id, e.rsvpCover]));
@@ -273,7 +277,7 @@ export default async function MeetingsPage({
               >
                 Past <Badge variant="secondary">{past.length}</Badge>
               </h2>
-              {pageList(past)}
+              {pageList(past, false, true)}
             </section>
           )}
         </>
