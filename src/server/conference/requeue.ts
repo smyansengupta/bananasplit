@@ -19,18 +19,24 @@ export const REQUEUE_LIMIT = 500;
  * Queues the meetings that were waiting for a provider, once it is connected
  * (docs/features/meetings.md).
  *
- * Two kinds of meeting are waiting:
+ * Three kinds of meeting are waiting:
  *   - one saved before the provider was connected. The save path skips it
  *     (needsConferenceSync wants a connected provider), so with nothing else
  *     to wake it, it would stay without a link forever;
  *   - one left FAILED, typically by an expired grant. The sync job gave up on
- *     it with "reconnecting queues the work again", and this is that.
+ *     it with "reconnecting queues the work again", and this is that;
+ *   - a meeting we made at THIS provider whose cancellation FAILED: the event
+ *     was deleted or merged, became in person, or moved to another provider
+ *     while this one was disconnected. Disconnect promises that changes reach
+ *     the provider once it is connected again, and for these the change is
+ *     calling our meeting off, so they are picked up whatever the event wants
+ *     now. The sync job reads `conferenceManagedAt` to know where to cancel.
  *
- * Only what the sync job could act on is queued: live (not deleted, not
- * merged), still ahead of `now`, online, at THIS provider, and either FAILED
- * or with no link of any kind. A pasted link (`conferenceManaged` false with a
- * URL) is never ours to replace, so it is left alone, the same rule the job
- * itself applies.
+ * Only what the sync job could act on is queued, and only what is still
+ * ahead of `now`. For the first two: live (not deleted, not merged), online,
+ * wanting THIS provider, and either FAILED or with no link of any kind. A
+ * pasted link (`conferenceManaged` false with a URL) is never ours to
+ * replace, so it is left alone, the same rule the job itself applies.
  *
  * Marking a row PENDING is raw SQL, as afterSave does (src/server/events/
  * service.ts): it is not an edit, so `updatedAt` stays where it was and the
@@ -51,14 +57,25 @@ export async function requeueWaitingMeetings(
     const waiting = await db.event.findMany({
       where: {
         organizationId: orgId,
-        deletedAt: null,
-        mergedIntoId: null,
         endsAt: { gt: now },
-        conferenceProvider: def.conference,
-        format: { not: MeetingFormat.IN_PERSON },
         OR: [
-          { conferenceSyncState: CalendarSyncState.FAILED },
-          { conferenceManaged: false, conferenceUrl: null },
+          // Waiting for a link at this provider.
+          {
+            deletedAt: null,
+            mergedIntoId: null,
+            conferenceProvider: def.conference,
+            format: { not: MeetingFormat.IN_PERSON },
+            OR: [
+              { conferenceSyncState: CalendarSyncState.FAILED },
+              { conferenceManaged: false, conferenceUrl: null },
+            ],
+          },
+          // A meeting we made here that a failed change never reached.
+          {
+            conferenceManaged: true,
+            conferenceManagedAt: def.conference,
+            conferenceSyncState: CalendarSyncState.FAILED,
+          },
         ],
       },
       orderBy: { startsAt: "asc" },

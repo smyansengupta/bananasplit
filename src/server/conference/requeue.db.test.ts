@@ -191,6 +191,91 @@ describe("meetings that are picked up", () => {
   });
 });
 
+describe("cancellations that failed while the provider was disconnected", () => {
+  /**
+   * A meeting we made at Zoom, whose cancel at Zoom FAILED: Disconnect says
+   * changes reach the provider once it is connected again, and for these the
+   * change is calling our meeting off. Whatever the event wants now (nothing,
+   * a room, another provider), the Zoom meeting is still out there.
+   */
+  const OURS_AT_ZOOM = {
+    conferenceManaged: true,
+    conferenceManagedAt: "ZOOM",
+    conferenceMeetingId: "98765432100",
+    conferenceUrl: "https://us02web.zoom.us/j/98765432100",
+    conferenceSyncState: CalendarSyncState.FAILED,
+  } as const;
+
+  it.each<[string, Record<string, unknown>]>([
+    ["the event was deleted", { deletedAt: new Date() }],
+    ["the event was merged into another", { mergeInto: true }],
+    [
+      "it became in person",
+      { format: "IN_PERSON", conferenceProvider: "NONE", location: "Curry 342" },
+    ],
+    ["it moved to Google Meet", { conferenceProvider: "MEET" }],
+  ])("requeues it on Zoom connect when %s", async (_why, change) => {
+    if (!reachable) return;
+    const { mergeInto, ...data } = change;
+    const keeper = mergeInto
+      ? await makeEvent({ conferenceProvider: "NONE", format: "IN_PERSON" })
+      : null;
+    const eventId = await makeEvent({
+      ...OURS_AT_ZOOM,
+      ...data,
+      ...(keeper ? { mergedIntoId: keeper } : {}),
+    });
+
+    expect(await requeueWaitingMeetings(orgId, "ZOOM")).toBe(1);
+
+    expect((await readEvent(eventId)).conferenceSyncState).toBe(CalendarSyncState.PENDING);
+    expect(await jobsFor(eventId)).toHaveLength(1);
+  });
+
+  it("leaves it for Zoom: connecting Meet does not try to cancel a Zoom meeting", async () => {
+    if (!reachable) return;
+    const eventId = await makeEvent({ ...OURS_AT_ZOOM, deletedAt: new Date() });
+
+    expect(await requeueWaitingMeetings(orgId, "GOOGLE_MEET")).toBe(0);
+
+    expect((await readEvent(eventId)).conferenceSyncState).toBe(CalendarSyncState.FAILED);
+    expect(await allJobs()).toBe(0);
+  });
+
+  it("leaves one that is over", async () => {
+    if (!reachable) return;
+    const eventId = await makeEvent({
+      ...OURS_AT_ZOOM,
+      deletedAt: new Date(),
+      startsAt: new Date(Date.now() - 2 * DAY),
+      endsAt: new Date(Date.now() - 2 * DAY + 3600_000),
+    });
+
+    expect(await requeueWaitingMeetings(orgId, "ZOOM")).toBe(0);
+
+    expect((await readEvent(eventId)).conferenceSyncState).toBe(CalendarSyncState.FAILED);
+    expect(await allJobs()).toBe(0);
+  });
+
+  it("leaves a deleted one whose cancel did not fail", async () => {
+    if (!reachable) return;
+    // Still on its way (PENDING with its own job), or already done.
+    await makeEvent({
+      ...OURS_AT_ZOOM,
+      deletedAt: new Date(),
+      conferenceSyncState: CalendarSyncState.PENDING,
+    });
+    await makeEvent({
+      ...OURS_AT_ZOOM,
+      deletedAt: new Date(),
+      conferenceSyncState: CalendarSyncState.SYNCED,
+    });
+
+    expect(await requeueWaitingMeetings(orgId, "ZOOM")).toBe(0);
+    expect(await allJobs()).toBe(0);
+  });
+});
+
 describe("meetings that are left alone", () => {
   it("leaves a pasted link alone", async () => {
     if (!reachable) return;
@@ -218,8 +303,11 @@ describe("meetings that are left alone", () => {
     expect(await allJobs()).toBe(0);
   });
 
-  it("skips deleted and merged meetings", async () => {
+  it("skips deleted and merged meetings with no meeting of ours to cancel", async () => {
     if (!reachable) return;
+    // None of these was made by us (conferenceManaged false), so a deleted or
+    // merged one has nothing at the provider to call off. One that was is a
+    // failed cancellation, and is picked up (above).
     const keeper = await makeEvent({ conferenceProvider: "NONE", format: "IN_PERSON" });
     await makeEvent({ deletedAt: new Date() });
     await makeEvent({ deletedAt: new Date(), mergedIntoId: keeper });
