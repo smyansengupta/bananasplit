@@ -162,7 +162,7 @@ connecting has to.
 new connection is stored. It queues a meeting only if the sync job could act
 on it:
 
-- it is live (not deleted, not merged away), still ahead of now, and not in
+- it is live (not deleted, not merged away), has not ended yet, and is not in
   person;
 - its provider is the one just connected;
 - it is `FAILED`, or it has no link of any kind. A pasted link is never ours
@@ -207,7 +207,9 @@ takes the shape of the Google Calendar disconnect, without its revoke job:
    may remove secrets, which is an owner. An admin's disconnect leaves a
    revoked, now useless token encrypted until an owner removes it. A token
    that was **not** revoked is never deleted: deleting it would strand a live
-   grant that nobody here can revoke any more.
+   grant that nobody here can revoke any more. An owner's deletion goes through
+   `removeSecret`, so it also writes an `integration.secret_removed` audit row
+   and alerts the organization's owners, as any removed secret does.
 
 **Teams has no revoke endpoint.** Its connection has nothing to ask, so it
 counts as revoked for step 4 and an owner's disconnect deletes the token, but
@@ -506,9 +508,9 @@ nothing to dequeue. Then:
   is ("Weekly sync starts in an hour", "Weekly sync is tomorrow"), and its body
   has when and where (`memberReminder`). It links to the meeting's page. As with
   every notification, an email copy goes through the `notify-email` job: it
-  follows the member's own settings ("A reminder before a meeting I'm going
-  to") and needs the organization's own email sender. Without one, a member's
-  reminder is in-app only.
+  follows the member's own setting ("A reminder before a meeting I'm going
+  to") and comes from the organization's own sender, or else from the platform
+  sender ("<Organization> via Bananasplit").
 
 Online and hybrid meetings put the **join link** in the reminder, for members
 and guests. The host link is in neither, and the fanout does not even select it.

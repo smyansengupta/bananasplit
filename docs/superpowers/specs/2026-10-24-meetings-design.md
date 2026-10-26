@@ -85,11 +85,14 @@ list does not describe something that is not there
   Admin panel › Integrations.
 - D6: the `+` menu has New meeting (Meetings) and New event (Calendar). Both
   open the same form.
-- E2: a member's reminder is always in-app. Its email copy follows the member's
-  notification settings and needs the organization's own email sender.
+- E2: a member's reminder is an in-app notification with an email copy. The
+  email follows the member's own notification setting and comes from the
+  organization's sender, or else the platform's.
 - K2: the e2e covers the three create paths and who sees the join link. A
   meeting made at a provider is covered by `sync.db.test.ts` with the provider's
   HTTP mocked, not by the e2e.
+- K3: `docs/features/rsvp.md` stays beside `meetings.md` as the sign-up page's
+  own document; `meetings.md` does not replace it.
 
 ### A. Data model and migrations
 
