@@ -13,12 +13,13 @@ import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { VisitTracker } from "@/components/shell/pin-button";
 import { SectionGate } from "@/components/shell/section-gate";
 import { type SidebarState } from "@/components/shell/sidebar-mode-context";
-import { SidebarNav, type SidebarFolder, type SidebarPin } from "@/components/shell/sidebar-nav";
+import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { SidebarPanel } from "@/components/shell/sidebar-panel";
 import { SpaceList } from "@/components/shell/space-list";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
 import { Toaster } from "@/components/ui/toaster";
+import { ContextActionsHost } from "@/components/context-actions";
 import type { Role } from "@/generated/prisma/enums";
 import { serializeSidebarCookie, type SidebarMode } from "@/lib/sidebar-mode";
 import { cn } from "@/lib/utils";
@@ -50,7 +51,6 @@ export function AppShell({
   user,
   brand,
   pins = [],
-  folders = [],
   sections,
   sectionPaths = [],
   role = null,
@@ -72,8 +72,6 @@ export function AppShell({
   brand?: React.ReactNode;
   /** The member's pins in this org (sidebar, and the pin button's state). */
   pins?: SidebarPin[];
-  /** The space's Files folders, nested under Files in the sidebar. */
-  folders?: SidebarFolder[];
   /** The org's sidebar (Admin panel › Sidebar). */
   sections: NavSection[];
   /**
@@ -148,7 +146,6 @@ export function AppShell({
       sections={sections}
       orgId={orgId}
       pins={pins}
-      folders={folders}
       onNavigate={onNavigate}
       spaces={<SpaceList orgs={orgs} activeSlug={orgSlug} user={user} onNavigate={onNavigate} />}
     />
@@ -231,6 +228,8 @@ export function AppShell({
           onOpenChange={setCommandOpen}
         />
         <Toaster />
+        {/* One listener for every right-click menu in the app. */}
+        <ContextActionsHost />
       </div>
     </PinsProvider>
   );

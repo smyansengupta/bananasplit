@@ -11,9 +11,10 @@ import {
 } from "@/app/app/[orgSlug]/databases/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FieldSelect } from "@/components/ui/field-select";
 
 import { ContactSearch, type ContactOption } from "./contact-search";
-import { nativeSelectClass, notice as noticeClass } from "./styles";
+import { notice as noticeClass } from "./styles";
 
 /**
  * Admin tools for the person behind a row: rename, link to a member
@@ -70,10 +71,10 @@ export function ContactActions({
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <select
+        <FieldSelect
           aria-label="Linked member"
           defaultValue={contact.userId ?? ""}
-          className={nativeSelectClass}
+          className="w-full"
           onChange={(e) =>
             go(
               () => linkContactAction(organizationId, contact.id, e.target.value || null),
@@ -88,7 +89,7 @@ export function ContactActions({
               {m.name ?? "Member"}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </div>
       <div className="space-y-2">
         <p className="text-muted-foreground text-[13px]">

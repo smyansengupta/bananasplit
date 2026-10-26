@@ -323,6 +323,13 @@ export function useMemberSearch(
   };
 }
 
+/**
+ * The owner. The same drop-down as PeopleField below it in every respect —
+ * the same well, heading, search box, rows and footer — because on the task
+ * form they sit side by side, and two pickers of people that look different
+ * read as two different kinds of thing. The only difference is what they
+ * mean: one person here, any number there.
+ */
 export function OwnerField({
   id,
   value,
@@ -338,13 +345,16 @@ export function OwnerField({
 }) {
   const { members, memberById } = useTasks();
   const [open, setOpen] = useState(false);
+  const owner = value ? memberById.get(value) : undefined;
   const search = useMemberSearch(members, {
+    always: true,
     onPick: (m) => {
       onChange(m.id);
       setOpen(false);
     },
+    onRemoveLast: () => allowNone && onChange(null),
   });
-  const owner = value ? memberById.get(value) : undefined;
+
   return (
     <Popover open={open} onOpenChange={(o) => (setOpen(o), o || search.reset())}>
       <PopoverTrigger asChild>
@@ -355,18 +365,46 @@ export function OwnerField({
           aria-label="Owner"
           className={wellClass(open, !owner)}
         >
-          {owner ? (
-            <>
-              <UserAvatar user={owner} size="xs" />
-              <span className="truncate">{firstName(owner)}</span>
-            </>
-          ) : (
-            <span className="truncate">No owner</span>
+          {owner && (
+            <span className="flex shrink-0 pe-1">
+              <UserAvatar user={owner} size="xs" className="ring-card -me-1.5 ring-2" />
+            </span>
           )}
+          <span className="truncate">{owner ? firstName(owner) : "No owner"}</span>
           <UpDown />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className={MENU}>
+      <PopoverContent
+        align="end"
+        className={MENU}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          search.focus();
+        }}
+      >
+        <MenuHeading>Owner</MenuHeading>
+        {owner && (
+          <div className="flex flex-wrap gap-1 px-1 pb-1.5">
+            <span className="bg-muted inline-flex h-6 items-center gap-1 rounded-md ps-0.5 pe-0.5 text-xs font-medium">
+              <UserAvatar user={owner} size="xs" />
+              {firstName(owner)}
+              {allowNone && (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={`Remove ${owner.name ?? "member"}`}
+                  onClick={() => {
+                    onChange(null);
+                    search.focus();
+                  }}
+                  className="text-muted-foreground hover:text-foreground hover:bg-background rounded p-0.5"
+                >
+                  <X className="size-3" aria-hidden="true" />
+                </button>
+              )}
+            </span>
+          </div>
+        )}
         {search.input}
         <div
           id={search.listId}
@@ -374,37 +412,36 @@ export function OwnerField({
           aria-label="Owner"
           className="flex max-h-72 flex-col gap-px overflow-y-auto"
         >
-          {search.filtered.map((m, i) => (
-            <button
-              key={m.id}
-              id={search.optionId(m)}
-              type="button"
-              role="option"
-              aria-selected={m.id === value}
-              className={cn(menuItemClass(m.id === value), search.isActive(i) && "bg-muted")}
-              onPointerMove={() => search.hover(i)}
-              onClick={() => search.pick(m)}
-            >
-              <UserAvatar user={m} size="xs" />
-              <span className="truncate">{m.name ?? "Member"}</span>
-              <MemberHint member={m} />
-            </button>
-          ))}
-          {allowNone && (
-            <button
-              type="button"
-              role="option"
-              aria-selected={value === null}
-              className={cn(menuItemClass(value === null), "text-muted-foreground")}
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-            >
-              No owner
-            </button>
+          {search.filtered.length === 0 && (
+            <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
           )}
+          {search.filtered.map((m, i) => {
+            const on = m.id === value;
+            return (
+              <button
+                key={m.id}
+                id={search.optionId(m)}
+                type="button"
+                role="option"
+                aria-selected={on}
+                className={cn(menuItemClass(on), search.isActive(i) && "bg-muted")}
+                onPointerMove={() => search.hover(i)}
+                onClick={() => search.pick(m)}
+              >
+                <UserAvatar user={m} size="xs" />
+                <span className="truncate">{m.name ?? "Member"}</span>
+                {on ? (
+                  <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
+                ) : (
+                  <MemberHint member={m} />
+                )}
+              </button>
+            );
+          })}
         </div>
+        <p className="text-muted-foreground mt-1 border-t px-2 pt-1.5 text-[11px]">
+          Enter picks · Backspace clears · Esc closes
+        </p>
       </PopoverContent>
     </Popover>
   );

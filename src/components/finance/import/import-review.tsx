@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { FieldSelect } from "@/components/ui/field-select";
 import { TransactionKind } from "@/generated/prisma/enums";
 import {
   inferKind,
@@ -47,15 +48,7 @@ import { formatCents } from "@/lib/finance/money";
 import { cn } from "@/lib/utils";
 
 import type { ImportSummary } from "./import-done";
-import {
-  ErrorNotice,
-  fieldSelect,
-  fieldSelectSm,
-  HatchProgress,
-  ImportPanel,
-  ReadNotes,
-  WarningNotice,
-} from "./panel";
+import { ErrorNotice, HatchProgress, ImportPanel, ReadNotes, WarningNotice } from "./panel";
 
 /**
  * Every proposed row, editable, before anything is saved: tick what goes
@@ -521,18 +514,18 @@ export function ImportReview({
                     </Button>
                   </TableCell>
                   <TableCell>
-                    <select
-                      className={fieldSelectSm}
+                    <FieldSelect
                       value={r.kind}
                       onChange={(e) => patch(r.key, { kind: e.target.value as TransactionKind })}
                       aria-label={`Type, ${r.source}`}
+                      size="sm"
                     >
                       {KINDS.filter((k) => !r.direction || kindFits(k, r.direction)).map((k) => (
                         <option key={k} value={k}>
                           {KIND_LABEL[k]}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                   </TableCell>
                   <TableCell>
                     <Input
@@ -750,8 +743,8 @@ export function BudgetReview({
         <ReadNotes readBy={readBy} notes={notes} />
         <label className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-muted-foreground">Put it in</span>
-          <select
-            className={cn(fieldSelect, "w-auto min-w-56")}
+          <FieldSelect
+            className="w-auto min-w-56"
             value={periodId}
             onChange={(e) => setPeriodId(e.target.value)}
           >
@@ -762,7 +755,7 @@ export function BudgetReview({
                 {p.isActive ? " (current)" : ""}
               </option>
             ))}
-          </select>
+          </FieldSelect>
         </label>
         <ul className="divide-border/70 -mx-2 divide-y">
           {lines.map((l) => (

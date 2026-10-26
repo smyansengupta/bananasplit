@@ -20,6 +20,7 @@ import {
 } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
+import { listFileRefOptions } from "@/server/notes/files";
 import { chartPalette } from "@/server/tasks/catalog";
 import { LABEL_COLOR_PALETTE } from "@/lib/label-colors";
 import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
@@ -129,7 +130,9 @@ export default async function TasksPage({
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
     const labels = await getOrgLabels(db, org.id);
     const parents = await getOrgParents(db, org.id);
-    return { tz: effectiveTimezone(me, org), labels, parents };
+    // What `/` in a title or a description can point at.
+    const files = await listFileRefOptions(db, org.id);
+    return { tz: effectiveTimezone(me, org), labels, parents, files };
   });
   const todayKey = localDateKey(now, base.tz);
   const today = fromDateKey(todayKey);
@@ -213,6 +216,7 @@ export default async function TasksPage({
       viewer={{ userId: user.id, name: user.name, isAdmin, chart }}
       members={members}
       labels={base.labels}
+      files={base.files}
       parents={base.parents}
     >
       <WorkspaceProvider query={ws} hasReports={chart.subtree.length > 0} simple={simple}>

@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldSelect } from "@/components/ui/field-select";
 import type { ProposedEvent } from "@/lib/ai/calendar-shot";
 import type { ImportRosterMember } from "@/lib/ai/types";
 import { parseZonedDateTimeLocal } from "@/lib/calendar/dates";
@@ -645,8 +646,8 @@ function EventRow({
               </span>
             ))}
             {addable.length > 0 && (
-              <select
-                className="border-input bg-card h-8 max-w-40 rounded-full border px-2.5 text-xs font-medium"
+              <FieldSelect
+                className="max-w-40 rounded-full text-xs font-medium"
                 value=""
                 aria-label="Invite someone"
                 onChange={(e) => {
@@ -654,6 +655,7 @@ function EventRow({
                   if (v === "*") onChange({ attendeeIds: members.map((m) => m.id) });
                   else if (v) onChange({ attendeeIds: [...row.attendeeIds, v] });
                 }}
+                size="sm"
               >
                 <option value="">+ Invite</option>
                 <option value="*">Everyone</option>
@@ -662,7 +664,7 @@ function EventRow({
                     {m.name}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             )}
           </div>
         </div>

@@ -22,14 +22,6 @@ export function ImportPanel({
   return <Card className={cn("gap-5 px-6", className)}>{children}</Card>;
 }
 
-/** A native <select> that lines up with Input (40px, field corners, the surface colour). */
-export const fieldSelect =
-  "border-input bg-card rounded-field focus-visible:border-foreground h-10 w-full min-w-0 border px-3 text-sm transition-colors outline-none focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--glow)_45%,transparent)] disabled:cursor-not-allowed disabled:opacity-50";
-
-/** The same at 32px, for selects inside table rows. */
-export const fieldSelectSm =
-  "border-input bg-card rounded-field focus-visible:border-foreground h-8 min-w-0 border px-2.5 text-[13px] transition-colors outline-none focus-visible:shadow-[0_0_0_4px_color-mix(in_oklab,var(--glow)_45%,transparent)]";
-
 /** An error said in the danger tint (no border). */
 export function ErrorNotice({ children, className }: { children: ReactNode; className?: string }) {
   return (

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldSelect } from "@/components/ui/field-select";
 import {
   addMinutesLocal,
   MAX_ACTION_TEXT,
@@ -71,9 +72,6 @@ const PLACEHOLDER = `- Sam: book the room for the fall social by Friday
 - Riley and Alex draft the sponsor deck (urgent)
 - Exec meeting Thursday 6pm in the student center
 - Someone order T-shirts before 10/20`;
-
-const selectClass =
-  "border-input bg-card rounded-field focus-visible:border-foreground h-8 w-full border px-2.5 text-sm outline-none";
 
 const PRIORITY_LABEL: Record<ImportPriority, string> = {
   LOW: "Low",
@@ -552,8 +550,8 @@ function ItemRow({
       >
         <label className="space-y-1">
           <span className="text-muted-foreground text-xs">{isEvent ? "Host" : "Owner"}</span>
-          <select
-            className={selectClass}
+          <FieldSelect
+            className="w-full"
             value={row.ownerId ?? ""}
             onChange={(e) =>
               onChange({
@@ -561,6 +559,7 @@ function ItemRow({
                 helperIds: row.helperIds.filter((id) => id !== e.target.value),
               })
             }
+            size="sm"
           >
             <option value="">{isEvent ? "Nobody in particular" : "No owner"}</option>
             {members.map((m) => (
@@ -569,7 +568,7 @@ function ItemRow({
                 {m.title ? ` · ${m.title}` : ""}
               </option>
             ))}
-          </select>
+          </FieldSelect>
         </label>
         <div className="space-y-1">
           <span className="text-muted-foreground text-xs">
@@ -593,13 +592,14 @@ function ItemRow({
               </span>
             ))}
             {addable.length > 0 && (
-              <select
-                className="border-input bg-card h-8 max-w-36 rounded-full border px-2.5 text-xs font-medium"
+              <FieldSelect
+                className="max-w-36 rounded-full text-xs font-medium"
                 value=""
                 aria-label="Add someone"
                 onChange={(e) =>
                   e.target.value && onChange({ helperIds: [...row.helperIds, e.target.value] })
                 }
+                size="sm"
               >
                 <option value="">+ Add</option>
                 {addable.map((m) => (
@@ -607,7 +607,7 @@ function ItemRow({
                     {m.name}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             )}
           </div>
         </div>
@@ -624,17 +624,18 @@ function ItemRow({
             </label>
             <label className="space-y-1">
               <span className="text-muted-foreground text-xs">Priority</span>
-              <select
-                className={selectClass}
+              <FieldSelect
+                className="w-full"
                 value={row.priority}
                 onChange={(e) => onChange({ priority: e.target.value as ImportPriority })}
+                size="sm"
               >
                 {(Object.keys(PRIORITY_LABEL) as ImportPriority[]).map((p) => (
                   <option key={p} value={p}>
                     {PRIORITY_LABEL[p]}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             </label>
           </>
         )}
