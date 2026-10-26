@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 import { createOrgViaOnboarding, makeUser, signUpVerified, uniqueSuffix } from "./helpers";
@@ -13,7 +15,7 @@ import { createOrgViaOnboarding, makeUser, signUpVerified, uniqueSuffix } from "
 // The Video calls bar test relies on this environment having no provider
 // credentials, and skips itself when a client id is set (see the end).
 //
-// To run it (the dev server's own `.env` is used for the database):
+// To run it (the database comes from `.env`, which the dev server loads):
 //
 //   PLAYWRIGHT_CHANNEL=chrome AUTH_REQUIRE_EMAIL_VERIFICATION=true \
 //     pnpm test:e2e e2e/meetings.spec.ts
@@ -57,7 +59,9 @@ async function openNewMeeting() {
   // The empty page repeats the button, quietly; the header's is the first.
   await page.getByRole("button", { name: "New meeting" }).first().click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "New meeting" })).toBeVisible();
+  // The form is fetched when first asked for, and on a cold dev server the
+  // click can land before the page is hydrated.
+  await expect(dialog.getByRole("heading", { name: "New meeting" })).toBeVisible(COLD);
   return dialog;
 }
 
@@ -89,6 +93,9 @@ test("Online: a pasted link is the meeting's join link, on its page and in the l
   // A create from Meetings lands on the meeting's own page.
   await expect(page).toHaveURL(new RegExp(`/app/${orgSlug}/meetings/[^/]+$`), COLD);
   await expect(page.getByRole("heading", { name: title })).toBeVisible(COLD);
+  // The join card is a labelled section ("<provider> meeting"; a pasted link is
+  // "Online"). This is the control for the In person test's "no such section".
+  await expect(page.getByRole("region", { name: "Online meeting" })).toBeVisible();
   const join = page.getByRole("link", { name: "Join meeting" });
   await expect(join).toBeVisible();
   await expect(join).toHaveAttribute("href", PASTED_LINK);
@@ -184,8 +191,12 @@ test("Event: its sign-up page hides the join link until someone signs up", async
 });
 
 test("Video calls: with no provider set up, none can be connected", async () => {
-  // The runner and the dev server it starts share this environment. With a
-  // provider's OAuth client present the bar offers Connect, by design.
+  // With a provider's OAuth client configured, the bar offers Connect, by
+  // design. The dev server reads `.env` (documented place for these ids) and
+  // so does this file (`dotenv/config` above), as well as the shell, so the
+  // guard sees what the server sees. Next also reads `.env.local` and
+  // `.env.development*`, which the runner does not: an id kept only there
+  // is not seen here.
   test.skip(
     Boolean(
       process.env.GOOGLE_MEET_CLIENT_ID ||
