@@ -60,6 +60,8 @@ export default async function EventDetailPage({
         locationDetails: event.locationDetails,
         conferenceProvider: event.conferenceProvider,
         conferenceUrl: event.conferenceUrl,
+        // So the edit form knows a link we made is already there, as on Meetings.
+        conferenceManaged: event.conferenceManaged,
         kind: event.kind,
         visibility: event.visibility,
         hostUserId: event.hostUserId,
