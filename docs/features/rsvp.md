@@ -2,13 +2,15 @@
 
 > The RSVP page is now one of three shapes a meeting can take, and it is
 > reached from the **Meetings** section rather than a section of its own. See
-> `docs/features/meetings.md`. The page itself, below, is unchanged.
+> `docs/features/meetings.md`. The page itself, below, is unchanged; its
+> reminders are now the meeting's reminders, which that document describes.
 
 A public sign-up page for an event. An owner or admin turns it on for any
 event (every club has them, the Free plan included); anyone with
 the link signs up with a name, an email and a phone number. Guests get a
-confirmation email (with their ticket and invite link), then a reminder
-(email, and a text once Twilio is set up) a day and an hour before.
+confirmation email (with their ticket and invite link), then reminders
+(email, and a text once Twilio is set up) at the times the meeting sets: a
+day and an hour before, unless the host chose others.
 
 What sets it apart from Luma and Partiful: guests **split the cost** with
 the host's Venmo, Cash App, PayPal or Zelle (no fees, nothing through us),
@@ -24,11 +26,13 @@ in the club's People and Attendance databases.
   and kept when the page is turned off and on again, so a shared link
   survives. Pages aren't indexed by search engines.
 - **In the suite:**
-  - **RSVPs** (a sidebar section in every club and in Personal,
-    `/app/{slug}/calendar/rsvp`): owners and admins see every event with a
-    page, with sign-ups at a glance; everyone else sees the club's events
-    taking sign-ups, each opening its public page. Everyone sees their own
-    tickets there too (in Personal, from every space).
+  - **Meetings** (the sidebar section that was RSVPs, in every club and in
+    Personal, `/app/{slug}/meetings`; the old `/calendar/rsvp` redirects
+    there): owners and admins see every meeting, with sign-ups at a glance;
+    everyone else sees what is still to come and joinable or taking sign-ups.
+    Every card opens the meeting's own page, which links to its public page.
+    Everyone sees their own tickets there too (in Personal, from every
+    space).
   - Each event's page has an **RSVP page** card.
   - _New event_ starts by picking **Online**, **In person** or **Event**.
     An Event also creates the public page and opens its settings.
@@ -121,23 +125,27 @@ The registration card is always paper and ink, whatever the background.
 Job kinds in `src/server/jobs/registry.ts`:
 
 - `rsvp-email`: one email per guest. The templates are confirmation,
-  waitlist, a spot opened, the day-before and hour-before reminders, and
-  the event was cancelled.
+  waitlist, a spot opened, a reminder (one per reminder time), and the event
+  was cancelled.
 - `rsvp-fanout`: queues one `rsvp-email` per guest, in bulk
   (`enqueueRsvpEmails`: the same keys, with `app.enqueue_job` run per guest
   inside the database in one statement), so a big guest list fits in its
   short transaction.
   It may run in the request's `after()`, so a cancellation goes out right
   after the delete.
-  - Reminders are queued with `runAt` 24 hours and 1 hour before the start
-    (an all-day event gets only the day-before one). Their key includes the
-    start, so moving the event queues new reminders, and the old ones find
-    the time changed and do nothing.
-  - Moving the event also clears `reminderDaySentAt` and
-    `reminderHourSentAt` in the same transaction, so the new time's
-    reminders reach everyone.
+  - Reminders are one fanout per reminder time the meeting sets
+    (`Event.reminderMinutes`, a day and an hour unless the host chose
+    others), queued with `runAt` that long before the start; an all-day
+    event skips any under a day. The same fanout reminds invited members
+    in-app, so members and guests have one reminder system
+    (`docs/features/meetings.md`, Reminders). Its key includes the time and
+    the start, so moving the event queues new reminders, and the old ones
+    find the start changed and do nothing.
+  - Moving the event also lets the new time's reminders reach everyone: the
+    fanout forgets the sends logged for the old time
+    (`EventReminderSend`) before it sends.
   - A reminder still waiting when the event starts (a retry, a late drain)
-    is dropped.
+    is dropped, and so is one for a time since taken off the meeting.
   - The event service queues a `cancelled` fan-out when an event with a
     page is deleted. A merge sends none, so `mergeEvents` refuses to merge
     away an event whose page is on with people signed up (sign-ups don't
@@ -151,9 +159,11 @@ Emails come from the club's own sender if it has one, otherwise from
 "<Club> via Bananasplit". The text goes out with each reminder when
 `SMS_DELIVERY` is live (`src/server/sms`, set up with `TWILIO_*` in
 `.env.example`). It is best effort: a failed text never resends the email.
-Each reminder is claimed on the registration (`reminderDaySentAt`,
-`reminderHourSentAt`) before it is sent, so a retried job never reminds
-twice.
+Each reminder is claimed in `EventReminderSend` (one row per guest and
+reminder time) before it is sent, so a retried job never reminds twice; a
+failed send releases the claim so the retry can send. The old
+`reminderDaySentAt` and `reminderHourSentAt` columns on the registration are
+unused now.
 
 Reminders depend on the job drain: every 15 minutes with the Jobs pinger,
 or `*/5` on Vercel Pro (RUNBOOK, Background jobs). With only the daily
@@ -168,13 +178,14 @@ backstop cron, they arrive late.
 - Turning a page off keeps its sign-ups. Deleting the event soft-deletes
   it, and its guests are emailed that it's cancelled.
 
-## The RSVPs page
+## The Meetings list
 
-The sidebar's RSVPs lists event pages as cards in a grid, like Files: the
-event's cover (or its first letter on its kind's tint) with a calendar-leaf
-date, the kind and time, and the head count (hosts) or your status. The next
-upcoming one is a wide **Next up** card. Your tickets are cards too, the
-event's picture on the left like a stub, with **Show ticket**.
+The sidebar's Meetings (it was RSVPs) lists meetings as cards in a grid, like
+Files: the event's cover (or its first letter on its kind's tint) with a
+calendar-leaf date, the kind and time, and the head count (hosts) or your
+status. The next upcoming one is a wide **Next up** card. Your tickets are
+cards too, the event's picture on the left like a stub, with **Show ticket**.
+`docs/features/meetings.md` has the rest of what a card shows.
 
 ## Part of every club
 
