@@ -117,13 +117,20 @@ interface MenuState {
   heading?: string;
 }
 
-/** Where the browser's own menu is the one people want. */
+/**
+ * Where the browser's own menu is the one people want: somewhere you type,
+ * over text you have selected to copy, or with Shift held.
+ *
+ * NOT over a link or a picture. Almost every card and row in this app IS a
+ * link — a file, a meeting, a note, an Up next card — so bailing out on
+ * `a[href]` left the feature working on hardly anything. Its own menu
+ * carries Open, which is what the link menu was for.
+ */
 function wantsNativeMenu(event: MouseEvent): boolean {
   if (event.shiftKey) return true;
   const target = event.target as HTMLElement | null;
   if (!target) return true;
-  if (target.closest("input, textarea, select, [contenteditable='true'], a[href], img, video"))
-    return true;
+  if (target.closest("input, textarea, select, [contenteditable='true']")) return true;
   const selection = window.getSelection();
   return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
 }

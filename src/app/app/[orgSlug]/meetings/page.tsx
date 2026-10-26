@@ -28,6 +28,8 @@ import { until } from "@/lib/relative-time";
 import { timeLine } from "@/lib/rsvp/when";
 import { cn } from "@/lib/utils";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+
+import { MeetingCardActions } from "./meeting-card-actions";
 import { userPublicSelect } from "@/server/members";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
@@ -288,80 +290,88 @@ export default async function MeetingsPage({
     const soon = e.startsAt > now ? until(e.startsAt, now) : null;
     return (
       <li key={e.id} className={cn(featured && "sm:col-span-2")}>
-        <Link
-          href={hrefOf(e)}
-          className={cn(
-            "group bg-card text-card-foreground edge rounded-card focus-glow hover:shadow-e2 flex h-full overflow-hidden transition-[transform,box-shadow] duration-200 ease-(--ease-ink) hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
-            featured && hasCover ? "flex-col sm:flex-row" : "flex-col",
-          )}
+        <MeetingCardActions
+          title={e.title}
+          openLabel={canManage ? "Open its guest list" : "Open"}
+          openHref={hrefOf(e)}
+          signUpHref={e.rsvpSlug ? `/e/${e.rsvpSlug}` : null}
+          calendarHref={`/app/${orgSlug}/calendar/${e.id}`}
         >
-          {hasCover && (
-            <Cover
-              title={e.title}
-              cover={e.rsvpCover}
-              kind={e.kind}
-              startsAt={e.startsAt}
-              timeZone={timeZone}
-              className={
-                featured ? "aspect-[16/10] sm:aspect-auto sm:min-h-56 sm:w-1/2" : "aspect-[16/9]"
-              }
-            />
-          )}
-          <span
+          <Link
+            href={hrefOf(e)}
             className={cn(
-              "flex min-w-0 flex-1 flex-col gap-3",
-              featured ? "p-6" : "p-4.5",
-              featured && !hasCover && "sm:p-7",
+              "group bg-card text-card-foreground edge rounded-card focus-glow hover:shadow-e2 flex h-full overflow-hidden transition-[transform,box-shadow] duration-200 ease-(--ease-ink) hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+              featured && hasCover ? "flex-col sm:flex-row" : "flex-col",
             )}
           >
-            <span className="space-y-1">
-              {/* With no picture the date leads the card instead of sitting on one. */}
-              {!hasCover && (
-                <span className="mb-3 flex items-center gap-3">
-                  <DateLeaf startsAt={e.startsAt} timeZone={timeZone} />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    {(featured || first) && <span className="eyebrow block">Next up</span>}
-                    {soon && (
-                      <span className="text-muted-foreground text-[13px] first-letter:uppercase">
-                        {soon}
-                      </span>
-                    )}
-                  </span>
-                </span>
-              )}
-              {featured && hasCover && <span className="eyebrow block">Next up</span>}
-              <span className="flex items-start gap-2">
-                <span
-                  className={cn(
-                    "min-w-0 font-semibold break-words",
-                    featured ? "display-title text-2xl" : "line-clamp-2 text-[15px]",
-                  )}
-                >
-                  {e.title}
-                </span>
-                {e.rsvpSlug && !e.rsvpEnabled && (
-                  <Badge variant="secondary" title="Its sign-up page is turned off">
-                    Sign-ups off
-                  </Badge>
-                )}
-                {mine === "YES" && <Badge variant="success">You&apos;re going</Badge>}
-                {mine === "MAYBE" && <Badge variant="outline">You said maybe</Badge>}
-              </span>
-              <span className="text-muted-foreground block text-[13px]">
-                {listWhen(e.startsAt, e.endsAt, timeZone, e.allDay)}
-              </span>
-              {shapeLine(e)}
-            </span>
-            {crowd && <Crowd {...crowd} />}
-            <span className="mt-auto flex items-end justify-between gap-3">
-              {statusOf(e)}
-              <ArrowUpRight
-                className="text-muted-foreground group-hover:text-foreground size-4 flex-none transition-colors"
-                aria-hidden="true"
+            {hasCover && (
+              <Cover
+                title={e.title}
+                cover={e.rsvpCover}
+                kind={e.kind}
+                startsAt={e.startsAt}
+                timeZone={timeZone}
+                className={
+                  featured ? "aspect-[16/10] sm:aspect-auto sm:min-h-56 sm:w-1/2" : "aspect-[16/9]"
+                }
               />
+            )}
+            <span
+              className={cn(
+                "flex min-w-0 flex-1 flex-col gap-3",
+                featured ? "p-6" : "p-4.5",
+                featured && !hasCover && "sm:p-7",
+              )}
+            >
+              <span className="space-y-1">
+                {/* With no picture the date leads the card instead of sitting on one. */}
+                {!hasCover && (
+                  <span className="mb-3 flex items-center gap-3">
+                    <DateLeaf startsAt={e.startsAt} timeZone={timeZone} />
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      {(featured || first) && <span className="eyebrow block">Next up</span>}
+                      {soon && (
+                        <span className="text-muted-foreground text-[13px] first-letter:uppercase">
+                          {soon}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                )}
+                {featured && hasCover && <span className="eyebrow block">Next up</span>}
+                <span className="flex items-start gap-2">
+                  <span
+                    className={cn(
+                      "min-w-0 font-semibold break-words",
+                      featured ? "display-title text-2xl" : "line-clamp-2 text-[15px]",
+                    )}
+                  >
+                    {e.title}
+                  </span>
+                  {e.rsvpSlug && !e.rsvpEnabled && (
+                    <Badge variant="secondary" title="Its sign-up page is turned off">
+                      Sign-ups off
+                    </Badge>
+                  )}
+                  {mine === "YES" && <Badge variant="success">You&apos;re going</Badge>}
+                  {mine === "MAYBE" && <Badge variant="outline">You said maybe</Badge>}
+                </span>
+                <span className="text-muted-foreground block text-[13px]">
+                  {listWhen(e.startsAt, e.endsAt, timeZone, e.allDay)}
+                </span>
+                {shapeLine(e)}
+              </span>
+              {crowd && <Crowd {...crowd} />}
+              <span className="mt-auto flex items-end justify-between gap-3">
+                {statusOf(e)}
+                <ArrowUpRight
+                  className="text-muted-foreground group-hover:text-foreground size-4 flex-none transition-colors"
+                  aria-hidden="true"
+                />
+              </span>
             </span>
-          </span>
-        </Link>
+          </Link>
+        </MeetingCardActions>
       </li>
     );
   };

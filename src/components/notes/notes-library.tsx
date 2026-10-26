@@ -67,6 +67,9 @@ import { familyOf, formatBytes } from "@/lib/files/types";
 import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
 import { cn } from "@/lib/utils";
 
+import { ContextActions } from "@/components/context-actions";
+import type { ItemMenuEntry } from "@/components/item-menu";
+
 import { FolderCard, folderTone, type FolderCardPeek } from "./folder-card";
 
 const NOTE_MIME = "application/x-bananasplit-note";
@@ -216,6 +219,45 @@ export function NotesLibrary({
   const [error, setError] = useState<string | null>(null);
   const [overFolder, setOverFolder] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+
+  /** Deleting a folder, from its "…" menu or from a right-click on its card. */
+  const removeFolder = async (f: LibraryFolder) => {
+    const ok = await confirm({
+      title: `Delete the folder “${f.name}”?`,
+      description: "Its notes and files stay, just out of the folder.",
+      confirmLabel: "Delete folder",
+      run: async () => {
+        const result = await deleteFolderAction(orgId, f.id);
+        return result.ok ? undefined : result.error;
+      },
+    });
+    if (!ok) return;
+    if (folder === f.id) go({ folder: null });
+    router.refresh();
+    toast({
+      title: `Folder “${f.name}” deleted`,
+      description: "Everything in it is under Not in a folder.",
+    });
+  };
+
+  /**
+   * What can be done to a folder. The cards on Everything carry no "…" of
+   * their own, so without this a right-click on one found nothing.
+   */
+  const folderActions = (f: LibraryFolder): ItemMenuEntry[] => [
+    { label: "Open", icon: FolderOpen, onSelect: () => go({ folder: f.id }) },
+    f.canEdit && {
+      label: "Rename",
+      icon: Pencil,
+      onSelect: () => setRenaming({ id: f.id, name: f.name }),
+    },
+    f.canEdit && {
+      label: "Delete folder",
+      icon: Trash2,
+      destructive: true,
+      onSelect: () => void removeFolder(f),
+    },
+  ];
   const [moving, setMoving] = useState<Item | null>(null);
   const [overTrash, setOverTrash] = useState(false);
   const [confirmEl, confirm] = useConfirm();
@@ -846,24 +888,7 @@ export function NotesLibrary({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           variant="destructive"
-                          onSelect={async () => {
-                            const ok = await confirm({
-                              title: `Delete the folder “${f.name}”?`,
-                              description: "Its notes and files stay, just out of the folder.",
-                              confirmLabel: "Delete folder",
-                              run: async () => {
-                                const result = await deleteFolderAction(orgId, f.id);
-                                return result.ok ? undefined : result.error;
-                              },
-                            });
-                            if (!ok) return;
-                            if (folder === f.id) go({ folder: null });
-                            router.refresh();
-                            toast({
-                              title: `Folder “${f.name}” deleted`,
-                              description: "Everything in it is under Not in a folder.",
-                            });
-                          }}
+                          onSelect={() => void removeFolder(f)}
                         >
                           <Trash2 className="size-4" aria-hidden="true" />
                           Delete folder
@@ -1032,22 +1057,24 @@ export function NotesLibrary({
             <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))] gap-x-4 gap-y-5">
               {folders.map((f) => (
                 <li key={f.id}>
-                  <FolderCard
-                    name={f.name}
-                    color={f.color}
-                    noteCount={f.noteCount}
-                    fileCount={f.fileCount}
-                    peek={f.peek ?? []}
-                    colors={COLORS}
-                    onColor={
-                      f.canEdit
-                        ? (c) => run(() => updateFolderAction(orgId, f.id, { color: c }))
-                        : undefined
-                    }
-                    dropping={overFolder === f.id}
-                    onOpen={() => go({ folder: f.id })}
-                    dropProps={dropProps(f.id)}
-                  />
+                  <ContextActions items={folderActions(f)} heading={f.name}>
+                    <FolderCard
+                      name={f.name}
+                      color={f.color}
+                      noteCount={f.noteCount}
+                      fileCount={f.fileCount}
+                      peek={f.peek ?? []}
+                      colors={COLORS}
+                      onColor={
+                        f.canEdit
+                          ? (c) => run(() => updateFolderAction(orgId, f.id, { color: c }))
+                          : undefined
+                      }
+                      dropping={overFolder === f.id}
+                      onOpen={() => go({ folder: f.id })}
+                      dropProps={dropProps(f.id)}
+                    />
+                  </ContextActions>
                 </li>
               ))}
             </ul>
