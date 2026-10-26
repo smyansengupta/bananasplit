@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   findMany: vi.fn(),
   groupBy: vi.fn(),
+  attendees: vi.fn(),
   registrations: vi.fn(),
   connections: vi.fn(),
   members: vi.fn(),
@@ -25,7 +26,11 @@ vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.context,
   withOrgTx: async (_orgId: string, fn: (ctx: unknown) => unknown) =>
     fn({
-      db: { event: { findMany: mocks.findMany }, eventRegistration: { groupBy: mocks.groupBy } },
+      db: {
+        event: { findMany: mocks.findMany },
+        eventRegistration: { groupBy: mocks.groupBy },
+        eventAttendee: { findMany: mocks.attendees },
+      },
     }),
 }));
 vi.mock("@/server/rsvp/my-registrations", () => ({ myRsvpRegistrations: mocks.registrations }));
@@ -40,7 +45,10 @@ vi.mock("@/components/meetings/meeting-card", () => ({
 }));
 vi.mock("@/components/meetings/video-connections", () => ({ VideoConnections: () => null }));
 vi.mock("@/components/meetings/new-meeting-button", () => ({ NewMeetingButton: mocks.NewButton }));
-vi.mock("@/server/members", () => ({ getOrgMembersForPicker: mocks.members }));
+vi.mock("@/server/members", () => ({
+  getOrgMembersForPicker: mocks.members,
+  userPublicSelect: { id: true, name: true, image: true, avatar: true },
+}));
 
 const { default: MeetingsPage } = await import("./page");
 
@@ -116,6 +124,7 @@ beforeEach(() => {
   signIn("ADMIN");
   mocks.findMany.mockResolvedValue([stored()]);
   mocks.groupBy.mockResolvedValue([]);
+  mocks.attendees.mockResolvedValue([]);
   mocks.registrations.mockResolvedValue([]);
   mocks.connections.mockResolvedValue([]);
   mocks.members.mockResolvedValue([]);
@@ -247,6 +256,110 @@ describe("the Meetings list: sign-ups on the card", () => {
 
     const [member] = await cards();
     expect(member).toMatchObject({ going: 0, waiting: 0, mine: "WAITLIST" });
+  });
+});
+
+describe("the Meetings list: who is coming", () => {
+  const person = (id: string) => ({ id, name: id, image: null, avatar: null });
+
+  it("reads this organization's invitees of the listed meetings, and no email", async () => {
+    mocks.findMany.mockResolvedValue([stored({ id: "e1" }), stored({ id: "e2" })]);
+
+    await cards();
+
+    const { where, select } = mocks.attendees.mock.calls[0]![0] as {
+      where: { organizationId: string; eventId: { in: string[] } };
+      select: { user: { select: Record<string, boolean> } };
+    };
+    expect(where).toEqual({ organizationId: "org_1", eventId: { in: ["e1", "e2"] } });
+    expect(Object.keys(select.user.select)).not.toContain("email");
+  });
+
+  it("hands a card the faces of the people going, the numbers, and your own answer", async () => {
+    mocks.attendees.mockResolvedValue([
+      { eventId: "e1", rsvp: "YES", user: person("user_1") },
+      { eventId: "e1", rsvp: "MAYBE", user: person("u2") },
+      { eventId: "e1", rsvp: "PENDING", user: person("u3") },
+      { eventId: "e1", rsvp: "NO", user: person("u4") },
+    ]);
+
+    const [card] = await cards();
+
+    expect(card?.crowd).toEqual({
+      faces: [person("user_1")],
+      going: 1,
+      maybe: 1,
+      awaited: 1,
+      invited: 4,
+    });
+    // user_1 is the one signed in.
+    expect(card?.myRsvp).toBe("YES");
+  });
+
+  it("shows who was asked, five at most, before anyone has said yes", async () => {
+    mocks.attendees.mockResolvedValue(
+      ["u1", "u2", "u3", "u4", "u5", "u6"].map((id) => ({
+        eventId: "e1",
+        rsvp: "PENDING",
+        user: person(id),
+      })),
+    );
+
+    const [card] = await cards();
+
+    const crowd = card?.crowd as { faces: { id: string }[]; going: number; invited: number };
+    expect(crowd.faces.map((f) => f.id)).toEqual(["u1", "u2", "u3", "u4", "u5"]);
+    expect(crowd).toMatchObject({ going: 0, invited: 6 });
+    expect(card?.myRsvp).toBeNull();
+  });
+
+  it("gives a meeting nobody was invited to no crowd", async () => {
+    mocks.findMany.mockResolvedValue([stored({ id: "e1" }), stored({ id: "e2" })]);
+    mocks.attendees.mockResolvedValue([{ eventId: "e1", rsvp: "YES", user: person("u2") }]);
+
+    const found = await cards();
+
+    expect(found.find((c) => (c.event as { id: string }).id === "e2")?.crowd).toBeNull();
+  });
+});
+
+describe("the Meetings list: Next up", () => {
+  const COVER = { key: "k", s480: "/covers/k-480.webp", s960: "/covers/k-960.webp" };
+
+  it("makes the first meeting the wide card when it has a picture", async () => {
+    mocks.findMany.mockResolvedValue([
+      stored({ id: "a", rsvpCover: COVER }),
+      stored({ id: "b", rsvpCover: COVER }),
+    ]);
+
+    const [a, b] = await cards();
+
+    expect(a).toMatchObject({ featured: true, first: true });
+    expect(b).toMatchObject({ featured: false, first: false });
+  });
+
+  it("keeps a first meeting with no picture in the grid, still saying Next up", async () => {
+    mocks.findMany.mockResolvedValue([stored({ id: "a" }), stored({ id: "b" })]);
+
+    const [a] = await cards();
+
+    expect(a).toMatchObject({ featured: false, first: true });
+  });
+
+  it("does not say Next up on the Past list", async () => {
+    const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    mocks.findMany.mockResolvedValue([
+      stored({
+        id: "old",
+        rsvpCover: COVER,
+        startsAt: lastWeek,
+        endsAt: new Date(lastWeek.getTime() + 60 * 60 * 1000),
+      }),
+    ]);
+
+    const [old] = await cards();
+
+    expect(old).toMatchObject({ featured: false, first: false, past: true });
   });
 });
 
