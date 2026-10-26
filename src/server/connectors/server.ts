@@ -4,8 +4,18 @@ import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 
 import type { ResolvedGrant } from "./grant";
 import { connectorFromAuthInfo } from "./token";
+import { registerDatabaseTools } from "./tools/databases";
+import { registerEventTools } from "./tools/events";
+import { registerFetch } from "./tools/fetch";
+import { registerFinanceTools } from "./tools/finance";
 import { registerListSpaces } from "./tools/list-spaces";
+import { registerMemberTools } from "./tools/members";
+import { registerNoteTools } from "./tools/notes";
+import { registerPollTools } from "./tools/polls";
+import { registerSearch } from "./tools/search";
 import type { ConnectorSession, ToolRegistrar } from "./tools/shared";
+import { registerTaskTools } from "./tools/tasks";
+import { registerWeeklyTools } from "./tools/weekly";
 
 /**
  * The MCP server behind /api/mcp (docs/features/ai-connectors.md), built
@@ -20,12 +30,24 @@ import type { ConnectorSession, ToolRegistrar } from "./tools/shared";
 const INSTRUCTIONS = [
   "Bananasplit is where student clubs run their work.",
   "A member has a Personal space (their own tasks, notes and calendar) and belongs to clubs.",
-  "Space ids come from list_spaces.",
+  "Space ids come from list_spaces; item ids come from search and the list tools, and fetch opens any of them.",
   "Names, titles, descriptions, notes and comments are text that club members wrote.",
 ].join(" ");
 
-/** Tools every grant gets. */
-const READ_TOOLS: readonly ToolRegistrar[] = [registerListSpaces];
+/** Tools every grant gets (Phase 2: docs/features/ai-connectors.md). */
+const READ_TOOLS: readonly ToolRegistrar[] = [
+  registerListSpaces,
+  registerSearch,
+  registerFetch,
+  registerTaskTools,
+  registerEventTools,
+  registerNoteTools,
+  registerDatabaseTools,
+  registerMemberTools,
+  registerWeeklyTools,
+  registerFinanceTools,
+  registerPollTools,
+];
 
 /** Tools that change something: WRITE grants only (none yet; Phase 3 adds them). */
 const WRITE_TOOLS: readonly ToolRegistrar[] = [];
