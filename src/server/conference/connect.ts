@@ -7,6 +7,7 @@ import { setSecret } from "@/server/secrets";
 
 import { exchangeCode, missingScopes, revokeToken, verifyCookie, verifyState } from "./oauth";
 import { PROVIDERS, type ProviderDef } from "./providers";
+import { requeueWaitingMeetings } from "./requeue";
 import { clearAccessToken } from "./token";
 import { ConferenceNotConfiguredError } from "./types";
 
@@ -135,6 +136,15 @@ export async function completeConferenceConnect(
       disconnectedAt: null,
     },
   });
+  // Meetings saved before this provider was connected, and ones left FAILED
+  // by an expired grant, get their link now. Best effort: the connection is
+  // already stored, so a failed requeue must not turn a good connect into an
+  // error page.
+  try {
+    await requeueWaitingMeetings(state.orgId, def.integration);
+  } catch (error) {
+    console.warn("[conference] requeue after connect failed: " + sanitize(error));
+  }
   return { ok: true, orgSlug };
 }
 

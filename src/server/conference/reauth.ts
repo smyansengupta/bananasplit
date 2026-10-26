@@ -65,8 +65,8 @@ export async function markConferenceNeedsReauth(
         title: `${label} needs to be reconnected`,
         body:
           `${label} stopped accepting the connection, so new online meetings are not being created there. ` +
-          "An owner or admin can reconnect it in Admin panel > Integrations; meetings made meanwhile pick up a link once it is back.",
-        linkUrl: org ? `/app/${org.slug}/settings/integrations` : null,
+          "An owner or admin can reconnect it from Meetings; meetings made meanwhile get their link once it is back.",
+        linkUrl: org ? `/app/${org.slug}/meetings` : null,
       },
     );
     await writeOrgAuditLog(db, {

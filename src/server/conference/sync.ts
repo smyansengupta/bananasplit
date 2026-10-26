@@ -234,7 +234,7 @@ export const conferenceSyncJob: JobHandler<{ eventId: string }> = async (run) =>
   if (intent !== "remove" && integrationStatus !== IntegrationStatus.CONNECTED) {
     const why =
       integrationStatus === IntegrationStatus.NEEDS_REAUTH
-        ? `${def.label} needs to be reconnected in Admin panel > Integrations.`
+        ? `${def.label} needs to be reconnected from Meetings.`
         : `${def.label} is not connected for this organization.`;
     await recordFailure(orgId, eventId, why, event.conferenceSyncAttempts);
     return { status: "DEAD", error: why };
