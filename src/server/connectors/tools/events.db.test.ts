@@ -209,6 +209,12 @@ describe("get_event", () => {
         { person: { id: itemId("person", club.id, bob.id), name: bob.name }, rsvp: "maybe" },
       ]),
     );
+    // Linked notes stay out while the club hides Files from members.
+    await fx.hiding(club.id, ["notes"], async () => {
+      const id = itemId("event", club.id, ids.gala);
+      expect((await getEvent(await fx!.session(alice), { id }, now)).notes).toEqual([]);
+      expect((await getEvent(await fx!.session(bob), { id }, now)).notes).toHaveLength(2);
+    });
   });
 
   it("answers another org's event and a forged id as not found", async () => {

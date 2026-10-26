@@ -288,10 +288,13 @@ async function loadEvent(
       rsvp: RSVP_OUT[a.rsvp],
     })),
     attendeeCount: event.attendees.length,
-    notes: event.notes.map((n) => ({
-      id: itemId("note", space.id, n.id),
-      title: n.title.trim() || "Untitled note",
-    })),
+    // As the notes rules allow, and not while the club hides Files from members.
+    notes: space.opens("notes")
+      ? event.notes.map((n) => ({
+          id: itemId("note", space.id, n.id),
+          title: n.title.trim() || "Untitled note",
+        }))
+      : [],
   };
 }
 
