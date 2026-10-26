@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DateField, DateTimeField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -418,16 +419,25 @@ function EventForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* A date and a time need the width; a bare day does not. */}
+          <div className={cn("grid gap-3", allDay && "grid-cols-1 sm:grid-cols-2")}>
             <div className="grid gap-1.5">
               <Label htmlFor="event-start">{allDay ? "First day" : "Starts"}</Label>
-              <Input
-                id="event-start"
-                type={allDay ? "date" : "datetime-local"}
-                value={startValue}
-                onChange={(e) => changeStart(e.target.value)}
-                required
-              />
+              {allDay ? (
+                <DateField
+                  id="event-start"
+                  value={startValue}
+                  onChange={changeStart}
+                  aria-label="First day"
+                />
+              ) : (
+                <DateTimeField
+                  id="event-start"
+                  value={startValue}
+                  onChange={changeStart}
+                  aria-label="Starts"
+                />
+              )}
             </div>
             <div className="grid gap-1.5">
               <div className="flex items-baseline justify-between gap-2">
@@ -438,13 +448,23 @@ function EventForm({
                   </span>
                 )}
               </div>
-              <Input
-                id="event-end"
-                type={allDay ? "date" : "datetime-local"}
-                value={endValue}
-                onChange={(e) => setEndValue(e.target.value)}
-                required
-              />
+              {allDay ? (
+                <DateField
+                  id="event-end"
+                  value={endValue}
+                  onChange={setEndValue}
+                  min={startValue}
+                  aria-label="Last day"
+                />
+              ) : (
+                <DateTimeField
+                  id="event-end"
+                  value={endValue}
+                  onChange={setEndValue}
+                  min={startValue}
+                  aria-label="Ends"
+                />
+              )}
             </div>
           </div>
           <p className="text-muted-foreground text-xs">
@@ -620,7 +640,6 @@ function EventForm({
                 </div>
               </fieldset>
             )}
-
 
             <div className="grid gap-1.5">
               <Label htmlFor="event-description">Description</Label>

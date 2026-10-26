@@ -22,6 +22,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import { loadTaskChips, type TaskChipData } from "@/app/app/[orgSlug]/notes/embed-actions";
 import { setTaskStatus } from "@/app/app/[orgSlug]/tasks/actions";
 import { FILE_ICONS } from "@/components/notes/file-card";
+import { DatePopover } from "@/components/ui/date-field";
 import { UserAvatar } from "@/components/user-avatar";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { dayLabel, todayKey } from "@/lib/notes/dates";
@@ -214,16 +215,7 @@ function DateChipView({ node, updateAttributes, selected }: ReactNodeViewProps) 
     >
       <CalendarDays className="size-3.5" aria-hidden="true" />
       {editable ? (
-        <label className="relative cursor-pointer">
-          {dayLabel(date)}
-          <input
-            type="date"
-            value={date ?? ""}
-            onChange={(e) => e.target.value && updateAttributes({ date: e.target.value })}
-            aria-label="Change the date"
-            className="absolute inset-0 cursor-pointer opacity-0"
-          />
-        </label>
+        <DateNodeButton date={date} onPick={(next) => updateAttributes({ date: next })} />
       ) : (
         <time dateTime={date ?? undefined}>{dayLabel(date)}</time>
       )}
@@ -370,4 +362,20 @@ export function nodeViewOverrides() {
     }),
     callout: Callout.extend({ addNodeView: () => ReactNodeViewRenderer(CalloutView) }),
   };
+}
+
+/**
+ * A date written into a note: the date itself is the button, and it opens
+ * the themed calendar. It used to be an invisible native date input laid
+ * over the text, which meant the operating system's own picker.
+ */
+function DateNodeButton({ date, onPick }: { date: string | null; onPick: (date: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <DatePopover value={date ?? ""} onPick={onPick} open={open} onOpenChange={setOpen}>
+      <button type="button" aria-label="Change the date" className="cursor-pointer">
+        {dayLabel(date)}
+      </button>
+    </DatePopover>
+  );
 }

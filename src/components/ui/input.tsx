@@ -1,7 +1,20 @@
 import * as React from "react";
 import { cn } from "cn";
 
+import { DateInput, THEMED_INPUT_TYPES } from "@/components/ui/date-field";
+
+/**
+ * A text field, and — for a date, a date and time, or a time — the themed
+ * picker instead of the operating system's own. Those three native controls
+ * draw the Windows calendar and Chrome's clock, the one place in the app
+ * where the theme stopped at the edge of the field. DateInput takes the same
+ * props and gives `onChange` the same shape, so a field swaps over without
+ * its call site changing.
+ */
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+  if (type && THEMED_INPUT_TYPES.has(type)) {
+    return <DateInput type={type} className={className} {...props} />;
+  }
   return (
     <input
       type={type}

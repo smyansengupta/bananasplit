@@ -487,9 +487,11 @@ export function EventCalendar({
               navigate({ ...range, visibility: v === "ALL" ? null : (v as EventVisibility) })
             }
           >
+            {/* A pill, like every other filter beside it: the one rounded
+                rectangle in a row of rounded pills read as a mistake. */}
             <SelectTrigger
               size="sm"
-              className="w-auto min-w-38 shrink-0"
+              className="border-input h-8 w-auto shrink-0 rounded-full ps-3.5 pe-3 text-[13px] font-medium"
               aria-label="Filter by visibility"
             >
               <SelectValue />

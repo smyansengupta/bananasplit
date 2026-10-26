@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { parseCell, type Choice, type FieldDef, type StoredValue } from "@/lib/databases/fields";
 import { formatPhone } from "@/lib/rsvp/format";
+import { DatePopover } from "@/components/ui/date-field";
 import { cn } from "@/lib/utils";
 
 import { choiceColor } from "../styles";
@@ -254,25 +255,12 @@ function ReadOnly({ field, value, shown }: { field: FieldDef; value: unknown; sh
   );
 }
 
-/** A day: shown as "Oct 12, 2026"; the browser's date picker while editing. */
+/** A day: shown as "Oct 12, 2026"; the themed calendar picks a new one. */
 function DateCell({ field, value, members, canEdit, onSave, label }: CellProps) {
-  const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(false);
   const stored = typeof value === "string" ? value : "";
-  const [draft, setDraft] = useState(stored);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shown = formatValue(field, value, members);
 
-  function startEditing() {
-    setDraft(stored);
-    setEditing(true);
-  }
-
-  // Typing a year digit by digit makes the picker report every step; save
-  // the day once it settles, or when leaving the cell.
-  function commit(next: string) {
-    if (timer.current) clearTimeout(timer.current);
-    if (next !== stored) onSave(next || null);
-  }
   if (!canEdit) {
     return (
       <div className="flex h-10 items-center px-2.5 text-sm tabular-nums">
@@ -280,40 +268,19 @@ function DateCell({ field, value, members, canEdit, onSave, label }: CellProps) 
       </div>
     );
   }
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        aria-label={label}
-        onClick={startEditing}
-        onFocus={startEditing}
-        className={cn(base, "text-left tabular-nums")}
-      >
+  // The cell is the trigger: picking a day saves it, so there is no separate
+  // editing state and no native picker to open.
+  return (
+    <DatePopover
+      value={stored}
+      onPick={(next) => next !== stored && onSave(next || null)}
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <button type="button" aria-label={label} className={cn(base, "text-left tabular-nums")}>
         {shown}
       </button>
-    );
-  }
-  return (
-    <input
-      type="date"
-      autoFocus
-      aria-label={label}
-      value={draft}
-      onChange={(e) => {
-        const next = e.target.value;
-        setDraft(next);
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => commit(next), SAVE_AFTER_MS);
-      }}
-      onBlur={() => {
-        commit(draft);
-        setEditing(false);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLInputElement).blur();
-      }}
-      className={cn(base, "tabular-nums [&::-webkit-calendar-picker-indicator]:opacity-50")}
-    />
+    </DatePopover>
   );
 }
 
