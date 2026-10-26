@@ -653,6 +653,70 @@ describe("the path a person actually takes", () => {
     expect(seen.some((r) => r.method === "DELETE")).toBe(true);
     expect((await readEvent(event.id)).conferenceUrl).toBeNull();
   });
+
+  /** A meeting we made at Zoom, then edited to "A link I'll paste" with a link. */
+  async function swappedForAPastedLink(pasted: string) {
+    fakeZoom();
+    const { event } = await createThroughService({ conferenceProvider: "ZOOM" });
+    await runJob(event.id);
+    expect((await readEvent(event.id)).conferenceManaged).toBe(true);
+
+    vi.restoreAllMocks();
+    clearAllAccessTokens();
+    // What the form sends after the picker dropped the Zoom link: OTHER and
+    // only the link that was pasted.
+    await withOrgTx(orgId, async (ctx) =>
+      updateEvent({ ...ctx, userId: adminId } as never, event.id, {
+        conferenceProvider: "OTHER",
+        conferenceUrl: pasted,
+      } as never),
+    );
+    expect((await readEvent(event.id)).conferenceUrl).toBe(pasted);
+    return event.id;
+  }
+
+  it("cancels the Zoom meeting when a pasted link replaces it, and keeps the pasted link", async () => {
+    if (!reachable) return;
+    const pasted = "https://example.com/our-own-room";
+    const eventId = await swappedForAPastedLink(pasted);
+    const seen = fakeZoom();
+
+    expect(await runJob(eventId)).toEqual({ status: "DONE" });
+
+    expect(
+      seen.some(
+        (r) => r.method === "DELETE" && r.url === "https://api.zoom.us/v2/meetings/98765432100",
+      ),
+    ).toBe(true);
+    expect(await readEvent(eventId)).toMatchObject({
+      // The Zoom meeting and everything that pointed at it is gone...
+      conferenceManaged: false,
+      conferenceManagedAt: null,
+      conferenceMeetingId: null,
+      conferenceHostUrl: null,
+      conferencePasscode: null,
+      conferenceDialIn: null,
+      conferenceSyncState: CalendarSyncState.NOT_APPLICABLE,
+      // ...and the link someone pasted is untouched.
+      conferenceUrl: pasted,
+    });
+  });
+
+  it("keeps the pasted link when Zoom has already lost the meeting it replaced", async () => {
+    if (!reachable) return;
+    const pasted = "https://example.com/our-own-room";
+    const eventId = await swappedForAPastedLink(pasted);
+    fakeZoom({ deleteStatus: 404 });
+
+    expect(await runJob(eventId)).toEqual({ status: "DONE" });
+
+    expect(await readEvent(eventId)).toMatchObject({
+      conferenceManaged: false,
+      conferenceMeetingId: null,
+      conferenceUrl: pasted,
+      conferenceSyncState: CalendarSyncState.NOT_APPLICABLE,
+    });
+  });
 });
 
 describe("switching provider", () => {

@@ -127,20 +127,31 @@ function savedFields(meeting: ConferenceMeeting, provider: ConferenceProvider): 
   };
 }
 
-/** The fields a cancellation writes: the meeting is gone, so is its link. */
-const CLEARED_FIELDS: Prisma.EventUpdateInput = {
-  conferenceManaged: false,
-  conferenceManagedAt: null,
-  conferenceMeetingId: null,
-  conferenceUrl: null,
-  conferenceHostUrl: null,
-  conferencePasscode: null,
-  conferenceDialIn: Prisma.DbNull,
-  conferenceSyncState: CalendarSyncState.NOT_APPLICABLE,
-  conferenceSyncAttempts: 0,
-  conferenceSyncedAt: new Date(),
-  conferenceSyncError: null,
-};
+/**
+ * The fields a cancellation writes: the meeting we made is gone, and so is
+ * everything that pointed at it.
+ *
+ * Except a link someone pasted in its place. Editing a meeting we made to "A
+ * link I'll paste" changes the provider to OTHER and the URL to theirs in the
+ * same save (the picker drops our link on any switch), so by the time this
+ * runs the URL on the row is not ours. A pasted link is never touched: it
+ * stays, and only our meeting's own fields are cleared.
+ */
+function clearedFields(event: Snapshot): Prisma.EventUpdateInput {
+  return {
+    conferenceManaged: false,
+    conferenceManagedAt: null,
+    conferenceMeetingId: null,
+    ...(event.conferenceProvider === ConferenceProvider.OTHER ? {} : { conferenceUrl: null }),
+    conferenceHostUrl: null,
+    conferencePasscode: null,
+    conferenceDialIn: Prisma.DbNull,
+    conferenceSyncState: CalendarSyncState.NOT_APPLICABLE,
+    conferenceSyncAttempts: 0,
+    conferenceSyncedAt: new Date(),
+    conferenceSyncError: null,
+  };
+}
 
 /**
  * Writes the result only while syncVersion still matches what we read. A
@@ -251,7 +262,7 @@ export const conferenceSyncJob: JobHandler<{ eventId: string }> = async (run) =>
         providerForConference(event.conferenceProvider) !== null &&
         event.conferenceProvider !== event.conferenceManagedAt;
       await commit(orgId, eventId, event.syncVersion, {
-        ...CLEARED_FIELDS,
+        ...clearedFields(event),
         ...(switching ? { conferenceSyncState: CalendarSyncState.PENDING } : {}),
       });
       if (switching) {
@@ -289,7 +300,7 @@ export const conferenceSyncJob: JobHandler<{ eventId: string }> = async (run) =>
       // A meeting the provider says is gone is the state a cancellation
       // wanted anyway: clear our copy instead of failing forever.
       if (error.status === 404 && intent !== "create") {
-        await commit(orgId, eventId, event.syncVersion, CLEARED_FIELDS);
+        await commit(orgId, eventId, event.syncVersion, clearedFields(event));
         return { status: "DONE" };
       }
       await recordFailure(orgId, eventId, error, event.conferenceSyncAttempts);
