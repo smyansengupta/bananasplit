@@ -48,6 +48,7 @@ export const NONCE_ROUTE_PREFIXES = [
   "/checkout",
   "/forgot-password",
   "/reset-password",
+  "/connect",
 ] as const;
 
 export function isNonceRoute(pathname: string): boolean {
@@ -87,6 +88,21 @@ const FRAME_SOURCES = ["https://www.google.com"];
 /** The Google sign-in form POST redirects to accounts.google.com. */
 const FORM_TARGETS = ["https://accounts.google.com"];
 
+/**
+ * /connect's Continue redirects to AuthKit (docs/features/ai-connectors.md),
+ * which a form posted without JavaScript follows under form-action. Only
+ * while AI connectors are on (CONNECTORS_ENABLED, src/server/connectors/config.ts).
+ */
+function authkitOrigin(env: NodeJS.ProcessEnv): string | null {
+  const domain = env.WORKOS_AUTHKIT_DOMAIN?.trim();
+  if (!domain || env.CONNECTORS_ENABLED?.trim() !== "true") return null;
+  try {
+    return new URL(domain).origin;
+  } catch {
+    return null;
+  }
+}
+
 interface PolicyOptions {
   env?: NodeJS.ProcessEnv;
 }
@@ -108,7 +124,7 @@ function sharedDirectives(env: NodeJS.ProcessEnv): string[] {
     "font-src 'self' data:",
     `frame-src ${FRAME_SOURCES.join(" ")}`,
     `connect-src ${connect.join(" ")}`,
-    `form-action 'self' ${FORM_TARGETS.join(" ")}`,
+    `form-action 'self' ${[...FORM_TARGETS, authkitOrigin(env)].filter(Boolean).join(" ")}`,
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",
@@ -185,4 +201,4 @@ export const NOT_FRAMABLE_SOURCE = `/((?!${FRAMABLE}).*)`;
  * next.config.ts `source` for the static CSP: every path EXCEPT the nonce
  * routes (so a matched route never carries two policies).
  */
-export const STATIC_CSP_SOURCE = `/((?!app/|app$|poll/|poll$|e/|e$|invite/|invite$|sign-in|sign-up|verify-email|onboarding|checkout|forgot-password|reset-password|${FRAMABLE}).*)`;
+export const STATIC_CSP_SOURCE = `/((?!app/|app$|poll/|poll$|e/|e$|invite/|invite$|sign-in|sign-up|verify-email|onboarding|checkout|forgot-password|reset-password|connect$|${FRAMABLE}).*)`;

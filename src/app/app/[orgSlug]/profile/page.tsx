@@ -9,6 +9,8 @@ import { parseNotificationPreferences } from "@/lib/notifications/preferences";
 import { personHref, type ProfileSection } from "@/lib/profile/href";
 import { effectiveTimezone } from "@/lib/profile/timezone";
 import { parsePersonalTheme } from "@/lib/theme/personal";
+import { claudeConnectorUrl, connectorsConfig } from "@/server/connectors/config";
+import { listConnectedApps } from "@/server/connectors/connected-apps";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { getOwnProfile } from "@/server/profiles/queries";
 
@@ -17,6 +19,7 @@ import { SettingsCard } from "../settings/settings-card";
 import { AvailabilityForm } from "./availability-form";
 import { AvatarEditor } from "./avatar-editor";
 import { CalendarFeedCard } from "./calendar-feed-card";
+import { ConnectedAppsCard } from "./connected-apps-card";
 import { DetailsForm } from "./details-form";
 import { LinksForm } from "./links-form";
 import { NotificationPreferencesForm } from "./notification-preferences-form";
@@ -30,6 +33,8 @@ const SECTIONS: { id: ProfileSection; label: string }[] = [
   { id: "availability", label: "Availability" },
   { id: "notifications", label: "Notifications" },
   { id: "calendar", label: "Calendar feed" },
+  // Only while AI connectors are on (src/server/connectors/config.ts).
+  { id: "ai-apps", label: "AI apps" },
 ];
 
 function roleLabel(role: string): string {
@@ -40,7 +45,8 @@ function roleLabel(role: string): string {
  * The signed-in user's own profile (Phase 2). One profile across every org
  * the user belongs to; titles are per org and set by that org's admins.
  * Sections: details, picture, links, notifications, calendar feed (the old
- * settings/notifications and settings/calendar pages redirect here).
+ * settings/notifications and settings/calendar pages redirect here), and
+ * the AI apps the user connected while AI connectors are on.
  */
 export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/profile">) {
   const { orgSlug } = await params;
@@ -49,6 +55,9 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
     orgTheme?.mode === "LIGHT" ? "light" : orgTheme?.mode === "DARK" ? "dark" : "system";
   const profile = await getOwnProfile(user.id);
   if (!profile) notFound();
+  const connectors = connectorsConfig();
+  const connectedApps = connectors ? await listConnectedApps(user.id) : [];
+  const sections = SECTIONS.filter((s) => s.id !== "ai-apps" || connectors);
 
   const preferences = parseNotificationPreferences(profile.emailPreferences);
   const zone = effectiveTimezone(profile, organization);
@@ -88,7 +97,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
         <nav aria-label="Profile sections" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           {/* Wrapping on a phone too, so every section is in view without scrolling. */}
           <ul className="flex min-w-max gap-2 max-md:min-w-0 max-md:flex-wrap sm:flex-wrap">
-            {SECTIONS.map((s) => (
+            {sections.map((s) => (
               <li key={s.id}>
                 <ChipLink href={`#${s.id}`}>{s.label}</ChipLink>
               </li>
@@ -173,6 +182,16 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
         <section id="calendar" className="scroll-mt-24">
           <CalendarFeedCard activeSince={profile.icsActiveSince?.toISOString() ?? null} />
         </section>
+
+        {connectors && (
+          <section id="ai-apps" className="scroll-mt-24">
+            <ConnectedAppsCard
+              apps={connectedApps}
+              mcpUrl={connectors.resourceUrl}
+              claudeUrl={claudeConnectorUrl(connectors.resourceUrl)}
+            />
+          </section>
+        )}
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
 # AI connectors (MCP): implementation plan
 
-Status: planned, nothing built yet. Decided 2026-10-21: Bananasplit serves a
-remote MCP server, so members can use their Personal space and clubs from
-Claude, ChatGPT, Cursor, VS Code and other MCP clients. WorkOS AuthKit
+Status: Phase 1 (foundations) built 2026-10-25, behind `CONNECTORS_ENABLED`
+(see "Phase 1: as built"). Phase 0's WorkOS checks have not run yet, so
+nothing has been tried against WorkOS itself. Decided 2026-10-21: Bananasplit
+serves a remote MCP server, so members can use their Personal space and clubs
+from Claude, ChatGPT, Cursor, VS Code and other MCP clients. WorkOS AuthKit
 Standalone Connect issues the OAuth tokens. Auth.js stays the only way to
 sign in. The research behind this covered the MCP 2026-07-28 spec, the
 TypeScript SDK v2 and the WorkOS Connect docs, all checked 2026-10-21.
@@ -111,7 +113,11 @@ grant's `access`, chosen at consent.
 
 Use a WorkOS staging environment, Claude Code against localhost and the MCP
 Inspector. Confirm what the docs leave open, and write the answers into
-this doc:
+this doc. The harness and its 13 checks are on `claude/mcp-spike` (commit
+`8474061`, runbook `docs/features/ai-connectors-spike.md`); run them there,
+since Phase 1 replaced the spike's `whoami` tool, which shows the token's
+claims. Not run yet (it waits on a WorkOS staging environment and a local
+database).
 
 - **The user-id claim.** `urn:bananasplit:uid` appears in access tokens
   issued to both CIMD and DCR clients.
@@ -257,7 +263,9 @@ model ConnectorGrant {
 - **Grant resolution on every request (`src/server/connectors/grant.ts`).**
   It runs in `withConnectorUserTx` and looks up `(userId, clientId)`:
   - **No row:** create one from the consent claims. Without them the
-    defaults are READ and every space.
+    defaults are READ and every space. A space claim naming a space the
+    member is no longer in is refused with the same 401, never widened to
+    every space.
   - **`consentId` differs from `sid`:** this is a new consent. Take its
     claims and clear `revokedAt`.
   - **`revokedAt` set and the same `sid`:** refuse with `401
@@ -382,11 +390,77 @@ whether the club is paused.
 
 **Done when:**
 - Claude Code, on localhost against WorkOS staging, connects and lists
-  spaces.
+  spaces. *Not yet: waits on Phase 0's WorkOS staging setup.*
 - Disconnect refuses the next call, and the club switch refuses calls for
-  its club.
-- Another org's id answers not found.
-- `pnpm test:rls` is green.
+  its club. *Verified by tests only (route and DB tests).*
+- Another org's id answers not found. *Verified by the DB tests.*
+- `pnpm test:rls` is green. *Yes, 2026-10-25.*
+
+### Phase 1: as built (2026-10-25)
+
+Built as planned above, with these decisions on the way:
+
+- **Two definer functions** (migration `20261025120000_connector_grants`).
+  - `app.connector_spaces()`, for `app_user`: the caller's spaces with each
+    club's switch. `OrgSettings` is readable only in the current org, and
+    both `list_spaces` and `/connect`'s consent choices need every club's.
+  - `app.revoke_connector_grants(user)`, for `app_auth` only: the password
+    reset and the Google gate run on the identity plane, without a member
+    context, and revoke in their own transaction. It returns what WorkOS
+    should forget. The grant matrix row stays `["SIUD", "", ""]`.
+  - Both are in the reviewed lists (`tests.mjs` T27c, T27f), and the three
+    own-row `ConnectorGrant` write policies are on the manifest's
+    tenant-only-write allowlist (as `Pin`'s are).
+- **Tokens** must also carry `sub`, since `workosUserId` is required for the
+  WorkOS revocation call.
+- **The wrapper's refusals, in order:** a grant scoped to another space
+  (checked before any query), then non-member or scheduled-for-deletion
+  (`NotFoundError`), then the club switch, then `checkSpace` with
+  `connectors` and the tool's own feature. The scope and switch refusals are
+  a `ConnectorRefusedError` (an `AppError`, 403) whose message the tool
+  passes on.
+- **`list_spaces`** also returns the grant's `access` (`read` or
+  `read_and_change`); a scoped grant lists only its space, and spaces
+  scheduled for deletion are left out. The `instructions` name only
+  `list_spaces`; Phase 2 adds `search` to them.
+- **Consent choices** are grouped ("All spaces", "Personal", "Clubs") when
+  the member has clubs with connectors on, and flat otherwise: the WorkOS
+  docs show flat or grouped choices, never a mix. Phase 0 check 5 confirms
+  how AuthKit renders them.
+- **The rate limit** answers HTTP 429 with `Retry-After` and a JSON-RPC
+  error body, before the MCP server runs.
+- **Bookkeeping.** `clientName` is looked up after the response when the
+  grant is created or renewed, or at a `lastUsedAt` write while it is still
+  empty (so at most every 15 minutes). The WorkOS DELETE after Disconnect,
+  a password reset or the Google gate also runs after the response
+  (`after()`), best effort and logged.
+- **Hidden while off.** With the flag off, `/connect` says so on load, the
+  profile card and the club switch are hidden, Settings › Plan doesn't list
+  "AI connectors", and the CSP leaves AuthKit out of `form-action`.
+- **Where things are.**
+  - `src/server/connectors/`: `config.ts`, `token.ts` (`VerifiedConnector`),
+    `grant.ts`, `errors.ts`, `server.ts`, `tools/`, `consent.ts`,
+    `connected-apps.ts`, `revoke.ts`, `workos.ts`.
+  - `withConnectorUserTx` and `withConnectorOrgTx` in
+    `src/server/db/context.ts`, importable only from
+    `src/server/connectors/**` (ESLint `CONNECTORS`).
+  - The profile card is `src/app/app/[orgSlug]/profile/connected-apps-card.tsx`.
+    The club switch is in `settings/privacy/`, audited as
+    `privacy.connectors_changed`.
+- **Still open, for Phase 0.**
+  - If a refresh can mint a new `sid` (check 8), a refresh would revive a
+    revoked grant, since a new consent clears `revokedAt`. The WorkOS DELETE
+    kills the refresh tokens, but it is best effort. If check 8 shows a new
+    `sid` on refresh, reviving must also require a `/connect` completion
+    after `revokedAt`.
+  - Whether a repeat authorization keeps `sid` (check 9). If it does, a
+    member who disconnected can't reconnect the same app unless the WorkOS
+    DELETE went through.
+- **Merged with main (2026-10-25).** The migration's
+  `app.security_manifest()` is rebuilt from `20261024120000_meetings` (the
+  latest before it), so main's `UpNextDismissal` entries stay. The profile
+  card uses Bananasplit's own icons (`@/components/icons`). Any later
+  migration that re-creates the manifest must start from this one.
 
 ## Phase 2: read tools
 

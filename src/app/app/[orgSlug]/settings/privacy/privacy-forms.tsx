@@ -13,6 +13,7 @@ import { SettingsCard, SettingsStatus } from "../settings-card";
 import {
   type PrivacyInput,
   updateBallotVisibility,
+  updateConnectorsEnabled,
   updateDatabaseVisibility,
   updatePrivacy,
 } from "./actions";
@@ -286,5 +287,54 @@ export function DatabaseVisibilityRow({
         </FieldSelect>
       </div>
     </li>
+  );
+}
+
+/** AI connectors: saves as it is switched, like the database rows. */
+export function ConnectorsSwitchForm({
+  orgId,
+  value: initial,
+  canEdit,
+}: {
+  orgId: string;
+  value: boolean;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(initial);
+  const [status, setStatus] = useState<Status>(null);
+  const [isPending, startTransition] = useTransition();
+  return (
+    <SettingsCard
+      title="AI connectors"
+      description="Members can use this club from AI apps they connect, such as Claude or ChatGPT. An app only ever sees what that member can see here."
+      status={status && <SettingsStatus status={status} />}
+    >
+      <Row
+        id="connectors-enabled"
+        label="Allow AI apps"
+        help="Turning this off stops every member's AI apps from using the club right away. Nothing is disconnected, so turning it back on restores them."
+      >
+        <Switch
+          id="connectors-enabled"
+          checked={value}
+          disabled={!canEdit || isPending}
+          onCheckedChange={(next) => {
+            setValue(next);
+            startTransition(async () => {
+              setStatus(null);
+              const result = await updateConnectorsEnabled(orgId, next);
+              if (result.error) {
+                setValue(!next);
+                setStatus({ tone: "error", text: result.error });
+                return;
+              }
+              setStatus({ tone: "ok", text: next ? "AI apps allowed." : "AI apps turned off." });
+              router.refresh();
+            });
+          }}
+        />
+      </Row>
+    </SettingsCard>
   );
 }

@@ -7,7 +7,7 @@ vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 
 const { fake, resetFake } = await import("@/test/fake-context");
 const { ForbiddenError } = await import("@/lib/auth/errors");
-const { updateBallotVisibility, updateDatabaseVisibility, updatePrivacy } =
+const { updateBallotVisibility, updateConnectorsEnabled, updateDatabaseVisibility, updatePrivacy } =
   await import("./actions");
 
 const current = {
@@ -17,6 +17,7 @@ const current = {
   showMemberEmailsToMembers: false,
   publicEventsEnabled: false,
   contactEmailVisibility: "ADMINS",
+  connectorsEnabled: true,
 };
 
 beforeEach(() => {
@@ -97,5 +98,25 @@ describe("Privacy settings", () => {
       where: { id: "db_1" },
       data: { memberVisibility: "HIDDEN" },
     });
+  });
+
+  it("ADMINs switch AI connectors off for the club, audited; members can't", async () => {
+    expect(await updateConnectorsEnabled("org_1", false)).toEqual({});
+    expect(fake.db.orgSettings.update).toHaveBeenCalledWith({
+      where: { organizationId: "org_1" },
+      data: { connectorsEnabled: false, updatedById: "actor" },
+    });
+    const audit = fake.db.$queryRaw.mock.calls[0];
+    expect(audit[2]).toBe("privacy.connectors_changed");
+
+    vi.clearAllMocks();
+    expect(await updateConnectorsEnabled("org_1", true)).toEqual({});
+    expect(fake.db.orgSettings.update).not.toHaveBeenCalled();
+    expect(
+      (await updateConnectorsEnabled("org_1", "off" as unknown as boolean)).error,
+    ).toBeTruthy();
+
+    fake.role = "MEMBER";
+    await expect(updateConnectorsEnabled("org_1", false)).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

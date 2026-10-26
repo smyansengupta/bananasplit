@@ -135,6 +135,8 @@ export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   Pin: "Each member's own shortcuts; the service role cannot read them.",
   RecentVisit: "Each member's own browsing history in the app; private, and not org data.",
   MemberPrefs: "Each member's own display settings; the service role cannot read them.",
+  ConnectorGrant:
+    "Each member's own AI app connections (organizationId is only the space one is scoped to); the service role cannot read them.",
   NoteShare:
     "Who a note is shared with by name: mostly private notes, which the export leaves out, and access settings rather than club data.",
   NoteVersion:

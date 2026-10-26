@@ -27,6 +27,9 @@ const GRANTS = {
   Contact: ["SIUD", "SIUD", ""],
   ContactEmail: ["SIUD", "SIUD", ""],
   ContactTermStats: ["S", "SIUD", ""],
+  // AI connectors: a user's own grants (owner-only, whatever the org
+  // context); app_auth revokes through app.revoke_connector_grants only.
+  ConnectorGrant: ["SIUD", "", ""],
   DataSourceSyncState: ["S", "SIUD", ""],
   DatabaseDefinition: ["SIU", "SIUD", ""],
   // Club-made databases: rows and fields, guarded per database by
@@ -4891,6 +4894,141 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         hidden_admin: true,
       },
     },
+  );
+
+  // ======================= AI connectors =======================
+  await tcase(
+    "P-CONN-01",
+    "ConnectorGrant: a user reads, writes and revokes only their own grants, in any org context",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const grant = (id, user, org) =>
+        `INSERT INTO "ConnectorGrant" ("id","userId","clientId","workosUserId","consentId","organizationId")
+         VALUES ('${id}','${user}','client_${id}','user_01W','app_consent_1',${org ? `'${org}'` : "NULL"})`;
+      const s = {};
+      s.own_insert = await tryq(q, grant("cg_1", "u_memberA", null));
+      s.own_scoped = await tryq(q, grant("cg_2", "u_memberA", "org_A"));
+      s.other_insert = await tryq(q, grant("cg_3", "u_adminA", null));
+      s.own_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      // An admin of the same org sees and revokes nothing of the member's.
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      s.admin_revokes = await rc(
+        q,
+        `UPDATE "ConnectorGrant" SET "revokedAt" = now() WHERE "userId" = 'u_memberA'`,
+      );
+      s.admin_deletes = await rc(q, `DELETE FROM "ConnectorGrant" WHERE "userId" = 'u_memberA'`);
+      s.admin_steals = await tryq(
+        q,
+        `UPDATE "ConnectorGrant" SET "userId" = 'u_adminA' WHERE "id" = 'cg_1'`,
+      );
+      // The member with no org context (withConnectorUserTx, withUserTx).
+      await q(`SELECT app.set_context('u_memberA','')`);
+      s.user_ctx_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      s.user_ctx_revokes = await rc(
+        q,
+        `UPDATE "ConnectorGrant" SET "revokedAt" = now() WHERE "id" = 'cg_1'`,
+      );
+      s.give_away = await tryq(
+        q,
+        `UPDATE "ConnectorGrant" SET "userId" = 'u_adminA' WHERE "id" = 'cg_2'`,
+      );
+      // No context at all: nothing.
+      await q(`SELECT app.set_context('','')`);
+      s.no_ctx_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      return s;
+    },
+    {
+      value: {
+        own_insert: 1,
+        own_scoped: 1,
+        other_insert: "42501",
+        own_reads: 2,
+        admin_reads: 0,
+        admin_revokes: 0,
+        admin_deletes: 0,
+        admin_steals: 0,
+        user_ctx_reads: 2,
+        user_ctx_revokes: 1,
+        give_away: "42501",
+        no_ctx_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CONN-02",
+    "app.connector_spaces: the caller's own spaces with each club's switch, which only an admin changes",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_switches_off = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "connectorsEnabled" = false WHERE "organizationId" = 'org_A'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_switches_off = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "connectorsEnabled" = false WHERE "organizationId" = 'org_A'`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','')`);
+      s.both = (
+        await q(
+          `SELECT "organizationId" || ':' || "connectorsEnabled" AS v FROM app.connector_spaces()
+            WHERE "organizationId" IN ('org_A','org_B') ORDER BY 1`,
+        )
+      ).rows.map((r) => r.v);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.member_b = (
+        await q(`SELECT "organizationId" AS v FROM app.connector_spaces() ORDER BY 1`)
+      ).rows.map((r) => r.v);
+      await q(`SELECT app.set_context('','')`);
+      s.no_ctx = await count(q, `SELECT count(*) n FROM app.connector_spaces()`);
+      return s;
+    },
+    {
+      value: {
+        member_switches_off: 0,
+        admin_switches_off: 1,
+        both: ["org_A:false", "org_B:true"],
+        member_b: ["org_B"],
+        no_ctx: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CONN-03",
+    "connector functions: connector_spaces for app_user, revoke_connector_grants for app_auth, nothing for PUBLIC",
+    "owner",
+    null,
+    async (q) =>
+      (
+        await q(`SELECT r || ':' || f AS p FROM
+                   unnest(ARRAY['app_user','app_service','app_auth','public']) r,
+                   unnest(ARRAY['app.connector_spaces()','app.revoke_connector_grants(text)']) f
+                 WHERE has_function_privilege(r, f, 'EXECUTE') ORDER BY 1`)
+      ).rows.map((r) => r.p),
+    { value: ["app_auth:app.revoke_connector_grants(text)", "app_user:app.connector_spaces()"] },
+  );
+  await tcase(
+    "P-CONN-04",
+    "app.revoke_connector_grants runs for app_auth (no tenant context) and is refused to app_user",
+    "app_auth",
+    null,
+    async (q) => ({
+      auth_runs: await count(q, `SELECT count(*) n FROM app.revoke_connector_grants('u_memberA')`),
+      auth_reads_table: await tryq(q, `SELECT 1 FROM "ConnectorGrant"`),
+    }),
+    { value: { auth_runs: 0, auth_reads_table: "42501" } },
+  );
+  await tcase(
+    "P-CONN-05",
+    "app_user cannot call the identity plane's revoke",
+    "app_user",
+    A("u_memberA"),
+    async (q) => tryv(q, `SELECT count(*) FROM app.revoke_connector_grants('u_adminA')`),
+    { value: "error:42501" },
   );
 
   await own(`DELETE FROM "Organization" WHERE "id" IN ('org_PA','org_PB','org_PM')`);
