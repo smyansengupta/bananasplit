@@ -140,6 +140,48 @@ describe("authorization: events are ADMIN+", () => {
   });
 });
 
+describe("how to find the place", () => {
+  it("passes a new event's directions to the service as they were sent", async () => {
+    await createEvent(ORG, { ...timed, location: "Curry 344", locationDetails: "Second floor." });
+    expect(service.createEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ location: "Curry 344", locationDetails: "Second floor." }),
+    );
+  });
+
+  it("passes a null through, which is how the form clears them", async () => {
+    await createEvent(ORG, { ...timed, locationDetails: null });
+    expect(service.createEvent.mock.calls[0]![1]).toHaveProperty("locationDetails", null);
+  });
+
+  it("names none when the form sent none", async () => {
+    await createEvent(ORG, timed);
+    expect(service.createEvent.mock.calls[0]![1]).not.toHaveProperty("locationDetails");
+  });
+
+  it("changes an event's directions only when the patch names them", async () => {
+    await updateEvent(ORG, "evt_1", { locationDetails: "Ring the bell." });
+    expect(service.updateEvent).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "evt_1",
+      expect.objectContaining({ locationDetails: "Ring the bell." }),
+    );
+    await updateEvent(ORG, "evt_1", { title: "Renamed" });
+    expect(service.updateEvent.mock.calls[1]![2]).not.toHaveProperty("locationDetails");
+  });
+
+  it("refuses more than 1,000 characters", async () => {
+    expect(
+      (await createEvent(ORG, { ...timed, locationDetails: "x".repeat(1001) })).error,
+    ).toBeTruthy();
+    expect(service.createEvent).not.toHaveBeenCalled();
+    expect(
+      (await updateEvent(ORG, "evt_1", { locationDetails: "x".repeat(1001) })).error,
+    ).toBeTruthy();
+    expect(service.updateEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe("reminders", () => {
   it("passes a new event's reminder offsets to the service as they were sent", async () => {
     await createEvent(ORG, { ...timed, reminderMinutes: [60, 1440] });

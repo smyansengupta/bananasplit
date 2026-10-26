@@ -1,8 +1,16 @@
 "use client";
 
-import { ChevronDown, Globe, Ticket, TriangleAlert } from "@/components/icons";
+import {
+  ChevronDown,
+  Globe,
+  MapPin,
+  Ticket,
+  TriangleAlert,
+  Video,
+  type IconComponent,
+} from "@/components/icons";
 import { useParams, useRouter } from "next/navigation";
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 
 import { createEvent, deleteEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { turnOnRsvpPage } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
@@ -31,6 +39,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { allDaySpan } from "@/lib/calendar/dates";
 import { DEFAULT_REMINDER_MINUTES, sameReminderOffsets } from "@/lib/meetings/reminders";
+import { SHAPES, SHAPE_META, shapeFields, type MeetingShape } from "@/lib/meetings/shape";
 import { cn } from "@/lib/utils";
 
 import { ConferencePicker } from "@/components/meetings/conference-picker";
@@ -57,6 +66,12 @@ import { toDateInputValue, toDateTimeLocalValue } from "./utils";
  *   visible without doing the arithmetic.
  * - The disclosure opens itself when an event already uses anything inside
  *   it, so editing never hides a filled-in field.
+ * - A NEW event starts by picking its shape (online, in person or event), which
+ *   decides whether the form asks for a place, a call or both, and whether a
+ *   sign-up page is turned on when it is saved. The answers to a question the
+ *   shape does not ask are kept while the form is open, so switching back finds
+ *   them, but Save never sends them. EDITING asks everything, so a meeting
+ *   can gain a call or a place later.
  */
 
 /** The event as the form edits it (serializable from a server component). */
@@ -68,6 +83,8 @@ export interface EventFormEvent {
   endsAt: Date;
   allDay: boolean;
   location: string | null;
+  /** How to find the place ("Second floor, past the elevators"). */
+  locationDetails: string | null;
   conferenceProvider: ConferenceProvider;
   conferenceUrl: string | null;
   /** True when Bananasplit made this meeting at the provider. */
@@ -95,8 +112,17 @@ interface Props {
   event: EventFormEvent | null;
   defaultStart?: Date | null;
   defaultAllDay?: boolean;
-  /** A new event starts with "Take RSVPs with a public page" switched on. */
+  /**
+   * A new event starts as the Event shape, which turns a public sign-up page
+   * on. For callers that do not pass `defaultShape`.
+   */
   defaultRsvpPage?: boolean;
+  /**
+   * The shape a new event starts as. Left out, In person, or Event when
+   * `defaultRsvpPage` is set. An existing event has no shape: editing asks
+   * every question.
+   */
+  defaultShape?: MeetingShape;
   /**
    * The organization's reminder times (OrgSettings.meetingReminderMinutes): a
    * new event starts with them, and an event whose own differ opens "More
@@ -129,6 +155,15 @@ export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...re
 
 const NO_HOST = "__none";
 const GUEST_HOST = "__guest";
+
+const SHAPE_ICON: Record<MeetingShape, IconComponent> = {
+  online: Video,
+  "in-person": MapPin,
+  event: Ticket,
+};
+
+/** An existing event is asked everything, and never turns a sign-up page on from here. */
+const EDIT_FIELDS = { place: true, call: true, signUp: false } as const;
 
 function initialTimes(
   event: EventFormEvent | null,
@@ -175,6 +210,7 @@ function EventForm({
   defaultStart,
   defaultAllDay,
   defaultRsvpPage,
+  defaultShape,
   defaultReminderMinutes = [...DEFAULT_REMINDER_MINUTES],
   members,
   onSaved,
@@ -203,7 +239,11 @@ function EventForm({
   );
   const [startValue, setStartValue] = useState(initial.start);
   const [endValue, setEndValue] = useState(initial.end);
+  const [shape, setShape] = useState<MeetingShape>(
+    defaultShape ?? (defaultRsvpPage ? "event" : "in-person"),
+  );
   const [location, setLocation] = useState(event?.location ?? "");
+  const [locationDetails, setLocationDetails] = useState(event?.locationDetails ?? "");
   const [provider, setProvider] = useState<ConferenceProvider>(
     event?.conferenceProvider ?? ConferenceProvider.NONE,
   );
@@ -224,11 +264,14 @@ function EventForm({
   );
   const [notifyAttendees, setNotifyAttendees] = useState(true);
   const [showMore, setShowMore] = useState(() => usesMoreDetails(event, defaultReminderMinutes));
-  // New events only: also turn on a public RSVP page and go set it up.
-  const [withRsvpPage, setWithRsvpPage] = useState(defaultRsvpPage ?? false);
   const params = useParams<{ orgSlug?: string }>();
 
   const isPublic = visibility === EventVisibility.PUBLIC;
+  // What this form asks. A new event asks what its shape asks, and the Event
+  // shape is the one that also turns a public sign-up page on and goes to set
+  // it up. Whatever was typed for a question that is not asked is not sent.
+  const fields = event ? EDIT_FIELDS : shapeFields(shape);
+  const callProvider = fields.call ? provider : ConferenceProvider.NONE;
 
   function toggleAllDay(next: boolean) {
     setAllDay(next);
@@ -269,9 +312,10 @@ function EventForm({
       // All-day: the first and last day; timed: the browser's wall time as an instant.
       startsAt: allDay ? startValue : new Date(startValue).toISOString(),
       endsAt: allDay ? endValue : new Date(endValue).toISOString(),
-      location: location || null,
-      conferenceProvider: provider,
-      conferenceUrl: provider === ConferenceProvider.NONE ? null : conferenceUrl || null,
+      location: fields.place ? location || null : null,
+      locationDetails: fields.place ? locationDetails || null : null,
+      conferenceProvider: callProvider,
+      conferenceUrl: callProvider === ConferenceProvider.NONE ? null : conferenceUrl || null,
       kind,
       visibility,
       hostUserId: host !== NO_HOST && host !== GUEST_HOST ? host : null,
@@ -310,7 +354,7 @@ function EventForm({
         setError(result.error);
         return;
       }
-      if (!event && withRsvpPage && result.eventId && params.orgSlug) {
+      if (!event && fields.signUp && result.eventId && params.orgSlug) {
         const page = await turnOnRsvpPage(orgId, result.eventId);
         onOpenChange(false);
         // The event exists either way; the RSVP screen offers the page again if this failed.
@@ -361,6 +405,8 @@ function EventForm({
       </DialogHeader>
 
       <div className="space-y-4">
+        {!event && <ShapePicker value={shape} onChange={setShape} />}
+
         <div className="grid gap-1.5">
           <Label htmlFor="event-title">Title</Label>
           <Input
@@ -474,41 +520,38 @@ function EventForm({
           </p>
         </fieldset>
 
-        <div className="grid gap-1.5">
-          <Label htmlFor="event-location">
-            {provider === ConferenceProvider.NONE ? "Location" : "Location (optional)"}
-          </Label>
-          <Input
-            id="event-location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder={
-              provider === ConferenceProvider.NONE
-                ? "Room, address, or leave blank"
-                : "Add a room too, for anyone coming in person"
-            }
-            maxLength={300}
-          />
-        </div>
+        {fields.place && (
+          <>
+            <div className="grid gap-1.5">
+              <Label htmlFor="event-location">
+                {callProvider === ConferenceProvider.NONE ? "Location" : "Location (optional)"}
+              </Label>
+              <Input
+                id="event-location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder={
+                  callProvider === ConferenceProvider.NONE
+                    ? "Room, address, or leave blank"
+                    : "Add a room too, for anyone coming in person"
+                }
+                maxLength={300}
+              />
+            </div>
 
-        {!event && (
-          <label
-            htmlFor="event-rsvp-page"
-            className={cn(
-              "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-              withRsvpPage ? "border-primary bg-primary/5" : "hover:bg-muted/50",
-            )}
-          >
-            <Ticket aria-hidden className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-            <span className="min-w-0 flex-1 space-y-0.5">
-              <span className="block text-sm font-medium">Take RSVPs with a public page</span>
-              <span className="text-muted-foreground block text-xs leading-relaxed">
-                Anyone with the link signs up with their name, email and phone. You&apos;ll set the
-                spots, cover and privacy next.
-              </span>
-            </span>
-            <Switch id="event-rsvp-page" checked={withRsvpPage} onCheckedChange={setWithRsvpPage} />
-          </label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="event-location-details">How to find it</Label>
+              <Textarea
+                id="event-location-details"
+                value={locationDetails}
+                onChange={(e) => setLocationDetails(e.target.value)}
+                rows={2}
+                maxLength={1000}
+                className="min-h-16"
+                placeholder="e.g. Second floor, past the elevators"
+              />
+            </div>
+          </>
         )}
 
         {/*
@@ -516,14 +559,16 @@ function EventForm({
           should be. One menu, so the answer is one click and the form does
           not open with five provider buttons across it.
         */}
-        <ConferencePicker
-          orgId={orgId}
-          provider={provider}
-          onProviderChange={setProvider}
-          conferenceUrl={conferenceUrl}
-          onUrlChange={setConferenceUrl}
-          managed={event?.conferenceManaged ?? false}
-        />
+        {fields.call && (
+          <ConferencePicker
+            orgId={orgId}
+            provider={provider}
+            onProviderChange={setProvider}
+            conferenceUrl={conferenceUrl}
+            onUrlChange={setConferenceUrl}
+            managed={event?.conferenceManaged ?? false}
+          />
+        )}
 
         <div>
           <button
@@ -719,6 +764,78 @@ function EventForm({
         </div>
       </DialogFooter>
     </form>
+  );
+}
+
+/**
+ * The shape of a new meeting: three cards, one chosen, a radio group's
+ * keyboard. Tab reaches the chosen card only, and the arrow keys move the
+ * choice (and focus) to the next or the one before, wrapping round.
+ */
+function ShapePicker({
+  value,
+  onChange,
+}: {
+  value: MeetingShape;
+  onChange: (next: MeetingShape) => void;
+}) {
+  const id = useId();
+  const cards = useRef<Partial<Record<MeetingShape, HTMLButtonElement | null>>>({});
+
+  function onKeyDown(keyEvent: React.KeyboardEvent, index: number) {
+    if (keyEvent.altKey || keyEvent.ctrlKey || keyEvent.metaKey) return;
+    const step =
+      keyEvent.key === "ArrowRight" || keyEvent.key === "ArrowDown"
+        ? 1
+        : keyEvent.key === "ArrowLeft" || keyEvent.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (step === 0) return;
+    keyEvent.preventDefault();
+    const next = SHAPES[(index + step + SHAPES.length) % SHAPES.length]!;
+    onChange(next);
+    cards.current[next]?.focus();
+  }
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Kind of meeting"
+      className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+    >
+      {SHAPES.map((shape, index) => {
+        const selected = shape === value;
+        const Icon = SHAPE_ICON[shape];
+        return (
+          <button
+            key={shape}
+            ref={(node) => {
+              cards.current[shape] = node;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-labelledby={`${id}-${shape}-label`}
+            aria-describedby={`${id}-${shape}-hint`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(shape)}
+            onKeyDown={(keyEvent) => onKeyDown(keyEvent, index)}
+            className={cn(
+              "focus-visible:outline-foreground flex min-w-0 flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
+              selected ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+            )}
+          >
+            <span className="flex items-center gap-1.5 text-sm font-medium">
+              <Icon aria-hidden className="text-muted-foreground size-4 shrink-0" />
+              <span id={`${id}-${shape}-label`}>{SHAPE_META[shape].label}</span>
+            </span>
+            <span id={`${id}-${shape}-hint`} className="text-muted-foreground text-xs leading-snug">
+              {SHAPE_META[shape].hint}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

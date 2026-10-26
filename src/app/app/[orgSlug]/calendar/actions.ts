@@ -45,6 +45,8 @@ const eventFormSchema = z.object({
   startsAt: z.string().min(1).max(40),
   endsAt: z.string().min(1).max(40),
   location: z.string().max(300).nullish(),
+  /** How to find the place. The sign-up page's settings write it too, with the same cap. */
+  locationDetails: z.string().max(1000).nullish(),
   conferenceProvider: z.enum(ConferenceProvider).optional(),
   conferenceUrl: z.string().max(2000).nullish(),
   kind: z.enum(EventKind).optional(),
@@ -117,6 +119,7 @@ function serviceFields(data: z.infer<typeof eventPatchSchema>) {
   if (data.title !== undefined) out.title = data.title;
   if (data.description !== undefined) out.description = data.description;
   if (data.location !== undefined) out.location = data.location;
+  if (data.locationDetails !== undefined) out.locationDetails = data.locationDetails;
   if (data.conferenceProvider !== undefined) out.conferenceProvider = data.conferenceProvider;
   if (data.conferenceUrl !== undefined) out.conferenceUrl = data.conferenceUrl;
   if (data.kind !== undefined) out.kind = data.kind;

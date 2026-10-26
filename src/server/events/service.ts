@@ -128,6 +128,8 @@ const eventFields = {
   endsAt: z.coerce.date(),
   allDay: z.boolean(),
   location: optionalText(300),
+  /** How to find the place ("Second floor, past the elevators"). The sign-up page shows it too. */
+  locationDetails: optionalText(1000),
   conferenceProvider: z.enum(ConferenceProvider),
   conferenceUrl: optionalText(2000),
   kind: z.enum(EventKind),
@@ -177,6 +179,7 @@ export const EVENT_SELECT = {
   endsAt: true,
   allDay: true,
   location: true,
+  locationDetails: true,
   conferenceProvider: true,
   conferenceUrl: true,
   kind: true,

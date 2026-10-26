@@ -183,6 +183,34 @@ describe("event service", () => {
     ).rejects.toThrow(/member/);
   });
 
+  it("stores how to find the place trimmed, none when it is empty, and refuses more than 1,000 characters", async () => {
+    const { ctx, saved } = makeCtx({});
+    await createEvent(ctx, {
+      ...base,
+      location: "Curry 344",
+      locationDetails: "  Second floor.  ",
+    });
+    expect(saved[0]).toMatchObject({ location: "Curry 344", locationDetails: "Second floor." });
+
+    await createEvent(ctx, { ...base, locationDetails: "   " });
+    expect(saved[1]!.locationDetails).toBeNull();
+    await createEvent(ctx, { ...base, locationDetails: "x".repeat(1000) });
+    expect(saved[2]!.locationDetails).toBe("x".repeat(1000));
+    await expect(
+      createEvent(ctx, { ...base, locationDetails: "x".repeat(1001) }),
+    ).rejects.toBeInstanceOf(EventValidationError);
+  });
+
+  it("a patch changes how to find the place only when it names it, and can clear it", async () => {
+    const { ctx, saved } = makeCtx({ existing: { ...existing, locationDetails: "Second floor." } });
+    await updateEvent(ctx, "evt_1", { title: "Renamed" });
+    expect(saved[0]).not.toHaveProperty("locationDetails");
+    await updateEvent(ctx, "evt_1", { locationDetails: "Ring the bell." });
+    expect(saved[1]!.locationDetails).toBe("Ring the bell.");
+    await updateEvent(ctx, "evt_1", { locationDetails: null });
+    expect(saved[2]!.locationDetails).toBeNull();
+  });
+
   it("a new event takes the org's reminder default, or one day and one hour with no settings row", async () => {
     const withDefault = makeCtx({ orgReminders: [30] });
     await createEvent(withDefault.ctx, base);

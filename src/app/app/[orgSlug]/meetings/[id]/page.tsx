@@ -91,6 +91,7 @@ export default async function MeetingPage({
         endsAt: event.endsAt,
         allDay: event.allDay,
         location: event.location,
+        locationDetails: event.locationDetails,
         conferenceProvider: event.conferenceProvider,
         conferenceUrl: event.conferenceUrl,
         conferenceManaged: event.conferenceManaged,

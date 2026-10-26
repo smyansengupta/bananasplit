@@ -30,8 +30,8 @@ in the club's People and Attendance databases.
     taking sign-ups, each opening its public page. Everyone sees their own
     tickets there too (in Personal, from every space).
   - Each event's page has an **RSVP page** card.
-  - _New event_ has **Take RSVPs with a public page**, which creates the
-    page and opens its settings.
+  - _New event_ starts by picking **Online**, **In person** or **Event**.
+    An Event also creates the public page and opens its settings.
   - The management screen (`/app/{slug}/meetings/{id}/rsvp`; the old
     `/calendar/{id}/rsvp` redirects there) has two tabs:
     - **Guests:** search, filter, check-in, move guests between going and

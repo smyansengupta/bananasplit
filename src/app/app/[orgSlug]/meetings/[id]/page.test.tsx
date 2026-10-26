@@ -165,6 +165,12 @@ describe("the meeting page: what it passes on", () => {
     expect(props.canEdit).toBe(true);
   });
 
+  it("gives the edit form the directions too, so saving the form does not blank them", async () => {
+    const { props } = await page();
+
+    expect(props.event.locationDetails).toBe("Second floor.");
+  });
+
   it("offers no map link for a meeting with no place", async () => {
     mocks.getEventById.mockResolvedValue(stored({ location: null, locationDetails: null }));
 

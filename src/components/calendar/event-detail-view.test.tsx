@@ -54,6 +54,7 @@ function event(overrides: Partial<EventDetail> = {}): EventDetail {
     endsAt: new Date("2026-11-02T23:00:00Z"),
     allDay: false,
     location: null,
+    locationDetails: null,
     conferenceProvider: "ZOOM",
     conferenceUrl: JOIN,
     kind: "BOARD_MEETING",

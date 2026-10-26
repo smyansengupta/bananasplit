@@ -57,6 +57,7 @@ export default async function EventDetailPage({
         endsAt: event.endsAt,
         allDay: event.allDay,
         location: event.location,
+        locationDetails: event.locationDetails,
         conferenceProvider: event.conferenceProvider,
         conferenceUrl: event.conferenceUrl,
         kind: event.kind,
