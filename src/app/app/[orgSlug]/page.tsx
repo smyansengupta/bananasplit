@@ -482,15 +482,10 @@ export default async function OrgOverviewPage({
   };
 
   const greetingBlock = (
-    <div>
-      <h1 className="page-title">
-        {greeting(now, timeZone)}
-        {data.firstName ? `, ${data.firstName}` : ""}
-      </h1>
-      <p className="text-muted-foreground mt-2 text-[15px]">
-        {dateLine}, {org.name}
-      </p>
-    </div>
+    <h1 className="page-title">
+      {greeting(now, timeZone)}
+      {data.firstName ? `, ${data.firstName}` : ""}
+    </h1>
   );
 
   return (
@@ -503,6 +498,7 @@ export default async function OrgOverviewPage({
         bodies={bodies}
         headerActions={headerActions}
         intro={greetingBlock}
+        introDescription={`${dateLine}, ${org.name}`}
         stats={
           <div className="space-y-[30px]">
             {stats}

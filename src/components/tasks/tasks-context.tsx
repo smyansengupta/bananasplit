@@ -19,6 +19,7 @@ import { NewTaskDialog } from "./new-task-dialog";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import type { TaskEditorDefaults } from "./task-editor";
 import type {
+  FileOption,
   LabelOption,
   MemberOption,
   ParentOption,
@@ -47,6 +48,8 @@ interface TasksContextValue {
   members: MemberOption[];
   memberById: Map<string, MemberOption>;
   labels: LabelOption[];
+  /** The club's files, for the `/` picker in a title or a description. */
+  files: FileOption[];
   /** Live epics and stories (what work can be part of). */
   parents: ParentOption[];
   /** The epics alone, done ones last. */
@@ -76,6 +79,7 @@ export function TasksProvider({
   viewer,
   members,
   labels,
+  files = [],
   parents,
   can,
   children,
@@ -84,6 +88,8 @@ export function TasksProvider({
   viewer: TasksViewer;
   members: MemberOption[];
   labels: LabelOption[];
+  /** The club's files (none passed: the `/` picker has nothing to offer). */
+  files?: FileOption[];
   parents: ParentOption[];
   /** The club's creation rules for this viewer (admins only when left out). */
   can?: TasksCan;
@@ -164,6 +170,7 @@ export function TasksProvider({
       members,
       memberById: new Map(members.map((m) => [m.id, m])),
       labels: allLabels,
+      files,
       parents: allParents,
       epics,
       parentById: new Map(allParents.map((p) => [p.id, p])),
@@ -181,6 +188,7 @@ export function TasksProvider({
       viewer,
       members,
       allLabels,
+      files,
       allParents,
       epics,
       can,

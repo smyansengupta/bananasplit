@@ -9,7 +9,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  * "Bring anything in?" against the real roles, policies and
  * app.move_personal_items on the local database: what a Personal space
  * lists, the move, and that every public link still resolves from the club
- * (the RSVP page, a ticket, an availability poll with its responses).
+ * (the RSVP page, a ticket, an availability poll with its responses), and
+ * Files: a folder, a note with sub-pages and an image, uploads whose bytes
+ * are copied into the club's storage, history and comments.
  * Throwaway users, their Personal spaces and a club are made here and
  * removed in afterAll. Skipped when the database is not reachable, like the
  * other *.db.test.ts files.
@@ -20,9 +22,12 @@ vi.mock("@/lib/auth/session", () => ({ requireUser: requireUserMock, getSession:
 vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 
 import { pollOrgId } from "@/app/poll/[pollId]/poll-org";
+import { noteStateToContent, seedNoteState } from "@/lib/collab/note-doc";
 import { authDb, disconnectAll } from "@/server/db/clients";
+import { openNoteFile, storeNoteFile } from "@/server/notes/files";
 import { loadRsvpPage, rsvpPageTarget } from "@/server/rsvp/page";
 import { loadTicket } from "@/server/rsvp/ticket";
+import { deleteBlobs, getBlob } from "@/server/storage";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 
 import { bringableIds, clubsUserRuns, loadBringable, movePersonalItems } from "./move";
@@ -54,7 +59,41 @@ const ids = {
   subtask: `t_bring_sub_${tag}`,
   doneTask: `t_bring_done_${tag}`,
   label: `l_bring_${tag}`,
+  trips: `fo_bring_trips_${tag}`,
+  docs: `fo_bring_docs_${tag}`,
+  clubDocs: `fo_bring_cdocs_${tag}`,
+  note: `n_bring_${tag}`,
+  subpage: `n_bring_sub_${tag}`,
+  trashedSubpage: `n_bring_trash_${tag}`,
+  tripNote: `n_bring_trip_${tag}`,
+  version: `nv_bring_${tag}`,
+  comment: `nc_bring_${tag}`,
 };
+/** Uploads, made through the upload path in beforeAll. */
+const up = { image: "", tripFile: "", loose: "" };
+/** Every storage key the test wrote, for afterAll. */
+const keys: string[] = [];
+// A 1x1 PNG: the image a note shows.
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+const imageDoc = (orgId: string, fileId: string) => ({
+  type: "doc",
+  content: [
+    { type: "paragraph", content: [{ type: "text", text: "Pack light" }] },
+    { type: "image", attrs: { src: `/api/orgs/${orgId}/files/${fileId}`, alt: "map", fileId } },
+  ],
+});
+const storageUsed = async (orgId: string) =>
+  Number(
+    (
+      await ownerDb.organization.findUniqueOrThrow({
+        where: { id: orgId },
+        select: { storageUsedBytes: true },
+      })
+    ).storageUsedBytes,
+  );
 const rsvpSlug = code(8);
 const ticketCode = code(12);
 
@@ -207,6 +246,103 @@ beforeAll(async () => {
       data: { organizationId: spaceId, taskId: ids.task, labelId: ids.label },
     });
     requireUserMock.mockResolvedValue(maya);
+
+    // Files: "Trips" (picked: the club has none), "Docs" (the club has "docs").
+    await ownerDb.noteFolder.createMany({
+      data: [
+        {
+          id: ids.trips,
+          organizationId: spaceId,
+          name: "Trips",
+          color: "chart-2",
+          createdById: maya.id,
+        },
+        { id: ids.docs, organizationId: spaceId, name: "Docs", createdById: maya.id },
+        { id: ids.clubDocs, organizationId: clubId, name: "docs", createdById: maya.id },
+      ],
+    });
+    const stored = async (name: string, bytes: Buffer, folderId: string | null) => {
+      const row = await storeNoteFile({
+        orgId: spaceId,
+        bytes,
+        filename: name,
+        visibility: "PRIVATE",
+        folderId,
+      });
+      keys.push((await ownerDb.orgFile.findUniqueOrThrow({ where: { id: row.id } })).storageKey);
+      return row.id;
+    };
+    up.image = await stored("map.png", PNG, null);
+    up.tripFile = await stored("tickets.txt", Buffer.from("seat 12A\n"), ids.trips);
+    up.loose = await stored("lease.txt", Buffer.from("rent is due\n"), null);
+    const body = imageDoc(spaceId, up.image);
+    await ownerDb.note.create({
+      data: {
+        id: ids.note,
+        organizationId: spaceId,
+        title: "Packing list",
+        contentJson: body,
+        contentText: "Pack light",
+        // A live document, as after live editing: the move rewrites its link too.
+        yjsState: new Uint8Array(seedNoteState(body)),
+        authorId: maya.id,
+        updatedById: maya.id,
+        folderId: ids.docs,
+      },
+    });
+    await ownerDb.note.createMany({
+      data: [
+        {
+          id: ids.subpage,
+          organizationId: spaceId,
+          parentId: ids.note,
+          title: "Day one",
+          contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+          contentText: "",
+          authorId: maya.id,
+          updatedById: maya.id,
+        },
+        {
+          id: ids.trashedSubpage,
+          organizationId: spaceId,
+          parentId: ids.note,
+          title: "Old plan",
+          contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+          contentText: "",
+          authorId: maya.id,
+          updatedById: maya.id,
+          deletedAt: new Date(),
+        },
+        {
+          id: ids.tripNote,
+          organizationId: spaceId,
+          title: "Itinerary",
+          contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+          contentText: "",
+          authorId: maya.id,
+          updatedById: maya.id,
+          folderId: ids.trips,
+        },
+      ],
+    });
+    await ownerDb.noteVersion.create({
+      data: {
+        id: ids.version,
+        organizationId: spaceId,
+        noteId: ids.note,
+        contentJson: body,
+        createdById: maya.id,
+      },
+    });
+    await ownerDb.noteComment.create({
+      data: {
+        id: ids.comment,
+        organizationId: spaceId,
+        noteId: ids.note,
+        authorId: maya.id,
+        body: "Bring a map",
+      },
+    });
   } catch (error) {
     console.warn("move.db.test: database not reachable, skipping", error);
     reachable = false;
@@ -215,6 +351,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (reachable) {
+    const moved = await ownerDb.orgFile.findMany({
+      where: { id: { in: Object.values(up).filter(Boolean) } },
+      select: { storageKey: true },
+    });
+    await deleteBlobs([...keys, ...moved.map((f) => f.storageKey)]).catch(() => undefined);
     await ownerDb.organization.deleteMany({ where: { id: { in: [clubId, otherClubId] } } });
     if (spaceId) await ownerDb.organization.deleteMany({ where: { id: spaceId } });
     await ownerDb.user.deleteMany({
@@ -250,6 +391,20 @@ describe("Bring anything in? against the local database", () => {
     expect(bringableIds(b!).has(ids.doneTask)).toBe(false);
   });
 
+  it("lists folders, top-level notes and the uploads no note shows", async () => {
+    if (!reachable) return;
+    const b = await loadBringable(maya.id);
+    expect(b!.folders.map((f) => [f.name, f.notes, f.files])).toEqual([
+      ["Docs", 1, 0],
+      ["Trips", 1, 1],
+    ]);
+    const packing = b!.notes.find((n) => n.id === ids.note);
+    // The trashed sub-page doesn't count; the image the note shows comes along.
+    expect(packing).toMatchObject({ folder: "Docs", subpages: 1, files: 1 });
+    expect(b!.notes.map((n) => n.id).sort()).toEqual([ids.note, ids.tripNote].sort());
+    expect(b!.files.map((f) => f.id).sort()).toEqual([up.tripFile, up.loose].sort());
+  });
+
   it("lists only the clubs the user owns or runs", async () => {
     if (!reachable) return;
     expect((await clubsUserRuns(maya.id)).map((c) => c.id)).toEqual([clubId]);
@@ -277,7 +432,7 @@ describe("Bring anything in? against the local database", () => {
     });
     expect(result).toEqual({
       ok: true,
-      moved: { events: 1, polls: 1, questionPolls: 0, tasks: 2 },
+      moved: { events: 1, polls: 1, questionPolls: 0, tasks: 2, notes: 0, folders: 0, files: 0 },
     });
 
     // The public RSVP page and the guest's ticket, from the club.
@@ -338,5 +493,127 @@ describe("Bring anything in? against the local database", () => {
     if (!reachable) return;
     const again = await movePersonalItems(maya.id, clubId, { eventIds: [ids.rsvpEvent] });
     expect(again).toMatchObject({ ok: false });
+  });
+
+  it("moves a folder and a note with what comes along, copying the uploads into the club", async () => {
+    if (!reachable) return;
+    const files = await ownerDb.orgFile.findMany({
+      where: { id: { in: [up.image, up.tripFile] } },
+      select: { id: true, storageKey: true, sizeBytes: true },
+    });
+    const history = (await ownerDb.noteVersion.findUniqueOrThrow({ where: { id: ids.version } }))
+      .sizeBytes;
+    const fileBytes = files.reduce((n, f) => n + f.sizeBytes, 0);
+    const [clubBefore, spaceBefore] = [await storageUsed(clubId), await storageUsed(spaceId)];
+
+    const result = await movePersonalItems(maya.id, clubId, {
+      noteIds: [ids.note],
+      folderIds: [ids.trips],
+    });
+    expect(result).toEqual({
+      ok: true,
+      moved: { events: 0, polls: 0, questionPolls: 0, tasks: 0, notes: 3, folders: 1, files: 2 },
+    });
+
+    // "Trips" moved itself (id kept); "Docs" matched the club's "docs" and stays in Personal.
+    const trips = await ownerDb.noteFolder.findUniqueOrThrow({ where: { id: ids.trips } });
+    expect([trips.organizationId, trips.name, trips.color]).toEqual([clubId, "Trips", "chart-2"]);
+    expect(
+      (await ownerDb.noteFolder.findUniqueOrThrow({ where: { id: ids.docs } })).organizationId,
+    ).toBe(spaceId);
+
+    const notes = await ownerDb.note.findMany({
+      where: { id: { in: [ids.note, ids.subpage, ids.trashedSubpage, ids.tripNote] } },
+      select: {
+        id: true,
+        organizationId: true,
+        parentId: true,
+        folderId: true,
+        visibility: true,
+        contentJson: true,
+        yjsState: true,
+        version: true,
+      },
+    });
+    const note = (id: string) => notes.find((n) => n.id === id)!;
+    expect(note(ids.note)).toMatchObject({
+      organizationId: clubId,
+      folderId: ids.clubDocs,
+      visibility: "PRIVATE",
+      version: 2,
+    });
+    expect(note(ids.subpage)).toMatchObject({ organizationId: clubId, parentId: ids.note });
+    expect(note(ids.tripNote)).toMatchObject({ organizationId: clubId, folderId: ids.trips });
+    // The trashed sub-page stays in Personal's trash, at the top level.
+    expect(note(ids.trashedSubpage)).toMatchObject({ organizationId: spaceId, parentId: null });
+
+    // The image links to the club, in the body, the live document and the history.
+    const clubLink = `/api/orgs/${clubId}/files/${up.image}`;
+    expect(JSON.stringify(note(ids.note).contentJson)).toContain(clubLink);
+    expect(JSON.stringify(note(ids.note).contentJson)).not.toContain(`/api/orgs/${spaceId}/`);
+    const live = noteStateToContent(new Uint8Array(note(ids.note).yjsState!));
+    expect(JSON.stringify(live.json)).toContain(clubLink);
+    expect(live.text).toContain("Pack light");
+    const version = await ownerDb.noteVersion.findUniqueOrThrow({ where: { id: ids.version } });
+    expect(version.organizationId).toBe(clubId);
+    expect(JSON.stringify(version.contentJson)).toContain(clubLink);
+    expect(
+      (await ownerDb.noteComment.findUniqueOrThrow({ where: { id: ids.comment } })).organizationId,
+    ).toBe(clubId);
+
+    // The uploads: in the club, private to Maya, their bytes under the club's id.
+    const after = await ownerDb.orgFile.findMany({
+      where: { id: { in: [up.image, up.tripFile, up.loose] } },
+      select: {
+        id: true,
+        organizationId: true,
+        storageKey: true,
+        visibility: true,
+        folderId: true,
+      },
+    });
+    const file = (id: string) => after.find((f) => f.id === id)!;
+    for (const id of [up.image, up.tripFile]) {
+      expect(file(id)).toMatchObject({ organizationId: clubId, visibility: "PRIVATE" });
+      expect(file(id).storageKey.startsWith(`files/${clubId}/`)).toBe(true);
+      expect(await getBlob(file(id).storageKey)).not.toBeNull();
+      expect(await getBlob(files.find((f) => f.id === id)!.storageKey)).toBeNull();
+    }
+    expect(file(up.tripFile).folderId).toBe(ids.trips);
+    expect(file(up.loose).organizationId).toBe(spaceId);
+    const opened = await openNoteFile(clubId, up.image);
+    expect(opened?.row.contentType).toBe("image/png");
+
+    // Their bytes and the history count in the club now, not in Personal
+    // (the version's size changed with its link: the ids differ in length).
+    expect(version.sizeBytes).toBe(history + clubId.length - spaceId.length);
+    expect(await storageUsed(clubId)).toBe(clubBefore + fileBytes + version.sizeBytes);
+    expect(await storageUsed(spaceId)).toBe(spaceBefore - fileBytes - history);
+
+    const b = await loadBringable(maya.id);
+    expect(b!.notes).toEqual([]);
+    expect(b!.folders.map((f) => f.name)).toEqual(["Docs"]);
+    expect(b!.files.map((f) => f.id)).toEqual([up.loose]);
+  });
+
+  it("refuses uploads the club has no room for, and moves nothing", async () => {
+    if (!reachable) return;
+    const size = (await ownerDb.orgFile.findUniqueOrThrow({ where: { id: up.loose } })).sizeBytes;
+    // Fill the club to its last few bytes (the counter is the database's; the owner may set it).
+    const { limitBytes } = (await import("@/lib/billing/storage")).storageState(
+      await ownerDb.organization.findUniqueOrThrow({ where: { id: clubId } }),
+    );
+    const real = await storageUsed(clubId);
+    await ownerDb.$executeRaw`UPDATE "Organization" SET "storageUsedBytes" = ${BigInt(limitBytes - size + 1)} WHERE "id" = ${clubId}`;
+    try {
+      const result = await movePersonalItems(maya.id, clubId, { fileIds: [up.loose] });
+      expect(result).toMatchObject({ ok: false });
+      expect((result as { error: string }).error).toContain("doesn't have room");
+      expect(
+        (await ownerDb.orgFile.findUniqueOrThrow({ where: { id: up.loose } })).organizationId,
+      ).toBe(spaceId);
+    } finally {
+      await ownerDb.$executeRaw`UPDATE "Organization" SET "storageUsedBytes" = ${BigInt(real)} WHERE "id" = ${clubId}`;
+    }
   });
 });

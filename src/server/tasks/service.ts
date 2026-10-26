@@ -28,6 +28,7 @@ import {
   mentionsToPlainText,
   parseMentionIds,
 } from "@/lib/tasks/mentions";
+import { fileRefsToPlainText } from "@/lib/tasks/file-refs";
 import {
   BlockedReasonRequiredError,
   MAX_BLOCKED_REASON,
@@ -512,7 +513,10 @@ function actorName(env: TaskEnv): string {
 }
 
 function quoted(title: string): string {
-  return `"${title.length > 120 ? `${title.slice(0, 119)}…` : title}"`;
+  // A notification is plain text: a `/file` reference goes in as the name
+  // of the file, not as its markdown.
+  const plain = fileRefsToPlainText(title);
+  return `"${plain.length > 120 ? `${plain.slice(0, 119)}…` : plain}"`;
 }
 
 function assignmentBody(
@@ -624,7 +628,7 @@ async function syncMentions(
   const notify = mentionsToNotify(existing, next, env.actor.userId);
   if (notify.length > 0) {
     const excerpt = markdown
-      ? mentionsToPlainText(markdown).replace(/\s+/g, " ").trim().slice(0, 280)
+      ? fileRefsToPlainText(mentionsToPlainText(markdown)).replace(/\s+/g, " ").trim().slice(0, 280)
       : null;
     await notifyUsers(db, organizationId, notify, {
       type: NotificationType.TASK_MENTIONED,
@@ -1504,7 +1508,7 @@ export async function addComment(
     await notifyUsers(db, organizationId, watchers, {
       type: NotificationType.TASK_COMMENTED,
       title: `${actorName(env)} commented on ${quoted(s.title)}`,
-      body: mentionsToPlainText(body).replace(/\s+/g, " ").slice(0, 280),
+      body: fileRefsToPlainText(mentionsToPlainText(body)).replace(/\s+/g, " ").slice(0, 280),
       linkUrl: taskPath(env.org.slug, s.id),
       taskId: s.id,
       actorId: env.actor.userId,

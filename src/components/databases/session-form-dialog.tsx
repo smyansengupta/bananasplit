@@ -22,9 +22,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { FieldSelect } from "@/components/ui/field-select";
 
-import { nativeSelectClass, notice } from "./styles";
+import { notice } from "./styles";
 import { useViewParams } from "./view-params";
 
 const KINDS: [string, string][] = [
@@ -146,30 +146,30 @@ export function SessionFormDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="s-kind">Type</Label>
-              <select
+              <FieldSelect
                 id="s-kind"
                 name="kind"
                 defaultValue={initial?.kind ?? "WORKSHOP"}
-                className={nativeSelectClass}
+                className="w-full"
               >
                 {KINDS.map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="s-vis">Visibility</Label>
-              <select
+              <FieldSelect
                 id="s-vis"
                 name="visibility"
                 defaultValue={initial?.visibility ?? "INTERNAL"}
-                className={nativeSelectClass}
+                className="w-full"
               >
                 <option value="INTERNAL">Internal (board only)</option>
                 <option value="PUBLIC">Public (website)</option>
-              </select>
+              </FieldSelect>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -206,29 +206,29 @@ export function SessionFormDialog({
           <div className="grid gap-1.5">
             <Label htmlFor="s-host-mode">Host</Label>
             <div className="flex gap-2">
-              <select
+              <FieldSelect
                 id="s-host-mode"
                 value={hostMode}
                 onChange={(e) => setHostMode(e.target.value)}
-                className={cn(nativeSelectClass, "w-36 shrink-0")}
+                className="w-36 shrink-0"
               >
                 <option value="none">None</option>
                 <option value="member">A member</option>
                 <option value="guest">A guest</option>
-              </select>
+              </FieldSelect>
               {hostMode === "member" && (
-                <select
+                <FieldSelect
                   name="hostUserId"
                   defaultValue={initial?.hostUserId ?? members[0]?.id}
                   aria-label="Host member"
-                  className={cn(nativeSelectClass, "flex-1")}
+                  className="flex-1"
                 >
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name ?? "Member"}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               )}
               {hostMode === "guest" && (
                 <Input

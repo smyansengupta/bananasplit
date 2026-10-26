@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FieldSelect } from "@/components/ui/field-select";
 import {
   cellKey,
   DAY_LABELS,
@@ -210,7 +211,9 @@ export function AvailabilityEditor({
               onClick={() => toggleMany(HAND_HOURS.map((h) => cellKey(d, h)))}
               className={cn(
                 "rounded-md py-1 text-center text-[11px] font-medium transition-colors",
-                hover?.day === d ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                hover?.day === d
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
               title={`Mark all of ${day}`}
             >
@@ -231,7 +234,10 @@ export function AvailabilityEditor({
           ))}
         </div>
 
-        <div className="text-muted-foreground mt-3 flex min-h-5 items-center gap-1.5 border-t pt-2.5 text-xs" aria-live="polite">
+        <div
+          className="text-muted-foreground mt-3 flex min-h-5 items-center gap-1.5 border-t pt-2.5 text-xs"
+          aria-live="polite"
+        >
           <MousePointerClick className="size-3.5 shrink-0" aria-hidden="true" />
           {hover ? (
             <span>
@@ -246,7 +252,9 @@ export function AvailabilityEditor({
                   : "free. Click or drag to block it"}
             </span>
           ) : (
-            <span>Click or drag to block hours. Click a day or a time to block the whole column or row.</span>
+            <span>
+              Click or drag to block hours. Click a day or a time to block the whole column or row.
+            </span>
           )}
         </div>
       </div>
@@ -297,7 +305,9 @@ function Row({
         title={`Mark ${hourLabelLong(hour)} every day`}
         className={cn(
           "flex items-center justify-end rounded-md pr-1.5 font-mono text-[10px] transition-colors",
-          hover?.hour === hour ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          hover?.hour === hour
+            ? "bg-muted text-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
       >
         {hourLabel(hour)}
@@ -355,7 +365,13 @@ const RULE_STYLE: Record<string, { icon: IconComponent; tone: string }> = {
   DATE: { icon: CalendarX, tone: "text-muted-foreground" },
 };
 
-function RuleList({ value, onChange }: { value: Availability; onChange: (next: Availability) => void }) {
+function RuleList({
+  value,
+  onChange,
+}: {
+  value: Availability;
+  onChange: (next: Availability) => void;
+}) {
   const [adding, setAdding] = useState<AddKind>(null);
   const full = value.rules.length >= MAX_RULES;
 
@@ -379,7 +395,10 @@ function RuleList({ value, onChange }: { value: Availability; onChange: (next: A
             const style = RULE_STYLE[d.badge];
             const Icon = style.icon;
             return (
-              <li key={i} className="group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm">
+              <li
+                key={i}
+                className="group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm"
+              >
                 <Icon className={cn("size-4 shrink-0", style.tone)} aria-hidden="true" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{d.title}</span>
@@ -389,7 +408,9 @@ function RuleList({ value, onChange }: { value: Availability; onChange: (next: A
                   type="button"
                   className="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md p-1"
                   aria-label={`Remove: ${d.title}`}
-                  onClick={() => onChange({ ...value, rules: value.rules.filter((_, j) => j !== i) })}
+                  onClick={() =>
+                    onChange({ ...value, rules: value.rules.filter((_, j) => j !== i) })
+                  }
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>
@@ -436,11 +457,11 @@ function HourSelect({
   to?: number;
 }) {
   return (
-    <select
+    <FieldSelect
       aria-label={label}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+      size="sm"
     >
       {HOUR_OPTIONS.filter((h) => h >= from && h <= to).map((h) => (
         <option key={h} value={h}>
@@ -448,7 +469,7 @@ function HourSelect({
         </option>
       ))}
       {to === 24 && <option value={24}>12 AM (midnight)</option>}
-    </select>
+    </FieldSelect>
   );
 }
 
@@ -489,7 +510,13 @@ function FormShell({
   );
 }
 
-function WeeklyForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void; onCancel: () => void }) {
+function WeeklyForm({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (r: AvailabilityRule) => void;
+  onCancel: () => void;
+}) {
   const [label, setLabel] = useState("");
   const [days, setDays] = useState<number[]>([]);
   const [start, setStart] = useState(13);
@@ -502,7 +529,9 @@ function WeeklyForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void;
       onCancel={onCancel}
       canAdd={label.trim().length > 0 && days.length > 0 && !error}
       error={error}
-      onAdd={() => onAdd({ kind: "weekly", label: label.trim(), days: [...days].sort(), start, end })}
+      onAdd={() =>
+        onAdd({ kind: "weekly", label: label.trim(), days: [...days].sort(), start, end })
+      }
     >
       <Input
         autoFocus
@@ -532,7 +561,13 @@ function WeeklyForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void;
   );
 }
 
-function NeverForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void; onCancel: () => void }) {
+function NeverForm({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (r: AvailabilityRule) => void;
+  onCancel: () => void;
+}) {
   const [scope, setScope] = useState<"hour" | "day">("hour");
   const [hour, setHour] = useState(8);
   const [day, setDay] = useState(6);
@@ -542,7 +577,9 @@ function NeverForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void; 
       title="A time you're never free"
       onCancel={onCancel}
       canAdd
-      onAdd={() => onAdd(scope === "hour" ? { kind: "never", scope, hour } : { kind: "never", scope, day })}
+      onAdd={() =>
+        onAdd(scope === "hour" ? { kind: "never", scope, hour } : { kind: "never", scope, day })
+      }
     >
       <div className="flex gap-1">
         <Chip selected={scope === "hour"} onClick={() => setScope("hour")}>
@@ -560,25 +597,31 @@ function NeverForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void; 
       ) : (
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">No meetings on</span>
-          <select
+          <FieldSelect
             aria-label="Day"
             value={day}
             onChange={(e) => setDay(Number(e.target.value))}
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+            size="sm"
           >
             {DAY_LABELS.map((d, i) => (
               <option key={d} value={i}>
                 {d}
               </option>
             ))}
-          </select>
+          </FieldSelect>
         </div>
       )}
     </FormShell>
   );
 }
 
-function DateForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void; onCancel: () => void }) {
+function DateForm({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (r: AvailabilityRule) => void;
+  onCancel: () => void;
+}) {
   const [label, setLabel] = useState("");
   const [date, setDate] = useState("");
   const [allDay, setAllDay] = useState(true);
@@ -593,7 +636,13 @@ function DateForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void; o
       canAdd={label.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date) && !error}
       error={error}
       onAdd={() =>
-        onAdd({ kind: "date", label: label.trim(), date, start: allDay ? null : start, end: allDay ? null : end })
+        onAdd({
+          kind: "date",
+          label: label.trim(),
+          date,
+          start: allDay ? null : start,
+          end: allDay ? null : end,
+        })
       }
     >
       <Input
@@ -605,7 +654,13 @@ function DateForm({ onAdd, onCancel }: { onAdd: (r: AvailabilityRule) => void; o
         onChange={(e) => setLabel(e.target.value)}
       />
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Input type="date" aria-label="Date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" />
+        <Input
+          type="date"
+          aria-label="Date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-auto"
+        />
         <Chip selected={allDay} onClick={() => setAllDay(!allDay)}>
           All day
         </Chip>
@@ -655,7 +710,10 @@ function BusyRow({ hour, set }: { hour: number; set: Set<string> }) {
       {DAY_LABELS.map((_, d) => (
         <span
           key={d}
-          className={cn("h-3.5 rounded-[3px]", set.has(cellKey(d, hour)) ? "bg-muted-foreground/45" : "bg-muted")}
+          className={cn(
+            "h-3.5 rounded-[3px]",
+            set.has(cellKey(d, hour)) ? "bg-muted-foreground/45" : "bg-muted",
+          )}
         />
       ))}
     </>

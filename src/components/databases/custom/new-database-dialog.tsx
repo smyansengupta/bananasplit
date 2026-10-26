@@ -40,13 +40,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/components/ui/toaster";
+import { FieldSelect } from "@/components/ui/field-select";
 import { DATABASE_TEMPLATES } from "@/lib/databases/templates";
 import { readTableFile, SpreadsheetError, type SheetData } from "@/lib/finance/import/sheet";
 import { cn } from "@/lib/utils";
 import type { ImportSummary } from "@/server/databases/custom";
 
 import { StepPills } from "../step-pills";
-import { nativeSelectClass, notice } from "../styles";
+import { notice } from "../styles";
 import { TableFrame } from "../table-frame";
 
 const IMPORT_STEPS = ["Choose a file", "Check the preview", "Import"] as const;
@@ -330,11 +331,11 @@ export function NewDatabaseDialog({
             {sheets && sheets.length > 1 && (
               <div className="space-y-1.5">
                 <Label htmlFor="new-db-sheet">Sheet</Label>
-                <select
+                <FieldSelect
                   id="new-db-sheet"
                   value={sheet?.name ?? ""}
                   onChange={(e) => setSheetName(e.target.value)}
-                  className={nativeSelectClass}
+                  className="w-full"
                 >
                   {sheets.map((s) => (
                     <option key={s.name} value={s.name}>
@@ -342,7 +343,7 @@ export function NewDatabaseDialog({
                       {s.hidden ? " (hidden)" : ""} · {s.rowCount.toLocaleString()} rows
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </div>
             )}
             {sheet && <SheetPreviewTable sheet={sheet} />}

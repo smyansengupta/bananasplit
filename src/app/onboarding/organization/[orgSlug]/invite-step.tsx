@@ -19,6 +19,7 @@ import { Role } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
 import { goToNextOrgStep } from "./actions";
+import { FieldSelect } from "@/components/ui/field-select";
 
 type InviteRole = typeof Role.ADMIN | typeof Role.TREASURER | typeof Role.MEMBER;
 
@@ -31,7 +32,12 @@ const ROLES: { value: InviteRole; label: string }[] = [
 const roleLabel = (role: string) =>
   ROLES.find((r) => r.value === role)?.label ?? role.charAt(0) + role.slice(1).toLowerCase();
 
-const AVATAR_TONES = ["bg-brand-accent", "bg-avatar-1", "bg-avatar-3", "bg-avatar-4 text-primary-foreground"] as const;
+const AVATAR_TONES = [
+  "bg-brand-accent",
+  "bg-avatar-1",
+  "bg-avatar-3",
+  "bg-avatar-4 text-primary-foreground",
+] as const;
 
 /**
  * B6 · Invite officers: email invites (the same invites as Settings >
@@ -130,8 +136,8 @@ export function InviteStep({
           ))}
           {code && (
             <p className="text-muted-foreground m-0 mt-auto text-[12px] leading-normal">
-              Anyone with the code <b className="text-muted-foreground font-mono">{code}</b> and a verified
-              email can join as a member.
+              Anyone with the code <b className="text-muted-foreground font-mono">{code}</b> and a
+              verified email can join as a member.
             </p>
           )}
         </>
@@ -146,7 +152,9 @@ export function InviteStep({
         {code && (
           <div className="bg-muted flex flex-wrap items-center justify-between gap-3 rounded-[14px] px-4 py-3.5">
             <span className="flex flex-col gap-1">
-              <span className="text-muted-foreground text-[13px] font-semibold">Your invite code</span>
+              <span className="text-muted-foreground text-[13px] font-semibold">
+                Your invite code
+              </span>
               <span
                 className="font-heading text-[30px] leading-none tracking-[0.12em]"
                 aria-label={`Invite code ${code.split("").join(" ")}`}
@@ -188,7 +196,7 @@ export function InviteStep({
               autoComplete="off"
               className={cn(brandInputClass, "min-w-0 flex-[1_1_220px]")}
             />
-            <select
+            <FieldSelect
               aria-label="Role"
               value={role}
               onChange={(e) => setRole(e.target.value as InviteRole)}
@@ -199,7 +207,7 @@ export function InviteStep({
                   {r.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
             <button
               type="submit"
               disabled={inviting || !email.trim()}
@@ -218,7 +226,7 @@ export function InviteStep({
             {sent.map((invite) => (
               <li
                 key={invite.email}
-                className="bg-card border-foreground/10 flex h-10 items-center gap-3 rounded-field border px-4"
+                className="bg-card border-foreground/10 rounded-field flex h-10 items-center gap-3 border px-4"
               >
                 <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">
                   {invite.email}

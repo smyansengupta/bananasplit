@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { FieldSelect } from "@/components/ui/field-select";
 
-import { nativeSelectClass, SettingsCard, SettingsStatus } from "../settings-card";
+import { SettingsCard, SettingsStatus } from "../settings-card";
 import { bootstrapCbcAction } from "./actions";
 
 export interface BootstrapPerson {
@@ -71,8 +72,8 @@ export function BootstrapCard({
             <span className="font-medium">
               {p.name} <span className="text-muted-foreground font-normal">· {p.title}</span>
             </span>
-            <select
-              className={nativeSelectClass}
+            <FieldSelect
+              className="w-full"
               value={mapping[p.key] ?? ""}
               onChange={(e) => setMapping((m) => ({ ...m, [p.key]: e.target.value }))}
             >
@@ -82,7 +83,7 @@ export function BootstrapCard({
                   {m.name}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </label>
         ))}
       </div>

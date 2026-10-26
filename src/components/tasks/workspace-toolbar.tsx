@@ -22,7 +22,7 @@ import {
 } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Children, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { PHONE_HIDDEN_LAYOUTS, type TaskLayout } from "@/app/app/[orgSlug]/tasks/views";
 import { Badge } from "@/components/ui/badge";
@@ -113,68 +113,78 @@ export function WorkspaceToolbar() {
         clearAll={() => router.push(`/app/${org.slug}/tasks?view=${ws.query.view}`)}
       />
       {/*
-        A container, not a viewport breakpoint. What makes this bar wrap is
+        A container, not a viewport breakpoint. What makes this bar tighten is
         the room it actually has, and that is not the window: docking or
         railing the sidebar moves it by 150px, and a MacBook with the sidebar
         out had the filters pushed onto a second row while the same window on
         a desktop was fine. Everything below steps down on @[…]/toolbar.
+
+        Two things keep it whole at every width. It wraps rather than
+        overflowing, and the search block asks for 12rem, so when the rest of
+        the bar leaves less than that the search drops onto its own line
+        whole, instead of being squeezed to a slot nobody can type in. And
+        the layout names only appear with the room for them: six names are
+        most of the bar's width, and each button keeps its icon and its
+        tooltip without them.
       */}
       <div className="@container/toolbar max-md:hidden">
-        <div className="flex flex-nowrap items-center gap-2 overflow-visible">
-        {/* Layout: three shapes of the same question (none on the Free plan). */}
-        {ws.layouts.length > 0 && (
-          <Segmented
-            label="Layout"
-            value={ws.query.view}
-            onSelect={(v) => ws.setView(v as (typeof ws.layouts)[number]["value"])}
-            options={ws.layouts.map((layout, index) => ({
-              value: layout.value,
-              label: layout.label,
-              icon: LAYOUT_ICONS[layout.value],
-              compact: true,
-              title: `${layout.label}: ${layout.hint} (${index + 1})`,
-            }))}
-            // The first thing to go when the bar tightens: five layout names
-            // is most of its width, and each one keeps its icon and its title.
-            labelsFrom="sr-only @[52rem]/toolbar:not-sr-only"
-            className="shrink-0"
-          />
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Layout: three shapes of the same question (none on the Free plan). */}
+          {ws.layouts.length > 0 && (
+            <Segmented
+              label="Layout"
+              value={ws.query.view}
+              onSelect={(v) => ws.setView(v as (typeof ws.layouts)[number]["value"])}
+              options={ws.layouts.map((layout, index) => ({
+                value: layout.value,
+                label: layout.label,
+                icon: LAYOUT_ICONS[layout.value],
+                compact: true,
+                title: `${layout.label}: ${layout.hint} (${index + 1})`,
+              }))}
+              // The first thing to go when the bar tightens.
+              labelsFrom="sr-only @[64rem]/toolbar:not-sr-only"
+              className="shrink-0"
+            />
+          )}
 
-        {/*
+          {/*
           Scope: whose work, as icons that open up to say what they are on
           hover or focus. The team option only exists if you have reports.
         */}
-        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Whose tasks">
-          {ws.scopes.map((scope) => (
-            <ExpandChip
-              key={scope.value}
-              icon={SCOPE_ICONS[scope.value]}
-              label={scope.label}
-              active={ws.query.scope === scope.value && !pinnedMember}
-              onClick={() => ws.setScope(scope.value)}
-              title={SCOPE_KEYS[scope.value] && `${scope.label} (${SCOPE_KEYS[scope.value]})`}
-            />
-          ))}
-        </div>
+          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Whose tasks">
+            {ws.scopes.map((scope) => (
+              <ExpandChip
+                key={scope.value}
+                icon={SCOPE_ICONS[scope.value]}
+                label={scope.label}
+                active={ws.query.scope === scope.value && !pinnedMember}
+                onClick={() => ws.setScope(scope.value)}
+                title={SCOPE_KEYS[scope.value] && `${scope.label} (${SCOPE_KEYS[scope.value]})`}
+              />
+            ))}
+          </div>
 
-        {/* Filters: one chip that slides out Person, Epic, Tag and Status. */}
-        <FiltersMenu count={ws.filterCount + (ws.query.epicId ? 1 : 0)}>
-          {members.length > 1 && <PersonFilter />}
-          <EpicFilter />
-          {labels.length > 0 && <TagFilter />}
-          <StatusFilter />
-        </FiltersMenu>
-
-        <div className="ms-auto flex min-w-0 flex-1 items-center justify-end gap-2">
-          {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
-          {ws.query.view === "board" && <GroupMenu />}
-          <TaskSearch
-            key={ws.query.q ?? ""}
-            inputRef={searchRef}
-            initial={ws.query.q ?? ""}
-            onCommit={commitSearch}
+          {/* Filters: one chip that opens Person, Epic, Tag and Status. */}
+          <FiltersMenu
+            count={ws.filterCount + (ws.query.epicId ? 1 : 0)}
+            items={[
+              ...(members.length > 1 ? [{ name: "Person", node: <PersonFilter /> }] : []),
+              { name: "Epic", node: <EpicFilter /> },
+              ...(labels.length > 0 ? [{ name: "Tag", node: <TagFilter /> }] : []),
+              { name: "Status", node: <StatusFilter /> },
+            ]}
           />
+
+          <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
+            {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
+            {ws.query.view === "board" && <GroupMenu />}
+            <TaskSearch
+              key={ws.query.q ?? ""}
+              inputRef={searchRef}
+              initial={ws.query.q ?? ""}
+              onCommit={commitSearch}
+            />
           </div>
         </div>
       </div>
@@ -591,7 +601,9 @@ function PersonFilter() {
           ) : (
             <>
               <UserRound className="size-3.5" aria-hidden="true" />
-              Person
+              {/* In a span like every other pill's label, so the filters
+                  panel can lay them all out the same way. */}
+              <span>Person</span>
             </>
           )}
           <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
@@ -882,128 +894,54 @@ function GroupMenu() {
  * slide out beside it; it stays open while one of their menus is open, and
  * folds away again once the pointer leaves.
  */
-function FiltersMenu({ count, children }: { count: number; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const pills = useRef<HTMLDivElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+/**
+ * Filters: one chip, one panel, at every size.
+ *
+ * It used to have two behaviours. On a container wider than 64rem the
+ * filter pills slid out into the bar beside the chip; narrower than that
+ * they were packed into a popover. The trouble was everything in between —
+ * a MacBook, a docked sidebar, a half-width window — where the pills had
+ * just enough room to appear and not enough to sit side by side, so Tag and
+ * Status rode over the search box and the row turned to mush. Hover opened
+ * it, too, which a touch screen cannot do at all.
+ *
+ * So: the chip opens a panel, each filter under its own name, the way the
+ * phone's sheet already reads. Nothing is ever injected into the row, so
+ * nothing in the row can be run over, and the bar is the same shape whether
+ * it has 400px or 2000px. Click or Enter opens it; Escape closes it.
+ */
+function FiltersMenu({
+  count,
+  items,
+}: {
+  count: number;
+  items: readonly { name: string; node: React.ReactNode }[];
+}) {
   const [open, setOpen] = useState(false);
-  const [packed, setPacked] = useState(false);
-  const pillList = Children.toArray(children);
-  const show = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    setOpen(true);
-  };
-  // Only a pill's own menu (it lives in a portal) keeps the row out; the
-  // Filters chip's aria-expanded doesn't count, or it would never close.
-  const pillMenuOpen = () =>
-    Boolean(pills.current?.querySelector('[aria-expanded="true"], [data-state="open"]'));
-  // A short grace period, started once: moving the pointer around outside
-  // doesn't keep pushing it back (which made it feel slow to fold).
-  const hideSoon = () => {
-    if (timer.current) return;
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      if (!pillMenuOpen()) setOpen(false);
-    }, 240);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const onMove = (event: PointerEvent) => {
-      const target = event.target as Element | null;
-      if (!target) return;
-      if (ref.current?.contains(target)) return show();
-      if (target.closest("[data-radix-popper-content-wrapper]")) return;
-      hideSoon();
-    };
-    document.addEventListener("pointermove", onMove);
-    return () => document.removeEventListener("pointermove", onMove);
-    // show/hideSoon only touch refs and state setters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const chip = (expanded: boolean) => (
-    <>
-      <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-      Filters
-      {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
-      <span className="sr-only">{expanded ? " (open)" : ""}</span>
-    </>
-  );
-
   return (
-    <div ref={ref} className="flex shrink-0 items-center gap-1">
-      {/*
-        A tight bar (a laptop, or any window with the sidebar docked): the
-        pills have nowhere to slide to, and sliding them anyway is what used
-        to push the whole row onto a second line. They go in a popover
-        instead, stacked, which needs no room in the bar at all.
-      */}
-      <Popover open={packed} onOpenChange={setPacked}>
-        <PopoverTrigger
-          aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
-          className={cn(chipClass(packed || count > 0), "@[64rem]/toolbar:hidden")}
-        >
-          {chip(packed)}
-        </PopoverTrigger>
-        <PopoverContent align="start" className="grid w-64 gap-1.5 p-2">
-          {pillList.map((pill, i) => (
-            <div key={i} className="[&>*]:w-full">
-              {pill}
-            </div>
-          ))}
-        </PopoverContent>
-      </Popover>
-
-      {/* A roomy bar keeps the pills sliding out beside the chip. */}
-      <div
-        className="hidden items-center gap-1 @[64rem]/toolbar:flex"
-        onPointerEnter={show}
-        onPointerLeave={hideSoon}
-        onFocus={show}
-        onBlur={(e) => {
-          if (!ref.current?.contains(e.relatedTarget as Node | null)) hideSoon();
-        }}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
+        className={chipClass(open || count > 0)}
       >
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
-          onClick={() => setOpen((v) => !v)}
-          className={chipClass(open || count > 0)}
-        >
-          {chip(open)}
-        </button>
-        <div
-          inert={!open}
-          className={cn(
-            "grid transition-[grid-template-columns] duration-[380ms] ease-(--ease-ink) motion-reduce:transition-none",
-            open ? "grid-cols-[1fr]" : "pointer-events-none grid-cols-[0fr]",
-          )}
-        >
-          {/*
-            The pills slide out one after another, and fold back in the other
-            order (last one first) while the row closes up behind them.
-          */}
-          <div ref={pills} className="flex min-w-0 items-center gap-1 overflow-hidden p-0.5">
-            {pillList.map((pill, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "flex transition-[opacity,transform] duration-200 ease-(--ease-ink) motion-reduce:transition-none",
-                  open ? "translate-x-0 opacity-100" : "-translate-x-3 opacity-0",
-                )}
-                style={{
-                  transitionDelay: `${(open ? i : pillList.length - 1 - i) * 40}ms`,
-                }}
-              >
-                {pill}
-              </span>
-            ))}
+        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+        Filters
+        {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="grid w-72 gap-3 p-3">
+        {items.map((item) => (
+          <div key={item.name} className="grid min-w-0 gap-1.5">
+            <span className="text-muted-foreground text-[13px] font-medium">{item.name}</span>
+            {/*
+              Each pill fills its row here, so the panel reads as a form:
+              the icon, then the value filling the width, then the chevron.
+            */}
+            <div className="[&>*]:w-full [&>*]:justify-between [&>*>span]:max-w-none [&>*>span]:flex-1 [&>*>span]:text-start">
+              {item.node}
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        ))}
+      </PopoverContent>
+    </Popover>
   );
 }

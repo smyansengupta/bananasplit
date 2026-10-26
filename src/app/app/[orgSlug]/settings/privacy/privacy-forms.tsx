@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { FieldSelect } from "@/components/ui/field-select";
 
-import { nativeSelectClass, SettingsCard, SettingsStatus } from "../settings-card";
+import { SettingsCard, SettingsStatus } from "../settings-card";
 import {
   type PrivacyInput,
   updateBallotVisibility,
@@ -141,9 +141,9 @@ export function PrivacyForm({
             label="Who sees website contacts' emails"
             help="In the People, Attendance and Signups databases."
           >
-            <select
+            <FieldSelect
               id="contact-emails"
-              className={cn(nativeSelectClass, "w-auto min-w-48")}
+              className="w-auto min-w-48"
               value={value.contactEmailVisibility}
               disabled={!canEdit}
               onChange={(e) =>
@@ -158,7 +158,7 @@ export function PrivacyForm({
                   {o.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </Row>
           <Row
             id="public-events"
@@ -220,9 +220,9 @@ export function BallotVisibilityForm({
       >
         <div className="grid max-w-md gap-1.5">
           <Label htmlFor="ballot-visibility">Who can see individual votes</Label>
-          <select
+          <FieldSelect
             id="ballot-visibility"
-            className={nativeSelectClass}
+            className="w-full"
             value={value}
             disabled={!canEdit}
             onChange={(e) => setValue(e.target.value)}
@@ -230,7 +230,7 @@ export function BallotVisibilityForm({
             <option value="OWNER_ONLY">Owners only (default)</option>
             <option value="OWNER_AND_ADMINS">Owners and admins</option>
             <option value="NOBODY">Nobody (also left out of exports)</option>
-          </select>
+          </FieldSelect>
         </div>
       </SettingsCard>
     </form>
@@ -260,9 +260,9 @@ export function DatabaseVisibilityRow({
       </label>
       <div className="flex items-center gap-3">
         <SettingsStatus status={status} />
-        <select
+        <FieldSelect
           id={`db-${id}`}
-          className={cn(nativeSelectClass, "w-auto min-w-48")}
+          className="w-auto min-w-48"
           defaultValue={initial}
           disabled={!canEdit || isPending}
           onChange={(e) => {
@@ -284,7 +284,7 @@ export function DatabaseVisibilityRow({
               {o.label}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </div>
     </li>
   );

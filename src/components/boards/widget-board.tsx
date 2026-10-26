@@ -136,6 +136,7 @@ export function WidgetBoard({
   renderBody,
   onSave,
   intro,
+  introDescription,
   notice,
   headerActions,
   belowIntro,
@@ -152,6 +153,11 @@ export function WidgetBoard({
   onSave: SaveBoard;
   /** What sits on the left of the Customize button (a page's title, a line of text). */
   intro?: ReactNode;
+  /**
+   * The line under the title. It goes BELOW the title's row, not inside it,
+   * so Customize stays level with the title (PageHeader does the same).
+   */
+  introDescription?: ReactNode;
   /** Something to say above the widgets (a setup prompt), under the title row. */
   notice?: ReactNode;
   /**
@@ -231,19 +237,24 @@ export function WidgetBoard({
 
   return (
     <div className="space-y-[18px]">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">{intro}</div>
-        {!editing && (
-          <Button
-            type="button"
-            variant="outline"
-            className="max-md:hidden"
-            disabled={pending}
-            onClick={() => setEditing(true)}
-          >
-            <SlidersHorizontal className="size-4" aria-hidden="true" />
-            Customize
-          </Button>
+      <div className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">{intro}</div>
+          {!editing && (
+            <Button
+              type="button"
+              variant="outline"
+              className="max-md:hidden"
+              disabled={pending}
+              onClick={() => setEditing(true)}
+            >
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
+              Customize
+            </Button>
+          )}
+        </div>
+        {introDescription && (
+          <p className="text-muted-foreground text-[15px]">{introDescription}</p>
         )}
       </div>
       {belowIntro && <div className="pt-2 pb-3">{belowIntro}</div>}

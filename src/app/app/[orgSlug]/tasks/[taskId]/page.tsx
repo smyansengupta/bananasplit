@@ -8,6 +8,7 @@ import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
 import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
+import { listFileRefOptions } from "@/server/notes/files";
 import { getComments, getOrgLabels, getOrgParents, getTaskDetail } from "@/server/tasks/queries";
 
 /**
@@ -31,7 +32,9 @@ export default async function TaskPage({ params }: PageProps<"/app/[orgSlug]/tas
     // What it can be part of (the editor's Part of).
     const parents = await getOrgParents(db, org.id);
     const comments = await getComments(db, org.id, taskId);
-    return { task, labels, parents, comments, tz: effectiveTimezone(me, org) };
+    // What `/` in a title or a description can point at.
+    const files = await listFileRefOptions(db, org.id);
+    return { task, labels, parents, files, comments, tz: effectiveTimezone(me, org) };
   });
   if (!data) notFound();
 
@@ -54,6 +57,7 @@ export default async function TaskPage({ params }: PageProps<"/app/[orgSlug]/tas
       }}
       members={members}
       labels={data.labels}
+      files={data.files}
       parents={data.parents}
     >
       <div className="mx-auto max-w-2xl space-y-4">

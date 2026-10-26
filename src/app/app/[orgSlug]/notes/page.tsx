@@ -12,7 +12,7 @@ import { isPersonalSpace, spaceLimits } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listDeletedNoteFiles, listNoteFiles } from "@/server/notes/files";
-import { listFolders } from "@/server/notes/folders";
+import { folderPeeks, listFolders } from "@/server/notes/folders";
 import { countNoteShares } from "@/server/notes/sharing";
 import { noteVisibleWhere } from "@/server/notes/visibility";
 import { listPins } from "@/server/pins";
@@ -70,6 +70,7 @@ export default async function NotesPage({
     : "edited";
 
   const data = await withOrgTx(org.id, async ({ db }) => {
+    const folders = await listFolders(db, org.id, user.id);
     const notes = await getNotesForList(db, org.id, user.id, {
       visibility,
       authorId: author,
@@ -86,7 +87,16 @@ export default async function NotesPage({
       ),
       files: await listNoteFiles(db, org.id, { folderId: listFolderId, q }),
       memberships: await getOrgMembersForFilter(db, org.id),
-      folders: await listFolders(db, org.id, user.id),
+      folders,
+      // What each folder card names, only where the cards are drawn.
+      peeks: atRoot
+        ? await folderPeeks(
+            db,
+            org.id,
+            user.id,
+            folders.map((f) => f.id),
+          )
+        : new Map(),
       pins: await listPins(db, org.id, org.slug, user.id),
       trash: inTrash
         ? {
@@ -189,6 +199,7 @@ export default async function NotesPage({
           color: f.color,
           noteCount: f.noteCount,
           fileCount: f.fileCount,
+          peek: data.peeks.get(f.id) ?? [],
           canEdit: isAdmin || f.createdById === user.id,
         }))}
         notes={data.notes.map((n) => ({

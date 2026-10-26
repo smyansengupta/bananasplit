@@ -164,14 +164,19 @@
 }
 
 /* Leading and trailing days of the neighbouring months recede but stay
-   usable: an admin can still click one to add an event there. */
+   usable: an admin can still click one to add an event there. They keep a
+   tile, in a lighter wash of the surface, so the month reads as a block and
+   the weeks either side of it are plainly not part of it. The mix is of the
+   surface itself, so it lands between the tile and the page in both
+   themes. */
 .cal-td[data-outside="true"] {
-  background: transparent;
-  box-shadow: none;
+  background: color-mix(in oklab, var(--card) 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cal-ring) 45%, transparent);
 }
 
 .cal-td[data-outside="true"] .cal-day__num {
-  opacity: 0.5;
+  color: var(--muted-foreground);
+  opacity: 0.7;
 }
 
 .cal-td[data-outside="true"] .cal-chip {
