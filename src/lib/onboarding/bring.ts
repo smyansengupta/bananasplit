@@ -6,7 +6,9 @@
  * turns the ticked ids back into the move's selection.
  */
 
-export type BringKind = "event" | "poll" | "question" | "task";
+import { formatStorage } from "@/lib/billing/storage";
+
+export type BringKind = "event" | "poll" | "question" | "task" | "folder" | "note" | "file";
 
 export interface BringItem {
   id: string;
@@ -23,7 +25,7 @@ export interface BringGroup {
 }
 
 export interface BringSection {
-  key: "rsvp" | "events" | "polls" | "tasks";
+  key: "rsvp" | "events" | "polls" | "tasks" | "folders" | "notes" | "files";
   title: string;
   groups: BringGroup[];
 }
@@ -33,6 +35,9 @@ export interface BringSelection {
   pollIds: string[];
   questionPollIds: string[];
   taskIds: string[];
+  noteIds: string[];
+  folderIds: string[];
+  fileIds: string[];
 }
 
 interface EventIn {
@@ -58,12 +63,36 @@ interface TaskIn {
   subtasks: number;
 }
 
+interface FolderIn {
+  id: string;
+  name: string;
+  notes: number;
+  files: number;
+}
+interface NoteIn {
+  id: string;
+  title: string;
+  updatedAt: Date;
+  folder: string | null;
+  subpages: number;
+  files: number;
+}
+interface FileIn {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  folder: string | null;
+}
+
 export interface BringableIn {
   space: { timezone: string };
   rsvpEvents: EventIn[];
   events: EventIn[];
   polls: PollIn[];
   taskGroups: { project: string | null; tasks: TaskIn[] }[];
+  folders: FolderIn[];
+  notes: NoteIn[];
+  files: FileIn[];
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -117,6 +146,45 @@ function taskItem(t: TaskIn, timeZone: string): BringItem {
   return { id: t.id, kind: "task", title: t.title, meta: parts.join(" · ") || "No due date" };
 }
 
+function folderItem(f: FolderIn): BringItem {
+  const inside = [
+    f.notes ? plural(f.notes, "note") : null,
+    f.files ? plural(f.files, "file") : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+  return {
+    id: f.id,
+    kind: "folder",
+    title: f.name,
+    meta: inside ? `${inside} come${f.notes + f.files === 1 ? "s" : ""} too` : "Empty",
+  };
+}
+
+function noteItem(n: NoteIn, timeZone: string): BringItem {
+  const edited = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+  }).format(n.updatedAt);
+  const parts = [`Edited ${edited}`];
+  if (n.folder) parts.push(`In ${n.folder}`);
+  const along = [
+    n.subpages ? plural(n.subpages, "sub-page") : null,
+    n.files ? plural(n.files, "file") : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+  if (along) parts.push(`${along} come${n.subpages + n.files === 1 ? "s" : ""} too`);
+  return { id: n.id, kind: "note", title: n.title || "Untitled note", meta: parts.join(" · ") };
+}
+
+function fileItem(f: FileIn): BringItem {
+  const parts = [formatStorage(f.sizeBytes)];
+  if (f.folder) parts.push(`In ${f.folder}`);
+  return { id: f.id, kind: "file", title: f.name, meta: parts.join(" · ") };
+}
+
 /** The checklist's sections, in order; empty ones are left out. */
 export function bringSections(b: BringableIn): BringSection[] {
   const tz = b.space.timezone;
@@ -140,6 +208,17 @@ export function bringSections(b: BringableIn): BringSection[] {
         items: g.tasks.map((t) => taskItem(t, tz)),
       })),
     },
+    {
+      key: "folders",
+      title: "Folders",
+      groups: [{ label: null, items: b.folders.map(folderItem) }],
+    },
+    {
+      key: "notes",
+      title: "Notes",
+      groups: [{ label: null, items: b.notes.map((n) => noteItem(n, tz)) }],
+    },
+    { key: "files", title: "Files", groups: [{ label: null, items: b.files.map(fileItem) }] },
   ];
   return sections.filter((s) => s.groups.some((g) => g.items.length > 0));
 }
@@ -153,6 +232,9 @@ export function bringSelection(items: BringItem[], ticked: ReadonlySet<string>):
     pollIds: pick("poll"),
     questionPollIds: pick("question"),
     taskIds: pick("task"),
+    noteIds: pick("note"),
+    folderIds: pick("folder"),
+    fileIds: pick("file"),
   };
 }
 

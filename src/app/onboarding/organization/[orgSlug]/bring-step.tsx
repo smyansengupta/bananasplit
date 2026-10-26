@@ -19,10 +19,11 @@ import { bringIntoClubAction, finishBringAction } from "./bring-actions";
 
 /**
  * B7 · Bring anything in? The creator's Personal event pages, calendar
- * events, polls and open tasks, none ticked (except the one they came to
- * move, from Move to a club or an upgrade prompt). "Move N items into
- * <club>" moves the ticked ones one way, keeping their links, sign-ups,
- * tickets and responses; then Finish opens the club.
+ * events, polls, open tasks, folders, notes and files, none ticked (except
+ * the one they came to move, from Move to a club or an upgrade prompt).
+ * "Move N items into <club>" moves the ticked ones one way, keeping their
+ * links, sign-ups, tickets and responses (notes and files arrive private to
+ * the mover); then Finish opens the club.
  */
 export function BringStep({
   orgId,
@@ -84,17 +85,8 @@ export function BringStep({
         setError(result.error);
         return;
       }
-      // What moved leaves the list; what's left can still come.
-      setShown(
-        shown
-          .map((s) => ({
-            ...s,
-            groups: s.groups
-              .map((g) => ({ ...g, items: g.items.filter((i) => !ticked.has(i.id)) }))
-              .filter((g) => g.items.length > 0),
-          }))
-          .filter((s) => s.groups.length > 0),
-      );
+      // What moved leaves the list, with what came along; what's left can still come.
+      setShown(result.sections);
       setMoved([...moved, result.summary]);
       setTicked(new Set());
     });
@@ -132,8 +124,9 @@ export function BringStep({
       }
     >
       <StepIntro index={index} total={total} title="Bring anything in?">
-        Move events, polls and tasks from Personal into {clubName}. Links, RSVPs, tickets and poll
-        responses keep working. Moving is one way.
+        Move events, polls, tasks, notes and files from Personal into {clubName}. Links, RSVPs,
+        tickets and poll responses keep working, and notes and files stay private to you until you
+        share them. Moving is one way.
       </StepIntro>
 
       <StepBody className="gap-6">
