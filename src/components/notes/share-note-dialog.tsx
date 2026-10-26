@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Link2, Loader2, Lock, UserPlus, Users, X } from "lucide-react";
+import { Check, ChevronsUpDown, Link2, Loader2, Lock, UserPlus, Users, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 

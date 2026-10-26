@@ -23,8 +23,8 @@ import {
   Repeat2,
   SquareCode,
   Trash2,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRef, useState } from "react";
 
 import {
@@ -51,7 +51,7 @@ interface Target {
   pos: number;
 }
 
-const TURN_INTO: { label: string; icon: LucideIcon; run: (e: Editor) => boolean }[] = [
+const TURN_INTO: { label: string; icon: IconComponent; run: (e: Editor) => boolean }[] = [
   { label: "Text", icon: Pilcrow, run: (e) => e.chain().focus().setParagraph().run() },
   {
     label: "Heading 1",

@@ -1,4 +1,4 @@
-import { Check, Clock, KeyRound } from "lucide-react";
+import { Check, Clock, KeyRound } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 

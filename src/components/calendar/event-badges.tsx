@@ -1,4 +1,4 @@
-import { CalendarCheck2, CalendarClock, CalendarX2, Globe, Lock } from "lucide-react";
+import { CalendarCheck2, CalendarClock, CalendarX2, Globe, Lock } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";

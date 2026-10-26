@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "lucide-react";
+import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "@/components/icons";
 import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 

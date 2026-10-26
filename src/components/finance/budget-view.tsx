@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarRange, Check, Loader2, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { CalendarRange, Check, Loader2, Pencil, Plus, Star, Trash2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 

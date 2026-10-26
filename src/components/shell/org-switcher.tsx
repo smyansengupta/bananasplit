@@ -9,7 +9,7 @@ import {
   Settings,
   ShieldCheck,
   UserPlus,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useTransition, type ReactNode } from "react";
 

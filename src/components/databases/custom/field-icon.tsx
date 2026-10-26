@@ -11,13 +11,13 @@ import {
   Tags,
   Type,
   User,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import type { FieldType } from "@/lib/databases/fields";
 import { cn } from "@/lib/utils";
 
-const ICONS: Record<FieldType, LucideIcon> = {
+const ICONS: Record<FieldType, IconComponent> = {
   TEXT: Type,
   LONG_TEXT: AlignLeft,
   NUMBER: Hash,

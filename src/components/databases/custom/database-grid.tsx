@@ -20,7 +20,7 @@ import {
   Settings2,
   Shapes,
   Trash2,
-} from "lucide-react";
+} from "@/components/icons";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import {

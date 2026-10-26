@@ -41,6 +41,12 @@ const GRANTS = {
   // RSVP page sign-ups: owners/admins in the suite (row policy), the public
   // page and the reminder jobs on the service path.
   EventRegistration: ["SIUD", "SIUD", ""],
+  // Who was reminded about an event and when (meetings): the jobs write it
+  // on the service path, owners and admins read it, nobody updates it.
+  EventReminderSend: ["S", "SID", ""],
+  // Cards a member hid from their own "Up next". Own row only; hiding is an
+  // insert and un-hiding a delete, so there is no UPDATE.
+  UpNextDismissal: ["SID", "SD", ""],
   EventLinkLog: ["SI", "SI", ""],
   FinanceAuditLog: ["S", "S", ""],
   Invitation: ["SIUD", "SIUD", ""],
@@ -180,6 +186,8 @@ const NEW_TENANT_TABLES = [
   "PollOption",
   "PollVote",
   "EventRegistration",
+  "EventReminderSend",
+  "UpNextDismissal",
   "DatabaseField",
   "DatabaseRecord",
   "RsvpItem",

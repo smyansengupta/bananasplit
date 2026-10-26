@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, TriangleAlert } from "@/components/icons";
 import { useId, useState } from "react";
 
 import { Input } from "@/components/ui/input";

@@ -9,7 +9,7 @@ import {
   MapPin,
   Mic,
   Video,
-} from "lucide-react";
+} from "@/components/icons";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";

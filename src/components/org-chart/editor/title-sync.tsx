@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight } from "@/components/icons";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";

@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info } from "@/components/icons";
 
 import { platformNoReplyAddress, resolveOrgMailRouting } from "@/server/email/mailer";
 import { planGate } from "@/server/billing/plan-gate";

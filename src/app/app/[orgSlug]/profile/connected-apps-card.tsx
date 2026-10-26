@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, Copy, ExternalLink, Unplug } from "lucide-react";
 import { useState } from "react";
+
+import { Check, Copy, ExternalLink, Unlink } from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -118,7 +119,7 @@ export function ConnectedAppsCard({
       footer={
         apps.length > 1 && (
           <Button type="button" variant="ghost" onClick={() => disconnect(null)}>
-            <Unplug className="size-4" aria-hidden="true" />
+            <Unlink className="size-4" aria-hidden="true" />
             Disconnect all
           </Button>
         )

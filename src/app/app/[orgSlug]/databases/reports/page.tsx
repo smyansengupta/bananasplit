@@ -1,4 +1,4 @@
-import { ChartNoAxesColumn } from "lucide-react";
+import { ChartNoAxesColumn } from "@/components/icons";
 import { Suspense, type ReactNode } from "react";
 import { notFound } from "next/navigation";
 

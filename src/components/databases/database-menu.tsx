@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Download, FileJson, Upload } from "lucide-react";
+import { Copy, Download, FileJson, Upload } from "@/components/icons";
 
 import { ItemMenu, type ItemMenuEntry } from "@/components/item-menu";
 

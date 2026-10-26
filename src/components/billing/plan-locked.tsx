@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react";
+import { Lock } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";

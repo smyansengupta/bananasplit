@@ -1,4 +1,4 @@
-import { FileUp } from "lucide-react";
+import { FileUp } from "@/components/icons";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";

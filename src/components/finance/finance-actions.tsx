@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSpreadsheet, ListChecks, Plus, Receipt } from "lucide-react";
+import { FileSpreadsheet, ListChecks, Plus, Receipt } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";

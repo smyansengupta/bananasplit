@@ -1,4 +1,4 @@
-import { CircleCheck } from "lucide-react";
+import { CircleCheck } from "@/components/icons";
 
 import { dueLabel } from "@/lib/overview/format";
 import { dueDateKey } from "@/lib/tasks/dates";

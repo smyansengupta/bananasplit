@@ -15,8 +15,8 @@ import {
   Target,
   Upload,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
 type Dialogs = "word" | "google" | "upload" | "folder" | null;
 type Visibility = "ORGANIZATION" | "PRIVATE";
 
-const TEMPLATE_ICONS: Record<string, LucideIcon> = { Users, CalendarDays, Target, ListChecks };
+const TEMPLATE_ICONS: Record<string, IconComponent> = { Users, CalendarDays, Target, ListChecks };
 
 interface Draft {
   title: string;

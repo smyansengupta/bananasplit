@@ -18,8 +18,8 @@ import {
   UserPlus,
   Users,
   Vote,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -47,7 +47,7 @@ import { StepPanel } from "../setup/step-panel";
 import type { SetupStepView } from "../setup/view";
 import { DatabasesTabs } from "./databases-tabs";
 
-const ICONS: Record<string, LucideIcon> = {
+const ICONS: Record<string, IconComponent> = {
   CalendarDays,
   ClipboardCheck,
   UserPlus,
@@ -74,7 +74,7 @@ const DESCRIPTIONS: Record<string, string> = {
  * The 36px icon chip (ui/stat's IconChip, size sm), drawn here: IconChip is
  * a client component, and a server page can't hand it an icon component.
  */
-function IconChip({ icon: Icon, className }: { icon: LucideIcon; className?: string }) {
+function IconChip({ icon: Icon, className }: { icon: IconComponent; className?: string }) {
   return (
     <span
       className={cn(

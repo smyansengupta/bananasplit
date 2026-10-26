@@ -12,6 +12,7 @@ import {
   BANANA_CREAM_PRESET,
   BANANA_NIGHT_PRESET,
   DEFAULT_PRESET,
+  UNTHEMED_PRESET,
   isFormerDefault,
   findPreset,
   GRAPHITE_PRESET,
@@ -35,7 +36,9 @@ describe("presets", () => {
   });
 
   it("include Default, Claude Builders Club and at least two generic presets", () => {
-    expect(THEME_PRESETS[0]).toBe(DEFAULT_PRESET);
+    // Graphite leads: it is what a space gets with nothing saved.
+    expect(THEME_PRESETS[0]).toBe(UNTHEMED_PRESET);
+    expect(THEME_PRESETS).toContain(DEFAULT_PRESET);
     expect(findPreset("cbc")).toBe(CBC_PRESET);
     expect(THEME_PRESETS.length).toBeGreaterThanOrEqual(4);
   });
@@ -142,11 +145,11 @@ describe("globals.css", () => {
     );
   }
 
-  it("ships the Default preset's derived tokens as its defaults, in both modes", () => {
+  it("ships the untheme preset's derived tokens as its defaults, in both modes", () => {
     const root = block(":root");
     const dark = block(".dark");
-    const light = deriveTokens(DEFAULT_PRESET.light, { glow: DEFAULT_PRESET.glow });
-    const darkTokens = deriveTokens(DEFAULT_PRESET.dark, { glow: DEFAULT_PRESET.glow });
+    const light = deriveTokens(UNTHEMED_PRESET.light, { glow: UNTHEMED_PRESET.glow });
+    const darkTokens = deriveTokens(UNTHEMED_PRESET.dark, { glow: UNTHEMED_PRESET.glow });
     for (const name of TOKEN_NAMES) {
       expect(root[name], `:root --${name}`).toBe(light[name]);
       expect(dark[name], `.dark --${name}`).toBe(darkTokens[name]);

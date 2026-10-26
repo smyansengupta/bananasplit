@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Columns3 } from "lucide-react";
+import { ChevronDown, ChevronRight, Columns3 } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";

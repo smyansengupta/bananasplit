@@ -2,7 +2,7 @@
 
 import { generateJSON, generateText } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { Download, Link2, Loader2, NotebookPen, Trash2 } from "lucide-react";
+import { Download, Link2, Loader2, NotebookPen, Trash2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 

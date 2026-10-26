@@ -1,4 +1,4 @@
-import { MessageSquare } from "lucide-react";
+import { MessageSquare } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";

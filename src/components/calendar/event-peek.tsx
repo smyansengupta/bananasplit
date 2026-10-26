@@ -9,7 +9,7 @@ import {
   MapPin,
   Pencil,
   Ticket,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 

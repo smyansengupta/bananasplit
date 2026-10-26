@@ -13,14 +13,14 @@ import {
   PiggyBank,
   Star,
   UserRound,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import { Chip } from "@/components/onboarding/step-fields";
 import { Input } from "@/components/ui/input";
 import { MAX_TITLE, ROLE_CHOICES } from "@/lib/onboarding/steps";
 
-const ROLE_ICONS: Record<(typeof ROLE_CHOICES)[number], LucideIcon> = {
+const ROLE_ICONS: Record<(typeof ROLE_CHOICES)[number], IconComponent> = {
   President: Crown,
   "Vice President": Star,
   Treasurer: PiggyBank,

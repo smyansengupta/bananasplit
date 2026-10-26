@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, ImageUp, Loader2, Trash2 } from "lucide-react";
+import { Camera, ImageUp, Loader2, Trash2 } from "@/components/icons";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";

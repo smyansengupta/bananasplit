@@ -50,22 +50,32 @@ describe("org creation policy", () => {
     ).toBeNull();
   });
 
-  it("in production, creation is disabled by default for everyone but platform admins, even for a direct action call", () => {
-    expect(orgCreationEnabled(prod())).toBe(false);
+  it("in production, any verified account may create a club by default", () => {
+    expect(orgCreationEnabled(prod())).toBe(true);
+    expect(orgCreationMode(prod())).toBe("open");
+    expect(orgCreationPolicy(verified, prod())).toMatchObject({
+      denial: null,
+      mode: "open",
+      requiresCode: false,
+      openLimits: true,
+    });
+  });
+
+  it("switched off in production, only platform admins may, even for a direct action call", () => {
+    const off = { PLATFORM_ORG_CREATION_ENABLED: "false" };
     expect(
-      orgCreationDenial(verified, prod({ PLATFORM_ADMIN_EMAILS: "president@example.edu" })),
+      orgCreationDenial(verified, prod({ ...off, PLATFORM_ADMIN_EMAILS: "president@example.edu" })),
     ).toBe("disabled");
     expect(
       orgCreationDenial(
         verified,
-        prod({ PLATFORM_ADMIN_EMAILS: " Jackson@Example.edu , other@example.edu" }),
+        prod({ ...off, PLATFORM_ADMIN_EMAILS: " Jackson@Example.edu , other@example.edu" }),
       ),
     ).toBeNull();
   });
 
-  it("with creation enabled in production, the default mode is admins-only", () => {
-    const e = prod({ PLATFORM_ORG_CREATION_ENABLED: "true" });
-    expect(orgCreationMode(e)).toBe("admins");
+  it("admins mode limits creation to platform admins", () => {
+    const e = prod({ ORG_CREATION_MODE: "admins" });
     expect(orgCreationDenial(verified, e)).toBe("locked");
   });
 
@@ -90,9 +100,12 @@ describe("org creation policy", () => {
     expect(orgCreationPolicy(verified, e)).toMatchObject({ denial: null, openLimits: true });
   });
 
-  it("locks a self-hosted production build (no VERCEL_ENV) too", () => {
+  it("treats a self-hosted production build (no VERCEL_ENV) as production too", () => {
     expect(isProductionDeployment(env({ NODE_ENV: "production" }))).toBe(true);
-    expect(orgCreationDenial(verified, env({ NODE_ENV: "production" }))).toBe("disabled");
+    expect(orgCreationPolicy(verified, env({ NODE_ENV: "production" }))).toMatchObject({
+      denial: null,
+      openLimits: true,
+    });
   });
 
   it("treats an empty admin list as nobody", () => {
@@ -112,7 +125,11 @@ describe("org-creation codes", () => {
     expect(
       canIssueOrgCreationCodes(
         admin,
-        prod({ PLATFORM_ADMIN_EMAILS: "boss@example.edu", ORG_CREATION_MODE: "invite" }),
+        prod({
+          PLATFORM_ADMIN_EMAILS: "boss@example.edu",
+          ORG_CREATION_MODE: "invite",
+          PLATFORM_ORG_CREATION_ENABLED: "false",
+        }),
       ).reason,
     ).toMatch(/switched off/);
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons";
 import { useOptimistic, useState, useTransition } from "react";
 
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";

@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight, Lock } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Lock } from "@/components/icons";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";

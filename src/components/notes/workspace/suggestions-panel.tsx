@@ -3,7 +3,7 @@
 import type { Editor } from "@tiptap/core";
 import { useEditorState } from "@tiptap/react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Check, X } from "lucide-react";
+import { Check, X } from "@/components/icons";
 
 import { decideSuggestion, editorSuggestions } from "@/components/notes/editor/suggesting";
 import { Button } from "@/components/ui/button";

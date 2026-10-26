@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight, Info, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Info, TriangleAlert } from "@/components/icons";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";

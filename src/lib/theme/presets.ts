@@ -174,7 +174,21 @@ export const CBC_PRESET: ThemePreset = {
   },
 };
 
+/**
+ * What a space looks like with no theme of its own: Graphite, since
+ * 2026-10-25. Every org that had already saved a theme keeps it (their
+ * palettes are stored on the row, and resolve.ts reads those), so this is the
+ * look for new clubs, Personal spaces, and the signed-out shell - marketing,
+ * sign-in and onboarding, whose tokens globals.css ships.
+ *
+ * DEFAULT_PRESET is still Moonstone and still in the list below; it is simply
+ * no longer the one you get by default.
+ */
+export const UNTHEMED_PRESET: ThemePreset = GRAPHITE_PRESET;
+export const UNTHEMED_PRESET_ID = GRAPHITE_PRESET_ID;
+
 export const THEME_PRESETS: readonly ThemePreset[] = [
+  GRAPHITE_PRESET,
   DEFAULT_PRESET,
   BANANA_NIGHT_PRESET,
   BANANA_CREAM_PRESET,
@@ -274,7 +288,6 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
       text: "#e8e9fb",
     },
   },
-  GRAPHITE_PRESET,
 ];
 
 export function findPreset(id: string): ThemePreset | undefined {

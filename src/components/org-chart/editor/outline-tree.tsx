@@ -14,7 +14,7 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { GripVertical } from "lucide-react";
+import { GripVertical } from "@/components/icons";
 import { useMemo, useRef, useState } from "react";
 
 import { UserAvatar } from "@/components/user-avatar";

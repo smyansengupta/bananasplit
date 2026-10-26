@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, Info, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Info, Loader2, Sparkles } from "@/components/icons";
 import { useState } from "react";
 
 import { ConnectionPicker, type useAiConnections } from "@/components/ai/connection-picker";

@@ -44,7 +44,7 @@ describe("describePath", () => {
       kind: "event",
       lookup: { type: "poll", id: "p_1" },
     });
-    expect(describePath("cbc", "/app/cbc/calendar/rsvp")?.label).toBe("RSVPs");
+    expect(describePath("cbc", "/app/cbc/meetings")?.label).toBe("Meetings");
     expect(describePath("cbc", "/app/cbc/people/u_1")?.kind).toBe("person");
   });
 

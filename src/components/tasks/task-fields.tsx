@@ -10,7 +10,7 @@ import {
   Lock,
   TriangleAlert,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { TagChip } from "@/components/ui/chip";

@@ -125,16 +125,15 @@ several of them: the org switcher lists them, and it has **Join with invite
 code** and **Create organization**, which runs this same org setup for every
 new org.
 
-Who may create an organization is a platform setting, not code:
+Anyone with a verified account can create a club. Platform settings can
+narrow that:
 
-| Setting                         | What it does                                                                                                                  |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `PLATFORM_ORG_CREATION_ENABLED` | Off (the production default): only `PLATFORM_ADMIN_EMAILS` may create orgs.                                                   |
-| `ORG_CREATION_MODE=open`        | Any verified account may. Limits: 3 a day per person, and in production also 1 every 30 days per person and 20 a day overall. |
-| `ORG_CREATION_MODE=invite`      | Only people holding a single-use org-creation code from a platform admin.                                                     |
-
-Production is still admins-only. Opening it up is the owners' call, because
-it also decides who is responsible for other clubs' student data.
+| Setting                               | What it does                                                                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ORG_CREATION_MODE=open`              | The default. Any verified account may. Limits: 3 a day per person, and in production also 1 every 30 days per person and 20 a day overall. |
+| `ORG_CREATION_MODE=invite`            | Only people holding a single-use org-creation code from a platform admin.                                                                  |
+| `ORG_CREATION_MODE=admins`            | Only `PLATFORM_ADMIN_EMAILS` may create orgs.                                                                                              |
+| `PLATFORM_ORG_CREATION_ENABLED=false` | Stops new clubs: only `PLATFORM_ADMIN_EMAILS` may create orgs.                                                                             |
 
 ### What is shared and what stays in one org
 

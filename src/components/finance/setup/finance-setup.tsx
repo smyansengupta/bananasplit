@@ -14,8 +14,8 @@ import {
   TriangleAlert,
   Users,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
@@ -79,7 +79,7 @@ export interface FinanceSetupProps {
   board: BoardWidget[];
 }
 
-const STEP_ICON: Record<SetupStepId, LucideIcon> = {
+const STEP_ICON: Record<SetupStepId, IconComponent> = {
   period: CalendarRange,
   balance: Wallet,
   budget: PiggyBank,

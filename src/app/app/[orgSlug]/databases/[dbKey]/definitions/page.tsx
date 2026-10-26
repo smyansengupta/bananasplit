@@ -2,7 +2,7 @@ import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
 import { notFound } from "next/navigation";
 
-import { CircleAlert, FileJson } from "lucide-react";
+import { CircleAlert, FileJson } from "@/components/icons";
 
 import { BackLink } from "@/components/back-link";
 import { DefinitionEditForm, DefinitionImportForm } from "@/components/databases/definition-forms";

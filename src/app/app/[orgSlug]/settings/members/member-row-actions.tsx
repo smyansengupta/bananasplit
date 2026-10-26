@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState, useTransition } from "react";
 

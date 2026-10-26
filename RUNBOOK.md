@@ -425,14 +425,14 @@ can't verify; test with Google or locally.
 
 ## Security switches (Phase 0A)
 
-- **Org creation lock.** In production (`VERCEL_ENV=production`, or
-  `NODE_ENV=production` off Vercel) only a verified address listed in
-  `PLATFORM_ADMIN_EMAILS` (comma-separated) can create an organization
-  until `PLATFORM_ORG_CREATION_ENABLED=true` is set; then
-  `ORG_CREATION_MODE` (`admins`, `invite` with codes from
-  `/app/platform/org-codes`, or `open`) decides. Everyone else joins by
-  invitation. Previews and local dev are unrestricted. The President creates
-  the CBC org once through `/onboarding`. See docs/features/settings.md.
+- **Org creation.** Any verified account can create a club, everywhere. In
+  production (`VERCEL_ENV=production`, or `NODE_ENV=production` off Vercel)
+  that is limited to one per person per 30 days and 20 a day overall. To
+  narrow it, set `ORG_CREATION_MODE` to `invite` (codes from
+  `/app/platform/org-codes`) or `admins`, or set
+  `PLATFORM_ORG_CREATION_ENABLED=false` to stop new clubs. Verified addresses
+  in `PLATFORM_ADMIN_EMAILS` (comma-separated) can always create one. See
+  docs/features/settings.md.
 - **Email verification.** Password sign-ups must verify their address before
   they can create or join an org, so the platform sender (`RESEND_API_KEY`,
   `EMAIL_FROM` on a verified domain) must work on day one. The link goes out

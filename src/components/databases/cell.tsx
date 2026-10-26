@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, Check, CircleAlert, Minus } from "lucide-react";
+import { ArrowUpRight, Check, CircleAlert, Minus } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";

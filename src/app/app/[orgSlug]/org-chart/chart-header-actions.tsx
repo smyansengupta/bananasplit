@@ -1,6 +1,6 @@
 "use client";
 
-import { FileUp, History, List, Network, Pencil } from "lucide-react";
+import { FileUp, History, List, Network, Pencil } from "@/components/icons";
 import Link from "next/link";
 
 import { ItemMenu } from "@/components/item-menu";

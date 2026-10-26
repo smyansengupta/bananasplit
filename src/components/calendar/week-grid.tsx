@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Lock } from "lucide-react";
+import { Globe, Lock } from "@/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {

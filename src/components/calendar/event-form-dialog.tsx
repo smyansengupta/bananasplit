@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Globe, Ticket, TriangleAlert } from "lucide-react";
+import { ChevronDown, Globe, Ticket, TriangleAlert } from "@/components/icons";
 import { useParams, useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 
@@ -32,7 +32,7 @@ import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/pris
 import { allDaySpan } from "@/lib/calendar/dates";
 import { cn } from "@/lib/utils";
 
-import { ConferenceProviderSelect } from "./conference-provider-select";
+import { ConferencePicker } from "@/components/meetings/conference-picker";
 import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
 import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 import { toDateInputValue, toDateTimeLocalValue } from "./utils";
@@ -68,6 +68,8 @@ export interface EventFormEvent {
   location: string | null;
   conferenceProvider: ConferenceProvider;
   conferenceUrl: string | null;
+  /** True when Bananasplit made this meeting at the provider. */
+  conferenceManaged?: boolean;
   kind: EventKind;
   visibility: EventVisibility;
   hostUserId: string | null;
@@ -147,8 +149,6 @@ function usesMoreDetails(event: EventFormEvent | null): boolean {
     event.stampSlot ||
     event.capacityFull ||
     event.featured ||
-    event.conferenceUrl ||
-    event.conferenceProvider !== ConferenceProvider.NONE ||
     event.attendeeIds.length > 0,
   );
 }
@@ -455,12 +455,18 @@ function EventForm({
         </fieldset>
 
         <div className="grid gap-1.5">
-          <Label htmlFor="event-location">Location</Label>
+          <Label htmlFor="event-location">
+            {provider === ConferenceProvider.NONE ? "Location" : "Location (optional)"}
+          </Label>
           <Input
             id="event-location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="Room, address, or leave blank"
+            placeholder={
+              provider === ConferenceProvider.NONE
+                ? "Room, address, or leave blank"
+                : "Add a room too, for anyone coming in person"
+            }
             maxLength={300}
           />
         </div>
@@ -484,6 +490,20 @@ function EventForm({
             <Switch id="event-rsvp-page" checked={withRsvpPage} onCheckedChange={setWithRsvpPage} />
           </label>
         )}
+
+        {/*
+          Last, on purpose: you set the meeting up, then say where the call
+          should be. One menu, so the answer is one click and the form does
+          not open with five provider buttons across it.
+        */}
+        <ConferencePicker
+          orgId={orgId}
+          provider={provider}
+          onProviderChange={setProvider}
+          conferenceUrl={conferenceUrl}
+          onUrlChange={setConferenceUrl}
+          managed={event?.conferenceManaged ?? false}
+        />
 
         <div>
           <button
@@ -601,22 +621,6 @@ function EventForm({
               </fieldset>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label>Video call</Label>
-                <ConferenceProviderSelect value={provider} onChange={setProvider} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="event-conference-url">Meeting link</Label>
-                <Input
-                  id="event-conference-url"
-                  value={conferenceUrl}
-                  onChange={(e) => setConferenceUrl(e.target.value)}
-                  disabled={provider === ConferenceProvider.NONE}
-                  placeholder="https://…"
-                />
-              </div>
-            </div>
 
             <div className="grid gap-1.5">
               <Label htmlFor="event-description">Description</Label>

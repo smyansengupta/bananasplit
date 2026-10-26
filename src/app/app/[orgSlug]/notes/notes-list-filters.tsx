@@ -1,6 +1,6 @@
 "use client";
 
-import { ListFilter, UserRound } from "lucide-react";
+import { ListFilter, UserRound } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";

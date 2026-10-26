@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, SlidersHorizontal, X } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 

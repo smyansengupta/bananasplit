@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { BackLink } from "@/components/back-link";
-import { Lock, Users } from "lucide-react";
+import { Lock, Users } from "@/components/icons";
 import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";

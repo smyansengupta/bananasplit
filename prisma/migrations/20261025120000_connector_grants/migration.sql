@@ -113,7 +113,7 @@ GRANT EXECUTE ON FUNCTION app.revoke_connector_grants(text) TO app_auth;
 
 -- ---- app.security_manifest ------------------------------------------
 -- The tenant-only-write allowlist gains ConnectorGrant:INSERT/UPDATE/DELETE
--- (unchanged otherwise from 20261019150000_org_chart_member_edits).
+-- (unchanged otherwise from 20261024120000_meetings).
 CREATE OR REPLACE FUNCTION app.security_manifest()
 RETURNS TABLE (check_name text, object_name text)
 LANGUAGE sql STABLE SET search_path = pg_catalog, pg_temp SET jit = off
@@ -364,6 +364,10 @@ AS $$
        -- app.set_active_org_chart.
        'OrgChartVersion:INSERT', 'OrgChartVersion:UPDATE',
        'OrgChartPosition:INSERT', 'OrgChartPosition:UPDATE', 'OrgChartPosition:DELETE',
+       -- Each member hides and un-hides cards on their own Overview;
+       -- the policies pin userId to the actor, which is a stronger test
+       -- than a role check, not a weaker one.
+       'UpNextDismissal:INSERT', 'UpNextDismissal:DELETE',
        -- AI connectors: a user's own grants (userId pinned on every
        -- command, no org involved). The connector path records and renews
        -- its grant as the user; Disconnect revokes it.

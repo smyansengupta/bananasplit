@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelLeft } from "lucide-react";
+import { PanelLeft } from "@/components/icons";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Lock } from "lucide-react";
+import { Globe, Lock } from "@/components/icons";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskVisibility } from "@/generated/prisma/enums";

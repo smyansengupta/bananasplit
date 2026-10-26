@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Camera, ImageUp, Loader2, Trash2 } from "lucide-react";
+import { Building2, Camera, ImageUp, Loader2, Trash2 } from "@/components/icons";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";

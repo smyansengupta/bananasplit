@@ -1,4 +1,4 @@
-import { CalendarClock, ListTodo, Pencil } from "lucide-react";
+import { CalendarClock, ListTodo, Pencil } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";

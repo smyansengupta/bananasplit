@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ExternalLink, Plus, X } from "lucide-react";
+import { Check, ExternalLink, Plus, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 
 import { TagChip } from "@/components/ui/chip";

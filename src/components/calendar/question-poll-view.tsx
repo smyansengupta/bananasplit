@@ -16,7 +16,7 @@ import {
   Users,
   Vote,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useId, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
 

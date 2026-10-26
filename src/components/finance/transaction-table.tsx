@@ -1,6 +1,6 @@
 "use client";
 
-import { ArchiveRestore, Lock, ReceiptText, Trash2 } from "lucide-react";
+import { ArchiveRestore, Lock, ReceiptText, Trash2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 

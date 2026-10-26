@@ -6,14 +6,14 @@ import {
   FileType2,
   Lock,
   Presentation,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { familyOf, formatBytes, type FileFamily } from "@/lib/files/types";
 import { cn } from "@/lib/utils";
 
-export const FILE_ICONS: Record<FileFamily, LucideIcon> = {
+export const FILE_ICONS: Record<FileFamily, IconComponent> = {
   pdf: FileType2,
   image: FileImage,
   word: FileText,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import type { CSSProperties } from "react";
 
 import { Badge } from "@/components/ui/badge";

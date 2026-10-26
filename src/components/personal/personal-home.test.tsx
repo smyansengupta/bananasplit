@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PersonalHomeData } from "@/server/personal/home";
 
+// Up next is a client component: hiding a card redraws the Overview.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
 /**
  * The Personal dashboard as rendered: each section with data, and the empty
  * states that teach what goes there and how to start.
@@ -71,7 +74,7 @@ describe("PersonalHome", () => {
     expect(html).toContain("Nothing in the next 14 days");
     expect(html).toContain("Nothing due this week");
     expect(html).toContain("No RSVPs yet");
-    expect(html).toContain('href="/app/me-abc/calendar/rsvp"');
+    expect(html).toContain('href="/app/me-abc/meetings"');
     expect(html).toContain("No polls waiting");
     expect(html).toContain('href="/app/me-abc/calendar/find-a-time/new"');
     expect(html).not.toContain("Finish your profile");

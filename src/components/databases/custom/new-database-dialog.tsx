@@ -11,8 +11,8 @@ import {
   Table2,
   Upload,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
@@ -51,7 +51,7 @@ import { TableFrame } from "../table-frame";
 
 const IMPORT_STEPS = ["Choose a file", "Check the preview", "Import"] as const;
 
-const TEMPLATE_ICONS: Record<string, LucideIcon> = {
+const TEMPLATE_ICONS: Record<string, IconComponent> = {
   Table2,
   Sheet,
   Users,

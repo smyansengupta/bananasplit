@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Lock, ShieldCheck } from "lucide-react";
+import { Archive, Lock, ShieldCheck } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 

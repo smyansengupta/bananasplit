@@ -15,7 +15,7 @@ import {
   FileText,
   Loader2,
   Vote,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 

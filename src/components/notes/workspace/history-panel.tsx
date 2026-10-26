@@ -1,7 +1,7 @@
 "use client";
 
 import { format, isToday, isYesterday } from "date-fns";
-import { Eye, History, Loader2, Pencil, Save, Trash2 } from "lucide-react";
+import { Eye, History, Loader2, Pencil, Save, Trash2 } from "@/components/icons";
 import { useState } from "react";
 
 import {

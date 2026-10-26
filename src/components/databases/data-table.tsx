@@ -12,7 +12,7 @@ import {
   Filter,
   Loader2,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import { useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";

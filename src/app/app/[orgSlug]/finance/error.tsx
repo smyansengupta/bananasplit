@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCcw, Wallet } from "lucide-react";
+import { RotateCcw, Wallet } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 

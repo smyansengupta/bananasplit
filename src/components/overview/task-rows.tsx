@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CalendarDays, Lock } from "lucide-react";
+import { Ban, CalendarDays, Lock } from "@/components/icons";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 

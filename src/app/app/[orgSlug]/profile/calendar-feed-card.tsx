@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Link2, Loader2, RotateCcw, TriangleAlert, Unlink } from "lucide-react";
+import { Check, Copy, Link2, Loader2, RotateCcw, TriangleAlert, Unlink } from "@/components/icons";
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";

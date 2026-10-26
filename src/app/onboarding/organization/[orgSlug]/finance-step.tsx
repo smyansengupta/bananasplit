@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useMemo, useState, useTransition } from "react";
 
 import { brandInputClass } from "@/components/brand/fields";

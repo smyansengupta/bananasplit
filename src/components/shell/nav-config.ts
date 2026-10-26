@@ -16,7 +16,7 @@ export interface NavLink {
   label: string;
   /** The page, sometimes with a query (Personal's Notes and Files share /notes). */
   href: string;
-  /** lucide icon name. */
+  /** Icon name (@/components/icons). */
   icon: string;
   /** Other pages that belong to this link (People's org chart). */
   also?: string[];
@@ -39,7 +39,7 @@ export interface NavSection {
  * A Personal space's sidebar: Home (the Personal dashboard), Tasks,
  * Calendar, Files (notes and uploads together, the one library at /notes),
  * Databases (only the ones you make), Find a time (availability polls anyone
- * answers from a link) and RSVPs (its event pages and your tickets). No
+ * answers from a link) and Meetings (its calls, event pages and tickets). No
  * question polls: only members vote on those, and Personal has one. Not
  * arrangeable: there is no team to arrange it for.
  */
@@ -65,7 +65,7 @@ export const PERSONAL_NAV: readonly {
     path: "/calendar/find-a-time",
     exact: false,
   },
-  { id: "rsvps", label: "RSVPs", icon: "Ticket", path: "/calendar/rsvp", exact: false },
+  { id: "meetings", label: "Meetings", icon: "Video", path: "/meetings", also: ["/calendar/rsvp"], exact: false },
 ];
 
 /**
@@ -193,7 +193,7 @@ export type CreateActionId = "task" | "event" | "note" | "poll" | "find-a-time";
 export interface CreateAction {
   id: CreateActionId;
   label: string;
-  /** lucide icon name. */
+  /** Icon name (@/components/icons). */
   icon: string;
   /** Where it starts; none for a note, which the menu creates and then opens. */
   href?: string;

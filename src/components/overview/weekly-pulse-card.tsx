@@ -1,4 +1,4 @@
-import { CalendarDays, CheckSquare, Layers, PenLine, UserPlus, Users, Vote } from "lucide-react";
+import { CalendarDays, CheckSquare, Layers, PenLine, UserPlus, Users, Vote } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 

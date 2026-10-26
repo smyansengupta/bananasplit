@@ -54,6 +54,7 @@ const PARAM: Partial<Record<keyof WorkspaceQuery, string>> = {
   dueFrom: "dueFrom",
   dueTo: "dueTo",
   flagged: "flagged",
+  overdue: "overdue",
   blockers: "blockers",
   visibility: "visibility",
 };
@@ -124,6 +125,7 @@ export function WorkspaceProvider({
             dueFrom: undefined,
             dueTo: undefined,
             flagged: false,
+            overdue: false,
             blockers: false,
             visibility: undefined,
           }),

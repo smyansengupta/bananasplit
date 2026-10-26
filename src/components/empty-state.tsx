@@ -1,4 +1,4 @@
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ export function EmptyState({
   description?: ReactNode;
   action?: ReactNode;
   /** The section's own icon (Tasks' check, Calendar's calendar...). */
-  icon?: LucideIcon;
+  icon?: IconComponent;
   className?: string;
   size?: "default" | "compact";
 }) {

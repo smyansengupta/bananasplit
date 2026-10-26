@@ -16,7 +16,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
-  type LucideIcon,
+  type IconComponent,
   Minus,
   Pilcrow,
   Quote,
@@ -25,7 +25,7 @@ import {
   SquareCode,
   Table as TableIcon,
   Vote,
-} from "lucide-react";
+} from "@/components/icons";
 import type { Editor, Range } from "@tiptap/core";
 
 import { todayKey } from "@/lib/notes/dates";
@@ -37,7 +37,7 @@ export interface SlashCommandItem {
   key: string;
   title: string;
   description: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   group: string;
   keywords: string[];
   hint?: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, LogOut } from "lucide-react";
+import { Loader2, LogOut } from "@/components/icons";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound } from "lucide-react";
+import { KeyRound } from "@/components/icons";
 import Link from "next/link";
 import { useTransition } from "react";
 

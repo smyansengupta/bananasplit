@@ -1,6 +1,6 @@
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
-import { EyeOff, Lock, Vote } from "lucide-react";
+import { EyeOff, Lock, Vote } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";

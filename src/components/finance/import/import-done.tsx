@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Loader2, RotateCcw, Upload } from "lucide-react";
+import { ArrowRight, Check, Loader2, RotateCcw, Upload } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

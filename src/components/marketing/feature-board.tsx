@@ -4,10 +4,10 @@ import {
   Columns3,
   Gauge,
   ListTree,
-  type LucideIcon,
+  type IconComponent,
   Search,
   Table2,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { ArrowRight } from "@/components/brand/arrows";
 import { CoreMark } from "@/components/brand/logo";
@@ -28,7 +28,7 @@ const REPLACED_APPS = [
 ] as const;
 
 /** Tasks' six layouts, each with what it is for. */
-const TASK_VIEWS: readonly { name: string; icon: LucideIcon; body: string }[] = [
+const TASK_VIEWS: readonly { name: string; icon: IconComponent; body: string }[] = [
   { name: "Board", icon: Columns3, body: "Drag work from To do to Done and spot what's stuck." },
   {
     name: "Week",

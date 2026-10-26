@@ -1,6 +1,6 @@
 "use client";
 
-import { Layers } from "lucide-react";
+import { Layers } from "@/components/icons";
 import type { CSSProperties } from "react";
 
 import { EmptyState } from "@/components/empty-state";

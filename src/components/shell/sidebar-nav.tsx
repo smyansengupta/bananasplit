@@ -17,10 +17,11 @@ import {
   Plus,
   Ticket,
   Users,
+  Video,
   Wallet,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
@@ -47,7 +48,7 @@ export interface SidebarPin {
   kind: PinKind;
 }
 
-export const NAV_ICONS: Record<string, LucideIcon> = {
+export const NAV_ICONS: Record<string, IconComponent> = {
   CalendarCheck,
   CalendarClock,
   CalendarDays,
@@ -60,10 +61,11 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   NotebookText,
   Ticket,
   Users,
+  Video,
   Wallet,
 };
 
-/** Lucide at the redesign's lighter stroke. */
+/** The icons at the redesign's lighter stroke. */
 export const ICON_STROKE = 1.75;
 
 /**
@@ -332,16 +334,96 @@ function PinnedList({
   );
 }
 
+/**
+ * The folders under Files, one click from anywhere in the app. Indented and a
+ * size down from the sections so they read as Files' own, and capped: a club
+ * with twenty folders gets the first few and a link to the rest, rather than a
+ * sidebar that scrolls past everything else. Folded away on the rail, where
+ * there is no room for a name.
+ */
+function FolderLinks({
+  folders,
+  filesHref,
+  pathname,
+  search,
+  onNavigate,
+}: {
+  folders: SidebarFolder[];
+  filesHref: string;
+  pathname: string;
+  search: string;
+  onNavigate?: () => void;
+}) {
+  const current = pathname === filesHref ? new URLSearchParams(search).get("folder") : null;
+  const shown = folders.slice(0, SIDEBAR_FOLDERS);
+  const rest = folders.length - shown.length;
+  return (
+    <ul className="mb-1 ml-[1.4rem] flex flex-col gap-px border-l border-border/70 pl-2">
+      {shown.map((f) => {
+        const active = current === f.id;
+        return (
+          <li key={f.id}>
+            <Link
+              href={f.href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "focus-glow flex h-7 items-center gap-2 rounded-md px-2 text-[13px] outline-none transition-colors",
+                active
+                  ? "bg-muted text-foreground font-medium"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                // A folder's colour is a token name (chart-1…chart-5), not a colour.
+                style={{ backgroundColor: f.color ? `var(--${f.color})` : "var(--muted-foreground)" }}
+              />
+              <span className="truncate">{f.name}</span>
+            </Link>
+          </li>
+        );
+      })}
+      {rest > 0 && (
+        <li>
+          <Link
+            href={filesHref}
+            onClick={onNavigate}
+            className="text-muted-foreground hover:text-foreground focus-glow flex h-7 items-center rounded-md px-2 text-[12px] outline-none"
+          >
+            {rest} more
+          </Link>
+        </li>
+      )}
+    </ul>
+  );
+}
+
+/** A Files folder, for the links nested under Files. */
+export interface SidebarFolder {
+  id: string;
+  name: string;
+  color: string | null;
+  href: string;
+}
+
+/** How many folders sit under Files before the rest is one "more" link. */
+const SIDEBAR_FOLDERS = 8;
+
 export function SidebarNav({
   sections,
   orgId,
   pins = [],
+  folders = [],
   spaces,
   onNavigate,
 }: {
   sections: NavSection[];
   orgId: string;
   pins?: SidebarPin[];
+  /** The space's Files folders, nested under Files so each is one click away. */
+  folders?: SidebarFolder[];
   /** Personal and the clubs (SpaceList), at the foot; folded away on the rail. */
   spaces?: React.ReactNode;
   onNavigate?: () => void;
@@ -363,14 +445,24 @@ export function SidebarNav({
           <div key={section.id} className="flex flex-col gap-0.5">
             {section.label && <GroupLabel label={section.label} />}
             {section.items.map((link) => (
-              <NavItemLink
-                key={link.id}
-                link={link}
-                pathname={pathname}
-                search={search}
-                all={all}
-                onNavigate={onNavigate}
-              />
+              <div key={link.id} className="flex flex-col gap-0.5">
+                <NavItemLink
+                  link={link}
+                  pathname={pathname}
+                  search={search}
+                  all={all}
+                  onNavigate={onNavigate}
+                />
+                {link.id === "notes" && folders.length > 0 && !rail && (
+                  <FolderLinks
+                    folders={folders}
+                    filesHref={link.href}
+                    pathname={pathname}
+                    search={search}
+                    onNavigate={onNavigate}
+                  />
+                )}
+              </div>
             ))}
           </div>
         ))}

@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound } from "@/components/icons";
 import { notFound } from "next/navigation";
 
 import { TableFrame } from "@/components/databases/table-frame";

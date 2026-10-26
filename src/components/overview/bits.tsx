@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import type { PersonFace } from "@/server/overview/queries";
 
 /**
- * Small Overview pieces that work in server components (Lucide icons are
+ * Small Overview pieces that work in server components (icon components are
  * rendered here, never passed as props to a client component):
  * the ↗ circle link, the count chip, tiles and their icon chip, and the
  * avatar stack.

@@ -8,8 +8,8 @@ import {
   PenLine,
   Users,
   Vote,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { LazyAttendanceLineChart } from "@/components/reports/charts/lazy";
@@ -59,7 +59,7 @@ function Destination({
   detail,
 }: {
   href: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   detail: string;
 }) {

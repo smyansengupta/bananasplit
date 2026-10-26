@@ -1,6 +1,6 @@
 "use client";
 
-import { FileUp, Loader2 } from "lucide-react";
+import { FileUp, Loader2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 

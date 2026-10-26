@@ -40,9 +40,9 @@ const people = [
 
 describe("directory query in the URL", () => {
   it("round-trips and drops defaults", () => {
-    const state = { ...EMPTY_QUERY, q: "vp", team: "growth", role: "ADMIN" as const, year: 2028, free: true, sort: "name" as const, view: "list" as const, person: "u4" };
+    const state = { ...EMPTY_QUERY, q: "vp", team: "growth", role: "ADMIN" as const, year: 2028, free: true, sort: "name" as const, view: "grid" as const, person: "u4" };
     const qs = directorySearch(state);
-    expect(qs).toBe("q=vp&team=growth&role=admin&year=2028&free=1&sort=name&view=list&person=u4");
+    expect(qs).toBe("q=vp&team=growth&role=admin&year=2028&free=1&sort=name&view=grid&person=u4");
     expect(parseDirectoryQuery(new URLSearchParams(qs))).toEqual(state);
     expect(directorySearch(EMPTY_QUERY)).toBe("");
   });

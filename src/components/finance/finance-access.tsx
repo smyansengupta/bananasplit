@@ -1,4 +1,4 @@
-import { Receipt, UserCog, Wallet } from "lucide-react";
+import { Receipt, UserCog, Wallet } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Plus, Search } from "lucide-react";
+import { Check, Plus, Search } from "@/components/icons";
 import { useState, useTransition } from "react";
 
 import { createTag } from "@/app/app/[orgSlug]/settings/labels/actions";

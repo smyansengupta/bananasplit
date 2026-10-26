@@ -21,7 +21,7 @@ import {
   MessageSquarePlus,
   Strikethrough,
   Underline as UnderlineIcon,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { dismissToast, toast } from "@/components/ui/toaster";
 import { NOTE_FIELD, type CollabUser } from "@/lib/collab/protocol";

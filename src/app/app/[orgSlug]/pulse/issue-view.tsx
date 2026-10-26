@@ -7,7 +7,7 @@ import {
   UserPlus,
   Users,
   Vote,
-} from "lucide-react";
+} from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { formatCents } from "@/lib/finance/money";

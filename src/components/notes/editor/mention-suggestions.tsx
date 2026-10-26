@@ -2,7 +2,7 @@
 
 import { PluginKey } from "@tiptap/pm/state";
 import type { Editor, Range } from "@tiptap/core";
-import { CalendarDays, FileText } from "lucide-react";
+import { CalendarDays, FileText } from "@/components/icons";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { dayLabel, todayKey } from "@/lib/notes/dates";

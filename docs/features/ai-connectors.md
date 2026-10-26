@@ -456,10 +456,11 @@ Built as planned above, with these decisions on the way:
   - Whether a repeat authorization keeps `sid` (check 9). If it does, a
     member who disconnected can't reconnect the same app unless the WorkOS
     DELETE went through.
-- **Likely merge conflict.** `claude/personal-files-databases` has
-  uncommitted billing changes in `src/lib/billing/features.ts` and
-  `space.ts`; this branch adds the `connectors` key, its label, its pitch
-  and its plural.
+- **Merged with main (2026-10-25).** The migration's
+  `app.security_manifest()` is rebuilt from `20261024120000_meetings` (the
+  latest before it), so main's `UpNextDismissal` entries stay. The profile
+  card uses Bananasplit's own icons (`@/components/icons`). Any later
+  migration that re-creates the manifest must start from this one.
 
 ## Phase 2: read tools
 

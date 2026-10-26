@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Link2, Trash2, UserPlus } from "lucide-react";
+import { ExternalLink, Link2, Trash2, UserPlus } from "@/components/icons";
 import { useRouter } from "next/navigation";
 
 import { ItemMenu } from "@/components/item-menu";

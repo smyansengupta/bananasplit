@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Check, ChevronLeft, ChevronRight, ClipboardCopy, Lock, Send } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ClipboardCopy, Lock, Send } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";

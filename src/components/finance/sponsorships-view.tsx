@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Handshake, Plus, Ticket, Trash2 } from "lucide-react";
+import { Banknote, Handshake, Plus, Ticket, Trash2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 

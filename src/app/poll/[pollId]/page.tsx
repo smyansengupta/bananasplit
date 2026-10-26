@@ -1,4 +1,4 @@
-import { CalendarClock, Info } from "lucide-react";
+import { CalendarClock, Info } from "@/components/icons";
 import { cookies } from "next/headers";
 import Link from "next/link";
 

@@ -15,7 +15,7 @@ export const SECTION_IDS = [
   "tasks",
   "calendar",
   "find-a-time",
-  "rsvps",
+  "meetings",
   "notes",
   "people",
   "polls",
@@ -27,9 +27,10 @@ export type SectionId = (typeof SECTION_IDS)[number];
 /**
  * Sections that used to be separate and still appear in saved sidebars:
  * accepted when reading a saved config, then dropped. The org chart is part
- * of People now.
+ * of People now, and RSVPs became Meetings (see RENAMED_FROM, which carries a
+ * saved sidebar's choice across the rename).
  */
-const RETIRED_SECTION_IDS = ["org-chart"] as const;
+const RETIRED_SECTION_IDS = ["org-chart", "rsvps"] as const;
 
 export const GROUP_IDS = ["main", "club", "data"] as const;
 export type GroupId = (typeof GROUP_IDS)[number];
@@ -37,7 +38,7 @@ export type GroupId = (typeof GROUP_IDS)[number];
 export interface SectionDef {
   id: SectionId;
   label: string;
-  /** lucide icon name, resolved in the sidebar. */
+  /** Icon name (@/components/icons), resolved in the sidebar. */
   icon: string;
   /** Path under /app/{slug}. */
   path: string;
@@ -59,7 +60,7 @@ export const SECTIONS: readonly SectionDef[] = [
   { id: "people", label: "People", icon: "Users", path: "/people", also: ["/org-chart"], group: "club", description: "The member directory and the org chart." },
   { id: "polls", label: "Polls", icon: "CalendarCheck", path: "/calendar/polls", group: "club", description: "Ask the club a question and let people vote." },
   { id: "find-a-time", label: "Find a time", icon: "CalendarClock", path: "/calendar/find-a-time", group: "club", description: "Offer some times and see when everyone's free." },
-  { id: "rsvps", label: "RSVPs", icon: "Ticket", path: "/calendar/rsvp", group: "club", description: "Sign-up pages for events, and your tickets." },
+  { id: "meetings", label: "Meetings", icon: "Video", path: "/meetings", also: ["/calendar/rsvp"], group: "club", description: "Set up a call, an in-person meeting or an event with a sign-up page." },
   { id: "notes", label: "Files", icon: "FolderOpen", path: "/notes", group: "data", description: "Notes, documents and uploads." },
   { id: "databases", label: "Databases", icon: "Database", path: "/databases", group: "data", description: "Attendance, sign-ups, votes and reports." },
   { id: "finance", label: "Finance", icon: "Wallet", path: "/finance", group: "data", description: "Budget, transactions and reimbursements." },
@@ -71,7 +72,7 @@ export const SECTION_FEATURES: Record<SectionId, PlanFeature> = {
   tasks: "tasks",
   calendar: "rsvp",
   "find-a-time": "polls",
-  rsvps: "rsvp",
+  meetings: "rsvp",
   notes: "files",
   people: "people",
   polls: "polls",
@@ -86,7 +87,16 @@ export const SECTION_FEATURES: Record<SectionId, PlanFeature> = {
  */
 const ADDED_FROM: Partial<Record<SectionId, SectionId>> = {
   "find-a-time": "polls",
-  rsvps: "calendar",
+  meetings: "calendar",
+};
+
+/**
+ * A section that was renamed: a saved sidebar naming the old id means the new
+ * one, so a club that hid RSVPs still has Meetings hidden, in the same group
+ * and under its own name if they gave it one.
+ */
+const RENAMED_FROM: Partial<Record<SectionId, (typeof RETIRED_SECTION_IDS)[number]>> = {
+  meetings: "rsvps",
 };
 
 export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = { main: null, club: "Club", data: "Data" };
@@ -148,7 +158,11 @@ export function resolveSidebar(raw: unknown): ResolvedGroup[] {
   );
   const items: (ResolvedItem & { order: number })[] = [];
   for (const [i, def] of SECTIONS.entries()) {
-    const s = saved.get(def.id);
+    // A renamed section reads its own saved row first, then the row saved
+    // under its old id: a club that hid RSVPs still has Meetings hidden, in
+    // the group they put it in, under the name they gave it.
+    const renamed = RENAMED_FROM[def.id];
+    const s = saved.get(def.id) ?? (renamed ? saved.get(renamed) : undefined);
     // Saved order first. A section added since the club saved its sidebar
     // goes right after the one before it, under its heading (Find a time
     // after Polls, RSVPs after Find a time), and starts hidden if the section

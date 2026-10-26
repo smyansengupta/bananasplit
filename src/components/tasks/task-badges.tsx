@@ -1,4 +1,4 @@
-import { Ban, CalendarClock, Lock, TriangleAlert } from "lucide-react";
+import { Ban, CalendarClock, Lock, TriangleAlert } from "@/components/icons";
 
 import { TaskVisibility } from "@/generated/prisma/enums";
 import { addDaysToKey, dueDateKey, formatDueKey } from "@/lib/tasks/dates";

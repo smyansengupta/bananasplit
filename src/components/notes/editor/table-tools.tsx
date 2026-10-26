@@ -14,8 +14,8 @@ import {
   TableColumnsSplit,
   TableRowsSplit,
   Trash2,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -170,7 +170,7 @@ export function TableInsertButton({ editor, active }: { editor: Editor; active: 
 
 interface TableTool {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   run: (e: Editor) => boolean;
   can: (e: Editor) => boolean;
   active?: (e: Editor) => boolean;

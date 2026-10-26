@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { CalendarDays, Lock, Users } from "lucide-react";
+import { CalendarDays, Lock, Users } from "@/components/icons";
 import Link from "next/link";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

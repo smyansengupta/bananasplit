@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare } from "lucide-react";
+import { MessageSquare } from "@/components/icons";
 
 import { PinToggle } from "@/components/pins/pins-context";
 import { Badge } from "@/components/ui/badge";

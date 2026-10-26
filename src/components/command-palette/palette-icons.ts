@@ -63,13 +63,13 @@ import {
   UserRound,
   Users,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import type { SearchKind } from "@/lib/search/types";
 
 /** The icon of each kind of search result. */
-export const KIND_ICONS: Record<SearchKind, LucideIcon> = {
+export const KIND_ICONS: Record<SearchKind, IconComponent> = {
   page: FileText,
   action: Command,
   note: NotebookText,
@@ -88,7 +88,7 @@ export const KIND_ICONS: Record<SearchKind, LucideIcon> = {
 };
 
 /** Icons the page catalog names (catalog.ts, the sidebar sections, settings-nav). */
-export const NAMED_ICONS: Record<string, LucideIcon> = {
+export const NAMED_ICONS: Record<string, IconComponent> = {
   ArrowLeftRight,
   ArrowRightLeft,
   Bell,

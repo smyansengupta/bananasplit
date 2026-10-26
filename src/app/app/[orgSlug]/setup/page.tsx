@@ -1,4 +1,4 @@
-import { Plug } from "lucide-react";
+import { Plug } from "@/components/icons";
 import Link from "next/link";
 
 import { BackLink } from "@/components/back-link";

@@ -1,4 +1,4 @@
-import { UserPlus } from "lucide-react";
+import { UserPlus } from "@/components/icons";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";

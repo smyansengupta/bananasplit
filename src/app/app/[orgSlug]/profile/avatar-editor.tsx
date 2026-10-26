@@ -1,6 +1,6 @@
 "use client";
 
-import { ImageUp, Loader2, Trash2 } from "lucide-react";
+import { ImageUp, Loader2, Trash2 } from "@/components/icons";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";

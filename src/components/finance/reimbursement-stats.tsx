@@ -1,6 +1,6 @@
 "use client";
 
-import { HandCoins, ReceiptText } from "lucide-react";
+import { HandCoins, ReceiptText } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Stat, StatStrip } from "@/components/ui/stat";

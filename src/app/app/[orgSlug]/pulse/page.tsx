@@ -1,4 +1,4 @@
-import { Activity, ChevronRight, Settings2 } from "lucide-react";
+import { Activity, ChevronRight, Settings2 } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 

@@ -2,7 +2,7 @@
 
 import type { Editor } from "@tiptap/core";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Check, Loader2, MessageSquarePlus, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Loader2, MessageSquarePlus, Pencil, RotateCcw, Trash2 } from "@/components/icons";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {

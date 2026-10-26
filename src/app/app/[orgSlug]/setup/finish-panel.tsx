@@ -1,4 +1,4 @@
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check } from "@/components/icons";
 import Link from "next/link";
 
 import { PanelSection } from "@/components/setup/setup-ui";

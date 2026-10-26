@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons";
 import { useId, useRef, useState, useTransition } from "react";
 
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";

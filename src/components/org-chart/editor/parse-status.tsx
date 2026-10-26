@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Loader2, RotateCcw, TriangleAlert } from "lucide-react";
+import { FileText, Loader2, RotateCcw, TriangleAlert } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 

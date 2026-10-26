@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarRange, Check, ChevronDown } from "lucide-react";
+import { CalendarRange, Check, ChevronDown } from "@/components/icons";
 import type { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";

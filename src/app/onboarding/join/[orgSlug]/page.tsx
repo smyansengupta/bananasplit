@@ -1,4 +1,4 @@
-import { CalendarX } from "lucide-react";
+import { CalendarX } from "@/components/icons";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 

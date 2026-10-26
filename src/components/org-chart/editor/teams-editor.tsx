@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2, UsersRound } from "lucide-react";
+import { Plus, Trash2, UsersRound } from "@/components/icons";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";

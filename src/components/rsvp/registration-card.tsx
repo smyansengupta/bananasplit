@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, Check, Hourglass, Lock, Video } from "lucide-react";
+import { CalendarPlus, Check, Hourglass, Lock, Video } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 

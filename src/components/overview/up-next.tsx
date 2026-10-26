@@ -1,7 +1,17 @@
-import { ArrowUpRight, CalendarCheck2 } from "lucide-react";
+"use client";
+
+import { ArrowUpRight, CalendarCheck2, EyeOff, MoreHorizontal, RotateCcw } from "@/components/icons";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 import { BlockCard } from "@/components/ui/block-card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { UpNextSlot } from "@/lib/overview/up-next";
 import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
@@ -16,10 +26,38 @@ import { FaceStack, OpenLink } from "./bits";
 export function UpNext({
   slots,
   calendarHref,
+  /**
+   * Hiding a card, bound to one space by the page. Passed in rather than
+   * imported, so rendering this component does not drag the server-action
+   * stack (and next-auth with it) into everything that shows an Up next.
+   * Without it there is no Hide at all: a dismissal is a row in one org, and
+   * the Personal dashboard's Up next gathers cards from every space.
+   */
+  onHide,
+  onShowAll,
+  /** How many cards this member has hidden, so they can be put back. */
+  hiddenCount = 0,
 }: {
   slots: readonly UpNextSlot<UpNextBlock>[];
   calendarHref: string;
+  onHide?: (kind: string, refId: string) => Promise<unknown>;
+  onShowAll?: () => Promise<unknown>;
+  hiddenCount?: number;
 }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  const hide = (kind: string, id: string) =>
+    start(async () => {
+      await onHide?.(kind, id);
+      router.refresh();
+    });
+  const showAll = () =>
+    start(async () => {
+      await onShowAll?.();
+      router.refresh();
+    });
+
   return (
     <section aria-labelledby="up-next-heading">
       <div className="mb-4 flex items-center gap-2.5">
@@ -28,6 +66,17 @@ export function UpNext({
         </h2>
         <span className="text-muted-foreground text-sm max-md:hidden">The next 7 days</span>
         <span className="flex-1" />
+        {onShowAll && hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={showAll}
+            disabled={pending}
+            className="text-muted-foreground hover:text-foreground focus-glow inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] outline-none transition-colors disabled:opacity-50"
+          >
+            <RotateCcw className="size-3.5" aria-hidden="true" />
+            Show {hiddenCount} hidden
+          </button>
+        )}
         <OpenLink href={calendarHref} label="Open the calendar" />
       </div>
       {slots.length === 0 ? (
@@ -50,13 +99,39 @@ export function UpNext({
               figureLabel={moreAlerts > 0 ? `more due today or overdue` : item.figureLabel}
               aside={<FaceStack people={item.faces} total={item.facesTotal} />}
               action={
-                <Link
-                  href={item.href}
-                  aria-label={`Open ${item.title}`}
-                  className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 active:scale-[0.94]"
-                >
-                  <ArrowUpRight className="size-4" aria-hidden="true" />
-                </Link>
+                !onHide ? (
+                  <Link
+                    href={item.href}
+                    aria-label={`Open ${item.title}`}
+                    className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 active:scale-[0.94]"
+                  >
+                    <ArrowUpRight className="size-4" aria-hidden="true" />
+                  </Link>
+                ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    aria-label={`What to do with ${item.title}`}
+                    className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 active:scale-[0.94] focus-visible:outline-none"
+                  >
+                    <MoreHorizontal className="size-4" aria-hidden="true" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem asChild>
+                      <Link href={item.href}>
+                        <ArrowUpRight aria-hidden="true" />
+                        Open
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={pending}
+                      onSelect={() => hide(item.kind, item.id)}
+                    >
+                      <EyeOff aria-hidden="true" />
+                      Hide this
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                )
               }
               className={cn(
                 "min-h-[13.75rem] w-[82%] shrink-0 snap-start max-sm:min-h-44 sm:w-auto",

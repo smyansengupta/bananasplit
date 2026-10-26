@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Info, Minus, Plus } from "lucide-react";
+import { ChevronDown, Info, Minus, Plus } from "@/components/icons";
 import Link from "next/link";
 import { useId, useState, type FormEvent } from "react";
 

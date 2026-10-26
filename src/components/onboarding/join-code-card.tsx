@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Link2, RefreshCw } from "lucide-react";
+import { Check, Copy, Link2, RefreshCw } from "@/components/icons";
 import { useState, useTransition } from "react";
 
 import {

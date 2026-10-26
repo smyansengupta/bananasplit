@@ -10,7 +10,7 @@ import {
   Plus,
   Users,
   Wallet,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { BlockCard } from "@/components/ui/block-card";

@@ -4,8 +4,8 @@ import {
   GraduationCap,
   Link2,
   NotebookPen,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -240,7 +240,7 @@ function Review({ profile }: { profile: OnboardingProfile }) {
   const subtitle = [profile.pronouns, zoneShort(profile.timezone)].filter(Boolean).join(" · ");
   const blocked = blockedHoursPerWeek(profile.availability);
 
-  const rows: { icon: LucideIcon; label: string; value: React.ReactNode; edit: ProfileStep }[] = [
+  const rows: { icon: IconComponent; label: string; value: React.ReactNode; edit: ProfileStep }[] = [
     { icon: BookOpen, label: "Major", value: profile.major ?? "—", edit: "school" },
     { icon: GraduationCap, label: "Grad year", value: profile.gradYear ?? "—", edit: "school" },
     {

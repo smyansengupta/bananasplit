@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Plug } from "lucide-react";
+import { AlertTriangle, ArrowRight, Plug } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";

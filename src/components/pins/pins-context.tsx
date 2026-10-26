@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, FileText, Loader2, Pin } from "lucide-react";
+import { Check, FileText, Loader2, Pin } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
 

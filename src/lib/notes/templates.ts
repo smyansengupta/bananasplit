@@ -7,7 +7,7 @@ export interface NoteTemplate {
   id: string;
   title: string;
   description: string;
-  /** lucide icon name. */
+  /** Icon name (@/components/icons). */
   icon: string;
   html: (today: string) => string;
 }

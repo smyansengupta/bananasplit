@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff } from "lucide-react";
+import { EyeOff } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 

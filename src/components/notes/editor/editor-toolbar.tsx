@@ -21,8 +21,8 @@ import {
   Strikethrough,
   Underline as UnderlineIcon,
   Undo2,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 
@@ -30,7 +30,7 @@ import { TableInsertButton, TableTools } from "./table-tools";
 
 interface Tool {
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   active?: (e: Editor) => boolean;
   run: (e: Editor) => void;
   disabled?: (e: Editor) => boolean;

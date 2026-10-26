@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Check, LayoutGrid, Lock, Menu, type LucideIcon } from "lucide-react";
+import { Building2, Check, LayoutGrid, Lock, Menu, type IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -42,7 +42,7 @@ function NavRow({
 }: {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   active: boolean;
   /** aria-current: "page" on the item's own URL, "true" on a page below it. */
   current?: "page" | "true";

@@ -9,7 +9,7 @@ import {
   MessageSquareText,
   Trash2,
   Users,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";

@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarSync, Ticket } from "lucide-react";
+import { CalendarClock, CalendarSync, Video } from "@/components/icons";
 import Link from "next/link";
 
 import { EventCalendar, type CalendarItem } from "@/components/calendar/event-calendar";
@@ -150,9 +150,9 @@ export default async function CalendarPage({
             )}
             {can({ role }, "events.write") && (
               <Button variant="outline" className="max-md:hidden" asChild>
-                <Link href={`/app/${orgSlug}/calendar/rsvp`}>
-                  <Ticket aria-hidden="true" />
-                  RSVPs
+                <Link href={`/app/${orgSlug}/meetings`}>
+                  <Video aria-hidden="true" />
+                  Meetings
                 </Link>
               </Button>
             )}

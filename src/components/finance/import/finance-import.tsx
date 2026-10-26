@@ -8,7 +8,7 @@ import {
   Loader2,
   ShieldCheck,
   Upload,
-} from "lucide-react";
+} from "@/components/icons";
 import { useCallback, useRef, useState } from "react";
 
 import { useAiConnections } from "@/components/ai/connection-picker";

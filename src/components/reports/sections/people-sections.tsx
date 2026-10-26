@@ -1,4 +1,4 @@
-import { Stamp, UserPlus, Users } from "lucide-react";
+import { Stamp, UserPlus, Users } from "@/components/icons";
 
 import { reportLinks } from "@/server/reports/links";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ImageUp, Plus } from "lucide-react";
+import { ImageUp, Plus } from "@/components/icons";
 
 import { CreateSplitButton } from "@/components/ui/create-split-button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";

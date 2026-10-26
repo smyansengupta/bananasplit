@@ -7,7 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Globe,
-} from "lucide-react";
+} from "@/components/icons";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";

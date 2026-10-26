@@ -11,8 +11,8 @@ import {
   NotebookPen,
   Plus,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useState } from "react";
 
 import { DashedButton, FieldError, FieldLabel } from "@/components/onboarding/step-fields";
@@ -30,7 +30,7 @@ import {
 import { saveBioStep } from "./actions";
 import { StepNav, useStepSave } from "./step-nav";
 
-const KIND_ICONS: Record<LinkKind, LucideIcon> = {
+const KIND_ICONS: Record<LinkKind, IconComponent> = {
   linkedin: Briefcase,
   github: CodeXml,
   website: Globe,

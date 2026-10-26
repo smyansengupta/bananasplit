@@ -7,13 +7,13 @@ import {
   NotebookText,
   Paperclip,
   User,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import type { PinKind } from "@/lib/pins/pages";
 
 /** The icon for each kind of pinned or recently visited item. */
-export const PIN_ICONS: Record<PinKind, LucideIcon> = {
+export const PIN_ICONS: Record<PinKind, IconComponent> = {
   page: FileText,
   note: NotebookText,
   task: CheckSquare,

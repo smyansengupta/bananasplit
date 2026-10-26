@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CircleAlert, SquareCheckBig, Ticket } from "lucide-react";
+import { CalendarDays, CircleAlert, SquareCheckBig, Ticket } from "@/components/icons";
 
 import { OpenTasksBar, taskStatsSegments } from "@/components/tasks/open-tasks-bar";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import type { TaskStats } from "@/server/tasks/queries";
  * Personal home alike (redesign guide 7.4, 9): your tasks due this week
  * (with what's due today), overdue (or "All clear"), what's on the
  * calendar in the next two weeks and, at home, your RSVPs. A client
- * component so it can hand Lucide icons to Stat; pages pass plain numbers.
+ * component so it can hand icon components to Stat; pages pass plain numbers.
  */
 export function OverviewStats({
   dueSoon,

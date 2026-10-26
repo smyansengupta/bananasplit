@@ -25,7 +25,7 @@ export interface WidgetMeta {
   title: string;
   description: string;
   group: string;
-  /** lucide icon name, resolved by the board. */
+  /** Icon name (@/components/icons), resolved by the board. */
   icon: string;
   w: number;
   h: number | null;

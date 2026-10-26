@@ -1,7 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/back-link";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {

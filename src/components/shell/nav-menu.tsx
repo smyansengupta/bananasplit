@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Menu, X } from "lucide-react";
+import { FileText, Menu, X } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";

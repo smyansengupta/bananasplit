@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, EyeOff, Vote } from "lucide-react";
+import { ArrowUpRight, EyeOff, Vote } from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 

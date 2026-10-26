@@ -11,8 +11,8 @@ import {
   Upload,
   UserRound,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition, type ReactNode } from "react";
 
@@ -997,7 +997,7 @@ function ActivityRow({
   tone,
   children,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   tone?: "danger";
   children: ReactNode;
 }) {

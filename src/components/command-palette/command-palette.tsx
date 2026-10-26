@@ -1,7 +1,7 @@
 "use client";
 
 import { Command as CommandPrimitive } from "cmdk";
-import { AlertCircle, Loader2, RotateCw, Search, SearchX } from "lucide-react";
+import { AlertCircle, Loader2, RotateCw, Search, SearchX } from "@/components/icons";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";

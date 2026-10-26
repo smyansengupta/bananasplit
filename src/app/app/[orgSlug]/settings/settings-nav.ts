@@ -12,7 +12,7 @@ import { spaceIncludes, type SpaceInfo } from "@/lib/billing/space";
 export interface SettingsNavItem {
   label: string;
   href: string;
-  /** lucide icon name. */
+  /** Icon name (@/components/icons). */
   icon: string;
   group: SettingsGroup;
   /** Other paths under which this item is active (e.g. invitations under Members). */

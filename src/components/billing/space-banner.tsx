@@ -1,4 +1,4 @@
-import { Clock, PauseCircle } from "lucide-react";
+import { Clock, PauseCircle } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";

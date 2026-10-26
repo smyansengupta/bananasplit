@@ -1,4 +1,4 @@
-import { BookOpenText, Cpu, FileQuestion, LayoutTemplate, PencilLine } from "lucide-react";
+import { BookOpenText, Cpu, FileQuestion, LayoutTemplate, PencilLine } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { claudeModelLabel, formatUsd } from "@/lib/org-chart/models";

@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, CalendarDays, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, Minus } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { reportLinks } from "@/server/reports/links";

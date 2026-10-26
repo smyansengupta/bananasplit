@@ -1,7 +1,7 @@
 "use client";
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { UserPlus } from "lucide-react";
+import { UserPlus } from "@/components/icons";
 import { memo, type CSSProperties } from "react";
 
 import { UserAvatar } from "@/components/user-avatar";

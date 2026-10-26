@@ -10,7 +10,7 @@ import {
   Palette,
   SlidersHorizontal,
   Sun,
-} from "lucide-react";
+} from "@/components/icons";
 import { useMemo, useState } from "react";
 
 import { cn } from "@/lib/utils";

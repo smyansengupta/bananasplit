@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, GraduationCap, Plus } from "lucide-react";
+import { BookOpen, GraduationCap, Plus } from "@/components/icons";
 import { useMemo, useState } from "react";
 
 import { MajorInput } from "@/components/onboarding/major-input";

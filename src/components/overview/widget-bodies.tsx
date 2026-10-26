@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { FileText, Lock, NotebookText } from "lucide-react";
+import { FileText, Lock, NotebookText } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";

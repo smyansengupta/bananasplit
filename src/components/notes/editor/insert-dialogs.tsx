@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Loader2, Search, Vote } from "lucide-react";
+import { Database, Loader2, Search, Vote } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 import { listEmbedTargets, type EmbedTarget } from "@/app/app/[orgSlug]/notes/embed-actions";

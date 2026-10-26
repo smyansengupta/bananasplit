@@ -189,7 +189,10 @@ describe("people pages privacy", () => {
     expect(loadDirectoryMock).toHaveBeenCalledWith("org_cbc", "America/New_York");
     expect(html).toContain("1 member · 1 team · 1 free now");
     expect(html).toContain("Lucas Salzgeber");
-    expect(html).toContain("VP Growth · Growth");
+    // The dense list is the default now, and it shows the title and the team
+    // as separate cells rather than one joined line.
+    expect(html).toContain("VP Growth");
+    expect(html).toContain("Growth");
     expect(html).toContain('data-person-id="u_lucas"');
     // Members can't invite: no create button.
     expect(html).not.toContain("Invite people");

@@ -53,10 +53,10 @@ this is what comes on top of it.
 
 ## Within two days: the second org
 
-Keep creation closed to the public and hand out a single-use code:
+Anyone can create a club by default. To keep creation closed to the public
+instead and hand out a single-use code:
 
-1. Set `PLATFORM_ORG_CREATION_ENABLED=true` and `ORG_CREATION_MODE=invite` in
-   Vercel, then redeploy.
+1. Set `ORG_CREATION_MODE=invite` in Vercel, then redeploy.
 2. As platform admin, open `/app/platform/org-codes` and issue a code, with a
    note naming the club. Codes are single use and expire after 14 days.
 3. The other club's president signs up, verifies, does profile setup, and

@@ -1,4 +1,4 @@
-import { BookOpenText, ChevronLeft, Cpu, LayoutTemplate } from "lucide-react";
+import { BookOpenText, ChevronLeft, Cpu, LayoutTemplate } from "@/components/icons";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
