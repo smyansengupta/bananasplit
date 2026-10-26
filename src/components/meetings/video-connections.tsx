@@ -22,7 +22,9 @@ import { cn } from "@/lib/utils";
  * comes here to do. The menu belongs in the create form, where picking a
  * provider is a choice among options you already have.
  *
- * Consent opens in a new tab, so this page stays where it was.
+ * Each button is a plain form POST that navigates to the provider's consent
+ * screen (not a new tab, which a popup blocker can stop), and the callback
+ * brings the browser back to Meetings with how it went (`notice`).
  *
  * A connected provider also says which account it is and can be disconnected
  * from the same row. Disconnecting asks first, because what it costs is not

@@ -27,11 +27,13 @@ import { cn } from "@/lib/utils";
  * It is one menu now, the last thing the create form asks: you set the
  * meeting up, then say where the call should be.
  *
- * A provider the organization has not connected is still in the menu, with
- * Connect on it, so the answer to "can I use Zoom?" is never "go to an admin
- * page first". Consent opens in a NEW TAB on purpose - a redirect would throw
- * away the half-filled meeting behind this dialog - and coming back re-reads
- * the connections, so the provider you just connected is simply there.
+ * A provider the organization has not connected is still in the menu, so it
+ * says what is possible, but as a disabled item ("Not connected", or "Needs
+ * reconnecting") with a line pointing at Video calls in Meetings. Connecting
+ * is not done from here: it is a form POST there that navigates to the
+ * provider and back, which would throw away the half-filled meeting behind
+ * this dialog. The connections are read again whenever the tab regains focus,
+ * so a provider connected in another tab is simply there.
  *
  * The form reads the connections (`useMeetingConnections`) and hands them in,
  * because it needs them too: a new online meeting starts on the first
@@ -54,7 +56,8 @@ export function useMeetingConnections(orgId: string): MeetingConnection[] | null
 
   useEffect(() => load(), [load]);
   useEffect(() => {
-    // Connecting happens in another tab; coming back is when this changes.
+    // Someone may connect one from Meetings in another tab; coming back here
+    // is when that shows.
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
