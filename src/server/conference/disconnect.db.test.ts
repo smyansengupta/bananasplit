@@ -364,7 +364,7 @@ describe("disconnecting a meeting provider", () => {
     expect(await ownerDb.job.count({ where: { organizationId: orgId } })).toBe(0);
   });
 
-  it("uses the provider's own name and counts a provider with no revoke endpoint as revoked", async () => {
+  it("a provider with no revoke endpoint says what is left to do", async () => {
     if (!reachable) return;
     const teamsToken = await connect("MICROSOFT_TEAMS");
     const seen = fakeProvider();
@@ -372,10 +372,12 @@ describe("disconnecting a meeting provider", () => {
     const result = await disconnectMeetingProvider(orgId, owner(), "MICROSOFT_TEAMS");
 
     // Microsoft offers no revoke call, so there is nothing to ask and nothing
-    // that can fail: the token is ours to delete.
+    // that can fail: the token is ours to delete. But nothing was revoked, and
+    // the message must not say it was.
     expect(result).toEqual({
       ok: true,
-      message: "Disconnected. Access was revoked at Microsoft Teams and the token deleted.",
+      message:
+        "Disconnected and the token deleted. Remove Bananasplit from that Microsoft Teams account's connected apps to revoke its access too.",
     });
     expect(seen).toHaveLength(0);
     expect((await readIntegration("MICROSOFT_TEAMS")).status).toBe(IntegrationStatus.DISCONNECTED);
@@ -385,6 +387,39 @@ describe("disconnecting a meeting provider", () => {
     // Zoom, next to it, is not touched.
     expect((await readIntegration("ZOOM")).status).toBe(IntegrationStatus.CONNECTED);
     expect(teamsToken).not.toBe(storedToken);
+  });
+
+  it("a provider with no revoke endpoint, disconnected by an admin, keeps the token and says what is left", async () => {
+    if (!reachable) return;
+    const teamsToken = await connect("MICROSOFT_TEAMS");
+    const seen = fakeProvider();
+
+    const result = await disconnectMeetingProvider(orgId, admin(), "MICROSOFT_TEAMS");
+
+    expect(result).toEqual({
+      ok: true,
+      message:
+        "Disconnected. Remove Bananasplit from that Microsoft Teams account's connected apps to revoke its access too.",
+    });
+    expect(seen).toHaveLength(0);
+    expect((await readIntegration("MICROSOFT_TEAMS")).status).toBe(IntegrationStatus.DISCONNECTED);
+    const kept = await getSecret({ orgId, provider: "MICROSOFT_TEAMS", kind: "REFRESH_TOKEN" });
+    expect(kept === teamsToken).toBe(true);
+  });
+
+  it("a provider with a revoke endpoint says it was revoked, in its own name", async () => {
+    if (!reachable) return;
+    const meetToken = await connect("GOOGLE_MEET");
+    const seen = fakeProvider();
+
+    const result = await disconnectMeetingProvider(orgId, owner(), "GOOGLE_MEET");
+
+    expect(result).toEqual({
+      ok: true,
+      message: "Disconnected. Access was revoked at Google Meet and the token deleted.",
+    });
+    expect(seen.map((s) => s.url)).toEqual(["https://oauth2.googleapis.com/revoke"]);
+    expect(seen[0]!.token === meetToken).toBe(true);
   });
 
   it("forgets the cached access token, so a kept token is not used on", async () => {

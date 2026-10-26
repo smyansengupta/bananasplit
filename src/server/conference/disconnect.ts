@@ -23,7 +23,7 @@ import { clearAccessToken, getRefreshToken } from "./token";
  *   1. ADMIN+ (integrations.write).
  *   2. Revoke at the provider, best effort, with no transaction open. A
  *      provider with no revoke call (Microsoft) has nothing to ask and counts
- *      as revoked.
+ *      as revoked for step 5, but its message says nothing was revoked.
  *   3. One system transaction: DISCONNECTED, config.disconnectedAt, and the
  *      audit row. This is what stops new meetings: the sync job will not
  *      create or move one through a provider that is not CONNECTED.
@@ -88,18 +88,28 @@ export async function disconnectMeetingProvider(
 
   clearAccessToken(orgId, integration);
 
+  // A provider with no revoke call (Microsoft) counts as revoked above, so its
+  // token may be deleted, but nothing was revoked and the message must not
+  // say so: the person still has that to do in the provider's own settings.
+  const asked = def.revoke !== null;
+  const finishAtProvider = `Remove Bananasplit from that ${def.label} account's connected apps to`;
+
   if (revoked && can(actor, "integrations.remove")) {
     await removeSecret({ orgId, actor, provider: integration, kind: "REFRESH_TOKEN" });
     return {
       ok: true,
-      message: `Disconnected. Access was revoked at ${def.label} and the token deleted.`,
+      message: asked
+        ? `Disconnected. Access was revoked at ${def.label} and the token deleted.`
+        : `Disconnected and the token deleted. ${finishAtProvider} revoke its access too.`,
     };
   }
   return {
     ok: true,
-    message: revoked
-      ? `Disconnected. Access was revoked at ${def.label}.`
-      : `Disconnected. Remove Bananasplit from that ${def.label} account's connected apps to finish.`,
+    message: !revoked
+      ? `Disconnected. ${finishAtProvider} finish.`
+      : asked
+        ? `Disconnected. Access was revoked at ${def.label}.`
+        : `Disconnected. ${finishAtProvider} revoke its access too.`,
   };
 }
 
