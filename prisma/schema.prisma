@@ -451,6 +451,8 @@ enum NotificationType {
   NOTE_SHARED
   // The club's weekly pulse (PulseIssue), in-app when OrgSettings.pulseInApp
   WEEKLY_PULSE
+  // A meeting's reminder to a member going (src/server/rsvp/jobs.ts)
+  EVENT_REMINDER
 }
 
 model Notification {

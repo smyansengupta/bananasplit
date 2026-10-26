@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * service's writes are mocked (its own tests cover it).
  */
 
-const { ctx, db, service, notifyUsers } = vi.hoisted(() => {
+const { ctx, db, service, notifyUsers, scheduleEventReminders } = vi.hoisted(() => {
   const db = {
     organization: { findUnique: vi.fn() },
     membership: { count: vi.fn() },
@@ -24,6 +24,7 @@ const { ctx, db, service, notifyUsers } = vi.hoisted(() => {
     ctx: { role: "ADMIN" as string, userId: "u_admin" },
     service: { createEvent: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn() },
     notifyUsers: vi.fn(),
+    scheduleEventReminders: vi.fn(),
   };
 });
 
@@ -38,6 +39,10 @@ vi.mock("@/server/events/service", async (importOriginal) => ({
   ...service,
 }));
 vi.mock("@/server/notifications", () => ({ notifyUsers }));
+vi.mock("@/server/rsvp/service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/rsvp/service")>()),
+  scheduleEventReminders,
+}));
 
 const { createEvent, updateEvent, deleteEvent, moveEvent, rsvpToEvent } = await import("./actions");
 const { EventValidationError } = await import("@/server/events/service");
@@ -275,6 +280,20 @@ describe("attendees", () => {
       [["u_c"], "EVENT_INVITE"],
       [["u_a"], "EVENT_UPDATED"],
     ]);
+  });
+
+  it("queues the reminders when attendees are added, since they are who a reminder reaches", async () => {
+    await updateEvent(ORG, "evt_1", { attendeeIds: ["u_a", "u_b", "u_c"] });
+    expect(scheduleEventReminders).toHaveBeenCalledTimes(1);
+    expect(scheduleEventReminders).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "evt_1", startsAt: new Date(timed.startsAt) }),
+    );
+    // Removing someone, or leaving the list alone, adds no one to remind.
+    scheduleEventReminders.mockClear();
+    await updateEvent(ORG, "evt_1", { attendeeIds: ["u_a"] });
+    await updateEvent(ORG, "evt_1", { title: "Board meeting (moved rooms)" });
+    expect(scheduleEventReminders).not.toHaveBeenCalled();
   });
 
   it("can skip the reschedule notice", async () => {

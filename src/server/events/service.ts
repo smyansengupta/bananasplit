@@ -25,11 +25,7 @@ import {
 } from "@/server/conference/providers";
 import { parseGoogleConfig } from "@/server/google-calendar/config";
 import { enqueueJob } from "@/server/jobs/enqueue";
-import {
-  notifyEventCancelled,
-  resetRsvpReminders,
-  scheduleRsvpReminders,
-} from "@/server/rsvp/service";
+import { notifyEventCancelled, scheduleEventReminders } from "@/server/rsvp/service";
 import { markReportsDataChanged } from "@/server/reports/data-version";
 
 /**
@@ -49,6 +45,9 @@ import { markReportsDataChanged } from "@/server/reports/data-version";
  *     gcal:{eventId} when the org has a Google connection (Phase 7 worker);
  *     site-rebuild:{orgId} (runAt +60s, coalesced) when a PUBLIC event
  *       changes and the org has a website build hook;
+ *     rsvp-fanout:{eventId}:r{offset}:{startMinute}, one per reminder time,
+ *       when an event is created here, moved or given other reminder times
+ *       (scheduleEventReminders);
  *     an OrgAuditLog row;
  *     invalidate() of tags.publicEvents(org) (when a PUBLIC event is
  *       involved) and tags.reports(org), after commit.
@@ -394,6 +393,28 @@ function needsGoogleSync(
     : integrations.google.hasInternalCalendar;
 }
 
+/**
+ * Whether a save changed when this meeting's reminders go out: created
+ * here (not brought in by the Google import or the website sync, whose
+ * events were not made to remind anyone), moved, or given other reminder
+ * times. scheduleEventReminders' job keys merge, so queuing again for a
+ * start that already has them is harmless.
+ */
+function remindersChanged(
+  before: ServiceEvent | null,
+  after: ServiceEvent,
+  origin: NonNullable<EventSaveOptions["origin"]>,
+): boolean {
+  if (!before) return origin === "suite";
+  if (before.startsAt.getTime() !== after.startsAt.getTime()) return true;
+  if (before.allDay !== after.allDay) return true;
+  // The column is nullable in the database (an array column always is);
+  // a row with none has no reminders.
+  const offsets = (list: readonly number[] | null) =>
+    [...(list ?? [])].sort((a, b) => a - b).join(",");
+  return offsets(before.reminderMinutes) !== offsets(after.reminderMinutes);
+}
+
 async function afterSave(
   ctx: EventServiceContext,
   action: "event.created" | "event.updated" | "event.deleted",
@@ -401,6 +422,7 @@ async function afterSave(
   after: ServiceEvent,
   integrations: Integrations,
   googleSync: boolean,
+  origin: NonNullable<EventSaveOptions["origin"]> = "suite",
 ): Promise<string[]> {
   if (googleSync) {
     await enqueueJob(ctx.db, {
@@ -436,21 +458,18 @@ async function afterSave(
       runAt: new Date(Date.now() + 60_000),
     });
   }
-  // A move also forgets which reminders went out (they were for the old
-  // time), even while the page is off, so turning it back on reminds again.
-  const moved = before !== null && before.startsAt.getTime() !== after.startsAt.getTime();
-  if (moved && action !== "event.deleted") {
-    await resetRsvpReminders(ctx.db, ctx.organizationId, after.id);
-  }
-  // An RSVP page's guests: reminders follow the start time, and a deleted
-  // event tells them it's off (not a merge: mergeEvents won't merge away a
-  // live page that people signed up on).
-  if (after.rsvpEnabled) {
-    if (action === "event.deleted") {
-      if (!after.mergedIntoId) await notifyEventCancelled(ctx.db, ctx.organizationId, after.id);
-    } else if (!before || moved) {
-      await scheduleRsvpReminders(ctx.db, after);
+  if (action === "event.deleted") {
+    // An RSVP page's guests are told it's off (not a merge: mergeEvents
+    // won't merge away a live page that people signed up on). Its queued
+    // reminders find it gone and send nothing.
+    if (after.rsvpEnabled && !after.mergedIntoId) {
+      await notifyEventCancelled(ctx.db, ctx.organizationId, after.id);
     }
+  } else if (remindersChanged(before, after, origin)) {
+    // One fanout per reminder time, for members and guests alike. After a
+    // move the old time's fanouts find the start changed and do nothing,
+    // and the new ones forget what went out for the old time.
+    await scheduleEventReminders(ctx.db, after);
   }
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
@@ -514,7 +533,15 @@ export async function createEvent(
     },
     select: EVENT_SELECT,
   });
-  const tags = await afterSave(ctx, "event.created", null, event, integrations, googleSync);
+  const tags = await afterSave(
+    ctx,
+    "event.created",
+    null,
+    event,
+    integrations,
+    googleSync,
+    options.origin ?? "suite",
+  );
   return { event, tags };
 }
 
@@ -569,7 +596,15 @@ export async function updateEvent(
     },
     select: EVENT_SELECT,
   });
-  const tags = await afterSave(ctx, "event.updated", before, event, integrations, googleSync);
+  const tags = await afterSave(
+    ctx,
+    "event.updated",
+    before,
+    event,
+    integrations,
+    googleSync,
+    options.origin ?? "suite",
+  );
   return { event, tags };
 }
 

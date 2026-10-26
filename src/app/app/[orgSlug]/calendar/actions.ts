@@ -15,6 +15,7 @@ import { MAX_REMINDERS } from "@/lib/meetings/reminders";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
 import * as events from "@/server/events/service";
 import { notifyUsers } from "@/server/notifications";
+import { scheduleEventReminders } from "@/server/rsvp/service";
 
 import { actionError } from "./action-result";
 
@@ -240,6 +241,11 @@ const updateEventTx = withOrgAction(
     }
 
     const { event } = await events.updateEvent(ctx, eventId, patch);
+    // Someone new to remind. The service queued the reminders only if the
+    // time or the offsets changed; an event that came in from the Google
+    // import may have none queued yet. Its job keys merge, so queuing again
+    // is harmless.
+    if (added.length > 0) await scheduleEventReminders(ctx.db, event);
     const link = eventLink(org.slug, eventId);
     await notify(ctx, added, NotificationType.EVENT_INVITE, `You were invited to "${event.title}"`, link);
     const rescheduled =
