@@ -13,6 +13,7 @@ import {
 } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
+import { DEFAULT_REMINDER_MINUTES, reminderOffsetsSchema } from "@/lib/meetings/reminders";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
 import { publicEvents, reports } from "@/server/cache/tags";
@@ -143,6 +144,12 @@ const eventFields = {
   capacityFull: z.boolean(),
   featured: z.boolean(),
   publicNote: optionalText(500),
+  /**
+   * Minutes before the start to remind people, earliest first once parsed.
+   * Deliberately no default here: a create without it takes the org's
+   * default (createEvent), and a patch without it leaves the column alone.
+   */
+  reminderMinutes: reminderOffsetsSchema.optional(),
 };
 
 /** Input for createEvent. Defaults: INTERNAL, OTHER, not all-day, no conference. */
@@ -183,6 +190,7 @@ export const EVENT_SELECT = {
   capacityFull: true,
   featured: true,
   publicNote: true,
+  reminderMinutes: true,
   rsvpEnabled: true,
   createdById: true,
   deletedAt: true,
@@ -283,6 +291,19 @@ function checkShape(e: EventShape): void {
 function formatOf(e: { conferenceProvider: ConferenceProvider; location: string | null }): MeetingFormat {
   if (e.conferenceProvider === ConferenceProvider.NONE) return MeetingFormat.IN_PERSON;
   return e.location?.trim() ? MeetingFormat.HYBRID : MeetingFormat.ONLINE;
+}
+
+/**
+ * What a new meeting is reminded at when its creator did not say: the
+ * organization's default (Settings > General), or a day's and an hour's
+ * notice for an organization with no settings row.
+ */
+async function orgReminderDefault(ctx: EventServiceContext): Promise<number[]> {
+  const settings = await ctx.db.orgSettings.findUnique({
+    where: { organizationId: ctx.organizationId },
+    select: { meetingReminderMinutes: true },
+  });
+  return settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES];
 }
 
 async function checkHost(
@@ -463,6 +484,7 @@ export async function createEvent(
   await checkHost(ctx, data.hostUserId);
 
   const integrations = await loadIntegrations(ctx);
+  const reminderMinutes = data.reminderMinutes ?? (await orgReminderDefault(ctx));
   const link = options.google;
   const googleSync = link
     ? false
@@ -470,6 +492,7 @@ export async function createEvent(
   const event = await ctx.db.event.create({
     data: {
       ...data,
+      reminderMinutes,
       organizationId: ctx.organizationId,
       createdById: ctx.userId,
       conferenceUrl:

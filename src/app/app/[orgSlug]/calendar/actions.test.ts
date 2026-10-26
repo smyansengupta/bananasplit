@@ -135,6 +135,52 @@ describe("authorization: events are ADMIN+", () => {
   });
 });
 
+describe("reminders", () => {
+  it("passes a new event's reminder offsets to the service as they were sent", async () => {
+    await createEvent(ORG, { ...timed, reminderMinutes: [60, 1440] });
+    expect(service.createEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ reminderMinutes: [60, 1440] }),
+    );
+  });
+
+  it("names no reminders when the form sent none, so the service takes the org's default", async () => {
+    await createEvent(ORG, timed);
+    expect(service.createEvent.mock.calls[0]![1]).not.toHaveProperty("reminderMinutes");
+  });
+
+  it("keeps an empty list, which means no reminders rather than the default", async () => {
+    await createEvent(ORG, { ...timed, reminderMinutes: [] });
+    expect(service.createEvent.mock.calls[0]![1]).toHaveProperty("reminderMinutes", []);
+  });
+
+  it("changes an event's reminders only when the patch names them", async () => {
+    await updateEvent(ORG, "evt_1", { reminderMinutes: [30] });
+    expect(service.updateEvent).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "evt_1",
+      expect.objectContaining({ reminderMinutes: [30] }),
+    );
+    await updateEvent(ORG, "evt_1", { title: "Renamed" });
+    expect(service.updateEvent.mock.calls[1]![2]).not.toHaveProperty("reminderMinutes");
+  });
+
+  it("refuses more than eight with a sentence, and returns the service's own message for a bad one", async () => {
+    const nine = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    expect(await createEvent(ORG, { ...timed, reminderMinutes: nine })).toEqual({
+      error: "Use at most 8 reminders.",
+    });
+    expect(service.createEvent).not.toHaveBeenCalled();
+
+    service.createEvent.mockRejectedValueOnce(
+      new EventValidationError("Each reminder time can only be used once."),
+    );
+    expect(await createEvent(ORG, { ...timed, reminderMinutes: [60, 60] })).toEqual({
+      error: "Each reminder time can only be used once.",
+    });
+  });
+});
+
 describe("times", () => {
   it("stores all-day events as org-timezone midnights with an exclusive end", async () => {
     await createEvent(ORG, { title: "Hackathon", allDay: true, startsAt: "2026-10-10", endsAt: "2026-10-11" });

@@ -11,6 +11,7 @@ import {
 } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { conferenceUrlError, resolveTimes } from "@/lib/calendar/event-input";
+import { MAX_REMINDERS } from "@/lib/meetings/reminders";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
 import * as events from "@/server/events/service";
 import { notifyUsers } from "@/server/notifications";
@@ -54,6 +55,11 @@ const eventFormSchema = z.object({
   featured: z.boolean().optional(),
   publicNote: z.string().max(500).nullish(),
   stampSlot: z.number().int().min(1).max(12).nullish(),
+  /** Minutes before the start to remind people. The service validates the range and duplicates; left out, a new event takes the organization's default. */
+  reminderMinutes: z
+    .array(z.number().int())
+    .max(MAX_REMINDERS, `Use at most ${MAX_REMINDERS} reminders.`)
+    .optional(),
   attendeeIds: z.array(z.string().min(1).max(100)).max(200).optional(),
   /** Tell existing attendees about a reschedule, a move or a cancellation (default yes). */
   notifyAttendees: z.boolean().optional(),
@@ -121,6 +127,7 @@ function serviceFields(data: z.infer<typeof eventPatchSchema>) {
   if (data.featured !== undefined) out.featured = data.featured;
   if (data.publicNote !== undefined) out.publicNote = data.publicNote;
   if (data.stampSlot !== undefined) out.stampSlot = data.stampSlot;
+  if (data.reminderMinutes !== undefined) out.reminderMinutes = data.reminderMinutes;
   return out;
 }
 
