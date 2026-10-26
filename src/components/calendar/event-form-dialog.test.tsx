@@ -349,6 +349,23 @@ describe("EventFormDialog: the shape of a new meeting", () => {
       expect(mocks.createEvent).not.toHaveBeenCalled();
     });
 
+    it("drops the ask for a call when the connections arrive and choose one", async () => {
+      // Enter pressed before the connections had loaded: nothing chosen yet.
+      mocks.connections.current = null;
+      const view = open({ defaultShape: "online" });
+      typeTitle("Standup");
+      save();
+      expect((await screen.findByRole("alert")).textContent).toBe(
+        "Choose a video call or paste a link, or pick In person.",
+      );
+
+      mocks.connections.current = ZOOM_CONNECTED;
+      view.again();
+
+      expect(picker()?.getAttribute("data-provider")).toBe("ZOOM");
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
     it("saves once a call is chosen after being asked", async () => {
       mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
       open({ defaultShape: "online" });

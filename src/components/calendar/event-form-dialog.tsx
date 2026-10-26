@@ -272,6 +272,8 @@ function EventForm({
     setConnectionsSeen(true);
     if (!event && shape === "online" && provider === ConferenceProvider.NONE && connected) {
       setProvider(connected);
+      // Save pressed before they loaded asked for a call; there is one now.
+      setError((current) => (current === NO_CALL_ERROR ? null : current));
     }
   }
   const [host, setHost] = useState<string>(
