@@ -337,17 +337,26 @@ export interface RemoveSecretInput {
   kind?: SecretKind;
 }
 
-/** Deletes the secret(s) and marks the integration DISCONNECTED. OWNER only. */
+/**
+ * Deletes the secret(s) and marks the integration DISCONNECTED. OWNER only.
+ *
+ * Locks the OrgIntegration row first, then deletes the OrgSecret rows: the
+ * order rotateSecret and setSecret take them in. Delete-then-lock would
+ * deadlock with a refresh keeping a rotated token, which holds the
+ * integration row and waits for the secret row this holds.
+ */
 export async function removeSecret(input: RemoveSecretInput): Promise<boolean> {
   requirePermission(input.actor, "integrations.remove");
   if (input.kind) checkKind(input.kind);
   const kinds = input.kind ? [input.kind] : [...SECRET_KINDS];
 
   return withSystemOrgTx(input.orgId, { userId: input.actor.userId }, async ({ db }) => {
-    const integration = await db.orgIntegration.findUnique({
-      where: { organizationId_provider: { organizationId: input.orgId, provider: input.provider } },
-      select: { id: true },
-    });
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "OrgIntegration"
+       WHERE "organizationId" = ${input.orgId}
+         AND "provider" = ${input.provider}::"IntegrationProvider"
+         FOR UPDATE`;
+    const integration = rows[0];
     if (!integration) return false;
     let removed = false;
     for (const kind of kinds) {
