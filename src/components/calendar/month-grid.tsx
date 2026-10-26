@@ -41,6 +41,7 @@ export function MonthGrid({
   draggingId,
   chipProps,
   dayProps,
+  chipHref,
 }: {
   items: readonly CalendarItem[];
   fromKey: string;
@@ -59,6 +60,8 @@ export function MonthGrid({
   chipProps?: (item: CalendarItem) => Record<string, unknown>;
   /** Extra props for a day cell, used to accept a dropped chip. */
   dayProps?: (dayKey: string) => Record<string, unknown>;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   const { rows, monthKey } = monthGridShape(fromKey, dayCount, todayKey);
   const byDay = bucketByDay(items);
@@ -101,6 +104,7 @@ export function MonthGrid({
                   isDropTarget={dropDayKey === cell.key}
                   draggingId={draggingId ?? null}
                   chipProps={chipProps}
+                  chipHref={chipHref}
                   dayProps={dayProps}
                 />
               ))}
@@ -125,6 +129,7 @@ function DayCell({
   draggingId,
   chipProps,
   dayProps,
+  chipHref,
 }: {
   cell: MonthCell;
   items: CalendarItem[];
@@ -138,6 +143,8 @@ function DayCell({
   draggingId: string | null;
   chipProps?: (item: CalendarItem) => Record<string, unknown>;
   dayProps?: (dayKey: string) => Record<string, unknown>;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   // Events before tasks' due dates: tasks are a layer over the calendar.
   const ordered = [...items.filter((i) => !i.task), ...items.filter((i) => i.task)];
@@ -177,6 +184,7 @@ function DayCell({
           onOpen={onOpen}
           showSync={showSync}
           extra={chipProps?.(item)}
+          chipHref={chipHref}
         />
       ))}
 
@@ -197,6 +205,7 @@ function EventChip({
   onOpen,
   showSync,
   extra,
+  chipHref,
 }: {
   item: CalendarItem;
   open: boolean;
@@ -204,6 +213,8 @@ function EventChip({
   onOpen: (item: CalendarItem, anchor: HTMLElement) => void;
   showSync: boolean;
   extra?: Record<string, unknown>;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   const kind = KIND_META[item.kind];
   const visibility = VISIBILITY_META[item.visibility];
@@ -213,6 +224,8 @@ function EventChip({
       type="button"
       className="cal-chip"
       style={itemStyle(item)}
+      data-context-href={chipHref?.(item)}
+      data-context-label={item.title}
       data-internal={item.visibility === "INTERNAL" && !item.task ? "true" : undefined}
       data-task={item.task ? (item.task.done ? "done" : "open") : undefined}
       data-rsvp={item.rsvp === "YES" ? "yes" : undefined}

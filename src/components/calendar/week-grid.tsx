@@ -49,6 +49,7 @@ export function WeekGrid({
   openId,
   onOpen,
   showSync,
+  chipHref,
 }: {
   items: readonly CalendarItem[];
   /** The first day of the window (a Sunday for a week). */
@@ -59,6 +60,8 @@ export function WeekGrid({
   openId: string | null;
   onOpen: (item: CalendarItem, anchor: HTMLElement) => void;
   showSync: boolean;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   const windowKeys = useMemo(() => dayKeysBetween(fromKey, dayCount), [fromKey, dayCount]);
   const byDay = useMemo(() => bucketByDay(items), [items]);
@@ -190,6 +193,7 @@ export function WeekGrid({
                 <div key={key} className="cal-week__allday">
                   {dayItems.map((item) => (
                     <AllDayChip
+                      chipHref={chipHref}
                       key={item.id}
                       item={item}
                       open={openId === item.id}
@@ -224,6 +228,7 @@ export function WeekGrid({
 
                 {placed.map((placement) => (
                   <Slot
+                    chipHref={chipHref}
                     key={placement.item.id}
                     placement={placement}
                     startHour={startHour}
@@ -251,12 +256,15 @@ function Slot({
   open,
   onOpen,
   showSync,
+  chipHref,
 }: {
   placement: PlacedItem<CalendarItem>;
   startHour: number;
   open: boolean;
   onOpen: (item: CalendarItem, anchor: HTMLElement) => void;
   showSync: boolean;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   const { item, startMinutes, endMinutes, lane, lanes } = placement;
   const drawnEnd = Math.max(endMinutes, startMinutes + MIN_SLOT_MINUTES);
@@ -279,6 +287,8 @@ function Slot({
       data-internal={item.visibility === "INTERNAL" ? "true" : undefined}
       data-rsvp={item.rsvp === "YES" ? "yes" : undefined}
       data-compact={compact ? "true" : undefined}
+      data-context-href={chipHref?.(item)}
+      data-context-label={item.title}
       aria-expanded={open}
       aria-label={itemLabel(
         item,
@@ -307,10 +317,13 @@ function AllDayChip({
   item,
   open,
   onOpen,
+  chipHref,
 }: {
   item: CalendarItem;
   open: boolean;
   onOpen: (item: CalendarItem, anchor: HTMLElement) => void;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   const VisIcon = item.visibility === "PUBLIC" ? Globe : Lock;
   return (
@@ -321,6 +334,8 @@ function AllDayChip({
       data-internal={item.visibility === "INTERNAL" && !item.task ? "true" : undefined}
       data-task={item.task ? (item.task.done ? "done" : "open") : undefined}
       data-rsvp={item.rsvp === "YES" ? "yes" : undefined}
+      data-context-href={chipHref?.(item)}
+      data-context-label={item.title}
       aria-expanded={open}
       aria-label={itemLabel(
         item,

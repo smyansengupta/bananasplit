@@ -38,6 +38,7 @@ export function AgendaList({
   onOpen,
   showSync,
   emptyState,
+  chipHref,
 }: {
   items: readonly CalendarItem[];
   fromKey: string;
@@ -47,6 +48,8 @@ export function AgendaList({
   onOpen: (item: CalendarItem, anchor: HTMLElement) => void;
   showSync: boolean;
   emptyState: React.ReactNode;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   const days = useMemo(() => agendaDays(items, fromKey, dayCount), [items, fromKey, dayCount]);
 
@@ -68,6 +71,7 @@ export function AgendaList({
           </h3>
           {day.items.map((item) => (
             <AgendaRow
+              chipHref={chipHref}
               key={`${day.key}-${item.id}`}
               item={item}
               open={openId === item.id}
@@ -86,11 +90,14 @@ function AgendaRow({
   open,
   onOpen,
   showSync,
+  chipHref,
 }: {
   item: CalendarItem;
   open: boolean;
   onOpen: (item: CalendarItem, anchor: HTMLElement) => void;
   showSync: boolean;
+  /** Where this item lives, for a right-click on its chip. */
+  chipHref?: (item: CalendarItem) => string;
 }) {
   const kind = KIND_META[item.kind];
   const visibility = VISIBILITY_META[item.visibility];
@@ -102,6 +109,8 @@ function AgendaRow({
       className="cal-agenda__row"
       style={itemStyle(item)}
       data-task={item.task ? (item.task.done ? "done" : "open") : undefined}
+      data-context-href={chipHref?.(item)}
+      data-context-label={item.title}
       aria-expanded={open}
       onClick={(event) => onOpen(item, event.currentTarget)}
     >

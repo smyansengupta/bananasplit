@@ -1,6 +1,12 @@
 "use client";
 
-import { MoreHorizontal, type IconComponent } from "@/components/icons";
+import {
+  ArrowUpRight,
+  ExternalLink,
+  Link2,
+  MoreHorizontal,
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import {
   Fragment,
@@ -20,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/toaster";
 import type { ItemMenuEntry } from "@/components/item-menu";
 
 /**
@@ -136,6 +143,60 @@ function wantsNativeMenu(event: MouseEvent): boolean {
 }
 
 /**
+ * Everything else that opens.
+ *
+ * A card or row with actions of its own registers them. Anything else that
+ * opens something — a link, or a row carrying data-context-href (and, if
+ * its own text would read badly, data-context-label) — still
+ * gets the three things the browser would have offered for a link, drawn
+ * like the rest of the app: open it, open it in a new tab, copy the
+ * address. So a right-click lands on something on every page, including the
+ * ones nobody has written an action list for, and a page added later starts
+ * out covered rather than dead.
+ */
+function linkFallback(target: Element): { heading?: string; entries: MenuState["entries"] } | null {
+  // A row that opens something without being a link — a calendar chip, a
+  // person's card — says where it goes with data-context-href, and is
+  // treated the same way.
+  const opener = target.closest("a[href], [data-context-href]");
+  if (!opener) return null;
+  const href = opener.getAttribute("data-context-href") ?? opener.getAttribute("href") ?? "";
+  if (!href || href.startsWith("#")) return null;
+  // What to call it: what the row says it is, then its accessible name, and
+  // only then its text, which on a wide row is every column at once.
+  const name = (
+    opener.getAttribute("data-context-label") ??
+    opener.getAttribute("aria-label") ??
+    opener.textContent ??
+    ""
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+  const url = new URL(href, window.location.origin).href;
+  return {
+    heading: name ? name.slice(0, 60) : undefined,
+    entries: [
+      { label: "Open", icon: ArrowUpRight, href },
+      {
+        label: "Open in a new tab",
+        icon: ExternalLink,
+        onSelect: () => window.open(url, "_blank", "noopener,noreferrer"),
+      },
+      {
+        label: "Copy link",
+        icon: Link2,
+        onSelect: () => {
+          void navigator.clipboard
+            ?.writeText(url)
+            .then(() => toast({ title: "Link copied" }))
+            .catch(() => toast({ title: "Couldn't copy that link", tone: "error" }));
+        },
+      },
+    ],
+  };
+}
+
+/**
  * Mounted once, inside the app shell. Everything above is inert without it.
  */
 export function ContextActionsHost() {
@@ -157,20 +218,29 @@ export function ContextActionsHost() {
         setMenu(null);
         return;
       }
-      let node: Element | null = event.target as Element | null;
+      const target = event.target as Element | null;
+      if (!target) return;
+      let node: Element | null = target;
       while (node && !REGISTRY.has(node)) node = node.parentElement;
-      if (!node) return;
-      const found = REGISTRY.get(node)!;
-      const entries = found.items.filter(Boolean) as MenuState["entries"];
-      if (entries.length === 0) return;
+      const found = node ? REGISTRY.get(node) : undefined;
+      let entries = (found?.items.filter(Boolean) ?? []) as MenuState["entries"];
+      let heading = found?.heading;
+      if (entries.length === 0) {
+        // Nothing registered here, or nothing it can do right now.
+        const fallback = linkFallback(target);
+        if (!fallback) return;
+        entries = fallback.entries;
+        heading = fallback.heading;
+        node = target;
+      }
       event.preventDefault();
       last.current = { x: event.clientX, y: event.clientY, at: Date.now() };
       setMenu({
         x: event.clientX,
         y: event.clientY,
-        row: node,
+        row: node!,
         entries,
-        heading: found.heading,
+        heading,
       });
     }
     document.addEventListener("contextmenu", onContextMenu);

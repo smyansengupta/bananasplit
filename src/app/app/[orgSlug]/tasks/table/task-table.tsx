@@ -400,6 +400,10 @@ export function TaskTable({
                   <TableRow
                     className="hover:bg-muted/50 group cursor-pointer"
                     onClick={() => showTask(task)}
+                    // The row carries no "…", so this is what a right-click
+                    // on it offers: the task's own page.
+                    data-context-href={`/app/${org.slug}/tasks/${task.id}`}
+                    data-context-label={task.title}
                   >
                     <TableCell
                       className={cn(PINNED_CELL, PINNED_CHECKBOX)}

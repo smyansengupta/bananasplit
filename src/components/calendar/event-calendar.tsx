@@ -222,6 +222,14 @@ export function EventCalendar({
     navigate({ ...range, kinds: KIND_ORDER.filter((k) => kinds.includes(k)) });
   }
 
+  // Where a chip's item lives, for a right-click on it: a task's due date is
+  // the task, anything else is the event's own page.
+  const chipHref = useCallback(
+    (item: CalendarItem) =>
+      item.task ? `/app/${orgSlug}/tasks/${item.id}` : `/app/${orgSlug}/calendar/${item.id}`,
+    [orgSlug],
+  );
+
   const openPeek = useCallback(
     (item: CalendarItem, chip: HTMLElement) => {
       // A task's due date opens the task itself.
@@ -504,6 +512,7 @@ export function EventCalendar({
       <div className={cn("cal-wrap transition-opacity", isPending && "opacity-60")} ref={wrapRef}>
         {range.view === "dayGridMonth" && (
           <MonthGrid
+            chipHref={chipHref}
             items={items}
             fromKey={range.fromKey}
             dayCount={dayCount}
@@ -537,6 +546,7 @@ export function EventCalendar({
               This month
             </h2>
             <AgendaList
+              chipHref={chipHref}
               items={items}
               fromKey={range.fromKey}
               dayCount={dayCount}
@@ -551,6 +561,7 @@ export function EventCalendar({
 
         {(range.view === "timeGridWeek" || range.view === "timeGridDay") && (
           <WeekGrid
+            chipHref={chipHref}
             items={items}
             fromKey={range.fromKey}
             dayCount={range.view === "timeGridDay" ? 1 : 7}
@@ -563,6 +574,7 @@ export function EventCalendar({
 
         {range.view === "listMonth" && (
           <AgendaList
+            chipHref={chipHref}
             items={items}
             fromKey={range.fromKey}
             dayCount={dayCount}
