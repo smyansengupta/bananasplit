@@ -2,14 +2,17 @@
 
 import { z } from "zod";
 
-import { IntegrationProvider } from "@/generated/prisma/enums";
+import { IntegrationProvider, MeetingFormat } from "@/generated/prisma/enums";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
-import { can } from "@/lib/auth/permissions";
+import { can, requirePermission } from "@/lib/auth/permissions";
 import { loadMeetingConnections, type MeetingConnection } from "@/server/conference/connections";
 import { disconnectMeetingProvider } from "@/server/conference/disconnect";
-import { MEETING_INTEGRATIONS } from "@/server/conference/providers";
+import { MEETING_INTEGRATIONS, providerForConference } from "@/server/conference/providers";
 import { withOrgAction } from "@/server/db/context";
 import { resolveActor } from "@/server/integrations/service";
+import { enqueueJob } from "@/server/jobs/enqueue";
+
+import { actionError } from "../calendar/action-result";
 
 /**
  * Which video accounts this organization has connected, for the client
@@ -74,5 +77,64 @@ export async function disconnectMeetingProviderAction(
     if (error instanceof NotFoundError) return { ok: false, message: "Not found." };
     if (error instanceof z.ZodError) return { ok: false, message: "Invalid input." };
     throw error;
+  }
+}
+
+const retryTx = withOrgAction(async (ctx, eventId: string): Promise<{ error?: string }> => {
+  requirePermission(ctx, "events.write");
+  const event = await ctx.db.event.findFirst({
+    where: { id: eventId, organizationId: ctx.organizationId, deletedAt: null, mergedIntoId: null },
+    select: {
+      format: true,
+      conferenceProvider: true,
+      conferenceManaged: true,
+      conferenceUrl: true,
+    },
+  });
+  if (!event) return { error: "That meeting no longer exists." };
+
+  // Only a meeting the sync job could make: online, at a provider we have a
+  // client for, and not a link someone pasted (the job never touches one, so
+  // marking it PENDING would leave it that way).
+  const wantsOne =
+    event.format !== MeetingFormat.IN_PERSON &&
+    providerForConference(event.conferenceProvider) !== null &&
+    (event.conferenceManaged || !event.conferenceUrl);
+  if (!wantsOne) return { error: "This meeting has no video call to make." };
+
+  // PENDING first, as afterSave does (src/server/events/service.ts): the page
+  // then says "getting the link" at once. Raw, because marking a row is not an
+  // edit, so updatedAt stays where it was. The job is enqueued in the same
+  // transaction, so a row is never PENDING with no job to resolve it.
+  await ctx.db.$executeRaw`
+    UPDATE "Event" SET "conferenceSyncState" = 'PENDING'::"CalendarSyncState"
+     WHERE "organizationId" = ${ctx.organizationId} AND "id" = ${eventId}`;
+  await enqueueJob(ctx.db, {
+    orgId: ctx.organizationId,
+    kind: "conference-sync",
+    key: eventId,
+    payload: { eventId },
+  });
+  return {};
+});
+
+/**
+ * "Try again" on a meeting whose video call failed (docs/features/meetings.md):
+ * owners and admins, like every other change to an event.
+ *
+ * It queues the same conference-sync job a save does and nothing more, so the
+ * job's own rules still decide what happens (a pasted link is never touched, a
+ * provider that needs reconnecting says so on the row). Returns `{ error }`
+ * rather than throwing, so the button can show why.
+ */
+export async function retryConferenceSync(
+  orgId: string,
+  eventId: string,
+): Promise<{ error?: string }> {
+  try {
+    return await retryTx(orgId, eventId);
+  } catch (error) {
+    if (error instanceof NotFoundError) return { error: "That meeting no longer exists." };
+    return actionError(error);
   }
 }

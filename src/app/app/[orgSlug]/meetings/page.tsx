@@ -21,6 +21,7 @@ import { isPlatformAdmin } from "@/lib/auth/org-creation";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { newRsvpEventHref } from "@/lib/calendar/range";
+import { CONFERENCE_LABELS } from "@/lib/meetings/conference-status";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { rsvpCover } from "@/lib/rsvp/cover";
 import { timeLine } from "@/lib/rsvp/when";
@@ -37,15 +38,6 @@ import {
 const CONNECT_NOTICES: Record<string, string> = {
   not_configured: "That provider isn't set up on this platform yet.",
   rate_limited: "Too many connection attempts. Try again in an hour.",
-};
-
-/** What a card calls each kind of call. */
-const CONFERENCE_LABELS: Record<ConferenceProvider, string> = {
-  NONE: "",
-  MEET: "Google Meet",
-  ZOOM: "Zoom",
-  TEAMS: "Microsoft Teams",
-  OTHER: "Online",
 };
 
 /** The OrgIntegration behind an event's provider, for its logo. */

@@ -12,11 +12,10 @@ import {
   Ticket,
   Trash2,
   Video,
-  type IconComponent,
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 import { deleteEvent, rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
@@ -28,6 +27,7 @@ import { BlockCard } from "@/components/ui/block-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusDot } from "@/components/ui/chip";
+import { Fact } from "@/components/ui/fact";
 import { Gauge } from "@/components/ui/meters";
 import { IconChip } from "@/components/ui/stat";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -91,6 +91,10 @@ export function EventDetailView({
   currentUserId,
   canEdit,
   startInEdit = false,
+  section = "calendar",
+  joinCard,
+  locationDetails = null,
+  showMapLink = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -102,8 +106,25 @@ export function EventDetailView({
   canEdit: boolean;
   /** Opened from the calendar's "Edit" (?edit=1), so the form is already up. */
   startInEdit?: boolean;
+  /**
+   * Which section this page is shown in: where the back link goes, and where
+   * Delete returns to. A meeting's own page (/meetings/{id}) is "meetings".
+   */
+  section?: "calendar" | "meetings";
+  /**
+   * A meeting's join details (MeetingJoinCard). Replaces the plain "Join
+   * meeting" button, and is shown even before the link exists, so the page
+   * can say it is on its way.
+   */
+  joinCard?: ReactNode;
+  /** How to find the place, in the host's words ("Second floor, past the elevators"). */
+  locationDetails?: string | null;
+  /** Offer "Open in Maps" under the place. */
+  showMapLink?: boolean;
 }) {
   const router = useRouter();
+  // The list this page belongs to: the back link, and where a delete lands.
+  const sectionHref = `/app/${orgSlug}/${section}`;
   const [editOpen, setEditOpen] = useState(canEdit && startInEdit);
   const [isPending, startTransition] = useTransition();
   const [confirmEl, confirm] = useConfirm();
@@ -130,7 +151,7 @@ export function EventDetailView({
     });
     if (!ok) return;
     toast({ title: "Event deleted", description: event.title });
-    router.push(`/app/${orgSlug}/calendar`);
+    router.push(sectionHref);
   }
 
   function handleCreateMeetingNotes() {
@@ -151,7 +172,7 @@ export function EventDetailView({
   return (
     <div className="mx-auto max-w-5xl space-y-7">
       {confirmEl}
-      <BackLink href={`/app/${orgSlug}/calendar`} label="Calendar" />
+      <BackLink href={sectionHref} label={section === "meetings" ? "Meetings" : "Calendar"} />
 
       <PageHeader
         title={<span className="break-words">{event.title}</span>}
@@ -227,6 +248,23 @@ export function EventDetailView({
                   {event.location && (
                     <Fact icon={MapPin} label="Where">
                       {event.location}
+                      {locationDetails && (
+                        <span className="mt-1 block text-[13px] font-normal">
+                          <span className="text-muted-foreground block">How to find it</span>
+                          <span className="block whitespace-pre-wrap">{locationDetails}</span>
+                        </span>
+                      )}
+                      {showMapLink && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1 text-[13px] font-normal underline-offset-4 hover:underline"
+                        >
+                          <ExternalLink aria-hidden className="size-3.5" />
+                          Open in Maps
+                        </a>
+                      )}
                     </Fact>
                   )}
                   {hostLabel && (
@@ -255,14 +293,15 @@ export function EventDetailView({
               )}
 
               <div className="flex flex-wrap gap-2">
-                {event.conferenceUrl && (
-                  <Button asChild>
-                    <a href={event.conferenceUrl} target="_blank" rel="noopener noreferrer">
-                      <Video className="size-4" />
-                      Join meeting
-                    </a>
-                  </Button>
-                )}
+                {joinCard ??
+                  (event.conferenceUrl && (
+                    <Button asChild>
+                      <a href={event.conferenceUrl} target="_blank" rel="noopener noreferrer">
+                        <Video className="size-4" />
+                        Join meeting
+                      </a>
+                    </Button>
+                  ))}
                 <Button variant="outline" asChild>
                   <a href={`/api/calendar/${event.id}/ics`} download>
                     <CalendarPlus className="size-4" />
@@ -486,7 +525,7 @@ export function EventDetailView({
           onOpenChange={setEditOpen}
           event={event}
           members={members}
-          onDeleted={() => router.push(`/app/${orgSlug}/calendar`)}
+          onDeleted={() => router.push(sectionHref)}
         />
       )}
     </div>
@@ -511,24 +550,6 @@ export function FaceStack({ people, className }: { people: UserAvatarUser[]; cla
         )}
       </span>
     </span>
-  );
-}
-
-function Fact({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: IconComponent;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-[auto_6rem_minmax(0,1fr)] items-start gap-3 py-1.5 text-sm">
-      <Icon aria-hidden className="text-muted-foreground mt-0.5 size-4" />
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium break-words">{children}</dd>
-    </div>
   );
 }
 
