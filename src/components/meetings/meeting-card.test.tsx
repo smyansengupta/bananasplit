@@ -332,6 +332,34 @@ describe("MeetingCard: sign-ups on the right", () => {
   });
 });
 
+describe("MeetingCard: a long title", () => {
+  // jsdom has no CSS, so this pins the classes. `line-clamp-2` only cuts at two
+  // lines on a -webkit-box, and `block` after it in the stylesheet would turn
+  // that back into a plain block and let a long title stretch the card.
+  it("is cut at two lines: line-clamp-2, and no class that would override its display", () => {
+    card();
+
+    const title = screen.getByRole("link", { name: "Exec sync" });
+    expect(title.classList.contains("line-clamp-2")).toBe(true);
+    expect(title.classList.contains("block")).toBe(false);
+  });
+
+  it("keeps the stretched-link overlay", () => {
+    card();
+
+    expect(screen.getByRole("link", { name: "Exec sync" }).classList).toContain("after:absolute");
+    expect(screen.getByRole("link", { name: "Exec sync" }).classList).toContain("after:inset-0");
+  });
+
+  it("is a block box on the featured card, which does not clamp", () => {
+    card({ featured: true });
+
+    const title = screen.getByRole("link", { name: "Exec sync" });
+    expect(title.classList.contains("block")).toBe(true);
+    expect(title.classList.contains("line-clamp-2")).toBe(false);
+  });
+});
+
 describe("MeetingCard: the featured card", () => {
   it("says it is next up, and is still one card", () => {
     card({ featured: true });

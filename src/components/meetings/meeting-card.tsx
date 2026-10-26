@@ -219,8 +219,10 @@ export function MeetingCard({
               href={href}
               data-card-link=""
               className={cn(
-                "block min-w-0 font-semibold break-words underline-offset-4 group-hover:underline after:absolute after:inset-0 focus-visible:outline-none",
-                featured ? "display-title text-2xl" : "line-clamp-2 text-[15px]",
+                "min-w-0 font-semibold break-words underline-offset-4 group-hover:underline after:absolute after:inset-0 focus-visible:outline-none",
+                // line-clamp-2 is its own display (a -webkit-box, which is
+                // block-level), so `block` goes only where nothing clamps.
+                featured ? "display-title block text-2xl" : "line-clamp-2 text-[15px]",
               )}
             >
               {e.title}
