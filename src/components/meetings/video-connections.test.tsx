@@ -142,4 +142,22 @@ describe("VideoConnections", () => {
       (screen.getByRole("button", { name: "Disconnect Zoom" }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
+
+  it("tells whoever runs the platform what an organization needs, in Meetings' words", () => {
+    // Nothing switched on yet: the one case that explains itself in a sentence.
+    render(
+      <VideoConnections
+        orgId="org_1"
+        canConnect
+        platformAdmin
+        connections={CONNECTIONS.map((c) =>
+          connection({ ...c, connected: false, needsReauth: false, available: false }),
+        )}
+      />,
+    );
+
+    const line = screen.getByText(/need an app with each provider/);
+    expect(line.textContent).toContain("before any organization can connect them");
+    expect(line.textContent).not.toMatch(/club/i);
+  });
 });

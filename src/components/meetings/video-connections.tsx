@@ -94,7 +94,7 @@ export function VideoConnections({
         <span className="text-sm font-semibold">Video calls</span>
         <span className="text-muted-foreground text-[13px]">
           {platformAdmin
-            ? `Google Meet, Zoom and Teams need an app with each provider before any club can connect them. Add ${unavailable
+            ? `Google Meet, Zoom and Teams need an app with each provider before any organization can connect them. Add ${unavailable
                 .flatMap((c) => c.missingEnv.slice(0, 1))
                 .join(", ")} and their secrets to this deployment (docs/setup/meeting-providers.md has the steps).`
             : "Joining links for Google Meet, Zoom and Teams aren't switched on for Bananasplit yet. You can still paste a link into any meeting."}

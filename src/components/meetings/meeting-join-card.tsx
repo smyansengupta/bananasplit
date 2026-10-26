@@ -5,9 +5,9 @@ import { useState, useTransition } from "react";
 
 import { retryConferenceSync } from "@/app/app/[orgSlug]/meetings/actions";
 import { Copy, KeyRound, Loader2, Mic, Phone, RefreshCw, Video } from "@/components/icons";
+import { copyToClipboard } from "@/components/meetings/copy-to-clipboard";
 import { Button } from "@/components/ui/button";
 import { Fact } from "@/components/ui/fact";
-import { toast } from "@/components/ui/toaster";
 import type { ConferenceStatus } from "@/lib/meetings/conference-status";
 import type { ConferenceDialIn } from "@/server/conference/types";
 
@@ -51,15 +51,6 @@ export function MeetingJoinCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  async function copy(text: string, done: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast({ title: done, tone: "success", duration: 3000 });
-    } catch {
-      toast({ title: "Couldn't copy. Your browser blocked the clipboard.", tone: "error" });
-    }
-  }
 
   function retry() {
     setError(null);
@@ -124,7 +115,7 @@ export function MeetingJoinCard({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void copy(joinUrl, "Link copied")}
+                onClick={() => void copyToClipboard(joinUrl, "Link copied")}
               >
                 <Copy aria-hidden />
                 Copy link
@@ -153,7 +144,7 @@ export function MeetingJoinCard({
                   variant="ghost"
                   size="icon-xs"
                   aria-label="Copy passcode"
-                  onClick={() => void copy(passcode, "Passcode copied")}
+                  onClick={() => void copyToClipboard(passcode, "Passcode copied")}
                 >
                   <Copy aria-hidden />
                 </Button>
