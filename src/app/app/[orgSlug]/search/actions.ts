@@ -2,11 +2,10 @@
 
 import { z } from "zod";
 
-import { resolveSidebar } from "@/lib/nav/sidebar";
 import { MAX_QUERY_LENGTH } from "@/lib/search/text";
 import { isSearchScope, type SearchResponse, type SearchScope } from "@/lib/search/types";
-import { isValidTimeZone } from "@/lib/timezones";
 import { withOrgAction } from "@/server/db/context";
+import { loadSearchViewer } from "@/server/search/viewer";
 import { searchWorkspace } from "@/server/search/workspace";
 
 /**
@@ -27,44 +26,9 @@ const inputSchema = z.object({
 export const searchWorkspaceAction = withOrgAction(
   async (ctx, input: { query: string; scope?: SearchScope }): Promise<SearchResponse> => {
     const { query, scope } = inputSchema.parse(input ?? {});
-    const org = await ctx.db.organization.findUnique({
-      where: { id: ctx.organizationId },
-      select: {
-        slug: true,
-        kind: true,
-        timezone: true,
-        activeOrgChartVersionId: true,
-        settings: { select: { sidebar: true } },
-      },
-    });
-    if (!org) return { query, scope, groups: [] };
-    const user = await ctx.db.user.findUnique({
-      where: { id: ctx.userId },
-      select: { timezone: true },
-    });
-    const orgZone = isValidTimeZone(org.timezone) ? org.timezone : "UTC";
-    const viewerZone = user?.timezone && isValidTimeZone(user.timezone) ? user.timezone : orgZone;
-    const hiddenSections = new Set(
-      resolveSidebar(org.settings?.sidebar)
-        .flatMap((g) => g.items)
-        .filter((i) => i.hidden)
-        .map((i) => i.id),
-    );
-
-    return searchWorkspace(
-      ctx.db,
-      {
-        orgId: ctx.organizationId,
-        orgSlug: org.slug,
-        userId: ctx.userId,
-        role: ctx.role,
-        zones: { viewer: viewerZone, org: orgZone },
-        hiddenSections,
-        orgChartVersionId: org.activeOrgChartVersionId,
-        personal: org.kind === "PERSONAL",
-      },
-      { query, scope },
-    );
+    const viewer = await loadSearchViewer(ctx.db, ctx);
+    if (!viewer) return { query, scope, groups: [] };
+    return searchWorkspace(ctx.db, viewer, { query, scope });
   },
   { whenPaused: "allow" },
 );
