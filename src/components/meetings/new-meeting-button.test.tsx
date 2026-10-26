@@ -97,6 +97,17 @@ describe("NewMeetingButton", () => {
     expect(chosen()).toEqual([false, true, false]);
   });
 
+  it("calls what it opens a meeting, not an event", async () => {
+    render(button());
+
+    fireEvent.click(screen.getByRole("button", { name: "New meeting" }));
+
+    await dialogOpen();
+    expect(screen.getByRole("dialog", { name: "New meeting" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create meeting" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create event" })).toBeNull();
+  });
+
   it('startOpen with initialShape "online" opens on Online', async () => {
     render(button({ startOpen: true, initialShape: "online" }));
 
@@ -125,7 +136,7 @@ describe("NewMeetingButton", () => {
     await dialogOpen();
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Standup" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create event" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create meeting" }));
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalled());
     expect(mocks.createEvent.mock.calls[0]![0]).toBe("org_1");
@@ -140,7 +151,7 @@ describe("NewMeetingButton", () => {
     await dialogOpen();
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Open house" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create event" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create meeting" }));
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalled());
     expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/app/acme/meetings/evt_new/rsvp?new=1");

@@ -110,11 +110,6 @@ export function parseCalendarRange(params: Params, timeZoneRaw: string, now: Dat
  */
 export const NEW_EVENT_PARAM = "new";
 
-/** A link that starts a new event, with its sign-up page, in Meetings. */
-export function newRsvpEventHref(orgSlug: string): string {
-  return `/app/${orgSlug}/meetings?${NEW_EVENT_PARAM}=event`;
-}
-
 /** The query string for a window and filters (stable key order). */
 export function calendarSearch(r: {
   fromKey: string;

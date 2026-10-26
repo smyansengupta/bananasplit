@@ -120,16 +120,17 @@ interface Props {
   defaultStart?: Date | null;
   defaultAllDay?: boolean;
   /**
-   * A new event starts as the Event shape, which turns a public sign-up page
-   * on. For callers that do not pass `defaultShape`.
-   */
-  defaultRsvpPage?: boolean;
-  /**
-   * The shape a new event starts as. Left out, In person, or Event when
-   * `defaultRsvpPage` is set. An existing event has no shape: editing asks
-   * every question.
+   * The shape a new event starts as; the Event shape turns a public sign-up
+   * page on. Left out, In person. An existing event has no shape: editing asks
+   * every question. A `?new=` link names one (`shapeFromParam`).
    */
   defaultShape?: MeetingShape;
+  /**
+   * What a new one is called: "New event" and "Create event" (the Calendar's
+   * wording, and the default), or "New meeting" and "Create meeting" (Meetings').
+   * Editing reads "Edit event" in both.
+   */
+  noun?: "event" | "meeting";
   /**
    * The organization's reminder times (OrgSettings.meetingReminderMinutes): a
    * new event starts with them, and an event whose own differ opens "More
@@ -222,8 +223,8 @@ function EventForm({
   event,
   defaultStart,
   defaultAllDay,
-  defaultRsvpPage,
   defaultShape,
+  noun = "event",
   defaultReminderMinutes = [...DEFAULT_REMINDER_MINUTES],
   members,
   afterCreate,
@@ -253,9 +254,7 @@ function EventForm({
   );
   const [startValue, setStartValue] = useState(initial.start);
   const [endValue, setEndValue] = useState(initial.end);
-  const [shape, setShape] = useState<MeetingShape>(
-    defaultShape ?? (defaultRsvpPage ? "event" : "in-person"),
-  );
+  const [shape, setShape] = useState<MeetingShape>(defaultShape ?? "in-person");
   const [location, setLocation] = useState(event?.location ?? "");
   const [locationDetails, setLocationDetails] = useState(event?.locationDetails ?? "");
   const [provider, setProvider] = useState<ConferenceProvider>(
@@ -451,7 +450,7 @@ function EventForm({
   return (
     <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="contents">
       <DialogHeader>
-        <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
+        <DialogTitle>{event ? "Edit event" : `New ${noun}`}</DialogTitle>
         <DialogDescription>
           {event
             ? "Changes reach the website and Google Calendar the same way the original did."
@@ -814,7 +813,7 @@ function EventForm({
             Cancel
           </Button>
           <Button type="submit" disabled={isPending || !title.trim()}>
-            {isPending ? "Saving…" : event ? "Save" : "Create event"}
+            {isPending ? "Saving…" : event ? "Save" : `Create ${noun}`}
           </Button>
         </div>
       </DialogFooter>

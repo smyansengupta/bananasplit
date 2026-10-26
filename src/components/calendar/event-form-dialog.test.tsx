@@ -175,16 +175,13 @@ describe("EventFormDialog: the shape of a new meeting", () => {
     expect(document.activeElement).toBe(screen.getByLabelText("Title"));
   });
 
-  it("Event is chosen when defaultRsvpPage is set", () => {
-    open({ defaultRsvpPage: true });
-
-    expect(chosen()).toEqual([false, false, true]);
-  });
-
-  it("starts as the shape it is told to, over defaultRsvpPage", () => {
-    open({ defaultShape: "online", defaultRsvpPage: true });
-
+  it("starts as the shape it is told to", () => {
+    open({ defaultShape: "online" });
     expect(chosen()).toEqual([true, false, false]);
+
+    cleanup();
+    open({ defaultShape: "event" });
+    expect(chosen()).toEqual([false, false, true]);
   });
 
   it("chooses a shape with a click", () => {
@@ -633,6 +630,41 @@ describe("EventFormDialog: the shape of a new meeting", () => {
       await waitFor(() => expect(mocks.updateEvent).toHaveBeenCalled());
       expect(mocks.updateEvent.mock.calls[0]![2]).toMatchObject({ locationDetails: null });
     });
+  });
+});
+
+describe("EventFormDialog: what a new one is called", () => {
+  it("reads New event and Create event, as the Calendar does", () => {
+    open();
+
+    expect(screen.getByRole("dialog", { name: "New event" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create event" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create meeting" })).toBeNull();
+  });
+
+  it("reads New meeting and Create meeting when it is told it is Meetings'", () => {
+    open({ noun: "meeting" });
+
+    expect(screen.getByRole("dialog", { name: "New meeting" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create meeting" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create event" })).toBeNull();
+  });
+
+  it("still saves from the Create meeting button", async () => {
+    mocks.createEvent.mockResolvedValue({ eventId: "evt_new" });
+    open({ noun: "meeting" });
+
+    typeTitle("Workshop");
+    fireEvent.click(screen.getByRole("button", { name: "Create meeting" }));
+
+    await waitFor(() => expect(mocks.createEvent).toHaveBeenCalled());
+  });
+
+  it("reads Edit event and Save for an existing one either way", () => {
+    open({ event: event(), noun: "meeting" });
+
+    expect(screen.getByRole("dialog", { name: "Edit event" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
   });
 });
 

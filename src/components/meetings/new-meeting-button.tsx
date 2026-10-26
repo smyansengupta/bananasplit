@@ -102,6 +102,7 @@ export function NewMeetingButton({
           onOpenChange={setOpen}
           event={null}
           defaultShape={shape ?? undefined}
+          noun="meeting"
           defaultReminderMinutes={defaultReminderMinutes}
           members={members}
           afterCreate={(eventId) =>
