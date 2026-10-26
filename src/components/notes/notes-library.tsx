@@ -264,6 +264,7 @@ export function NotesLibrary({
       const types = Array.from(e.dataTransfer.types);
       if (!types.includes(NOTE_MIME) && !types.includes(FILE_MIME)) return;
       e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
       setOverFolder(id ?? "none");
     },
     onDragLeave: () => setOverFolder((f) => (f === (id ?? "none") ? null : f)),
@@ -329,6 +330,7 @@ export function NotesLibrary({
       const types = Array.from(e.dataTransfer.types);
       if (!types.includes(NOTE_MIME) && !types.includes(FILE_MIME)) return;
       e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
       setOverTrash(true);
     },
     onDragLeave: () => setOverTrash(false),
@@ -541,8 +543,16 @@ export function NotesLibrary({
           {view === "grid" &&
             (family === "image" ? (
               <div className="bg-muted relative h-32 overflow-hidden">
+                {/* Not draggable itself, so the card drags (an image drag carries the
+                    picture as a file, and the page would upload it again). */}
                 {/* eslint-disable-next-line @next/next/no-img-element -- a private, permission-checked file */}
-                <img src={src} alt="" loading="lazy" className="size-full object-cover" />
+                <img
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                  className="size-full object-cover"
+                />
                 <Badge variant="secondary" className="absolute bottom-2 left-3">
                   {FILE_LABELS[family]}
                 </Badge>
