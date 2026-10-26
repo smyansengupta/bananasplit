@@ -140,6 +140,13 @@ export async function getViewerRsvps(
  * One event with its relations, as `viewerId` may see them. The relations
  * are read one query at a time: Prisma runs sibling includes concurrently,
  * which a single transaction connection cannot do.
+ *
+ * The row is read whole, so it carries every meeting field (`format`,
+ * `locationDetails`, `conferenceManaged`, `conferencePasscode`,
+ * `conferenceDialIn`, `conferenceSyncState`, `conferenceSyncError`, and the
+ * host's start link `conferenceHostUrl`). The row is the caller's to filter:
+ * the host link starts the meeting as its host, so a page hands it on only to
+ * someone who can edit the event (the meeting page does).
  */
 export async function getEventById(
   db: TxClient,

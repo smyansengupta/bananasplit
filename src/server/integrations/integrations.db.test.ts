@@ -33,8 +33,8 @@ import { authDb, disconnectAll } from "@/server/db/clients";
 import { withSystemOrgTx } from "@/server/db/context";
 import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { NO_PUBLIC_CALENDAR } from "@/server/google-calendar/requests";
-import { getSecret, setSecret } from "@/server/secrets";
-import { secretLast4 } from "@/server/secrets/fingerprint";
+import { getSecret, rotateSecret, setSecret } from "@/server/secrets";
+import { secretFingerprint, secretLast4 } from "@/server/secrets/fingerprint";
 import { createOrganization } from "@/server/settings/org-creation";
 
 import { googleHttp, OAUTH_COOKIE } from "./google";
@@ -284,6 +284,111 @@ describe.skipIf(!dbReady)("integrations against the local database", () => {
     const gone = (await loadIntegrations(orgId)).find((d) => d.provider === "EMAIL_RESEND")!;
     expect(gone).toMatchObject({ hasSecret: false, last4: null });
     expect(await getSecret({ orgId, provider: "EMAIL_RESEND", kind: "API_KEY" })).toBeNull();
+  });
+
+  /**
+   * Zoom hands back a new refresh token on every refresh. Keeping it must
+   * not page the owners or reset the connection the way setSecret does, and
+   * a refresh that lost a race to another rotation (or to a reconnect) must
+   * not overwrite the newer token with its own.
+   */
+  it("rotateSecret replaces only while the previous token is still stored", async () => {
+    sessionUser.current = admin;
+    await setSecret({
+      orgId,
+      actor: await resolveActor(orgId),
+      provider: "ZOOM",
+      kind: "REFRESH_TOKEN",
+      value: "r1",
+      status: "CONNECTED",
+    });
+    const count = async (sql: string) => Number((await client.query(sql, [orgId])).rows[0].n);
+    const alertsSql = `SELECT count(*) n FROM "Notification" WHERE "organizationId" = $1 AND type = 'SECURITY_ALERT'`;
+    const auditSql = `SELECT count(*) n FROM "OrgAuditLog" WHERE "organizationId" = $1`;
+    const alertsBefore = await count(alertsSql);
+    const auditBefore = await count(auditSql);
+    expect(alertsBefore).toBeGreaterThan(0);
+
+    expect(
+      await rotateSecret({
+        orgId,
+        provider: "ZOOM",
+        kind: "REFRESH_TOKEN",
+        previous: "r1",
+        value: "r2",
+      }),
+    ).toBe(true);
+    expect(await getSecret({ orgId, provider: "ZOOM", kind: "REFRESH_TOKEN" })).toBe("r2");
+    const row = await client.query(
+      `SELECT status, "connectedById", "secretFingerprint" FROM "OrgIntegration" WHERE "organizationId" = $1 AND provider = 'ZOOM'`,
+      [orgId],
+    );
+    expect(row.rows[0]).toMatchObject({
+      status: "CONNECTED",
+      connectedById: admin.id,
+      secretFingerprint: secretFingerprint("r2"),
+    });
+    expect(await count(alertsSql)).toBe(alertsBefore);
+    expect(await count(auditSql)).toBe(auditBefore);
+
+    // Someone already rotated past r1: a late "r1 -> r3" leaves r2 in place.
+    expect(
+      await rotateSecret({
+        orgId,
+        provider: "ZOOM",
+        kind: "REFRESH_TOKEN",
+        previous: "r1",
+        value: "r3",
+      }),
+    ).toBe(false);
+    expect(await getSecret({ orgId, provider: "ZOOM", kind: "REFRESH_TOKEN" })).toBe("r2");
+  });
+
+  /**
+   * Another process's rotation from the same token is under way: it holds
+   * the OrgIntegration row (a separate connection, as another server would
+   * be). Ours must wait for it and then back off, not read the old
+   * fingerprint, match, and overwrite the newer token once the row frees.
+   */
+  it("a rotation racing another from the same token waits for the row, then leaves it alone", async () => {
+    // Stored is "r2" from the case above.
+    const other = new pg.Client({ connectionString: process.env.MIGRATE_DATABASE_URL });
+    await other.connect();
+    try {
+      await other.query("BEGIN");
+      await other.query(
+        `SELECT 1 FROM "OrgIntegration" WHERE "organizationId" = $1 AND provider = 'ZOOM' FOR UPDATE`,
+        [orgId],
+      );
+      let settled = false;
+      const late = rotateSecret({
+        orgId,
+        provider: "ZOOM",
+        kind: "REFRESH_TOKEN",
+        previous: "r2",
+        value: "r5",
+      }).finally(() => {
+        settled = true;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(settled).toBe(false);
+      // The other rotation (r2 -> r4) lands and commits.
+      await other.query(
+        `UPDATE "OrgIntegration" SET "secretFingerprint" = $2 WHERE "organizationId" = $1 AND provider = 'ZOOM'`,
+        [orgId, secretFingerprint("r4")],
+      );
+      await other.query("COMMIT");
+      expect(await late).toBe(false);
+    } finally {
+      await other.query("ROLLBACK").catch(() => {});
+      await other.end();
+    }
+    const row = await client.query(
+      `SELECT "secretFingerprint" FROM "OrgIntegration" WHERE "organizationId" = $1 AND provider = 'ZOOM'`,
+      [orgId],
+    );
+    expect(row.rows[0].secretFingerprint).toBe(secretFingerprint("r4"));
+    expect(await getSecret({ orgId, provider: "ZOOM", kind: "REFRESH_TOKEN" })).not.toBe("r5");
   });
 
   // ---------------------------------------------------------------- Google

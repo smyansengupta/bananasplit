@@ -220,7 +220,7 @@ describe("PersonalHome", () => {
           going: 7,
           waitlist: 2,
           capacity: 20,
-          manageHref: "/app/me-abc/calendar/h1/rsvp",
+          manageHref: "/app/me-abc/meetings/h1/rsvp",
           pageHref: "/e/bday1234",
         },
       ],

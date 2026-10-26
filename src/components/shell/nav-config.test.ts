@@ -73,8 +73,11 @@ describe("sidebar navigation", () => {
     // the right section up.
     expect(active("Meetings", "/app/cbc/calendar/rsvp")).toBe(true);
     expect(active("Calendar", "/app/cbc/calendar/rsvp")).toBe(false);
-    // An event's own RSVP page is part of that event, on the Calendar.
-    expect(active("Calendar", "/app/cbc/calendar/e1/rsvp")).toBe(true);
+    // A meeting's sign-up screens are part of that meeting, so Meetings stays
+    // lit on them (the Calendar's old /calendar/{id}/rsvp only forwards).
+    expect(active("Meetings", "/app/cbc/meetings/e1/rsvp")).toBe(true);
+    expect(active("Meetings", "/app/cbc/meetings/e1/rsvp/door")).toBe(true);
+    expect(active("Calendar", "/app/cbc/meetings/e1/rsvp")).toBe(false);
   });
 
   it("puts sections added since a club saved its sidebar after the one before them, hidden with what they came from", () => {
@@ -234,11 +237,12 @@ describe("the create menu", () => {
   const sections = (space: Space, raw: unknown = null, showLocked = false) =>
     navSections("me", visibleSidebar(raw), { space, showLocked });
 
-  it("offers what the space has: task, event, note, poll and Find a time", () => {
+  it("offers what the space has: task, event, meeting, note, poll and Find a time", () => {
     const all = createActions(sections(club("SOCIETY")), { canCreateEvents: true });
     expect(all.map((a) => [a.id, a.href])).toEqual([
       ["task", "/app/me/tasks?new=1"],
       ["event", "/app/me/calendar?new=1"],
+      ["meeting", "/app/me/meetings?new=1"],
       ["note", undefined],
       ["poll", "/app/me/calendar/polls/ask"],
       ["find-a-time", "/app/me/calendar/find-a-time/new"],
@@ -253,6 +257,7 @@ describe("the create menu", () => {
     expect(createActions(sections(PERSONAL), { canCreateEvents: true }).map((a) => a.id)).toEqual([
       "task",
       "event",
+      "meeting",
       "note",
       "find-a-time",
     ]);
@@ -264,7 +269,48 @@ describe("the create menu", () => {
       createActions(sections(club("SOCIETY"), toConfig(groups)), { canCreateEvents: true }).map(
         (a) => a.id,
       ),
-    ).toEqual(["task", "event", "find-a-time"]);
+    ).toEqual(["task", "event", "meeting", "find-a-time"]);
+  });
+
+  describe("New meeting", () => {
+    const meeting = (actions: ReturnType<typeof createActions>) =>
+      actions.find((a) => a.id === "meeting");
+
+    it("New meeting appears for event creators when Meetings is in the sidebar", () => {
+      expect(meeting(createActions(sections(club("SOCIETY")), { canCreateEvents: true }))).toEqual({
+        id: "meeting",
+        label: "New meeting",
+        icon: "Video",
+        href: "/app/me/meetings?new=1",
+      });
+      // Personal has Meetings too.
+      expect(meeting(createActions(sections(PERSONAL), { canCreateEvents: true }))).toMatchObject({
+        label: "New meeting",
+        href: "/app/me/meetings?new=1",
+      });
+    });
+
+    it("not for members who cannot create events", () => {
+      expect(
+        meeting(createActions(sections(club("SOCIETY")), { canCreateEvents: false })),
+      ).toBeUndefined();
+      expect(
+        meeting(createActions(sections(PERSONAL), { canCreateEvents: false })),
+      ).toBeUndefined();
+    });
+
+    it("not when Meetings is hidden", () => {
+      const groups = resolveSidebar(null);
+      for (const g of groups) {
+        for (const i of g.items) if (i.id === "meetings") i.hidden = true;
+      }
+      const hidden = createActions(sections(club("SOCIETY"), toConfig(groups)), {
+        canCreateEvents: true,
+      });
+      expect(meeting(hidden)).toBeUndefined();
+      // The Calendar's New event does not depend on it.
+      expect(hidden.map((a) => a.id)).toContain("event");
+    });
   });
 });
 

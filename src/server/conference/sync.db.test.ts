@@ -74,7 +74,13 @@ function json(body: unknown, status = 200) {
  * requests it saw, so a test can assert what was actually sent.
  */
 function fakeZoom(
-  overrides: { createStatus?: number; createBody?: unknown; deleteStatus?: number } = {},
+  overrides: {
+    createStatus?: number;
+    createBody?: unknown;
+    deleteStatus?: number;
+    /** What PATCH and GET on an existing meeting answer: 404 is a meeting Zoom no longer has. */
+    meetingStatus?: number;
+  } = {},
 ) {
   const seen: Array<{ url: string; method: string; body: unknown }> = [];
   vi.spyOn(conferenceHttp, "fetch").mockImplementation(async (url, init) => {
@@ -105,8 +111,11 @@ function fakeZoom(
       );
     }
     if (url.startsWith("https://api.zoom.us/v2/meetings/")) {
-      if (method === "PATCH") return json(null, 204);
       if (method === "DELETE") return json(null, overrides.deleteStatus ?? 204);
+      if (overrides.meetingStatus) {
+        return json({ code: 3001, message: "Meeting does not exist." }, overrides.meetingStatus);
+      }
+      if (method === "PATCH") return json(null, 204);
       return json({
         id: 98765432100,
         join_url: "https://us02web.zoom.us/j/98765432100",
@@ -406,6 +415,72 @@ describe("moving and cancelling", () => {
     expect(await runJob(eventId)).toEqual({ status: "DONE" });
     expect((await readEvent(eventId)).conferenceUrl).toBeNull();
   });
+
+  it("makes a new meeting when Zoom has lost the one it is asked to move", async () => {
+    if (!reachable) return;
+    // The host deleted it in Zoom, or Zoom was reconnected as another account.
+    fakeZoom();
+    const eventId = await makeEvent();
+    await runJob(eventId);
+    expect((await readEvent(eventId)).conferenceMeetingId).toBe("98765432100");
+
+    vi.restoreAllMocks();
+    clearAllAccessTokens();
+    fakeZoom({ meetingStatus: 404 });
+    await ownerDb.event.update({
+      where: { id: eventId },
+      data: {
+        startsAt: new Date(Date.now() + 3 * DAY),
+        endsAt: new Date(Date.now() + 3 * DAY + 3600_000),
+        conferenceSyncState: CalendarSyncState.PENDING,
+        syncVersion: { increment: 1 },
+      },
+    });
+    const queuedBefore = await ownerDb.job.count({
+      where: { organizationId: orgId, kind: "conference-sync", payload: { equals: { eventId } } },
+    });
+
+    expect(await runJob(eventId)).toEqual({ status: "DONE" });
+
+    // Not a cancellation: the meeting still wants a call, so the dead one is
+    // forgotten and the row waits for the job that makes a new one.
+    expect(await readEvent(eventId)).toMatchObject({
+      conferenceManaged: false,
+      conferenceManagedAt: null,
+      conferenceMeetingId: null,
+      conferenceUrl: null,
+      conferenceHostUrl: null,
+      conferenceSyncState: CalendarSyncState.PENDING,
+      conferenceSyncError: null,
+    });
+    const queued = await ownerDb.job.findMany({
+      where: { organizationId: orgId, kind: "conference-sync", payload: { equals: { eventId } } },
+      select: { status: true },
+    });
+    expect(queued).toHaveLength(queuedBefore + 1);
+    expect(queued.filter((j) => j.status === "PENDING")).toHaveLength(1);
+
+    // That job makes a new meeting, at the new time.
+    vi.restoreAllMocks();
+    clearAllAccessTokens();
+    const seen = fakeZoom({
+      createBody: {
+        id: 11122233344,
+        join_url: "https://us02web.zoom.us/j/11122233344",
+        start_url: "https://us02web.zoom.us/s/11122233344?zak=secret",
+        password: "n3w",
+      },
+    });
+    expect(await runJob(eventId)).toEqual({ status: "DONE" });
+    expect(seen.some((r) => r.method === "POST" && r.url.endsWith("/users/me/meetings"))).toBe(true);
+    expect(await readEvent(eventId)).toMatchObject({
+      conferenceManaged: true,
+      conferenceManagedAt: "ZOOM",
+      conferenceMeetingId: "11122233344",
+      conferenceUrl: "https://us02web.zoom.us/j/11122233344",
+      conferenceSyncState: CalendarSyncState.SYNCED,
+    });
+  });
 });
 
 describe("when things go wrong", () => {
@@ -652,6 +727,70 @@ describe("the path a person actually takes", () => {
     expect(await runJob(event.id)).toEqual({ status: "DONE" });
     expect(seen.some((r) => r.method === "DELETE")).toBe(true);
     expect((await readEvent(event.id)).conferenceUrl).toBeNull();
+  });
+
+  /** A meeting we made at Zoom, then edited to "A link I'll paste" with a link. */
+  async function swappedForAPastedLink(pasted: string) {
+    fakeZoom();
+    const { event } = await createThroughService({ conferenceProvider: "ZOOM" });
+    await runJob(event.id);
+    expect((await readEvent(event.id)).conferenceManaged).toBe(true);
+
+    vi.restoreAllMocks();
+    clearAllAccessTokens();
+    // What the form sends after the picker dropped the Zoom link: OTHER and
+    // only the link that was pasted.
+    await withOrgTx(orgId, async (ctx) =>
+      updateEvent({ ...ctx, userId: adminId } as never, event.id, {
+        conferenceProvider: "OTHER",
+        conferenceUrl: pasted,
+      } as never),
+    );
+    expect((await readEvent(event.id)).conferenceUrl).toBe(pasted);
+    return event.id;
+  }
+
+  it("cancels the Zoom meeting when a pasted link replaces it, and keeps the pasted link", async () => {
+    if (!reachable) return;
+    const pasted = "https://example.com/our-own-room";
+    const eventId = await swappedForAPastedLink(pasted);
+    const seen = fakeZoom();
+
+    expect(await runJob(eventId)).toEqual({ status: "DONE" });
+
+    expect(
+      seen.some(
+        (r) => r.method === "DELETE" && r.url === "https://api.zoom.us/v2/meetings/98765432100",
+      ),
+    ).toBe(true);
+    expect(await readEvent(eventId)).toMatchObject({
+      // The Zoom meeting and everything that pointed at it is gone...
+      conferenceManaged: false,
+      conferenceManagedAt: null,
+      conferenceMeetingId: null,
+      conferenceHostUrl: null,
+      conferencePasscode: null,
+      conferenceDialIn: null,
+      conferenceSyncState: CalendarSyncState.NOT_APPLICABLE,
+      // ...and the link someone pasted is untouched.
+      conferenceUrl: pasted,
+    });
+  });
+
+  it("keeps the pasted link when Zoom has already lost the meeting it replaced", async () => {
+    if (!reachable) return;
+    const pasted = "https://example.com/our-own-room";
+    const eventId = await swappedForAPastedLink(pasted);
+    fakeZoom({ deleteStatus: 404 });
+
+    expect(await runJob(eventId)).toEqual({ status: "DONE" });
+
+    expect(await readEvent(eventId)).toMatchObject({
+      conferenceManaged: false,
+      conferenceMeetingId: null,
+      conferenceUrl: pasted,
+      conferenceSyncState: CalendarSyncState.NOT_APPLICABLE,
+    });
   });
 });
 

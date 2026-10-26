@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { EventDetailView } from "@/components/calendar/event-detail-view";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
+import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
 
@@ -13,7 +14,7 @@ export default async function EventDetailPage({
   searchParams,
 }: PageProps<"/app/[orgSlug]/calendar/[eventId]">) {
   const { orgSlug, eventId } = await params;
-  const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
+  const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const canEdit = can({ role }, "events.write");
   const loaded = await withOrgTx(org.id, async ({ db }) => {
     const event = await getEventById(db, org.id, eventId, user.id);
@@ -47,6 +48,7 @@ export default async function EventDetailPage({
       orgId={org.id}
       orgSlug={orgSlug}
       timeZone={org.timezone}
+      defaultReminderMinutes={settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES]}
       event={{
         id: event.id,
         title: event.title,
@@ -55,8 +57,11 @@ export default async function EventDetailPage({
         endsAt: event.endsAt,
         allDay: event.allDay,
         location: event.location,
+        locationDetails: event.locationDetails,
         conferenceProvider: event.conferenceProvider,
         conferenceUrl: event.conferenceUrl,
+        // So the edit form knows a link we made is already there, as on Meetings.
+        conferenceManaged: event.conferenceManaged,
         kind: event.kind,
         visibility: event.visibility,
         hostUserId: event.hostUserId,
@@ -73,6 +78,7 @@ export default async function EventDetailPage({
         host: event.host,
         attendees: event.attendees.map((a) => ({ userId: a.userId, rsvp: a.rsvp, user: a.user })),
         attendeeIds: event.attendees.map((a) => a.userId),
+        reminderMinutes: event.reminderMinutes,
         notes: event.notes,
       }}
       members={members.map((m) => ({

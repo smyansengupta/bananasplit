@@ -7,6 +7,7 @@ import {
   Loader2,
   NotebookPen,
   Plus,
+  Video,
   Vote,
   type IconComponent,
 } from "@/components/icons";
@@ -30,11 +31,12 @@ const ICONS: Record<string, IconComponent> = {
   CalendarPlus,
   CheckSquare,
   NotebookPen,
+  Video,
   Vote,
 };
 
 /**
- * The + menu: start a task, an event, a note, a poll or a Find a time from
+ * The + menu: start a task, an event, a meeting, a note, a poll or a Find a time from
  * any page (createActions in nav-config.ts says which, for this space and
  * viewer). The tool capsule opens it (desktop only: on a phone each page's
  * own add button does); `children` is the trigger, which gets a spinner while

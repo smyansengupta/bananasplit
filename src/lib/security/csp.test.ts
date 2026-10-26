@@ -6,6 +6,8 @@ import {
   buildStaticCsp,
   cspHeaderName,
   cspMode,
+  DOOR_MODE_SOURCES,
+  DOOR_PERMISSIONS_HEADER,
   generateNonce,
   isNonceRoute,
   NONCE_ROUTE_PREFIXES,
@@ -243,5 +245,16 @@ describe("mode and headers", () => {
       "/reset-password",
       "/connect",
     ]);
+  });
+});
+
+describe("door mode's camera", () => {
+  it("is allowed on a meeting's door page, and only there", () => {
+    // Door mode moved from /calendar/{id}/rsvp/door to the meeting. If this
+    // source goes stale the page still loads, but ticket scanning is blocked.
+    expect([...DOOR_MODE_SOURCES]).toEqual(["/app/:orgSlug/meetings/:id/rsvp/door"]);
+    expect(DOOR_PERMISSIONS_HEADER.value).toContain("camera=(self)");
+    const everywhere = STATIC_SECURITY_HEADERS.find((h) => h.key === "Permissions-Policy");
+    expect(everywhere?.value).toContain("camera=()");
   });
 });

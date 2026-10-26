@@ -7,6 +7,7 @@ import { setSecret } from "@/server/secrets";
 
 import { exchangeCode, missingScopes, revokeToken, verifyCookie, verifyState } from "./oauth";
 import { PROVIDERS, type ProviderDef } from "./providers";
+import { requeueWaitingMeetings } from "./requeue";
 import { clearAccessToken } from "./token";
 import { ConferenceNotConfiguredError } from "./types";
 
@@ -135,14 +136,25 @@ export async function completeConferenceConnect(
       disconnectedAt: null,
     },
   });
+  // Meetings saved before this provider was connected, and ones left FAILED
+  // by an expired grant, get their link now. Best effort: the connection is
+  // already stored, so a failed requeue must not turn a good connect into an
+  // error page.
+  try {
+    await requeueWaitingMeetings(state.orgId, def.integration);
+  } catch (error) {
+    console.warn("[conference] requeue after connect failed: " + sanitize(error));
+  }
   return { ok: true, orgSlug };
 }
 
 /**
  * Where a connect attempt sends the browser back to: the Meetings section,
- * which is where you connect a provider now. The create form opens consent in
- * a new tab, so landing here closes the loop in that tab while the meeting
- * being typed in survives in the other one.
+ * which is where you connect a provider now. Connect is a form POST from the
+ * Video calls bar there that navigates to the provider's consent screen, so
+ * this brings the person back to the page they started from. The create form
+ * has no connect of its own (a provider not connected is a disabled item in
+ * its menu), so there is no half-typed meeting to come back to.
  */
 export function returnPath(orgSlug: string, _def: ProviderDef): string {
   return `/app/${orgSlug}/meetings`;
