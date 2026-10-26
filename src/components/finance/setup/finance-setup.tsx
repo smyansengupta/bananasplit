@@ -28,13 +28,13 @@ import { saveBudgetLines, setStartingBalance } from "@/app/app/[orgSlug]/finance
 import { changeMemberRole } from "@/app/app/[orgSlug]/settings/members/actions";
 import { BOARD_ICONS } from "@/components/boards/widget-board";
 import { FinanceImport } from "@/components/finance/import/finance-import";
-import { fieldSelect } from "@/components/finance/import/panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TickMeter } from "@/components/ui/meters";
 import { IconChip } from "@/components/ui/stat";
 import { toast } from "@/components/ui/toaster";
+import { FieldSelect } from "@/components/ui/field-select";
 import type { BoardWidget } from "@/lib/boards";
 import type { PeriodLike } from "@/lib/finance/import/plan";
 import { parseAmount } from "@/lib/finance/import/values";
@@ -771,8 +771,8 @@ function PeopleStep({ orgId, members, canAppoint, currentUserId }: FinanceSetupP
           >
             <label className="min-w-56 flex-1 space-y-1.5">
               <FieldLabel>Make a member treasurer</FieldLabel>
-              <select
-                className={fieldSelect}
+              <FieldSelect
+                className="w-full"
                 value={pick}
                 onChange={(e) => setPick(e.target.value)}
               >
@@ -782,7 +782,7 @@ function PeopleStep({ orgId, members, canAppoint, currentUserId }: FinanceSetupP
                     {m.name}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             </label>
             <SaveButton pending={pending}>Make treasurer</SaveButton>
           </form>

@@ -2,7 +2,7 @@
 
 import { MoreHorizontal, type IconComponent } from "@/components/icons";
 import Link from "next/link";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { rowOf, useContextActions } from "@/components/context-actions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,6 +22,11 @@ import { cn } from "@/lib/utils";
  *
  * Items that open a dialog (Delete → confirm) work because the menu is
  * non-modal: the dialog takes focus as the menu closes.
+ *
+ * The same items are the row's RIGHT-CLICK menu too: the button finds the
+ * row it sits in (its list item, table row or card) and registers them
+ * there, so nothing here is written twice and a new "…" menu anywhere gets
+ * a right-click menu without being asked. See components/context-actions.
  */
 
 export type ItemMenuEntry =
@@ -55,11 +61,17 @@ export function ItemMenu({
   size?: "sm" | "xs";
 }) {
   const entries = items.filter(Boolean) as Exclude<ItemMenuEntry, null | false | undefined>[];
+  const button = useRef<HTMLButtonElement>(null);
+  // The row this menu belongs to, found once the button is on the page.
+  const [row, setRow] = useState<HTMLElement | null>(null);
+  useEffect(() => setRow(rowOf(button.current) as HTMLElement | null), []);
+  useContextActions(row, items, { heading: heading ?? label.replace(/^Actions for /, "") });
   if (entries.length === 0) return null;
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
+          ref={button}
           type="button"
           aria-label={label}
           title="More actions"

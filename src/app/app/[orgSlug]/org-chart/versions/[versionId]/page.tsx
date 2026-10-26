@@ -6,6 +6,7 @@ import { ChartList } from "@/components/org-chart/chart-list";
 import { RollbackButton } from "@/components/org-chart/rollback-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FieldSelect } from "@/components/ui/field-select";
 import { can } from "@/lib/auth/permissions";
 import { diffCharts, type DiffChange, type DiffPosition } from "@/lib/org-chart/diff";
 import { personLabel, type ChartNodeDTO } from "@/lib/org-chart/types";
@@ -146,12 +147,7 @@ export default async function VersionPage({
           <label htmlFor="compare" className="text-sm font-medium">
             Compare with
           </label>
-          <select
-            id="compare"
-            name="compare"
-            defaultValue={other?.version.id ?? ""}
-            className="border-input bg-background h-8 rounded-lg border px-2.5 text-sm"
-          >
+          <FieldSelect id="compare" name="compare" defaultValue={other?.version.id ?? ""} size="sm">
             {versions
               .filter((v) => v.id !== version.id)
               .map((v) => (
@@ -160,7 +156,7 @@ export default async function VersionPage({
                   {v.isActive ? " (published)" : ` (${v.status.toLowerCase()})`}
                 </option>
               ))}
-          </select>
+          </FieldSelect>
           <Button type="submit" size="sm" variant="outline">
             Compare
           </Button>

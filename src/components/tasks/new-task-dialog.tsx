@@ -1,7 +1,6 @@
 "use client";
 
-import { ChevronDown } from "@/components/icons";
-import { useId, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
 import { TaskPriority, TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
 import { LABEL_COLOR_PALETTE } from "@/lib/label-colors";
@@ -32,24 +30,29 @@ import { allowedTypes, TASK_TYPES, typeLabel, type TaskTypeValue } from "@/lib/t
 import { MAX_BLOCKED_REASON } from "@/lib/tasks/status";
 import { cn } from "@/lib/utils";
 
+import { MentionTextarea } from "./mention-textarea";
 import { useConfirmFlagged } from "./prompts";
 import { HashTagHint } from "./tag-menu";
-import { LabelsField, PeopleField, PRIORITY_OPTIONS, STATUS_OPTIONS } from "./task-fields";
+import { TitleInput } from "./task-title-field";
+import {
+  LabelsField,
+  OwnerField,
+  PeopleField,
+  PRIORITY_OPTIONS,
+  STATUS_OPTIONS,
+} from "./task-fields";
 import type { TaskEditorDefaults } from "./task-editor";
 import { useTasks } from "./tasks-context";
-import { useRubberReveal } from "./use-rubber-reveal";
 import { useHashTags } from "./use-hash-tags";
 
 const NONE = "__none";
 
 /**
  * New task, as a centred dialog (editing a task is centred too, in
- * TaskDetailSheet). The window opens on the essentials, in this order:
- * title, type and priority, owner and who else, the epic and the due date.
- * The rest (description, tags, status, who can see it, a start date for
- * epics and stories) sits just below, reached by scrolling, never a click:
- * a short scroll stretches and springs back like a rubber band, a longer
- * one carries on to the details (useRubberReveal).
+ * TaskDetailSheet). One form, in one column, in this order: title, type and
+ * priority, owner and who else, the epic and the due date, then the
+ * description, tags, status and who can see it. The window is sized so all
+ * of it is on screen on a laptop; on anything shorter it simply scrolls.
  */
 export function NewTaskDialog({
   open,
@@ -62,7 +65,7 @@ export function NewTaskDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(86vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+      <DialogContent className="flex max-h-[min(94vh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
         {open && (
           <NewTaskForm
             key={`${defaults?.parentTaskId ?? "top"}-${defaults?.type ?? ""}-${defaults?.status ?? ""}`}
@@ -82,15 +85,11 @@ function NewTaskForm({
   defaults?: TaskEditorDefaults;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { org, viewer, members, memberById, labels, parents, parentById, announce } = useTasks();
+  const { org, viewer, memberById, labels, parents, parentById, announce } = useTasks();
   const hashTags = useHashTags();
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
   const [isPending, startTransition] = useTransition();
   const saving = useRef(false);
-  const moreId = useId();
-  const scroller = useRef<HTMLDivElement>(null);
-  const details = useRef<HTMLDivElement>(null);
-  const band = useRubberReveal(scroller, details);
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState<TaskTypeValue>(defaults?.type ?? "TASK");
@@ -152,7 +151,6 @@ function NewTaskForm({
   async function save() {
     setError(null);
     if (status === TaskStatus.BLOCKED && !blockedReason.trim()) {
-      band.reveal();
       setError("Say what it's blocked on.");
       return;
     }
@@ -237,37 +235,27 @@ function NewTaskForm({
       </DialogHeader>
 
       {/*
-        The essentials fill the window; the rest waits just below. At the top,
-        scrolling down stretches it like a rubber band and springs back
-        (useRubberReveal); pull past the threshold and it glides on to the
-        details. From there it scrolls normally.
+        One column, top to bottom, sized to fit on a laptop screen: the
+        essentials first, then the description, tags, status and who can see
+        it. It used to hide the second half behind a rubber-band scroll,
+        which asked people to discover a gesture to find fields that fit on
+        the screen anyway.
       */}
-      <div
-        ref={scroller}
-        className="min-h-0 flex-1 [scrollbar-width:thin] overflow-x-hidden overflow-y-auto overscroll-contain"
-      >
-        <div
-          style={{ transform: band.offset ? `translateY(${band.offset}px)` : undefined }}
-          className={cn(
-            "min-h-full",
-            band.springing &&
-              "transition-transform duration-500 ease-(--ease-spring) motion-reduce:transition-none",
-          )}
-        >
-          <div
-            className="flex min-h-full flex-col gap-4 px-6 pt-2 pb-4"
-            style={band.pageHeight ? { minHeight: band.pageHeight } : undefined}
-          >
+      <div className="min-h-0 flex-1 [scrollbar-width:thin] overflow-x-hidden overflow-y-auto overscroll-contain">
+        <div>
+          <div className="flex flex-col gap-4 px-6 pt-2 pb-4">
             <div className="grid content-start gap-1.5">
               <Label htmlFor="task-title">Title</Label>
-              <Input
+              <TitleInput
                 id="task-title"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={setTitle}
                 autoFocus
                 required
                 maxLength={200}
-                placeholder={isEpic ? "e.g. Fall Showcase" : "e.g. Book the room (#tag to tag it)"}
+                placeholder={
+                  isEpic ? "e.g. Fall Showcase" : "e.g. Book the room (#tag, /file to link one)"
+                }
               />
               <HashTagHint title={title} />
             </div>
@@ -308,22 +296,16 @@ function NewTaskForm({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
               <div className="grid content-start gap-1.5">
                 <Label htmlFor="task-owner">Owner</Label>
-                <Select
-                  value={ownerId ?? NONE}
-                  onValueChange={(v) => setOwnerId(v === NONE ? null : v)}
-                >
-                  <SelectTrigger id="task-owner" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!ownerRequired && <SelectItem value={NONE}>Nobody yet</SelectItem>}
-                    {members.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.id === viewer.userId ? `${m.name ?? "Me"} (you)` : (m.name ?? "Member")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/*
+                  The same picker as Who else, so both read the same: faces,
+                  names and how each person relates to you in the org chart.
+                */}
+                <OwnerField
+                  id="task-owner"
+                  value={ownerId}
+                  onChange={setOwnerId}
+                  allowNone={!ownerRequired}
+                />
                 {ownerAbove && (
                   <p className="text-warning text-xs">Above your level: this will be flagged.</p>
                 )}
@@ -444,40 +426,19 @@ function NewTaskForm({
                 {error}
               </p>
             )}
-
-            {/* The way down to the rest: a nudge, not a button. */}
-            <p
-              aria-hidden="true"
-              className="text-muted-foreground mt-auto flex flex-col items-center gap-0.5 pt-4 text-xs"
-            >
-              {band.offset < -30
-                ? "Keep scrolling for more details"
-                : "Scroll for description, tags, status and who can see it"}
-              <ChevronDown
-                className={cn(
-                  "size-4 transition-transform",
-                  band.offset < -30 ? "translate-y-1" : "motion-safe:animate-bounce",
-                )}
-              />
-            </p>
           </div>
 
-          <div
-            ref={details}
-            id={moreId}
-            className="flex min-h-full flex-col gap-4 border-t px-6 pt-5 pb-4"
-            style={band.pageHeight ? { minHeight: band.pageHeight } : undefined}
-          >
-            <h3 className="heading text-[15px]">More details</h3>
+          <div className="flex flex-col gap-4 px-6 pb-5">
             <div className="grid content-start gap-1.5">
               <Label htmlFor="task-description">Description</Label>
-              <Textarea
+              {/* @ mentions a member, / links a club file, markdown works. */}
+              <MentionTextarea
                 id="task-description"
                 value={description}
+                onChange={setDescription}
                 rows={4}
                 maxLength={20000}
-                placeholder="Markdown works"
-                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Markdown, @mentions and /file links work"
               />
             </div>
             <div className="grid content-start gap-1.5">

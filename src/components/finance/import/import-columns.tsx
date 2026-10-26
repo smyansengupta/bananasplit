@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { FieldSelect } from "@/components/ui/field-select";
 import type { AiLabel, SheetRead } from "@/lib/ai/finance-sheet";
 import {
   AMOUNT_SIGN_LABEL,
@@ -34,7 +35,7 @@ import type { SheetData } from "@/lib/finance/import/sheet";
 import type { DateOrder } from "@/lib/finance/import/values";
 import { cn } from "@/lib/utils";
 
-import { ErrorNotice, fieldSelect, fieldSelectSm, ImportPanel, WarningNotice } from "./panel";
+import { ErrorNotice, ImportPanel, WarningNotice } from "./panel";
 
 /**
  * Which column is which. The guess is shown on a preview of the sheet with
@@ -265,19 +266,19 @@ export function ImportColumns({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1.5">
             <span className="eyebrow text-muted-foreground block">What&apos;s in it</span>
-            <select
-              className={fieldSelect}
+            <FieldSelect
+              className="w-full"
               value={mapping.kind}
               onChange={(e) => set({ kind: e.target.value as SheetMapping["kind"] })}
             >
               <option value="transactions">Money in and out (a ledger or statement)</option>
               <option value="budget">A budget (an amount per category)</option>
-            </select>
+            </FieldSelect>
           </label>
           <label className="space-y-1.5">
             <span className="eyebrow text-muted-foreground block">Column names are in</span>
-            <select
-              className={fieldSelect}
+            <FieldSelect
+              className="w-full"
               value={mapping.headerRow}
               onChange={(e) => set({ headerRow: Number(e.target.value) })}
             >
@@ -287,7 +288,7 @@ export function ImportColumns({
                   Row {i + 1}: {r.filter(Boolean).slice(0, 3).join(", ").slice(0, 40)}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </label>
           {mapping.kind === "transactions" &&
             has("amount") &&
@@ -295,8 +296,8 @@ export function ImportColumns({
             !has("moneyOut") && (
               <label className="space-y-1.5">
                 <span className="eyebrow text-muted-foreground block">Money in or out</span>
-                <select
-                  className={fieldSelect}
+                <FieldSelect
+                  className="w-full"
                   value={mapping.amountSign}
                   onChange={(e) => set({ amountSign: e.target.value as AmountSign })}
                 >
@@ -305,21 +306,21 @@ export function ImportColumns({
                       {AMOUNT_SIGN_LABEL[s]}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </label>
             )}
           {mapping.kind === "transactions" && has("date") && (
             <label className="space-y-1.5">
               <span className="eyebrow text-muted-foreground block">Dates are written</span>
-              <select
-                className={fieldSelect}
+              <FieldSelect
+                className="w-full"
                 value={mapping.dateOrder}
                 onChange={(e) => set({ dateOrder: e.target.value as DateOrder })}
               >
                 <option value="MDY">Month first (9/5/2026 is Sep 5)</option>
                 <option value="DMY">Day first (5/9/2026 is Sep 5)</option>
                 <option value="YMD">Year first (2026-09-05)</option>
-              </select>
+              </FieldSelect>
             </label>
           )}
         </div>
@@ -342,16 +343,17 @@ export function ImportColumns({
                       className="bg-card ring-foreground/6 flex h-10 items-center gap-2 rounded-full pr-1 pl-3.5 text-[13px] ring-1"
                     >
                       <span className="font-semibold">{v}</span>
-                      <select
+                      <FieldSelect
                         aria-label={`${v} means`}
-                        className={cn(fieldSelectSm, "rounded-full")}
+                        className="rounded-full"
                         value={way}
                         onChange={(e) => setTypeValue(v, e.target.value as "in" | "out" | "none")}
+                        size="sm"
                       >
                         <option value="in">Money in</option>
                         <option value="out">Money out</option>
                         <option value="none">Not sure</option>
-                      </select>
+                      </FieldSelect>
                     </li>
                   );
                 })}
@@ -368,10 +370,9 @@ export function ImportColumns({
                 const mapped = (mapping.roles[c] ?? "ignore") !== "ignore";
                 return (
                   <TableHead key={c} className="h-auto py-2.5 align-top">
-                    <select
+                    <FieldSelect
                       aria-label={`Column ${c + 1}${header?.[c] ? ` (${header[c]})` : ""}`}
                       className={cn(
-                        fieldSelectSm,
                         "w-full min-w-32",
                         mapped
                           ? "text-foreground border-foreground/30 font-semibold"
@@ -383,13 +384,14 @@ export function ImportColumns({
                           mapping: setColumnRole(mapping, c, e.target.value as ColumnRole),
                         })
                       }
+                      size="sm"
                     >
                       {roles.map((r) => (
                         <option key={r} value={r}>
                           {ROLE_LABEL[r]}
                         </option>
                       ))}
-                    </select>
+                    </FieldSelect>
                     <span className="mt-1.5 block max-w-48 truncate px-0.5 font-medium">
                       {header?.[c] || `Column ${c + 1}`}
                     </span>

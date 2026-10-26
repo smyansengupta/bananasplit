@@ -18,6 +18,7 @@ import { timeZoneOptions } from "@/lib/timezones";
 import { cn } from "@/lib/utils";
 
 import { checkSlugAvailability, createOrganizationAction } from "../actions";
+import { FieldSelect } from "@/components/ui/field-select";
 
 /** What a new club's sidebar opens with, for the preview. */
 const SPACES = [
@@ -89,7 +90,7 @@ export function ClubBasicsStep({
         <>
           <PreviewHeader meta="Your club's home" />
           <PreviewTile className="flex-row items-center gap-3">
-            <span className="bg-primary text-primary-foreground font-heading grid size-11 flex-none place-items-center rounded-field text-[20px]">
+            <span className="bg-primary text-primary-foreground font-heading rounded-field grid size-11 flex-none place-items-center text-[20px]">
               {clubName[0]?.toUpperCase()}
             </span>
             <span className="flex min-w-0 flex-col gap-0.5">
@@ -110,7 +111,10 @@ export function ClubBasicsStep({
               >
                 <span
                   aria-hidden="true"
-                  className={cn("size-2 rounded-full", i === 0 ? "bg-brand-accent" : "bg-foreground/15")}
+                  className={cn(
+                    "size-2 rounded-full",
+                    i === 0 ? "bg-brand-accent" : "bg-foreground/15",
+                  )}
                 />
                 {space}
               </span>
@@ -123,7 +127,8 @@ export function ClubBasicsStep({
       }
     >
       <StepIntro index={index} total={total} title="Let's start with the basics.">
-        You&apos;ll be the club&apos;s admin. Everything here can be changed later in the Admin panel.
+        You&apos;ll be the club&apos;s admin. Everything here can be changed later in the Admin
+        panel.
       </StepIntro>
 
       {notice ? (
@@ -151,7 +156,11 @@ export function ClubBasicsStep({
                   aria-live="polite"
                   className={cn(
                     "text-[13px] font-medium",
-                    taken ? "text-destructive" : available ? "text-tint-success-foreground" : "text-muted-foreground",
+                    taken
+                      ? "text-destructive"
+                      : available
+                        ? "text-tint-success-foreground"
+                        : "text-muted-foreground",
                   )}
                 >
                   {slug && checking
@@ -164,7 +173,7 @@ export function ClubBasicsStep({
                 </span>
               }
             >
-              <div className="bg-card border-input focus-within-banana flex h-10 items-center rounded-field border pl-4 text-[15px] transition-shadow">
+              <div className="bg-card border-input focus-within-banana rounded-field flex h-10 items-center border pl-4 text-[15px] transition-shadow">
                 <span className="text-muted-foreground font-mono text-[13px]">/app/</span>
                 <input
                   id="org-slug"
@@ -181,7 +190,7 @@ export function ClubBasicsStep({
               </div>
             </BrandField>
             <BrandField id="org-timezone" label="Time zone">
-              <select
+              <FieldSelect
                 id="org-timezone"
                 name="timezone"
                 value={timezone}
@@ -193,7 +202,7 @@ export function ClubBasicsStep({
                     {zone.replace(/_/g, " ")}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             </BrandField>
             {requiresCode && (
               <BrandField id="org-code" label="Club creation code">

@@ -15,6 +15,7 @@ import {
   StepIntro,
 } from "@/components/onboarding/setup-shell";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldSelect } from "@/components/ui/field-select";
 import { FINANCE_CARDS } from "@/lib/finance/dashboard-cards";
 import { fiscalYearFor, MONTHS } from "@/lib/onboarding/org";
 import { cn } from "@/lib/utils";
@@ -127,7 +128,9 @@ export function FinanceStep({
           {shown.map((card) => (
             <PreviewTile key={card.id} className="gap-1">
               <span className="text-[14px] font-semibold">{card.title}</span>
-              <span className="text-muted-foreground text-[12px] leading-normal">{card.detail}</span>
+              <span className="text-muted-foreground text-[12px] leading-normal">
+                {card.detail}
+              </span>
             </PreviewTile>
           ))}
           {shown.length === 0 && (
@@ -158,18 +161,22 @@ export function FinanceStep({
                 aria-checked={on}
                 onClick={() => toggle(card.id)}
                 className={cn(
-                  "bg-card flex cursor-pointer items-start gap-3 rounded-field border px-4 py-3 text-left transition-colors",
+                  "bg-card rounded-field flex cursor-pointer items-start gap-3 border px-4 py-3 text-left transition-colors",
                   on ? "border-foreground" : "border-foreground/10 hover:border-foreground/25",
                 )}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="text-[15px] font-semibold">{card.title}</span>
-                  <span className="text-muted-foreground text-[13px] leading-snug">{card.detail}</span>
+                  <span className="text-muted-foreground text-[13px] leading-snug">
+                    {card.detail}
+                  </span>
                 </span>
                 <span
                   className={cn(
                     "mt-0.5 grid size-5 flex-none place-items-center rounded-full border-[1.5px]",
-                    on ? "bg-primary border-foreground text-primary-foreground" : "border-foreground/22",
+                    on
+                      ? "bg-primary border-foreground text-primary-foreground"
+                      : "border-foreground/22",
                   )}
                 >
                   {on && <Check className="size-3" strokeWidth={3.5} aria-hidden="true" />}
@@ -184,7 +191,7 @@ export function FinanceStep({
             Your year starts
           </label>
           <div className="flex flex-wrap items-center gap-3">
-            <select
+            <FieldSelect
               id="fy-start"
               value={month}
               onChange={(e) => setMonth(Number(e.target.value))}
@@ -195,7 +202,7 @@ export function FinanceStep({
                   {m} 1
                 </option>
               ))}
-            </select>
+            </FieldSelect>
             <span className="bg-muted rounded-full px-3 py-1.5 text-[13px] font-semibold">
               {fy.label}
               <span className="text-muted-foreground font-normal">
