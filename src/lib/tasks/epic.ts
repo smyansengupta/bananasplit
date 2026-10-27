@@ -1,3 +1,4 @@
+import { TAG_COLORS, tagToken } from "@/lib/tag-colors";
 import { isHex } from "@/lib/theme/hex";
 
 /**
@@ -7,7 +8,19 @@ import { isHex } from "@/lib/theme/hex";
  * dates, and the work under it. Pure and client-safe.
  */
 
-const SLOTS = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5"];
+/**
+ * An epic with no colour of its own takes one of these, from the tag
+ * palette (src/lib/tag-colors.ts) rather than the chart slots: an epic
+ * is a label on a row of work, and a board of them wants telling apart
+ * more than it wants matching the club's theme.
+ *
+ * CHANGING THIS LIST RECOLOURS EVERY EPIC that has not picked a colour,
+ * because the slot is the epic's id hashed modulo the length. Moving off
+ * the five chart slots did exactly that, once: an epic people knew as
+ * "the green one" may be another colour now. Picking a colour stores a
+ * hex and stops consulting this list at all.
+ */
+const SLOTS: string[] = TAG_COLORS.map((c) => tagToken(c));
 
 export interface EpicRef {
   id: string;
@@ -17,8 +30,8 @@ export interface EpicRef {
 
 /**
  * An epic's colour as CSS: its own (strict hex, picked when it was made or
- * recoloured), else a chart slot that stays the same for that epic. No epic
- * at all is the muted ink.
+ * recoloured), else a palette slot that stays the same for that epic. No
+ * epic at all is the muted ink.
  */
 export function epicColor(
   epic: { id: string; color?: string | null } | string | null | undefined,
