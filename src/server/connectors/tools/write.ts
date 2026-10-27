@@ -135,8 +135,8 @@ export async function writeInSpace<T>(
 }
 
 /**
- * A service result's refusal as WriteRefusedError: `{ error }` (and the
- * service's own error class) roll the write back with its message.
+ * A service result's `{ error }` as WriteRefusedError, which rolls the
+ * write back with the service's message; the result itself otherwise.
  */
 export function refuseOn<T extends { error?: string }>(result: T): T {
   if (result.error) throw new WriteRefusedError(result.error);
