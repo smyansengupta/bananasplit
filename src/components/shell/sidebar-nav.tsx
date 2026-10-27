@@ -85,7 +85,11 @@ export function sidebarItemClass({
   const tone = surfaceTone(chrome);
   return cn(
     "focus-glow relative flex h-10 shrink-0 items-center gap-3 overflow-hidden rounded-full pr-3 pl-2.5 text-sm font-medium whitespace-nowrap outline-none",
-    "[transition:width_500ms_var(--ease-ink),background-color_200ms,color_200ms,box-shadow_200ms] motion-reduce:[transition:none]",
+    // Width animates (the rail collapsing) and so does the halo. The pill
+    // itself lands at once: cross-fading it left a beat on a slow page where
+    // the row you came from still looked selected and the one you picked
+    // didn't, which reads as the highlight bouncing between two rows.
+    "[transition:width_500ms_var(--ease-ink),box-shadow_200ms] motion-reduce:[transition:none]",
     rail ? "w-10" : "w-full",
     active
       ? chrome

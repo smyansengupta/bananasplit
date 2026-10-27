@@ -136,7 +136,9 @@ function Row({
       aria-current={current}
       className={cn(
         "focus-glow group flex h-12 items-center gap-3 rounded-2xl px-2 text-[15px] font-medium outline-none",
-        "transition-[background-color,scale] duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
+        // Only the press animates; the selected row lands at once, so a slow
+        // page never leaves two rows looking half-selected at the same time.
+        "transition-[scale] duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
         "hover:bg-muted aria-[current]:bg-foreground aria-[current]:text-background",
       )}
     >
