@@ -148,21 +148,34 @@ function itemContent(item: ListItem, scope: Scope): JSONContent[] {
   return out[0]?.type === "paragraph" ? out : [paragraph([]), ...out];
 }
 
-function list(node: List, scope: Scope): JSONContent {
-  const checklist = node.children.some((item) => typeof item.checked === "boolean");
-  const items = node.children.map((item) =>
-    checklist
-      ? {
-          type: "taskItem",
-          attrs: { checked: item.checked === true },
-          content: itemContent(item, scope),
-        }
-      : { type: "listItem", content: itemContent(item, scope) },
-  );
-  if (checklist) return { type: "taskList", content: items };
-  return node.ordered
-    ? { type: "orderedList", attrs: { start: node.start ?? 1 }, content: items }
-    : { type: "bulletList", content: items };
+/**
+ * A list as one or more note lists: its checklist items ("- [ ] …") as a
+ * checklist, the others as bullets or numbers. A blank line doesn't end a
+ * Markdown list, so the export's bullets followed by a checklist arrive as
+ * one list, and come back as the two.
+ */
+function list(node: List, scope: Scope): JSONContent[] {
+  const out: JSONContent[] = [];
+  node.children.forEach((item, i) => {
+    const checklist = typeof item.checked === "boolean";
+    const content = itemContent(item, scope);
+    const type = checklist ? "taskList" : node.ordered ? "orderedList" : "bulletList";
+    let run = out.at(-1);
+    if (run?.type !== type) {
+      run = {
+        type,
+        ...(type === "orderedList" ? { attrs: { start: (node.start ?? 1) + i } } : {}),
+        content: [],
+      };
+      out.push(run);
+    }
+    run.content!.push(
+      checklist
+        ? { type: "taskItem", attrs: { checked: item.checked === true }, content }
+        : { type: "listItem", content },
+    );
+  });
+  return out;
 }
 
 function table(node: Table, scope: Scope): JSONContent {
@@ -198,7 +211,7 @@ function block(node: RootContent, scope: Scope): JSONContent[] {
     case "blockquote":
       return [{ type: "blockquote", content: someBlocks(node.children, scope) }];
     case "list":
-      return [list(node, scope)];
+      return list(node, scope);
     case "code":
       return [
         {

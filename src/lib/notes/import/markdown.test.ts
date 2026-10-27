@@ -53,17 +53,18 @@ const DOC = {
         li(p(t("Lanyards")), { type: "bulletList", content: [li(p(t("Blue")))] }),
       ],
     },
-    {
-      type: "orderedList",
-      attrs: { start: 3 },
-      content: [li(p(t("Third"))), li(p(t("Fourth")))],
-    },
+    // Bullets straight before a checklist: one Markdown list, two note lists.
     {
       type: "taskList",
       content: [
         { type: "taskItem", attrs: { checked: true }, content: [p(t("Book the room"))] },
         { type: "taskItem", attrs: { checked: false }, content: [p(t("Order pizza"))] },
       ],
+    },
+    {
+      type: "orderedList",
+      attrs: { start: 3 },
+      content: [li(p(t("Third"))), li(p(t("Fourth")))],
     },
     { type: "blockquote", content: [p(t("Be there early."))] },
     {
@@ -101,6 +102,37 @@ describe("markdownToNote", () => {
     const markdown = noteToMarkdown("Run of show", DOC);
     const note = markdownToNote(markdown);
     expect(noteToMarkdown(note.title, stored(note.content))).toBe(markdown);
+  });
+
+  it("splits a list into its checklist items and its plain ones", () => {
+    const note = markdownToNote(
+      "- [ ] Send invites\n- Venue: TBD\n- [x] Pick a date\n\n3. Three\n4. [x] Four",
+    );
+    expect(stored(note.content)).toEqual(
+      stored({
+        type: "doc",
+        content: [
+          {
+            type: "taskList",
+            content: [
+              { type: "taskItem", attrs: { checked: false }, content: [p(t("Send invites"))] },
+            ],
+          },
+          { type: "bulletList", content: [li(p(t("Venue: TBD")))] },
+          {
+            type: "taskList",
+            content: [
+              { type: "taskItem", attrs: { checked: true }, content: [p(t("Pick a date"))] },
+            ],
+          },
+          { type: "orderedList", attrs: { start: 3 }, content: [li(p(t("Three")))] },
+          {
+            type: "taskList",
+            content: [{ type: "taskItem", attrs: { checked: true }, content: [p(t("Four"))] }],
+          },
+        ],
+      }),
+    );
   });
 
   it("keeps a heading that isn't the title, and drops one that repeats it", () => {
