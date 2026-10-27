@@ -30,6 +30,9 @@ import { cn } from "@/lib/utils";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import { MeetingCardActions } from "./meeting-card-actions";
+import { MeetingsCreateActions } from "./meetings-create-actions";
+import { listEventTags } from "@/server/events/tags";
+import { getOrgMembersForPicker } from "@/server/members";
 import { userPublicSelect } from "@/server/members";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
@@ -113,65 +116,70 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts, attendees }, registrations, connections] = await Promise.all([
-    withOrgTx(org.id, async ({ db }) => {
-      const events: PageRow[] = await db.event.findMany({
-        where: {
-          organizationId: org.id,
-          deletedAt: null,
-          mergedIntoId: null,
-          // Hosts work from the whole list. Everyone else sees what they can
-          // act on: something to join, or a page open for sign-ups, still to
-          // come. Row policies have already limited this to what they may see.
-          ...(canManage
-            ? {}
-            : {
-                endsAt: { gt: now },
-                OR: [{ rsvpEnabled: true }, { conferenceUrl: { not: null } }],
-              }),
-        },
-        orderBy: { startsAt: "asc" },
-        select: {
-          id: true,
-          title: true,
-          startsAt: true,
-          endsAt: true,
-          allDay: true,
-          rsvpEnabled: true,
-          rsvpSlug: true,
-          rsvpCapacity: true,
-          rsvpCover: true,
-          tag: { select: { name: true, color: true } },
-          format: true,
-          location: true,
-          conferenceProvider: true,
-          conferenceUrl: true,
-          conferenceSyncState: true,
-        },
-      });
-      // Head counts are the hosts' view.
-      const counts = canManage
-        ? await db.eventRegistration.groupBy({
-            by: ["eventId", "status"],
-            where: {
-              organizationId: org.id,
-              eventId: { in: events.map((e) => e.id) },
-              status: { in: ["GOING", "WAITLIST"] },
-            },
-            _count: { _all: true },
-          })
-        : [];
-      // Who was invited from the club and what they said, so a card can
-      // show the people rather than a blank picture.
-      const attendees = await db.eventAttendee.findMany({
-        where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
-        select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
-      });
-      return { events, counts, attendees };
-    }),
-    myRsvpRegistrations(user.id, MY_TICKETS),
-    canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
-  ]);
+  // The header's New meeting opens the event form here, so the page needs
+  // what that form needs: who can be invited and the org's own event types.
+  const [{ events, counts, attendees }, registrations, connections, members, tags] =
+    await Promise.all([
+      withOrgTx(org.id, async ({ db }) => {
+        const events: PageRow[] = await db.event.findMany({
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            mergedIntoId: null,
+            // Hosts work from the whole list. Everyone else sees what they can
+            // act on: something to join, or a page open for sign-ups, still to
+            // come. Row policies have already limited this to what they may see.
+            ...(canManage
+              ? {}
+              : {
+                  endsAt: { gt: now },
+                  OR: [{ rsvpEnabled: true }, { conferenceUrl: { not: null } }],
+                }),
+          },
+          orderBy: { startsAt: "asc" },
+          select: {
+            id: true,
+            title: true,
+            startsAt: true,
+            endsAt: true,
+            allDay: true,
+            rsvpEnabled: true,
+            rsvpSlug: true,
+            rsvpCapacity: true,
+            rsvpCover: true,
+            tag: { select: { name: true, color: true } },
+            format: true,
+            location: true,
+            conferenceProvider: true,
+            conferenceUrl: true,
+            conferenceSyncState: true,
+          },
+        });
+        // Head counts are the hosts' view.
+        const counts = canManage
+          ? await db.eventRegistration.groupBy({
+              by: ["eventId", "status"],
+              where: {
+                organizationId: org.id,
+                eventId: { in: events.map((e) => e.id) },
+                status: { in: ["GOING", "WAITLIST"] },
+              },
+              _count: { _all: true },
+            })
+          : [];
+        // Who was invited from the club and what they said, so a card can
+        // show the people rather than a blank picture.
+        const attendees = await db.eventAttendee.findMany({
+          where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
+          select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
+        });
+        return { events, counts, attendees };
+      }),
+      myRsvpRegistrations(user.id, MY_TICKETS),
+      canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
+      canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
+      withOrgTx(org.id, ({ db }) => listEventTags(db, org.id)),
+    ]);
 
   const countOf = (eventId: string, status: string) =>
     counts.find((c) => c.eventId === eventId && c.status === status)?._count._all ?? 0;
@@ -211,6 +219,17 @@ export default async function MeetingsPage({
         </Link>
       </Button>
     ) : null;
+
+  // The header's pair: the event flow on the left, a meeting on the right.
+  const createActions = canManage ? (
+    <MeetingsCreateActions
+      orgId={org.id}
+      timeZone={org.timezone}
+      members={members}
+      tags={tags}
+      newEventHref={newRsvpEventHref(orgSlug)}
+    />
+  ) : null;
 
   // The live line: what's taking sign-ups now, and who's coming.
   const openPages = upcoming.filter((e) => e.rsvpEnabled);
@@ -453,7 +472,7 @@ export default async function MeetingsPage({
               ? "Set up a call, an in-person meeting, or an event with a sign-up page."
               : "What's coming up that you can join or sign up for.")
         }
-        actions={newEvent("create")}
+        actions={createActions}
       />
 
       {canManage && (

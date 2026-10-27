@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Globe, Ticket, TriangleAlert } from "@/components/icons";
+import { ChevronDown, Globe, MapPin, Ticket, TriangleAlert, Video } from "@/components/icons";
 import { useParams, useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 
@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConferenceProvider, EventVisibility } from "@/generated/prisma/enums";
@@ -87,6 +88,13 @@ export interface EventFormEvent {
 /** Radix will not take an empty item value; "no type" travels as this. */
 const NO_TAG = "__none";
 
+/**
+ * How the form asks "where": online or in person. The database's own
+ * MeetingFormat has a third, HYBRID, which nobody has to pick — an online
+ * meeting that also names a place is saved as one.
+ */
+export type MeetingShape = "ONLINE" | "IN_PERSON";
+
 interface Props {
   orgId: string;
   /** The org timezone: all-day events are whole days there. */
@@ -98,6 +106,8 @@ interface Props {
   defaultAllDay?: boolean;
   /** A new event starts with "Take RSVPs with a public page" switched on. */
   defaultRsvpPage?: boolean;
+  /** Which way a new event's Where starts, when the button that opened this said. */
+  defaultShape?: MeetingShape;
   members: CalendarMember[];
   /** The organization's own event types, in its own order. */
   tags: EventTagOption[];
@@ -112,7 +122,7 @@ export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...re
       <DialogContent className="max-h-[90vh] gap-4 overflow-x-hidden overflow-y-auto sm:max-w-lg">
         {open && (
           <EventForm
-            key={event?.id ?? `new-${defaultStart?.toISOString() ?? ""}`}
+            key={event?.id ?? `new-${defaultStart?.toISOString() ?? ""}-${rest.defaultShape ?? ""}`}
             event={event}
             defaultStart={defaultStart}
             onOpenChange={onOpenChange}
@@ -168,6 +178,7 @@ function EventForm({
   defaultStart,
   defaultAllDay,
   defaultRsvpPage,
+  defaultShape,
   members,
   tags,
   onSaved,
@@ -196,6 +207,17 @@ function EventForm({
   const [startValue, setStartValue] = useState(initial.start);
   const [endValue, setEndValue] = useState(initial.end);
   const [location, setLocation] = useState(event?.location ?? "");
+  // Online or in person, the way the Meetings page asks it. The column the
+  // server keeps (Event.format) is derived from the provider and the place,
+  // so this is only how the question is put: picking "In person" is picking
+  // no video call.
+  const [shape, setShape] = useState<MeetingShape>(() =>
+    event
+      ? event.conferenceProvider === ConferenceProvider.NONE
+        ? "IN_PERSON"
+        : "ONLINE"
+      : (defaultShape ?? "IN_PERSON"),
+  );
   const [provider, setProvider] = useState<ConferenceProvider>(
     event?.conferenceProvider ?? ConferenceProvider.NONE,
   );
@@ -287,6 +309,10 @@ function EventForm({
     }
     if (!allDay && new Date(endValue).getTime() < new Date(startValue).getTime()) {
       setError("The event ends before it starts. Check the end time.");
+      return;
+    }
+    if (shape === "ONLINE" && provider === ConferenceProvider.NONE) {
+      setError("Say where the call happens, or switch this to in person.");
       return;
     }
     startTransition(async () => {
@@ -484,22 +510,63 @@ function EventForm({
           </p>
         </fieldset>
 
-        <div className="grid gap-1.5">
-          <Label htmlFor="event-location">
-            {provider === ConferenceProvider.NONE ? "Location" : "Location (optional)"}
-          </Label>
-          <Input
-            id="event-location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder={
-              provider === ConferenceProvider.NONE
-                ? "Room, address, or leave blank"
-                : "Add a room too, for anyone coming in person"
-            }
-            maxLength={300}
+        {/*
+          Where it happens, as one question. It used to be two fields in two
+          places — a Location box near the top and a video-call menu at the
+          bottom — which left you reading both to find out whether a meeting
+          was online. Online still takes a place as well (that's a hybrid);
+          it's just not the first thing it asks for.
+        */}
+        <fieldset className="grid gap-2.5">
+          <legend className="sr-only">Where</legend>
+          <Segmented
+            label="Where"
+            value={shape}
+            onSelect={(v) => {
+              const next = v as MeetingShape;
+              setShape(next);
+              // "In person" means no video call, so the provider follows the
+              // choice instead of lingering behind a menu that is now hidden.
+              if (next === "IN_PERSON") {
+                setProvider(ConferenceProvider.NONE);
+                setConferenceUrl("");
+              }
+            }}
+            options={[
+              { value: "IN_PERSON", label: "In person", icon: MapPin },
+              { value: "ONLINE", label: "Online", icon: Video },
+            ]}
+            className="w-full justify-stretch [&>a]:flex-1 [&>button]:flex-1"
           />
-        </div>
+
+          {shape === "ONLINE" && (
+            <ConferencePicker
+              orgId={orgId}
+              provider={provider}
+              onProviderChange={setProvider}
+              conferenceUrl={conferenceUrl}
+              onUrlChange={setConferenceUrl}
+              managed={event?.conferenceManaged ?? false}
+            />
+          )}
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="event-location">
+              {shape === "ONLINE" ? "A place too (optional)" : "Location"}
+            </Label>
+            <Input
+              id="event-location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder={
+                shape === "ONLINE"
+                  ? "A room for anyone coming in person"
+                  : "Room, address, or leave blank"
+              }
+              maxLength={300}
+            />
+          </div>
+        </fieldset>
 
         {!event && (
           <label
@@ -520,20 +587,6 @@ function EventForm({
             <Switch id="event-rsvp-page" checked={withRsvpPage} onCheckedChange={setWithRsvpPage} />
           </label>
         )}
-
-        {/*
-          Last, on purpose: you set the meeting up, then say where the call
-          should be. One menu, so the answer is one click and the form does
-          not open with five provider buttons across it.
-        */}
-        <ConferencePicker
-          orgId={orgId}
-          provider={provider}
-          onProviderChange={setProvider}
-          conferenceUrl={conferenceUrl}
-          onUrlChange={setConferenceUrl}
-          managed={event?.conferenceManaged ?? false}
-        />
 
         <div>
           <button
