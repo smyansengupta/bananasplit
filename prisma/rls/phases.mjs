@@ -409,6 +409,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "NOTE_SHARED",
           // The weekly pulse (20261019120000_moonstone_product_update).
           "WEEKLY_PULSE",
+          // A meeting's reminder to a member going (20261026120000_event_reminders).
+          "EVENT_REMINDER",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         indexes: [

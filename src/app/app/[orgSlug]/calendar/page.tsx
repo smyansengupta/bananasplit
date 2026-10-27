@@ -16,6 +16,7 @@ import {
 } from "@/lib/calendar/dates";
 import { weekWindowFor } from "@/lib/calendar/grid";
 import { parseCalendarRange } from "@/lib/calendar/range";
+import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { sectionLabel } from "@/lib/nav/sidebar";
 
 import { dueDateKey, fromDateKey } from "@/lib/tasks/dates";
@@ -42,6 +43,8 @@ export default async function CalendarPage({
 }: PageProps<"/app/[orgSlug]/calendar">) {
   const { orgSlug } = await params;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
+  // A new event starts with the organization's reminders (Settings > General).
+  const defaultReminderMinutes = settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES];
   const range = parseCalendarRange(await searchParams, org.timezone);
   const canManage = can({ role }, "events.write");
   // The Tasks layer is one of the task views; Google sync a data connection.
@@ -175,6 +178,7 @@ export default async function CalendarPage({
         orgId={org.id}
         orgSlug={orgSlug}
         timeZone={org.timezone}
+        defaultReminderMinutes={defaultReminderMinutes}
         items={items}
         members={members.map((m) => ({
           id: m.id,

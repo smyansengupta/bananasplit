@@ -1,0 +1,202 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+
+import { retryConferenceSync } from "@/app/app/[orgSlug]/meetings/actions";
+import { Copy, KeyRound, Loader2, Mic, Phone, RefreshCw, Video } from "@/components/icons";
+import { copyToClipboard } from "@/components/meetings/copy-to-clipboard";
+import { Button } from "@/components/ui/button";
+import { Fact } from "@/components/ui/fact";
+import type { ConferenceStatus } from "@/lib/meetings/conference-status";
+import type { ConferenceDialIn } from "@/server/conference/types";
+
+/** How often a card whose link is on its way asks the page again. */
+export const PENDING_REFRESH_MS = 2_500;
+/**
+ * How long it keeps asking. The job usually lands the link in a second or
+ * two; one still pending after half a minute is retrying or stuck, and a
+ * reload (or the FAILED state the job leaves) is the honest answer then,
+ * not a page that re-renders forever.
+ */
+export const PENDING_REFRESH_FOR_MS = 30_000;
+
+/**
+ * How to get into a meeting, on its page (docs/features/meetings.md): the
+ * join link, the passcode and dial-in numbers, and, for the people who run
+ * it, the host's own link and a way to try again when making the meeting
+ * failed.
+ *
+ * It sits in the event detail's button row, in place of the plain "Join
+ * meeting" button (EventDetailView's `joinCard`).
+ *
+ * `hostUrl` is the link that starts the meeting as its host. The page passes
+ * it only to someone with `events.write` and `null` to everyone else, so it
+ * is never in this component's props, or the page's markup, for a member. It
+ * is only ever the target of the Start as host link: never printed, and never
+ * put in a toast.
+ *
+ * While the link is being made (`pending`), the card refreshes the page every
+ * PENDING_REFRESH_MS for up to PENDING_REFRESH_FOR_MS, so a meeting created a
+ * moment ago shows its link without a reload. It stops as soon as the status
+ * is anything else, and when the card goes away.
+ */
+export function MeetingJoinCard({
+  orgId,
+  eventId,
+  providerLabel,
+  joinUrl,
+  hostUrl,
+  passcode,
+  dialIn,
+  status,
+  canEdit,
+}: {
+  orgId: string;
+  eventId: string;
+  /** "Zoom", "Google Meet": what to call the provider. */
+  providerLabel: string;
+  joinUrl: string | null;
+  hostUrl: string | null;
+  passcode: string | null;
+  dialIn: ConferenceDialIn[];
+  status: ConferenceStatus;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const pending = status.kind === "pending";
+  useEffect(() => {
+    if (!pending) return;
+    // A refresh that finds it still pending re-renders with the same status,
+    // so this does not restart: the half minute counts from when it began.
+    let asked = 0;
+    const timer = window.setInterval(() => {
+      asked += 1;
+      router.refresh();
+      if (asked * PENDING_REFRESH_MS >= PENDING_REFRESH_FOR_MS) window.clearInterval(timer);
+    }, PENDING_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [pending, router]);
+
+  function retry() {
+    setError(null);
+    startTransition(async () => {
+      const result = await retryConferenceSync(orgId, eventId);
+      if (result.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  const hasDetails = Boolean(passcode) || dialIn.length > 0;
+  const nothingYet = !joinUrl && !hostUrl && status.kind === "none";
+
+  return (
+    <section
+      aria-label={`${providerLabel} meeting`}
+      className="bg-muted/50 rounded-field w-full space-y-3 p-4"
+    >
+      <p className="heading flex items-center gap-2 text-[15px]">
+        <Video aria-hidden className="size-4" />
+        {providerLabel}
+      </p>
+
+      {status.kind === "pending" && (
+        <p role="status" className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Loader2 aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
+          {status.line}
+        </p>
+      )}
+
+      {status.kind === "failed" && (
+        <div
+          className="bg-tint-danger text-tint-danger-foreground rounded-field space-y-2 p-3.5 text-sm"
+          role="note"
+        >
+          <p className="font-medium">{status.line}</p>
+          {status.reason && <p>{status.reason}</p>}
+          {canEdit && (
+            <Button type="button" size="sm" variant="outline" onClick={retry} disabled={isPending}>
+              <RefreshCw aria-hidden />
+              Try again
+            </Button>
+          )}
+          {error && (
+            <p role="alert" className="font-medium">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+
+      {(joinUrl || hostUrl) && (
+        <div className="flex flex-wrap gap-2">
+          {joinUrl && (
+            <>
+              <Button asChild>
+                <a href={joinUrl} target="_blank" rel="noopener noreferrer">
+                  <Video aria-hidden />
+                  Join meeting
+                </a>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void copyToClipboard(joinUrl, "Link copied")}
+              >
+                <Copy aria-hidden />
+                Copy link
+              </Button>
+            </>
+          )}
+          {hostUrl && (
+            <Button variant="outline" asChild>
+              <a href={hostUrl} target="_blank" rel="noopener noreferrer">
+                <Mic aria-hidden />
+                Start as host
+              </a>
+            </Button>
+          )}
+        </div>
+      )}
+
+      {hasDetails && (
+        <dl className="grid gap-1">
+          {passcode && (
+            <Fact icon={KeyRound} label="Passcode">
+              <span className="flex items-center gap-1.5">
+                <span className="tabular-nums">{passcode}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Copy passcode"
+                  onClick={() => void copyToClipboard(passcode, "Passcode copied")}
+                >
+                  <Copy aria-hidden />
+                </Button>
+              </span>
+            </Fact>
+          )}
+          {dialIn.length > 0 && (
+            <Fact icon={Phone} label="Dial in">
+              <ul className="space-y-1">
+                {dialIn.map((entry, i) => (
+                  <li key={`${entry.number}-${i}`} className="tabular-nums">
+                    {[entry.country, entry.number, entry.pin ? `PIN ${entry.pin}` : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </li>
+                ))}
+              </ul>
+            </Fact>
+          )}
+        </dl>
+      )}
+
+      {nothingYet && <p className="text-muted-foreground text-sm">No join link yet.</p>}
+    </section>
+  );
+}

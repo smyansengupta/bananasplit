@@ -36,8 +36,14 @@ export const RSVP_RULES_SELECT = {
 
 export type RsvpRulesEvent = Prisma.EventGetPayload<{ select: typeof RSVP_RULES_SELECT }>;
 
+/**
+ * The emails a guest gets. A "reminder" goes out at each of the meeting's
+ * reminder offsets (Event.reminderMinutes). The email job still reads the
+ * "reminder-day" and "reminder-hour" payloads queued before offsets existed
+ * (src/server/rsvp/jobs.ts), but nothing queues those any more.
+ */
 export type RsvpEmailTemplate =
-  "registered" | "waitlisted" | "promoted" | "reminder-day" | "reminder-hour" | "event-cancelled";
+  "registered" | "waitlisted" | "promoted" | "reminder" | "event-cancelled";
 
 /** Serializes everything that counts this event's spots, until commit. */
 export async function lockEvent(db: Db, eventId: string): Promise<void> {
@@ -59,7 +65,13 @@ export async function registrationCounts(
   return { going: of("GOING"), waitlist: of("WAITLIST") };
 }
 
-type RsvpEmailOptions = { startsAt?: Date; dedupe?: string };
+type RsvpEmailOptions = {
+  /** Reminders: the start they are for, so a moved event's are skipped. */
+  startsAt?: Date;
+  /** Reminders: how many minutes before the start. */
+  offsetMinutes?: number;
+  dedupe?: string;
+};
 
 function rsvpEmailJob(
   organizationId: string,
@@ -67,14 +79,16 @@ function rsvpEmailJob(
   template: RsvpEmailTemplate,
   options: RsvpEmailOptions,
 ): EnqueueInput<"rsvp-email"> {
+  const offset = options.offsetMinutes ? `:r${options.offsetMinutes}` : "";
   const stamp = options.startsAt ? `:${Math.floor(options.startsAt.getTime() / 60_000)}` : "";
   return {
     orgId: organizationId,
     kind: "rsvp-email",
-    key: `${registrationId}:${template}${stamp}${options.dedupe ? `:${options.dedupe}` : ""}`,
+    key: `${registrationId}:${template}${offset}${stamp}${options.dedupe ? `:${options.dedupe}` : ""}`,
     payload: {
       registrationId,
       template,
+      ...(options.offsetMinutes ? { offsetMinutes: options.offsetMinutes } : {}),
       ...(options.startsAt ? { startsAt: options.startsAt.toISOString() } : {}),
     },
   };
@@ -102,7 +116,7 @@ export async function enqueueRsvpEmails(
   organizationId: string,
   registrationIds: readonly string[],
   template: RsvpEmailTemplate,
-  options: { startsAt?: Date } = {},
+  options: { startsAt?: Date; offsetMinutes?: number } = {},
 ): Promise<number> {
   const [first, ...rest] = registrationIds;
   if (!first) return 0;
@@ -194,8 +208,6 @@ export async function registerGuest(
     queuedAt: now,
     cancelledAt: null,
     checkedInAt: null,
-    reminderDaySentAt: null,
-    reminderHourSentAt: null,
   };
   const row = existing
     ? await db.eventRegistration.update({
@@ -315,61 +327,59 @@ export async function setRegistrationStatus(
   return true;
 }
 
-/** How long before the start each reminder goes out. */
-export const REMINDER_LEAD_MS = { day: 24 * 60 * 60 * 1000, hour: 60 * 60 * 1000 } as const;
+/**
+ * The shortest reminder an all-day event gets: anything under a day before
+ * its midnight start lands the evening before (an hour before is 11 PM).
+ */
+export const ALL_DAY_MIN_REMINDER_MINUTES = 1440;
 
 /**
- * Queues the day-before and hour-before reminders for the event's current
- * start. The job key carries the start, so moving the event queues new ones
- * and the old ones find the time changed and do nothing. A reminder whose
- * moment has already passed is skipped (people who sign up that late just
- * got their confirmation). An all-day event gets only the day-before one:
- * an hour before its midnight start is 11 PM the night before.
+ * Queues one reminder fanout (rsvp-fanout) per offset in the meeting's
+ * reminderMinutes, each to run at the start minus that offset. One fanout
+ * reminds members and public guests alike (src/server/rsvp/jobs.ts).
+ *
+ * - The job key carries the offset and the start, so moving the event
+ *   queues new ones and the old ones find the time changed and do nothing.
+ *   Scheduling the same start again merges into the job already waiting, so
+ *   any caller may call this whenever who or when might have changed.
+ * - A reminder whose moment has already passed is skipped (people who sign
+ *   up that late just got their confirmation).
+ * - An all-day event skips offsets under a day.
+ *
+ * Returns how many it queued.
  */
-export async function scheduleRsvpReminders(
+export async function scheduleEventReminders(
   db: Db,
   event: {
     id: string;
     organizationId: string;
     startsAt: Date;
     allDay: boolean;
-    rsvpEnabled: boolean;
+    reminderMinutes: number[];
   },
   now: Date = new Date(),
-): Promise<void> {
-  if (!event.rsvpEnabled) return;
-  const stages = event.allDay ? (["day"] as const) : (["day", "hour"] as const);
-  for (const stage of stages) {
-    const runAt = new Date(event.startsAt.getTime() - REMINDER_LEAD_MS[stage]);
+): Promise<number> {
+  const startMinute = Math.floor(event.startsAt.getTime() / 60_000);
+  let queued = 0;
+  for (const offset of new Set(event.reminderMinutes)) {
+    if (event.allDay && offset < ALL_DAY_MIN_REMINDER_MINUTES) continue;
+    const runAt = new Date(event.startsAt.getTime() - offset * 60_000);
     if (runAt <= now) continue;
     await enqueueJob(db, {
       orgId: event.organizationId,
       kind: "rsvp-fanout",
-      key: `${event.id}:${stage}:${Math.floor(event.startsAt.getTime() / 60_000)}`,
-      payload: { eventId: event.id, stage, startsAt: event.startsAt.toISOString() },
+      key: `${event.id}:r${offset}:${startMinute}`,
+      payload: {
+        eventId: event.id,
+        stage: "reminder",
+        offsetMinutes: offset,
+        startsAt: event.startsAt.toISOString(),
+      },
       runAt,
     });
+    queued++;
   }
-}
-
-/**
- * Forgets which reminders went out, after the event moved: those were for
- * the old start, and the new start's reminders should reach everyone. Run
- * in the same transaction as the move.
- */
-export async function resetRsvpReminders(
-  db: Db,
-  organizationId: string,
-  eventId: string,
-): Promise<void> {
-  await db.eventRegistration.updateMany({
-    where: {
-      organizationId,
-      eventId,
-      OR: [{ reminderDaySentAt: { not: null } }, { reminderHourSentAt: { not: null } }],
-    },
-    data: { reminderDaySentAt: null, reminderHourSentAt: null },
-  });
+  return queued;
 }
 
 /**
@@ -461,9 +471,9 @@ export async function enableRsvpPage(
   const updated = await db.event.update({
     where: { id: eventId },
     data: { rsvpEnabled: true },
-    select: { id: true, organizationId: true, startsAt: true, allDay: true, rsvpEnabled: true },
+    select: { id: true, organizationId: true, startsAt: true, allDay: true, reminderMinutes: true },
   });
-  await scheduleRsvpReminders(db, updated);
+  await scheduleEventReminders(db, updated);
   return slug;
 }
 

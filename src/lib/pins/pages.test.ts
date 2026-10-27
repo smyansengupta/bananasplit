@@ -48,6 +48,48 @@ describe("describePath", () => {
     expect(describePath("cbc", "/app/cbc/people/u_1")?.kind).toBe("person");
   });
 
+  it("pins a meeting, and its sign-up screen, under Meetings", () => {
+    // The meeting's own page: the event's title, looked up like a Calendar event's.
+    expect(describePath("cbc", "/app/cbc/meetings/e_1?edit=1")).toEqual({
+      href: "/app/cbc/meetings/e_1",
+      kind: "event",
+      label: "Meeting",
+      lookup: { type: "event", id: "e_1" },
+    });
+    // Its sign-up screen keeps the label and suffix it always had.
+    expect(describePath("cbc", "/app/cbc/meetings/e_1/rsvp?new=1")).toEqual({
+      href: "/app/cbc/meetings/e_1/rsvp",
+      kind: "event",
+      label: "RSVP page",
+      lookup: { type: "event", id: "e_1" },
+      suffix: " · RSVPs",
+    });
+    // Door mode is named by its section and last segment, as it was under the Calendar.
+    expect(describePath("cbc", "/app/cbc/meetings/e_1/rsvp/door")).toMatchObject({
+      kind: "page",
+      label: "Meetings · Door",
+    });
+    // Neither is a bare section: the list itself is still just "Meetings".
+    expect(describePath("cbc", "/app/cbc/meetings")).toEqual({
+      href: "/app/cbc/meetings",
+      kind: "page",
+      label: "Meetings",
+    });
+    // A pin saved before the move still describes itself.
+    expect(describePath("cbc", "/app/cbc/calendar/e_1/rsvp")).toEqual({
+      href: "/app/cbc/calendar/e_1/rsvp",
+      kind: "event",
+      label: "RSVP page",
+      lookup: { type: "event", id: "e_1" },
+      suffix: " · RSVPs",
+    });
+    expect(describePath("cbc", "/app/cbc/calendar/e_1")).toMatchObject({
+      kind: "event",
+      label: "Event",
+      lookup: { type: "event", id: "e_1" },
+    });
+  });
+
   it("keeps the views that live in the query string, so they can be pinned", () => {
     expect(describePath("cbc", "/app/cbc/notes?folder=f_1&tab=files&junk=1")).toEqual({
       href: "/app/cbc/notes?folder=f_1&tab=files",

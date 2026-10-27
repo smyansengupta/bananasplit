@@ -13,6 +13,7 @@ import {
 } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
+import { DEFAULT_REMINDER_MINUTES, reminderOffsetsSchema } from "@/lib/meetings/reminders";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
 import { publicEvents, reports } from "@/server/cache/tags";
@@ -24,11 +25,7 @@ import {
 } from "@/server/conference/providers";
 import { parseGoogleConfig } from "@/server/google-calendar/config";
 import { enqueueJob } from "@/server/jobs/enqueue";
-import {
-  notifyEventCancelled,
-  resetRsvpReminders,
-  scheduleRsvpReminders,
-} from "@/server/rsvp/service";
+import { notifyEventCancelled, scheduleEventReminders } from "@/server/rsvp/service";
 import { markReportsDataChanged } from "@/server/reports/data-version";
 
 /**
@@ -48,6 +45,9 @@ import { markReportsDataChanged } from "@/server/reports/data-version";
  *     gcal:{eventId} when the org has a Google connection (Phase 7 worker);
  *     site-rebuild:{orgId} (runAt +60s, coalesced) when a PUBLIC event
  *       changes and the org has a website build hook;
+ *     rsvp-fanout:{eventId}:r{offset}:{startMinute}, one per reminder time,
+ *       when an event is created here, moved or given other reminder times
+ *       (scheduleEventReminders);
  *     an OrgAuditLog row;
  *     invalidate() of tags.publicEvents(org) (when a PUBLIC event is
  *       involved) and tags.reports(org), after commit.
@@ -128,6 +128,8 @@ const eventFields = {
   endsAt: z.coerce.date(),
   allDay: z.boolean(),
   location: optionalText(300),
+  /** How to find the place ("Second floor, past the elevators"). The sign-up page shows it too. */
+  locationDetails: optionalText(1000),
   conferenceProvider: z.enum(ConferenceProvider),
   conferenceUrl: optionalText(2000),
   kind: z.enum(EventKind),
@@ -143,6 +145,12 @@ const eventFields = {
   capacityFull: z.boolean(),
   featured: z.boolean(),
   publicNote: optionalText(500),
+  /**
+   * Minutes before the start to remind people, earliest first once parsed.
+   * Deliberately no default here: a create without it takes the org's
+   * default (createEvent), and a patch without it leaves the column alone.
+   */
+  reminderMinutes: reminderOffsetsSchema.optional(),
 };
 
 /** Input for createEvent. Defaults: INTERNAL, OTHER, not all-day, no conference. */
@@ -171,6 +179,7 @@ export const EVENT_SELECT = {
   endsAt: true,
   allDay: true,
   location: true,
+  locationDetails: true,
   conferenceProvider: true,
   conferenceUrl: true,
   kind: true,
@@ -183,6 +192,7 @@ export const EVENT_SELECT = {
   capacityFull: true,
   featured: true,
   publicNote: true,
+  reminderMinutes: true,
   rsvpEnabled: true,
   createdById: true,
   deletedAt: true,
@@ -285,6 +295,19 @@ function formatOf(e: { conferenceProvider: ConferenceProvider; location: string 
   return e.location?.trim() ? MeetingFormat.HYBRID : MeetingFormat.ONLINE;
 }
 
+/**
+ * What a new meeting is reminded at when its creator did not say: the
+ * organization's default (Settings > General), or a day's and an hour's
+ * notice for an organization with no settings row.
+ */
+async function orgReminderDefault(ctx: EventServiceContext): Promise<number[]> {
+  const settings = await ctx.db.orgSettings.findUnique({
+    where: { organizationId: ctx.organizationId },
+    select: { meetingReminderMinutes: true },
+  });
+  return settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES];
+}
+
 async function checkHost(
   ctx: EventServiceContext,
   hostUserId: string | null | undefined,
@@ -373,6 +396,28 @@ function needsGoogleSync(
     : integrations.google.hasInternalCalendar;
 }
 
+/**
+ * Whether a save changed when this meeting's reminders go out: created
+ * here (not brought in by the Google import or the website sync, whose
+ * events were not made to remind anyone), moved, or given other reminder
+ * times. scheduleEventReminders' job keys merge, so queuing again for a
+ * start that already has them is harmless.
+ */
+function remindersChanged(
+  before: ServiceEvent | null,
+  after: ServiceEvent,
+  origin: NonNullable<EventSaveOptions["origin"]>,
+): boolean {
+  if (!before) return origin === "suite";
+  if (before.startsAt.getTime() !== after.startsAt.getTime()) return true;
+  if (before.allDay !== after.allDay) return true;
+  // The column is nullable in the database (an array column always is);
+  // a row with none has no reminders.
+  const offsets = (list: readonly number[] | null) =>
+    [...(list ?? [])].sort((a, b) => a - b).join(",");
+  return offsets(before.reminderMinutes) !== offsets(after.reminderMinutes);
+}
+
 async function afterSave(
   ctx: EventServiceContext,
   action: "event.created" | "event.updated" | "event.deleted",
@@ -380,6 +425,7 @@ async function afterSave(
   after: ServiceEvent,
   integrations: Integrations,
   googleSync: boolean,
+  origin: NonNullable<EventSaveOptions["origin"]> = "suite",
 ): Promise<string[]> {
   if (googleSync) {
     await enqueueJob(ctx.db, {
@@ -415,21 +461,18 @@ async function afterSave(
       runAt: new Date(Date.now() + 60_000),
     });
   }
-  // A move also forgets which reminders went out (they were for the old
-  // time), even while the page is off, so turning it back on reminds again.
-  const moved = before !== null && before.startsAt.getTime() !== after.startsAt.getTime();
-  if (moved && action !== "event.deleted") {
-    await resetRsvpReminders(ctx.db, ctx.organizationId, after.id);
-  }
-  // An RSVP page's guests: reminders follow the start time, and a deleted
-  // event tells them it's off (not a merge: mergeEvents won't merge away a
-  // live page that people signed up on).
-  if (after.rsvpEnabled) {
-    if (action === "event.deleted") {
-      if (!after.mergedIntoId) await notifyEventCancelled(ctx.db, ctx.organizationId, after.id);
-    } else if (!before || moved) {
-      await scheduleRsvpReminders(ctx.db, after);
+  if (action === "event.deleted") {
+    // An RSVP page's guests are told it's off (not a merge: mergeEvents
+    // won't merge away a live page that people signed up on). Its queued
+    // reminders find it gone and send nothing.
+    if (after.rsvpEnabled && !after.mergedIntoId) {
+      await notifyEventCancelled(ctx.db, ctx.organizationId, after.id);
     }
+  } else if (remindersChanged(before, after, origin)) {
+    // One fanout per reminder time, for members and guests alike. After a
+    // move the old time's fanouts find the start changed and do nothing,
+    // and the new ones forget what went out for the old time.
+    await scheduleEventReminders(ctx.db, after);
   }
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
@@ -463,6 +506,7 @@ export async function createEvent(
   await checkHost(ctx, data.hostUserId);
 
   const integrations = await loadIntegrations(ctx);
+  const reminderMinutes = data.reminderMinutes ?? (await orgReminderDefault(ctx));
   const link = options.google;
   const googleSync = link
     ? false
@@ -470,6 +514,7 @@ export async function createEvent(
   const event = await ctx.db.event.create({
     data: {
       ...data,
+      reminderMinutes,
       organizationId: ctx.organizationId,
       createdById: ctx.userId,
       conferenceUrl:
@@ -491,7 +536,15 @@ export async function createEvent(
     },
     select: EVENT_SELECT,
   });
-  const tags = await afterSave(ctx, "event.created", null, event, integrations, googleSync);
+  const tags = await afterSave(
+    ctx,
+    "event.created",
+    null,
+    event,
+    integrations,
+    googleSync,
+    options.origin ?? "suite",
+  );
   return { event, tags };
 }
 
@@ -546,7 +599,15 @@ export async function updateEvent(
     },
     select: EVENT_SELECT,
   });
-  const tags = await afterSave(ctx, "event.updated", before, event, integrations, googleSync);
+  const tags = await afterSave(
+    ctx,
+    "event.updated",
+    before,
+    event,
+    integrations,
+    googleSync,
+    options.origin ?? "suite",
+  );
   return { event, tags };
 }
 

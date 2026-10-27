@@ -209,6 +209,12 @@ function makeTx() {
         return { count: rows.length };
       },
     },
+    // createEvent reads the org's reminder default; no settings row is fine.
+    orgSettings: {
+      async findUnique() {
+        return null;
+      },
+    },
     membership: {
       async findMany({ where }: { where: Record<string, unknown> }) {
         return store.members.filter((r) => visible(r) && matchWhere(r, where)).map(clone);

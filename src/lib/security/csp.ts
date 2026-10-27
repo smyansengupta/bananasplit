@@ -182,7 +182,7 @@ export const STATIC_SECURITY_HEADERS: { key: string; value: string }[] = [
  * other page keeps camera=() from STATIC_SECURITY_HEADERS. next.config.ts
  * lists these after the static headers, and the later value wins.
  */
-export const DOOR_MODE_SOURCES = ["/app/:orgSlug/calendar/:eventId/rsvp/door"] as const;
+export const DOOR_MODE_SOURCES = ["/app/:orgSlug/meetings/:id/rsvp/door"] as const;
 export const DOOR_PERMISSIONS_HEADER = {
   key: "Permissions-Policy",
   value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",

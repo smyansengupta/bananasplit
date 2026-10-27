@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * service's writes are mocked (its own tests cover it).
  */
 
-const { ctx, db, service, notifyUsers } = vi.hoisted(() => {
+const { ctx, db, service, notifyUsers, scheduleEventReminders } = vi.hoisted(() => {
   const db = {
     organization: { findUnique: vi.fn() },
     membership: { count: vi.fn() },
@@ -24,6 +24,7 @@ const { ctx, db, service, notifyUsers } = vi.hoisted(() => {
     ctx: { role: "ADMIN" as string, userId: "u_admin" },
     service: { createEvent: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn() },
     notifyUsers: vi.fn(),
+    scheduleEventReminders: vi.fn(),
   };
 });
 
@@ -38,6 +39,10 @@ vi.mock("@/server/events/service", async (importOriginal) => ({
   ...service,
 }));
 vi.mock("@/server/notifications", () => ({ notifyUsers }));
+vi.mock("@/server/rsvp/service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/rsvp/service")>()),
+  scheduleEventReminders,
+}));
 
 const { createEvent, updateEvent, deleteEvent, moveEvent, rsvpToEvent } = await import("./actions");
 const { EventValidationError } = await import("@/server/events/service");
@@ -135,6 +140,94 @@ describe("authorization: events are ADMIN+", () => {
   });
 });
 
+describe("how to find the place", () => {
+  it("passes a new event's directions to the service as they were sent", async () => {
+    await createEvent(ORG, { ...timed, location: "Curry 344", locationDetails: "Second floor." });
+    expect(service.createEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ location: "Curry 344", locationDetails: "Second floor." }),
+    );
+  });
+
+  it("passes a null through, which is how the form clears them", async () => {
+    await createEvent(ORG, { ...timed, locationDetails: null });
+    expect(service.createEvent.mock.calls[0]![1]).toHaveProperty("locationDetails", null);
+  });
+
+  it("names none when the form sent none", async () => {
+    await createEvent(ORG, timed);
+    expect(service.createEvent.mock.calls[0]![1]).not.toHaveProperty("locationDetails");
+  });
+
+  it("changes an event's directions only when the patch names them", async () => {
+    await updateEvent(ORG, "evt_1", { locationDetails: "Ring the bell." });
+    expect(service.updateEvent).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "evt_1",
+      expect.objectContaining({ locationDetails: "Ring the bell." }),
+    );
+    await updateEvent(ORG, "evt_1", { title: "Renamed" });
+    expect(service.updateEvent.mock.calls[1]![2]).not.toHaveProperty("locationDetails");
+  });
+
+  it("refuses more than 1,000 characters", async () => {
+    expect(
+      (await createEvent(ORG, { ...timed, locationDetails: "x".repeat(1001) })).error,
+    ).toBeTruthy();
+    expect(service.createEvent).not.toHaveBeenCalled();
+    expect(
+      (await updateEvent(ORG, "evt_1", { locationDetails: "x".repeat(1001) })).error,
+    ).toBeTruthy();
+    expect(service.updateEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("reminders", () => {
+  it("passes a new event's reminder offsets to the service as they were sent", async () => {
+    await createEvent(ORG, { ...timed, reminderMinutes: [60, 1440] });
+    expect(service.createEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ reminderMinutes: [60, 1440] }),
+    );
+  });
+
+  it("names no reminders when the form sent none, so the service takes the org's default", async () => {
+    await createEvent(ORG, timed);
+    expect(service.createEvent.mock.calls[0]![1]).not.toHaveProperty("reminderMinutes");
+  });
+
+  it("keeps an empty list, which means no reminders rather than the default", async () => {
+    await createEvent(ORG, { ...timed, reminderMinutes: [] });
+    expect(service.createEvent.mock.calls[0]![1]).toHaveProperty("reminderMinutes", []);
+  });
+
+  it("changes an event's reminders only when the patch names them", async () => {
+    await updateEvent(ORG, "evt_1", { reminderMinutes: [30] });
+    expect(service.updateEvent).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "evt_1",
+      expect.objectContaining({ reminderMinutes: [30] }),
+    );
+    await updateEvent(ORG, "evt_1", { title: "Renamed" });
+    expect(service.updateEvent.mock.calls[1]![2]).not.toHaveProperty("reminderMinutes");
+  });
+
+  it("refuses more than eight with a sentence, and returns the service's own message for a bad one", async () => {
+    const nine = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    expect(await createEvent(ORG, { ...timed, reminderMinutes: nine })).toEqual({
+      error: "Use at most 8 reminders.",
+    });
+    expect(service.createEvent).not.toHaveBeenCalled();
+
+    service.createEvent.mockRejectedValueOnce(
+      new EventValidationError("Each reminder time can only be used once."),
+    );
+    expect(await createEvent(ORG, { ...timed, reminderMinutes: [60, 60] })).toEqual({
+      error: "Each reminder time can only be used once.",
+    });
+  });
+});
+
 describe("times", () => {
   it("stores all-day events as org-timezone midnights with an exclusive end", async () => {
     await createEvent(ORG, { title: "Hackathon", allDay: true, startsAt: "2026-10-10", endsAt: "2026-10-11" });
@@ -170,11 +263,28 @@ describe("times", () => {
   });
 });
 
-describe("conference links (paste-only, per provider)", () => {
+describe("conference links", () => {
+  /** The row an edit starts from: a meeting Bananasplit made at this provider. */
+  function managed(conferenceProvider: string, conferenceUrl: string | null) {
+    db.event.findFirst.mockResolvedValue({
+      title: "Board meeting",
+      allDay: false,
+      startsAt: new Date(timed.startsAt),
+      endsAt: new Date(timed.endsAt),
+      location: null,
+      conferenceProvider,
+      conferenceUrl,
+      attendees: [],
+    });
+  }
+
   it.each([
     ["MEET", "https://zoom.us/j/1", /meet\.google\.com/],
+    ["ZOOM", "https://zoom.us.example.com/j/1", /zoom\.us/],
+    ["TEAMS", "https://example.com/teams.microsoft.com", /teams\.microsoft\.com/],
+    ["ZOOM", "http://zoom.us/j/1", /https/],
     ["OTHER", "http://example.com/m", /https/],
-    ["ZOOM", "", /paste a meeting link/i],
+    ["OTHER", "", /paste a meeting link/i],
     ["NONE", "https://meet.google.com/x", /remove the link/i],
   ])("%s with %s is refused", async (provider, url, message) => {
     const result = await createEvent(ORG, { ...timed, conferenceProvider: provider as never, conferenceUrl: url });
@@ -182,13 +292,98 @@ describe("conference links (paste-only, per provider)", () => {
     expect(service.createEvent).not.toHaveBeenCalled();
   });
 
-  it("accepts a zoom.us subdomain", async () => {
-    const result = await createEvent(ORG, {
-      ...timed,
-      conferenceProvider: "ZOOM",
-      conferenceUrl: "https://us02web.zoom.us/j/123",
-    });
+  it.each([
+    ["ZOOM", "https://us02web.zoom.us/j/123"],
+    ["MEET", "https://meet.google.com/abc-defg-hij"],
+    ["TEAMS", "https://teams.microsoft.com/l/meetup-join/1"],
+    // providers.ts allows both of Microsoft's hosts; the action must agree.
+    ["TEAMS", "https://teams.live.com/meet/9876543210"],
+  ])("accepts %s with a link on its own host (%s)", async (provider, url) => {
+    const result = await createEvent(ORG, { ...timed, conferenceProvider: provider as never, conferenceUrl: url });
     expect(result.error).toBeUndefined();
+  });
+
+  describe("an empty link with a provider that makes the meeting means make it for me", () => {
+    it.each(["ZOOM", "MEET", "TEAMS"])("creates a %s meeting with no link", async (provider) => {
+      for (const conferenceUrl of ["", null, undefined]) {
+        service.createEvent.mockClear();
+        const result = await createEvent(ORG, {
+          ...timed,
+          conferenceProvider: provider as never,
+          conferenceUrl,
+        });
+        expect(result).toEqual({ eventId: "evt_1" });
+        expect(service.createEvent).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ conferenceProvider: provider }),
+        );
+      }
+    });
+
+    it.each(["ZOOM", "MEET", "TEAMS"])("adds a %s call to an existing meeting with no link", async (provider) => {
+      // The default row: in person, no call.
+      const result = await updateEvent(ORG, "evt_1", {
+        conferenceProvider: provider as never,
+        conferenceUrl: null,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+      expect(service.updateEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        "evt_1",
+        expect.objectContaining({ conferenceProvider: provider, conferenceUrl: null }),
+      );
+    });
+
+    it("saves a title change on a meeting whose link is still being made", async () => {
+      // PENDING (or FAILED): the job has not filled the link in yet. The edit
+      // form sends the provider and the empty link back with every save.
+      managed("ZOOM", null);
+      const result = await updateEvent(ORG, "evt_1", {
+        title: "Board meeting (renamed)",
+        conferenceProvider: "ZOOM",
+        conferenceUrl: null,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+      expect(service.updateEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        "evt_1",
+        expect.objectContaining({ title: "Board meeting (renamed)" }),
+      );
+    });
+
+    it("saves an edit of a Teams meeting made on teams.live.com", async () => {
+      const link = "https://teams.live.com/meet/9876543210?p=abc";
+      managed("TEAMS", link);
+      const result = await updateEvent(ORG, "evt_1", {
+        title: "Board meeting (renamed)",
+        conferenceProvider: "TEAMS",
+        conferenceUrl: link,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+    });
+
+    it("switches a meeting we made to another provider", async () => {
+      // The picker drops the old provider's link on a switch, so the form
+      // sends the new provider with no link: make one there.
+      managed("ZOOM", "https://us02web.zoom.us/j/98765432100");
+      const result = await updateEvent(ORG, "evt_1", {
+        conferenceProvider: "MEET",
+        conferenceUrl: null,
+      });
+      expect(result).toEqual({ eventId: "evt_1" });
+      expect(service.updateEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        "evt_1",
+        expect.objectContaining({ conferenceProvider: "MEET", conferenceUrl: null }),
+      );
+    });
+
+    it("still refuses another provider's link left on a switch", async () => {
+      managed("ZOOM", "https://us02web.zoom.us/j/98765432100");
+      const result = await updateEvent(ORG, "evt_1", { conferenceProvider: "MEET" });
+      expect(result.error).toMatch(/meet\.google\.com/);
+      expect(service.updateEvent).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -229,6 +424,20 @@ describe("attendees", () => {
       [["u_c"], "EVENT_INVITE"],
       [["u_a"], "EVENT_UPDATED"],
     ]);
+  });
+
+  it("queues the reminders when attendees are added, since they are who a reminder reaches", async () => {
+    await updateEvent(ORG, "evt_1", { attendeeIds: ["u_a", "u_b", "u_c"] });
+    expect(scheduleEventReminders).toHaveBeenCalledTimes(1);
+    expect(scheduleEventReminders).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ id: "evt_1", startsAt: new Date(timed.startsAt) }),
+    );
+    // Removing someone, or leaving the list alone, adds no one to remind.
+    scheduleEventReminders.mockClear();
+    await updateEvent(ORG, "evt_1", { attendeeIds: ["u_a"] });
+    await updateEvent(ORG, "evt_1", { title: "Board meeting (moved rooms)" });
+    expect(scheduleEventReminders).not.toHaveBeenCalled();
   });
 
   it("can skip the reschedule notice", async () => {

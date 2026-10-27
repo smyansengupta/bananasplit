@@ -29,7 +29,7 @@ import { loadRsvpPage, rsvpPageTarget } from "./page";
 import {
   registerGuest,
   RSVP_RULES_SELECT,
-  scheduleRsvpReminders,
+  scheduleEventReminders,
   setRegistrationStatus,
 } from "./service";
 
@@ -82,6 +82,22 @@ async function makeEvent(rules: {
     select: { id: true },
   });
   return { id: event.id, slug };
+}
+
+/** What scheduleEventReminders needs from the event. */
+function scheduleOf(eventId: string) {
+  return withSystemOrgTx(orgId, ({ db }) =>
+    db.event.findFirstOrThrow({
+      where: { id: eventId, organizationId: orgId },
+      select: {
+        id: true,
+        organizationId: true,
+        startsAt: true,
+        allDay: true,
+        reminderMinutes: true,
+      },
+    }),
+  );
 }
 
 function rulesOf(eventId: string) {
@@ -324,25 +340,27 @@ describe("RSVP pages against the local database", () => {
   it("queues the day-before and hour-before reminders for the event's start", async () => {
     if (!reachable) return;
     const event = await makeEvent({ capacity: null, waitlist: true });
-    const rules = await rulesOf(event.id);
-    await withSystemOrgTx(orgId, ({ db }) => scheduleRsvpReminders(db, rules));
+    const schedule = await scheduleOf(event.id);
+    // A new event's offsets default to a day's notice and an hour's.
+    expect(schedule.reminderMinutes).toEqual([1440, 60]);
+    await withSystemOrgTx(orgId, ({ db }) => scheduleEventReminders(db, schedule));
     const jobs = await ownerDb.job.findMany({
       where: { organizationId: orgId, kind: "rsvp-fanout", dedupeKey: { contains: event.id } },
       select: { dedupeKey: true, runAt: true },
     });
-    expect(jobs.map((j) => j.dedupeKey.split(":")[2]).sort()).toEqual(["day", "hour"]);
+    expect(jobs.map((j) => j.dedupeKey.split(":")[2]).sort()).toEqual(["r1440", "r60"]);
   });
 
   it("queues only the day-before reminder for an all-day event", async () => {
     if (!reachable) return;
     const event = await makeEvent({ capacity: null, waitlist: true, allDay: true });
-    const rules = await rulesOf(event.id);
-    await withSystemOrgTx(orgId, ({ db }) => scheduleRsvpReminders(db, rules));
+    const schedule = await scheduleOf(event.id);
+    await withSystemOrgTx(orgId, ({ db }) => scheduleEventReminders(db, schedule));
     const jobs = await ownerDb.job.findMany({
       where: { organizationId: orgId, kind: "rsvp-fanout", dedupeKey: { contains: event.id } },
       select: { dedupeKey: true },
     });
-    expect(jobs.map((j) => j.dedupeKey.split(":")[2])).toEqual(["day"]);
+    expect(jobs.map((j) => j.dedupeKey.split(":")[2])).toEqual(["r1440"]);
   });
 
   it("gives the spot a host frees by moving a guest to the waitlist to the next in line", async () => {
@@ -419,9 +437,17 @@ describe("RSVP pages against the local database", () => {
     if (!reachable) return;
     const event = await makeEvent({ capacity: null, waitlist: true });
     const guest = registered(await signUp(event.id, "Kit Moved", `kit-moved-${tag}@x.test`));
-    await ownerDb.eventRegistration.update({
-      where: { id: guest.registrationId },
-      data: { reminderDaySentAt: new Date(), reminderHourSentAt: new Date() },
+    // Kit was reminded a day before the old time.
+    await ownerDb.eventReminderSend.create({
+      data: {
+        organizationId: orgId,
+        eventId: event.id,
+        offsetMinutes: 1440,
+        registrationId: guest.registrationId,
+        recipientKey: `g:${guest.registrationId}`,
+        channel: "email",
+        sentAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
     });
     const before = await rulesOf(event.id);
     const startsAt = new Date(before.startsAt.getTime() + 2 * DAY);
@@ -431,30 +457,32 @@ describe("RSVP pages against the local database", () => {
         endsAt: new Date(startsAt.getTime() + 2 * 60 * 60 * 1000),
       }),
     );
-    expect(
-      await ownerDb.eventRegistration.findUniqueOrThrow({
-        where: { id: guest.registrationId },
-        select: { reminderDaySentAt: true, reminderHourSentAt: true },
-      }),
-    ).toEqual({ reminderDaySentAt: null, reminderHourSentAt: null });
 
-    // The new start's day-before fan-out queues the guest's reminder again.
+    // The new start's day-before fan-out forgets the old time's send and
+    // queues the guest's reminder again.
     await rsvpFanoutJob(
-      run("rsvp-fanout", { eventId: event.id, stage: "day", startsAt: startsAt.toISOString() }),
+      run("rsvp-fanout", {
+        eventId: event.id,
+        stage: "reminder" as const,
+        offsetMinutes: 1440,
+        startsAt: startsAt.toISOString(),
+      }),
     );
+    expect(await ownerDb.eventReminderSend.count({ where: { eventId: event.id } })).toBe(0);
     const minute = Math.floor(startsAt.getTime() / 60_000);
     expect(
       await ownerDb.job.findFirst({
         where: {
           organizationId: orgId,
-          dedupeKey: `rsvp-email:${guest.registrationId}:reminder-day:${minute}`,
+          dedupeKey: `rsvp-email:${guest.registrationId}:reminder:r1440:${minute}`,
         },
         select: { payload: true },
       }),
     ).toEqual({
       payload: {
         registrationId: guest.registrationId,
-        template: "reminder-day",
+        template: "reminder",
+        offsetMinutes: 1440,
         startsAt: startsAt.toISOString(),
       },
     });
@@ -471,24 +499,19 @@ describe("RSVP pages against the local database", () => {
       await rsvpEmailJob(
         run("rsvp-email", {
           registrationId: late.registrationId,
-          template: "reminder-hour" as const,
+          template: "reminder" as const,
+          offsetMinutes: 60,
           startsAt: lateStart.toISOString(),
         }),
       ),
     ).toEqual({ status: "DONE" });
-    expect(
-      (
-        await ownerDb.eventRegistration.findUniqueOrThrow({
-          where: { id: late.registrationId },
-          select: { reminderHourSentAt: true },
-        })
-      ).reminderHourSentAt,
-    ).toBeNull();
+    expect(await ownerDb.eventReminderSend.count({ where: { eventId: started.id } })).toBe(0);
     expect(
       await rsvpFanoutJob(
         run("rsvp-fanout", {
           eventId: started.id,
-          stage: "hour",
+          stage: "reminder" as const,
+          offsetMinutes: 60,
           startsAt: lateStart.toISOString(),
         }),
       ),
@@ -514,7 +537,12 @@ describe("RSVP pages against the local database", () => {
     }
     const { startsAt } = await rulesOf(event.id);
     await rsvpFanoutJob(
-      run("rsvp-fanout", { eventId: event.id, stage: "hour", startsAt: startsAt.toISOString() }),
+      run("rsvp-fanout", {
+        eventId: event.id,
+        stage: "reminder" as const,
+        offsetMinutes: 60,
+        startsAt: startsAt.toISOString(),
+      }),
     );
     const minute = Math.floor(startsAt.getTime() / 60_000);
     const keys = (
@@ -522,7 +550,7 @@ describe("RSVP pages against the local database", () => {
         where: {
           organizationId: orgId,
           kind: "rsvp-email",
-          dedupeKey: { endsWith: `:reminder-hour:${minute}` },
+          dedupeKey: { endsWith: `:reminder:r60:${minute}` },
         },
         select: { dedupeKey: true },
       })
@@ -531,7 +559,7 @@ describe("RSVP pages against the local database", () => {
     expect(keys.sort()).toEqual(
       guests
         .filter((g) => g.status === "GOING")
-        .map((g) => `rsvp-email:${g.registrationId}:reminder-hour:${minute}`)
+        .map((g) => `rsvp-email:${g.registrationId}:reminder:r60:${minute}`)
         .sort(),
     );
     expect(guests.filter((g) => g.status === "GOING")).toHaveLength(3);

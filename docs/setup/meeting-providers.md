@@ -138,6 +138,29 @@ server.
    approve. You land back on Meetings with "Connected".
 3. Make a meeting, pick that provider as the video call, save. The join link
    appears on the meeting a second or two later.
+4. Check that reconnecting picks up what was waiting. Press **Disconnect**
+   beside the provider in the Video calls bar and confirm. Meetings already
+   made keep their links, and the provider goes back to **Connect**. A meeting
+   saved while the provider is disconnected has nothing to join yet (for
+   instance one saved from a New meeting form that was already open when you
+   disconnected): its page says "No join link yet." Press **Connect** again
+   and approve. You land on Meetings with "Connected", and a second or two
+   later that meeting has its join link. Meetings left failed by an expired
+   connection are picked up the same way.
 
 If step 2 comes back with an error, the message says what went wrong: a wrong
 redirect URI, a missing scope, or offline access not granted.
+
+## Disconnecting a club
+
+Owners and admins can press **Disconnect** beside a connected provider on the
+same bar. It asks first, because changing or cancelling meetings already made
+stops reaching the provider until someone connects again; their links stay.
+
+Disconnect revokes Bananasplit's access at the provider. Teams has no revoke
+call, so for Teams, and for any revoke that fails, the message tells the person
+to remove Bananasplit from that account's connected apps themselves. Only an
+owner's Disconnect also deletes the stored refresh token; an admin's leaves it
+encrypted, already revoked, until an owner removes it. A token that could not
+be revoked is never deleted, so nobody is left holding a live grant they can
+no longer revoke.

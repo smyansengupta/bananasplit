@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ConferenceProvider } from "@/generated/prisma/enums";
+import { CONFERENCE_PROVIDER_OF as PROVIDER_OF } from "@/lib/meetings/connected-provider";
 import type { MeetingConnection } from "@/server/conference/connections";
 import { cn } from "@/lib/utils";
 
@@ -26,18 +27,18 @@ import { cn } from "@/lib/utils";
  * It is one menu now, the last thing the create form asks: you set the
  * meeting up, then say where the call should be.
  *
- * A provider the organization has not connected is still in the menu, with
- * Connect on it, so the answer to "can I use Zoom?" is never "go to an admin
- * page first". Consent opens in a NEW TAB on purpose - a redirect would throw
- * away the half-filled meeting behind this dialog - and coming back re-reads
- * the connections, so the provider you just connected is simply there.
+ * A provider the organization has not connected is still in the menu, so it
+ * says what is possible, but as a disabled item ("Not connected", or "Needs
+ * reconnecting") with a line pointing at Video calls in Meetings. Connecting
+ * is not done from here: it is a form POST there that navigates to the
+ * provider and back, which would throw away the half-filled meeting behind
+ * this dialog. The connections are read again whenever the tab regains focus,
+ * so a provider connected in another tab is simply there.
+ *
+ * The form reads the connections (`useMeetingConnections`) and hands them in,
+ * because it needs them too: a new online meeting starts on the first
+ * provider that is connected.
  */
-
-const PROVIDER_OF: Record<string, ConferenceProvider> = {
-  GOOGLE_MEET: ConferenceProvider.MEET,
-  ZOOM: ConferenceProvider.ZOOM,
-  MICROSOFT_TEAMS: ConferenceProvider.TEAMS,
-};
 
 /** Re-reads the org's connections, and again whenever this tab regains focus. */
 export function useMeetingConnections(orgId: string): MeetingConnection[] | null {
@@ -55,7 +56,8 @@ export function useMeetingConnections(orgId: string): MeetingConnection[] | null
 
   useEffect(() => load(), [load]);
   useEffect(() => {
-    // Connecting happens in another tab; coming back is when this changes.
+    // Someone may connect one from Meetings in another tab; coming back here
+    // is when that shows.
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
@@ -65,7 +67,7 @@ export function useMeetingConnections(orgId: string): MeetingConnection[] | null
 }
 
 export function ConferencePicker({
-  orgId,
+  connections,
   provider,
   onProviderChange,
   conferenceUrl,
@@ -74,7 +76,8 @@ export function ConferencePicker({
   managed,
   disabled,
 }: {
-  orgId: string;
+  /** The organization's connections (`useMeetingConnections`); null while they load. */
+  connections: MeetingConnection[] | null;
   provider: ConferenceProvider;
   onProviderChange: (next: ConferenceProvider) => void;
   conferenceUrl: string;
@@ -82,15 +85,18 @@ export function ConferencePicker({
   managed?: boolean;
   disabled?: boolean;
 }) {
-  const connections = useMeetingConnections(orgId);
   const rows = connections ?? [];
   const pasting = provider === ConferenceProvider.OTHER;
   const chosen = rows.find((c) => PROVIDER_OF[c.provider] === provider) ?? null;
 
   const pick = (next: ConferenceProvider) => {
     onProviderChange(next);
-    // A provider that makes the meeting for us fills the link itself.
-    if (next !== ConferenceProvider.OTHER && !managed) onUrlChange("");
+    // A link belongs to the provider it was made or pasted for, ours or not.
+    // Kept across a switch, it would be saved against the new provider: a
+    // Zoom link on a Meet meeting, or the Zoom meeting we are about to cancel
+    // passed off as the link someone pasted. A provider that makes the
+    // meeting fills its own in; a link to paste starts empty.
+    if (next !== provider) onUrlChange("");
   };
 
   const triggerLabel = pasting

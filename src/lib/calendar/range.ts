@@ -10,8 +10,8 @@ import { addDaysToKey, parseDateKey, safeTimeZone, zonedDateKey, zonedMidnight }
  *   &kind=WORKSHOP,SOCIAL            optional filters
  *   &vis=PUBLIC|INTERNAL
  *   &tasks=0                         hide tasks (their due dates show by default)
- *   &new=rsvp                        open New event with "Take RSVPs" on (the
- *                                    RSVPs page's button), then dropped
+ *   &new=1|online|in-person|event    open New event (on that shape), then dropped
+ *                                    (NEW_EVENT_PARAM; `rsvp` still means `event`)
  *
  * Days are read in the org timezone; the window is padded by a day on each
  * side so viewers in other timezones never miss an edge event. A missing or
@@ -101,12 +101,14 @@ export function parseCalendarRange(params: Params, timeZoneRaw: string, now: Dat
   };
 }
 
-/** ?new=rsvp: the calendar opens New event with its RSVP page switched on. */
+/**
+ * ?new=: opens the create form on arrival, then is dropped. `1` opens it with
+ * nothing preset; `online`, `in-person` or `event` open it on that shape (see
+ * `newMeetingAsk`, lib/meetings/shape.ts), and the old `rsvp` means `event`.
+ * It is read by the Calendar and by Meetings, which are the two places that
+ * open the form.
+ */
 export const NEW_EVENT_PARAM = "new";
-
-export function newRsvpEventHref(orgSlug: string): string {
-  return `/app/${orgSlug}/calendar?${NEW_EVENT_PARAM}=rsvp`;
-}
 
 /** The query string for a window and filters (stable key order). */
 export function calendarSearch(r: {

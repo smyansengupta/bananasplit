@@ -1,34 +1,31 @@
-import { ArrowUpRight, MapPin, Plus, Ticket, Video } from "@/components/icons";
+import { Ticket, Video } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
-import { hasMeetingLogo, MeetingLogo } from "@/components/meeting-logos";
+import {
+  Cover,
+  listWhen,
+  MeetingCard,
+  type MeetingCrowd,
+  type MeetingRow,
+} from "@/components/meetings/meeting-card";
+import { NewMeetingButton } from "@/components/meetings/new-meeting-button";
 import { VideoConnections } from "@/components/meetings/video-connections";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
-import { TickMeter } from "@/components/ui/meters";
-import { shortDayAt } from "@/components/calendar/day-label";
-import { KIND_META } from "@/components/calendar/kinds";
-import type {
-  CalendarSyncState,
-  ConferenceProvider,
-  EventKind,
-  MeetingFormat,
-} from "@/generated/prisma/enums";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { isPlatformAdmin } from "@/lib/auth/org-creation";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
-import { newRsvpEventHref } from "@/lib/calendar/range";
+import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
+import { conferenceStatus } from "@/lib/meetings/conference-status";
+import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
+import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { rsvpCover } from "@/lib/rsvp/cover";
-import { until } from "@/lib/relative-time";
-import { timeLine } from "@/lib/rsvp/when";
-import { cn } from "@/lib/utils";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { userPublicSelect } from "@/server/members";
+import { getOrgMembersForPicker, userPublicSelect } from "@/server/members";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
 import {
@@ -42,53 +39,27 @@ const CONNECT_NOTICES: Record<string, string> = {
   rate_limited: "Too many connection attempts. Try again in an hour.",
 };
 
-/** What a card calls each kind of call. */
-const CONFERENCE_LABELS: Record<ConferenceProvider, string> = {
-  NONE: "",
-  MEET: "Google Meet",
-  ZOOM: "Zoom",
-  TEAMS: "Microsoft Teams",
-  OTHER: "Online",
-};
-
-/** The OrgIntegration behind an event's provider, for its logo. */
-function conferenceIntegration(provider: ConferenceProvider): string | null {
-  if (provider === "MEET") return "GOOGLE_MEET";
-  if (provider === "ZOOM") return "ZOOM";
-  if (provider === "TEAMS") return "MICROSOFT_TEAMS";
-  return null;
-}
-
 /** Your sign-ups read for this page (the lookup's own ceiling). */
 const MY_TICKETS = 50;
 
-interface PageRow {
-  id: string;
-  title: string;
-  startsAt: Date;
-  endsAt: Date;
-  allDay: boolean;
-  rsvpEnabled: boolean;
-  rsvpSlug: string | null;
-  rsvpCapacity: number | null;
-  rsvpCover: unknown;
-  kind: EventKind;
-  format: MeetingFormat;
-  location: string | null;
-  conferenceProvider: ConferenceProvider;
-  conferenceUrl: string | null;
-  conferenceSyncState: CalendarSyncState;
+/** A query parameter given twice is read as its first. */
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 /**
- * RSVPs, its own sidebar section in Personal and in every club:
+ * Meetings, its own sidebar section in Personal and in every organization:
  * - Your tickets: events you're going to or waitlisted for. In Personal,
- *   every one of them; in a club, the club's.
- * - Owners and admins (and you, in Personal): every event with an RSVP page,
- *   coming up first, with sign-ups at a glance; each opens its guest list
- *   and page settings.
- * - Everyone else in a club: the club's events taking sign-ups now, each
- *   opening its public page to sign up there.
+ *   every one of them; in an organization, its own.
+ * - Owners and admins (and you, in Personal): every meeting, coming up first,
+ *   with its shape, its join link and sign-ups at a glance.
+ * - Everyone else in an organization: its meetings with a call to join or a
+ *   page taking sign-ups, still to come.
+ * Every card opens the meeting's page (`/meetings/{id}`); Join and Copy link
+ * are on the card for the one thing most people come here to do.
+ * - New meeting (whoever can create events) opens the create form in place.
+ *   `?new=1` opens it on arrival, and `?new=online|in-person|event` on that
+ *   shape, which is how the + menu and other pages start one here.
  */
 export default async function MeetingsPage({
   params,
@@ -102,6 +73,12 @@ export default async function MeetingsPage({
   const { organization: org, user } = ctx;
   const personal = org.kind === "PERSONAL";
   const canManage = can(ctx, "events.write");
+  // ?new= opens New meeting on arrival (and only for someone who can make one).
+  const askedNew = canManage ? newMeetingAsk(first(sp[NEW_EVENT_PARAM])) : null;
+  // A new meeting starts with the organization's reminders (Settings > General).
+  const defaultReminderMinutes = ctx.settings?.meetingReminderMinutes ?? [
+    ...DEFAULT_REMINDER_MINUTES,
+  ];
   // Connecting a video account is the same right as any other integration:
   // owners and admins, not everyone who can make an event.
   const canConnectVideo = can(ctx, "integrations.write");
@@ -111,9 +88,9 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts, attendees }, registrations, connections] = await Promise.all([
+  const [{ events, counts, attendees }, registrations, connections, members] = await Promise.all([
     withOrgTx(org.id, async ({ db }) => {
-      const events: PageRow[] = await db.event.findMany({
+      const rows: MeetingRow[] = await db.event.findMany({
         where: {
           organizationId: org.id,
           deletedAt: null,
@@ -143,10 +120,19 @@ export default async function MeetingsPage({
           format: true,
           location: true,
           conferenceProvider: true,
+          conferenceManaged: true,
           conferenceUrl: true,
           conferenceSyncState: true,
+          conferenceSyncError: true,
+          // Not conferenceHostUrl: it starts the meeting as host, and nothing
+          // on this list needs it. The meeting's page hands it to editors.
         },
       });
+      // The stored error can name an account or a setting that is not for
+      // everyone, so only people who can edit a meeting get it on the card.
+      const events: MeetingRow[] = canManage
+        ? rows
+        : rows.map((e) => ({ ...e, conferenceSyncError: null }));
       // Head counts are the hosts' view.
       const counts = canManage
         ? await db.eventRegistration.groupBy({
@@ -159,7 +145,7 @@ export default async function MeetingsPage({
             _count: { _all: true },
           })
         : [];
-      // Who was invited from the club and what they said, so a card can
+      // Who was invited from the organization and what they said, so a card can
       // show the people rather than a blank picture.
       const attendees = await db.eventAttendee.findMany({
         where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
@@ -169,6 +155,8 @@ export default async function MeetingsPage({
     }),
     myRsvpRegistrations(user.id, MY_TICKETS),
     canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
+    // The create form's host and invite pickers, for whoever can make a meeting.
+    canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
   ]);
 
   const countOf = (eventId: string, status: string) =>
@@ -180,7 +168,7 @@ export default async function MeetingsPage({
    * out rather than saying "0 going".
    */
   const FACES = 5;
-  const crowdOf = (eventId: string) => {
+  const crowdOf = (eventId: string): MeetingCrowd | null => {
     const rows = attendees.filter((a) => a.eventId === eventId);
     if (rows.length === 0) return null;
     const going = rows.filter((a) => a.rsvp === "YES");
@@ -197,17 +185,21 @@ export default async function MeetingsPage({
   const ticketFor = new Map(tickets.map((r) => [r.eventId, r]));
   const upcoming = events.filter((e) => e.endsAt > now);
   const past = events.filter((e) => e.endsAt <= now).reverse();
-  // Whoever can make events: the Calendar's New event, with the RSVP page on.
+  // Whoever can make events: New meeting, which opens the create form here.
   // The header's is the screen's one create button; the empty state repeats
-  // it quietly.
-  const newEvent = (variant: "create" | "secondary") =>
+  // it quietly. Only the header's opens on arrival (?new=), so there is one
+  // dialog and one param to drop.
+  const newMeeting = (variant: "create" | "secondary", opensOnArrival = false) =>
     canManage ? (
-      <Button variant={variant} asChild>
-        <Link href={newRsvpEventHref(orgSlug)}>
-          <Plus aria-hidden="true" />
-          New event
-        </Link>
-      </Button>
+      <NewMeetingButton
+        orgId={org.id}
+        timeZone={timeZone}
+        members={members}
+        defaultReminderMinutes={defaultReminderMinutes}
+        initialShape={opensOnArrival ? (askedNew?.shape ?? null) : null}
+        startOpen={opensOnArrival && askedNew !== null}
+        variant={variant}
+      />
     ) : null;
 
   // The live line: what's taking sign-ups now, and who's coming.
@@ -223,207 +215,44 @@ export default async function MeetingsPage({
     .filter(Boolean)
     .join(" · ");
 
-  const hrefOf = (e: PageRow) =>
-    canManage
-      ? `/app/${orgSlug}/calendar/${e.id}/rsvp`
-      : e.rsvpSlug
-        ? `/e/${e.rsvpSlug}`
-        : `/app/${orgSlug}/calendar/${e.id}`;
+  // Every card opens the meeting's own page: hosts manage sign-ups from there,
+  // and everyone else finds the join details and the sign-up link there.
+  const hrefOf = (e: MeetingRow) => `/app/${orgSlug}/meetings/${e.id}`;
 
-  // What each card says on the right: the head count for hosts, your own
-  // status for everyone else.
-  const statusOf = (e: PageRow) => {
-    const going = countOf(e.id, "GOING");
-    const waiting = countOf(e.id, "WAITLIST");
-    const mine = ticketFor.get(e.id);
-    // No sign-up page means nobody to count here: the club's own invitees
-    // are on the card already (crowdOf), so this says nothing at all rather
-    // than "No sign-up page" on every internal meeting.
-    if (!e.rsvpSlug) return null;
-    if (canManage) {
-      return (
-        <span className="flex min-w-0 flex-col gap-1.5 text-sm tabular-nums">
-          <span>
-            <span className="font-semibold">{going}</span>
-            <span className="text-muted-foreground">
-              {e.rsvpCapacity ? ` of ${e.rsvpCapacity}` : ""} going
-              {waiting > 0 ? ` · ${waiting} waitlisted` : ""}
-            </span>
-          </span>
-          {e.rsvpCapacity && e.rsvpCapacity <= 60 ? (
-            <TickMeter
-              total={e.rsvpCapacity}
-              filled={going}
-              height={8}
-              color="var(--success)"
-              label={`${going} of ${e.rsvpCapacity} spots taken`}
-              className="w-full max-w-40"
-            />
-          ) : null}
-        </span>
-      );
-    }
-    return mine ? (
-      <Badge variant={mine.status === "WAITLIST" ? "accent" : "success"}>
-        {mine.status === "WAITLIST" ? "On the waitlist" : "You're going"}
-      </Badge>
-    ) : (
-      <Badge variant="outline">RSVP</Badge>
-    );
-  };
+  const card = (e: MeetingRow, featured = false, leads = false, ended = false) => (
+    <MeetingCard
+      key={e.id}
+      event={e}
+      canManage={canManage}
+      status={conferenceStatus(e, canManage)}
+      href={hrefOf(e)}
+      timeZone={timeZone}
+      featured={featured}
+      first={leads}
+      past={ended}
+      now={now}
+      going={countOf(e.id, "GOING")}
+      waiting={countOf(e.id, "WAITLIST")}
+      mine={ticketFor.get(e.id)?.status ?? null}
+      myRsvp={myRsvp(e.id)}
+      crowd={crowdOf(e.id)}
+    />
+  );
 
   /**
-   * One meeting.
-   *
-   * A card with a sign-up picture shows it. One without used to show a
-   * placeholder instead — a huge letter on a blank tile, half the card
-   * spent saying nothing — so now the room goes to what a person actually
-   * wants off this list: when it is and how soon, what you join or where to
-   * be, and who is coming.
+   * A grid of event cards, like Files; the first upcoming one says "Next up".
+   * It is given the wide card ONLY when it has a picture to fill it: without
+   * one, a double-width card is a double-width gap, so it sits in the grid
+   * with the rest. `ended` is the Past list: its cards have nothing left to join.
    */
-  const card = (e: PageRow, featured = false, first = false) => {
-    const hasCover = Boolean(rsvpCover(e.rsvpCover));
-    const crowd = crowdOf(e.id);
-    const mine = myRsvp(e.id);
-    const soon = e.startsAt > now ? until(e.startsAt, now) : null;
-    return (
-      <li key={e.id} className={cn(featured && "sm:col-span-2")}>
-        <Link
-          href={hrefOf(e)}
-          className={cn(
-            "group bg-card text-card-foreground edge rounded-card focus-glow hover:shadow-e2 flex h-full overflow-hidden transition-[transform,box-shadow] duration-200 ease-(--ease-ink) hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
-            featured && hasCover ? "flex-col sm:flex-row" : "flex-col",
-          )}
-        >
-          {hasCover && (
-            <Cover
-              title={e.title}
-              cover={e.rsvpCover}
-              kind={e.kind}
-              startsAt={e.startsAt}
-              timeZone={timeZone}
-              className={
-                featured ? "aspect-[16/10] sm:aspect-auto sm:min-h-56 sm:w-1/2" : "aspect-[16/9]"
-              }
-            />
-          )}
-          <span
-            className={cn(
-              "flex min-w-0 flex-1 flex-col gap-3",
-              featured ? "p-6" : "p-4.5",
-              featured && !hasCover && "sm:p-7",
-            )}
-          >
-            <span className="space-y-1">
-              {/* With no picture the date leads the card instead of sitting on one. */}
-              {!hasCover && (
-                <span className="mb-3 flex items-center gap-3">
-                  <DateLeaf startsAt={e.startsAt} timeZone={timeZone} />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    {(featured || first) && <span className="eyebrow block">Next up</span>}
-                    {soon && (
-                      <span className="text-muted-foreground text-[13px] first-letter:uppercase">
-                        {soon}
-                      </span>
-                    )}
-                  </span>
-                </span>
-              )}
-              {featured && hasCover && <span className="eyebrow block">Next up</span>}
-              <span className="flex items-start gap-2">
-                <span
-                  className={cn(
-                    "min-w-0 font-semibold break-words",
-                    featured ? "display-title text-2xl" : "line-clamp-2 text-[15px]",
-                  )}
-                >
-                  {e.title}
-                </span>
-                {e.rsvpSlug && !e.rsvpEnabled && (
-                  <Badge variant="secondary" title="Its sign-up page is turned off">
-                    Sign-ups off
-                  </Badge>
-                )}
-                {mine === "YES" && <Badge variant="success">You&apos;re going</Badge>}
-                {mine === "MAYBE" && <Badge variant="outline">You said maybe</Badge>}
-              </span>
-              <span className="text-muted-foreground block text-[13px]">
-                {listWhen(e.startsAt, e.endsAt, timeZone, e.allDay)}
-              </span>
-              {shapeLine(e)}
-            </span>
-            {crowd && <Crowd {...crowd} />}
-            <span className="mt-auto flex items-end justify-between gap-3">
-              {statusOf(e)}
-              <ArrowUpRight
-                className="text-muted-foreground group-hover:text-foreground size-4 flex-none transition-colors"
-                aria-hidden="true"
-              />
-            </span>
-          </span>
-        </Link>
-      </li>
-    );
-  };
-
-  /**
-   * What kind of meeting this is, in one line: where it is, or what you join.
-   * An online meeting still waiting for its link says so rather than showing
-   * nothing, because the job that makes it runs just after the save.
-   */
-  const shapeLine = (e: PageRow) => {
-    const integration = conferenceIntegration(e.conferenceProvider);
-    const waiting =
-      e.format !== "IN_PERSON" && !e.conferenceUrl && e.conferenceSyncState === "PENDING";
-    const place = e.location?.trim();
-    const parts: React.ReactNode[] = [];
-
-    if (e.conferenceUrl) {
-      parts.push(
-        <span key="call" className="inline-flex items-center gap-1.5">
-          {integration && hasMeetingLogo(integration) ? (
-            <MeetingLogo provider={integration} className="size-3.5" />
-          ) : (
-            <Video className="size-3.5" aria-hidden="true" />
-          )}
-          {CONFERENCE_LABELS[e.conferenceProvider]}
-        </span>,
-      );
-    } else if (waiting) {
-      parts.push(
-        <span key="call" className="text-muted-foreground inline-flex items-center gap-1.5">
-          {integration && <MeetingLogo provider={integration} className="size-3.5 opacity-60" />}
-          Getting the link…
-        </span>,
-      );
-    }
-    if (place) {
-      parts.push(
-        <span key="place" className="inline-flex min-w-0 items-center gap-1.5">
-          <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-          <span className="truncate">{place}</span>
-        </span>,
-      );
-    }
-    if (parts.length === 0) return null;
-    return (
-      <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]">
-        {parts}
-      </span>
-    );
-  };
-
-  /** A grid of event cards, like Files; the first upcoming one is the wide "Next up". */
-  // The first one up is given the big card ONLY when it has a picture to
-  // fill it. Without one, a double-width card is a double-width gap: it
-  // keeps its "Next up" line and sits in the grid with the rest.
-  const pageList = (items: PageRow[], feature = false) => (
+  const pageList = (items: MeetingRow[], feature = false, ended = false) => (
     <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((e, i) =>
         card(
           e,
           feature && i === 0 && items.length > 1 && Boolean(rsvpCover(e.rsvpCover)),
           feature && i === 0,
+          ended,
         ),
       )}
     </ul>
@@ -443,7 +272,7 @@ export default async function MeetingsPage({
               ? "Set up a call, an in-person meeting, or an event with a sign-up page."
               : "What's coming up that you can join or sign up for.")
         }
-        actions={newEvent("create")}
+        actions={newMeeting("create", true)}
       />
 
       {canManage && (
@@ -489,7 +318,7 @@ export default async function MeetingsPage({
                 made for you.
               </>
             }
-            action={newEvent("secondary")}
+            action={newMeeting("secondary")}
           />
         ) : (
           <EmptyState
@@ -517,7 +346,7 @@ export default async function MeetingsPage({
               >
                 Past <Badge variant="secondary">{past.length}</Badge>
               </h2>
-              {pageList(past)}
+              {pageList(past, false, true)}
             </section>
           )}
         </>
@@ -530,120 +359,6 @@ export default async function MeetingsPage({
         </section>
       )}
     </div>
-  );
-}
-
-/** "Today, 6:00 – 7:00 PM EDT", "Wed, Oct 14, ...": the day as the app says it. */
-function listWhen(start: Date, end: Date, timeZone: string, allDay: boolean): string {
-  return `${shortDayAt(start, timeZone)}, ${timeLine(start, end, timeZone, allDay)}`;
-}
-
-const MONTH = (timeZone: string) => new Intl.DateTimeFormat("en-US", { month: "short", timeZone });
-const DAY = (timeZone: string) => new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone });
-
-/** The calendar leaf: the month over the day, as it reads on a cover. */
-function DateLeaf({ startsAt, timeZone }: { startsAt: Date; timeZone: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="bg-muted text-foreground rounded-tile flex w-12 shrink-0 flex-col items-center py-1.5 leading-none"
-    >
-      <span className="text-muted-foreground text-[11px] font-semibold uppercase">
-        {MONTH(timeZone).format(startsAt)}
-      </span>
-      <span className="numeral mt-0.5 text-lg">{DAY(timeZone).format(startsAt)}</span>
-    </span>
-  );
-}
-
-/**
- * Who is coming: the faces of the people who said yes (or, before anyone
- * has, of the people asked), and then the count in words. This is what the
- * card had nothing of before — a meeting is people, and a list of meetings
- * that doesn't say who is on them makes you open each one to find out.
- */
-function Crowd({
-  faces,
-  going,
-  maybe,
-  awaited,
-  invited,
-}: {
-  faces: { id: string; name: string | null; image: string | null; avatar: unknown }[];
-  going: number;
-  maybe: number;
-  awaited: number;
-  invited: number;
-}) {
-  const line = [
-    going > 0 ? `${going} going` : `${invited} invited`,
-    maybe > 0 && `${maybe} maybe`,
-    going > 0 && awaited > 0 && `${awaited} yet to answer`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <span className="flex shrink-0">
-        {faces.map((u) => (
-          <UserAvatar key={u.id} user={u} size="xs" className="ring-card -me-1.5 ring-2" />
-        ))}
-      </span>
-      <span className="text-muted-foreground min-w-0 truncate ps-2 text-[13px]">{line}</span>
-    </span>
-  );
-}
-
-/**
- * The event's picture (its RSVP cover), with a calendar-leaf date on it.
- * Without a cover: the event's first letter on a tint of its kind's colour
- * (the calendar's), with a faint ticket behind it.
- */
-function Cover({
-  title,
-  cover: stored,
-  kind,
-  startsAt,
-  timeZone,
-  className,
-}: {
-  title: string;
-  cover: unknown;
-  kind?: EventKind;
-  startsAt: Date;
-  timeZone: string;
-  className?: string;
-}) {
-  const cover = rsvpCover(stored);
-  const token = kind ? KIND_META[kind].token : "--primary";
-  return (
-    <span
-      className={cn("relative block overflow-hidden", className)}
-      style={{ background: `color-mix(in oklab, var(${token}) 26%, var(--card))` }}
-    >
-      {cover ? (
-        // eslint-disable-next-line @next/next/no-img-element -- a stored WebP variant
-        <img
-          src={cover.s960}
-          alt=""
-          loading="lazy"
-          className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-        />
-      ) : (
-        <span aria-hidden="true" className="absolute inset-0 grid place-items-center">
-          <Ticket className="absolute size-32 -rotate-12 opacity-[0.08]" strokeWidth={1.25} />
-          <span className="font-heading text-foreground/80 relative text-5xl">
-            {title.trim()[0]?.toUpperCase() ?? "B"}
-          </span>
-        </span>
-      )}
-      <span className="bg-card text-card-foreground rounded-tile shadow-e1 absolute top-3 left-3 flex w-12 flex-col items-center py-1.5 leading-none">
-        <span className="text-muted-foreground text-[11px] font-semibold uppercase">
-          {MONTH(timeZone).format(startsAt)}
-        </span>
-        <span className="numeral mt-0.5 text-lg">{DAY(timeZone).format(startsAt)}</span>
-      </span>
-    </span>
   );
 }
 
