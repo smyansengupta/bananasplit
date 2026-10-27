@@ -20,10 +20,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { UpNextSlot } from "@/lib/overview/up-next";
+import type { EventKind } from "@/generated/prisma/enums";
+import { KIND_META } from "@/components/calendar/kinds";
 import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
 
 import { FaceStack, OpenLink } from "./bits";
+
+/** An event kind's colour for its block card; nothing for anything else. */
+function accentOf(kind: EventKind | null | undefined): string | null {
+  // OTHER has no colour of its own, so its card stays the quiet near-black
+  // rather than being painted in the neutral ink.
+  if (!kind || kind === "OTHER") return null;
+  return `var(${KIND_META[kind].token})`;
+}
 
 /**
  * Up next (redesign guide 9): a row of up to four block cards, what needs
@@ -111,6 +121,7 @@ export function UpNext({
             >
               <BlockCard
                 tone={item.tone}
+                accent={accentOf(item.eventKind)}
                 kicker={item.kicker}
                 title={item.title}
                 subtitle={item.subtitle}

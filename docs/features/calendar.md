@@ -360,13 +360,29 @@ Two rules worth knowing when changing them:
   the viewer's own day on hydration (`useTodayKey`), so the first paint
   cannot mismatch.
 
-Event type colours are theme tokens (`--chart-1` … `--chart-5`, and
-`--muted-foreground` for _Other_), listed in
-`src/components/calendar/kinds.ts`. That palette is derived per org and is
-already checked for a lightness band, a chroma floor, colour-blind
-separation between adjacent slots and 3:1 against both surfaces
-(`src/lib/theme/chart.ts`), which is the guarantee a row of event types
-needs. Nothing in the calendar carries a fixed colour value.
+Event kind colours come from the tag palette, NOT from the org's theme:
+`--tag-navy`, `--tag-plum`, `--tag-burgundy`, `--tag-rust`, `--tag-ochre`,
+`--tag-forest`, `--tag-teal`, and `--muted-foreground` for _Other_. The
+names live in `src/lib/tag-colors.ts`, the light and dark values in
+`globals.css`, and the mapping from kind to colour in
+`src/components/calendar/kinds.ts`. A club theme deliberately does not
+override them: a kind is a label, and it keeps the colour it was given.
+Note folders and epics take the same palette.
+
+They were the derived chart slots until 2026-10-27. Under a monochrome
+theme those are nearly grey, and under any theme they moved when the theme
+moved, which is wrong for something somebody picked. Folder rows saved
+before the change still hold `chart-1` … `chart-5`; `tagColorOf()` reads
+those onto the nearest name, so nothing had to be migrated.
+
+`src/lib/tag-colors.test.ts` holds the palette honest: every colour clears
+4.5:1 on the page, on a card and on its own 15% tint, in both modes and
+under every preset the app ships, keeps a chroma floor so no name reads as
+grey, and keeps adjacent hues apart. `--chart-1..5` are untouched and
+still belong to charts and meters, with their own guarantees in
+`src/lib/theme/chart.ts`. Everything in the calendar still paints from
+`--kind`, so a chip, a dot, a bar and a time-grid block follow one
+variable.
 
 FullCalendar is still a dependency (the task calendar uses it) but the org
 calendar no longer loads it.
