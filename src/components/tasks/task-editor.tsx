@@ -778,7 +778,7 @@ export function TaskEditor({
           subtasks={task.subtasks}
           canAdd={canEdit}
           onOpen={onOpenTask}
-          projectColor={task.type === "EPIC" ? epicColor(task) : "var(--chart-1)"}
+          projectColor={task.type === "EPIC" ? epicColor(task) : "var(--tag-navy)"}
         />
       )}
       <section className="space-y-2 border-t pt-5">

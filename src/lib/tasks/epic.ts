@@ -7,7 +7,29 @@ import { isHex } from "@/lib/theme/hex";
  * dates, and the work under it. Pure and client-safe.
  */
 
-const SLOTS = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5"];
+/**
+ * An epic with no colour of its own takes one of these. They are the
+ * event-type palette (lib/calendar/tags.ts, --tag-*), not the chart slots:
+ * an epic is a label on a row of work, the same job an event type does, and
+ * a board of epics wants telling apart more than it wants matching the
+ * club's theme.
+ *
+ * CHANGING THIS LIST RECOLOURS EVERY EPIC that has no colour of its own,
+ * because the slot is the epic's id hashed modulo the length. Going from
+ * the five chart slots to these seven did exactly that, once, on purpose:
+ * an epic people had learned as "the green one" may now be another colour.
+ * Anyone who wants a colour to stay put picks it, which stores a hex and
+ * stops consulting this list at all.
+ */
+const SLOTS = [
+  "--tag-navy",
+  "--tag-rust",
+  "--tag-forest",
+  "--tag-plum",
+  "--tag-ochre",
+  "--tag-teal",
+  "--tag-burgundy",
+];
 
 export interface EpicRef {
   id: string;
@@ -17,8 +39,8 @@ export interface EpicRef {
 
 /**
  * An epic's colour as CSS: its own (strict hex, picked when it was made or
- * recoloured), else a chart slot that stays the same for that epic. No epic
- * at all is the muted ink.
+ * recoloured), else a palette slot that stays the same for that epic. No
+ * epic at all is the muted ink.
  */
 export function epicColor(
   epic: { id: string; color?: string | null } | string | null | undefined,

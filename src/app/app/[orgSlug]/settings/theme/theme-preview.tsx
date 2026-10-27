@@ -193,7 +193,7 @@ export function ThemePreview({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">Confirm the venue</span>
                         <span className="mt-1 flex items-center gap-2">
-                          <TagChip color="var(--chart-3)">Fall Showcase</TagChip>
+                          <TagChip color="var(--tag-forest)">Fall Showcase</TagChip>
                           <span className="text-tint-danger-foreground text-xs font-semibold">
                             Today
                           </span>
@@ -213,7 +213,7 @@ export function ThemePreview({
                           Book Engineering Hall 112
                         </span>
                         <span className="mt-1 flex items-center gap-2">
-                          <TagChip color="var(--chart-2)">Club operations</TagChip>
+                          <TagChip color="var(--tag-rust)">Club operations</TagChip>
                         </span>
                       </span>
                       <Badge variant="accent">High</Badge>

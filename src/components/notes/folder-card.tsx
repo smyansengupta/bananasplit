@@ -12,6 +12,7 @@ import {
   type IconComponent,
 } from "@/components/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TAG_COLOR_LABELS, tagColorOf, tagToken, type TagColor } from "@/lib/calendar/tags";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,8 +27,10 @@ import { cn } from "@/lib/utils";
  * theme's colour (primary), so a new folder already matches the club. Whoever
  * may edit the folder clicks the line to pick another.
  *
- * The colour is stored as a token name (chart-1 … chart-5), not a colour, so
- * it is always read through var(--…).
+ * The colour is stored as a palette name (navy, plum, burgundy, rust,
+ * ochre, forest, teal — src/lib/calendar/tags.ts), not a colour, so it is
+ * always read through var(--tag-…). Rows saved before the palette hold a
+ * chart slot and are read through the same helper.
  */
 
 export type FolderCardType = "note" | "pdf" | "image" | "sheet" | "slides" | "doc" | "file";
@@ -43,7 +46,7 @@ export interface FolderCardPeek {
 
 export interface FolderCardProps {
   name: string;
-  /** A token name, chart-1 … chart-5, or null for the theme's colour. */
+  /** A palette name (see tags.ts), or null for the theme's colour. */
   color: string | null;
   /** The colours to choose from (token names); without onColor, no choosing. */
   colors?: readonly string[];
@@ -72,7 +75,7 @@ const GLYPH: Record<FolderCardType, IconComponent> = {
 
 /** What a folder's colour token draws as; null is the theme's own colour. */
 export function folderTone(color: string | null): string {
-  return color ? `var(--${color})` : "var(--primary)";
+  return color ? `var(${tagToken(color)})` : "var(--primary)";
 }
 
 /** "3 notes, 2 files" - what is in it, in words, rather than a bare total. */
@@ -259,9 +262,9 @@ export function FolderCard({
                 <button
                   key={c ?? "theme"}
                   type="button"
-                  aria-label={c ? `Colour ${c.replace("chart-", "")}` : "Match the theme"}
-                  aria-pressed={color === c}
-                  title={c ? undefined : "Match the theme"}
+                  aria-label={c ? (TAG_COLOR_LABELS[c as TagColor] ?? c) : "Match the theme"}
+                  aria-pressed={tagColorOf(color) === c}
+                  title={c ? (TAG_COLOR_LABELS[c as TagColor] ?? undefined) : "Match the theme"}
                   onClick={() => onColor(c)}
                   className="focus-glow grid size-7 place-items-center rounded-full outline-none"
                 >
@@ -272,7 +275,7 @@ export function FolderCard({
                     )}
                     style={{ backgroundColor: folderTone(c) }}
                   >
-                    {color === c && (
+                    {tagColorOf(color) === c && (
                       <Check
                         className="size-3"
                         style={{ color: "var(--card)" }}

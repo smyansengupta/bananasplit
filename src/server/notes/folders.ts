@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { TAG_COLORS, tagColorOf, type TagColor } from "@/lib/calendar/tags";
 import type { TxClient } from "@/server/db/context";
 
 import { noteVisibleWhere } from "./visibility";
@@ -11,8 +12,14 @@ import { noteVisibleWhere } from "./visibility";
  * for its uploader or an admin.
  */
 
-export const FOLDER_COLORS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"] as const;
-export type FolderColor = (typeof FOLDER_COLORS)[number];
+/**
+ * A folder takes a colour from the same palette as an event type
+ * (lib/calendar/tags.ts): both are a label a member picked and expects to
+ * stay the colour they picked, and a shelf of folders is easier to find
+ * your way around when they are not five shades of one theme.
+ */
+export const FOLDER_COLORS = TAG_COLORS;
+export type FolderColor = TagColor;
 
 export interface FolderRow {
   id: string;
@@ -54,9 +61,8 @@ export async function listFolders(
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
-    color: (FOLDER_COLORS as readonly string[]).includes(r.color ?? "")
-      ? (r.color as FolderColor)
-      : null,
+    // Rows saved before the palette hold a chart slot; tagColorOf reads those.
+    color: tagColorOf(r.color),
     createdById: r.createdById,
     noteCount: r._count.notes,
     fileCount: r._count.files,

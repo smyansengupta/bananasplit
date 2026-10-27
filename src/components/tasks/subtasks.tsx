@@ -36,7 +36,7 @@ export function Subtasks({
   subtasks,
   canAdd,
   onOpen,
-  projectColor = "var(--chart-1)",
+  projectColor = "var(--tag-navy)",
 }: {
   parentId: string;
   parentType: TaskTypeValue;

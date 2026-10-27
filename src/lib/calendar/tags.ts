@@ -6,21 +6,64 @@
  * team, a department or a society has its own, so the list is the org's
  * own rows now (EventTag) and an event points at one of them, or at none.
  *
- * COLOURS ARE THEME TOKENS, not fixed values: a tag names a CSS variable,
- * so an org's theme restyles the calendar with everything else (Settings >
- * Theme). --chart-1..5 are the derived categorical palette, checked per
- * theme for a lightness band, a chroma floor, colour-blind separation
- * between adjacent slots and 3:1 against both surfaces (src/lib/theme/
- * chart.ts), which is what a row of event types needs. A tag with no
- * colour takes the neutral, as the old "Other" did.
+ * COLOURS ARE A PALETTE OF THEIR OWN, not the theme's. They used to be the
+ * derived chart slots (--chart-1..5), which meant a club's event types
+ * changed colour whenever it changed theme, and under a monochrome theme
+ * they had almost no colour at all. A type is not a data series: it is a
+ * label somebody chose and expects to stay put. So the seven below are
+ * fixed jewel tones — navy, plum, burgundy, rust, ochre, forest, teal —
+ * named after the colour rather than a slot number, each with a light
+ * value and a dark one (globals.css, --tag-*). Every one clears 4.5:1 on
+ * the page, on a card and on its own 15% tint, in both modes and under
+ * every preset (tag-colors.test.ts).
  *
  * Colour is never the only cue: every chip carries its type in its
  * accessible name, and every tile, row and popover names it in text.
  */
 
 /** The colours a tag may take, in the order the picker offers them. */
-export const TAG_COLORS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"] as const;
+export const TAG_COLORS = [
+  "navy",
+  "plum",
+  "burgundy",
+  "rust",
+  "ochre",
+  "forest",
+  "teal",
+] as const;
 export type TagColor = (typeof TAG_COLORS)[number];
+
+/** What the picker calls each colour, for its accessible name. */
+export const TAG_COLOR_LABELS: Record<TagColor, string> = {
+  navy: "Navy",
+  plum: "Plum",
+  burgundy: "Burgundy",
+  rust: "Rust",
+  ochre: "Ochre",
+  forest: "Forest",
+  teal: "Teal",
+};
+
+/**
+ * What the old chart-slot colours become. Rows saved before this palette
+ * existed still hold "chart-1".."chart-5"; they are read through this so a
+ * club's types keep a colour, and roughly the hue they had, with no
+ * migration to run.
+ */
+const LEGACY_TAG_COLORS: Record<string, TagColor> = {
+  "chart-1": "navy",
+  "chart-2": "rust",
+  "chart-3": "forest",
+  "chart-4": "ochre",
+  "chart-5": "plum",
+};
+
+/** A stored colour read as one of today's names, or null for the neutral. */
+export function tagColorOf(color: string | null | undefined): TagColor | null {
+  if (!color) return null;
+  if ((TAG_COLORS as readonly string[]).includes(color)) return color as TagColor;
+  return LEGACY_TAG_COLORS[color] ?? null;
+}
 
 export const MAX_TAG_NAME = 40;
 /** Enough for any org's list without the filter row becoming a wall. */
@@ -40,17 +83,16 @@ export interface EventTagOption {
  * already using.
  */
 export const STARTER_TAGS: readonly { name: string; color: TagColor }[] = [
-  { name: "Meeting", color: "chart-1" },
-  { name: "Workshop", color: "chart-2" },
-  { name: "Social", color: "chart-3" },
-  { name: "Deadline", color: "chart-4" },
+  { name: "Meeting", color: "navy" },
+  { name: "Workshop", color: "rust" },
+  { name: "Social", color: "forest" },
+  { name: "Deadline", color: "burgundy" },
 ];
 
 /** The CSS variable a tag's colour names. */
 export function tagToken(color: string | null | undefined): string {
-  return color && (TAG_COLORS as readonly string[]).includes(color)
-    ? `--${color}`
-    : "--muted-foreground";
+  const name = tagColorOf(color);
+  return name ? `--tag-${name}` : "--muted-foreground";
 }
 
 /**

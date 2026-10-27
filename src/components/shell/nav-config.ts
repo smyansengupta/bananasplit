@@ -1,5 +1,4 @@
 import { spaceIncludes, type SpaceInfo } from "@/lib/billing/space";
-import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
 import { SECTION_FEATURES, type ResolvedGroup } from "@/lib/nav/sidebar";
 import { NEW_TASK_PARAM } from "@/lib/shortcuts";
 
@@ -204,8 +203,8 @@ export interface CreateAction {
  * what the viewer can start in this space, from the sections it shows.
  *
  * - New task: Tasks with ?new=1, which starts one there (as `c` does).
- * - New event: the Calendar with ?new=1, which opens the event form; only
- *   for those who may create events.
+ * - New event: the event form's own page, calendar/new; only for those who
+ *   may create events.
  * - New note: a blank private note, made by the menu, then opened.
  * - New poll: Polls' "Ask a question" (clubs only; Personal has no polls).
  * - Find a time: a new availability poll.
@@ -235,7 +234,7 @@ export function createActions(
       id: "event",
       label: "New event",
       icon: "CalendarPlus",
-      href: `${path("calendar")}?${NEW_EVENT_PARAM}=1`,
+      href: `${path("calendar")}/new`,
     });
   }
   if (links.has("notes")) actions.push({ id: "note", label: "New note", icon: "NotebookPen" });

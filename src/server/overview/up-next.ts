@@ -16,6 +16,8 @@ import type { EventGoing, PersonFace, PollStat, TaskExtras } from "./queries";
  */
 
 export interface UpNextBlock extends UpNextCandidate {
+  /** An event's type colour (EventTag.color), for the card's own fill. */
+  accent?: string | null;
   kicker: string;
   title: string;
   subtitle: string | null;
@@ -93,6 +95,7 @@ export function buildUpNext(input: {
         id: event.id,
         kind: waiting ? "rsvp" : kind,
         tone: waiting ? "answer" : "quiet",
+        accent: event.tag?.color ?? null,
         at: event.startsAt,
         kicker: waiting ? `Your RSVP · ${when}` : when,
         title: event.title,

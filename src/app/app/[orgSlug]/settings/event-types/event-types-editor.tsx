@@ -12,7 +12,9 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   MAX_TAG_NAME,
   MAX_TAGS_PER_ORG,
+  TAG_COLOR_LABELS,
   TAG_COLORS,
+  tagColorOf,
   tagToken,
   type EventTagOption,
 } from "@/lib/calendar/tags";
@@ -91,13 +93,14 @@ export function EventTypesEditor({ orgId, tags }: { orgId: string; tags: EventTa
                     key={c ?? "none"}
                     type="button"
                     disabled={pending}
-                    aria-label={c ? `Colour ${c.replace("chart-", "")}` : "No colour"}
-                    aria-pressed={tag.color === c}
+                    aria-label={c ? TAG_COLOR_LABELS[c] : "No colour"}
+                    title={c ? TAG_COLOR_LABELS[c] : "No colour"}
+                    aria-pressed={tagColorOf(tag.color) === c}
                     onClick={() => run(() => updateEventTag(orgId, { id: tag.id, color: c }))}
                     className="focus-glow grid size-5 place-items-center rounded-md border disabled:opacity-50"
                     style={{ background: `var(${tagToken(c)})` }}
                   >
-                    {tag.color === c && (
+                    {tagColorOf(tag.color) === c && (
                       <Check className="text-background size-3" aria-hidden="true" />
                     )}
                   </button>

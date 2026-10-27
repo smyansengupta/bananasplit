@@ -10,8 +10,6 @@ import { addDaysToKey, parseDateKey, safeTimeZone, zonedDateKey, zonedMidnight }
  *   &type=<tagId>,<tagId>            optional filters
  *   &vis=PUBLIC|INTERNAL
  *   &tasks=0                         hide tasks (their due dates show by default)
- *   &new=rsvp                        open New event with "Take RSVPs" on (the
- *                                    RSVPs page's button), then dropped
  *
  * Days are read in the org timezone; the window is padded by a day on each
  * side so viewers in other timezones never miss an edge event. A missing or
@@ -112,11 +110,27 @@ export function parseCalendarRange(
   };
 }
 
-/** ?new=rsvp: the calendar opens New event with its RSVP page switched on. */
-export const NEW_EVENT_PARAM = "new";
-
-export function newRsvpEventHref(orgSlug: string): string {
-  return `/app/${orgSlug}/calendar?${NEW_EVENT_PARAM}=rsvp`;
+/**
+ * New event is a page of its own (calendar/new), not a dialog the calendar
+ * opens over itself. The options are what the button that sent you there
+ * already knew: whether to take RSVPs, whether it's online or in person,
+ * and where Cancel should put you back.
+ */
+export function newEventHref(
+  orgSlug: string,
+  options: {
+    rsvp?: boolean;
+    shape?: "ONLINE" | "IN_PERSON";
+    /** The page the button was on, so Cancel returns to it. */
+    from?: "meetings";
+  } = {},
+): string {
+  const q = new URLSearchParams();
+  if (options.rsvp) q.set("rsvp", "1");
+  if (options.shape) q.set("shape", options.shape.toLowerCase());
+  if (options.from) q.set("from", options.from);
+  const search = q.toString();
+  return `/app/${orgSlug}/calendar/new${search ? `?${search}` : ""}`;
 }
 
 /** The query string for a window and filters (stable key order). */

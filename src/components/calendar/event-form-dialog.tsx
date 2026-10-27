@@ -113,10 +113,31 @@ interface Props {
   tags: EventTagOption[];
   onSaved?: () => void;
   onDeleted?: () => void;
+  /**
+   * Where the form is drawn. "dialog" is the overlay the calendar grid and
+   * the Meetings page open; "page" is /calendar/new, which gives the same
+   * fields the whole column and its own footer bar.
+   */
+  chrome?: "dialog" | "page";
+  /**
+   * What Cancel says, when it is not "Cancel" (e.g. "Back to Meetings").
+   * Page chrome only: EventFormDialog's own props leave it out.
+   */
+  cancelLabel?: string;
 }
 
-/** Keyed by event id so opening a different event (or switching create/edit) remounts cleanly. */
-export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...rest }: Props) {
+/**
+ * Keyed by event id so opening a different event (or switching create/edit)
+ * remounts cleanly. The two page-chrome props are not part of this one's
+ * shape, so a dialog cannot be told to draw itself as a page.
+ */
+export function EventFormDialog({
+  open,
+  onOpenChange,
+  event,
+  defaultStart,
+  ...rest
+}: Omit<Props, "chrome" | "cancelLabel">) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] gap-4 overflow-x-hidden overflow-y-auto sm:max-w-lg">
@@ -170,7 +191,7 @@ function usesMoreDetails(event: EventFormEvent | null): boolean {
   );
 }
 
-function EventForm({
+export function EventForm({
   orgId,
   timeZone,
   onOpenChange,
@@ -183,7 +204,10 @@ function EventForm({
   tags,
   onSaved,
   onDeleted,
+  chrome = "dialog",
+  cancelLabel,
 }: Omit<Props, "open">) {
+  const onPage = chrome === "page";
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [confirmEl, confirm] = useConfirm();
@@ -325,13 +349,19 @@ function EventForm({
       }
       if (!event && withRsvpPage && result.eventId && params.orgSlug) {
         const page = await turnOnRsvpPage(orgId, result.eventId);
-        onOpenChange(false);
+        if (!onPage) onOpenChange(false);
         // Straight to the new event, on the part that was promised next.
         // The event exists either way; if the page failed to turn on, its
         // Details offers it again.
         router.push(
           `/app/${params.orgSlug}/calendar/${result.eventId}${page.error ? "" : "?tab=page"}`,
         );
+        return;
+      }
+      // A page that just made an event has nothing left to show, so it goes
+      // to the event. A dialog closes and leaves you on the list behind it.
+      if (onPage && !event && result.eventId && params.orgSlug) {
+        router.push(`/app/${params.orgSlug}/calendar/${result.eventId}`);
         return;
       }
       onOpenChange(false);
@@ -365,15 +395,21 @@ function EventForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="contents">
-      <DialogHeader>
-        <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
-        <DialogDescription>
-          {event
-            ? "Changes reach the website and Google Calendar the same way the original did."
-            : "A title and a time are all it takes. Everything else has a sensible default."}
-        </DialogDescription>
-      </DialogHeader>
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={onKeyDown}
+      className={onPage ? "flex min-w-0 flex-col gap-6" : "contents"}
+    >
+      {!onPage && (
+        <DialogHeader>
+          <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
+          <DialogDescription>
+            {event
+              ? "Changes reach the website and Google Calendar the same way the original did."
+              : "A title and a time are all it takes. Everything else has a sensible default."}
+          </DialogDescription>
+        </DialogHeader>
+      )}
 
       <div className="space-y-4">
         <div className="grid gap-1.5">
@@ -389,7 +425,7 @@ function EventForm({
           />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 [&>*]:min-w-0 [&>*]:content-start">
           <div className="grid gap-1.5">
             <Label htmlFor="event-kind">Type</Label>
             <Select
@@ -458,7 +494,7 @@ function EventForm({
           </div>
 
           {/* A date and a time need the width; a bare day does not. */}
-          <div className={cn("grid gap-3", allDay && "grid-cols-1 sm:grid-cols-2")}>
+          <div className={cn("grid items-start gap-3", allDay && "grid-cols-1 sm:grid-cols-2")}>
             <div className="grid gap-1.5">
               <Label htmlFor="event-start">{allDay ? "First day" : "Starts"}</Label>
               {allDay ? (
@@ -613,7 +649,7 @@ function EventForm({
 
         {showMore && (
           <div id={moreId} className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 [&>*]:content-start">
               <div className="grid gap-1.5">
                 <Label htmlFor="event-host">Host</Label>
                 <Select value={host} onValueChange={setHost}>
@@ -675,7 +711,7 @@ function EventForm({
                     <Label htmlFor="event-featured">Featured</Label>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]">
+                <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[1fr_8rem] [&>*]:content-start">
                   <div className="grid gap-1.5">
                     <Label htmlFor="event-note">Public note</Label>
                     <Input
@@ -751,8 +787,8 @@ function EventForm({
       </div>
 
       {confirmEl}
-      <DialogFooter className="flex items-center justify-between sm:justify-between">
-        {event ? (
+      {(() => {
+        const destructive = event ? (
           <Button
             type="button"
             variant="ghost"
@@ -763,16 +799,37 @@ function EventForm({
           </Button>
         ) : (
           <span />
-        )}
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isPending || !title.trim()}>
-            {isPending ? "Saving…" : event ? "Save" : "Create event"}
-          </Button>
-        </div>
-      </DialogFooter>
+        );
+        const buttons = (
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              {cancelLabel ?? "Cancel"}
+            </Button>
+            <Button type="submit" disabled={isPending || !title.trim()}>
+              {isPending ? "Saving…" : event ? "Save" : "Create event"}
+            </Button>
+          </div>
+        );
+        // On a page the actions close the card, on their own band.
+        //
+        // They were sticky, pinned to the bottom of the window. That put
+        // Create event within reach from anywhere in the form, and cost
+        // more than it bought: an invalid save renders its error at the
+        // END of the form, so pressing a pinned button from the top left
+        // you looking at a form that had apparently done nothing. Here the
+        // button and the error it produces are always on screen together.
+        return onPage ? (
+          <div className="border-border bg-card -mx-5 flex items-center justify-between gap-3 border-t px-5 py-4 sm:-mx-7 sm:px-7">
+            {destructive}
+            {buttons}
+          </div>
+        ) : (
+          <DialogFooter className="flex items-center justify-between sm:justify-between">
+            {destructive}
+            {buttons}
+          </DialogFooter>
+        );
+      })()}
     </form>
   );
 }

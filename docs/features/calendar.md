@@ -360,13 +360,24 @@ Two rules worth knowing when changing them:
   the viewer's own day on hydration (`useTodayKey`), so the first paint
   cannot mismatch.
 
-Event type colours are theme tokens (`--chart-1` … `--chart-5`, and
-`--muted-foreground` for _Other_), listed in
-`src/components/calendar/kinds.ts`. That palette is derived per org and is
-already checked for a lightness band, a chroma floor, colour-blind
-separation between adjacent slots and 3:1 against both surfaces
-(`src/lib/theme/chart.ts`), which is the guarantee a row of event types
-needs. Nothing in the calendar carries a fixed colour value.
+Event type colours are a palette of their own, NOT the org's theme:
+`--tag-navy`, `--tag-plum`, `--tag-burgundy`, `--tag-rust`, `--tag-ochre`,
+`--tag-forest`, `--tag-teal`, and `--muted-foreground` for a type with no
+colour. The names and the mapping live in `src/lib/calendar/tags.ts`; the
+light and dark values are in `globals.css`, and a club theme deliberately
+does not override them — a type is a label somebody picked and expects to
+keep. They were the derived chart slots until 2026-10-27, and rows saved
+before then still hold `chart-1` … `chart-5`; `tagColorOf()` reads those
+onto today's names, so nothing had to be migrated.
+
+`src/lib/calendar/tag-colors.test.ts` is what holds the palette honest:
+every colour clears 4.5:1 on the page, on a card and on its own 15% tint,
+in both modes and under every preset the app ships, keeps a chroma floor so
+no name reads as grey, and keeps adjacent hues apart. (The chart palette's
+own guarantees in `src/lib/theme/chart.ts` still apply to `--chart-1..5`,
+which charts and meters use; they are no longer what an event type takes.)
+Everything else in the calendar still paints from `--kind`, so a chip, a
+dot, a bar and a time-grid block all follow one variable.
 
 FullCalendar is still a dependency (the task calendar uses it) but the org
 calendar no longer loads it.

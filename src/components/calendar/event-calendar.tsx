@@ -9,7 +9,7 @@ import {
   Globe,
 } from "@/components/icons";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { moveEvent } from "@/app/app/[orgSlug]/calendar/actions";
@@ -33,7 +33,7 @@ import {
   weekWindowFor,
   windowDays,
 } from "@/lib/calendar/grid";
-import { calendarSearch, NEW_EVENT_PARAM, type CalendarView } from "@/lib/calendar/range";
+import { calendarSearch, type CalendarView } from "@/lib/calendar/range";
 import { cn } from "@/lib/utils";
 
 import { AgendaList } from "./agenda-list";
@@ -45,7 +45,7 @@ import { tagStyle, type EventTagOption } from "@/lib/calendar/tags";
 
 import type { CalendarItem } from "./item";
 
-import { CALENDAR_CREATE_EVENT, type CalendarCreateDetail } from "./new-event-button";
+import { CALENDAR_CREATE_EVENT } from "./new-event-button";
 import { longDate, MonthGrid, monthLabel } from "./month-grid";
 import type { CalendarMember } from "./member-picker";
 import { WeekGrid } from "./week-grid";
@@ -129,41 +129,17 @@ export function EventCalendar({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // ?new=1 (the create menu's "New event") and ?new=rsvp (the RSVPs page's
-  // "New event", its RSVP page switched on) arrive with New event
-  // open. The state is adjusted while rendering, not in an effect, so it
-  // also works when the calendar is already on screen.
-  const asked = canManage ? searchParams.get(NEW_EVENT_PARAM) : null;
-  const askedNew = asked === "1" || asked === "rsvp" ? asked : null;
+  // The dialog the GRID opens: a day cell's "+", a drag across a time, or
+  // an event to edit. New event itself is a page (calendar/new).
   const [peek, setPeek] = useState<PeekAnchor | null>(null);
   const [dialog, setDialog] = useState<
-    | { mode: "create"; start: Date | null; allDay: boolean; rsvp?: boolean }
+    | { mode: "create"; start: Date | null; allDay: boolean }
     | { mode: "edit"; event: EventFormEvent }
     | null
-  >(() =>
-    askedNew ? { mode: "create", start: null, allDay: false, rsvp: askedNew === "rsvp" } : null,
-  );
-  const [openedNew, setOpenedNew] = useState(askedNew);
-  if (askedNew !== openedNew) {
-    setOpenedNew(askedNew);
-    if (askedNew) {
-      setPeek(null);
-      setDialog({ mode: "create", start: null, allDay: false, rsvp: askedNew === "rsvp" });
-    }
-  }
-
-  // Then drop the param, so a reload or Back doesn't open another.
-  useEffect(() => {
-    if (!askedNew) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete(NEW_EVENT_PARAM);
-    const search = params.toString();
-    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
-  }, [askedNew, searchParams, router, pathname]);
+  >(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ id: string; over: string | null } | null>(null);
   const [shotOpen, setShotOpen] = useState(false);
@@ -256,14 +232,13 @@ export function EventCalendar({
     setDialog({ mode: "create", start, allDay });
   }
 
-  // The page header's New event (new-event-button.tsx) asks for a dialog.
+  // The page header's "From a screenshot" (new-event-button.tsx) asks for
+  // the reader; New event itself is a link to the event's own page.
   useEffect(() => {
     if (!canManage) return;
-    const onAsk = (e: Event) => {
-      const from = (e as CustomEvent<CalendarCreateDetail>).detail?.from;
+    const onAsk = () => {
       setPeek(null);
-      if (from === "screenshot") setShotOpen(true);
-      else setDialog({ mode: "create", start: null, allDay: false });
+      setShotOpen(true);
     };
     window.addEventListener(CALENDAR_CREATE_EVENT, onAsk);
     return () => window.removeEventListener(CALENDAR_CREATE_EVENT, onAsk);
@@ -654,7 +629,6 @@ export function EventCalendar({
           event={null}
           defaultStart={dialog.start}
           defaultAllDay={dialog.allDay}
-          defaultRsvpPage={dialog.rsvp}
           members={members}
           onSaved={() => setDialog(null)}
         />

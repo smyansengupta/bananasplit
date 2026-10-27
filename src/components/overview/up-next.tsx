@@ -19,11 +19,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { tagColorOf, tagToken } from "@/lib/calendar/tags";
 import type { UpNextSlot } from "@/lib/overview/up-next";
 import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
 
 import { FaceStack, OpenLink } from "./bits";
+
+/** An event type's colour for a block card, or null for the quiet card. */
+function accentOf(color: string | null | undefined): string | null {
+  const name = tagColorOf(color);
+  return name ? `var(${tagToken(name)})` : null;
+}
 
 /**
  * Up next (redesign guide 9): a row of up to four block cards, what needs
@@ -111,6 +118,10 @@ export function UpNext({
             >
               <BlockCard
                 tone={item.tone}
+                // tagColorOf, not the raw value: tagToken turns anything it
+                // does not know into --muted-foreground, which would paint a
+                // grey card instead of leaving it the quiet near-black.
+                accent={accentOf(item.accent)}
                 kicker={item.kicker}
                 title={item.title}
                 subtitle={item.subtitle}

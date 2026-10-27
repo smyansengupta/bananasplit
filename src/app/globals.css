@@ -205,6 +205,19 @@
   --avatar-4-foreground:#865900;
   --avatar-5:#fbe3ea;
   --avatar-5-foreground:#9f3964;
+  /*
+   * Event-type colours (src/lib/calendar/tags.ts). NOT derived from the
+   * org's theme, and a club theme does not override them: a type is a
+   * label somebody chose, and it keeps its colour. Light values here, dark
+   * ones under .dark; both checked in tag-colors.test.ts.
+   */
+  --tag-navy:#1f3f87;
+  --tag-plum:#6b2f8a;
+  --tag-burgundy:#90263c;
+  --tag-rust:#a24a1b;
+  --tag-ochre:#7f5900;
+  --tag-forest:#1c6340;
+  --tag-teal:#00616f;
   --radius: 0.875rem;
   --radius-scale: 1;
   /* The glow as light: the corona behind the page top, halos, focus. */
@@ -299,6 +312,19 @@
   --avatar-4-foreground:#f5ae46;
   --avatar-5:#442730;
   --avatar-5-foreground:#ff9bb9;
+  /*
+   * Event-type colours (src/lib/calendar/tags.ts). NOT derived from the
+   * org's theme, and a club theme does not override them: a type is a
+   * label somebody chose, and it keeps its colour. Light values here, dark
+   * ones under .dark; both checked in tag-colors.test.ts.
+   */
+  --tag-navy:#6d95ea;
+  --tag-plum:#b981de;
+  --tag-burgundy:#e8808f;
+  --tag-rust:#e28a4d;
+  --tag-ochre:#c79a23;
+  --tag-forest:#3cb87f;
+  --tag-teal:#35a9b8;
   --glow-strength: 16%;
   --haze-strength: 5%;
   --elevation-1: 0 18px 40px -24px rgb(0 0 0 / 0.8);

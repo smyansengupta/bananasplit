@@ -226,7 +226,7 @@ function EpicSection({ group, showOwner }: { group: EpicGroup; showOwner: boolea
               <ProgressBar
                 done={progress.done}
                 total={progress.total}
-                color={color ?? "var(--chart-4)"}
+                color={color ?? "var(--tag-ochre)"}
                 className="w-36"
               />
             )}

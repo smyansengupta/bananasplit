@@ -20,10 +20,10 @@ import { getUserIdentity } from "@/lib/auth/email-verification";
 import { isPlatformAdmin } from "@/lib/auth/org-creation";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
-import { newRsvpEventHref } from "@/lib/calendar/range";
+import { newEventHref } from "@/lib/calendar/range";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { rsvpCover } from "@/lib/rsvp/cover";
-import { tagToken } from "@/lib/calendar/tags";
+import { tagStyle, tagToken } from "@/lib/calendar/tags";
 import { until } from "@/lib/relative-time";
 import { timeLine } from "@/lib/rsvp/when";
 import { cn } from "@/lib/utils";
@@ -31,8 +31,6 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 import { MeetingCardActions } from "./meeting-card-actions";
 import { MeetingsCreateActions } from "./meetings-create-actions";
-import { listEventTags } from "@/server/events/tags";
-import { getOrgMembersForPicker } from "@/server/members";
 import { userPublicSelect } from "@/server/members";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
@@ -77,6 +75,8 @@ interface PageRow {
   rsvpSlug: string | null;
   rsvpCapacity: number | null;
   rsvpCover: unknown;
+  /** The event's own Featured flag: these get the wide card. */
+  featured: boolean;
   tag: { name: string; color: string | null } | null;
   format: MeetingFormat;
   location: string | null;
@@ -116,9 +116,7 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  // The header's New meeting opens the event form here, so the page needs
-  // what that form needs: who can be invited and the org's own event types.
-  const [{ events, counts, attendees }, registrations, connections, members, tags] =
+  const [{ events, counts, attendees }, registrations, connections] =
     await Promise.all([
       withOrgTx(org.id, async ({ db }) => {
         const events: PageRow[] = await db.event.findMany({
@@ -147,6 +145,7 @@ export default async function MeetingsPage({
             rsvpSlug: true,
             rsvpCapacity: true,
             rsvpCover: true,
+            featured: true,
             tag: { select: { name: true, color: true } },
             format: true,
             location: true,
@@ -177,8 +176,6 @@ export default async function MeetingsPage({
       }),
       myRsvpRegistrations(user.id, MY_TICKETS),
       canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
-      canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
-      withOrgTx(org.id, ({ db }) => listEventTags(db, org.id)),
     ]);
 
   const countOf = (eventId: string, status: string) =>
@@ -213,7 +210,7 @@ export default async function MeetingsPage({
   const newEvent = (variant: "create" | "secondary") =>
     canManage ? (
       <Button variant={variant} asChild>
-        <Link href={newRsvpEventHref(orgSlug)}>
+        <Link href={newEventHref(orgSlug, { rsvp: true, from: "meetings" })}>
           <Plus aria-hidden="true" />
           New event
         </Link>
@@ -221,15 +218,7 @@ export default async function MeetingsPage({
     ) : null;
 
   // The header's pair: the event flow on the left, a meeting on the right.
-  const createActions = canManage ? (
-    <MeetingsCreateActions
-      orgId={org.id}
-      timeZone={org.timezone}
-      members={members}
-      tags={tags}
-      newEventHref={newRsvpEventHref(orgSlug)}
-    />
-  ) : null;
+  const createActions = canManage ? <MeetingsCreateActions orgSlug={orgSlug} /> : null;
 
   // The live line: what's taking sign-ups now, and who's coming.
   const openPages = upcoming.filter((e) => e.rsvpEnabled);
@@ -249,8 +238,15 @@ export default async function MeetingsPage({
   const hrefOf = (e: PageRow) =>
     canManage || !e.rsvpSlug ? `/app/${orgSlug}/calendar/${e.id}` : `/e/${e.rsvpSlug}`;
 
-  // What each card says on the right: the head count for hosts, your own
-  // status for everyone else.
+  /**
+   * The sign-up line, under the crowd: how full the page is for a host,
+   * where you stand for everyone else.
+   *
+   * The meter runs the width of the card rather than sitting in a 160px
+   * stub beside the head count, because how full a page is is the thing a
+   * host came to this list to read, and a bar you have to squint at is
+   * worth less than the number already above it.
+   */
   const statusOf = (e: PageRow) => {
     const going = countOf(e.id, "GOING");
     const waiting = countOf(e.id, "WAITLIST");
@@ -260,13 +256,19 @@ export default async function MeetingsPage({
     // than "No sign-up page" on every internal meeting.
     if (!e.rsvpSlug) return null;
     if (canManage) {
+      const full = e.rsvpCapacity ? going >= e.rsvpCapacity : false;
       return (
-        <span className="flex min-w-0 flex-col gap-1.5 text-sm tabular-nums">
-          <span>
-            <span className="font-semibold">{going}</span>
+        <span className="flex min-w-0 flex-col gap-1.5">
+          <span className="flex items-baseline justify-between gap-3 text-[13px] tabular-nums">
             <span className="text-muted-foreground">
-              {e.rsvpCapacity ? ` of ${e.rsvpCapacity}` : ""} going
+              {e.rsvpCapacity ? "Signed up" : "Sign-ups"}
               {waiting > 0 ? ` · ${waiting} waitlisted` : ""}
+            </span>
+            <span className="numeral text-[15px]">
+              {going}
+              {e.rsvpCapacity ? (
+                <span className="text-muted-foreground font-normal"> / {e.rsvpCapacity}</span>
+              ) : null}
             </span>
           </span>
           {e.rsvpCapacity && e.rsvpCapacity <= 60 ? (
@@ -274,37 +276,56 @@ export default async function MeetingsPage({
               total={e.rsvpCapacity}
               filled={going}
               height={8}
-              color="var(--success)"
+              color={full ? "var(--warning)" : "var(--success)"}
               label={`${going} of ${e.rsvpCapacity} spots taken`}
-              className="w-full max-w-40"
+              className="w-full"
             />
           ) : null}
         </span>
       );
     }
-    return mine ? (
-      <Badge variant={mine.status === "WAITLIST" ? "accent" : "success"}>
-        {mine.status === "WAITLIST" ? "On the waitlist" : "You're going"}
-      </Badge>
-    ) : (
-      <Badge variant="outline">RSVP</Badge>
+    return (
+      <span className="flex">
+        {mine ? (
+          <Badge variant={mine.status === "WAITLIST" ? "accent" : "success"}>
+            {mine.status === "WAITLIST" ? "On the waitlist" : "You're going"}
+          </Badge>
+        ) : (
+          <Badge variant="outline">RSVP</Badge>
+        )}
+      </span>
     );
   };
 
   /**
    * One meeting.
    *
-   * A card with a sign-up picture shows it. One without used to show a
-   * placeholder instead — a huge letter on a blank tile, half the card
-   * spent saying nothing — so now the room goes to what a person actually
-   * wants off this list: when it is and how soon, what you join or where to
-   * be, and who is coming.
+   * WHAT A CARD IS FOR. A list of meetings is read at a glance and acted on
+   * once: which one is next, what kind it is, where to be, who is coming.
+   * The old card said all of that in one grey column of 13px text, so every
+   * card looked like every other card and the page had no shape to scan.
+   *
+   * So the card is built around the event's own TYPE COLOUR (its tag:
+   * --kind, from the palette in lib/calendar/tags.ts). The colour arrives
+   * twice — the wash behind the date tile and the dot on the type chip —
+   * and nowhere does it carry meaning on its own: the type is written
+   * beside the dot, the date beside the tile. A bar of it across the top
+   * of every card was tried and taken out again; it read as decoration.
+   *
+   * The rest is a fixed rhythm, so a card is read the same way every time:
+   *   type + how soon · date tile + title + when · where · who
+   * with the last row pinned to the bottom (mt-auto) so a two-line title
+   * and a one-line title still end level across a row of cards.
+   *
+   * Past meetings keep the shape and lose the colour (saturate-0, dimmed):
+   * they read as finished without being a different card.
    */
   const card = (e: PageRow, featured = false, first = false) => {
     const hasCover = Boolean(rsvpCover(e.rsvpCover));
     const crowd = crowdOf(e.id);
     const mine = myRsvp(e.id);
     const soon = e.startsAt > now ? until(e.startsAt, now) : null;
+    const over = e.endsAt <= now;
     return (
       <li key={e.id} className={cn(featured && "sm:col-span-2")}>
         <MeetingCardActions
@@ -316,75 +337,110 @@ export default async function MeetingsPage({
         >
           <Link
             href={hrefOf(e)}
+            style={tagStyle(e.tag?.color)}
             className={cn(
-              "group bg-card text-card-foreground edge rounded-card focus-glow hover:shadow-e2 flex h-full overflow-hidden transition-[transform,box-shadow] duration-200 ease-(--ease-ink) hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
-              featured && hasCover ? "flex-col sm:flex-row" : "flex-col",
+              "group bg-card text-card-foreground edge rounded-card focus-glow hover:shadow-e2 relative flex h-full flex-col overflow-hidden transition-[transform,box-shadow] duration-200 ease-(--ease-ink) hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+              over && "opacity-80 saturate-0 hover:opacity-100 hover:saturate-100",
             )}
           >
-            {hasCover && (
-              <Cover
-                title={e.title}
-                cover={e.rsvpCover}
-                tag={e.tag}
-                startsAt={e.startsAt}
-                timeZone={timeZone}
-                className={
-                  featured ? "aspect-[16/10] sm:aspect-auto sm:min-h-56 sm:w-1/2" : "aspect-[16/9]"
-                }
-              />
-            )}
             <span
-              className={cn(
-                "flex min-w-0 flex-1 flex-col gap-3",
-                featured ? "p-6" : "p-4.5",
-                featured && !hasCover && "sm:p-7",
-              )}
+              className={cn("flex min-h-0 flex-1", featured ? "flex-col sm:flex-row" : "flex-col")}
             >
-              <span className="space-y-1">
-                {/* With no picture the date leads the card instead of sitting on one. */}
-                {!hasCover && (
-                  <span className="mb-3 flex items-center gap-3">
-                    <DateLeaf startsAt={e.startsAt} timeZone={timeZone} />
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      {(featured || first) && <span className="eyebrow block">Next up</span>}
-                      {soon && (
-                        <span className="text-muted-foreground text-[13px] first-letter:uppercase">
-                          {soon}
-                        </span>
+              {hasCover ? (
+                <Cover
+                  title={e.title}
+                  cover={e.rsvpCover}
+                  tag={e.tag}
+                  startsAt={e.startsAt}
+                  timeZone={timeZone}
+                  className={
+                    featured
+                      ? "aspect-[16/10] sm:aspect-auto sm:min-h-56 sm:w-[44%]"
+                      : "aspect-[16/9]"
+                  }
+                />
+              ) : (
+                // A featured event with no picture gets the panel instead: the
+                // date large, on a wash of its own type's colour. Two columns
+                // of white with a 14px date tile in them is a two-column gap.
+                featured && <DatePanel startsAt={e.startsAt} timeZone={timeZone} />
+              )}
+              <span
+                className={cn(
+                  "flex min-w-0 flex-1 flex-col gap-3.5",
+                  featured ? "p-6 sm:p-7" : "p-5",
+                )}
+              >
+                {/* The type, and how soon it is: the two things you sort by. */}
+                <span className="flex items-center justify-between gap-3">
+                  {/* No type, nothing to say: the chip goes rather than
+                      labelling the card "No type". */}
+                  {e.tag ? <TypeChip tag={e.tag} /> : <span />}
+                  {soon ? (
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-[11.5px] font-semibold whitespace-nowrap",
+                        first
+                          ? "bg-(--kind) text-card [text-shadow:none]"
+                          : "bg-muted text-muted-foreground",
                       )}
+                    >
+                      {soon}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-[11.5px] font-medium">Finished</span>
+                  )}
+                </span>
+
+                <span className="flex min-w-0 items-start gap-3.5">
+                  {!hasCover && !featured && <DateTile startsAt={e.startsAt} timeZone={timeZone} />}
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    {/*
+                      Only a wide card says "Next up" in words: on a normal
+                      card the line would push its title a row below every
+                      other title in the grid, and the lit countdown pill
+                      above already says the same thing.
+                    */}
+                    {featured && first && (
+                      <span className="text-muted-foreground text-[11.5px] font-semibold tracking-wide uppercase">
+                        Next up
+                      </span>
+                    )}
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <span
+                        className={cn(
+                          "display-title min-w-0 break-words",
+                          featured ? "text-2xl" : "line-clamp-2 text-[16.5px]",
+                        )}
+                      >
+                        {e.title}
+                      </span>
+                      {e.rsvpSlug && !e.rsvpEnabled && (
+                        <Badge variant="secondary" title="Its sign-up page is turned off">
+                          Sign-ups off
+                        </Badge>
+                      )}
+                      {mine === "YES" && <Badge variant="success">You&apos;re going</Badge>}
+                      {mine === "MAYBE" && <Badge variant="outline">You said maybe</Badge>}
+                    </span>
+                    <span className="text-muted-foreground block text-[13px]">
+                      {listWhen(e.startsAt, e.endsAt, timeZone, e.allDay)}
                     </span>
                   </span>
-                )}
-                {featured && hasCover && <span className="eyebrow block">Next up</span>}
-                <span className="flex items-start gap-2">
-                  <span
-                    className={cn(
-                      "min-w-0 font-semibold break-words",
-                      featured ? "display-title text-2xl" : "line-clamp-2 text-[15px]",
-                    )}
-                  >
-                    {e.title}
+                </span>
+
+                {/* Where, who, and the head count, under one hairline. */}
+                <span className="border-border/70 mt-auto flex flex-col gap-2.5 border-t pt-3.5">
+                  {shapeLine(e)}
+                  <span className="flex items-end justify-between gap-3">
+                    {crowd ? <Crowd {...crowd} /> : <span />}
+                    <ArrowUpRight
+                      className="text-muted-foreground group-hover:text-foreground mb-0.5 size-4 flex-none transition-colors"
+                      aria-hidden="true"
+                    />
                   </span>
-                  {e.rsvpSlug && !e.rsvpEnabled && (
-                    <Badge variant="secondary" title="Its sign-up page is turned off">
-                      Sign-ups off
-                    </Badge>
-                  )}
-                  {mine === "YES" && <Badge variant="success">You&apos;re going</Badge>}
-                  {mine === "MAYBE" && <Badge variant="outline">You said maybe</Badge>}
+                  {statusOf(e)}
                 </span>
-                <span className="text-muted-foreground block text-[13px]">
-                  {listWhen(e.startsAt, e.endsAt, timeZone, e.allDay)}
-                </span>
-                {shapeLine(e)}
-              </span>
-              {crowd && <Crowd {...crowd} />}
-              <span className="mt-auto flex items-end justify-between gap-3">
-                {statusOf(e)}
-                <ArrowUpRight
-                  className="text-muted-foreground group-hover:text-foreground size-4 flex-none transition-colors"
-                  aria-hidden="true"
-                />
               </span>
             </span>
           </Link>
@@ -440,21 +496,39 @@ export default async function MeetingsPage({
     );
   };
 
-  /** A grid of event cards, like Files; the first upcoming one is the wide "Next up". */
-  // The first one up is given the big card ONLY when it has a picture to
-  // fill it. Without one, a double-width card is a double-width gap: it
-  // keeps its "Next up" line and sits in the grid with the rest.
-  const pageList = (items: PageRow[], feature = false) => (
-    <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
-      {items.map((e, i) =>
-        card(
-          e,
-          feature && i === 0 && items.length > 1 && Boolean(rsvpCover(e.rsvpCover)),
-          feature && i === 0,
-        ),
-      )}
-    </ul>
-  );
+  /**
+   * A grid of event cards. An IMPORTANT event takes two columns: that is
+   * the event's own Featured switch (More details > On the website), the
+   * same flag the club website reads, so the thing a club has already said
+   * is its big one is the big one here too.
+   *
+   * ONLY A COMING-UP LIST WIDENS ANYTHING (`feature`). Past is the one
+   * section nobody is scanning for what to do next, and a finished event
+   * given two columns and a poster-size date was the biggest thing on a
+   * page of live ones.
+   *
+   * The next event up takes the wide card when nothing else in the list is
+   * featured, so the top of the page always has something leading it;
+   * `first` is what lights its countdown pill either way.
+   *
+   * The grid is NOT grid-flow-dense. Dense packing fills the hole a
+   * two-column card leaves at the end of a row with whatever card comes
+   * next that fits, which in a list ordered by start time means painting a
+   * later meeting above an earlier one. A gap at the end of a row is worth
+   * less than the order being true.
+   */
+  const pageList = (items: PageRow[], feature = false) => {
+    const anyFeatured = feature && items.some((e) => e.featured);
+    return (
+      <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((e, i) => {
+          const lead = feature && i === 0;
+          const wide = feature && (e.featured || (lead && !anyFeatured && items.length > 1));
+          return card(e, wide, lead);
+        })}
+      </ul>
+    );
+  };
   const coverOf = new Map(events.map((e) => [e.id, e.rsvpCover]));
 
   return (
@@ -568,17 +642,69 @@ function listWhen(start: Date, end: Date, timeZone: string, allDay: boolean): st
 const MONTH = (timeZone: string) => new Intl.DateTimeFormat("en-US", { month: "short", timeZone });
 const DAY = (timeZone: string) => new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone });
 
-/** The calendar leaf: the month over the day, as it reads on a cover. */
-function DateLeaf({ startsAt, timeZone }: { startsAt: Date; timeZone: string }) {
+const WEEKDAY = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone });
+
+/**
+ * The date, as a tile washed in the event type's own colour: the month,
+ * the day in the display face, the weekday. It used to be a flat grey
+ * block with the month and the day in it, which on a page of a dozen
+ * cards was a dozen grey blocks — the one element that could carry the
+ * type's colour and did not.
+ */
+function DateTile({ startsAt, timeZone }: { startsAt: Date; timeZone: string }) {
   return (
     <span
       aria-hidden="true"
-      className="bg-muted text-foreground rounded-tile flex w-12 shrink-0 flex-col items-center py-1.5 leading-none"
+      style={{ background: "color-mix(in oklab, var(--kind) 15%, var(--card))" }}
+      className="rounded-tile flex w-14 shrink-0 flex-col items-center justify-center py-2.5 leading-none ring-1 ring-(--kind)/25"
     >
-      <span className="text-muted-foreground text-[11px] font-semibold uppercase">
+      <span className="text-[10.5px] font-semibold tracking-wide text-(--kind) uppercase">
         {MONTH(timeZone).format(startsAt)}
       </span>
-      <span className="numeral mt-0.5 text-lg">{DAY(timeZone).format(startsAt)}</span>
+      <span className="numeral my-0.5 text-[22px]">{DAY(timeZone).format(startsAt)}</span>
+      <span className="text-muted-foreground text-[10.5px] font-medium uppercase">
+        {WEEKDAY(timeZone).format(startsAt)}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The wide card's left half when the event has no picture: the date at
+ * poster size on a wash of its type's colour. This is what makes an
+ * important event worth two columns when there is no cover to fill them.
+ */
+function DatePanel({ startsAt, timeZone }: { startsAt: Date; timeZone: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        background: "var(--kind)",
+        // Black or white, whichever reads on the type's colour: the palette
+        // is dark in light mode and light in dark mode (calendar.css does
+        // the same thing on a time-grid block).
+        color: "oklch(from var(--kind) clamp(0, (0.62 - l) * 1000, 1) 0 0)",
+      }}
+      className="relative flex shrink-0 flex-col items-center justify-center gap-1 px-8 py-8 leading-none sm:w-[38%] sm:py-12"
+    >
+      <span className="text-[13px] font-semibold tracking-[0.16em] uppercase opacity-80">
+        {MONTH(timeZone).format(startsAt)}
+      </span>
+      <span className="numeral text-6xl sm:text-7xl">{DAY(timeZone).format(startsAt)}</span>
+      <span className="text-[13px] font-medium tracking-[0.16em] uppercase opacity-70">
+        {WEEKDAY(timeZone).format(startsAt)}
+      </span>
+    </span>
+  );
+}
+
+/** The event's type: its colour as a dot, its name beside it in words. */
+function TypeChip({ tag }: { tag: { name: string; color: string | null } }) {
+  return (
+    <span className="text-muted-foreground inline-flex min-w-0 items-center gap-1.5 text-[11.5px] font-semibold tracking-wide uppercase">
+      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-(--kind)" />
+      <span className="truncate">{tag.name}</span>
     </span>
   );
 }

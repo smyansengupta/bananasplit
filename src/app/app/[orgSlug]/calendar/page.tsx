@@ -169,7 +169,7 @@ export default async function CalendarPage({
                 </Link>
               </Button>
             )}
-            {canManage && <NewEventButton />}
+            {canManage && <NewEventButton orgSlug={orgSlug} />}
           </>
         }
       />

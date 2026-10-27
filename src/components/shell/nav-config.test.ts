@@ -238,7 +238,7 @@ describe("the create menu", () => {
     const all = createActions(sections(club("SOCIETY")), { canCreateEvents: true });
     expect(all.map((a) => [a.id, a.href])).toEqual([
       ["task", "/app/me/tasks?new=1"],
-      ["event", "/app/me/calendar?new=1"],
+      ["event", "/app/me/calendar/new"],
       ["note", undefined],
       ["poll", "/app/me/calendar/polls/ask"],
       ["find-a-time", "/app/me/calendar/find-a-time/new"],
