@@ -244,12 +244,10 @@ export default async function MeetingsPage({
     .filter(Boolean)
     .join(" · ");
 
+  // Hosts land on the event itself — the sign-up page is a section of it,
+  // and a card that only opened the sign-up page left no way to the event.
   const hrefOf = (e: PageRow) =>
-    canManage
-      ? `/app/${orgSlug}/calendar/${e.id}/rsvp`
-      : e.rsvpSlug
-        ? `/e/${e.rsvpSlug}`
-        : `/app/${orgSlug}/calendar/${e.id}`;
+    canManage || !e.rsvpSlug ? `/app/${orgSlug}/calendar/${e.id}` : `/e/${e.rsvpSlug}`;
 
   // What each card says on the right: the head count for hosts, your own
   // status for everyone else.

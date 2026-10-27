@@ -330,7 +330,7 @@ describe("shapePersonalHome", () => {
         going: 7,
         capacity: 20,
         enabled: true,
-        manageHref: "/app/me-abc/calendar/party/rsvp",
+        manageHref: "/app/me-abc/calendar/party",
         pageHref: "/e/bday1234",
       }),
     ]);

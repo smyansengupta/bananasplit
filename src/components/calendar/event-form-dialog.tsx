@@ -326,9 +326,11 @@ function EventForm({
       if (!event && withRsvpPage && result.eventId && params.orgSlug) {
         const page = await turnOnRsvpPage(orgId, result.eventId);
         onOpenChange(false);
-        // The event exists either way; the RSVP screen offers the page again if this failed.
+        // Straight to the new event, on the part that was promised next.
+        // The event exists either way; if the page failed to turn on, its
+        // Details offers it again.
         router.push(
-          `/app/${params.orgSlug}/calendar/${result.eventId}/rsvp${page.error ? "" : "?new=1"}`,
+          `/app/${params.orgSlug}/calendar/${result.eventId}${page.error ? "" : "?tab=page"}`,
         );
         return;
       }

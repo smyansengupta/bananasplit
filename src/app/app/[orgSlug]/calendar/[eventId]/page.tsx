@@ -1,13 +1,18 @@
 import { notFound } from "next/navigation";
 
-import { EventDetailView } from "@/components/calendar/event-detail-view";
+import { EventDetailView, type EventTab } from "@/components/calendar/event-detail-view";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { listEventTags } from "@/server/events/tags";
 import { getOrgMembersForPicker } from "@/server/members";
+import { loadRsvpManager } from "@/server/rsvp/manage";
+import { smsDelivery } from "@/server/sms";
 
 import { getEventById } from "../queries";
+
+const TABS = new Set<EventTab>(["details", "guests", "page"]);
 
 export default async function EventDetailPage({
   params,
@@ -40,8 +45,18 @@ export default async function EventDetailPage({
   // The calendar's "Edit" sends people here with the form already open, so
   // one click from a chip lands on a filled-in form rather than a page to
   // read and a button to find.
-  const { edit } = await searchParams;
+  const { edit, tab } = await searchParams;
   const startInEdit = (Array.isArray(edit) ? edit[0] : edit) === "1";
+  const asked = Array.isArray(tab) ? tab[0] : tab;
+
+  // The sign-up page's guests and settings are sections of this page now, so
+  // they load with it — but only for admins, and only once there is a page
+  // (or someone signed up before it was switched off) to show.
+  const section =
+    canEdit && (event.rsvpEnabled || event.rsvpSlug)
+      ? await withOrgTx(org.id, ({ db }) => loadRsvpManager(db, org.id, event.id, org.timezone))
+      : null;
+  const mail = section ? await resolveOrgMailRouting(org.id) : null;
 
   return (
     <EventDetailView
@@ -91,6 +106,26 @@ export default async function EventDetailPage({
         waitlist: countOf("WAITLIST"),
         capacity: event.rsvpCapacity,
       }}
+      rsvpSection={
+        section && mail
+          ? {
+              ...section.props,
+              messaging: {
+                email: mail.mode === "org" ? "org" : "platform",
+                texts: smsDelivery() === "live",
+              },
+              links: {
+                back: { href: `/app/${orgSlug}/calendar`, label: "Calendar" },
+                edit: `/app/${orgSlug}/calendar/${event.id}?edit=1`,
+                door: `/app/${orgSlug}/calendar/${event.id}/rsvp/door`,
+                flyer: `/e/${section.event.rsvpSlug}/flyer`,
+              },
+              door: `/app/${orgSlug}/calendar/${event.id}/rsvp/door`,
+              flyer: `/e/${section.event.rsvpSlug}/flyer`,
+            }
+          : null
+      }
+      tab={asked && TABS.has(asked as EventTab) ? (asked as EventTab) : "details"}
       tags={tags}
       currentUserId={user.id}
       canEdit={canEdit}

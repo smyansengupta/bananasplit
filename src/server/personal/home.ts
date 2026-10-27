@@ -712,7 +712,7 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
         going: h.going,
         waitlist: h.waitlist,
         capacity: h.rsvpCapacity,
-        manageHref: `${base}/calendar/${h.id}/rsvp`,
+        manageHref: `${base}/calendar/${h.id}`,
         pageHref: h.rsvpEnabled && h.rsvpSlug ? `/e/${h.rsvpSlug}` : null,
       }));
     }
