@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DateField, DateTimeField } from "@/components/ui/date-field";
+import { NO_TAG_LABEL, tagStyle, type EventTagOption } from "@/lib/calendar/tags";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,12 +30,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
+import { ConferenceProvider, EventVisibility } from "@/generated/prisma/enums";
 import { allDaySpan } from "@/lib/calendar/dates";
 import { cn } from "@/lib/utils";
 
 import { ConferencePicker } from "@/components/meetings/conference-picker";
-import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
+import { VISIBILITY_META } from "./kinds";
 import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 import { toDateInputValue, toDateTimeLocalValue } from "./utils";
 
@@ -71,7 +72,7 @@ export interface EventFormEvent {
   conferenceUrl: string | null;
   /** True when Bananasplit made this meeting at the provider. */
   conferenceManaged?: boolean;
-  kind: EventKind;
+  tagId: string | null;
   visibility: EventVisibility;
   hostUserId: string | null;
   hostName: string | null;
@@ -82,6 +83,9 @@ export interface EventFormEvent {
   stampSlot: number | null;
   attendeeIds: string[];
 }
+
+/** Radix will not take an empty item value; "no type" travels as this. */
+const NO_TAG = "__none";
 
 interface Props {
   orgId: string;
@@ -95,6 +99,8 @@ interface Props {
   /** A new event starts with "Take RSVPs with a public page" switched on. */
   defaultRsvpPage?: boolean;
   members: CalendarMember[];
+  /** The organization's own event types, in its own order. */
+  tags: EventTagOption[];
   onSaved?: () => void;
   onDeleted?: () => void;
 }
@@ -163,6 +169,7 @@ function EventForm({
   defaultAllDay,
   defaultRsvpPage,
   members,
+  tags,
   onSaved,
   onDeleted,
 }: Omit<Props, "open">) {
@@ -174,9 +181,8 @@ function EventForm({
 
   const [title, setTitle] = useState(event?.title ?? "");
   const [description, setDescription] = useState(event?.description ?? "");
-  // A club runs workshops; the type is the one field whose common answer is
-  // knowable, so it starts there instead of on "Other".
-  const [kind, setKind] = useState<EventKind>(event?.kind ?? EventKind.WORKSHOP);
+  // The org's first type is the sensible default for a new event.
+  const [tagId, setTagId] = useState<string | null>(event?.tagId ?? tags[0]?.id ?? null);
   const [visibility, setVisibility] = useState<EventVisibility>(
     event?.visibility ?? EventVisibility.INTERNAL,
   );
@@ -254,7 +260,7 @@ function EventForm({
       location: location || null,
       conferenceProvider: provider,
       conferenceUrl: provider === ConferenceProvider.NONE ? null : conferenceUrl || null,
-      kind,
+      tagId,
       visibility,
       hostUserId: host !== NO_HOST && host !== GUEST_HOST ? host : null,
       hostName: host === GUEST_HOST ? hostName || null : null,
@@ -358,19 +364,23 @@ function EventForm({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
           <div className="grid gap-1.5">
             <Label htmlFor="event-kind">Type</Label>
-            <Select value={kind} onValueChange={(v) => setKind(v as EventKind)}>
+            <Select
+              value={tagId ?? NO_TAG}
+              onValueChange={(v) => setTagId(v === NO_TAG ? null : v)}
+            >
               <SelectTrigger id="event-kind" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {KIND_ORDER.map((k) => (
-                  <SelectItem key={k} value={k}>
+                <SelectItem value={NO_TAG}>{NO_TAG_LABEL}</SelectItem>
+                {tags.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
                     <span
                       aria-hidden
                       className="size-2 shrink-0 rounded-full"
-                      style={{ ...kindStyle(k), background: "var(--kind)" }}
+                      style={{ ...tagStyle(t.color), background: "var(--kind)" }}
                     />
-                    {KIND_META[k].label}
+                    {t.name}
                   </SelectItem>
                 ))}
               </SelectContent>

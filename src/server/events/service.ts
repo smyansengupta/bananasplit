@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   CalendarSyncState,
   ConferenceProvider,
-  EventKind,
   EventVisibility,
   IntegrationProvider,
   MeetingFormat,
@@ -39,7 +38,7 @@ import { markReportsDataChanged } from "@/server/reports/data-version";
  *
  * - Authorization: ADMIN+ (permission events.write) for user contexts; the
  *   service path (jobs, sync) is trusted. RLS enforces tenancy either way.
- * - Validation: kind, visibility (default INTERNAL), host (a member, or a
+ * - Validation: type, visibility (default INTERNAL), host (a member, or a
  *   free-text guest name), http(s) RSVP link, conference link rules.
  * - Every save bumps syncVersion (the Google compare-and-set token and the
  *   ICS SEQUENCE) and, for suite-side edits, sets suiteEditedAt (the 4b
@@ -130,7 +129,8 @@ const eventFields = {
   location: optionalText(300),
   conferenceProvider: z.enum(ConferenceProvider),
   conferenceUrl: optionalText(2000),
-  kind: z.enum(EventKind),
+  /** An EventTag of this org's, or null for no type. */
+  tagId: z.string().min(1).max(64).nullish(),
   visibility: z.enum(EventVisibility),
   hostUserId: z.string().min(1).max(100).nullish(),
   hostName: optionalText(120),
@@ -145,12 +145,11 @@ const eventFields = {
   publicNote: optionalText(500),
 };
 
-/** Input for createEvent. Defaults: INTERNAL, OTHER, not all-day, no conference. */
+/** Input for createEvent. Defaults: INTERNAL, no type, not all-day, no conference. */
 export const eventInputSchema = z.object({
   ...eventFields,
   allDay: eventFields.allDay.default(false),
   conferenceProvider: eventFields.conferenceProvider.default(ConferenceProvider.NONE),
-  kind: eventFields.kind.default(EventKind.OTHER),
   visibility: eventFields.visibility.default(EventVisibility.INTERNAL),
   capacityFull: eventFields.capacityFull.default(false),
   featured: eventFields.featured.default(false),
@@ -173,7 +172,7 @@ export const EVENT_SELECT = {
   location: true,
   conferenceProvider: true,
   conferenceUrl: true,
-  kind: true,
+  tagId: true,
   visibility: true,
   hostUserId: true,
   hostName: true,
@@ -280,7 +279,10 @@ function checkShape(e: EventShape): void {
  * drift from the provider and the place it describes. Without this every
  * event kept the IN_PERSON default and no online meeting would ever be made.
  */
-function formatOf(e: { conferenceProvider: ConferenceProvider; location: string | null }): MeetingFormat {
+function formatOf(e: {
+  conferenceProvider: ConferenceProvider;
+  location: string | null;
+}): MeetingFormat {
   if (e.conferenceProvider === ConferenceProvider.NONE) return MeetingFormat.IN_PERSON;
   return e.location?.trim() ? MeetingFormat.HYBRID : MeetingFormat.ONLINE;
 }
@@ -438,7 +440,7 @@ async function afterSave(
     targetId: after.id,
     diff: {
       title: after.title,
-      kind: after.kind,
+      tagId: after.tagId,
       visibility: after.visibility,
       ...(before && before.visibility !== after.visibility
         ? { visibilityBefore: before.visibility }

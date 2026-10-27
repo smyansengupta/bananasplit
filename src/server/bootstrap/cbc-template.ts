@@ -3,7 +3,6 @@ import { generateNKeysBetween } from "fractional-indexing";
 
 import {
   AttendanceMethod,
-  EventKind,
   EventVisibility,
   OrgChartSource,
   Prisma,
@@ -18,6 +17,7 @@ import {
   type AssignmentRelation,
 } from "@/generated/prisma/client";
 import { fromDateKey, localDateKey } from "@/lib/tasks/dates";
+import { ensureEventTag } from "@/server/events/tags";
 
 /**
  * The Claude Builders Club workspace: the one source of the CBC structure
@@ -643,7 +643,8 @@ interface SessionPlan {
   hour: number;
   minutes: number;
   title: string;
-  kind: EventKind;
+  /** The org's name for the type; the tag is made if it has none. */
+  type: string;
   visibility: EventVisibility;
   location: string;
   host?: CbcPersonKey;
@@ -664,7 +665,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 60,
     title: "Info Session: Meet the Claude Builders Club",
-    kind: EventKind.INFO_SESSION,
+    type: "Info session",
     visibility: EventVisibility.PUBLIC,
     location: "Curry Student Center 344",
     host: "jackson",
@@ -677,7 +678,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 1: Prompting Fundamentals",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "alex",
@@ -689,7 +690,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 14,
     minutes: 120,
     title: "Welcome Social: Board Games & Boba",
-    kind: EventKind.SOCIAL,
+    type: "Social",
     visibility: EventVisibility.PUBLIC,
     location: "Curry Student Center Ballroom",
     host: "kristine",
@@ -700,7 +701,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 2: Building with the Claude API",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "smyan",
@@ -712,7 +713,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 3: Tool Use and Function Calling",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "alex",
@@ -724,7 +725,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 4: Retrieval-Augmented Generation",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "Richards Hall 300",
     host: "alex",
@@ -736,7 +737,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 5: Evals That Catch Regressions",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "Richards Hall 300",
     hostName: "Guest speaker (industry)",
@@ -748,7 +749,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 6: Agents with the Claude Agent SDK",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "smyan",
@@ -761,7 +762,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 7: Claude Code for Your Projects",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "alex",
@@ -773,7 +774,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 8: Vision and PDFs",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "Richards Hall 300",
     host: "alex",
@@ -785,7 +786,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 19,
     minutes: 120,
     title: "Fall Social: Pizza & Project Demos",
-    kind: EventKind.SOCIAL,
+    type: "Social",
     visibility: EventVisibility.PUBLIC,
     location: "Curry Student Center 344",
     host: "kristine",
@@ -796,7 +797,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 9: Structured Outputs",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     hostName: "Guest speaker (Anthropic)",
@@ -808,7 +809,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 10: MCP Servers from Scratch",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "smyan",
@@ -820,7 +821,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 11: Prompt Caching and Cost Control",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "Richards Hall 300",
     host: "alex",
@@ -832,7 +833,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 60,
     title: "Info Session: Spring Board Applications",
-    kind: EventKind.INFO_SESSION,
+    type: "Info session",
     visibility: EventVisibility.PUBLIC,
     location: "Curry Student Center 344",
     host: "lucas",
@@ -843,7 +844,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 12: Building a RAG Chatbot",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "alex",
@@ -855,7 +856,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 13: Safety and Red-Teaming",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "alex",
@@ -866,7 +867,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 10,
     minutes: 720,
     title: "Claude Builders Hackathon",
-    kind: EventKind.HACKATHON,
+    type: "Hackathon",
     visibility: EventVisibility.PUBLIC,
     location: "ISEC Atrium",
     host: "oliver",
@@ -879,7 +880,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 14: Shipping to Production",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "Richards Hall 300",
     host: "smyan",
@@ -890,7 +891,7 @@ export const CBC_SESSION_PLAN: readonly SessionPlan[] = [
     hour: 18,
     minutes: 90,
     title: "Workshop 15: Demo Night Prep",
-    kind: EventKind.WORKSHOP,
+    type: "Workshop",
     visibility: EventVisibility.PUBLIC,
     location: "West Village H 110",
     host: "alex",
@@ -1110,7 +1111,7 @@ export async function seedCbcDemoData(
         startsAt,
         endsAt: new Date(startsAt.getTime() + plan.minutes * 60 * 1000),
         location: plan.location,
-        kind: plan.kind,
+        tagId: await ensureEventTag(db, organizationId, plan.type),
         visibility: plan.visibility,
         hostUserId,
         hostName: plan.hostName ?? null,
@@ -1146,7 +1147,7 @@ export async function seedCbcDemoData(
         startsAt,
         endsAt: new Date(startsAt.getTime() + EXEC_SYNC.minutes * 60 * 1000),
         location: "Zoom (link in Slack)",
-        kind: EventKind.BOARD_MEETING,
+        tagId: await ensureEventTag(db, organizationId, "Board meeting"),
         visibility: EventVisibility.INTERNAL,
         hostUserId: members.oliver,
         createdById: members.oliver,
@@ -1347,8 +1348,8 @@ export async function seedCbcDemoData(
   await db.signup.createMany({ data: signupRows });
 
   // ---- Ballots -------------------------------------------------------------------
-  const infoSession = sessions.find((s) => s.plan.kind === EventKind.INFO_SESSION);
-  const hackathon = sessions.find((s) => s.plan.kind === EventKind.HACKATHON);
+  const infoSession = sessions.find((s) => s.plan.type === "Info session");
+  const hackathon = sessions.find((s) => s.plan.type === "Hackathon");
   const topics = await db.ballotDefinition.create({
     data: {
       organizationId,

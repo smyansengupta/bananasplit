@@ -17,7 +17,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { type CalendarItem, timeRange } from "./item";
-import { KIND_META, RSVP_META, SYNC_META, VISIBILITY_META } from "./kinds";
+import { NO_TAG_LABEL, tagStyle } from "@/lib/calendar/tags";
+
+import { RSVP_META, SYNC_META, VISIBILITY_META } from "./kinds";
 import { shortDay } from "./day-label";
 
 /**
@@ -79,7 +81,7 @@ export function EventPeek({
   onEdit: (item: CalendarItem) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const kind = KIND_META[item.kind];
+  const kindLabel = item.tag?.name ?? NO_TAG_LABEL;
   const visibility = VISIBILITY_META[item.visibility];
   const VisIcon = item.visibility === "PUBLIC" ? Globe : Lock;
 
@@ -128,12 +130,8 @@ export function EventPeek({
       aria-label={`${item.title}, detail`}
     >
       <p className="cal-pop__kind">
-        <span
-          aria-hidden
-          className="cal-chip__dot"
-          style={{ ["--kind" as string]: `var(${kind.token})` }}
-        />
-        {kind.label}
+        <span aria-hidden className="cal-chip__dot" style={tagStyle(item.tag?.color)} />
+        {kindLabel}
       </p>
 
       <h3 className="heading mt-2 text-[17px] leading-snug break-words">{item.title}</h3>

@@ -48,6 +48,8 @@ import {
   loadSessionDetail,
   loadSignupDetail,
 } from "@/server/databases/details";
+import { listEventTags } from "@/server/events/tags";
+import type { EventTagOption } from "@/lib/calendar/tags";
 import { fmtDate } from "@/server/databases/format";
 import { loadCustomDatabase } from "@/server/databases/custom";
 import { sourceFor } from "@/server/databases/sources";
@@ -203,6 +205,7 @@ export default async function DatabaseViewPage({
           organizationId={organization.id}
           timezone={organization.timezone}
           members={admin.members}
+          tags={admin.eventTags}
         />
       );
     } else if (kind === "ATTENDANCE") {
@@ -368,6 +371,8 @@ interface PageData {
   admin: {
     members: { id: string; name: string | null }[];
     sessions: { id: string; label: string }[];
+    /** The org's own event types, for the session form. */
+    eventTags: EventTagOption[];
   } | null;
 }
 
@@ -425,6 +430,7 @@ async function loadPage(
     timezone: vctx.timezone,
     canEdit: isAdmin,
     members,
+    tags: await listEventTags(db, org.id),
   };
 
   let drawer: Drawer | null = null;
@@ -438,7 +444,7 @@ async function loadPage(
           id: e.id,
           title: e.title,
           description: e.description,
-          kind: e.kind,
+          tagId: e.tag?.id ?? null,
           visibility: e.visibility,
           startsAt: localInput(e.startsAt, vctx.timezone),
           endsAt: localInput(e.endsAt, vctx.timezone),
@@ -554,6 +560,7 @@ async function loadPage(
         : [];
     adminData = {
       members,
+      eventTags: await listEventTags(db, org.id),
       sessions: sessions.map((s) => ({
         id: s.id,
         label: `${s.title} · ${fmtDate(s.startsAt, vctx.timezone)}`,

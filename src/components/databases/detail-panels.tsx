@@ -23,7 +23,6 @@ import type {
 } from "@/server/databases/details";
 import {
   CHANNEL_LABELS,
-  EVENT_KIND_LABELS,
   fmtDate,
   fmtDateTime,
   METHOD_LABELS,
@@ -31,6 +30,7 @@ import {
   STATUS_LABELS,
   termLabel,
 } from "@/server/databases/format";
+import type { EventTagOption } from "@/lib/calendar/tags";
 import { cn } from "@/lib/utils";
 import { signupLabel } from "@/server/sync/supabase-map";
 
@@ -54,6 +54,7 @@ export interface PanelContext {
   timezone: string;
   canEdit: boolean;
   members: { id: string; name: string | null }[];
+  tags: EventTagOption[];
 }
 
 const LINK =
@@ -198,7 +199,7 @@ export function SessionPanel({
   return (
     <>
       <dl className="divide-border/70 divide-y">
-        <Field label="Type">{EVENT_KIND_LABELS[e.kind] ?? e.kind}</Field>
+        <Field label="Type">{e.tag?.name ?? "—"}</Field>
         <Field label="When">
           {fmtDateTime(e.startsAt, ctx.timezone)} – {fmtDateTime(e.endsAt, ctx.timezone)}
         </Field>
@@ -257,6 +258,7 @@ export function SessionPanel({
           organizationId={ctx.organizationId}
           timezone={ctx.timezone}
           members={ctx.members}
+          tags={ctx.tags}
           initial={formInitial}
           needsReview={e.needsReview}
           mergeCandidates={mergeCandidates}

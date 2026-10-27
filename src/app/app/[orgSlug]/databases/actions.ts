@@ -3,12 +3,7 @@
 import { TZDate } from "@date-fns/tz";
 import { z } from "zod";
 
-import {
-  DatabaseKind,
-  EventKind,
-  EventVisibility,
-  IntegrationProvider,
-} from "@/generated/prisma/client";
+import { DatabaseKind, EventVisibility, IntegrationProvider } from "@/generated/prisma/client";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
@@ -91,7 +86,7 @@ const localDateTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Enter
 const sessionFormSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
-  kind: z.enum(EventKind),
+  tagId: z.string().min(1).max(64).nullish(),
   visibility: z.enum(EventVisibility),
   startsAt: localDateTime,
   endsAt: localDateTime,
@@ -125,7 +120,7 @@ async function sessionInput(organizationId: string, form: SessionForm) {
   return {
     title: data.title,
     description: data.description ?? null,
-    kind: data.kind,
+    tagId: data.tagId ?? null,
     visibility: data.visibility,
     startsAt: fromLocal(data.startsAt, org.timezone),
     endsAt: fromLocal(data.endsAt, org.timezone),

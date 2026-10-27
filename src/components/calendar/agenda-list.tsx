@@ -16,7 +16,9 @@ import { agendaDays } from "@/lib/calendar/grid";
 
 import { shortDay } from "./day-label";
 import { type CalendarItem, timeRange } from "./item";
-import { itemStyle, KIND_META, RSVP_META, SYNC_META, VISIBILITY_META } from "./kinds";
+import { NO_TAG_LABEL } from "@/lib/calendar/tags";
+
+import { itemStyle, RSVP_META, SYNC_META, VISIBILITY_META } from "./kinds";
 
 /**
  * The agenda: every day in the window that has something on it, in order,
@@ -99,7 +101,7 @@ function AgendaRow({
   /** Where this item lives, for a right-click on its chip. */
   chipHref?: (item: CalendarItem) => string;
 }) {
-  const kind = KIND_META[item.kind];
+  const kindLabel = item.tag?.name ?? NO_TAG_LABEL;
   const visibility = VISIBILITY_META[item.visibility];
   const VisIcon = item.visibility === "PUBLIC" ? Globe : Lock;
 
@@ -123,7 +125,7 @@ function AgendaRow({
       <span className="min-w-0">
         <span className="cal-agenda__title">{item.title}</span>
         <span className="cal-agenda__meta">
-          <span>{item.task ? (item.task.done ? "Task · done" : "Task") : kind.label}</span>
+          <span>{item.task ? (item.task.done ? "Task · done" : "Task") : kindLabel}</span>
           {item.location && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <MapPin aria-hidden className="size-3 shrink-0" />

@@ -19,7 +19,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { KIND_META, RSVP_META } from "@/components/calendar/kinds";
+import { RSVP_META } from "@/components/calendar/kinds";
 import { EmptyState } from "@/components/empty-state";
 import { PendingInviteCard } from "@/app/onboarding/pending-invite-card";
 import { Badge } from "@/components/ui/badge";
@@ -481,7 +481,7 @@ function UpcomingSection({ data, now, base }: { data: PersonalHomeData; now: Dat
                       <span className="max-w-32 shrink-0 truncate sm:hidden">
                         {event.space.name} ·
                       </span>
-                      <span className="shrink-0">{KIND_META[event.kind].label}</span>
+                      {event.tag && <span className="shrink-0">{event.tag.name}</span>}
                       {event.location && (
                         <>
                           <span aria-hidden="true">·</span>

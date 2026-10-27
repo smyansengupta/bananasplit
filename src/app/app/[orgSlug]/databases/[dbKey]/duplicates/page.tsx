@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dismissReviewAction } from "@/app/app/[orgSlug]/databases/actions";
 import { NotFoundError } from "@/lib/auth/errors";
-import { EVENT_KIND_LABELS, fmtDateTime } from "@/server/databases/format";
+import { fmtDateTime } from "@/server/databases/format";
 import { getDatabase } from "@/server/databases/views";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { findDuplicatePairs } from "@/server/events/match";
@@ -44,7 +44,7 @@ export default async function DuplicatesPage({
           id: true,
           title: true,
           startsAt: true,
-          kind: true,
+          tag: { select: { name: true } },
           needsReview: true,
           sourceSessionId: true,
           googleEventId: true,
@@ -75,7 +75,7 @@ export default async function DuplicatesPage({
       </Link>
       {keep && <Badge variant="success">Suggested to keep</Badge>}
       <span className="text-muted-foreground tabular-nums">{fmtDateTime(e.startsAt, tz)}</span>
-      <Badge variant="secondary">{EVENT_KIND_LABELS[e.kind] ?? e.kind}</Badge>
+      {e.tag && <Badge variant="secondary">{e.tag.name}</Badge>}
       {e.sourceSessionId && <Badge variant="info">Website</Badge>}
       {e.googleEventId && <Badge variant="info">Google</Badge>}
       <span className="text-muted-foreground tabular-nums">

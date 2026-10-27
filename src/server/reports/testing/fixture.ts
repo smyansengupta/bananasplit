@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
 
+import { ensureEventTag } from "@/server/events/tags";
+
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import {
   AttendanceMethod,
-  EventKind,
   PrismaClient,
   RecordSource,
   Role,
@@ -50,7 +51,11 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
   const suffix = randomBytes(4).toString("hex");
   const slug = `reports-fixture-${suffix}`;
   const user = await owner.user.create({
-    data: { email: `${slug}@example.test`, name: "Report Fixture Owner", emailVerified: new Date() },
+    data: {
+      email: `${slug}@example.test`,
+      name: "Report Fixture Owner",
+      emailVerified: new Date(),
+    },
     select: { id: true },
   });
   const org = await owner.organization.create({
@@ -58,7 +63,9 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
     select: { id: true },
   });
   const orgId = org.id;
-  await owner.membership.create({ data: { userId: user.id, organizationId: orgId, role: Role.OWNER } });
+  await owner.membership.create({
+    data: { userId: user.id, organizationId: orgId, role: Role.OWNER },
+  });
   await owner.orgSettings.update({
     where: { organizationId: orgId },
     data: { stampMilestones: [2, 3, 5], lapsedAfterSessions: 2, ballotMinCellSize: 3 },
@@ -66,7 +73,7 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
 
   const event = async (
     title: string,
-    kind: EventKind,
+    type: string,
     startsAt: string,
     extra: { deletedAt?: Date } = {},
   ) => {
@@ -75,7 +82,7 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
       data: {
         organizationId: orgId,
         title,
-        kind,
+        tagId: await ensureEventTag(owner, orgId, type),
         startsAt: start,
         endsAt: plus(start, 90),
         createdById: user.id,
@@ -86,18 +93,18 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
     return e.id;
   };
   const events = {
-    e1: await event("Spring Workshop", EventKind.WORKSHOP, "2026-04-10T22:00:00Z"),
-    e2: await event("Kickoff Info Session", EventKind.INFO_SESSION, "2026-09-02T22:00:00Z"),
-    e3: await event("Workshop A", EventKind.WORKSHOP, "2026-09-09T22:00:00Z"),
-    e4: await event("Welcome Social", EventKind.SOCIAL, "2026-09-12T18:00:00Z"),
+    e1: await event("Spring Workshop", "Workshop", "2026-04-10T22:00:00Z"),
+    e2: await event("Kickoff Info Session", "Info session", "2026-09-02T22:00:00Z"),
+    e3: await event("Workshop A", "Workshop", "2026-09-09T22:00:00Z"),
+    e4: await event("Welcome Social", "Social", "2026-09-12T18:00:00Z"),
     // Oct 31 18:00 EDT.
-    e5: await event("Workshop B", EventKind.WORKSHOP, "2026-10-31T22:00:00Z"),
+    e5: await event("Workshop B", "Workshop", "2026-10-31T22:00:00Z"),
     // Nov 1 00:00 EDT, the night the clocks go back.
-    e6: await event("Midnight Hack", EventKind.HACKATHON, "2026-11-01T04:00:00Z"),
+    e6: await event("Midnight Hack", "Hackathon", "2026-11-01T04:00:00Z"),
     // No check-ins: never a session.
-    e7: await event("Board meeting", EventKind.BOARD_MEETING, "2026-09-14T23:00:00Z"),
+    e7: await event("Board meeting", "Board meeting", "2026-09-14T23:00:00Z"),
     // Deleted, with a check-in: excluded from every report.
-    e8: await event("Deleted workshop", EventKind.WORKSHOP, "2026-09-20T22:00:00Z", {
+    e8: await event("Deleted workshop", "Workshop", "2026-09-20T22:00:00Z", {
       deletedAt: at("2026-09-21T12:00:00Z"),
     }),
   };
@@ -105,7 +112,11 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
   const contacts: Record<string, string> = {};
   for (let i = 1; i <= 12; i++) {
     const c = await owner.contact.create({
-      data: { organizationId: orgId, displayName: `Contact ${i}`, emailMasked: `c***@example.test` },
+      data: {
+        organizationId: orgId,
+        displayName: `Contact ${i}`,
+        emailMasked: `c***@example.test`,
+      },
       select: { id: true },
     });
     contacts[`c${i}`] = c.id;
@@ -224,7 +235,11 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
       title: "Next term vote",
       opensAt: at("2027-01-10T12:00:00Z"),
       closesAt: at("2027-01-20T12:00:00Z"),
-      definition: { questions: [{ key: "q", label: "Pick", type: "single", options: [{ key: "x", label: "X" }] }] },
+      definition: {
+        questions: [
+          { key: "q", label: "Pick", type: "single", options: [{ key: "x", label: "X" }] },
+        ],
+      },
     },
     select: { id: true },
   });
@@ -235,16 +250,28 @@ export async function createReportFixture(owner: PrismaClient): Promise<ReportFi
       title: "Test poll",
       isTest: true,
       opensAt: at("2026-09-01T12:00:00Z"),
-      definition: { questions: [{ key: "q", label: "Test", type: "single", options: [{ key: "x", label: "X" }] }] },
+      definition: {
+        questions: [
+          { key: "q", label: "Test", type: "single", options: [{ key: "x", label: "X" }] },
+        ],
+      },
     },
     select: { id: true },
   });
   const ballotRows: [string, Record<string, unknown>, string, string?][] = [
-    [topics.id, { topics: ["a", "b", "c"], format: "in-person", first: true }, "2026-09-03T15:00:00Z"],
+    [
+      topics.id,
+      { topics: ["a", "b", "c"], format: "in-person", first: true },
+      "2026-09-03T15:00:00Z",
+    ],
     [topics.id, { topics: ["a", "c"], format: "in-person", first: false }, "2026-09-03T16:00:00Z"],
     [topics.id, { topics: ["b", "a"], format: "hybrid", first: true }, "2026-09-04T15:00:00Z"],
     [topics.id, { topics: ["a"], format: "in-person", notes: "hi" }, "2026-09-05T15:00:00Z"],
-    [topics.id, { topics: ["c", "a", "b"], format: "in-person", first: true }, "2026-09-06T15:00:00Z"],
+    [
+      topics.id,
+      { topics: ["c", "a", "b"], format: "in-person", first: true },
+      "2026-09-06T15:00:00Z",
+    ],
     [topics.id, { topics: ["d"], format: "hybrid" }, "2026-09-06T16:00:00Z", "test ballot"],
     [testPoll.id, { q: "x" }, "2026-09-06T16:00:00Z"],
   ];

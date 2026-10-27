@@ -1,4 +1,4 @@
-import type { EventKind, EventVisibility, Prisma, Role, RSVPStatus } from "@/generated/prisma/client";
+import type { EventVisibility, Prisma, Role, RSVPStatus } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
@@ -22,6 +22,7 @@ export function eventInclude(viewerId: string) {
       select: { userId: true, rsvp: true, user: { select: userPublicSelect } },
     },
     host: { select: userPublicSelect },
+    tag: { select: { id: true, name: true, color: true } },
     notes: {
       where: {
         deletedAt: null,
@@ -44,7 +45,7 @@ export const calendarEventSelect = {
   startsAt: true,
   endsAt: true,
   allDay: true,
-  kind: true,
+  tag: { select: { id: true, name: true, color: true } },
   visibility: true,
   location: true,
   googleSyncState: true,
@@ -59,13 +60,14 @@ export const CALENDAR_WINDOW_LIMIT = 1000;
 export interface RangeFilter {
   from: Date;
   to: Date;
-  kinds?: readonly EventKind[];
+  /** EventTag ids; empty or absent means every type. */
+  tagIds?: readonly string[];
   visibility?: EventVisibility | null;
 }
 
 /**
  * The range-windowed filter: events overlapping [from, to), i.e.
- * startsAt < to AND endsAt > from, live and unmerged, optionally by kind
+ * startsAt < to AND endsAt > from, live and unmerged, optionally by type
  * and visibility.
  */
 export function rangeWhere(organizationId: string, f: RangeFilter): Prisma.EventWhereInput {
@@ -75,7 +77,7 @@ export function rangeWhere(organizationId: string, f: RangeFilter): Prisma.Event
     mergedIntoId: null,
     startsAt: { lt: f.to },
     endsAt: { gt: f.from },
-    ...(f.kinds && f.kinds.length > 0 ? { kind: { in: [...f.kinds] } } : {}),
+    ...(f.tagIds && f.tagIds.length > 0 ? { tagId: { in: [...f.tagIds] } } : {}),
     ...(f.visibility ? { visibility: f.visibility } : {}),
   };
 }
@@ -97,10 +99,13 @@ export function getUpcomingEvents(
   limit: number,
   only?: "meetings" | "events",
 ) {
-  // A meeting: a board meeting, or anything titled "... meeting" (the team
-  // meetings org setup adds). The Overview lists them apart from events.
+  // A meeting: anything whose type or title says so. With types the org
+  // writes itself, the name is what there is to go on.
   const meeting: Prisma.EventWhereInput = {
-    OR: [{ kind: "BOARD_MEETING" }, { title: { contains: "meeting", mode: "insensitive" } }],
+    OR: [
+      { tag: { name: { contains: "meeting", mode: "insensitive" } } },
+      { title: { contains: "meeting", mode: "insensitive" } },
+    ],
   };
   return db.event.findMany({
     where: {
@@ -148,7 +153,10 @@ export async function getEventById(
   viewerId: string,
 ): Promise<EventWithRelations | null> {
   const include = eventInclude(viewerId);
-  const event = await db.event.findFirst({ where: { id: eventId, organizationId, deletedAt: null } });
+  const event = await db.event.findFirst({
+    where: { id: eventId, organizationId, deletedAt: null },
+    include: { tag: include.tag },
+  });
   if (!event) return null;
   const attendees = await db.eventAttendee.findMany({
     where: { organizationId, eventId },
@@ -216,9 +224,12 @@ export async function getOrgPolls(db: TxClient, organizationId: string, now = ne
     by: ["pollId", "userId", "guestKeyHash", "guestName"],
     where: { organizationId, pollId: { in: pollIds }, availability: { not: "NO" } },
   });
-  const spanOf = new Map(spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]));
+  const spanOf = new Map(
+    spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]),
+  );
   const respondentCount = new Map<string, number>();
-  for (const r of respondents) respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);
+  for (const r of respondents)
+    respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);
   return polls.map((p) => ({
     ...p,
     firstSlotAt: spanOf.get(p.id)?.from ?? null,

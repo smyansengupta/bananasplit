@@ -1,62 +1,22 @@
-import type {
-  CalendarSyncState,
-  EventKind,
-  EventVisibility,
-  RSVPStatus,
-} from "@/generated/prisma/enums";
+import type { CalendarSyncState, EventVisibility, RSVPStatus } from "@/generated/prisma/enums";
+
+import { tagStyle } from "@/lib/calendar/tags";
 
 /**
- * Labels and colour variables for the calendar's event kinds, visibility,
- * Google sync state and RSVP. Client-safe.
+ * Labels for an event's visibility, its Google sync state and an RSVP.
+ * Client-safe.
  *
- * KIND COLOURS ARE THEME TOKENS, not fixed values. Each kind names a CSS
- * variable, so an org's theme restyles the calendar with everything else
- * (Settings > Theme). --chart-1..5 are the derived categorical palette: it
- * is checked per theme for a lightness band, a chroma floor, colour-blind
- * separation between adjacent slots and 3:1 against both surfaces (see
- * src/lib/theme/chart.ts), which is exactly the guarantee a row of event
- * kinds needs. "Other" is the uncategorised one and takes the neutral.
- *
- * Colour is never the only cue: every chip carries the kind in its
- * accessible name, and every tile, row and popover names it in text.
+ * The event TYPES that used to live here are the organization's own now
+ * (src/lib/calendar/tags.ts): a fixed list of one club's words was the
+ * wrong shape for everyone else.
  */
 
-export interface KindMeta {
-  label: string;
-  /** The CSS variable carrying this kind's colour. */
-  token: string;
-}
-
-export const KIND_META: Record<EventKind, KindMeta> = {
-  WORKSHOP: { label: "Workshop", token: "--chart-1" },
-  INFO_SESSION: { label: "Info session", token: "--chart-2" },
-  HACKATHON: { label: "Hackathon", token: "--chart-3" },
-  SOCIAL: { label: "Social", token: "--chart-4" },
-  BOARD_MEETING: { label: "Board meeting", token: "--chart-5" },
-  OTHER: { label: "Other", token: "--muted-foreground" },
-};
-
-export const KIND_ORDER: EventKind[] = [
-  "WORKSHOP",
-  "INFO_SESSION",
-  "HACKATHON",
-  "SOCIAL",
-  "BOARD_MEETING",
-  "OTHER",
-];
-
-/**
- * The style object that puts a kind's colour on an element as `--kind`.
- * Everything in calendar.css paints from that one variable, so a chip, a
- * dot, a bar and a time-grid block all follow the same token.
- */
-export function kindStyle(kind: EventKind): React.CSSProperties {
-  return { ["--kind" as string]: `var(${KIND_META[kind].token})` };
-}
-
-/** A chip's colour: its kind's, or the primary for a task's due date. */
-export function itemStyle(item: { kind: EventKind; task?: unknown }): React.CSSProperties {
-  return item.task ? { ["--kind" as string]: "var(--primary)" } : kindStyle(item.kind);
+/** A chip's colour: its type's, or the primary for a task's due date. */
+export function itemStyle(item: {
+  tag?: { color: string | null } | null;
+  task?: unknown;
+}): React.CSSProperties {
+  return item.task ? { ["--kind" as string]: "var(--primary)" } : tagStyle(item.tag?.color);
 }
 
 export const VISIBILITY_META: Record<EventVisibility, { label: string; hint: string }> = {

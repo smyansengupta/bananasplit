@@ -25,22 +25,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { FieldSelect } from "@/components/ui/field-select";
 
 import { notice } from "./styles";
+import { NO_TAG_LABEL, type EventTagOption } from "@/lib/calendar/tags";
+
 import { useViewParams } from "./view-params";
 
-const KINDS: [string, string][] = [
-  ["WORKSHOP", "Workshop"],
-  ["SOCIAL", "Social"],
-  ["HACKATHON", "Hackathon"],
-  ["INFO_SESSION", "Info session"],
-  ["BOARD_MEETING", "Board meeting"],
-  ["OTHER", "Other"],
-];
+/** Radix will not take an empty item value; "no type" travels as this. */
 
 export interface SessionFormInitial {
   id: string;
   title: string;
   description: string | null;
-  kind: string;
+  tagId: string | null;
   visibility: string;
   /** yyyy-MM-ddTHH:mm in the org timezone */
   startsAt: string;
@@ -62,11 +57,14 @@ export function SessionFormDialog({
   organizationId,
   timezone,
   members,
+  tags,
   initial,
 }: {
   organizationId: string;
   timezone: string;
   members: { id: string; name: string | null }[];
+  /** The organization's own event types. */
+  tags: EventTagOption[];
   initial?: SessionFormInitial;
 }) {
   const router = useRouter();
@@ -83,7 +81,7 @@ export function SessionFormDialog({
     const input: SessionForm = {
       title: get("title"),
       description: get("description"),
-      kind: get("kind") as SessionForm["kind"],
+      tagId: (get("tagId") as string) || null,
       visibility: get("visibility") as SessionForm["visibility"],
       startsAt: get("startsAt"),
       endsAt: get("endsAt"),
@@ -148,13 +146,14 @@ export function SessionFormDialog({
               <Label htmlFor="s-kind">Type</Label>
               <FieldSelect
                 id="s-kind"
-                name="kind"
-                defaultValue={initial?.kind ?? "WORKSHOP"}
+                name="tagId"
+                defaultValue={initial?.tagId ?? ""}
                 className="w-full"
               >
-                {KINDS.map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
+                <option value="">{NO_TAG_LABEL}</option>
+                {tags.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
                   </option>
                 ))}
               </FieldSelect>

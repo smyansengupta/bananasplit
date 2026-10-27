@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { EventKind, EventVisibility } from "@/generated/prisma/enums";
+import type { EventVisibility } from "@/generated/prisma/enums";
 import { addDaysToKey } from "@/lib/calendar/dates";
 import {
   dayWindowFor,
@@ -41,8 +41,10 @@ import "./calendar.css";
 import { useTodayKey } from "./hooks";
 import { anchorFor, EventPeek, type PeekAnchor } from "./event-peek";
 import type { EventFormEvent } from "./event-form-dialog";
+import { tagStyle, type EventTagOption } from "@/lib/calendar/tags";
+
 import type { CalendarItem } from "./item";
-import { KIND_META, KIND_ORDER, kindStyle } from "./kinds";
+
 import { CALENDAR_CREATE_EVENT, type CalendarCreateDetail } from "./new-event-button";
 import { longDate, MonthGrid, monthLabel } from "./month-grid";
 import type { CalendarMember } from "./member-picker";
@@ -72,7 +74,8 @@ export interface CalendarWindow {
   fromKey: string;
   toKey: string;
   view: CalendarView;
-  kinds: EventKind[];
+  /** EventTag ids the view is narrowed to; empty means every type. */
+  tagIds: string[];
   visibility: EventVisibility | null;
   /** Tasks' due dates drawn beside the events. */
   tasks: boolean;
@@ -103,6 +106,7 @@ export function EventCalendar({
   timeZone,
   items,
   members,
+  tags,
   canManage,
   window: range,
   orgTodayKey,
@@ -113,6 +117,8 @@ export function EventCalendar({
   timeZone: string;
   items: CalendarItem[];
   members: CalendarMember[];
+  /** The organization's own event types, in its own order. */
+  tags: EventTagOption[];
   /** OWNER/ADMIN: create, edit, drag and delete (the server re-checks every write). */
   canManage: boolean;
   window: CalendarWindow;
@@ -215,11 +221,12 @@ export function EventCalendar({
     else navigate({ ...range, view, ...monthWindowFor(anchor.slice(0, 7)) });
   }
 
-  function toggleKind(kind: EventKind) {
-    const kinds = range.kinds.includes(kind)
-      ? range.kinds.filter((k) => k !== kind)
-      : [...range.kinds, kind];
-    navigate({ ...range, kinds: KIND_ORDER.filter((k) => kinds.includes(k)) });
+  function toggleTag(tagId: string) {
+    const picked = range.tagIds.includes(tagId)
+      ? range.tagIds.filter((t) => t !== tagId)
+      : [...range.tagIds, tagId];
+    // Kept in the org's own order, so the URL reads the way the row does.
+    navigate({ ...range, tagIds: tags.map((t) => t.id).filter((id) => picked.includes(id)) });
   }
 
   // Where a chip's item lives, for a right-click on it: a task's due date is
@@ -358,7 +365,7 @@ export function EventCalendar({
           .filter(Boolean)
           .join(" · ");
 
-  const filtered = range.kinds.length > 0 || Boolean(range.visibility);
+  const filtered = range.tagIds.length > 0 || Boolean(range.visibility);
   const emptyState = (
     <EmptyState
       icon={CalendarDays}
@@ -375,7 +382,7 @@ export function EventCalendar({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => navigate({ ...range, kinds: [], visibility: null })}
+            onClick={() => navigate({ ...range, tagIds: [], visibility: null })}
           >
             Clear filters
           </Button>
@@ -464,23 +471,20 @@ export function EventCalendar({
           <span className="sr-only" id="cal-kind-filter-label">
             Filter by type
           </span>
-          {KIND_ORDER.map((kind) => {
-            const active = range.kinds.includes(kind);
-            return (
-              <button
-                key={kind}
-                type="button"
-                className="cal-filter"
-                style={kindStyle(kind)}
-                aria-pressed={active}
-                aria-describedby="cal-kind-filter-label"
-                onClick={() => toggleKind(kind)}
-              >
-                <span aria-hidden className="cal-filter__dot" />
-                {KIND_META[kind].label}
-              </button>
-            );
-          })}
+          {tags.map((tag) => (
+            <button
+              key={tag.id}
+              type="button"
+              className="cal-filter"
+              style={tagStyle(tag.color)}
+              aria-pressed={range.tagIds.includes(tag.id)}
+              aria-describedby="cal-kind-filter-label"
+              onClick={() => toggleTag(tag.id)}
+            >
+              <span aria-hidden className="cal-filter__dot" />
+              {tag.name}
+            </button>
+          ))}
           <Select
             value={range.visibility ?? "ALL"}
             onValueChange={(v) =>
@@ -644,6 +648,7 @@ export function EventCalendar({
         <EventFormDialog
           orgId={orgId}
           timeZone={timeZone}
+          tags={tags}
           open
           onOpenChange={(open) => !open && setDialog(null)}
           event={null}

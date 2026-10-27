@@ -10,11 +10,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import { TickMeter } from "@/components/ui/meters";
 import { shortDayAt } from "@/components/calendar/day-label";
-import { KIND_META } from "@/components/calendar/kinds";
+
 import type {
   CalendarSyncState,
   ConferenceProvider,
-  EventKind,
   MeetingFormat,
 } from "@/generated/prisma/enums";
 import { getUserIdentity } from "@/lib/auth/email-verification";
@@ -24,6 +23,7 @@ import { safeTimeZone } from "@/lib/calendar/dates";
 import { newRsvpEventHref } from "@/lib/calendar/range";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { rsvpCover } from "@/lib/rsvp/cover";
+import { tagToken } from "@/lib/calendar/tags";
 import { until } from "@/lib/relative-time";
 import { timeLine } from "@/lib/rsvp/when";
 import { cn } from "@/lib/utils";
@@ -74,7 +74,7 @@ interface PageRow {
   rsvpSlug: string | null;
   rsvpCapacity: number | null;
   rsvpCover: unknown;
-  kind: EventKind;
+  tag: { name: string; color: string | null } | null;
   format: MeetingFormat;
   location: string | null;
   conferenceProvider: ConferenceProvider;
@@ -141,7 +141,7 @@ export default async function MeetingsPage({
           rsvpSlug: true,
           rsvpCapacity: true,
           rsvpCover: true,
-          kind: true,
+          tag: { select: { name: true, color: true } },
           format: true,
           location: true,
           conferenceProvider: true,
@@ -308,7 +308,7 @@ export default async function MeetingsPage({
               <Cover
                 title={e.title}
                 cover={e.rsvpCover}
-                kind={e.kind}
+                tag={e.tag}
                 startsAt={e.startsAt}
                 timeZone={timeZone}
                 className={
@@ -612,20 +612,20 @@ function Crowd({
 function Cover({
   title,
   cover: stored,
-  kind,
+  tag,
   startsAt,
   timeZone,
   className,
 }: {
   title: string;
   cover: unknown;
-  kind?: EventKind;
+  tag?: { name: string; color: string | null } | null;
   startsAt: Date;
   timeZone: string;
   className?: string;
 }) {
   const cover = rsvpCover(stored);
-  const token = kind ? KIND_META[kind].token : "--primary";
+  const token = tag ? tagToken(tag.color) : "--primary";
   return (
     <span
       className={cn("relative block overflow-hidden", className)}

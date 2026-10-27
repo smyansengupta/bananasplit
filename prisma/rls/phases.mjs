@@ -49,6 +49,9 @@ const GRANTS = {
   Invitation: ["SIUD", "SIUD", ""],
   Job: ["S", "S", ""],
   Label: ["SIUD", "SIUD", ""],
+  // An org's own event types: every member reads them (the calendar draws
+  // them), owners and admins write them (the policies gate the writes).
+  EventTag: ["SIUD", "SIUD", ""],
   MemberPrefs: ["SIU", "", ""],
   Membership: ["SUD", "SIUD", ""],
   Note: ["SIUD", "SIUD", ""],

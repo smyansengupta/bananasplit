@@ -1,4 +1,3 @@
-import { EventKind } from "@/generated/prisma/enums";
 import { allDaySpan, safeTimeZone } from "@/lib/calendar/dates";
 import { eventUid, type IcsEvent } from "@/lib/ics";
 
@@ -20,7 +19,7 @@ export interface PublicEventRow {
   startsAt: string;
   endsAt: string;
   allDay: boolean;
-  kind: EventKind;
+  tag: { name: string } | null;
   rsvpUrl: string | null;
   capacityFull: boolean;
   featured: boolean;
@@ -62,17 +61,22 @@ export interface ClubEvent {
 
 export type WebsiteKind = "info" | "workshop" | "hackathon" | "social";
 
-const WEBSITE_KIND: Record<EventKind, WebsiteKind | null> = {
-  [EventKind.INFO_SESSION]: "info",
-  [EventKind.WORKSHOP]: "workshop",
-  [EventKind.HACKATHON]: "hackathon",
-  [EventKind.SOCIAL]: "social",
-  [EventKind.BOARD_MEETING]: null,
-  [EventKind.OTHER]: null,
+/**
+ * The website's own four words, matched against the org's name for the
+ * type. An organization writes its own types now, so most names have no
+ * website equivalent: those go as null, which is what the feed has always
+ * meant by "work it out from the title".
+ */
+const WEBSITE_KIND: Record<string, WebsiteKind> = {
+  "info session": "info",
+  info: "info",
+  workshop: "workshop",
+  hackathon: "hackathon",
+  social: "social",
 };
 
-export function websiteKind(kind: EventKind): WebsiteKind | null {
-  return WEBSITE_KIND[kind] ?? null;
+export function websiteKind(tag: { name: string } | null): WebsiteKind | null {
+  return WEBSITE_KIND[(tag?.name ?? "").trim().toLowerCase()] ?? null;
 }
 
 function httpUrlOrNull(value: string | null): string | null {
@@ -86,7 +90,9 @@ function httpUrlOrNull(value: string | null): string | null {
 }
 
 /** Deterministic order: start time, then id (plain code-unit order, no collation). */
-export function sortPublicEvents<T extends { startsAt: string; id: string }>(rows: readonly T[]): T[] {
+export function sortPublicEvents<T extends { startsAt: string; id: string }>(
+  rows: readonly T[],
+): T[] {
   return [...rows].sort((a, b) => {
     const d = Date.parse(a.startsAt) - Date.parse(b.startsAt);
     if (d !== 0) return d;
@@ -125,7 +131,7 @@ export function toClubEvent(row: PublicEventRow, options: ShapeOptions): ClubEve
     rsvpUrl,
     url: rsvpUrl,
     allDay: row.allDay,
-    kind: websiteKind(row.kind),
+    kind: websiteKind(row.tag),
     full: row.capacityFull,
     featured: row.featured,
     note: row.publicNote?.trim() || null,
@@ -133,7 +139,10 @@ export function toClubEvent(row: PublicEventRow, options: ShapeOptions): ClubEve
 }
 
 /** The JSON body: a compact array in feed order. */
-export function publicEventsJson(feed: PublicEventsFeed, options: Omit<ShapeOptions, "timeZone"> = {}): string {
+export function publicEventsJson(
+  feed: PublicEventsFeed,
+  options: Omit<ShapeOptions, "timeZone"> = {},
+): string {
   const events = sortPublicEvents(feed.events).map((row) =>
     toClubEvent(row, { timeZone: feed.timeZone, uidHost: options.uidHost }),
   );

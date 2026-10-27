@@ -57,12 +57,12 @@ INSERT INTO "TaskAssignee" ("organizationId", "taskId", "userId") VALUES
 INSERT INTO "TaskLabel" ("organizationId", "taskId", "labelId") VALUES ('org_A', 't_A', 'l_A');
 
 -- Terms are explicit so the Phase 4b rollups do not depend on the run date.
-INSERT INTO "Event" ("id", "organizationId", "title", "startsAt", "endsAt", "createdById", "visibility", "kind", "term", "updatedAt") VALUES
-  ('e_A',  'org_A', 'Event A', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour', 'u_memberA', 'INTERNAL', 'OTHER', 'fall-2026', CURRENT_TIMESTAMP),
-  ('e_A2', 'org_A', 'Event A2 by admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour', 'u_adminA', 'INTERNAL', 'BOARD_MEETING', 'fall-2026', CURRENT_TIMESTAMP),
-  ('e_B',  'org_B', 'Event B', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour', 'u_memberB', 'INTERNAL', 'OTHER', 'fall-2026', CURRENT_TIMESTAMP),
+INSERT INTO "Event" ("id", "organizationId", "title", "startsAt", "endsAt", "createdById", "visibility", "tagId", "term", "updatedAt") VALUES
+  ('e_A',  'org_A', 'Event A', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour', 'u_memberA', 'INTERNAL', NULL, 'fall-2026', CURRENT_TIMESTAMP),
+  ('e_A2', 'org_A', 'Event A2 by admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour', 'u_adminA', 'INTERNAL', NULL, 'fall-2026', CURRENT_TIMESTAMP),
+  ('e_B',  'org_B', 'Event B', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + interval '1 hour', 'u_memberB', 'INTERNAL', NULL, 'fall-2026', CURRENT_TIMESTAMP),
   -- A PUBLIC workshop in org A, created by an admin (Phase 4a/7).
-  ('e_A_pub', 'org_A', 'Public workshop A', CURRENT_TIMESTAMP + interval '2 days', CURRENT_TIMESTAMP + interval '2 days 2 hours', 'u_adminA', 'PUBLIC', 'WORKSHOP', 'fall-2026', CURRENT_TIMESTAMP);
+  ('e_A_pub', 'org_A', 'Public workshop A', CURRENT_TIMESTAMP + interval '2 days', CURRENT_TIMESTAMP + interval '2 days 2 hours', 'u_adminA', 'PUBLIC', NULL, 'fall-2026', CURRENT_TIMESTAMP);
 
 INSERT INTO "EventAttendee" ("organizationId", "eventId", "userId") VALUES
   ('org_A', 'e_A', 'u_memberA'), ('org_B', 'e_B', 'u_memberB');

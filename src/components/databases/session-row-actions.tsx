@@ -7,6 +7,8 @@ import { deleteSessionAction, dismissReviewAction } from "@/app/app/[orgSlug]/da
 
 import { ActionButton, ActionMenu } from "./action-button";
 import { MergeSessionPicker } from "./merge-session-picker";
+import type { EventTagOption } from "@/lib/calendar/tags";
+
 import { SessionFormDialog, type SessionFormInitial } from "./session-form-dialog";
 
 /**
@@ -18,6 +20,7 @@ export function SessionRowActions({
   organizationId,
   timezone,
   members,
+  tags,
   initial,
   needsReview,
   mergeCandidates,
@@ -25,6 +28,7 @@ export function SessionRowActions({
   organizationId: string;
   timezone: string;
   members: { id: string; name: string | null }[];
+  tags: EventTagOption[];
   initial: SessionFormInitial;
   needsReview: boolean;
   mergeCandidates: { id: string; label: string }[];
@@ -37,6 +41,7 @@ export function SessionRowActions({
           organizationId={organizationId}
           timezone={timezone}
           members={members}
+          tags={tags}
           initial={initial}
         />
         {needsReview && (

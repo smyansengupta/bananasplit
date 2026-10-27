@@ -56,7 +56,7 @@ function event(id: string, startsAt: Date) {
     endsAt: new Date(startsAt.getTime() + 3_600_000),
     allDay: false,
     location: null,
-    kind: "OTHER" as const,
+    tag: null,
     visibility: "INTERNAL" as const,
     needsReview: false,
     googleSyncState: "NOT_APPLICABLE" as const,

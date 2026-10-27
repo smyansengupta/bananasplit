@@ -1,4 +1,4 @@
-import { AttendanceMethod, EventKind, SignupSource } from "@/generated/prisma/enums";
+import { AttendanceMethod, SignupSource } from "@/generated/prisma/enums";
 
 /**
  * Pure mappings from the club website's Supabase rows to suite values
@@ -47,19 +47,19 @@ export function mapSignupSource(source: string | null | undefined): SignupSource
  * specific first; everything else is a workshop. The admin confirms the kind
  * of a session the sync created.
  */
-const KIND_MATCHERS: [RegExp, EventKind][] = [
-  [/athon\b|\bhack\s?night\b/i, EventKind.HACKATHON],
+const KIND_MATCHERS: [RegExp, string][] = [
+  [/athon\b|\bhack\s?night\b/i, "Hackathon"],
   [
     /\binfo(rmation)?\s*(session|night)\b|\bintro\b|\borientation\b|\bkick\s?-?off\b|\binterest\s*meeting\b/i,
-    EventKind.INFO_SESSION,
+    "Info session",
   ],
-  [/\bsocial\b|\bmixer\b|\bhangout\b|\bgame\s?night\b/i, EventKind.SOCIAL],
+  [/\bsocial\b|\bmixer\b|\bhangout\b|\bgame\s?night\b/i, "Social"],
 ];
 
-export function kindOfTitle(title: string | null | undefined): EventKind {
+export function kindOfTitle(title: string | null | undefined): string {
   const text = title ?? "";
   for (const [re, kind] of KIND_MATCHERS) if (re.test(text)) return kind;
-  return EventKind.WORKSHOP;
+  return "Workshop";
 }
 
 /** Lower-cased and trimmed; null when it is not an address at all. */

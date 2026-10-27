@@ -34,8 +34,10 @@ export type ReportQuery<T> = (db: TxClient, args: ReportQueryArgs) => Promise<T>
  */
 export function sessionsInRange(args: ReportQueryArgs): Prisma.Sql {
   return Prisma.sql`
-    SELECT e."id", e."title", e."kind"::text AS kind, e."startsAt" AS starts_at, e."attendanceCount" AS n
+    SELECT e."id", e."title", COALESCE(t."name", '') AS kind,
+             e."startsAt" AS starts_at, e."attendanceCount" AS n
       FROM public."Event" e
+      LEFT JOIN public."EventTag" t ON t."id" = e."tagId"
      WHERE e."organizationId" = ${args.orgId}
        AND e."deletedAt" IS NULL
        AND e."mergedIntoId" IS NULL

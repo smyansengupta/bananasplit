@@ -5,7 +5,9 @@ import { AlertTriangle, CalendarClock, CalendarX2, Globe, Plus } from "@/compone
 import { bucketByDay, monthGridShape, type MonthCell } from "@/lib/calendar/grid";
 
 import { type CalendarItem, chipTime, itemLabel } from "./item";
-import { itemStyle, KIND_META, VISIBILITY_META } from "./kinds";
+import { NO_TAG_LABEL } from "@/lib/calendar/tags";
+
+import { itemStyle, VISIBILITY_META } from "./kinds";
 
 /**
  * The month view: a real <table>, Sunday first, each day a rounded tile
@@ -216,7 +218,7 @@ function EventChip({
   /** Where this item lives, for a right-click on its chip. */
   chipHref?: (item: CalendarItem) => string;
 }) {
-  const kind = KIND_META[item.kind];
+  const kindLabel = item.tag?.name ?? NO_TAG_LABEL;
   const visibility = VISIBILITY_META[item.visibility];
 
   return (
@@ -231,7 +233,7 @@ function EventChip({
       data-rsvp={item.rsvp === "YES" ? "yes" : undefined}
       data-dragging={dragging ? "true" : undefined}
       aria-expanded={open}
-      aria-label={itemLabel(item, kind.label, visibility.label)}
+      aria-label={itemLabel(item, kindLabel, visibility.label)}
       onClick={(event) => onOpen(item, event.currentTarget)}
       {...extra}
     >

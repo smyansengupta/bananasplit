@@ -277,6 +277,7 @@ describe("Admin panel navigation", () => {
       "General",
       "Plan and storage",
       "Sidebar",
+      "Event types",
       "Theme",
       "Weekly pulse",
       "Members",

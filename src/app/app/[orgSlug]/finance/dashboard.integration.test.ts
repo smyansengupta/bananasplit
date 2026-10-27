@@ -148,7 +148,7 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
       const event = (
         title: string,
         startsAt: string,
-        extra: Partial<Prisma.EventCreateManyInput>,
+        extra: Partial<Prisma.EventCreateManyInput> = {},
       ): Prisma.EventCreateManyInput => ({
         organizationId: orgId,
         title,
@@ -159,13 +159,13 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
       });
       await db.event.createMany({
         data: [
-          event("Workshop", "2026-02-10T23:00:00Z", { kind: "WORKSHOP" }),
-          event("Social", "2026-03-10T23:00:00Z", { kind: "SOCIAL" }),
-          event("Info session", "2026-04-10T23:00:00Z", { kind: "INFO_SESSION" }),
-          event("Board meeting", "2026-03-01T23:00:00Z", { kind: "BOARD_MEETING" }),
-          event("Cancelled", "2026-05-01T23:00:00Z", { kind: "WORKSHOP", deletedAt: new Date() }),
-          event("Last year", "2025-12-01T23:00:00Z", { kind: "WORKSHOP" }),
-          event("Next workshop", "2026-09-10T23:00:00Z", { kind: "WORKSHOP" }),
+          event("Workshop", "2026-02-10T23:00:00Z"),
+          event("Social", "2026-03-10T23:00:00Z"),
+          event("Info session", "2026-04-10T23:00:00Z"),
+          event("Board meeting", "2026-03-01T23:00:00Z"),
+          event("Cancelled", "2026-05-01T23:00:00Z", { deletedAt: new Date() }),
+          event("Last year", "2025-12-01T23:00:00Z"),
+          event("Next workshop", "2026-09-10T23:00:00Z"),
         ],
       });
     });

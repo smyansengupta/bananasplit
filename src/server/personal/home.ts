@@ -1,7 +1,6 @@
 import { cache } from "react";
 
 import type {
-  EventKind,
   OrgKind,
   Prisma,
   RegistrationStatus,
@@ -103,7 +102,7 @@ export interface PersonalHomeClub {
 
 export interface UpcomingItem extends PersonalHomeEvent {
   space: SpaceRef;
-  kind: EventKind;
+  tag: { name: string; color: string | null } | null;
   location: string | null;
   /** Your answer, where you were invited (clubs). */
   rsvp: RSVPStatus | null;
@@ -237,7 +236,7 @@ export interface SpaceDigest {
     startsAt: Date;
     endsAt: Date;
     allDay: boolean;
-    kind: EventKind;
+    tag: { name: string; color: string | null } | null;
     location: string | null;
   }[];
   rsvps: Map<string, RSVPStatus>;
@@ -324,7 +323,7 @@ export async function readSpaceDigest(
       startsAt: true,
       endsAt: true,
       allDay: true,
-      kind: true,
+      tag: { select: { name: true, color: true } },
       location: true,
     },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],

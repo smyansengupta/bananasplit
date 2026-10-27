@@ -40,6 +40,8 @@ import { cn } from "@/lib/utils";
 import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
 import { EventFormDialog, type EventFormEvent } from "./event-form-dialog";
 import { useViewerTimeZone } from "./hooks";
+import type { EventTagOption } from "@/lib/calendar/tags";
+
 import { RSVP_META } from "./kinds";
 import type { CalendarMember } from "./member-picker";
 
@@ -61,6 +63,8 @@ const RSVP_BADGE_VARIANT: Record<RSVPStatus, "success" | "destructive" | "second
   };
 
 export interface EventDetail extends EventFormEvent {
+  /** The org's type for it, resolved, for the badge. */
+  tag: EventTagOption | null;
   needsReview: boolean;
   googleSyncState: CalendarSyncState;
   googleHtmlLink: string | null;
@@ -86,6 +90,7 @@ export function EventDetailView({
   orgSlug,
   timeZone,
   event,
+  tags,
   members,
   rsvp,
   currentUserId,
@@ -96,6 +101,8 @@ export function EventDetailView({
   orgSlug: string;
   timeZone: string;
   event: EventDetail;
+  /** The organization's own event types, for the edit dialog. */
+  tags: EventTagOption[];
   members: CalendarMember[];
   rsvp: EventRsvpSummary;
   currentUserId: string;
@@ -181,7 +188,7 @@ export function EventDetailView({
       />
 
       <div className="-mt-3 flex flex-wrap gap-1.5">
-        <KindBadge kind={event.kind} />
+        <KindBadge tag={event.tag} />
         <VisibilityBadge visibility={event.visibility} />
         {canEdit && <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />}
         {event.capacityFull && <Badge variant="destructive">Full</Badge>}
@@ -485,6 +492,7 @@ export function EventDetailView({
           open={editOpen}
           onOpenChange={setEditOpen}
           event={event}
+          tags={tags}
           members={members}
           onDeleted={() => router.push(`/app/${orgSlug}/calendar`)}
         />

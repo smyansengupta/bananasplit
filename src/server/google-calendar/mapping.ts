@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { EventKind, EventVisibility } from "@/generated/prisma/enums";
+import { EventVisibility } from "@/generated/prisma/enums";
 import { allDaySpan, parseDateKey, safeTimeZone, zonedMidnight } from "@/lib/calendar/dates";
 
 import type { GoogleEvent, GoogleEventBody } from "./client";
@@ -67,7 +67,8 @@ export function mirrorDescription(event: MirrorSource, calendar: "public" | "int
   if (prose) lines.push(prose);
   if (event.capacityFull) lines.push("This event is full.");
   if (event.publicNote?.trim()) lines.push(event.publicNote.trim());
-  if (calendar === "internal" && isHttpUrl(event.conferenceUrl)) lines.push(`Join: ${event.conferenceUrl}`);
+  if (calendar === "internal" && isHttpUrl(event.conferenceUrl))
+    lines.push(`Join: ${event.conferenceUrl}`);
   return lines.join("\n").slice(0, MAX_DESCRIPTION);
 }
 
@@ -84,7 +85,8 @@ export function toGoogleEvent(
     start = { date: span.start };
     end = { date: span.endExclusive };
   } else {
-    const endsAt = event.endsAt.getTime() > event.startsAt.getTime() ? event.endsAt : event.startsAt;
+    const endsAt =
+      event.endsAt.getTime() > event.startsAt.getTime() ? event.endsAt : event.startsAt;
     start = { dateTime: event.startsAt.toISOString(), timeZone };
     end = { dateTime: endsAt.toISOString(), timeZone };
   }
@@ -128,11 +130,15 @@ const tidy = (s: string) =>
     .trim();
 
 /** The website's parseDescription: the first link is the RSVP link, the rest is prose. */
-export function parseDescription(raw: string | null | undefined): { description: string | null; rsvpUrl: string | null } {
+export function parseDescription(raw: string | null | undefined): {
+  description: string | null;
+  rsvpUrl: string | null;
+} {
   if (!raw) return { description: null, rsvpUrl: null };
   const text = stripHtml(raw);
   const match = text.match(URL_RE);
-  if (!match || match.index === undefined) return { description: tidy(text) || null, rsvpUrl: null };
+  if (!match || match.index === undefined)
+    return { description: tidy(text) || null, rsvpUrl: null };
   const rsvpUrl = match[0].replace(/[.,;]+$/, "");
   const after = tidy(text.slice(match.index + match[0].length));
   if (after) return { description: after, rsvpUrl: isHttpUrl(rsvpUrl) ? rsvpUrl : null };
@@ -151,18 +157,24 @@ export function placeOrNull(raw: string | null | undefined): string | null {
   return clean;
 }
 
-/** The website's kindOf (title keywords), plus socials. */
-export function kindOfTitle(title: string): EventKind {
-  if (/athon\b|\bhack\s?night\b/i.test(title)) return EventKind.HACKATHON;
+/**
+ * A guess at what an imported event is, from its title — the website's
+ * kindOf, ported, plus socials. It returns a NAME, not a fixed type: an
+ * organization writes its own now, so the caller looks this up among the
+ * org's and leaves the event untyped when it has nothing by that name. An
+ * import never invents a type nobody asked for.
+ */
+export function kindOfTitle(title: string): string | null {
+  if (/athon\b|\bhack\s?night\b/i.test(title)) return "Hackathon";
   if (
     /\binfo(rmation)?\s*(session|night)\b|\bintro\b|\borientation\b|\bkick\s?-?off\b|\binterest\s*meeting\b/i.test(
       title,
     )
   ) {
-    return EventKind.INFO_SESSION;
+    return "Info session";
   }
-  if (/\bsocial\b|\bmixer\b|\bgame\s*night\b/i.test(title)) return EventKind.SOCIAL;
-  return EventKind.WORKSHOP;
+  if (/\bsocial\b|\bmixer\b|\bgame\s*night\b/i.test(title)) return "Social";
+  return "Workshop";
 }
 
 export interface ImportedEvent {
@@ -178,7 +190,8 @@ export interface ImportedEvent {
   startsAt: Date;
   endsAt: Date;
   allDay: boolean;
-  kind: EventKind;
+  /** A guess at the type, by name; the caller matches it to the org's. */
+  typeName: string | null;
 }
 
 /** A Google event as a suite event, or null when it cannot be one (cancelled, no start). */
@@ -192,7 +205,9 @@ export function fromGoogleEvent(g: GoogleEvent, timeZone: string): ImportedEvent
     if (!g.start.date || !parseDateKey(g.start.date)) return null;
     startsAt = zonedMidnight(g.start.date, tz);
     const endKey = g.end?.date && parseDateKey(g.end.date) ? g.end.date : null;
-    endsAt = endKey ? zonedMidnight(endKey, tz) : new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
+    endsAt = endKey
+      ? zonedMidnight(endKey, tz)
+      : new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
   } else {
     startsAt = new Date(g.start.dateTime ?? "");
     endsAt = new Date(g.end?.dateTime ?? g.start.dateTime ?? "");
@@ -206,7 +221,10 @@ export function fromGoogleEvent(g: GoogleEvent, timeZone: string): ImportedEvent
     googleEventId: g.id,
     etag: g.etag ?? null,
     htmlLink: g.htmlLink ?? null,
-    mirrorOf: priv?.suiteEventId && priv.orgId ? { suiteEventId: priv.suiteEventId, orgId: priv.orgId } : null,
+    mirrorOf:
+      priv?.suiteEventId && priv.orgId
+        ? { suiteEventId: priv.suiteEventId, orgId: priv.orgId }
+        : null,
     title,
     description: description ? description.slice(0, 20_000) : null,
     location: placeOrNull(g.location)?.slice(0, 300) ?? null,
@@ -214,6 +232,6 @@ export function fromGoogleEvent(g: GoogleEvent, timeZone: string): ImportedEvent
     startsAt,
     endsAt,
     allDay,
-    kind: kindOfTitle(title),
+    typeName: kindOfTitle(title),
   };
 }

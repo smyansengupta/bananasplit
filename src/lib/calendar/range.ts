@@ -7,7 +7,7 @@ import { addDaysToKey, parseDateKey, safeTimeZone, zonedDateKey, zonedMidnight }
  *   ?from=YYYY-MM-DD&to=YYYY-MM-DD   first day and the day AFTER the last
  *                                    (FullCalendar's exclusive end)
  *   &view=dayGridMonth|timeGridWeek|timeGridDay|listMonth
- *   &kind=WORKSHOP,SOCIAL            optional filters
+ *   &type=<tagId>,<tagId>            optional filters
  *   &vis=PUBLIC|INTERNAL
  *   &tasks=0                         hide tasks (their due dates show by default)
  *   &new=rsvp                        open New event with "Take RSVPs" on (the
@@ -22,8 +22,6 @@ import { addDaysToKey, parseDateKey, safeTimeZone, zonedDateKey, zonedMidnight }
 export const CALENDAR_VIEWS = ["dayGridMonth", "timeGridWeek", "timeGridDay", "listMonth"] as const;
 export type CalendarView = (typeof CALENDAR_VIEWS)[number];
 
-export const EVENT_KINDS = ["WORKSHOP", "SOCIAL", "HACKATHON", "INFO_SESSION", "BOARD_MEETING", "OTHER"] as const;
-export type EventKindValue = (typeof EVENT_KINDS)[number];
 export const EVENT_VISIBILITIES = ["PUBLIC", "INTERNAL"] as const;
 export type EventVisibilityValue = (typeof EVENT_VISIBILITIES)[number];
 
@@ -38,7 +36,8 @@ export interface CalendarRange {
   from: Date;
   to: Date;
   view: CalendarView;
-  kinds: EventKindValue[];
+  /** EventTag ids the view is narrowed to; empty means every type. */
+  tagIds: string[];
   visibility: EventVisibilityValue | null;
   /** Tasks' due dates on the grid, beside the events. */
   tasks: boolean;
@@ -53,7 +52,10 @@ function first(value: string | string[] | undefined): string | undefined {
 function daysBetween(a: string, b: string): number {
   const pa = parseDateKey(a)!;
   const pb = parseDateKey(b)!;
-  return Math.round((Date.UTC(pb.year, pb.month - 1, pb.day) - Date.UTC(pa.year, pa.month - 1, pa.day)) / 86_400_000);
+  return Math.round(
+    (Date.UTC(pb.year, pb.month - 1, pb.day) - Date.UTC(pa.year, pa.month - 1, pa.day)) /
+      86_400_000,
+  );
 }
 
 /** The default month-grid window around `now`: six weeks from the Sunday on or before the 1st. */
@@ -66,7 +68,11 @@ export function defaultWindow(now: Date, timeZone: string): { fromKey: string; t
   return { fromKey, toKey: addDaysToKey(fromKey, 42) };
 }
 
-export function parseCalendarRange(params: Params, timeZoneRaw: string, now: Date = new Date()): CalendarRange {
+export function parseCalendarRange(
+  params: Params,
+  timeZoneRaw: string,
+  now: Date = new Date(),
+): CalendarRange {
   const timeZone = safeTimeZone(timeZoneRaw);
   let fromKey = first(params.from);
   let toKey = first(params.to);
@@ -81,10 +87,15 @@ export function parseCalendarRange(params: Params, timeZoneRaw: string, now: Dat
     ({ fromKey, toKey } = defaultWindow(now, timeZone));
   }
   const viewRaw = first(params.view);
-  const view = (CALENDAR_VIEWS as readonly string[]).includes(viewRaw ?? "") ? (viewRaw as CalendarView) : "dayGridMonth";
-  const kinds = (first(params.kind) ?? "")
+  const view = (CALENDAR_VIEWS as readonly string[]).includes(viewRaw ?? "")
+    ? (viewRaw as CalendarView)
+    : "dayGridMonth";
+  // Ids, so a filtered calendar stays a link you can paste even after a
+  // type is renamed.
+  const tagIds = (first(params.type) ?? "")
     .split(",")
-    .filter((k): k is EventKindValue => (EVENT_KINDS as readonly string[]).includes(k));
+    .map((t) => t.trim())
+    .filter((t) => /^[A-Za-z0-9_-]{1,64}$/.test(t));
   const visRaw = first(params.vis);
   const visibility = (EVENT_VISIBILITIES as readonly string[]).includes(visRaw ?? "")
     ? (visRaw as EventVisibilityValue)
@@ -95,7 +106,7 @@ export function parseCalendarRange(params: Params, timeZoneRaw: string, now: Dat
     from: zonedMidnight(addDaysToKey(fromKey, -1), timeZone),
     to: zonedMidnight(addDaysToKey(toKey, 1), timeZone),
     view,
-    kinds: [...new Set(kinds)],
+    tagIds: [...new Set(tagIds)],
     visibility,
     tasks: first(params.tasks) !== "0",
   };
@@ -113,12 +124,12 @@ export function calendarSearch(r: {
   fromKey: string;
   toKey: string;
   view: CalendarView;
-  kinds: readonly string[];
+  tagIds: readonly string[];
   visibility: string | null;
   tasks?: boolean;
 }): string {
   const q = new URLSearchParams({ from: r.fromKey, to: r.toKey, view: r.view });
-  if (r.kinds.length > 0) q.set("kind", r.kinds.join(","));
+  if (r.tagIds.length > 0) q.set("type", r.tagIds.join(","));
   if (r.visibility) q.set("vis", r.visibility);
   if (r.tasks === false) q.set("tasks", "0");
   return q.toString();

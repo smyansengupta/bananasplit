@@ -4,6 +4,7 @@ import { EventDetailView } from "@/components/calendar/event-detail-view";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { listEventTags } from "@/server/events/tags";
 import { getOrgMembersForPicker } from "@/server/members";
 
 import { getEventById } from "../queries";
@@ -30,9 +31,9 @@ export default async function EventDetailPage({
             _count: { _all: true },
           })
         : [];
-    return { event, signups };
+    return { event, signups, tags: await listEventTags(db, org.id) };
   });
-  const { event, signups } = loaded;
+  const { event, signups, tags } = loaded;
   if (!event) notFound();
   const countOf = (s: string) => signups.find((r) => r.status === s)?._count._all ?? 0;
   const members = canEdit ? await getOrgMembersForPicker(org.id) : [];
@@ -50,6 +51,7 @@ export default async function EventDetailPage({
       event={{
         id: event.id,
         title: event.title,
+        tag: event.tag,
         description: event.description,
         startsAt: event.startsAt,
         endsAt: event.endsAt,
@@ -57,7 +59,7 @@ export default async function EventDetailPage({
         location: event.location,
         conferenceProvider: event.conferenceProvider,
         conferenceUrl: event.conferenceUrl,
-        kind: event.kind,
+        tagId: event.tagId,
         visibility: event.visibility,
         hostUserId: event.hostUserId,
         hostName: event.hostName,
@@ -89,6 +91,7 @@ export default async function EventDetailPage({
         waitlist: countOf("WAITLIST"),
         capacity: event.rsvpCapacity,
       }}
+      tags={tags}
       currentUserId={user.id}
       canEdit={canEdit}
       startInEdit={startInEdit}

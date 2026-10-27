@@ -1,5 +1,4 @@
 import {
-  EventKind,
   TransactionDirection,
   TransactionKind,
   TransactionStatus,
@@ -305,7 +304,15 @@ export async function getDashboardData(
       organizationId,
       deletedAt: null,
       mergedIntoId: null,
-      kind: { not: EventKind.BOARD_MEETING },
+      // Anything that is not a meeting. With types the org writes itself,
+      // the name is what there is to go on — its type's or its own, the
+      // same rule the calendar uses to tell meetings from events.
+      NOT: {
+        OR: [
+          { tag: { name: { contains: "meeting", mode: "insensitive" } } },
+          { title: { contains: "meeting", mode: "insensitive" } },
+        ],
+      },
       startsAt: { gte: period.startsOn, lt: new Date(period.endsOn.getTime() + DAY_MS) },
     },
     select: { startsAt: true },

@@ -1,9 +1,4 @@
-import type {
-  CalendarSyncState,
-  EventKind,
-  EventVisibility,
-  RSVPStatus,
-} from "@/generated/prisma/enums";
+import type { CalendarSyncState, EventVisibility, RSVPStatus } from "@/generated/prisma/enums";
 import type { GridItem } from "@/lib/calendar/grid";
 
 /**
@@ -19,7 +14,8 @@ export interface CalendarItem extends GridItem {
   /** Timed: an ISO instant. All-day: the day AFTER the last day. */
   end: string;
   allDay: boolean;
-  kind: EventKind;
+  /** The org's own type for it, or null when it has none. */
+  tag: { id: string; name: string; color: string | null } | null;
   visibility: EventVisibility;
   location: string | null;
   syncState: CalendarSyncState;

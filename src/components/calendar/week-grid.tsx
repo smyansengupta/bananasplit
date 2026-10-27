@@ -15,7 +15,9 @@ import {
 
 import { useMediaQuery, useNowMinutes } from "./hooks";
 import { type CalendarItem, itemLabel, shortTime, timeRange } from "./item";
-import { itemStyle, KIND_META, kindStyle, VISIBILITY_META } from "./kinds";
+import { NO_TAG_LABEL, tagStyle } from "@/lib/calendar/tags";
+
+import { itemStyle, VISIBILITY_META } from "./kinds";
 import { longDate } from "./month-grid";
 
 /**
@@ -148,7 +150,7 @@ export function WeekGrid({
                     <span
                       key={item.id}
                       className="cal-daystrip__dot"
-                      style={kindStyle(item.kind)}
+                      style={tagStyle(item.tag?.color)}
                     />
                   ))}
                 </span>
@@ -278,7 +280,7 @@ function Slot({
       type="button"
       className="cal-slot"
       style={{
-        ...kindStyle(item.kind),
+        ...tagStyle(item.tag?.color),
         top: `${top}px`,
         height: `${Math.max(height - 2, 18)}px`,
         left: `calc(${lane * width}% + 2px)`,
@@ -292,7 +294,7 @@ function Slot({
       aria-expanded={open}
       aria-label={itemLabel(
         item,
-        KIND_META[item.kind].label,
+        item.tag?.name ?? NO_TAG_LABEL,
         VISIBILITY_META[item.visibility].label,
       )}
       onClick={(event) => onOpen(item, event.currentTarget)}
@@ -339,7 +341,7 @@ function AllDayChip({
       aria-expanded={open}
       aria-label={itemLabel(
         item,
-        KIND_META[item.kind].label,
+        item.tag?.name ?? NO_TAG_LABEL,
         VISIBILITY_META[item.visibility].label,
       )}
       onClick={(event) => onOpen(item, event.currentTarget)}

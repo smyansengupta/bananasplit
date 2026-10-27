@@ -138,7 +138,7 @@ describe("shapePersonalHome", () => {
       startsAt: at(iso),
       endsAt: new Date(at(iso).getTime() + 3_600_000),
       allDay: false,
-      kind: "OTHER" as const,
+      tag: null,
       location: null,
     });
     const data = shapePersonalHome(
@@ -170,7 +170,7 @@ describe("shapePersonalHome", () => {
       startsAt: new Date(NOW.getTime() + (i + 1) * 3_600_000),
       endsAt: new Date(NOW.getTime() + (i + 2) * 3_600_000),
       allDay: false,
-      kind: "OTHER" as const,
+      tag: null,
       location: null,
     }));
     const tasks = Array.from({ length: 8 }, (_, i) => ({

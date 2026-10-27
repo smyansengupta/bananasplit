@@ -89,8 +89,12 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("event service", () => {
   it("is ADMIN+ for user contexts and open to the service path", async () => {
-    await expect(createEvent(makeCtx({ role: "MEMBER" }).ctx, base)).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(createEvent(makeCtx({ role: null, kind: "system" }).ctx, base)).resolves.toBeTruthy();
+    await expect(createEvent(makeCtx({ role: "MEMBER" }).ctx, base)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    await expect(
+      createEvent(makeCtx({ role: null, kind: "system" }).ctx, base),
+    ).resolves.toBeTruthy();
   });
 
   it("creates INTERNAL by default, bumps syncVersion and invalidates reports only", async () => {
@@ -100,15 +104,19 @@ describe("event service", () => {
       organizationId: ORG,
       createdById: "u_admin",
       visibility: "INTERNAL",
-      kind: "OTHER",
       syncVersion: 1,
       googleSyncState: "NOT_APPLICABLE",
     });
+    // No type unless one is asked for: what the old OTHER member meant.
+    expect(saved[0]?.tagId ?? null).toBeNull();
     expect(saved[0]!.suiteEditedAt).toBeInstanceOf(Date);
     expect(touched).toEqual([tags.reports(ORG)]);
     expect(invalidate).toHaveBeenCalledWith([tags.reports(ORG)]);
     expect(enqueueJob).not.toHaveBeenCalled();
-    expect(writeOrgAuditLog).toHaveBeenCalledWith(ctx.db, expect.objectContaining({ action: "event.created" }));
+    expect(writeOrgAuditLog).toHaveBeenCalledWith(
+      ctx.db,
+      expect.objectContaining({ action: "event.created" }),
+    );
   });
 
   it("a PUBLIC event with Google and a build hook enqueues gcal and a delayed site rebuild", async () => {
@@ -118,9 +126,12 @@ describe("event service", () => {
         { provider: "NETLIFY_BUILD_HOOK" },
       ],
     });
-    const { tags: touched } = await createEvent(ctx, { ...base, visibility: "PUBLIC", kind: "WORKSHOP" });
+    const { tags: touched } = await createEvent(ctx, { ...base, visibility: "PUBLIC" });
     expect(saved[0]).toMatchObject({ googleSyncState: "PENDING" });
-    expect(enqueueJob).toHaveBeenCalledWith(ctx.db, expect.objectContaining({ kind: "gcal", key: "evt_1" }));
+    expect(enqueueJob).toHaveBeenCalledWith(
+      ctx.db,
+      expect.objectContaining({ kind: "gcal", key: "evt_1" }),
+    );
     const rebuild = enqueueJob.mock.calls.find((c) => c[1].kind === "site-rebuild");
     expect(rebuild).toBeTruthy();
     expect(rebuild![1].runAt!.getTime()).toBeGreaterThan(Date.now() + 50_000);
@@ -135,7 +146,10 @@ describe("event service", () => {
       integrations: [{ provider: "GOOGLE_CALENDAR", config: { internalCalendarId: "cal_int" } }],
     });
     await createEvent(internal.ctx, base);
-    expect(enqueueJob).toHaveBeenCalledWith(internal.ctx.db, expect.objectContaining({ kind: "gcal" }));
+    expect(enqueueJob).toHaveBeenCalledWith(
+      internal.ctx.db,
+      expect.objectContaining({ kind: "gcal" }),
+    );
   });
 
   it("a PUBLIC event is mirrored only when a public calendar is configured (never a default one)", async () => {
@@ -144,7 +158,7 @@ describe("event service", () => {
       const { ctx, saved } = makeCtx({
         integrations: [{ provider: "GOOGLE_CALENDAR", config }, { provider: "NETLIFY_BUILD_HOOK" }],
       });
-      await createEvent(ctx, { ...base, visibility: "PUBLIC", kind: "WORKSHOP" });
+      await createEvent(ctx, { ...base, visibility: "PUBLIC" });
       expect(saved[0]).toMatchObject({ googleSyncState: "NOT_APPLICABLE" });
       // The website still rebuilds; only Google is left out.
       expect(enqueueJob.mock.calls.map((c) => c[1].kind)).toEqual(["site-rebuild"]);
@@ -154,12 +168,12 @@ describe("event service", () => {
 
   it("validates times, links, the RSVP URL and the host", async () => {
     const { ctx } = makeCtx({});
-    await expect(createEvent(ctx, { ...base, endsAt: "2026-10-01T21:00:00.000Z" })).rejects.toBeInstanceOf(
-      EventValidationError,
-    );
-    await expect(createEvent(ctx, { ...base, rsvpUrl: "javascript:alert(1)" })).rejects.toBeInstanceOf(
-      EventValidationError,
-    );
+    await expect(
+      createEvent(ctx, { ...base, endsAt: "2026-10-01T21:00:00.000Z" }),
+    ).rejects.toBeInstanceOf(EventValidationError);
+    await expect(
+      createEvent(ctx, { ...base, rsvpUrl: "javascript:alert(1)" }),
+    ).rejects.toBeInstanceOf(EventValidationError);
     // An empty link against a provider we can call is not a mistake: it
     // means "make the meeting for me" (docs/features/meetings.md). OTHER
     // still needs one pasted, because there is nothing for us to call.
@@ -167,7 +181,11 @@ describe("event service", () => {
       /meeting link/,
     );
     await expect(
-      createEvent(ctx, { ...base, conferenceProvider: "OTHER", conferenceUrl: "http://insecure.example" }),
+      createEvent(ctx, {
+        ...base,
+        conferenceProvider: "OTHER",
+        conferenceUrl: "http://insecure.example",
+      }),
     ).rejects.toThrow(/https/);
     await expect(
       createEvent(makeCtx({ hostIsMember: false }).ctx, { ...base, hostUserId: "u_outsider" }),
@@ -175,12 +193,15 @@ describe("event service", () => {
   });
 
   it("updates: 404 for a missing event, re-mirrors an existing Google event, rebuilds on a visibility flip", async () => {
-    await expect(updateEvent(makeCtx({ existing: null }).ctx, "nope", { title: "x" })).rejects.toBeInstanceOf(
-      NotFoundError,
-    );
+    await expect(
+      updateEvent(makeCtx({ existing: null }).ctx, "nope", { title: "x" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
     const { ctx, saved } = makeCtx({
       existing: { ...existing, visibility: "PUBLIC", googleEventId: "g1" },
-      integrations: [{ provider: "GOOGLE_CALENDAR", config: {} }, { provider: "NETLIFY_BUILD_HOOK" }],
+      integrations: [
+        { provider: "GOOGLE_CALENDAR", config: {} },
+        { provider: "NETLIFY_BUILD_HOOK" },
+      ],
     });
     const result = await updateEvent(ctx, "evt_1", { visibility: "INTERNAL" });
     expect(saved[0]).toMatchObject({ syncVersion: { increment: 1 }, googleSyncState: "PENDING" });

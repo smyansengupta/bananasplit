@@ -2,7 +2,13 @@ import { Prisma } from "@/generated/prisma/client";
 
 import { num, pct } from "../sql";
 import type { LastSessionReport } from "../types";
-import { sessionColumns, sessionsInRange, toSessionPoint, type ReportQuery, type SessionRow } from "./common";
+import {
+  sessionColumns,
+  sessionsInRange,
+  toSessionPoint,
+  type ReportQuery,
+  type SessionRow,
+} from "./common";
 
 /**
  * 1. Last session: the latest session in the range and the session right
@@ -18,8 +24,10 @@ export const queryLastSession: ReportQuery<LastSessionReport> = async (db, args)
       SELECT * FROM s ORDER BY s.starts_at DESC, s."id" DESC LIMIT 1
     ),
     prev AS (
-      SELECT e."id", e."title", e."kind"::text AS kind, e."startsAt" AS starts_at, e."attendanceCount" AS n
-        FROM public."Event" e, cur
+      SELECT e."id", e."title", COALESCE(t."name", '') AS kind,
+             e."startsAt" AS starts_at, e."attendanceCount" AS n
+        FROM public."Event" e
+        LEFT JOIN public."EventTag" t ON t."id" = e."tagId", cur
        WHERE e."organizationId" = ${args.orgId}
          AND e."deletedAt" IS NULL
          AND e."mergedIntoId" IS NULL

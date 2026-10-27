@@ -372,6 +372,7 @@ model Organization {
   invitations       Invitation[]
   tasks             Task[]
   labels            Label[]
+  eventTags         EventTag[]
   notes             Note[]
   events            Event[]
   availabilityPolls AvailabilityPoll[]
@@ -683,6 +684,31 @@ model TaskAssignee {
 /// createdById) while OrgSettings.memberCanCreateTags is on (RLS). Names
 /// are unique per org ignoring case by the app, not by an index: existing
 /// data may hold case duplicates.
+/// A kind of event the organization names for itself — "Workshop",
+/// "Standup", "Board meeting", "Rehearsal". It replaces a fixed EventKind
+/// enum whose members were one kind of club's vocabulary; an organization
+/// that is not that club now writes its own.
+///
+/// Colour is a chart token name ("chart-1".."chart-5") or NULL for the
+/// neutral, never a literal colour, so a club theme restyles the calendar
+/// with everything else (src/lib/theme/chart.ts).
+model EventTag {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  color          String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  // Names are unique per org ignoring case: the expression index
+  // "EventTag_organizationId_lower_name_key" on ("organizationId", lower("name"))
+  // lives in the migration only (Prisma can't declare it).
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       Event[]
+
+  @@index([organizationId, sortOrder])
+}
+
 model Label {
   id             String  @id @default(cuid())
   organizationId String
@@ -1031,7 +1057,9 @@ model Event {
   updatedAt          DateTime           @updatedAt
   // Sessions (Phase 4a): a Session in Databases and a calendar event are the
   // same record. Members may only create/edit their own INTERNAL events.
-  kind               EventKind          @default(OTHER)
+  /// The organization's own kind of event (EventTag). NULL is "no type":
+  /// the fixed EventKind enum this replaced had an OTHER member for that.
+  tagId              String?
   visibility         EventVisibility    @default(INTERNAL)
   hostUserId         String?
   /// Free-text host when the host is not a member (guest speaker).
@@ -1144,6 +1172,7 @@ model Event {
   reminderMinutes        Int[]               @default([1440, 60])
 
   organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tag               EventTag?           @relation(fields: [tagId], references: [id], onDelete: SetNull)
   createdBy         User                @relation("EventCreatedBy", fields: [createdById], references: [id])
   host              User?               @relation("EventHost", fields: [hostUserId], references: [id], onDelete: SetNull)
   mergedInto        Event?              @relation("EventMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
@@ -1163,7 +1192,7 @@ model Event {
   @@unique([organizationId, sourceSessionId])
   @@unique([organizationId, googleCalendarId, googleEventId])
   @@index([organizationId])
-  @@index([organizationId, deletedAt, kind, startsAt])
+  @@index([organizationId, deletedAt, tagId, startsAt])
   @@index([organizationId, visibility, deletedAt, startsAt])
   @@index([organizationId, term, startsAt])
   @@index([googleSyncState])
@@ -1177,15 +1206,6 @@ enum CalendarSyncState {
   PENDING
   SYNCED
   FAILED
-}
-
-enum EventKind {
-  WORKSHOP
-  SOCIAL
-  HACKATHON
-  INFO_SESSION
-  BOARD_MEETING
-  OTHER
 }
 
 enum EventVisibility {

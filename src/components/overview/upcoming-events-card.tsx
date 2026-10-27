@@ -9,7 +9,7 @@ import {
 } from "@/components/icons";
 import Link from "next/link";
 
-import { KIND_META, RSVP_META } from "@/components/calendar/kinds";
+import { RSVP_META } from "@/components/calendar/kinds";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RSVPStatus } from "@/generated/prisma/enums";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
@@ -77,7 +77,7 @@ export function UpcomingEventsCard({
                       {formatEventWhen(event, zones, now)}
                     </span>
                     <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
-                      <span className="shrink-0">{KIND_META[event.kind].label}</span>
+                      {event.tag && <span className="shrink-0">{event.tag.name}</span>}
                       {event.location && (
                         <>
                           <span aria-hidden="true">·</span>
@@ -92,7 +92,10 @@ export function UpcomingEventsCard({
             })}
           </ul>
         )}
-        <Link href={`/app/${orgSlug}/calendar`} className="text-muted-foreground hover:text-foreground block pt-2 text-[13px] font-medium">
+        <Link
+          href={`/app/${orgSlug}/calendar`}
+          className="text-muted-foreground hover:text-foreground block pt-2 text-[13px] font-medium"
+        >
           Open the calendar
         </Link>
       </div>
@@ -141,7 +144,7 @@ export function UpcomingEventsCard({
                       {formatEventWhen(event, zones, now)}
                     </span>
                     <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
-                      <span className="shrink-0">{KIND_META[event.kind].label}</span>
+                      {event.tag && <span className="shrink-0">{event.tag.name}</span>}
                       {event.location && (
                         <>
                           <span aria-hidden="true">·</span>

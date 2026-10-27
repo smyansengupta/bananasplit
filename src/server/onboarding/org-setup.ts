@@ -1,4 +1,4 @@
-import { EventKind, EventVisibility, Prisma } from "@/generated/prisma/client";
+import { EventVisibility, Prisma } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { FINANCE_CARD_IDS } from "@/lib/finance/dashboard-cards";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/lib/onboarding/org";
 import { localDateKey } from "@/lib/tasks/dates";
 import { writeOrgAuditLog } from "@/server/audit";
+import { matchEventTag } from "@/server/events/tags";
 import { invalidate } from "@/server/cache/invalidate";
 import { tags } from "@/server/cache/tags";
 import type { OrgContext } from "@/server/db/context";
@@ -317,7 +318,7 @@ export async function saveTeamsSetup(
   let meetings = 0;
   if (addMeetingsToCalendar) {
     const now = new Date();
-    for (const [i, team] of teams.entries()) {
+    for (const team of teams) {
       if (!team.meeting) continue;
       const title = `${team.name} meeting`;
       const existing = await ctx.db.event.count({
@@ -330,6 +331,8 @@ export async function saveTeamsSetup(
       });
       if (existing > 0) continue;
       const lead = team.leadUserId && nameOf.has(team.leadUserId) ? team.leadUserId : null;
+      // The org's own "Meeting", where it kept the one it started with.
+      const meetingTagId = await matchEventTag(ctx.db, ctx.organizationId, "Meeting");
       for (const startsAt of meetingOccurrences(
         team.meeting,
         orgTimezone,
@@ -348,7 +351,7 @@ export async function saveTeamsSetup(
             title,
             startsAt,
             endsAt: new Date(startsAt.getTime() + 60 * 60 * 1000),
-            kind: i === 0 ? EventKind.BOARD_MEETING : EventKind.OTHER,
+            tagId: meetingTagId,
             visibility: EventVisibility.INTERNAL,
             hostUserId: lead,
           },

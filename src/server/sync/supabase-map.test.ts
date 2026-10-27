@@ -46,15 +46,15 @@ describe("signup channel mapping", () => {
 
 describe("kindOfTitle (the website's kindOf, ported)", () => {
   it.each([
-    ["Mini Hackathon: Fix Northeastern", "HACKATHON"],
-    ["Fall Chatathon", "HACKATHON"],
-    ["Hack Night", "HACKATHON"],
-    ["Info Session: Meet the Club", "INFO_SESSION"],
-    ["Intro to the club", "INFO_SESSION"],
-    ["Kick-off", "INFO_SESSION"],
-    ["Welcome Social: Board Games", "SOCIAL"],
-    ["Workshop 3: Tool Use", "WORKSHOP"],
-    ["Prompting office hours", "WORKSHOP"],
+    ["Mini Hackathon: Fix Northeastern", "Hackathon"],
+    ["Fall Chatathon", "Hackathon"],
+    ["Hack Night", "Hackathon"],
+    ["Info Session: Meet the Club", "Info session"],
+    ["Intro to the club", "Info session"],
+    ["Kick-off", "Info session"],
+    ["Welcome Social: Board Games", "Social"],
+    ["Workshop 3: Tool Use", "Workshop"],
+    ["Prompting office hours", "Workshop"],
   ])("%s is a %s", (title, kind) => {
     expect(kindOfTitle(title)).toBe(kind);
   });
@@ -69,7 +69,10 @@ describe("emails", () => {
   });
 
   it("masks the local part only", () => {
-    expect(maskEmail("maya@husky.neu.edu")).toEqual({ masked: "m***@husky.neu.edu", domain: "husky.neu.edu" });
+    expect(maskEmail("maya@husky.neu.edu")).toEqual({
+      masked: "m***@husky.neu.edu",
+      domain: "husky.neu.edu",
+    });
   });
 });
 
@@ -90,7 +93,11 @@ describe("names and ids", () => {
 describe("signup answers", () => {
   it("keeps plain tokens, lower-cases them and drops the rest", () => {
     expect(
-      signupAnswers({ colleges: ["Khoury", "<script>", 7], meet_days: ["tuesday"], interests: null }),
+      signupAnswers({
+        colleges: ["Khoury", "<script>", 7],
+        meet_days: ["tuesday"],
+        interests: null,
+      }),
     ).toEqual({ colleges: ["khoury"], meet_days: ["tuesday"], interests: [] });
   });
 

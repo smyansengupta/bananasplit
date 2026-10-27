@@ -71,6 +71,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     feature: "sidebar",
   },
   {
+    label: "Event types",
+    segment: "event-types",
+    description: "Your own words for what goes on the calendar.",
+    icon: "CalendarDays",
+    group: "Club",
+    permission: "settings.view",
+  },
+  {
     label: "Theme",
     segment: "theme",
     description: "Colors, logo and the light or dark default.",

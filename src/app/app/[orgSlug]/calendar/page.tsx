@@ -21,13 +21,14 @@ import { sectionLabel } from "@/lib/nav/sidebar";
 import { dueDateKey, fromDateKey } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
+import { listEventTags } from "@/server/events/tags";
 import { getCalendarTasks } from "@/server/tasks/queries";
 
 import { getEventsInRange, getViewerRsvps, rangeWhere } from "./queries";
 
 /**
  * The org calendar. The server reads only the visible window (the view puts
- * it in ?from=&to=; see src/lib/calendar/range.ts), with the kind and
+ * it in ?from=&to=; see src/lib/calendar/range.ts), with the type and
  * visibility filters, and hands the grid a small summary per event. Editing
  * (create, drag, edit, delete) is offered only to OWNER/ADMIN; members see
  * the calendar and RSVP.
@@ -57,7 +58,7 @@ export default async function CalendarPage({
     const found = await getEventsInRange(db, org.id, {
       from: range.from,
       to: range.to,
-      kinds: range.kinds,
+      tagIds: range.tagIds,
       visibility: range.visibility,
     });
     return {
@@ -68,9 +69,9 @@ export default async function CalendarPage({
         user.id,
         found.map((e) => e.id),
       ),
-      // A kind filter is about events; tasks stay out while one is on.
+      // A type filter is about events; tasks stay out while one is on.
       tasks:
-        tasksLayer && range.tasks && range.kinds.length === 0
+        tasksLayer && range.tasks && range.tagIds.length === 0
           ? await getCalendarTasks(db, org.id, {
               dueFrom: fromDateKey(range.fromKey),
               dueTo: fromDateKey(addDaysToKey(range.toKey, -1)),
@@ -85,12 +86,13 @@ export default async function CalendarPage({
     };
   });
   const members = canManage ? await getOrgMembersForPicker(org.id) : [];
+  const tags = await withOrgTx(org.id, ({ db }) => listEventTags(db, org.id));
 
   const items: CalendarItem[] = events.map((e) => {
     const shared = {
       id: e.id,
       title: e.title,
-      kind: e.kind,
+      tag: e.tag,
       visibility: e.visibility,
       location: e.location,
       syncState: e.googleSyncState,
@@ -117,7 +119,7 @@ export default async function CalendarPage({
       start: day,
       end: addDaysToKey(day, 1),
       allDay: true,
-      kind: "OTHER",
+      tag: null,
       visibility: "INTERNAL",
       location: null,
       syncState: "NOT_APPLICABLE",
@@ -176,6 +178,7 @@ export default async function CalendarPage({
         orgSlug={orgSlug}
         timeZone={org.timezone}
         items={items}
+        tags={tags}
         members={members.map((m) => ({
           id: m.id,
           name: m.name,
@@ -189,7 +192,7 @@ export default async function CalendarPage({
           fromKey: range.fromKey,
           toKey: range.toKey,
           view: range.view,
-          kinds: range.kinds,
+          tagIds: range.tagIds,
           visibility: range.visibility,
           tasks: tasksLayer && range.tasks,
         }}

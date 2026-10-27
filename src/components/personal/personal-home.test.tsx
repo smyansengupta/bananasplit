@@ -167,7 +167,7 @@ describe("PersonalHome", () => {
           startsAt: new Date("2026-10-13T23:00:00Z"),
           endsAt: new Date("2026-10-14T01:00:00Z"),
           allDay: false,
-          kind: "WORKSHOP",
+          tag: null,
           location: "Lab 3",
           rsvp: "YES",
           space: robotics,
@@ -277,7 +277,13 @@ describe("PersonalHome", () => {
         },
       ],
       dueSoonTotal: 1,
-      yourWeek: { done: 5, bySpace: [{ space: robotics, done: 3 }, { space: personal, done: 2 }] },
+      yourWeek: {
+        done: 5,
+        bySpace: [
+          { space: robotics, done: 3 },
+          { space: personal, done: 2 },
+        ],
+      },
       recentFiles: [
         {
           id: "f1",

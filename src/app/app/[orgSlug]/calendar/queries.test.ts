@@ -46,13 +46,13 @@ describe("range-windowed calendar queries", () => {
   it("asks only for events overlapping the window, live and unmerged, with filters", () => {
     const from = new Date("2026-09-27T04:00:00.000Z");
     const to = new Date("2026-11-08T05:00:00.000Z");
-    expect(rangeWhere("org_1", { from, to, kinds: ["WORKSHOP"], visibility: "PUBLIC" })).toEqual({
+    expect(rangeWhere("org_1", { from, to, tagIds: ["t1"], visibility: "PUBLIC" })).toEqual({
       organizationId: "org_1",
       deletedAt: null,
       mergedIntoId: null,
       startsAt: { lt: to },
       endsAt: { gt: from },
-      kind: { in: ["WORKSHOP"] },
+      tagId: { in: ["t1"] },
       visibility: "PUBLIC",
     });
     expect(rangeWhere("org_1", { from, to })).not.toHaveProperty("kind");
@@ -60,18 +60,28 @@ describe("range-windowed calendar queries", () => {
 
   it("reads ?from=&to= in the org timezone, padded a day each side", () => {
     const r = parseCalendarRange(
-      { from: "2026-09-27", to: "2026-11-08", view: "dayGridMonth", kind: "WORKSHOP,BOGUS,SOCIAL", vis: "PUBLIC" },
+      {
+        from: "2026-09-27",
+        to: "2026-11-08",
+        view: "dayGridMonth",
+        type: "tag_a,,tag_b",
+        vis: "PUBLIC",
+      },
       "America/New_York",
     );
     expect(r.from.toISOString()).toBe("2026-09-26T04:00:00.000Z");
     expect(r.to.toISOString()).toBe("2026-11-09T05:00:00.000Z");
-    expect(r.kinds).toEqual(["WORKSHOP", "SOCIAL"]);
+    expect(r.tagIds).toEqual(["tag_a", "tag_b"]);
     expect(r.visibility).toBe("PUBLIC");
   });
 
   it("falls back to the month around today for a missing, reversed or huge window", () => {
     const now = new Date("2026-10-15T16:00:00.000Z");
-    for (const params of [{}, { from: "2026-10-10", to: "2026-10-01" }, { from: "2020-01-01", to: "2026-01-01" }]) {
+    for (const params of [
+      {},
+      { from: "2026-10-10", to: "2026-10-01" },
+      { from: "2020-01-01", to: "2026-01-01" },
+    ]) {
       const r = parseCalendarRange(params, "America/New_York", now);
       expect(r.fromKey).toBe("2026-09-27"); // the Sunday on or before Oct 1
       expect(r.toKey).toBe("2026-11-08");

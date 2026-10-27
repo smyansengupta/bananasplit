@@ -40,22 +40,33 @@ describe("suite -> Google mapping", () => {
 
   it("maps timed events to dateTime plus the org timezone, west and east of UTC", () => {
     const ny = toGoogleEvent(base, { timeZone: "America/New_York", calendar: "public" });
-    expect(ny.start).toEqual({ dateTime: "2026-10-06T22:00:00.000Z", timeZone: "America/New_York" });
+    expect(ny.start).toEqual({
+      dateTime: "2026-10-06T22:00:00.000Z",
+      timeZone: "America/New_York",
+    });
     expect(ny.end).toEqual({ dateTime: "2026-10-06T23:30:00.000Z", timeZone: "America/New_York" });
     const tokyo = toGoogleEvent(base, { timeZone: "Asia/Tokyo", calendar: "public" });
     expect(tokyo.start).toEqual({ dateTime: "2026-10-06T22:00:00.000Z", timeZone: "Asia/Tokyo" });
     // An unknown zone falls back to UTC rather than failing the sync.
-    expect(toGoogleEvent(base, { timeZone: "Nowhere/Land", calendar: "public" }).start.timeZone).toBe("UTC");
+    expect(
+      toGoogleEvent(base, { timeZone: "Nowhere/Land", calendar: "public" }).start.timeZone,
+    ).toBe("UTC");
   });
 
   it("maps all-day events to org-timezone dates with an exclusive end", () => {
     const ny = allDayInstants("2026-10-10", "2026-10-11", "America/New_York");
-    const body = toGoogleEvent({ ...base, allDay: true, ...ny }, { timeZone: "America/New_York", calendar: "public" });
+    const body = toGoogleEvent(
+      { ...base, allDay: true, ...ny },
+      { timeZone: "America/New_York", calendar: "public" },
+    );
     expect(body.start).toEqual({ date: "2026-10-10" });
     expect(body.end).toEqual({ date: "2026-10-12" });
 
     const tokyo = allDayInstants("2026-10-10", "2026-10-10", "Asia/Tokyo");
-    const east = toGoogleEvent({ ...base, allDay: true, ...tokyo }, { timeZone: "Asia/Tokyo", calendar: "public" });
+    const east = toGoogleEvent(
+      { ...base, allDay: true, ...tokyo },
+      { timeZone: "Asia/Tokyo", calendar: "public" },
+    );
     expect(east.start).toEqual({ date: "2026-10-10" });
     expect(east.end).toEqual({ date: "2026-10-11" });
   });
@@ -68,14 +79,19 @@ describe("suite -> Google mapping", () => {
       rsvpUrl: "https://lu.ma/cbc-w3",
       description: "Bring a laptop.\nPizza after.",
     });
-    expect(mirrorDescription({ ...base, rsvpUrl: null }, "public")).toBe("Bring a laptop.\nPizza after.");
+    expect(mirrorDescription({ ...base, rsvpUrl: null }, "public")).toBe(
+      "Bring a laptop.\nPizza after.",
+    );
   });
 
   it("keeps meeting links and attendees off the public calendar", () => {
     const pub = toGoogleEvent(base, { timeZone: "UTC", calendar: "public" });
     expect(JSON.stringify(pub)).not.toContain("meet.google.com");
     expect(pub).not.toHaveProperty("attendees");
-    const internal = toGoogleEvent({ ...base, visibility: "INTERNAL" }, { timeZone: "UTC", calendar: "internal" });
+    const internal = toGoogleEvent(
+      { ...base, visibility: "INTERNAL" },
+      { timeZone: "UTC", calendar: "internal" },
+    );
     expect(internal.description).toContain("Join: https://meet.google.com/abc-defg-hij");
   });
 
@@ -108,7 +124,7 @@ describe("Google -> suite mapping (import)", () => {
       rsvpUrl: "https://lu.ma/info",
       description: "What we build.",
       location: null,
-      kind: "INFO_SESSION",
+      typeName: "Info session",
       allDay: false,
     });
     expect(e?.startsAt.toISOString()).toBe("2026-09-17T22:00:00.000Z");
@@ -116,17 +132,24 @@ describe("Google -> suite mapping (import)", () => {
 
   it("reads all-day Google dates as org-timezone midnights with the exclusive end", () => {
     const e = fromGoogleEvent(
-      { id: "g2", summary: "Claude Hackathon", start: { date: "2026-10-10" }, end: { date: "2026-10-12" } },
+      {
+        id: "g2",
+        summary: "Claude Hackathon",
+        start: { date: "2026-10-10" },
+        end: { date: "2026-10-12" },
+      },
       "America/New_York",
     );
     expect(e?.allDay).toBe(true);
     expect(e?.startsAt.toISOString()).toBe("2026-10-10T04:00:00.000Z");
     expect(e?.endsAt.toISOString()).toBe("2026-10-12T04:00:00.000Z");
-    expect(e?.kind).toBe("HACKATHON");
+    expect(e?.typeName).toBe("Hackathon");
   });
 
   it("skips cancelled events and recognizes the suite's own mirrors", () => {
-    expect(fromGoogleEvent({ id: "g3", status: "cancelled", start: { date: "2026-10-10" } }, "UTC")).toBeNull();
+    expect(
+      fromGoogleEvent({ id: "g3", status: "cancelled", start: { date: "2026-10-10" } }, "UTC"),
+    ).toBeNull();
     const mirror = fromGoogleEvent(
       {
         id: "g4",
@@ -141,11 +164,13 @@ describe("Google -> suite mapping (import)", () => {
   });
 
   it("ports the website's kindOf and placeOrNull", () => {
-    expect(kindOfTitle("Chatathon with AINU")).toBe("HACKATHON");
-    expect(kindOfTitle("Spring kickoff")).toBe("INFO_SESSION");
-    expect(kindOfTitle("Welcome Social: Board Games")).toBe("SOCIAL");
-    expect(kindOfTitle("Prompting Fundamentals")).toBe("WORKSHOP");
+    expect(kindOfTitle("Chatathon with AINU")).toBe("Hackathon");
+    expect(kindOfTitle("Spring kickoff")).toBe("Info session");
+    expect(kindOfTitle("Welcome Social: Board Games")).toBe("Social");
+    expect(kindOfTitle("Prompting Fundamentals")).toBe("Workshop");
     expect(placeOrNull("TBD")).toBeNull();
-    expect(placeOrNull("Snell 108 (Zoom link in the invite)")).toBe("Snell 108 (Zoom link in the invite)");
+    expect(placeOrNull("Snell 108 (Zoom link in the invite)")).toBe(
+      "Snell 108 (Zoom link in the invite)",
+    );
   });
 });

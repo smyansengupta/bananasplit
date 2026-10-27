@@ -1,5 +1,6 @@
 import { EventVisibility, IntegrationStatus, Role } from "@/generated/prisma/client";
 import { withSystemOrgTx } from "@/server/db/context";
+import { matchEventTag } from "@/server/events/tags";
 import { createEvent, updateEvent, EventValidationError } from "@/server/events/service";
 import { sanitize } from "@/server/jobs/sanitize";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
@@ -7,7 +8,13 @@ import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 import { GoogleApiError, type CalendarClient, type GoogleEvent } from "./client";
 import { loadGoogleIntegration, mergeIntegrationConfig } from "./config";
 import { fromGoogleEvent, type ImportedEvent } from "./mapping";
-import { planImport, summarize, type ImportDecision, type ImportSummary, type SuiteCandidate } from "./match";
+import {
+  planImport,
+  summarize,
+  type ImportDecision,
+  type ImportSummary,
+  type SuiteCandidate,
+} from "./match";
 import { markNeedsReauth } from "./reauth";
 import { enqueueGoogleBackfill } from "./requests";
 import { syncDeps } from "./sync";
@@ -76,7 +83,10 @@ async function listAll(
   return { items: raw, complete };
 }
 
-function samplesOf(decisions: readonly ImportDecision[], titleOf: (id: string) => string | undefined) {
+function samplesOf(
+  decisions: readonly ImportDecision[],
+  titleOf: (id: string) => string | undefined,
+) {
   const pick = (a: ImportDecision["action"][]) =>
     decisions
       .filter((d) => a.includes(d.action))
@@ -84,21 +94,34 @@ function samplesOf(decisions: readonly ImportDecision[], titleOf: (id: string) =
       .map((d) => {
         if (d.action === "link" || d.action === "relink") {
           const suite = titleOf(d.suiteEventId);
-          return suite && suite !== d.google.title ? `${d.google.title} -> ${suite}` : d.google.title;
+          return suite && suite !== d.google.title
+            ? `${d.google.title} -> ${suite}`
+            : d.google.title;
         }
         return d.google.title;
       });
-  return { linked: pick(["link", "relink"]), created: pick(["create"]), ambiguous: pick(["ambiguous"]) };
+  return {
+    linked: pick(["link", "relink"]),
+    created: pick(["create"]),
+    ambiguous: pick(["ambiguous"]),
+  };
 }
 
-async function recordImport(organizationId: string, integrationId: string, record: ImportRecord): Promise<void> {
+async function recordImport(
+  organizationId: string,
+  integrationId: string,
+  record: ImportRecord,
+): Promise<void> {
   await withSystemOrgTx(organizationId, async ({ db }) => {
     await mergeIntegrationConfig(db, integrationId, { import: record });
   });
 }
 
 /** The member who owns imported events: whoever connected Google, else an OWNER. */
-async function importCreator(organizationId: string, connectedById: string | null): Promise<string> {
+async function importCreator(
+  organizationId: string,
+  connectedById: string | null,
+): Promise<string> {
   return withSystemOrgTx(organizationId, async ({ db }) => {
     if (connectedById) {
       const member = await db.membership.findFirst({
@@ -117,7 +140,7 @@ async function importCreator(organizationId: string, connectedById: string | nul
   });
 }
 
-function eventInput(g: ImportedEvent, visibility: EventVisibility) {
+function eventInput(g: ImportedEvent, visibility: EventVisibility, tagId: string | null) {
   return {
     title: g.title,
     description: g.description,
@@ -125,7 +148,7 @@ function eventInput(g: ImportedEvent, visibility: EventVisibility) {
     endsAt: g.endsAt,
     allDay: g.allDay,
     location: g.location,
-    kind: g.kind,
+    tagId,
     visibility,
     rsvpUrl: g.rsvpUrl,
   };
@@ -137,7 +160,12 @@ async function applyDecision(
   d: ImportDecision,
   calendarId: string,
 ): Promise<boolean> {
-  const link = { calendarId, eventId: d.google.googleEventId, etag: d.google.etag, htmlLink: d.google.htmlLink };
+  const link = {
+    calendarId,
+    eventId: d.google.googleEventId,
+    etag: d.google.etag,
+    htmlLink: d.google.htmlLink,
+  };
   const logLink = (eventId: string, method: "EXACT" | "MATCHED", score: number | null) =>
     ctx.db.eventLinkLog.create({
       data: {
@@ -160,31 +188,51 @@ async function applyDecision(
       // Linked events adopt PUBLIC: they are on the public calendar. The
       // suite's fields stay (it is the source of truth) and the mirror job
       // overwrites the Google copy with them.
-      await updateEvent(ctx, d.suiteEventId, { visibility: EventVisibility.PUBLIC }, { origin: "import", google: link });
-      await logLink(d.suiteEventId, d.action === "relink" ? "EXACT" : "MATCHED", d.action === "link" ? d.score : null);
+      await updateEvent(
+        ctx,
+        d.suiteEventId,
+        { visibility: EventVisibility.PUBLIC },
+        { origin: "import", google: link },
+      );
+      await logLink(
+        d.suiteEventId,
+        d.action === "relink" ? "EXACT" : "MATCHED",
+        d.action === "link" ? d.score : null,
+      );
       return true;
     }
     case "create":
     case "ambiguous": {
-      const { event } = await createEvent(ctx, eventInput(d.google, EventVisibility.PUBLIC), {
-        origin: "import",
-        google: link,
-        needsReview: d.action === "ambiguous",
-      });
+      const tagId = await matchEventTag(ctx.db, ctx.organizationId, d.google.typeName);
+      const { event } = await createEvent(
+        ctx,
+        eventInput(d.google, EventVisibility.PUBLIC, tagId),
+        {
+          origin: "import",
+          google: link,
+          needsReview: d.action === "ambiguous",
+        },
+      );
       await logLink(event.id, "EXACT", null);
       return true;
     }
   }
 }
 
-export const googleImportJob: JobHandler<{ integrationId: string; mode: "dry-run" | "apply" }> = async (run) => {
+export const googleImportJob: JobHandler<{
+  integrationId: string;
+  mode: "dry-run" | "apply";
+}> = async (run) => {
   const organizationId = run.organizationId;
   if (!organizationId) throw new PermanentJobError("google-import is an org job");
   const { integrationId, mode } = run.payload;
 
   const setup = await withSystemOrgTx(organizationId, async ({ db }) => {
     const integration = await loadGoogleIntegration(db, organizationId);
-    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { timezone: true },
+    });
     return { integration, timeZone: org?.timezone ?? "UTC" };
   });
   const integration = setup.integration;
@@ -196,9 +244,13 @@ export const googleImportJob: JobHandler<{ integrationId: string; mode: "dry-run
   const calendarId = integration.config.publicCalendarId;
   // The public calendar was unset or opted out of since the request: there
   // is no calendar the import may read (never fall back to another one).
-  if (!calendarId) return { status: "CANCELLED", error: "No public calendar is chosen to import from" };
+  if (!calendarId)
+    return { status: "CANCELLED", error: "No public calendar is chosen to import from" };
   const now = Date.now();
-  const window = { timeMin: new Date(now - LOOKBACK_DAYS * DAY), timeMax: new Date(now + LOOKAHEAD_DAYS * DAY) };
+  const window = {
+    timeMin: new Date(now - LOOKBACK_DAYS * DAY),
+    timeMax: new Date(now + LOOKAHEAD_DAYS * DAY),
+  };
 
   // ---- Google, outside any transaction ----
   let listed: { items: ImportedEvent[]; complete: boolean };
@@ -232,7 +284,8 @@ export const googleImportJob: JobHandler<{ integrationId: string; mode: "dry-run
       error: sanitize(error, 300),
     };
     await recordImport(organizationId, integrationId, failed);
-    if (error instanceof GoogleApiError && !error.retryable) throw new PermanentJobError(sanitize(error, 300));
+    if (error instanceof GoogleApiError && !error.retryable)
+      throw new PermanentJobError(sanitize(error, 300));
     throw error;
   }
 
@@ -241,7 +294,10 @@ export const googleImportJob: JobHandler<{ integrationId: string; mode: "dry-run
     db.event.findMany({
       where: {
         organizationId,
-        startsAt: { gte: new Date(window.timeMin.getTime() - DAY), lte: new Date(window.timeMax.getTime() + DAY) },
+        startsAt: {
+          gte: new Date(window.timeMin.getTime() - DAY),
+          lte: new Date(window.timeMax.getTime() + DAY),
+        },
       },
       select: {
         id: true,

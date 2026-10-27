@@ -2,17 +2,24 @@ import { CalendarCheck2, CalendarClock, CalendarX2, Globe, Lock } from "@/compon
 
 import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";
-import type { CalendarSyncState, EventKind, EventVisibility } from "@/generated/prisma/enums";
+import type { CalendarSyncState, EventVisibility } from "@/generated/prisma/enums";
+import { tagToken, type EventTagOption } from "@/lib/calendar/tags";
 import { cn } from "@/lib/utils";
 
-import { KIND_META, SYNC_META, VISIBILITY_META } from "./kinds";
+import { SYNC_META, VISIBILITY_META } from "./kinds";
 
-/** The event's kind as a tag chip: its colour mixed into the card. */
-export function KindBadge({ kind, className }: { kind: EventKind; className?: string }) {
-  const meta = KIND_META[kind];
+/** The event's type as a tag chip: its colour mixed into the card. */
+export function KindBadge({
+  tag,
+  className,
+}: {
+  tag: Pick<EventTagOption, "name" | "color"> | null;
+  className?: string;
+}) {
+  if (!tag) return null;
   return (
-    <TagChip color={`var(${meta.token})`} className={className}>
-      {meta.label}
+    <TagChip color={`var(${tagToken(tag.color)})`} className={className}>
+      {tag.name}
     </TagChip>
   );
 }

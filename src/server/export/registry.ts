@@ -43,6 +43,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "OrgAuditLog", key: ID },
   { model: "OrgExport", key: ID, omit: ["blobKey", "cursor"] },
   { model: "Label", key: ID },
+  { model: "EventTag", key: ID },
   { model: "Task", key: ID },
   { model: "TaskAssignee", key: ["taskId", "userId"] },
   { model: "TaskLabel", key: ["taskId", "labelId"] },
