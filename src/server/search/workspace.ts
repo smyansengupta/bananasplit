@@ -976,12 +976,19 @@ export function groupsFor(
 /**
  * Searches everything `viewer` may open for `query`. With no words: in
  * "All", the pages they visited last; under a filter, the latest of
- * that kind (recent notes, upcoming events, open tasks...).
+ * that kind (recent notes, upcoming events, open tasks...). `groups`
+ * narrows which groups run at all, and `limit` sets the hits per group
+ * (the AI connectors' search reads fewer kinds, and more of each).
  */
 export async function searchWorkspace(
   db: TxClient,
   viewer: SearchViewer,
-  input: { query: string; scope: SearchScope },
+  input: {
+    query: string;
+    scope: SearchScope;
+    groups?: readonly ServerGroupId[];
+    limit?: number;
+  },
   now = new Date(),
 ): Promise<SearchResponse> {
   const q = parseQuery(input.query);
@@ -1014,10 +1021,11 @@ export async function searchWorkspace(
     };
   }
 
-  const limit = input.scope === "all" ? ALL_LIMIT : SCOPED_LIMIT;
+  const limit = input.limit ?? (input.scope === "all" ? ALL_LIMIT : SCOPED_LIMIT);
   const ctx: Ctx = { db, viewer, q, browsing, limit, pool: Math.min(limit * 4, 40), base, now };
   const groups: SearchGroup[] = [];
   for (const id of groupsFor(input.scope, viewer)) {
+    if (input.groups && !input.groups.includes(id)) continue;
     const result = await SEARCHERS[id](ctx);
     if (result.hits.length) groups.push(result);
   }

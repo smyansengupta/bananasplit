@@ -276,6 +276,12 @@ Sign-in URI). The rules that matter here:
   then `checkSpace` with the `connectors` feature. `ctx.user` is the
   member's own row, so services that take an `OrgContext` work unchanged.
   Every failure is an `isError` tool result (`src/server/connectors/errors.ts`).
+- **Read tools open a space one way.** `inSpace` (`src/server/connectors/tools/space.ts`)
+  wraps `withConnectorOrgTx` with reads allowed while paused, the tool's plan
+  feature, and the club's hidden sidebar sections refused to members (as
+  search leaves them out). Item ids are opaque `<kind>:<spaceId>:<id>`, so
+  `fetch` and the `get_` tools find the space from the id; the lookup still
+  filters on `organizationId`.
 - **RLS.** `ConnectorGrant`'s policies test only `"userId" = app.user_id()`.
   Two definer functions: `app.connector_spaces()` (app_user: the caller's
   spaces with each switch) and `app.revoke_connector_grants(user)` (app_auth

@@ -1,8 +1,9 @@
 # AI connectors (MCP): implementation plan
 
-Status: Phase 1 (foundations) built 2026-10-25, behind `CONNECTORS_ENABLED`
-(see "Phase 1: as built"). Phase 0's WorkOS checks have not run yet, so
-nothing has been tried against WorkOS itself. Decided 2026-10-21: Bananasplit
+Status: Phase 1 (foundations) built 2026-10-25 and Phase 2 (read tools)
+2026-10-26, behind `CONNECTORS_ENABLED` (see "Phase 1: as built" and
+"Phase 2: as built"). Phase 0's WorkOS checks have not run yet, so nothing
+has been tried against WorkOS itself. Decided 2026-10-21: Bananasplit
 serves a remote MCP server, so members can use their Personal space and clubs
 from Claude, ChatGPT, Cursor, VS Code and other MCP clients. WorkOS AuthKit
 Standalone Connect issues the OAuth tokens. Auth.js stays the only way to
@@ -510,6 +511,145 @@ check.
 - a paused club's reads, which still work;
 - the club switch off;
 - a READ grant, which can't see write tools.
+
+### Phase 2: as built (2026-10-26)
+
+Built as the table above says, with these decisions on the way:
+
+- **Ids** (`src/server/connectors/tools/ids.ts`).
+  - Every item id a tool returns is opaque: `<kind>:<spaceId>:<id>`. The
+    kinds are note, task (epics and stories too), event, poll (either
+    kind), person, database (its URL key) and expense.
+  - `fetch` and the `get_` tools take that id alone. Space ids stay the
+    org ids `list_spaces` returns.
+  - A forged id finds nothing. The space still opens through
+    `withConnectorOrgTx`, and every lookup filters on `organizationId`.
+  - Folder ids, `list_notes`' filter, are plain ids from its own results:
+    a folder isn't something `fetch` opens.
+- **Cursors** (`tools/cursor.ts`).
+  - A cursor is base64url JSON. It names an offset (or a club-made
+    database's keyset position) and a fingerprint of the tool and its
+    filters.
+  - A cursor from another list is refused with "start over without a
+    cursor".
+  - `search` and the `get_` tools have no cursor. `search` returns its top
+    results, 20 unless asked for more, at most 50.
+- **One way into a space.** `inSpace` (`tools/space.ts`) does four things:
+  - runs `withConnectorOrgTx` with `whenPaused: "allow"` and the tool's
+    feature;
+  - loads the space's name, slug, zones and sidebar;
+  - refuses a section the club hid to members (`SectionHiddenError`);
+  - leaves that section open to owners and admins (`settings.view`), as
+    search does. Hiding Polls hides Find a time too, as in the sidebar.
+
+  | Tools | Feature | Section |
+  |---|---|---|
+  | `list_tasks`, `get_task` | tasks | Tasks |
+  | `list_events`, `get_event` | rsvp | Calendar |
+  | `list_notes`, `get_note` | files | Files |
+  | `list_databases`, `query_database` | databases | Databases |
+  | `list_members` | people | People |
+  | `get_weekly_summary` | teamwork | Tasks |
+  | `list_my_reimbursements` | finance | Finance |
+  | `list_open_polls` | polls | Polls, or Find a time, per poll |
+
+  `fetch` uses its kind's row. Personal doesn't have people, teamwork or
+  finance, so those tools refuse it with the plan's own message.
+- **search** (`tools/search.ts`).
+  - It is the palette's `searchWorkspace`. The viewer comes from
+    `src/server/search/viewer.ts`, which the ⌘K action now uses too.
+  - It runs over each space `list_spaces` lists with AI apps on, one
+    transaction each, and merges by score.
+  - It searches only what `fetch` opens: notes, tasks and epics, events,
+    polls, people and databases. `searchWorkspace` gained `groups` and
+    `limit` for this. A kind whose plan feature the space lacks isn't
+    searched.
+  - Left out: finance (the ledger), files and folders (`fetch` can't read
+    an upload), and tags and org-chart roles.
+  - A space that refuses (switched off between the two reads, say) is
+    skipped, not a failed search. A query with no words returns nothing,
+    rather than the palette's recent pages.
+- **fetch** (`tools/fetch.ts`) returns `{ id, title, text, url, metadata }`,
+  with the item as Markdown in `text`.
+  - A note is its first 40,000 characters. `metadata` holds `truncated`
+    and `nextOffset`, for `get_note`.
+  - A database is its columns and row count, not its rows.
+  - A poll reads as its page shows it to this member
+    (`buildQuestionPollView`, `buildPollView`). Counts stay hidden until it
+    closes when the poll says so, and an anonymous poll names no voters.
+- **get_event** lists the event's linked notes as the notes rules allow,
+  and none while the club hides Files from members.
+- **get_note** reads `noteToMarkdown`, the Download Markdown export.
+  - A part ends after a line break near 40,000 characters when there is
+    one, and never inside an emoji.
+  - The parts join back into the whole note.
+- **Times.**
+  - Instants are ISO 8601 with their offset, in the member's own zone, or
+    else the club's.
+  - All-day events and due dates are days (yyyy-mm-dd).
+  - `list_events` reads a `from` or `to` without an offset in the member's
+    zone.
+- **query_database** (`tools/databases.ts`).
+  - Built-in databases filter and sort through the view grammar
+    (`dbViewQuery`, `queryFor`). A filter the query builder rejects is
+    refused with its reason, never silently dropped. Each column says
+    whether it filters or sorts, and its operators.
+  - Club-made databases take `query` only (`loadRecords`). Values are what
+    the grid shows: choice labels, member names, "$15.50".
+  - Columns hidden from members are left out (`viewerColumns`). RLS masks
+    contact emails below the privacy tier.
+  - Individual ballots need the tier Privacy allows (`canViewBallotRows`).
+    Without it, `query_database` refuses and `fetch` describes the
+    database without a row count.
+- **list_members.** Emails come back for owners and admins
+  (`members.viewEmails`), for everyone when Admin panel › Privacy shows
+  member emails to members, and always for the member's own row.
+  `listOrgPeopleInTx` and `countOrgPeopleInTx` run `listOrgPeople`'s query
+  in the caller's transaction.
+- **get_weekly_summary** also takes a `member` ("me" unless given), since
+  the updates view lets anyone read a teammate's week. RLS leaves out their
+  private tasks, and a week that hasn't begun reads as this one, as in the
+  app.
+- **list_my_reimbursements** returns only the member's own expense
+  requests, with no receipt files and no emails. `fetch` opens one of them
+  by its expense id; anyone else's is not found.
+- **Errors.**
+  - The SDK checks the arguments against each input schema before a tool
+    runs. A failure is an `isError` result naming the field, never
+    repeating its value.
+  - The tools' own refusals are `AppError`s below 500 with fixed messages:
+    `CursorError`, `ConnectorInputError`, `SectionHiddenError` and
+    `BallotRowsHiddenError`.
+- **Small refactors.**
+  - `noteListWhere` in `notes/queries.ts`.
+  - `loadFields`, now exported from `databases/custom.ts`.
+  - `loadSearchViewer` and `hiddenSections` in `src/server/search/viewer.ts`.
+
+**Done when**, as checked on 2026-10-26:
+- Every tool has a `*.db.test.ts` covering its denials. They are in
+  `src/server/connectors/tools/`, over `src/test/connector-fixture.ts`:
+  - another org's id, and a forged one;
+  - another member's PRIVATE note, and a removed share;
+  - a PRIVATE task;
+  - hidden sections, refused to members and open to owners;
+  - member emails;
+  - a paused club's reads;
+  - the club switch;
+  - a grant scoped to another space.
+
+  They ran for real against a fresh, migrated database. Each file also
+  runs its tools through the MCP server, so the SDK checks every output
+  schema against real rows.
+- A READ grant can't see write tools. None exist yet; the route test
+  asserts that READ and WRITE grants list the same 15 read tools.
+- Unit tests cover the cursor codec, the id codec and text parts.
+- Protocol tests cover `tools/list`, and calls to `get_note`, `search` and
+  `fetch`, in both eras.
+- *Not yet:* any client against WorkOS staging. It waits on Phase 0.
+
+**For Phase 3.** `inSpace` always allows reads in a paused club. Write
+tools need the wrapper's default, `whenPaused: "refuse"`, so they need a
+write variant of it.
 
 ## Phase 3: write tools
 

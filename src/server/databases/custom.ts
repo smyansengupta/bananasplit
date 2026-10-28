@@ -136,7 +136,8 @@ function toFieldDef(f: {
 
 const FIELD_SELECT = { id: true, name: true, type: true, options: true, isPrimary: true } as const;
 
-async function loadFields(
+/** A club-made database's fields in grid order (the caller has checked it may see the database). */
+export async function loadFields(
   db: TxClient,
   organizationId: string,
   databaseId: string,
