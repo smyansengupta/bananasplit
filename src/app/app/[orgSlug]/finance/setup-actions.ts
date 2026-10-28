@@ -26,7 +26,7 @@ const financeAction: typeof withOrgAction = (handler, options) =>
  * BudgetCategory and Transaction policies enforce the same.
  */
 
-const NOT_FINANCE = { error: "Only the club's owners and treasurers can set up finance." };
+const NOT_FINANCE = { error: "Only the organization's owners and treasurers can set up finance." };
 
 const balanceSchema = z.object({
   /** Signed: negative when the club starts in debt. Zero removes it. */

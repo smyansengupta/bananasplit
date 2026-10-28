@@ -681,7 +681,7 @@ describe("shareNote — adding people", () => {
     db.membership.findMany.mockResolvedValue([]);
     expect(
       (await shareNote("org_1", "note_1", { userIds: ["stranger"], role: "VIEWER" })).error,
-    ).toMatch(/members of the club/);
+    ).toMatch(/members of the organization/);
 
     actAs("admin_1", Role.ADMIN);
     db.note.findFirst.mockResolvedValue(

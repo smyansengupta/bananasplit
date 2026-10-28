@@ -83,9 +83,9 @@ describe("Settings › Plan and storage: a club", () => {
     expect(auditCalls()).toHaveLength(0);
   });
 
-  it("refuses anything but Team or Team Advanced: no Personal plan, no new trial", async () => {
+  it("refuses anything but Free, Team or Team Advanced: no Personal plan, no new trial", async () => {
     for (const p of ["PLATINUM", "club", "FREE", "PERSONAL_PLUS", "TRIAL"]) {
-      expect((await switchPlan("org_1", p)).error).toBe("Choose Team or Team Advanced.");
+      expect((await switchPlan("org_1", p)).error).toBe("Choose Free, Team or Team Advanced.");
     }
     expect(fake.db.organization.update).not.toHaveBeenCalled();
   });

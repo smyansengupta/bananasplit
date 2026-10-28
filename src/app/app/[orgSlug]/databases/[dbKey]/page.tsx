@@ -316,7 +316,7 @@ export default async function DatabaseViewPage({
               description={
                 admin
                   ? "Import a poll definition to see its results here."
-                  : "Results show up here once your club runs a poll."
+                  : "Results show up here once your organization runs a poll."
               }
               action={
                 admin ? (

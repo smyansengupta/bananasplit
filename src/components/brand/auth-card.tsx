@@ -9,7 +9,7 @@ import { CoreMark, Logo } from "./logo";
  * The card behind sign-in, sign-up, password help and joining a club
  * (Moonstone): a 1000px card on the page, its 10px frame around a graphite
  * panel on the left (the chrome colour, dark in both modes, lit by the
- * banana glow from its corner: the logo at the top, `panel` at the bottom,
+ * the logo at the top, `panel` at the bottom,
  * a faint outline of the mark bleeding off the corner) and the form on the
  * right. Below lg the panel is hidden and the logo sits above the form.
  * `footer` closes the form column: the pages a signed-in person reaches pass
@@ -41,7 +41,7 @@ export function AuthCard({
           tall ? "lg:min-h-[660px]" : "lg:min-h-[620px]",
         )}
       >
-        <div className="bg-chrome text-chrome-foreground glow-corner relative hidden w-[420px] flex-none flex-col justify-between overflow-hidden rounded-[calc(var(--radius-shell)-0.625rem)] p-10 lg:flex">
+        <div className="bg-chrome text-chrome-foreground relative hidden w-[420px] flex-none flex-col justify-between overflow-hidden rounded-[calc(var(--radius-shell)-0.625rem)] p-10 lg:flex">
           <CoreMark
             size={420}
             tone="outline"
@@ -71,11 +71,7 @@ export function AuthCard({
 
 /** The panel's headline (the tagline unless given): the display face, set tight. */
 export function AuthHeadline({
-  children = (
-    <>
-      Running your club shouldn&apos;t be bananas<span className="glow-text">.</span>
-    </>
-  ),
+  children = <>The new era of team keeping.</>,
   className,
 }: {
   children?: ReactNode;

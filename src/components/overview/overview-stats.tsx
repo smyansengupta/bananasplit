@@ -41,7 +41,7 @@ export function OverviewStats({
 }) {
   return (
     <>
-      {/* A phone: the very same bar as Tasks' (the club's tasks, the same split). */}
+      {/* A phone: the very same bar as Tasks' (the organization's tasks, the same split). */}
       {taskBar && (
         <OpenTasksBar
           open={taskBar.open}

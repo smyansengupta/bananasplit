@@ -45,7 +45,9 @@ export function pulseIssuePath(orgSlug: string, weekStart: string): string {
   return `/app/${orgSlug}/pulse/${weekStart}`;
 }
 
-export const weeklyPulseJob: JobHandler<{ weekStart: string }> = async (run): Promise<JobOutcome | void> => {
+export const weeklyPulseJob: JobHandler<{ weekStart: string }> = async (
+  run,
+): Promise<JobOutcome | void> => {
   const orgId = requireOrg(run.organizationId);
   const { weekStart } = run.payload;
   if (!isDateKey(weekStart)) throw new PermanentJobError("weekStart is not a date");
@@ -91,7 +93,7 @@ export const weeklyPulseJob: JobHandler<{ weekStart: string }> = async (run): Pr
     });
     return { org, issueId: issue.id, sent: false as const, data };
   });
-  if (!compiled) return { status: "CANCELLED", error: "the pulse is off for this club" };
+  if (!compiled) return { status: "CANCELLED", error: "the pulse is off for this organization" };
   if (compiled.sent) return;
   const { org, issueId, data } = compiled;
 
@@ -179,7 +181,13 @@ export const pulseEmailJob: JobHandler<{ issueId: string; userId: string }> = as
       return { skip: "the recipient turned this email off" } as const;
     }
     const finance = seesPulseFinance(member.role)
-      ? await loadPulseFinance(db, orgId, data.range, safeTimeZone(member.organization.timezone), new Date())
+      ? await loadPulseFinance(
+          db,
+          orgId,
+          data.range,
+          safeTimeZone(member.organization.timezone),
+          new Date(),
+        )
       : null;
     return {
       to: member.user.email,

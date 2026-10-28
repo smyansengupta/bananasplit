@@ -131,7 +131,7 @@ describe("list_notes", () => {
     expect(rest.nextCursor).toBeNull();
   });
 
-  it("reads a paused club's notes, and refuses another org, the club switch, another scope and hidden Files", async () => {
+  it("reads a paused organization's notes, and refuses another org, the organization switch, another scope and hidden Files", async () => {
     if (!fx) return;
     const { alice, bob, club, other, pausedId, personalId } = fx;
     const session = await fx.session(alice);

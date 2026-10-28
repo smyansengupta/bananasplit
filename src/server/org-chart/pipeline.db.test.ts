@@ -51,7 +51,13 @@ import { currentTx, withOrgAction, withOrgTx, withSystemOrgTx } from "../db/cont
 import { anthropicClientFactory } from "./claude";
 import { claudeParseJob } from "./parse-job";
 import { getPublishedOrgChart } from "./queries";
-import { loadVersion, publishDraft, rollbackToVersion, saveDraft, type SaveDraftInput } from "./service";
+import {
+  loadVersion,
+  publishDraft,
+  rollbackToVersion,
+  saveDraft,
+  type SaveDraftInput,
+} from "./service";
 
 const fixtures = path.resolve("src/lib/org-chart/__fixtures__");
 const read = (name: string) => readFileSync(path.join(fixtures, name));
@@ -77,8 +83,14 @@ try {
       where: { slug: "claude-builders-club" },
       select: { id: true, activeOrgChartVersionId: true },
     }),
-    authDb.user.findUnique({ where: { email: "jackson@example.edu" }, select: { id: true, email: true, name: true } }),
-    authDb.user.findUnique({ where: { email: "kristine@example.edu" }, select: { id: true, email: true, name: true } }),
+    authDb.user.findUnique({
+      where: { email: "jackson@example.edu" },
+      select: { id: true, email: true, name: true },
+    }),
+    authDb.user.findUnique({
+      where: { email: "kristine@example.edu" },
+      select: { id: true, email: true, name: true },
+    }),
   ]);
   if (cbc?.activeOrgChartVersionId && jackson && kristine) {
     seeded = { cbcId: cbc.id, jackson, kristine, originalActive: cbc.activeOrgChartVersionId };
@@ -114,8 +126,16 @@ function fakeAnthropic(): Anthropic {
             stop_reason: next.stop_reason ?? "end_turn",
             stop_sequence: null,
             stop_details: null,
-            content: next.stop_reason === "refusal" ? [] : [{ type: "text", text: next.text, citations: null }],
-            usage: { input_tokens: 2500, output_tokens: 2000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+            content:
+              next.stop_reason === "refusal"
+                ? []
+                : [{ type: "text", text: next.text, citations: null }],
+            usage: {
+              input_tokens: 2500,
+              output_tokens: 2000,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
           };
         },
       },
@@ -123,11 +143,21 @@ function fakeAnthropic(): Anthropic {
   } as unknown as Anthropic;
 }
 
-function uploadRequest(orgId: string, name: string, bytes: Buffer, type: string, headers?: Record<string, string>) {
+function uploadRequest(
+  orgId: string,
+  name: string,
+  bytes: Buffer,
+  type: string,
+  headers?: Record<string, string>,
+) {
   const form = new FormData();
   form.append("file", new File([new Uint8Array(bytes)], name, { type }));
   return uploadRoute(
-    new Request(`http://localhost:3403/api/orgs/${orgId}/org-chart/imports`, { method: "POST", body: form, headers }),
+    new Request(`http://localhost:3403/api/orgs/${orgId}/org-chart/imports`, {
+      method: "POST",
+      body: form,
+      headers,
+    }),
     { params: Promise.resolve({ orgId }) },
   );
 }
@@ -164,7 +194,12 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         return false;
       }
       await db.orgIntegration.create({
-        data: { organizationId: s.cbcId, provider: "CLAUDE", ...KEY_MARKER, connectedById: s.jackson.id },
+        data: {
+          organizationId: s.cbcId,
+          provider: "CLAUDE",
+          ...KEY_MARKER,
+          connectedById: s.jackson.id,
+        },
       });
       return true;
     });
@@ -182,8 +217,17 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     // corpse from an interrupted run is claimed instead of the job under test
     // and every drain here reports done: 0.
     await ownerDb.job.updateMany({
-      where: { organizationId: s.cbcId, kind: "claude-parse", status: { in: ["PENDING", "RUNNING"] } },
-      data: { status: "CANCELLED", lockToken: null, lockedUntil: null, lastError: "cleared by pipeline.db.test" },
+      where: {
+        organizationId: s.cbcId,
+        kind: "claude-parse",
+        status: { in: ["PENDING", "RUNNING"] },
+      },
+      data: {
+        status: "CANCELLED",
+        lockToken: null,
+        lockedUntil: null,
+        lastError: "cleared by pipeline.db.test",
+      },
     });
   });
 
@@ -199,11 +243,19 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         where: { id: { in: createdVersions } },
         select: { sourceBlobKey: true },
       });
-      await db.organization.update({ where: { id: s.cbcId }, data: { activeOrgChartVersionId: s.originalActive } });
-      await db.orgChartVersion.update({ where: { id: s.originalActive }, data: { status: "PUBLISHED" } });
+      await db.organization.update({
+        where: { id: s.cbcId },
+        data: { activeOrgChartVersionId: s.originalActive },
+      });
+      await db.orgChartVersion.update({
+        where: { id: s.originalActive },
+        data: { status: "PUBLISHED" },
+      });
       await db.orgChartVersion.deleteMany({ where: { id: { in: createdVersions } } });
       if (createdIntegration) {
-        await db.orgIntegration.deleteMany({ where: { organizationId: s.cbcId, provider: "CLAUDE" } });
+        await db.orgIntegration.deleteMany({
+          where: { organizationId: s.cbcId, provider: "CLAUDE" },
+        });
       } else if (originalFingerprint !== undefined) {
         await db.orgIntegration.updateMany({
           where: { organizationId: s.cbcId, provider: "CLAUDE" },
@@ -220,7 +272,10 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
   /** Puts a version this suite created back out of the way. */
   async function discard(versionId: string) {
     await withSystemOrgTx(s.cbcId, ({ db }) =>
-      db.orgChartVersion.updateMany({ where: { id: versionId, status: "DRAFT" }, data: { status: "DISCARDED" } }),
+      db.orgChartVersion.updateMany({
+        where: { id: versionId, status: "DRAFT" },
+        data: { status: "DISCARDED" },
+      }),
     );
   }
 
@@ -255,17 +310,23 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
 
   it("a MEMBER uploads too; an unsupported file is refused before anything is stored", async () => {
     sessionUser.current = s.kristine;
-    const member = await track(await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown"));
+    const member = await track(
+      await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown"),
+    );
     expect(member.status).toBe(201);
     await discard(member.body.versionId!);
     sessionUser.current = s.jackson;
-    const rtf = await track(await uploadRequest(s.cbcId, "cbc.rtf", Buffer.from("{\\rtf1 hi}"), "application/rtf"));
+    const rtf = await track(
+      await uploadRequest(s.cbcId, "cbc.rtf", Buffer.from("{\\rtf1 hi}"), "application/rtf"),
+    );
     expect(rtf.status).toBe(415);
   });
 
   it("reads the CBC document with the built-in parser, in the upload, with no Claude call", async () => {
     claudeCalls.length = 0;
-    const res = await track(await uploadRequest(s.cbcId, "cbc-fall-2026.md", read("cbc-fall-2026.md"), "text/plain"));
+    const res = await track(
+      await uploadRequest(s.cbcId, "cbc-fall-2026.md", read("cbc-fall-2026.md"), "text/plain"),
+    );
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
     firstDraft = res.body.versionId as string;
@@ -286,7 +347,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       parseCostUsd: null,
       warnings: [],
     });
-    expect(draft?.version.sourceBlobKey).toMatch(new RegExp(`^org-chart/${s.cbcId}/${firstDraft}/`));
+    expect(draft?.version.sourceBlobKey).toMatch(
+      new RegExp(`^org-chart/${s.cbcId}/${firstDraft}/`),
+    );
     expect(draft?.version.parseConfidence).toBeGreaterThanOrEqual(0.9);
     expect(draft?.version.parseReport).toMatchObject({ shape: "sections", positions: 9 });
     const expected = JSON.parse(read("expected.json").toString("utf8")) as {
@@ -304,7 +367,12 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         .sort((a, b) => a.key.localeCompare(b.key)),
     ).toEqual(
       expected.positions
-        .map((p) => ({ key: p.key, reportsTo: p.reportsTo, isOpen: p.isOpen, isAdvisor: p.isAdvisor }))
+        .map((p) => ({
+          key: p.key,
+          reportsTo: p.reportsTo,
+          isOpen: p.isOpen,
+          isAdvisor: p.isAdvisor,
+        }))
         .sort((a, b) => a.key.localeCompare(b.key)),
     );
     // Suggestions only: nobody is linked until an admin confirms.
@@ -319,13 +387,17 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
 
   it("falls back to Claude Haiku for a document the parser cannot read", async () => {
     claudeCalls.length = 0;
-    const res = await track(await uploadRequest(s.cbcId, "who-does-what.md", read("cbc-narrative.md"), "text/markdown"));
+    const res = await track(
+      await uploadRequest(s.cbcId, "who-does-what.md", read("cbc-narrative.md"), "text/markdown"),
+    );
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ ready: false, reader: "claude" });
     const versionId = res.body.versionId as string;
 
     // One active parse per org: a second document that also needs Claude waits.
-    const second = await track(await uploadRequest(s.cbcId, "again.md", read("cbc-narrative.md"), "text/markdown"));
+    const second = await track(
+      await uploadRequest(s.cbcId, "again.md", read("cbc-narrative.md"), "text/markdown"),
+    );
     expect(second.status).toBe(409);
 
     const pending = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, versionId));
@@ -381,7 +453,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     // the reason Claude could not help.
     expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
     expect(draft?.positions.map((p) => p.key).sort()).toEqual(["head-of-tech", "president"]);
-    expect(JSON.stringify(draft?.version.parseReport)).toMatch(/Claude could not read this document/);
+    expect(JSON.stringify(draft?.version.parseReport)).toMatch(
+      /Claude could not read this document/,
+    );
 
     await discard(res.body.versionId!);
   });
@@ -406,7 +480,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
 
   it("members read the draft too", async () => {
     sessionUser.current = s.kristine;
-    expect((await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, firstDraft)))?.version.status).toBe("DRAFT");
+    expect((await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, firstDraft)))?.version.status).toBe(
+      "DRAFT",
+    );
   });
 
   it("the admin confirms matches and edits, a member publishes; the cache is invalidated after commit", async () => {
@@ -443,11 +519,17 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     await expect(
       withOrgAction((ctx) => publishDraft(ctx, firstDraft, { setTitles: true }))(s.cbcId),
     ).rejects.toThrow();
-    expect((await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, firstDraft)))?.version.status).toBe("DRAFT");
+    expect((await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, firstDraft)))?.version.status).toBe(
+      "DRAFT",
+    );
 
     const seen: string[] = [];
-    const update = vi.spyOn(nextCache, "updateTag").mockImplementation((tag) => void seen.push(tag));
-    const revalidate = vi.spyOn(nextCache, "revalidateTag").mockImplementation((tag) => void seen.push(tag));
+    const update = vi
+      .spyOn(nextCache, "updateTag")
+      .mockImplementation((tag) => void seen.push(tag));
+    const revalidate = vi
+      .spyOn(nextCache, "revalidateTag")
+      .mockImplementation((tag) => void seen.push(tag));
     const published = await withOrgAction((ctx) => publishDraft(ctx, firstDraft))(s.cbcId);
     update.mockRestore();
     revalidate.mockRestore();
@@ -472,7 +554,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     })(s.cbcId);
     createdVersions.push(blank);
     const seen: string[] = [];
-    const update = vi.spyOn(nextCache, "updateTag").mockImplementation((tag) => void seen.push(tag));
+    const update = vi
+      .spyOn(nextCache, "updateTag")
+      .mockImplementation((tag) => void seen.push(tag));
     const result = await withOrgAction((ctx) => publishDraft(ctx, blank))(s.cbcId);
     update.mockRestore();
     expect(result).toMatchObject({ ok: false });
@@ -482,7 +566,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
 
   it("rollback copies the seed version forward as a new published version", async () => {
     const seen: string[] = [];
-    const update = vi.spyOn(nextCache, "updateTag").mockImplementation((tag) => void seen.push(tag));
+    const update = vi
+      .spyOn(nextCache, "updateTag")
+      .mockImplementation((tag) => void seen.push(tag));
     const result = await withOrgAction((ctx) => rollbackToVersion(ctx, s.originalActive))(s.cbcId);
     update.mockRestore();
     expect(result).toMatchObject({ ok: true });
@@ -490,7 +576,11 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     createdVersions.push(copyId);
     expect(seen).toEqual([tags.orgChart(s.cbcId)]);
     const copy = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, copyId));
-    expect(copy?.version).toMatchObject({ status: "PUBLISHED", source: "ROLLBACK", basedOnVersionId: s.originalActive });
+    expect(copy?.version).toMatchObject({
+      status: "PUBLISHED",
+      source: "ROLLBACK",
+      basedOnVersionId: s.originalActive,
+    });
     expect(copy?.positions.find((p) => p.key === "vp-growth")?.title).toBe("VP Growth");
     expect((await getPublishedOrgChart(s.cbcId))?.versionId).toBe(copyId);
 
@@ -499,14 +589,22 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     // the publish and rollback assertions are done, rather than in afterAll.
     await withSystemOrgTx(s.cbcId, async ({ db }) => {
       await db.orgChartVersion.update({ where: { id: copyId }, data: { status: "DISCARDED" } });
-      await db.orgChartVersion.update({ where: { id: s.originalActive }, data: { status: "PUBLISHED" } });
-      await db.organization.update({ where: { id: s.cbcId }, data: { activeOrgChartVersionId: s.originalActive } });
+      await db.orgChartVersion.update({
+        where: { id: s.originalActive },
+        data: { status: "PUBLISHED" },
+      });
+      await db.organization.update({
+        where: { id: s.cbcId },
+        data: { activeOrgChartVersionId: s.originalActive },
+      });
     });
   });
 
   it("a refusal fails a draft the parser read nothing from, with a clear message", async () => {
     answers.push({ stop_reason: "refusal", text: "" });
-    const res = await track(await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"));
+    const res = await track(
+      await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"),
+    );
     expect(res.status).toBe(201);
     const summary = await drainJobs({ kinds: ["claude-parse"], budgetMs: 290_000 });
     expect(summary.dead).toBe(1);
@@ -519,12 +617,18 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
 
   it("the injection fixture is read by the parser, which executes nothing and calls nothing", async () => {
     claudeCalls.length = 0;
-    const res = await track(await uploadRequest(s.cbcId, "board.md", read("cbc-injection.md"), "text/markdown"));
+    const res = await track(
+      await uploadRequest(s.cbcId, "board.md", read("cbc-injection.md"), "text/markdown"),
+    );
     expect(res.status).toBe(201);
     expect(claudeCalls).toEqual([]);
     const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
     expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
-    expect(draft?.positions.map((p) => p.key).sort()).toEqual(["head-of-security", "president", "vp-ops-programs"]);
+    expect(draft?.positions.map((p) => p.key).sort()).toEqual([
+      "head-of-security",
+      "president",
+      "vp-ops-programs",
+    ]);
     expect(draft?.positions.every((p) => p.userId === null)).toBe(true);
     // The injected instructions are data: reported as lines nobody could
     // place, never followed.
@@ -545,9 +649,14 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     const counts = () =>
       withSystemOrgTx(s.cbcId, async ({ db }) => ({
         owners: await db.membership.count({ where: { organizationId: s.cbcId, role: "OWNER" } }),
-        invitations: await db.invitation.count({ where: { organizationId: s.cbcId, email: attacker } }),
+        invitations: await db.invitation.count({
+          where: { organizationId: s.cbcId, email: attacker },
+        }),
         notifications: await db.notification.count({
-          where: { organizationId: s.cbcId, OR: [{ title: { contains: attacker } }, { body: { contains: attacker } }] },
+          where: {
+            organizationId: s.cbcId,
+            OR: [{ title: { contains: attacker } }, { body: { contains: attacker } }],
+          },
         }),
         emailJobs: await db.job.count({
           where: {
@@ -558,18 +667,26 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         }),
       }));
     const versionCount = () =>
-      withSystemOrgTx(s.cbcId, ({ db }) => db.orgChartVersion.count({ where: { organizationId: s.cbcId } }));
+      withSystemOrgTx(s.cbcId, ({ db }) =>
+        db.orgChartVersion.count({ where: { organizationId: s.cbcId } }),
+      );
     const before = await counts();
     // The narrative document forces the Claude path; the double answers with
     // the injection fixture's output, which must still be schema-bound data.
     const versionsBefore = await versionCount();
     answers.push({ text: INJECTION_RAW });
-    const res = await track(await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"));
+    const res = await track(
+      await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"),
+    );
     expect(res.status).toBe(201);
     await drainJobs({ kinds: ["claude-parse"], budgetMs: 290_000 });
     const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
     expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "CLAUDE" });
-    expect(draft?.positions.map((p) => p.key).sort()).toEqual(["head-of-security", "president", "vp-ops-programs"]);
+    expect(draft?.positions.map((p) => p.key).sort()).toEqual([
+      "head-of-security",
+      "president",
+      "vp-ops-programs",
+    ]);
     expect(draft?.positions.every((p) => p.userId === null)).toBe(true);
     expect(draft?.version.openItems[0]?.question).toMatch(/ignored/);
     expect(await counts()).toEqual(before);
@@ -606,7 +723,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     });
 
     it("still imports the CBC document end to end", async () => {
-      const res = await track(await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown"));
+      const res = await track(
+        await uploadRequest(s.cbcId, "cbc.md", read("cbc-fall-2026.md"), "text/markdown"),
+      );
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
       expect(claudeCalls).toEqual([]);
@@ -619,7 +738,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     it("says why a PDF's draft is empty rather than leaving the admin guessing", async () => {
       // There is no local PDF text extraction, so the parser reads nothing.
       // The draft still has to explain itself and offer a way forward.
-      const res = await track(await uploadRequest(s.cbcId, "chart.pdf", read("cbc-fall-2026.pdf"), "application/pdf"));
+      const res = await track(
+        await uploadRequest(s.cbcId, "chart.pdf", read("cbc-fall-2026.pdf"), "application/pdf"),
+      );
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
       expect(claudeCalls).toEqual([]);
@@ -627,20 +748,26 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
       expect(draft?.positions).toEqual([]);
       expect(draft?.version.parseReport).toMatchObject({ shape: "none", positions: 0 });
-      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/no text the portal can read/);
-      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/Claude API key|club template/);
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(
+        /no text the portal can read/,
+      );
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(
+        /Claude API key|starter template/,
+      );
       await discard(res.body.versionId!);
     });
 
     it("lands an unreadable document in the editor rather than refusing it", async () => {
-      const res = await track(await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"));
+      const res = await track(
+        await uploadRequest(s.cbcId, "prose.md", read("cbc-narrative.md"), "text/markdown"),
+      );
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({ ready: true, reader: "builtin" });
       expect(claudeCalls).toEqual([]);
       const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, res.body.versionId!));
       expect(draft?.version).toMatchObject({ parseStatus: "READY", parseMethod: "BUILTIN" });
       expect(draft?.positions).toEqual([]);
-      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/club template/);
+      expect(JSON.stringify(draft?.version.parseReport?.notes)).toMatch(/starter template/);
       await discard(res.body.versionId!);
     });
 
@@ -667,7 +794,9 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       expect(draft?.positions.find((p) => p.key === "marketing-lead")?.isOpen).toBe(true);
       expect(draft?.positions.find((p) => p.key === "faculty-advisor")?.isAdvisor).toBe(true);
       expect(draft?.positions.filter((p) => p.reportsToId === null)).toHaveLength(1);
-      expect(draft?.positions.find((p) => p.key === "president")?.responsibilities.length).toBeGreaterThan(2);
+      expect(
+        draft?.positions.find((p) => p.key === "president")?.responsibilities.length,
+      ).toBeGreaterThan(2);
       // And it publishes as it stands. Put the club's own chart back straight
       // away: other suites read this org's published chart too.
       const published = await withOrgAction((ctx) => publishDraft(ctx, versionId))(s.cbcId);
@@ -676,9 +805,18 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       expect(live?.versionId).toBe(versionId);
       expect(live?.positions).toHaveLength(7);
       await withSystemOrgTx(s.cbcId, async ({ db }) => {
-        await db.orgChartVersion.update({ where: { id: versionId }, data: { status: "DISCARDED" } });
-        await db.orgChartVersion.update({ where: { id: restoreTo }, data: { status: "PUBLISHED" } });
-        await db.organization.update({ where: { id: s.cbcId }, data: { activeOrgChartVersionId: restoreTo } });
+        await db.orgChartVersion.update({
+          where: { id: versionId },
+          data: { status: "DISCARDED" },
+        });
+        await db.orgChartVersion.update({
+          where: { id: restoreTo },
+          data: { status: "PUBLISHED" },
+        });
+        await db.organization.update({
+          where: { id: s.cbcId },
+          data: { activeOrgChartVersionId: restoreTo },
+        });
       });
     });
   });

@@ -222,7 +222,7 @@ export function OrgSwitcher({
           ))}
         {clubs.length > 0 && (
           <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-            Your clubs
+            Your organizations
           </DropdownMenuLabel>
         )}
         {clubs.map((org) => (
@@ -255,13 +255,13 @@ export function OrgSwitcher({
         <DropdownMenuItem asChild>
           <Link href="/onboarding/join">
             <KeyRound className="size-4" aria-hidden="true" />
-            Join a club
+            Join an organization
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/onboarding/organization">
             <Plus className="size-4" aria-hidden="true" />
-            Start a club
+            Start an organization
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

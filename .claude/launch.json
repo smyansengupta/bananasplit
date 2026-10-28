@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 3000
+    },
+    {
+      "name": "hack1984",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd /Users/jackonlamoureux/code/anthropic-club-website/hackathon && exec /Users/jackonlamoureux/.local/node/bin/node node_modules/vite/bin/vite.js --port 5174 --strictPort"],
+      "port": 5174
     }
   ]
 }

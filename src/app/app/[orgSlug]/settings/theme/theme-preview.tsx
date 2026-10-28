@@ -213,7 +213,7 @@ export function ThemePreview({
                           Book Engineering Hall 112
                         </span>
                         <span className="mt-1 flex items-center gap-2">
-                          <TagChip color="var(--chart-2)">Club operations</TagChip>
+                          <TagChip color="var(--chart-2)">Operations</TagChip>
                         </span>
                       </span>
                       <Badge variant="accent">High</Badge>

@@ -666,7 +666,7 @@ function People({ page }: { page: RsvpPageData }) {
             <OrgMark page={page} />
             <span className="flex min-w-0 flex-col">
               <span className="truncate text-[15px] font-semibold">{page.org.name}</span>
-              <span className="text-muted-foreground text-[13px]">Club</span>
+              <span className="text-muted-foreground text-[13px]">Organization</span>
             </span>
           </li>
           {page.host && (

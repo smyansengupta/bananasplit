@@ -20,18 +20,20 @@ function render(space: SpaceInfo, canChoosePlan: boolean) {
 }
 
 describe("SpaceBanner", () => {
-  it("asks owners and admins of a paused club to choose a plan", () => {
+  it("tells owners and admins an ended trial is on Free, and that nothing was deleted", () => {
     const html = render(trial(-1), true);
-    expect(html).toContain("free trial has ended");
+    expect(html).toContain("free trial of Team Advanced has ended");
+    expect(html).toContain("on Free. Nothing was deleted");
     expect(html).toContain('href="/app/cbc/settings/plan"');
-    expect(html).toContain("Choose a plan");
+    expect(html).not.toMatch(/paused/i);
   });
 
-  it("tells members of a paused club, calmly, with no price, trial link or button", () => {
-    const html = render(trial(-1), false);
-    expect(html).toContain("This club is paused for now. Your officers have been asked");
-    expect(html).not.toContain("settings/plan");
-    expect(html).not.toMatch(/\$|trial/i);
+  it("tells members nothing about the trial or its end", () => {
+    expect(render(trial(-1), false)).toBe("");
+  });
+
+  it("stops once the owner picks Free", () => {
+    expect(render({ kind: "CLUB", plan: "TEAM_FREE", trialEndsAt: null }, true)).toBe("");
   });
 
   it("warns owners and admins in a trial's last week, and nobody else", () => {

@@ -27,7 +27,7 @@ describe("sidebar navigation", () => {
     ]);
     expect(navSections("cbc", visibleSidebar(null)).map((s) => s.label)).toEqual([
       null,
-      "Club",
+      "Organization",
       "Data",
     ]);
     expect(item("Files").href).toBe("/app/cbc/notes");
@@ -80,7 +80,7 @@ describe("sidebar navigation", () => {
     expect(active("Calendar", "/app/cbc/meetings/e1/rsvp")).toBe(false);
   });
 
-  it("puts sections added since a club saved its sidebar after the one before them, hidden with what they came from", () => {
+  it("puts sections added since an organization saved its sidebar after the one before them, hidden with what they came from", () => {
     // A sidebar saved before Find a time and RSVPs: Calendar moved under Club, Polls hidden.
     const saved = {
       groups: [
@@ -112,7 +112,7 @@ describe("sidebar navigation", () => {
     expect(links(saved).map((i) => i.label)).not.toContain("Find a time");
   });
 
-  it("names a section's page the way the club's sidebar does", () => {
+  it("names a section's page the way the organization's sidebar does", () => {
     expect(sectionLabel(null, "notes")).toBe("Files");
     const groups = resolveSidebar(null);
     groups.find((g) => g.id === "data")!.items.find((i) => i.id === "notes")!.label = "Docs";
@@ -146,7 +146,7 @@ describe("sidebar navigation", () => {
     expect(labels).toContain("Members");
     expect(navSections("cbc", visibleSidebar(config)).map((s) => s.label)).toEqual([
       null,
-      "Club",
+      "Organization",
       "Records",
     ]);
     // Overview can't be hidden, whatever is saved.
@@ -216,13 +216,17 @@ describe("the sidebar in each space", () => {
     expect(isExactPage("/app/me", "/app/me")).toBe(true);
   });
 
-  it("gives a club on its trial (running or paused) every section", () => {
+  it("gives a running trial every section, and an ended one (Team Free) all but Finance", () => {
     expect(nav(club("TRIAL", new Date(Date.now() + 86_400_000))).map((i) => i.label)).toEqual(
       links().map((i) => i.label),
     );
-    expect(nav(club("TRIAL", new Date(Date.now() - 86_400_000))).map((i) => i.label)).toEqual(
-      links().map((i) => i.label),
+    const ended = club("TRIAL", new Date(Date.now() - 86_400_000));
+    expect(nav(ended).map((i) => i.label)).toEqual(
+      links()
+        .map((i) => i.label)
+        .filter((l) => l !== "Finance"),
     );
+    expect(nav(ended, true).find((i) => i.label === "Finance")?.locked).toBe(true);
   });
 
   it("locks nothing on Club and Society", () => {
@@ -253,7 +257,7 @@ describe("the create menu", () => {
     ).not.toContain("event");
   });
 
-  it("leaves out polls in Personal, and what a club hid", () => {
+  it("leaves out polls in Personal, and what an organization hid", () => {
     expect(createActions(sections(PERSONAL), { canCreateEvents: true }).map((a) => a.id)).toEqual([
       "task",
       "event",
@@ -337,7 +341,7 @@ describe("Admin panel navigation", () => {
     expect(labels("TREASURER")).toEqual(["Members"]);
   });
 
-  it("marks the sections a club's plan lacks as locked, and none without a space", () => {
+  it("marks the sections an organization's plan lacks as locked, and none without a space", () => {
     const locked = (space?: Space) =>
       settingsNavItems("cbc", "OWNER", space)
         .filter((i) => i.locked)

@@ -67,7 +67,7 @@ async function showEmailsToMembers<T>(on: boolean, fn: () => Promise<T>): Promis
 }
 
 describe("list_members", () => {
-  it("lists the club by name with roles and titles, and only the member's own email", async () => {
+  it("lists the organization by name with roles and titles, and only the member's own email", async () => {
     if (!fx) return;
     const { alice, bob, club } = fx;
     const res = await listMembers(await fx.session(alice), { space: club.id });
@@ -115,7 +115,7 @@ describe("list_members", () => {
     expect(rest.nextCursor).toBeNull();
   });
 
-  it("refuses Personal (people are for clubs), another org, the club switch, another scope and hidden People", async () => {
+  it("refuses Personal (people are for organizations), another org, the organization switch, another scope and hidden People", async () => {
     if (!fx) return;
     const { alice, bob, club, other, pausedId, personalId } = fx;
     const session = await fx.session(alice);
@@ -142,7 +142,7 @@ describe("list_members", () => {
 });
 
 describe("a member through fetch", () => {
-  it("reads a profile, with the email only when the club shows it", async () => {
+  it("reads a profile, with the email only when the organization shows it", async () => {
     if (!fx) return;
     const { alice, club } = fx;
     const session = await fx.session(alice);

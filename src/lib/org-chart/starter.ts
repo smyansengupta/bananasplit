@@ -22,7 +22,7 @@ const positions: OrgChartParse["positions"] = [
     responsibilities: [
       "Sets the semester's goals and priorities",
       "Runs the weekly board meeting",
-      "Represents the club to the school and to partners",
+      "Represents the organization to partners and the outside world",
     ],
     decides_alone: ["Budget (final say)", "New partnerships", "Board changes"],
     is_open: false,
@@ -35,10 +35,7 @@ const positions: OrgChartParse["positions"] = [
     person_name: null,
     reports_to: "president",
     manages: [],
-    responsibilities: [
-      "Advises the President",
-      "Provides continuity between boards",
-    ],
+    responsibilities: ["Advises the President", "Provides continuity between boards"],
     decides_alone: [],
     is_open: false,
     is_advisor: true,
@@ -114,7 +111,7 @@ const positions: OrgChartParse["positions"] = [
     manages: [],
     responsibilities: [
       "Promotes every event",
-      "Runs the club's social media and brand",
+      "Runs the organization's social media and brand",
       "Welcomes new members",
     ],
     decides_alone: [],

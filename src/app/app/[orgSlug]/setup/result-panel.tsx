@@ -136,8 +136,8 @@ function DataResult({
             </p>
             <p className="text-muted-foreground text-sm">
               The export answered and reported zero sessions and zero check-ins. That is exactly
-              what a brand-new club website looks like — rows will appear here by themselves after
-              your first session. If you expected data, check that you applied{" "}
+              what a brand-new website looks like — rows will appear here by themselves after your
+              first session. If you expected data, check that you applied{" "}
               <span className="font-mono">suite-export.sql</span> to the live project rather than a
               staging copy.
             </p>
@@ -377,7 +377,7 @@ function ClaudeResult({
       <Done>The key works and can use {model}.</Done>
       <p className="text-muted-foreground text-sm">
         Nothing has been billed yet, and nothing will be until someone uploads an org chart. Each
-        upload is one API call on your club&apos;s own workspace.
+        upload is one API call on your organization&apos;s own workspace.
       </p>
       <PanelSection title="Now worth opening">
         <ul className="grid gap-2 sm:grid-cols-2">

@@ -69,7 +69,7 @@ beforeAll(async () => {
     rejectionReason: "No receipt",
     occurredAt: new Date("2026-09-20T00:00:00Z"),
   });
-  ids.clubCard = await expense(alice.id, `Paid with the club card ${tag}`, {
+  ids.clubCard = await expense(alice.id, `Paid with the organization card ${tag}`, {
     status: "NOT_APPLICABLE",
   });
   ids.deleted = await expense(alice.id, `Entered twice ${tag}`, {

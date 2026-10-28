@@ -67,7 +67,7 @@ const DESCRIPTIONS: Record<string, string> = {
   SIGNUPS: "Your interest or sign-up form: who signed up and whether they came.",
   BALLOTS: "Poll results, and individual votes where your role may see them.",
   PEOPLE: "One row per person per term: how often they came, and who stopped coming.",
-  CUSTOM: "A database your club made.",
+  CUSTOM: "A database your organization made.",
 };
 
 /**
@@ -310,19 +310,19 @@ export default async function DatabasesPage({
         <EmptyState
           icon={Database}
           title="No databases are visible to you"
-          description="Your club's owners decide who sees which data, in Admin panel › Privacy."
+          description="Your organization's owners decide who sees which data, in Admin panel › Privacy."
         />
       ) : needsSetup && !isAdmin ? (
         <EmptyState
           icon={Database}
           title="No data yet"
-          description="When your club's admins make a database or import a spreadsheet, it shows up here."
+          description="When your organization's admins make a database or import a spreadsheet, it shows up here."
         />
       ) : needsSetup ? (
         <section aria-labelledby="db-setup" className="space-y-4.5">
           <div className="space-y-1.5">
             <h2 id="db-setup" className="heading text-[17px]">
-              {personal ? "Make your first database" : <>Add your club&apos;s data</>}
+              {personal ? "Make your first database" : <>Add your organization&apos;s data</>}
             </h2>
             <p className="text-muted-foreground flex items-start gap-2 text-sm">
               <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -334,7 +334,7 @@ export default async function DatabasesPage({
               ) : (
                 <>
                   Everything is stored in Bananasplit and saved as you type: there&apos;s no
-                  database to set up, and no other club can see your data.
+                  database to set up, and no other organization can see your data.
                 </>
               )}
             </p>
@@ -446,7 +446,7 @@ export default async function DatabasesPage({
                       <IconChip icon={Globe} />
                       <div className="min-w-0 flex-1 space-y-0.5">
                         <p className="font-semibold">
-                          Already have a club website database?{" "}
+                          Already have a website database?{" "}
                           <span className="text-muted-foreground font-normal">Optional</span>
                         </p>
                         <p className="text-muted-foreground text-sm">
@@ -504,7 +504,7 @@ export default async function DatabasesPage({
       ) : (
         <>
           {/*
-            One list: the club's own databases and the built-in ones together,
+            One list: the organization's own databases and the built-in ones together,
             each tagged with where its rows live (Bananasplit or the website's
             Supabase). Empty built-ins fold away under the list.
           */}
@@ -515,7 +515,7 @@ export default async function DatabasesPage({
               </h2>
               <span className="text-muted-foreground flex items-center gap-1.5 text-[13px]">
                 <ShieldCheck className="size-3.5" aria-hidden="true" />
-                Saved as you type. Only {personal ? "you" : "your club"} can see them.
+                Saved as you type. Only {personal ? "you" : "your organization"} can see them.
               </span>
             </div>
             <ul className={GRID}>

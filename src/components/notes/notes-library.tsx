@@ -487,7 +487,7 @@ export function NotesLibrary({
                   {n.sharedWithMe
                     ? "Shared with you"
                     : n.memberCanEdit
-                      ? "Club can edit"
+                      ? "Org can edit"
                       : `Shared with ${n.shareCount}`}
                 </span>
               )}
@@ -761,7 +761,7 @@ export function NotesLibrary({
             title={
               personal
                 ? undefined
-                : "Folders are shared with the club; private notes stay private inside them."
+                : "Folders are shared with the organization; private notes stay private inside them."
             }
           >
             Folders

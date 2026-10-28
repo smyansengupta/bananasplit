@@ -52,11 +52,11 @@ const memberSummary = z.object({
   id: z.string().describe("The member's id, for list_tasks' assignee and fetch."),
   name: z.string(),
   role: z.enum(["owner", "admin", "treasurer", "member"]),
-  title: z.string().nullable().describe("Their title in this club."),
+  title: z.string().nullable().describe("Their title in this organization."),
   pronouns: z.string().nullable(),
   major: z.string().nullable(),
   gradYear: z.number().int().nullable(),
-  email: z.string().nullable().describe("Only when the club shows emails to this member."),
+  email: z.string().nullable().describe("Only when the organization shows emails to this member."),
   url: urlField,
 });
 
@@ -85,7 +85,7 @@ const listInput = z.object({
     .string()
     .max(80)
     .optional()
-    .describe("Words in their name, their title in the club, or their major."),
+    .describe("Words in their name, their title in the organization, or their major."),
   limit: limitArg,
   cursor: cursorArg,
 });
@@ -186,7 +186,7 @@ export const registerMemberTools: ToolRegistrar = (server, session) => {
     {
       title: "List members",
       description:
-        "Lists a club's current members by name, with their role and title in the club, pronouns, major and year, and their email when the club shows emails to this member.",
+        "Lists an organization's current members by name, with their role and title in the organization, pronouns, major and year, and their email when the organization shows emails to this member.",
       inputSchema: listInput,
       outputSchema: listOutput,
       annotations: READ_ONLY,

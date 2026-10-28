@@ -41,7 +41,12 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
   const now = new Date();
   const next = nextPulseLabel(now, tz, pulse.pulseDay, pulse.pulseHourLocal);
   const sent = (d: Date) =>
-    new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: tz }).format(d);
+    new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: tz,
+    }).format(d);
 
   return (
     <div className="space-y-[30px]">
@@ -49,8 +54,8 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
         title="Weekly pulse"
         description={
           pulse.pulseEnabled
-            ? `What the club got done each week. ${describePulseSchedule(pulse)}; the next one ${next}.`
-            : "The weekly pulse is off for this club."
+            ? `What the organization got done each week. ${describePulseSchedule(pulse)}; the next one ${next}.`
+            : "The weekly pulse is off for this organization."
         }
         actions={
           isAdmin ? (
@@ -89,7 +94,9 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-[15px] font-semibold">{pulseTitle(issue.data.range)}</span>
+                    <span className="text-[15px] font-semibold">
+                      {pulseTitle(issue.data.range)}
+                    </span>
                     {!issue.sentAt && <Badge variant="accent">Draft</Badge>}
                   </span>
                   <span className="text-muted-foreground block truncate text-sm">
@@ -99,7 +106,10 @@ export default async function PulseArchivePage({ params }: PageProps<"/app/[orgS
                 <span className="text-muted-foreground hidden shrink-0 text-[13px] sm:block">
                   {issue.sentAt ? `Sent ${sent(issue.sentAt)}` : `Goes out ${next}`}
                 </span>
-                <ChevronRight className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+                <ChevronRight
+                  className="text-muted-foreground size-4 shrink-0"
+                  aria-hidden="true"
+                />
               </Link>
             </li>
           ))}

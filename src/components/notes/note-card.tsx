@@ -32,7 +32,7 @@ export function NoteCard({ note, orgSlug }: { note: NoteCardData; orgSlug: strin
           ) : (
             <Users className="size-3" aria-hidden="true" />
           )}
-          {note.visibility === "PRIVATE" ? "Only you" : "Club"}
+          {note.visibility === "PRIVATE" ? "Only you" : "Org"}
         </Badge>
       </div>
 

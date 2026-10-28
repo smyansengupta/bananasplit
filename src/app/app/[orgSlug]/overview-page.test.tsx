@@ -175,7 +175,7 @@ afterEach(() => {
 });
 
 describe("a Personal space's home", () => {
-  it("is the Personal dashboard, not a club's board", async () => {
+  it("is the Personal dashboard, not an organization's board", async () => {
     mocks.getOrgContextBySlug.mockResolvedValue({
       user: viewer,
       organization: { ...org, slug: "me-abc", kind: "PERSONAL", plan: "FREE" },
@@ -189,7 +189,7 @@ describe("a Personal space's home", () => {
 });
 
 describe("org overview", () => {
-  it("shows no one the club's money, not even a treasurer", async () => {
+  it("shows no one the organization's money, not even a treasurer", async () => {
     mocks.getOrgContextBySlug.mockResolvedValue({
       user: viewer,
       organization: org,
@@ -197,7 +197,7 @@ describe("org overview", () => {
     });
     const html = await render();
     expect(html).not.toContain("Money owed to you");
-    expect(html).not.toContain("Club balance");
+    expect(html).not.toContain("Organization balance");
     // Greets them by first name, in their own timezone (10:00 in Los Angeles).
     expect(html).toContain("Good morning, Viewer");
   });
@@ -364,7 +364,7 @@ describe("org overview", () => {
 });
 
 describe("the Moonstone Overview", () => {
-  it("greets in the display face with the date and club on a plain line", async () => {
+  it("greets in the display face with the date and organization on a plain line", async () => {
     const html = await render();
     expect(html).toContain("Monday, October 5, Claude Builders Club");
     expect(html).not.toContain('class="eyebrow');
@@ -389,7 +389,7 @@ describe("the Moonstone Overview", () => {
     expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open polls"));
   });
 
-  it("shows owners the club's first steps until each is done or checked off", async () => {
+  it("shows owners the organization's first steps until each is done or checked off", async () => {
     mocks.getOrgContextBySlug.mockResolvedValue({
       user: viewer,
       organization: { ...org, logo: null },
@@ -399,7 +399,7 @@ describe("the Moonstone Overview", () => {
     db.budgetPeriod.count.mockResolvedValue(0);
     db.databaseDefinition.count.mockResolvedValue(0);
     const html = await render();
-    expect(html).toContain("Get your club started");
+    expect(html).toContain("Get your organization started");
     expect(html).toContain("Set up your budgets");
     expect(html).toContain("Create a task or an epic");
     expect(html).not.toContain("sections");
@@ -416,7 +416,7 @@ describe("the Moonstone Overview", () => {
       role: "OWNER",
       settings: { startedSkipped: ["database"] },
     });
-    expect(await render()).not.toContain("Get your club started");
+    expect(await render()).not.toContain("Get your organization started");
   });
 
   it("starts a new board with Up next and the Weekly pulse", async () => {

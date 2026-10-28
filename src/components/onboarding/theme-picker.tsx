@@ -14,11 +14,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { cn } from "@/lib/utils";
-import {
-  COLOUR_SWATCHES,
-  matchCustomRoles,
-  PAGE_STYLES,
-} from "@/lib/theme/custom-builder";
+import { COLOUR_SWATCHES, matchCustomRoles, PAGE_STYLES } from "@/lib/theme/custom-builder";
 import {
   DEFAULT_CUSTOM_ROLES,
   personalPalettes,
@@ -71,7 +67,7 @@ export function toPersonalTheme(choice: ThemeChoice): PersonalTheme | null {
 }
 
 export function choiceName(choice: ThemeChoice): string {
-  if (choice.preset === FOLLOW_ORG) return "my club's theme";
+  if (choice.preset === FOLLOW_ORG) return "my organization's theme";
   if (choice.preset === CUSTOM_PRESET_ID) return "Custom";
   return THEME_PRESETS.find((p) => p.id === choice.preset)?.name ?? "Default";
 }
@@ -110,12 +106,12 @@ function MiniApp({ colors, className }: { colors: Colors; className?: string }) 
           style={{ background: colors.surface }}
         >
           <span className="size-1.5 rounded-full" style={{ background: colors.accent }} />
-          <span className="h-1 flex-1 rounded-full opacity-60" style={{ background: colors.text }} />
+          <span
+            className="h-1 flex-1 rounded-full opacity-60"
+            style={{ background: colors.text }}
+          />
         </div>
-        <span
-          className="ml-auto h-3 w-8 rounded-full"
-          style={{ background: colors.primary }}
-        />
+        <span className="ml-auto h-3 w-8 rounded-full" style={{ background: colors.primary }} />
       </div>
     </div>
   );
@@ -239,7 +235,12 @@ function CustomBuilder({
                   className="border-background absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2"
                   style={{ background: c.accent }}
                 />
-                {on && <Check className="text-background absolute inset-0 m-auto size-3.5" aria-hidden="true" />}
+                {on && (
+                  <Check
+                    className="text-background absolute inset-0 m-auto size-3.5"
+                    aria-hidden="true"
+                  />
+                )}
               </button>
             );
           })}
@@ -248,7 +249,11 @@ function CustomBuilder({
 
       <div className="space-y-2">
         <span className="text-xs font-medium">Page</span>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Page style">
+        <div
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+          role="radiogroup"
+          aria-label="Page style"
+        >
           {PAGE_STYLES.map((p) => {
             const on = matched.page === p.id;
             return (
@@ -303,8 +308,8 @@ function CustomBuilder({
               />
             ))}
             <p className="text-muted-foreground text-[11px] sm:col-span-2">
-              The dark version is worked out for you. Colours that are hard to read are flagged
-              when you save.
+              The dark version is worked out for you. Colours that are hard to read are flagged when
+              you save.
             </p>
           </div>
         )}
@@ -324,14 +329,20 @@ export function ThemePicker({
   const shown = previewMode(value.mode);
   const followOrg = value.preset === FOLLOW_ORG;
   const customColors = useMemo(() => {
-    const palettes = personalPalettes({ preset: CUSTOM_PRESET_ID, mode: "light", custom: value.custom });
+    const palettes = personalPalettes({
+      preset: CUSTOM_PRESET_ID,
+      mode: "light",
+      custom: value.custom,
+    });
     return palettes ? previewTokens(palettes, shown) : null;
   }, [value.custom, shown]);
 
   const tile = (on: boolean) =>
     cn(
       "focus-visible:ring-ring/50 relative flex flex-col gap-2 rounded-xl border p-2 text-left transition-all outline-none focus-visible:ring-3",
-      on ? "border-primary ring-primary/20 bg-primary/5 ring-2" : "hover:border-foreground/20 hover:bg-muted/40",
+      on
+        ? "border-primary ring-primary/20 bg-primary/5 ring-2"
+        : "hover:border-foreground/20 hover:bg-muted/40",
     );
   const tick = (
     <span className="bg-primary text-primary-foreground absolute top-1.5 right-1.5 grid size-4 place-items-center rounded-full">
@@ -353,11 +364,11 @@ export function ThemePicker({
           <Building2 className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold">
-              Match my club{" "}
+              Match my organization{" "}
               <span className="text-muted-foreground text-xs font-normal">· recommended</span>
             </span>
             <span className="text-muted-foreground block text-xs">
-              Your club&apos;s colours, updated whenever an admin changes them.
+              Your organization&apos;s colours, updated whenever an admin changes them.
             </span>
           </span>
           {followOrg && tick}
@@ -450,7 +461,10 @@ export function ThemePicker({
                 <span className="flex-1 text-xs font-medium" style={{ color: colors.text }}>
                   {title}
                 </span>
-                <span className="text-[10px]" style={{ color: i === 0 ? colors.primary : colors.muted }}>
+                <span
+                  className="text-[10px]"
+                  style={{ color: i === 0 ? colors.primary : colors.muted }}
+                >
                   {i === 0 ? "Due Friday" : "Next week"}
                 </span>
               </div>

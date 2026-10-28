@@ -74,7 +74,7 @@ export default async function OrgSetupStepPage({
   if (!can({ role }, "settings.general.write")) {
     return shell(
       <SetupCard>
-        <StepIntro index={index} total={total} title="Setup is for the club's admins.">
+        <StepIntro index={index} total={total} title="Setup is for the organization's admins.">
           Ask an owner or admin of {organization.name} to finish it.
         </StepIntro>
         <Link href={`/app/${organization.slug}`} className="mt-6 font-semibold underline">

@@ -100,7 +100,7 @@ describe("Privacy settings", () => {
     });
   });
 
-  it("ADMINs switch AI connectors off for the club, audited; members can't", async () => {
+  it("ADMINs switch AI connectors off for the organization, audited; members can't", async () => {
     expect(await updateConnectorsEnabled("org_1", false)).toEqual({});
     expect(fake.db.orgSettings.update).toHaveBeenCalledWith({
       where: { organizationId: "org_1" },

@@ -164,9 +164,9 @@ export function ActionItemsImport({
     if (!r.title.trim()) return "Give it a title.";
     if (r.kind === "task") {
       if (read?.rules.requireOwner && !r.ownerId)
-        return "Your club requires an owner on every task.";
+        return "Your organization requires an owner on every task.";
       if (read?.rules.requireDueDate && !r.dueDate)
-        return "Your club requires a due date on every task.";
+        return "Your organization requires a due date on every task.";
     } else if (!r.startsAt) {
       return "Pick when it starts.";
     }

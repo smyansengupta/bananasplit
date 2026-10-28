@@ -740,7 +740,7 @@ const DATABASE_KIND: Record<string, string> = {
   SIGNUPS: "Sign-ups",
   SESSIONS: "Sessions",
   PEOPLE: "People",
-  CUSTOM: "Club database",
+  CUSTOM: "Organization database",
 };
 
 async function searchDatabases(ctx: Ctx): Promise<SearchGroup> {

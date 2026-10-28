@@ -135,20 +135,30 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
           Nothing to upload?
         </p>
         <p className="text-muted-foreground text-sm">
-          Type it: write or paste an outline, one position per line (&ldquo;Title — @Name&rdquo;), indented
-          under who each reports to, and the chart draws itself as you go. Or start from members: positions are
-          drafted from the titles members already have.
+          Type it: write or paste an outline, one position per line (&ldquo;Title — @Name&rdquo;),
+          indented under who each reports to, and the chart draws itself as you go. Or start from
+          members: positions are drafted from the titles members already have.
         </p>
         <div className="flex flex-wrap gap-2">
-          <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="blank" variant="default">
+          <StartDraftButton
+            orgId={organization.id}
+            orgSlug={orgSlug}
+            from="blank"
+            variant="default"
+          >
             Type or paste an outline
           </StartDraftButton>
-          <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="members" variant="outline">
+          <StartDraftButton
+            orgId={organization.id}
+            orgSlug={orgSlug}
+            from="members"
+            variant="outline"
+          >
             Start from members
           </StartDraftButton>
         </div>
         <p className="text-muted-foreground text-sm">
-          Start from the club template: {STARTER_ROLE_COUNT} roles a student club usually has
+          Start from the starter template: {STARTER_ROLE_COUNT} roles most organizations have
           (President, VPs, Heads, an advisor and an open hire), already laid out with
           responsibilities written in. Fill in the people, change what does not fit and delete the
           rest.
@@ -160,7 +170,7 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
             from="starter"
             variant="outline"
           >
-            Start from the club template
+            Start from the starter template
           </StartDraftButton>
         </div>
       </section>

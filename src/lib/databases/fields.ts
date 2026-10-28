@@ -44,7 +44,7 @@ export const FIELD_TYPE_META: Record<FieldType, { label: string; icon: string; h
   CHECKBOX: { label: "Checkbox", icon: "SquareCheck", hint: "Yes or no." },
   SELECT: { label: "Single select", icon: "CircleDot", hint: "One of a list of choices." },
   MULTI_SELECT: { label: "Multi-select", icon: "Tags", hint: "Any of a list of choices." },
-  MEMBER: { label: "Member", icon: "User", hint: "Someone in your club." },
+  MEMBER: { label: "Member", icon: "User", hint: "Someone in your organization." },
   EMAIL: { label: "Email", icon: "Mail", hint: "An email address." },
   PHONE: { label: "Phone", icon: "Phone", hint: "A phone number." },
   URL: { label: "Link", icon: "Link", hint: "A web address." },
@@ -262,9 +262,10 @@ export function parseCell(
     }
     case "MEMBER": {
       if (typeof input !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(input)) {
-        return { ok: false, error: "Pick someone in the club." };
+        return { ok: false, error: "Pick someone in the organization." };
       }
-      if (members && !members.has(input)) return { ok: false, error: "Pick someone in the club." };
+      if (members && !members.has(input))
+        return { ok: false, error: "Pick someone in the organization." };
       return { ok: true, value: input };
     }
     case "EMAIL": {

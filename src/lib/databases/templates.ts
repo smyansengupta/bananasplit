@@ -56,7 +56,7 @@ export const DATABASE_TEMPLATES: readonly DatabaseTemplate[] = [
     id: "roster",
     name: "Member roster",
     defaultName: "Member roster",
-    description: "Everyone in the club with their year, role and dues.",
+    description: "Everyone in the organization with their year, role and dues.",
     icon: "Users",
     fields: [
       { name: "Name", type: "TEXT" },
@@ -82,7 +82,7 @@ export const DATABASE_TEMPLATES: readonly DatabaseTemplate[] = [
     id: "equipment",
     name: "Equipment",
     defaultName: "Equipment",
-    description: "What the club owns, where it is and who has it.",
+    description: "What the organization owns, where it is and who has it.",
     icon: "Package",
     fields: [
       { name: "Item", type: "TEXT" },

@@ -238,10 +238,9 @@ export function HistoryPanel({
         </ul>
       )}
       <p className="text-muted-foreground px-1 text-[11px] leading-relaxed">
-        Autosaves are kept {historyDays} days, named versions until someone deletes
-        them.
+        Autosaves are kept {historyDays} days, named versions until someone deletes them.
         {versions.length > 0 &&
-          ` ${formatBytes(versions.reduce((n, v) => n + v.sizeBytes, 0))} of the club's storage.`}
+          ` ${formatBytes(versions.reduce((n, v) => n + v.sizeBytes, 0))} of the organization's storage.`}
       </p>
     </div>
   );

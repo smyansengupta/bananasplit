@@ -43,12 +43,18 @@ export function pulseHighlights(data: PulseIssueData): Highlight[] {
   }
   if (data.newMembers.length > 0) {
     const n = data.newMembers.length;
-    out.push({ icon: <UserPlus />, title: `${n} new member${n === 1 ? "" : "s"}`, sub: "Joined this week" });
+    out.push({
+      icon: <UserPlus />,
+      title: `${n} new member${n === 1 ? "" : "s"}`,
+      sub: "Joined this week",
+    });
   }
   const poll = data.pollResults[0];
-  if (poll && out.length < 3) out.push({ icon: <Vote />, title: poll.question, sub: pollOutcome(poll) });
+  if (poll && out.length < 3)
+    out.push({ icon: <Vote />, title: poll.question, sub: pollOutcome(poll) });
   const next = data.nextWeek[0];
-  if (next && out.length < 3) out.push({ icon: <CalendarDays />, title: next.title, sub: "Next week" });
+  if (next && out.length < 3)
+    out.push({ icon: <CalendarDays />, title: next.title, sub: "Next week" });
   return out.slice(0, 3);
 }
 
@@ -93,7 +99,10 @@ export function WeeklyPulseCard({
         <ul className="grid gap-2.5 sm:grid-cols-3">
           {highlights.map((h) => (
             <li key={h.title} className="min-w-0">
-              <Link href={issueHref} className="bg-muted/60 hover:bg-muted rounded-tile flex min-w-0 items-center gap-3 p-3.5 transition-colors">
+              <Link
+                href={issueHref}
+                className="bg-muted/60 hover:bg-muted rounded-tile flex min-w-0 items-center gap-3 p-3.5 transition-colors"
+              >
                 <TileIcon>{h.icon}</TileIcon>
                 <TileText title={h.title} sub={h.sub} />
               </Link>
@@ -104,15 +113,23 @@ export function WeeklyPulseCard({
       {(!issue || draftHref) && (
         <p className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
           {!issue &&
-            (nextSend ? `The first pulse goes out ${nextSend}.` : "The weekly pulse is off for this club.")}
+            (nextSend
+              ? `The first pulse goes out ${nextSend}.`
+              : "The weekly pulse is off for this organization.")}
           {draftHref && (
-            <Link href={draftHref} className="text-foreground inline-flex items-center gap-1.5 font-semibold">
+            <Link
+              href={draftHref}
+              className="text-foreground inline-flex items-center gap-1.5 font-semibold"
+            >
               <PenLine className="size-3.5" aria-hidden="true" />
               Add a note to this week&apos;s pulse
             </Link>
           )}
           {!issue && (
-            <Link href={archiveHref} className="text-foreground font-semibold underline underline-offset-4">
+            <Link
+              href={archiveHref}
+              className="text-foreground font-semibold underline underline-offset-4"
+            >
               About the pulse
             </Link>
           )}

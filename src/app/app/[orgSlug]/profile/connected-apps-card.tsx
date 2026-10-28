@@ -20,13 +20,13 @@ const ACCESS_LABELS: Record<ConnectedApp["access"], string> = {
 function spaceLabel(space: ConnectedAppSpace): string {
   switch (space.scope) {
     case "all":
-      return "Personal and all your clubs";
+      return "Personal and all your organizations";
     case "personal":
       return "Personal only";
     case "club":
       return `${space.name} only`;
     case "gone":
-      return "A club you've left";
+      return "An organization you've left";
   }
 }
 
@@ -110,7 +110,7 @@ export function ConnectedAppsCard({
   return (
     <SettingsCard
       title="AI apps"
-      description="Use your Personal space and clubs from Claude, ChatGPT and other AI apps. An app only ever sees what you can see here, in the spaces you chose when you connected it."
+      description="Use your Personal space and organizations from Claude, ChatGPT and other AI apps. An app only ever sees what you can see here, in the spaces you chose when you connected it."
       status={
         <p aria-live="polite" className="text-muted-foreground">
           {message}

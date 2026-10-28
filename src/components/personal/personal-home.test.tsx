@@ -96,16 +96,16 @@ describe("PersonalHome", () => {
       profileGaps: ["bio", "availability"],
       finishProfileHref: "/onboarding/profile/bio",
     });
-    expect(html).toContain("You&#x27;re invited to a club");
+    expect(html).toContain("You&#x27;re invited to an organization");
     expect(html).toContain("Debate Society");
     expect(html).toContain(">Join<");
     expect(html).toContain("Finish your profile");
     expect(html).toContain("Add your bio and links and when you can&#x27;t meet.");
     expect(html).toContain('href="/onboarding/profile/bio"');
-    expect(html.indexOf("Debate Society")).toBeLessThan(html.indexOf("clubs-heading"));
+    expect(html.indexOf("Debate Society")).toBeLessThan(html.indexOf("organizations-heading"));
   });
 
-  it("renders club cards that open the club, with role, next meeting, tasks and unread", () => {
+  it("renders organization cards that open the organization, with role, next meeting, tasks and unread", () => {
     const html = render({
       ...empty,
       clubs: [
@@ -125,7 +125,6 @@ describe("PersonalHome", () => {
           },
           openTasks: 3,
           unread: 2,
-          paused: false,
           timeZone: "America/Chicago",
         },
         {
@@ -138,7 +137,6 @@ describe("PersonalHome", () => {
           nextMeeting: null,
           openTasks: 0,
           unread: 0,
-          paused: true,
           timeZone: "America/Chicago",
         },
       ],
@@ -151,7 +149,7 @@ describe("PersonalHome", () => {
     expect(html).toContain("3 open tasks");
     expect(html).toContain("2 unread");
     expect(html).toContain('href="/app/chess"');
-    expect(html).toContain("Paused");
+    expect(html).not.toContain("Paused");
     expect(html).toContain("No meeting on the calendar");
     expect(html).toContain("And 1 more");
     expect(html).not.toContain("Joining is always free");
@@ -277,7 +275,13 @@ describe("PersonalHome", () => {
         },
       ],
       dueSoonTotal: 1,
-      yourWeek: { done: 5, bySpace: [{ space: robotics, done: 3 }, { space: personal, done: 2 }] },
+      yourWeek: {
+        done: 5,
+        bySpace: [
+          { space: robotics, done: 3 },
+          { space: personal, done: 2 },
+        ],
+      },
       recentFiles: [
         {
           id: "f1",

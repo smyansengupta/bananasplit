@@ -80,7 +80,7 @@ export function NameForm({
     >
       <SettingsCard
         title="Name"
-        description="How the club appears across the app, in emails and on invite pages."
+        description="How the organization appears across the app, in emails and on invite pages."
         status={status && <StatusLine status={status} />}
         footer={
           canEdit && (
@@ -355,10 +355,10 @@ export function SlugForm({
                 }}
               >
                 <DialogHeader>
-                  <DialogTitle>Change the club URL</DialogTitle>
+                  <DialogTitle>Change the organization URL</DialogTitle>
                   <DialogDescription>
                     Old links keep working: the current URL redirects to the new one. The old URL is
-                    reserved for this club forever, so no one else can take it.
+                    reserved for this organization forever, so no one else can take it.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-1.5">
@@ -459,7 +459,7 @@ export function LogoForm({
       if (!res.ok) return data.error ?? "The upload failed.";
       setStatus({
         tone: "ok",
-        text: method === "POST" ? "Club picture updated." : "Club picture removed.",
+        text: method === "POST" ? "Organization picture updated." : "Organization picture removed.",
       });
       router.refresh();
       return null;
@@ -508,8 +508,8 @@ export function LogoForm({
 
   return (
     <SettingsCard
-      title="Club picture"
-      description="Your club's profile picture: the sidebar, the club switcher, and the page people see when they join."
+      title="Organization picture"
+      description="Your organization's profile picture: the sidebar, the organization switcher, and the page people see when they join."
       status={status && <StatusLine status={status} />}
     >
       <div className="flex flex-wrap items-center gap-4">
@@ -518,7 +518,9 @@ export function LogoForm({
           disabled={!canEdit || busy}
           onClick={() => input.current?.click()}
           onPointerEnter={() => void loadCropDialog()}
-          aria-label={logoUrl ? "Change the club picture" : "Upload a club picture"}
+          aria-label={
+            logoUrl ? "Change the organization picture" : "Upload an organization picture"
+          }
           className="group rounded-tile ring-foreground/6 focus-visible:outline-foreground relative size-20 shrink-0 overflow-hidden ring-1 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-default"
         >
           {logoUrl ? (
@@ -588,7 +590,7 @@ export function LogoForm({
           imageSrc={source}
           busy={busy}
           error={cropError}
-          title="Crop the club picture"
+          title="Crop the organization picture"
           shape="rect"
           onCancel={() => setSource(null)}
           onConfirm={confirm}

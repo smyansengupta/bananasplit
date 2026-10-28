@@ -15,7 +15,13 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { LIMITS, normalizeOpenItems, type NormalizedChart } from "@/lib/org-chart/normalize";
 import { applyOutline, draftFromMembers, parseOutline } from "@/lib/org-chart/outline";
 import { starterChart } from "@/lib/org-chart/starter";
-import { clamp, cleanBullets, cleanLine, positionKeyFromTitle, uniqueKey } from "@/lib/org-chart/text";
+import {
+  clamp,
+  cleanBullets,
+  cleanLine,
+  positionKeyFromTitle,
+  uniqueKey,
+} from "@/lib/org-chart/text";
 import type { ChartWarning, MatchState, OpenItem, ParseReport } from "@/lib/org-chart/types";
 import { hasErrors, validateChart, type ValidationIssue } from "@/lib/org-chart/validate";
 import { writeOrgAuditLog } from "@/server/audit";
@@ -147,7 +153,11 @@ async function activeVersionId(db: Db, organizationId: string): Promise<string |
  * drafts for free still has its whole Claude allowance when it meets a
  * document the parser cannot read.
  */
-export async function assertUploadAllowed(db: Db, organizationId: string, exceptVersionId?: string): Promise<void> {
+export async function assertUploadAllowed(
+  db: Db,
+  organizationId: string,
+  exceptVersionId?: string,
+): Promise<void> {
   const uploads = await db.orgChartVersion.count({
     where: {
       organizationId,
@@ -218,7 +228,10 @@ export interface UploadVersionResult {
  *  - with no key, the uncertain reading becomes the draft anyway, with a
  *    note about what was not understood. An org is never left with nothing.
  */
-export async function createUploadVersion(ctx: Ctx, input: UploadVersionInput): Promise<UploadVersionResult> {
+export async function createUploadVersion(
+  ctx: Ctx,
+  input: UploadVersionInput,
+): Promise<UploadVersionResult> {
   requirePermission(ctx, "orgchart.write");
   const { db, organizationId } = ctx;
   await lockCharts(db, organizationId);
@@ -232,11 +245,11 @@ export async function createUploadVersion(ctx: Ctx, input: UploadVersionInput): 
     notes.push(
       input.claudeAvailable
         ? "This file has no text the portal can read on its own, so Claude is reading it."
-        : "This file has no text the portal can read on its own. Add a Claude API key in Admin panel › Integrations and import it again, or start from the club template.",
+        : "This file has no text the portal can read on its own. Add a Claude API key in Admin panel › Integrations and import it again, or start from the starter template.",
     );
   } else if (!input.accepted && !input.claudeAvailable) {
     notes.push(
-      "Only part of this document was understood, and the org has no Claude API key. Fix the positions below, or start again from the club template.",
+      "Only part of this document was understood, and the org has no Claude API key. Fix the positions below, or start again from the starter template.",
     );
   }
 
@@ -312,13 +325,28 @@ export async function createUploadVersion(ctx: Ctx, input: UploadVersionInput): 
  * `claudeKeySaved` comes from getClaudeKeyStatus, read before the
  * transaction (members cannot read OrgIntegration).
  */
-export async function retryParse(ctx: Ctx, versionId: string, claudeKeySaved: boolean): Promise<void> {
+export async function retryParse(
+  ctx: Ctx,
+  versionId: string,
+  claudeKeySaved: boolean,
+): Promise<void> {
   requirePermission(ctx, "orgchart.write");
   const { db, organizationId } = ctx;
   await lockCharts(db, organizationId);
   const version = await db.orgChartVersion.findFirst({
-    where: { id: versionId, organizationId, status: OrgChartVersionStatus.DRAFT, source: OrgChartSource.UPLOAD },
-    select: { parseStatus: true, updatedAt: true, parseMethod: true, parseConfidence: true, sourceBlobKey: true },
+    where: {
+      id: versionId,
+      organizationId,
+      status: OrgChartVersionStatus.DRAFT,
+      source: OrgChartSource.UPLOAD,
+    },
+    select: {
+      parseStatus: true,
+      updatedAt: true,
+      parseMethod: true,
+      parseConfidence: true,
+      sourceBlobKey: true,
+    },
   });
   if (!version) throw new OrgChartError("That draft no longer exists.", 404);
   const stuck =
@@ -378,7 +406,11 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
   let warnings: Prisma.InputJsonValue = [];
   let teams: Prisma.InputJsonValue = [];
   if (from === "current") {
-    if (!active) throw new OrgChartError("There is no published chart to edit yet. Start a blank draft instead.", 409);
+    if (!active)
+      throw new OrgChartError(
+        "There is no published chart to edit yet. Start a blank draft instead.",
+        409,
+      );
     const source = await db.orgChartVersion.findFirst({
       where: { id: active, organizationId },
       select: { openItems: true, teams: true, positions: { select: positionSelect } },
@@ -393,7 +425,12 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
       where: { organizationId },
       select: { userId: true, role: true, title: true, user: { select: { name: true } } },
     });
-    const members = rows.map((r) => ({ id: r.userId, name: r.user.name, title: r.title, role: r.role }));
+    const members = rows.map((r) => ({
+      id: r.userId,
+      name: r.user.name,
+      title: r.title,
+      role: r.role,
+    }));
     const drafted = applyOutline([], parseOutline(draftFromMembers(members)), members);
     const taken = new Set<string>();
     writes = drafted.map((p) => ({
@@ -467,7 +504,9 @@ export const SaveDraftSchema = z.object({
     .array(z.object({ id: z.string().min(1).max(40), name: z.string().trim().min(1).max(60) }))
     .max(40)
     .optional(),
-  openItems: z.array(z.object({ who: z.string().max(1000), question: z.string().max(2000) })).max(100),
+  openItems: z
+    .array(z.object({ who: z.string().max(1000), question: z.string().max(2000) }))
+    .max(100),
 });
 
 export type SaveDraftInput = z.infer<typeof SaveDraftSchema>;
@@ -482,7 +521,8 @@ const RANK = /^[0-9A-Za-z]{1,100}$/;
 export async function saveDraft(ctx: Ctx, raw: unknown): Promise<SaveDraftResult> {
   requirePermission(ctx, "orgchart.write");
   const parsed = SaveDraftSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: "The draft could not be saved: some fields are invalid." };
+  if (!parsed.success)
+    return { ok: false, error: "The draft could not be saved: some fields are invalid." };
   const input = parsed.data;
   const { db, organizationId } = ctx;
 
@@ -508,7 +548,10 @@ export async function saveDraft(ctx: Ctx, raw: unknown): Promise<SaveDraftResult
     if (!current || current.status !== OrgChartVersionStatus.DRAFT) {
       return { ok: false, error: "This draft was published or discarded in the meantime." };
     }
-    if (current.parseStatus && (ACTIVE_PARSE_STATUSES as readonly string[]).includes(current.parseStatus)) {
+    if (
+      current.parseStatus &&
+      (ACTIVE_PARSE_STATUSES as readonly string[]).includes(current.parseStatus)
+    ) {
       return { ok: false, error: "Claude is still reading this document; wait for it to finish." };
     }
     return {
@@ -567,7 +610,8 @@ export async function saveDraft(ctx: Ctx, raw: unknown): Promise<SaveDraftResult
       matchState: isOpen ? "UNMATCHED" : matchState,
       matchScore: userId || matchState === "SUGGESTED" ? p.matchScore : null,
       suggestedUserIds: p.suggestedUserIds.filter((id) => members.ids.has(id)).slice(0, 3),
-      reportsToRef: p.reportsTo && p.reportsTo !== p.id && clientIds.has(p.reportsTo) ? p.reportsTo : null,
+      reportsToRef:
+        p.reportsTo && p.reportsTo !== p.id && clientIds.has(p.reportsTo) ? p.reportsTo : null,
       isOpen,
       isAdvisor: p.isAdvisor,
       responsibilities: cleanBullets(p.responsibilities, LIMITS.bullets, LIMITS.bullet),
@@ -587,7 +631,11 @@ export async function saveDraft(ctx: Ctx, raw: unknown): Promise<SaveDraftResult
 export async function discardDraft(ctx: Ctx, versionId: string): Promise<void> {
   requirePermission(ctx, "orgchart.write");
   const res = await ctx.db.orgChartVersion.updateMany({
-    where: { id: versionId, organizationId: ctx.organizationId, status: OrgChartVersionStatus.DRAFT },
+    where: {
+      id: versionId,
+      organizationId: ctx.organizationId,
+      status: OrgChartVersionStatus.DRAFT,
+    },
     data: { status: OrgChartVersionStatus.DISCARDED },
   });
   if (res.count !== 1) throw new OrgChartError("That draft no longer exists.", 404);
@@ -601,7 +649,8 @@ export async function discardDraft(ctx: Ctx, versionId: string): Promise<void> {
 
 // ------------------------------------------------------------------ publish
 
-export type PublishResult = { ok: true; number: number } | { ok: false; error: string; issues?: ValidationIssue[] };
+export type PublishResult =
+  { ok: true; number: number } | { ok: false; error: string; issues?: ValidationIssue[] };
 
 function toValidationNodes(rows: readonly PositionRow[]) {
   return rows.map((r) => ({
@@ -618,7 +667,12 @@ function toValidationNodes(rows: readonly PositionRow[]) {
 }
 
 /** Each linked member's highest position (fewest managers above, then rank). */
-export function titlesFor(rows: readonly Pick<PositionRow, "id" | "userId" | "reportsToId" | "title" | "rank" | "matchState">[]) {
+export function titlesFor(
+  rows: readonly Pick<
+    PositionRow,
+    "id" | "userId" | "reportsToId" | "title" | "rank" | "matchState"
+  >[],
+) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const depth = (r: (typeof rows)[number]) => {
     let d = 0;
@@ -718,19 +772,31 @@ export async function publishDraft(
           : "Claude is still reading this document.",
     };
   }
-  if (options.expectedEditVersion !== undefined && version.editVersion !== options.expectedEditVersion) {
-    return { ok: false, error: "This draft changed since you opened it. Reload before publishing." };
+  if (
+    options.expectedEditVersion !== undefined &&
+    version.editVersion !== options.expectedEditVersion
+  ) {
+    return {
+      ok: false,
+      error: "This draft changed since you opened it. Reload before publishing.",
+    };
   }
   const rows = await db.orgChartPosition.findMany({
     where: { organizationId, versionId },
     select: positionSelect,
     orderBy: [{ rank: "asc" }, { id: "asc" }],
   });
-  return publishLocked(ctx, version, rows, { setTitles: options.setTitles === true, action: "orgchart.publish" });
+  return publishLocked(ctx, version, rows, {
+    setTitles: options.setTitles === true,
+    action: "orgchart.publish",
+  });
 }
 
 /** Copies a past version forward (source ROLLBACK) and publishes the copy. */
-export async function rollbackToVersion(ctx: Ctx, versionId: string): Promise<PublishResult & { versionId?: string }> {
+export async function rollbackToVersion(
+  ctx: Ctx,
+  versionId: string,
+): Promise<PublishResult & { versionId?: string }> {
   requirePermission(ctx, "orgchart.write");
   const { db, organizationId } = ctx;
   await lockCharts(db, organizationId);
@@ -746,14 +812,20 @@ export async function rollbackToVersion(ctx: Ctx, versionId: string): Promise<Pu
     },
   });
   if (!source) return { ok: false, error: "That version no longer exists." };
-  if (source.status !== OrgChartVersionStatus.ARCHIVED && source.status !== OrgChartVersionStatus.PUBLISHED) {
+  if (
+    source.status !== OrgChartVersionStatus.ARCHIVED &&
+    source.status !== OrgChartVersionStatus.PUBLISHED
+  ) {
     return { ok: false, error: "Only a previously published version can be restored." };
   }
   if ((await activeVersionId(db, organizationId)) === source.id) {
     return { ok: false, error: "That version is already the published chart." };
   }
   const members = await memberIndex(db, organizationId);
-  const writes = rowsToWrites(source.positions, { memberIds: members.ids, userNames: members.names });
+  const writes = rowsToWrites(source.positions, {
+    memberIds: members.ids,
+    userNames: members.names,
+  });
 
   const copyId = newVersionId();
   const number = await nextNumber(db, organizationId);
@@ -921,7 +993,10 @@ export async function loadVersion(ctx: Ctx, versionId: string): Promise<VersionD
       ...version,
       openItems: Array.isArray(openItems) ? (openItems as unknown as OpenItem[]) : [],
       warnings: Array.isArray(warnings) ? (warnings as unknown as ChartWarning[]) : [],
-      parseReport: parseReport && typeof parseReport === "object" ? (parseReport as unknown as ParseReport) : null,
+      parseReport:
+        parseReport && typeof parseReport === "object"
+          ? (parseReport as unknown as ParseReport)
+          : null,
       parseCostUsd: typeof usage?.costUsd === "number" ? usage.costUsd : null,
       isActive: row.id === active,
       teams: parseNamedTeams(teams),
@@ -949,7 +1024,10 @@ export interface OpenTasks {
 const OPEN_STATUSES = [TaskStatus.NOT_STARTED, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED];
 
 /** A member's open tasks for the side panel: owned, and involved as a collaborator (top 5 each). */
-export async function getOpenTasks(ctx: Pick<Ctx, "db" | "organizationId">, userId: string): Promise<OpenTasks> {
+export async function getOpenTasks(
+  ctx: Pick<Ctx, "db" | "organizationId">,
+  userId: string,
+): Promise<OpenTasks> {
   const { db, organizationId } = ctx;
   const base = { organizationId, deletedAt: null, status: { in: OPEN_STATUSES } };
   const ownedWhere = { ...base, ownerId: userId };
@@ -959,7 +1037,10 @@ export async function getOpenTasks(ctx: Pick<Ctx, "db" | "organizationId">, user
     assignees: { some: { userId } },
   };
   const select = { id: true, title: true, status: true, dueDate: true } as const;
-  const orderBy = [{ dueDate: { sort: "asc" as const, nulls: "last" as const } }, { createdAt: "asc" as const }];
+  const orderBy = [
+    { dueDate: { sort: "asc" as const, nulls: "last" as const } },
+    { createdAt: "asc" as const },
+  ];
   const owned = await db.task.findMany({ where: ownedWhere, select, orderBy, take: 5 });
   const ownedCount = await db.task.count({ where: ownedWhere });
   const involved = await db.task.findMany({ where: involvedWhere, select, orderBy, take: 5 });

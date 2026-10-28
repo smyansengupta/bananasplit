@@ -88,7 +88,7 @@ const taskSummary = z.object({
   priority: z.enum(["low", "medium", "high"]),
   due: z.string().nullable().describe("The day it's due (yyyy-mm-dd), if any."),
   owner: personRef.nullable(),
-  private: z.boolean().describe("Seen only by the people on it and the club's admins."),
+  private: z.boolean().describe("Seen only by the people on it and the organization's admins."),
   partOf,
   tags: z.array(z.string()),
   url: urlField,

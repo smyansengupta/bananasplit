@@ -139,7 +139,7 @@ describe("list_open_polls", () => {
     });
   });
 
-  it("leaves out a kind whose section the club hid, refuses when both are, and lets owners read", async () => {
+  it("leaves out a kind whose section the organization hid, refuses when both are, and lets owners read", async () => {
     if (!fx) return;
     const { alice, bob, club } = fx;
     const session = await fx.session(alice);
@@ -164,7 +164,7 @@ describe("list_open_polls", () => {
     });
   });
 
-  it("reads a paused club's polls, and refuses another org, the switch and another scope", async () => {
+  it("reads a paused organization's polls, and refuses another org, the switch and another scope", async () => {
     if (!fx) return;
     const { alice, club, other, pausedId, personalId } = fx;
     const session = await fx.session(alice);

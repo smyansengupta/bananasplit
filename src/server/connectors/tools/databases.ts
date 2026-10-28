@@ -68,7 +68,7 @@ const databaseSummary = z.object({
   kind: z
     .string()
     .describe(
-      "attendance, ballots, signups, sessions or people (built in), or custom (club-made).",
+      "attendance, ballots, signups, sessions or people (built in), or custom (organization-made).",
     ),
   description: z.string().nullable(),
   url: urlField,
@@ -359,7 +359,7 @@ async function customRows(
 ): Promise<Rows> {
   if ((args.filters?.length ?? 0) > 0 || args.sort) {
     throw new ConnectorInputError(
-      "A club-made database is searched with query; filters and sort are for the built-in ones.",
+      "An organization-made database is searched with query; filters and sort are for the built-in ones.",
     );
   }
   const actor = { db: ctx.db, organizationId: space.id, userId: ctx.userId, role: ctx.role };
@@ -491,7 +491,7 @@ export const registerDatabaseTools: ToolRegistrar = (server, session) => {
     {
       title: "List databases",
       description:
-        "Lists the databases in one space that the member can open: the club's built-in ones (sessions, attendance, sign-ups, ballots, people) and the ones it made.",
+        "Lists the databases in one space that the member can open: the organization's built-in ones (sessions, attendance, sign-ups, ballots, people) and the ones it made.",
       inputSchema: listInput,
       outputSchema: listOutput,
       annotations: READ_ONLY,

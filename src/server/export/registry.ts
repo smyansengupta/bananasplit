@@ -123,9 +123,9 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
 export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   OrgSecret: "Encrypted integration secrets: ciphertext is never exported.",
   Notification:
-    "Each member's own inbox: personal, not club data, and only its recipient can read it.",
+    "Each member's own inbox: personal, not organization data, and only its recipient can read it.",
   UpNextDismissal:
-    "Cards each member hid from their own Overview: a personal preference, not club data.",
+    "Cards each member hid from their own Overview: a personal preference, not organization data.",
   OrgJoinCode:
     "The live invite code is a credential for joining the org; an export must not carry it.",
   Job: "Background job bookkeeping (ids and sanitized errors), not org data.",
@@ -138,9 +138,9 @@ export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   ConnectorGrant:
     "Each member's own AI app connections (organizationId is only the space one is scoped to); the service role cannot read them.",
   NoteShare:
-    "Who a note is shared with by name: mostly private notes, which the export leaves out, and access settings rather than club data.",
+    "Who a note is shared with by name: mostly private notes, which the export leaves out, and access settings rather than organization data.",
   NoteVersion:
-    "Saved copies of note bodies (autosave snapshots and named versions); the export carries each club note's current body.",
+    "Saved copies of note bodies (autosave snapshots and named versions); the export carries each organization note's current body.",
 };
 
 /** The Prisma client property for a model name ("OrgChartPosition" -> "orgChartPosition"). */

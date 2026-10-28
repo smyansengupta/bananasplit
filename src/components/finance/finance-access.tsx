@@ -60,17 +60,17 @@ export function FinanceAccessNotice({
         >
           Admin panel › Members
         </Link>
-        . Only an owner can give you access to the club&apos;s money
+        . Only an owner can give you access to the organization&apos;s money
         {people.owners.length ? `: ask ${list(people.owners)}` : ""}.
       </>
     ) : (
-      `To help with the club's money, ask ${people.owners.length ? list(people.owners) : "an owner"} to make you treasurer.`
+      `To help with the organization's money, ask ${people.owners.length ? list(people.owners) : "an owner"} to make you treasurer.`
     );
   const body = (
     <>
       {who ? `That's ${who}. ` : ""}
       {people.treasurers.length === 0 ? "There's no treasurer yet. " : ""}
-      {advice} You can still ask to be paid back for anything you bought for the club.
+      {advice} You can still ask to be paid back for anything you bought for the organization.
     </>
   );
 
@@ -83,7 +83,7 @@ export function FinanceAccessNotice({
         <Wallet className="text-muted-foreground mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1">
           <h2 id="finance-access-title" className="heading text-sm">
-            The club&apos;s money is managed by its owners and treasurers
+            The organization&apos;s money is managed by its owners and treasurers
           </h2>
           <p className="text-muted-foreground text-sm">{body}</p>
         </div>
@@ -110,7 +110,7 @@ export function FinanceAccessNotice({
       </span>
       <div className="max-w-prose space-y-2">
         <h2 id="finance-access-title" className="heading text-[17px]">
-          Only owners and treasurers see the club&apos;s money
+          Only owners and treasurers see the organization&apos;s money
         </h2>
         <p className="text-muted-foreground text-sm">{body}</p>
       </div>

@@ -285,7 +285,7 @@ describe("removeMember", () => {
 
   it("rejects removing yourself", async () => {
     const result = await removeMember("org_1", "actor");
-    expect(result.error).toMatch(/leave club/i);
+    expect(result.error).toMatch(/leave organization/i);
     expect(fake.db.membership.delete).not.toHaveBeenCalled();
   });
 });

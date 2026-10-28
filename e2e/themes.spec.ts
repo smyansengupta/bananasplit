@@ -207,7 +207,7 @@ test("the org mode applies only without a stored choice, and the lock forces it"
     await chooser.page.reload();
     expect(await isDark(chooser.page)).toBe(true);
     await chooser.page.getByRole("button", { name: /Open user menu/ }).click();
-    await expect(chooser.page.getByText("Theme (set by your club)")).toBeVisible();
+    await expect(chooser.page.getByText("Theme (set by your organization)")).toBeVisible();
     await expect(chooser.page.getByRole("menuitemradio", { name: "Light" })).toBeDisabled();
 
     // Members cannot manage the theme.

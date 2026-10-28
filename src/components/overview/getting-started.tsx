@@ -75,12 +75,12 @@ export function GettingStarted({
             id="started-heading"
             className="display-title m-0 text-[clamp(1.625rem,1.2rem+1.4vw,2.125rem)]"
           >
-            Get your club started
+            Get your organization started
           </h2>
           <p className="mt-2 text-[15px] leading-[1.5] text-(--block-goal-meta)">
             {left === 1
-              ? "One step left before your club is ready for members."
-              : `${left} steps left before your club is ready for members. Check off anything you don't need.`}
+              ? "One step left before your organization is ready for members."
+              : `${left} steps left before your organization is ready for members. Check off anything you don't need.`}
           </p>
         </div>
         <Gauge

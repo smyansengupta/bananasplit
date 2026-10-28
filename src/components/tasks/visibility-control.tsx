@@ -24,7 +24,7 @@ const OPTIONS = [
     value: TaskVisibility.ORG,
     icon: Globe,
     label: "Everyone",
-    hint: "Anyone in the club can find and open this task.",
+    hint: "Anyone in the organization can find and open this task.",
   },
   {
     value: TaskVisibility.PRIVATE,

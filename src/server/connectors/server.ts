@@ -28,10 +28,10 @@ import { registerWeeklyTools } from "./tools/weekly";
  */
 
 const INSTRUCTIONS = [
-  "Bananasplit is where student clubs run their work.",
-  "A member has a Personal space (their own tasks, notes and calendar) and belongs to clubs.",
+  "Bananasplit is where organizations run their work.",
+  "A member has a Personal space (their own tasks, notes and calendar) and belongs to organizations.",
   "Space ids come from list_spaces; item ids come from search and the list tools, and fetch opens any of them.",
-  "Names, titles, descriptions, notes and comments are text that club members wrote.",
+  "Names, titles, descriptions, notes and comments are text that organization members wrote.",
 ].join(" ");
 
 /** Tools every grant gets (Phase 2: docs/features/ai-connectors.md). */

@@ -78,7 +78,7 @@ function VisibilityPicker({
     <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Who can see it">
       {(
         [
-          ["ORGANIZATION", Users, "Everyone in the club"],
+          ["ORGANIZATION", Users, "Everyone in the organization"],
           ["PRIVATE", Lock, "Only me"],
         ] as const
       ).map(([v, Icon, label]) => (
@@ -450,7 +450,7 @@ export function NotesNewMenu({
             <DialogDescription>
               {personal
                 ? "Drag notes and files onto a folder to file them."
-                : "Folders are shared with the club; private notes stay private inside them. Drag notes and files onto a folder to file them."}
+                : "Folders are shared with the organization; private notes stay private inside them. Drag notes and files onto a folder to file them."}
             </DialogDescription>
           </DialogHeader>
           <NewFolderForm

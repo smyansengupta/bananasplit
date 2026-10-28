@@ -445,7 +445,6 @@ describe("/api/mcp, 2025-11-25", () => {
             role: "owner",
             url: "http://localhost:3000/app/alice-nguyen",
             connectorsOn: true,
-            paused: false,
           },
           {
             id: "org_club",
@@ -454,7 +453,6 @@ describe("/api/mcp, 2025-11-25", () => {
             role: "member",
             url: "http://localhost:3000/app/robotics-club",
             connectorsOn: false,
-            paused: true,
           },
         ],
       },

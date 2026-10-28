@@ -105,7 +105,11 @@ const MODE_OPTIONS: { value: ThemeModeValue; label: string; hint: string }[] = [
 ];
 
 const LOGO_OPTIONS: { value: LogoDisplayValue; label: string; hint: string }[] = [
-  { value: "LOGO_AND_NAME", label: "Logo and name", hint: "A square mark beside the club name." },
+  {
+    value: "LOGO_AND_NAME",
+    label: "Logo and name",
+    hint: "A square mark beside the organization name.",
+  },
   {
     value: "LOGO_ONLY",
     label: "Logo only",
@@ -360,7 +364,8 @@ export function ThemeSettings({
       <section aria-labelledby="theme-look" className={THEME_SECTION}>
         <SectionHeading id="theme-look" title="Look and feel">
           Fine-tune the palette: your own accent colour for highlights, badges and charts, the glow,
-          plus corners, text size and fonts. These apply to everyone, on every page of the club.
+          plus corners, text size and fonts. These apply to everyone, on every page of the
+          organization.
         </SectionHeading>
         <LookAndFeel
           groupId={`${groupId}-look`}
@@ -455,7 +460,8 @@ export function ThemeSettings({
 
       <section aria-labelledby="theme-logo" className={THEME_SECTION}>
         <SectionHeading id="theme-logo" title="Logo display">
-          How the logo shows in the sidebar and on the club&apos;s public poll and invite pages.{" "}
+          How the logo shows in the sidebar and on the organization&apos;s public poll and invite
+          pages.{" "}
           {hasLogo ? (
             <>
               Change the logo in{" "}
@@ -476,7 +482,7 @@ export function ThemeSettings({
               >
                 General
               </Link>
-              . Until then the sidebar shows the club&apos;s initials in the primary colour.
+              . Until then the sidebar shows the organization&apos;s initials in the primary colour.
             </>
           )}
         </SectionHeading>
@@ -546,12 +552,12 @@ export function ThemeSettings({
                   setTheme(
                     saved.mode === "LIGHT" ? "light" : saved.mode === "DARK" ? "dark" : "system",
                   );
-                  setStatus({ kind: "ok", text: "Saved. You see the club theme now too." });
+                  setStatus({ kind: "ok", text: "Saved. You see the organization theme now too." });
                   router.refresh();
                 })
               }
             >
-              Show me the club theme
+              Show me the organization theme
             </Button>
           </p>
         )}

@@ -29,7 +29,7 @@ export const CLAUDE_MODELS: readonly ClaudeModelInfo[] = [
   {
     id: "claude-haiku-4-5-20251001",
     label: "Claude Haiku 4.5",
-    note: "Default. Fastest and cheapest; enough for a club's org chart.",
+    note: "Default. Fastest and cheapest; enough for most org charts.",
     inputPerMTok: 1,
     outputPerMTok: 5,
     adaptiveThinking: false,
@@ -90,7 +90,10 @@ export function claudeModel(id: string | null | undefined): ClaudeModelInfo | nu
 }
 
 /** US dollars for a given number of input and output tokens. */
-export function claudeCostUsd(id: string, tokens: { input: number; output: number }): number | null {
+export function claudeCostUsd(
+  id: string,
+  tokens: { input: number; output: number },
+): number | null {
   const model = claudeModel(id);
   if (!model) return null;
   return (tokens.input * model.inputPerMTok + tokens.output * model.outputPerMTok) / 1_000_000;

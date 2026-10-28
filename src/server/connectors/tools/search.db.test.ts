@@ -77,7 +77,12 @@ beforeAll(async () => {
   ids.diary = await note(personalId, alice.id, `Gala diary ${tag}`, "What to wear.", "PRIVATE");
   ids.minutes = await note(club.id, bob.id, `Gala minutes ${tag}`, "We picked the ballroom.");
   ids.secretNote = await note(club.id, bob.id, `Gala secrets ${tag}`, "Surprise act.", "PRIVATE");
-  ids.chessNote = await note(other.id, bob.id, `Gala at the chess club ${tag}`, "Not Alice's.");
+  ids.chessNote = await note(
+    other.id,
+    bob.id,
+    `Gala at the chess organization ${tag}`,
+    "Not Alice's.",
+  );
   ids.venue = await task(club.id, `Book the gala venue ${tag}`, {
     description: "Call the hotel.",
     status: "BLOCKED",
@@ -147,7 +152,7 @@ afterAll(async () => {
 });
 
 describe("search", () => {
-  it("searches Personal and every club in one call, and never what the member can't see", async () => {
+  it("searches Personal and every organization in one call, and never what the member can't see", async () => {
     if (!fx) return;
     const { alice, club, other, pausedId, personalId } = fx;
     const { results } = await search(await fx.session(alice), { query: `gala ${fx.tag}` });
@@ -187,7 +192,7 @@ describe("search", () => {
     expect((await search(await fx.session(alice), { query: "!!!" })).results).toEqual([]);
   });
 
-  it("searches only the scoped space, skips a club with AI apps off, and leaves out sections it hid", async () => {
+  it("searches only the scoped space, skips an organization with AI apps off, and leaves out sections it hid", async () => {
     if (!fx) return;
     const { alice, bob, club } = fx;
     const query = `gala ${fx.tag}`;

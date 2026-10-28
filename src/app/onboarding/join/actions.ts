@@ -74,10 +74,10 @@ export async function saveClubRoleAction(
   const parsed = clubRoleSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check your role." };
   const club = await getJoinedClub(user.id, typeof orgSlug === "string" ? orgSlug : "");
-  if (!club) return { error: "You're not a member of this club." };
+  if (!club) return { error: "You're not a member of this organization." };
   if (parsed.data.title !== club.title) {
     const saved = await setOwnClubTitle(user.id, club.organizationId, parsed.data.title);
-    if (!saved) return { error: "Your role here is set by the club's admins now." };
+    if (!saved) return { error: "Your role here is set by the organization's admins now." };
   }
   redirect(`/app/${club.slug}`);
 }

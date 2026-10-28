@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth/session";
 import { withOrgAction, withUserTx } from "@/server/db/context";
 
 /** Membership check only: set_context refuses a non-member with NotFoundError. */
-const enterOrg = withOrgAction(async (ctx) => ctx.organizationId, { whenPaused: "allow" });
+const enterOrg = withOrgAction(async (ctx) => ctx.organizationId);
 
 /**
  * The org switcher. Resolves the slug (a renamed org's old slug resolves to

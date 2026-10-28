@@ -23,11 +23,14 @@ const userId = z.string().min(1).max(64);
 const searchTx = withOrgAction(
   async (ctx, raw: string): Promise<PeopleSearchResult> =>
     searchPeopleInTx(ctx.db, ctx.organizationId, query.parse(raw).slice(0, 80)),
-  { feature: "people", whenPaused: "allow" },
+  { feature: "people" },
 );
 
 /** Member ids matching `q`, best first (close matches when nothing matches exactly). */
-export async function searchPeopleAction(organizationId: string, q: string): Promise<PeopleSearchResult> {
+export async function searchPeopleAction(
+  organizationId: string,
+  q: string,
+): Promise<PeopleSearchResult> {
   return searchTx(organizationId, q);
 }
 
@@ -45,14 +48,21 @@ const sheetTx = withOrgAction(
     return getPersonSheet(
       ctx.organizationId,
       id,
-      { id: ctx.userId, role: ctx.role, membersSeeEmails: settings?.showMemberEmailsToMembers === true },
+      {
+        id: ctx.userId,
+        role: ctx.role,
+        membersSeeEmails: settings?.showMemberEmailsToMembers === true,
+      },
       org?.timezone ?? "UTC",
     );
   },
-  { feature: "people", whenPaused: "allow" },
+  { feature: "people" },
 );
 
 /** One current member's profile sheet, or null when they are not a member of this org. */
-export async function loadPersonSheetAction(organizationId: string, id: string): Promise<PersonSheet | null> {
+export async function loadPersonSheetAction(
+  organizationId: string,
+  id: string,
+): Promise<PersonSheet | null> {
   return sheetTx(organizationId, id);
 }
