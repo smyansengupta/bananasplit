@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Layers, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CircleCheck, Layers, Pencil, Plus, RotateCcw, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";

@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState, useTransition } from "react";
 
@@ -92,7 +92,7 @@ export function MemberRowActions({
   const menuItems = [
     canEditTitle && { key: "title", label: isSelf ? "Edit my title" : "Edit title" },
     canTransfer && currentRole !== Role.OWNER && { key: "transfer", label: "Transfer ownership" },
-    canActOnRow && { key: "remove", label: "Remove from club" },
+    canActOnRow && { key: "remove", label: "Remove from organization" },
   ].filter(Boolean) as { key: Exclude<DialogKind, null>; label: string }[];
 
   return (
@@ -167,7 +167,7 @@ export function MemberRowActions({
             className="space-y-4"
           >
             <DialogHeader>
-              <DialogTitle>Title in this club</DialogTitle>
+              <DialogTitle>Title in this organization</DialogTitle>
               <DialogDescription>
                 Shown next to {isSelf ? "your" : `${memberName}'s`} name, e.g. &ldquo;VP
                 Growth&rdquo;. It does not change permissions.
@@ -247,9 +247,9 @@ export function MemberRowActions({
           <DialogHeader>
             <DialogTitle>Make {memberName} an owner?</DialogTitle>
             <DialogDescription>
-              {memberName} becomes an owner and you become an admin. Owners can rename the club,
-              change its URL, remove integrations, export all data and delete the club. You
-              can&apos;t undo this yourself.
+              {memberName} becomes an owner and you become an admin. Owners can rename the
+              organization, change its URL, remove integrations, export all data and delete the
+              organization. You can&apos;t undo this yourself.
             </DialogDescription>
           </DialogHeader>
           {error && (

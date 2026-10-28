@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Camera, Check, Search, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, Search, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";

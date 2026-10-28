@@ -7,14 +7,14 @@ import {
   Database,
   FolderOpen,
   Ticket,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
-const SHORTCUTS: readonly { path: string; label: string; icon: LucideIcon }[] = [
+const SHORTCUTS: readonly { path: string; label: string; icon: IconComponent }[] = [
   { path: "/tasks", label: "Tasks", icon: CheckSquare },
   { path: "/calendar", label: "Calendar", icon: CalendarDays },
   { path: "/notes", label: "Files", icon: FolderOpen },

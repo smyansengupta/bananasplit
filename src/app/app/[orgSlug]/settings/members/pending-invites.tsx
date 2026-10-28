@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import { Mail } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 

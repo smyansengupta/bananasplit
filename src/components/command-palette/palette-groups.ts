@@ -1,4 +1,4 @@
-import { Command, FileText, Search, type LucideIcon } from "lucide-react";
+import { Command, FileText, Search, type IconComponent } from "@/components/icons";
 
 import { parseQuery, type ParsedQuery } from "@/lib/search/text";
 import type { SearchGroup, SearchResponse, SearchScope } from "@/lib/search/types";
@@ -23,7 +23,7 @@ export interface PaletteItem {
   title: string;
   detail?: string | null;
   meta?: string | null;
-  icon: LucideIcon;
+  icon: IconComponent;
   command: PaletteCommand;
   score: number;
   /** Mark the query in it (search results, not the home lists). */

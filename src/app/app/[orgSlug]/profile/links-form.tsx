@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2, Loader2, Plus, X } from "lucide-react";
+import { Link2, Loader2, Plus, X } from "@/components/icons";
 import { useRef, useState, useTransition } from "react";
 
 import { EmptyState } from "@/components/empty-state";

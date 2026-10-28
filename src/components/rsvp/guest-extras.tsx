@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Check, Copy, Gift, Share2, Ticket, Users } from "lucide-react";
+import { Banknote, Check, Copy, Gift, Share2, Ticket, Users } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, useTransition } from "react";
 

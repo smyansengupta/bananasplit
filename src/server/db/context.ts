@@ -265,9 +265,6 @@ async function runInTx<T>(opts: RunOptions, fn: (ctx: TxContext) => Promise<T>):
  * - feature: the action belongs to it (finance, databases, files, people,
  *   ...); a space without it refuses the action, so a typed request can't
  *   reach a locked feature any more than a page can.
- * - whenPaused: "refuse" (the default) for anything that creates or changes
- *   club content; "allow" for reads, choosing a plan, leaving, deleting and
- *   the member's own things (pins), which a paused club still lets through.
  * - onRefused: "throw" (the default) throws SpaceRefusedError, an AppError
  *   whose message is meant for the person (the actions' error mappers turn
  *   it into `{ error }`); "return" hands back a SpaceRefusal instead of
@@ -275,7 +272,6 @@ async function runInTx<T>(opts: RunOptions, fn: (ctx: TxContext) => Promise<T>):
  */
 export interface OrgActionOptions {
   feature?: PlanFeature;
-  whenPaused?: "refuse" | "allow";
   onRefused?: "return" | "throw";
 }
 
@@ -284,7 +280,7 @@ export class SpaceRefusedError extends AppError {
   readonly refusal: SpaceRefusal;
 
   constructor(refusal: SpaceRefusal) {
-    super(refusal.error, 403, refusal.refused === "paused" ? "SPACE_PAUSED" : "SPACE_FEATURE");
+    super(refusal.error, 403, "SPACE_FEATURE");
     this.name = "SpaceRefusedError";
     this.refusal = refusal;
   }
@@ -331,8 +327,8 @@ export async function orgSpaceRefusal(
  *     ctx.afterCommit(() => invalidate([tags.things(ctx.organizationId)]));
  *   });
  *
- * Before the handler it asks the space (OrgActionOptions): a paused club
- * refuses writes, and an action of a feature the space lacks is refused
+ * Before the handler it asks the space (OrgActionOptions): an action of a
+ * feature the space lacks is refused
  * (SpaceRefusedError, or with onRefused "return" a SpaceRefusal in place of
  * the handler's result: only for handlers whose results are `{ error }`).
  */
@@ -501,7 +497,7 @@ export interface OrgContextBySlug {
     kind: OrgKind;
     /** What the space includes (src/lib/billing/space.ts: spaceIncludes). */
     plan: OrgPlan;
-    /** TRIAL: when the trial ends (after it, the club is paused). */
+    /** TRIAL: when the trial ends (after it, the organization is on Team Free). */
     trialEndsAt: Date | null;
   };
   role: Role;

@@ -14,8 +14,8 @@ import {
   UserRound,
   Users,
   Vote,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -95,7 +95,7 @@ export function PersonalHome({
             {data.firstName ? `, ${data.firstName}` : ""}
           </h1>
           <p className="text-muted-foreground mt-2 text-[15px]">
-            {dateLine} · Your clubs, plans and to-dos. Only you can see Personal.
+            {dateLine} · Your organizations, plans and to-dos. Only you can see Personal.
           </p>
         </div>
         <PersonalShortcuts base={base} />
@@ -118,8 +118,8 @@ export function PersonalHome({
         <section aria-labelledby="invites-heading" className="space-y-3">
           <SectionTitle id="invites-heading" icon={Bell}>
             {data.pendingInvites.length === 1
-              ? "You're invited to a club"
-              : `You're invited to ${data.pendingInvites.length} clubs`}
+              ? "You're invited to an organization"
+              : `You're invited to ${data.pendingInvites.length} organizations`}
           </SectionTitle>
           <div className="grid gap-3 md:grid-cols-2">
             {data.pendingInvites.map((invitation) => (
@@ -176,7 +176,7 @@ function SectionTitle({
   action,
 }: {
   id: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   children: ReactNode;
   action?: ReactNode;
 }) {
@@ -203,7 +203,7 @@ function HomeCard({
   children,
 }: {
   id: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   title: ReactNode;
   action?: ReactNode;
   children: ReactNode;
@@ -262,8 +262,8 @@ function FinishProfileCard({ href, gaps }: { href: string; gaps: ProfileGap[] })
           Finish your profile
         </CardTitle>
         <CardDescription>
-          Add your {list}. Clubs you join see your profile, and officers plan meetings around when
-          you&apos;re free. A minute or two; skip anything you like.
+          Add your {list}. Organizations you join see your profile, and admins plan meetings around
+          when you&apos;re free. A minute or two; skip anything you like.
         </CardDescription>
         <CardAction>
           <Button asChild size="sm">
@@ -283,7 +283,7 @@ function FinishProfileCard({ href, gaps }: { href: string; gaps: ProfileGap[] })
 function ClubsSection({ data, now }: { data: PersonalHomeData; now: Date }) {
   const hasClubs = data.clubs.length > 0;
   return (
-    <HomeCard id="clubs-heading" icon={Users} title="Your clubs">
+    <HomeCard id="clubs-heading" icon={Users} title="Your organizations">
       {hasClubs ? (
         <ul className="grid gap-2.5 sm:grid-cols-2">
           {data.clubs.map((club) => (
@@ -294,13 +294,13 @@ function ClubsSection({ data, now }: { data: PersonalHomeData; now: Date }) {
         </ul>
       ) : (
         <p className="text-muted-foreground max-w-prose text-sm">
-          A club shares one calendar, task board and set of polls. Joining is always free: ask an
-          officer for your club&apos;s code, or start one and invite your people.
+          An organization shares one calendar, task board and set of polls. Joining is always free:
+          ask an admin for your organization&apos;s code, or start one and invite your people.
         </p>
       )}
       {data.moreClubs > 0 && (
         <p className="text-muted-foreground pt-2 text-xs">
-          And {data.moreClubs} more: switch to them from Personal &amp; clubs in the sidebar.
+          And {data.moreClubs} more: switch to them from Personal &amp; orgs in the sidebar.
         </p>
       )}
       <JoinOrStart prominent={!hasClubs} />
@@ -334,7 +334,6 @@ function ClubRow({
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex items-center gap-2">
           <span className="truncate text-[15px] font-semibold">{club.name}</span>
-          {club.paused && <Badge variant="secondary">Paused</Badge>}
         </span>
         <span className="text-muted-foreground block truncate text-[13px]">{roleLine(club)}</span>
         <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[13px]">
@@ -381,7 +380,7 @@ function JoinOrStart({ prominent }: { prominent: boolean }) {
     <div className="mt-3 space-y-1.5 border-t pt-3">
       <label htmlFor="join-code" className="flex items-center gap-2 text-sm font-medium">
         <KeyRound className="size-4" aria-hidden="true" />
-        Join a club
+        Join an organization
       </label>
       <div className="flex flex-wrap items-center gap-2">
         <form action="/onboarding/join" method="get" className="flex gap-2">
@@ -404,14 +403,14 @@ function JoinOrStart({ prominent }: { prominent: boolean }) {
           <Button asChild size="sm" variant="ghost">
             <Link href="/onboarding/organization">
               <Plus aria-hidden="true" />
-              Start a club
+              Start an organization
             </Link>
           </Button>
         </span>
       </div>
       <p id="join-code-hint" className="text-muted-foreground text-xs">
-        You&apos;ll see the club before you join, and joining is free. A club you start is free for
-        30 days.
+        You&apos;ll see the organization before you join, and joining is free. An organization you
+        start is free for 30 days.
       </p>
     </div>
   );
@@ -434,8 +433,8 @@ function UpcomingSection({ data, now, base }: { data: PersonalHomeData; now: Dat
           title={`Nothing in the next ${UPCOMING_DAYS} days`}
           description={
             data.clubs.length > 0
-              ? "Meetings and events from your clubs and your own calendar show here, soonest first."
-              : "Your own plans and, once you join a club, its meetings and events show here."
+              ? "Meetings and events from your organizations and your own calendar show here, soonest first."
+              : "Your own plans and, once you join an organization, its meetings and events show here."
           }
           action={
             <Button asChild size="sm" variant="outline">
@@ -526,7 +525,7 @@ function DueSoonSection({ data, base }: { data: PersonalHomeData; base: string }
           size="compact"
           className="py-0"
           title="Nothing due this week"
-          description="Your own tasks and the ones you're on in your clubs show here when they're due within a week, or overdue."
+          description="Your own tasks and the ones you're on in your organizations show here when they're due within a week, or overdue."
           action={
             <Button asChild size="sm" variant="outline">
               <Link href={`${base}/tasks`}>
@@ -627,7 +626,7 @@ function YourWeekCard({ data, base }: { data: PersonalHomeData; base: string }) 
           </ul>
         ) : (
           <p className="text-muted-foreground text-sm">
-            Check off a task in Personal or a club and it counts here.
+            Check off a task in Personal or an organization and it counts here.
           </p>
         )}
         <p className="text-muted-foreground text-[13px]">
@@ -815,7 +814,7 @@ function PollsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
             size="compact"
             className="py-0"
             title="No polls waiting"
-            description="Polls in your clubs that need your answer show here. To find a time with anyone, send a find-a-time poll: they answer from a link, no account needed."
+            description="Polls in your organizations that need your answer show here. To find a time with anyone, send a find-a-time poll: they answer from a link, no account needed."
           />
         ) : (
           <>

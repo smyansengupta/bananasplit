@@ -12,8 +12,8 @@ import {
   Ticket,
   Trash2,
   Video,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -519,7 +519,7 @@ function Fact({
   label,
   children,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   children: React.ReactNode;
 }) {

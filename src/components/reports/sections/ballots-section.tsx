@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, EyeOff, Vote } from "lucide-react";
+import { ArrowUpRight, EyeOff, Vote } from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 
@@ -119,7 +119,7 @@ export async function BallotsSection({ ctx }: { ctx: ReportViewContext }) {
     >
       {r.hidden ? (
         <ReportEmpty icon={EyeOff}>
-          Ballot results are not shared with members in this club.
+          Ballot results are not shared with members in this organization.
         </ReportEmpty>
       ) : r.ballots.length === 0 ? (
         <ReportEmpty icon={Vote}>No ballots in {ctx.rangeLabel.toLowerCase()}.</ReportEmpty>

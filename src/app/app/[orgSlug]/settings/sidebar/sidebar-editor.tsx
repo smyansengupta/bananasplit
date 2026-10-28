@@ -19,8 +19,8 @@ import {
   Ticket,
   Users,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 
 import { saveSidebarAction } from "./actions";
 
-const ICONS: Record<string, LucideIcon> = {
+const ICONS: Record<string, IconComponent> = {
   CalendarCheck,
   CalendarClock,
   CalendarDays,

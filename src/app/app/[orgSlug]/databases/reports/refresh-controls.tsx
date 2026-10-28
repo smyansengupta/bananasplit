@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw } from "@/components/icons";
 
 import { useReportsFrame } from "@/components/reports/reports-frame";
 import { Button } from "@/components/ui/button";

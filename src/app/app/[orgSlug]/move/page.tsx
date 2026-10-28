@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,7 +11,7 @@ import { getOrgContextBySlug } from "@/server/db/context";
 import { isBringId } from "@/server/personal/bring-cookie";
 import { clubsUserRuns } from "@/server/personal/move";
 
-export const metadata = { title: "Move to a club · Bananasplit" };
+export const metadata = { title: "Move to an organization · Bananasplit" };
 
 function initials(name: string): string {
   return name
@@ -49,11 +49,11 @@ export default async function MoveToClubPage({
     <div className="mx-auto w-full max-w-2xl space-y-7.5">
       <div className="space-y-3">
         <PageHeader
-          title="Move to a club"
+          title="Move to an organization"
           description={
             clubs.length > 0
-              ? `${clubs.length} club${clubs.length === 1 ? "" : "s"} you run${itemId ? " · 1 item picked" : ""}`
-              : "You don't run a club yet"
+              ? `${clubs.length} organization${clubs.length === 1 ? "" : "s"} you run${itemId ? " · 1 item picked" : ""}`
+              : "You don't run an organization yet"
           }
         />
         <p className="text-muted-foreground max-w-prose text-sm">
@@ -66,7 +66,7 @@ export default async function MoveToClubPage({
           <Card>
             <CardHeader>
               <CardTitle>
-                <h2>Clubs you run</h2>
+                <h2>Organizations you run</h2>
               </CardTitle>
               <CardDescription>Pick one, then choose what to bring.</CardDescription>
             </CardHeader>
@@ -98,16 +98,17 @@ export default async function MoveToClubPage({
           <Card>
             <CardHeader>
               <CardTitle>
-                <h2>{clubs.length ? "Or start a new club" : "Start a club"}</h2>
+                <h2>{clubs.length ? "Or start a new organization" : "Start an organization"}</h2>
               </CardTitle>
               <CardDescription>
-                A new club is free for 30 days. At the end of setup, you choose what to bring in
+                A new organization is free for 30 days. At the end of setup, you choose what to
+                bring in
                 {itemId ? ", with this one already picked" : ""}.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex justify-end">
               <Button type="submit" variant={clubs.length ? "outline" : "default"}>
-                Start a club
+                Start an organization
               </Button>
             </CardContent>
           </Card>

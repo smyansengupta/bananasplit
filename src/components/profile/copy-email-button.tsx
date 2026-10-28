@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Mail } from "lucide-react";
+import { Check, Mail } from "@/components/icons";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";

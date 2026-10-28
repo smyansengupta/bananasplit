@@ -1,6 +1,6 @@
 "use client";
 
-import { BrushCleaning } from "lucide-react";
+import { BrushCleaning } from "@/components/icons";
 import { useTransition } from "react";
 
 import { bulkDelete, restoreTask } from "@/app/app/[orgSlug]/tasks/actions";

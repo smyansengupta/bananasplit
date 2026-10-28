@@ -1,5 +1,7 @@
 "use server";
 
+import { FUNNEL_EVENTS } from "@/lib/analytics/events";
+import { trackServer } from "@/lib/analytics/server";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isPlanChoiceFor, PLAN_LIMITS } from "@/lib/billing/features";
 import { changeOrgPlan } from "@/server/billing/change-plan";
@@ -8,12 +10,12 @@ import { crossedWarning, readStorageSpace, warnStorage } from "@/server/storage/
 
 /**
  * Settings › Plan and storage: the OWNER switches the plan. A Personal
- * space moves between Personal Free and Personal Plus; a club picks Team
- * or Team Advanced, during its trial or after it (a paused club: this is
- * the one write it allows). Billing isn't connected yet, so the switch
+ * space moves between Personal Free and Personal Plus; an organization
+ * picks Free, Team or Team Advanced, during its trial or after it. Billing isn't connected yet, so the switch
  * takes effect at once (and is audit-logged); once it is, an upgrade goes
  * through checkout instead and this keeps the downgrades. Back to a trial,
- * a club on a Personal plan or a Personal space on a club's is never a
+ * an organization on a Personal plan or a Personal space on an
+ * organization's is never a
  * choice: the database refuses them too (app.organization_space_guard).
  *
  * A downgrade never deletes anything. One that leaves the space over its
@@ -25,29 +27,29 @@ export interface PlanResult {
   error?: string;
 }
 
-export const switchPlan = withOrgAction(
-  async (ctx, plan: unknown): Promise<PlanResult> => {
-    requirePermission(ctx, "org.plan.write");
-    const space = await readStorageSpace(ctx.db, ctx.organizationId);
-    if (!space) return { error: "This space is gone." };
-    if (!isPlanChoiceFor(space.kind, plan)) {
-      return {
-        error:
-          space.kind === "PERSONAL"
-            ? "Choose Personal Free or Personal Plus."
-            : "Choose Team or Team Advanced.",
-      };
-    }
-    const result = await changeOrgPlan(ctx.db, ctx.organizationId, plan);
-    const after = { ...space, plan };
-    const usedBytes = Number(space.storageUsedBytes);
-    if (
-      result.changed &&
-      crossedWarning(after, { usedBytes, fromLimit: PLAN_LIMITS[result.from].storageBytes })
-    ) {
-      await warnStorage(ctx.db, after, usedBytes, `plan:${ctx.organizationId}:${Date.now()}`);
-    }
-    return {};
-  },
-  { whenPaused: "allow" },
-);
+export const switchPlan = withOrgAction(async (ctx, plan: unknown): Promise<PlanResult> => {
+  requirePermission(ctx, "org.plan.write");
+  const space = await readStorageSpace(ctx.db, ctx.organizationId);
+  if (!space) return { error: "This space is gone." };
+  if (!isPlanChoiceFor(space.kind, plan)) {
+    return {
+      error:
+        space.kind === "PERSONAL"
+          ? "Choose Personal Free or Personal Plus."
+          : "Choose Free, Team or Team Advanced.",
+    };
+  }
+  const result = await changeOrgPlan(ctx.db, ctx.organizationId, plan);
+  if (result.changed) {
+    ctx.afterCommit(() => trackServer(FUNNEL_EVENTS.planSelected, { plan, from: result.from }));
+  }
+  const after = { ...space, plan };
+  const usedBytes = Number(space.storageUsedBytes);
+  if (
+    result.changed &&
+    crossedWarning(after, { usedBytes, fromLimit: PLAN_LIMITS[result.from].storageBytes })
+  ) {
+    await warnStorage(ctx.db, after, usedBytes, `plan:${ctx.organizationId}:${Date.now()}`);
+  }
+  return {};
+});

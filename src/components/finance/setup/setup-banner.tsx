@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, ListChecks, X } from "lucide-react";
+import { ArrowRight, Check, ListChecks, X } from "@/components/icons";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
@@ -59,11 +59,11 @@ export function FinanceSetupBanner({
         <div className="min-w-0 space-y-3">
           <div className="space-y-1">
             <h2 id="finance-setup-banner-title" className="heading text-[17px]">
-              {fresh ? "Set up your club's finances" : "Finish setting up finance"}
+              {fresh ? "Set up your organization's finances" : "Finish setting up finance"}
             </h2>
             <p className="text-muted-foreground text-sm">
               {fresh
-                ? "Pick your budget year, enter what the club has, set a budget, and bring in last year's spreadsheet. About five minutes."
+                ? "Pick your budget year, enter what the organization has, set a budget, and bring in last year's spreadsheet. About five minutes."
                 : `${done} of ${total} steps done.${nextStep ? ` Next: ${nextStep.title.toLowerCase()}.` : ""}`}
             </p>
           </div>

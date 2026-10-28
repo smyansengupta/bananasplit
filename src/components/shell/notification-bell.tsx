@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { Bell } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 

@@ -19,8 +19,8 @@ import {
   Users,
   Wallet,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
@@ -47,7 +47,7 @@ export interface SidebarPin {
   kind: PinKind;
 }
 
-export const NAV_ICONS: Record<string, LucideIcon> = {
+export const NAV_ICONS: Record<string, IconComponent> = {
   CalendarCheck,
   CalendarClock,
   CalendarDays,

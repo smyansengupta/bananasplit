@@ -20,7 +20,7 @@ import {
   Pencil,
   Trash2,
   Users,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -475,7 +475,7 @@ export function NotesLibrary({
                   {n.sharedWithMe
                     ? "Shared with you"
                     : n.memberCanEdit
-                      ? "Club can edit"
+                      ? "Org can edit"
                       : `Shared with ${n.shareCount}`}
                 </span>
               )}
@@ -741,7 +741,7 @@ export function NotesLibrary({
             title={
               personal
                 ? undefined
-                : "Folders are shared with the club; private notes stay private inside them."
+                : "Folders are shared with the organization; private notes stay private inside them."
             }
           >
             Folders

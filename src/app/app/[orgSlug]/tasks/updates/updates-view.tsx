@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Check, ChevronLeft, ChevronRight, ClipboardCopy, Lock, Send } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ClipboardCopy, Lock, Send } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -184,8 +184,8 @@ export function UpdatesView({
             <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <span>
               {heldBack === 1 ? "One private task is" : `${heldBack} private tasks are`} in this
-              week but will not be posted. A posted update is readable by the whole club, so private
-              titles stay out of it — put them in the note yourself if you want to.
+              week but will not be posted. A posted update is readable by the whole organization, so
+              private titles stay out of it — put them in the note yourself if you want to.
             </span>
           </p>
         )}

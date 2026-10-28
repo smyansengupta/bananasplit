@@ -55,7 +55,8 @@ export default async function ThemeSettingsPage({
       <PageHeader title="Theme" description={summary} />
       <p className="text-muted-foreground -mt-2 max-w-prose text-sm">
         Colours, look and feel, logo and light or dark mode for everyone in {organization.name},
-        including the club&apos;s public poll and invite pages. Changes apply as soon as you save.
+        including the organization&apos;s public poll and invite pages. Changes apply as soon as you
+        save.
       </p>
       {personalName && (
         <PersonalThemeNotice

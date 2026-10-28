@@ -1,4 +1,4 @@
-import { ArrowUpRight, Plus, Ticket } from "lucide-react";
+import { ArrowUpRight, Plus, Ticket } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -240,8 +240,8 @@ export default async function RsvpsPage({ params }: PageProps<"/app/[orgSlug]/ca
           (personal
             ? "Event pages anyone can RSVP to, no account needed, and every event you've signed up for."
             : canManage
-              ? "Public sign-up pages for the club's events, and your own tickets. Start one here, or from any event's page."
-              : "The club's events taking sign-ups, and your tickets.")
+              ? "Public sign-up pages for the organization's events, and your own tickets. Start one here, or from any event's page."
+              : "The organization's events taking sign-ups, and your tickets.")
         }
         actions={newEvent("create")}
       />
@@ -273,7 +273,7 @@ export default async function RsvpsPage({ params }: PageProps<"/app/[orgSlug]/ca
           <EmptyState
             icon={Ticket}
             title="Nothing taking sign-ups right now"
-            description="When the club opens RSVPs for an event, it shows here and you can sign up in a click."
+            description="When the organization opens RSVPs for an event, it shows here and you can sign up in a click."
           />
         )
       ) : canManage ? (

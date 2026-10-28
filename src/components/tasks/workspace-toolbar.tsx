@@ -19,7 +19,7 @@ import {
   Globe,
   Rows3,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Children, useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -193,7 +193,9 @@ export function WorkspaceToolbar() {
                 ) : undefined
               }
               label={
-                ws.query.visibility === TaskVisibility.PRIVATE ? "Private only" : "Open to the club"
+                ws.query.visibility === TaskVisibility.PRIVATE
+                  ? "Private only"
+                  : "Open to the organization"
               }
               onClear={() => ws.setFilters({ visibility: undefined })}
             />
@@ -407,7 +409,7 @@ function MobileToolbar({
           options={[
             { value: "", label: "Everything I can see" },
             { value: TaskVisibility.PRIVATE, label: "Private only" },
-            { value: TaskVisibility.ORG, label: "Open to the club" },
+            { value: TaskVisibility.ORG, label: "Open to the organization" },
           ]}
         />
       </FilterSheet>
@@ -774,7 +776,7 @@ function StatusFilter() {
           {ws.query.visibility === TaskVisibility.PRIVATE && <Check className="ms-auto size-4" />}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => ws.setFilters({ visibility: TaskVisibility.ORG })}>
-          Open to the club
+          Open to the organization
           {ws.query.visibility === TaskVisibility.ORG && <Check className="ms-auto size-4" />}
         </DropdownMenuItem>
       </DropdownMenuContent>

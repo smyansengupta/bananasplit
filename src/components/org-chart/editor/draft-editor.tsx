@@ -4,7 +4,7 @@ import type { NamedTeam } from "@/lib/org-chart/teams";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { CheckCheck, CircleAlert, ListTree, Plus, Trash2, Type, Undo2 } from "lucide-react";
+import { CheckCheck, CircleAlert, ListTree, Plus, Trash2, Type, Undo2 } from "@/components/icons";
 
 import {
   discardDraftAction,

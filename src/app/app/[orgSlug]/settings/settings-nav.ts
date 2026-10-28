@@ -21,7 +21,12 @@ export interface SettingsNavItem {
   locked?: boolean;
 }
 
-export const SETTINGS_GROUPS = ["Club", "People & access", "Connections", "Records"] as const;
+export const SETTINGS_GROUPS = [
+  "Organization",
+  "People & access",
+  "Connections",
+  "Records",
+] as const;
 export type SettingsGroup = (typeof SETTINGS_GROUPS)[number];
 
 export interface SettingsSection {
@@ -45,28 +50,28 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     label: "General",
     segment: "general",
-    description: "Club picture, name, URL and timezone.",
+    description: "Organization picture, name, URL and timezone.",
     icon: "Building2",
-    group: "Club",
+    group: "Organization",
     permission: "settings.view",
     personal: true,
   },
   {
     label: "Plan and storage",
     segment: "plan",
-    description: "Your club's trial, Team or Team Advanced, and what your files use.",
+    description: "Your organization's trial, Team or Team Advanced, and what your files use.",
     personalDescription: "Personal Free or Personal Plus, and what your files use.",
     icon: "Gem",
-    group: "Club",
+    group: "Organization",
     permission: "settings.view",
     personal: true,
   },
   {
     label: "Sidebar",
     segment: "sidebar",
-    description: "Which sections your club uses, their order and names.",
+    description: "Which sections your organization uses, their order and names.",
     icon: "PanelLeft",
-    group: "Club",
+    group: "Organization",
     permission: "settings.view",
     feature: "sidebar",
   },
@@ -75,16 +80,16 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     segment: "theme",
     description: "Colors, logo and the light or dark default.",
     icon: "Palette",
-    group: "Club",
+    group: "Organization",
     permission: "theme.write",
     feature: "themes",
   },
   {
     label: "Weekly pulse",
     segment: "pulse",
-    description: "When the club's weekly recap goes out, to whom, and how.",
+    description: "When the organization's weekly recap goes out, to whom, and how.",
     icon: "Activity",
-    group: "Club",
+    group: "Organization",
     permission: "settings.view",
     feature: "overview",
   },
@@ -126,7 +131,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     label: "Danger zone",
     segment: "danger",
-    description: "Export all data, or delete the club.",
+    description: "Export all data, or delete the organization.",
     personalDescription: "Export your data, or delete your Personal space.",
     icon: "TriangleAlert",
     group: "Records",

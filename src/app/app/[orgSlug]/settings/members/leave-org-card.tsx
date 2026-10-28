@@ -36,13 +36,13 @@ export function LeaveOrgCard({
       description={
         isLastOwner
           ? "You're the only owner. Transfer ownership to another member first."
-          : "You lose access to this club. An admin can invite you again."
+          : "You lose access to this organization. An admin can invite you again."
       }
       footer={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" disabled={isLastOwner}>
-              Leave club
+              Leave organization
             </Button>
           </DialogTrigger>
           <DialogContent>

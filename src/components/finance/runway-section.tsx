@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { formatCents } from "@/lib/finance/money";

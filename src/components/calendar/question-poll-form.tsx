@@ -1,7 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/back-link";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -217,7 +217,7 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
         <BackLink href={`/app/${orgSlug}/calendar/polls`} label="Polls" />
         <PageHeader
           title="Ask a question"
-          description="Give the options and let the club vote. Everyone in the club can answer."
+          description="Give the options and let the organization vote. Everyone in the organization can answer."
         />
       </div>
 
@@ -352,7 +352,7 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
           <Setting
             id="qpoll-member-options"
             label="Members can add options"
-            description="Anyone in the club can add an option while the poll is open."
+            description="Anyone in the organization can add an option while the poll is open."
             checked={allowMemberOptions}
             onChange={setAllowMemberOptions}
           />

@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal } from "@/components/icons";
 import { useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";

@@ -10,8 +10,8 @@ import {
   Sunrise,
   Umbrella,
   X,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,7 @@ const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 interface Preset {
   id: string;
   label: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   keys: string[];
 }
 
@@ -349,7 +349,7 @@ function Row({
 
 type AddKind = "weekly" | "never" | "date" | null;
 
-const RULE_STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
+const RULE_STYLE: Record<string, { icon: IconComponent; tone: string }> = {
   NEVER: { icon: Ban, tone: "text-destructive" },
   WEEKLY: { icon: Repeat, tone: "text-chart-1" },
   DATE: { icon: CalendarX, tone: "text-muted-foreground" },
@@ -461,7 +461,7 @@ function FormShell({
   canAdd,
   error,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   children: React.ReactNode;
   onCancel: () => void;

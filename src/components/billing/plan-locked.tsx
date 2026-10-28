@@ -1,4 +1,4 @@
-import { Lock } from "lucide-react";
+import { Lock } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -74,18 +74,18 @@ export function PlanLocked({
         <h1 className="page-title">{title ?? FEATURE_LABELS[feature]}</h1>
         <div className={card}>
           <p className="heading">
-            {FEATURE_LABELS[feature]} {plural ? "are" : "is"} for clubs.
+            {FEATURE_LABELS[feature]} {plural ? "are" : "is"} for organizations.
           </p>
           <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
           <p className="text-muted-foreground max-w-prose text-sm">
-            Personal is just for you. Join your club, or start one, to use this with others.
+            Personal is just for you. Join your organization, or start one, to use this with others.
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-1.5">
             <Button asChild size="sm">
-              <Link href="/onboarding/join">Join a club</Link>
+              <Link href="/onboarding/join">Join an organization</Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link href="/onboarding/organization">Start a club</Link>
+              <Link href="/onboarding/organization">Start an organization</Link>
             </Button>
           </div>
         </div>
@@ -108,8 +108,8 @@ export function PlanLocked({
         <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
         <p className="text-muted-foreground max-w-prose text-sm">
           {canSeePlans
-            ? `Your club is on the ${PLAN_NAMES[plan]} plan. Nothing you already made is lost when you switch.`
-            : "Your club's plan doesn't include this. Ask your club's owner if you need it."}
+            ? `Your organization is on the ${PLAN_NAMES[plan]} plan. Nothing you already made is lost when you switch.`
+            : "Your organization's plan doesn't include this. Ask an owner if you need it."}
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1.5">
           {canSeePlans && (

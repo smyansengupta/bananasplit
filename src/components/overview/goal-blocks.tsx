@@ -1,4 +1,4 @@
-import { ArrowUpRight, Ticket } from "lucide-react";
+import { ArrowUpRight, Ticket } from "@/components/icons";
 import Link from "next/link";
 
 import { BlockCard } from "@/components/ui/block-card";

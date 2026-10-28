@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "lucide-react";
+import { Maximize2, Plus, Trash2, UserMinus, UserPlus, X } from "@/components/icons";
 import Link from "next/link";
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
@@ -364,8 +364,8 @@ export function TaskEditor({
   const heading = isNew ? `New ${typeLabel(type).toLowerCase()}` : typeLabel(type);
   const visibilityHint =
     visibility === TaskVisibility.PRIVATE
-      ? "Only the people on it, plus the club's owners and admins, can see this task."
-      : "Anyone in the club can find and open this task.";
+      ? "Only the people on it, plus the organization's owners and admins, can see this task."
+      : "Anyone in the organization can find and open this task.";
 
   const footer = (
     <div
@@ -659,7 +659,7 @@ export function TaskEditor({
             />
             <p className="text-muted-foreground mt-2 text-xs">
               {audience.length === 1
-                ? "Only you, and the club owners and admins."
+                ? "Only you, and the organization's owners and admins."
                 : `${audience.length} people plus owners and admins.`}{" "}
               Comments, history and @mentions on it are hidden too. To mention somebody else, add
               them here first.

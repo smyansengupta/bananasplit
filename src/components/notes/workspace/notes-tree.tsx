@@ -12,8 +12,8 @@ import {
   Star,
   Target,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 
 const PAGE_MIME = "application/x-bananasplit-page";
 
-const TEMPLATE_ICONS: Record<string, LucideIcon> = { Users, CalendarDays, Target, ListChecks };
+const TEMPLATE_ICONS: Record<string, IconComponent> = { Users, CalendarDays, Target, ListChecks };
 
 export interface TreePage extends TreeNote {
   updatedAt?: Date | string;

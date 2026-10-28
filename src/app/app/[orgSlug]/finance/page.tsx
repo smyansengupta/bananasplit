@@ -1,4 +1,4 @@
-import { TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "@/components/icons";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 

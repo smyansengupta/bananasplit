@@ -18,12 +18,12 @@ export async function savePulseSettingsAction(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const result = await saveTx(orgId, raw);
-    if (!("ok" in result)) return { ok: false, error: "This club is paused." };
+    if (!("ok" in result)) return { ok: false, error: "This organization is paused." };
     if (result.ok) refresh();
     return result;
   } catch (error) {
     if (error instanceof ForbiddenError) {
-      return { ok: false, error: "Only the club's owners and admins can change this." };
+      return { ok: false, error: "Only the organization's owners and admins can change this." };
     }
     throw error;
   }

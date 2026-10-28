@@ -1,4 +1,4 @@
-import { FileUp } from "lucide-react";
+import { FileUp } from "@/components/icons";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -135,7 +135,7 @@ export default async function OrgChartPage({
           title="No org chart yet"
           description={
             canEdit
-              ? "Import your org chart document (Word, Google Doc export, Markdown, text or PDF) and review it before publishing, start from the club template, or build it by hand."
+              ? "Import your org chart document (Word, Google Doc export, Markdown, text or PDF) and review it before publishing, start from the starter template, or build it by hand."
               : `${organization.name}'s reporting lines, roles and responsibilities will appear here once the chart is published.`
           }
           action={
@@ -153,14 +153,19 @@ export default async function OrgChartPage({
                   </Button>
                 ) : (
                   <>
-                    <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="blank" variant="create">
+                    <StartDraftButton
+                      orgId={organization.id}
+                      orgSlug={orgSlug}
+                      from="blank"
+                      variant="create"
+                    >
                       Type the chart
                     </StartDraftButton>
                     <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="members">
                       Start from members
                     </StartDraftButton>
                     <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="starter">
-                      Start from the club template
+                      Start from the starter template
                     </StartDraftButton>
                   </>
                 )}

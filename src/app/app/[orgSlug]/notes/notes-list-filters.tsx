@@ -1,6 +1,6 @@
 "use client";
 
-import { ListFilter, UserRound } from "lucide-react";
+import { ListFilter, UserRound } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ const AUDIENCES = [
   ["all", "Anyone"],
   ["PRIVATE", "Private"],
   ["SHARED", "Shared with me"],
-  ["ORGANIZATION", "Everyone in the club"],
+  ["ORGANIZATION", "Everyone in the organization"],
 ] as const;
 
 /**

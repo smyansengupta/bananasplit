@@ -1,6 +1,6 @@
 "use client";
 
-import { ChartColumn, Database } from "lucide-react";
+import { ChartColumn, Database } from "@/components/icons";
 import { useParams } from "next/navigation";
 
 import { PageTabs } from "@/components/ui/page-tabs";

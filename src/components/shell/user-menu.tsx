@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
+import { LogOut, Monitor, Moon, Sun, UserRound } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -72,7 +72,7 @@ export function UserMenu({ user, className }: { user: UserMenuUser; className?: 
         )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-          {locked ? "Theme (set by your club)" : "Theme"}
+          {locked ? "Theme (set by your organization)" : "Theme"}
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={forcedTheme ?? theme ?? "system"} onValueChange={setTheme}>
           <DropdownMenuRadioItem value="light" disabled={locked}>

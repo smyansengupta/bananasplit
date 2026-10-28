@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Link2, PanelRightOpen, Trash2 } from "lucide-react";
+import { ExternalLink, Link2, PanelRightOpen, Trash2 } from "@/components/icons";
 
 import { deleteTask, restoreTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { ItemMenu } from "@/components/item-menu";

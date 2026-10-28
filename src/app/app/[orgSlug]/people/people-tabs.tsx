@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Users } from "lucide-react";
+import { Network, Users } from "@/components/icons";
 
 import { PageTabs } from "@/components/ui/page-tabs";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Printer } from "lucide-react";
+import { Printer } from "@/components/icons";
 
 import { pill } from "@/components/brand/pill";
 

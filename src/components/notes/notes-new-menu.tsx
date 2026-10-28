@@ -15,8 +15,8 @@ import {
   Target,
   Upload,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
 type Dialogs = "word" | "google" | "upload" | "folder" | null;
 type Visibility = "ORGANIZATION" | "PRIVATE";
 
-const TEMPLATE_ICONS: Record<string, LucideIcon> = { Users, CalendarDays, Target, ListChecks };
+const TEMPLATE_ICONS: Record<string, IconComponent> = { Users, CalendarDays, Target, ListChecks };
 
 interface Draft {
   title: string;
@@ -77,7 +77,7 @@ function VisibilityPicker({
     <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Who can see it">
       {(
         [
-          ["ORGANIZATION", Users, "Everyone in the club"],
+          ["ORGANIZATION", Users, "Everyone in the organization"],
           ["PRIVATE", Lock, "Only me"],
         ] as const
       ).map(([v, Icon, label]) => (
@@ -448,7 +448,7 @@ export function NotesNewMenu({
             <DialogDescription>
               {personal
                 ? "Drag notes and files onto a folder to file them."
-                : "Folders are shared with the club; private notes stay private inside them. Drag notes and files onto a folder to file them."}
+                : "Folders are shared with the organization; private notes stay private inside them. Drag notes and files onto a folder to file them."}
             </DialogDescription>
           </DialogHeader>
           <NewFolderForm

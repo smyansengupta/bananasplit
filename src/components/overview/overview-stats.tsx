@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CircleAlert, SquareCheckBig, Ticket } from "lucide-react";
+import { CalendarDays, CircleAlert, SquareCheckBig, Ticket } from "@/components/icons";
 
 import { OpenTasksBar, taskStatsSegments } from "@/components/tasks/open-tasks-bar";
 import { Badge } from "@/components/ui/badge";

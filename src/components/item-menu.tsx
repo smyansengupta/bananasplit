@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, type LucideIcon } from "lucide-react";
+import { MoreHorizontal, type IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { Fragment } from "react";
 
@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 export type ItemMenuEntry =
   | {
       label: string;
-      icon?: LucideIcon;
+      icon?: IconComponent;
       onSelect?: () => void;
       href?: string;
       destructive?: boolean;

@@ -16,7 +16,7 @@ import {
   useReactFlow,
   type Edge,
 } from "@xyflow/react";
-import { ChevronsDownUp, ChevronsUpDown, Download, Printer } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Download, Printer } from "@/components/icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";

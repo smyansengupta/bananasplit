@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, CircleAlert, CloudUpload, Loader2 } from "lucide-react";
+import { CheckCircle2, CircleAlert, CloudUpload, Loader2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 

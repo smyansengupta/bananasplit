@@ -100,12 +100,10 @@ beforeEach(() => {
   // A Team club with room to spare (the upload gate reads it).
   db.organization.findUnique.mockResolvedValue(space());
   db.membership.findMany.mockResolvedValue([]);
-  putBlobMock.mockImplementation(
-    async (kind: string, scopeId: string, segments: string[]) => ({
-      key: [kind, scopeId, ...segments].join("/"),
-      url: null,
-    }),
-  );
+  putBlobMock.mockImplementation(async (kind: string, scopeId: string, segments: string[]) => ({
+    key: [kind, scopeId, ...segments].join("/"),
+    url: null,
+  }));
 });
 
 describe("POST /api/orgs/[orgId]/receipts (0A Fix 15, 0C wrappers)", () => {
@@ -273,18 +271,20 @@ describe("the receipt upload gate (redesign guide 11.2)", () => {
     expect(putBlobMock).not.toHaveBeenCalled();
   });
 
-  it("refuses a paused club before reading the body", async () => {
+  it("refuses an ended trial (Team Free has no finance) before reading the body", async () => {
     db.organization.findUnique.mockResolvedValue(
       space({ plan: "TRIAL", trialEndsAt: new Date(Date.now() - 1000) }),
     );
     const response = await upload({ bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
-    expect((await response.json()).code).toBe("SPACE_PAUSED");
+    expect((await response.json()).code).toBe("SPACE_FEATURE");
     expect(db.transaction.findFirst).not.toHaveBeenCalled();
   });
 
   it("refuses a Personal space: finance is for clubs", async () => {
-    db.organization.findUnique.mockResolvedValue(space({ kind: "PERSONAL", plan: "PERSONAL_PLUS" }));
+    db.organization.findUnique.mockResolvedValue(
+      space({ kind: "PERSONAL", plan: "PERSONAL_PLUS" }),
+    );
     const response = await upload({ bytes: jpegOfSize(10), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe("SPACE_FEATURE");

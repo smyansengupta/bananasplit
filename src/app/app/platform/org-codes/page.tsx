@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound } from "@/components/icons";
 import { notFound } from "next/navigation";
 
 import { TableFrame } from "@/components/databases/table-frame";
@@ -57,8 +57,8 @@ export default async function OrgCodesPage() {
         />
         <p className="text-muted-foreground max-w-prose text-sm">
           Mode: <span className="font-mono">{orgCreationMode()}</span>{" "}
-          (PLATFORM_ORG_CREATION_ENABLED turns creation on or off). Give a club&apos;s president a
-          code; they enter it when creating their organization.
+          (PLATFORM_ORG_CREATION_ENABLED turns creation on or off). Give an organization&apos;s
+          leader a code; they enter it when creating their organization.
         </p>
       </div>
       <div className="space-y-4.5">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useMemo, useState, useTransition } from "react";
 
 import { brandInputClass } from "@/components/brand/fields";
@@ -127,7 +127,9 @@ export function FinanceStep({
           {shown.map((card) => (
             <PreviewTile key={card.id} className="gap-1">
               <span className="text-[14px] font-semibold">{card.title}</span>
-              <span className="text-muted-foreground text-[12px] leading-normal">{card.detail}</span>
+              <span className="text-muted-foreground text-[12px] leading-normal">
+                {card.detail}
+              </span>
             </PreviewTile>
           ))}
           {shown.length === 0 && (
@@ -139,7 +141,7 @@ export function FinanceStep({
       }
     >
       <StepIntro index={index} total={total} title="What should the treasurer see?">
-        Pick the reports on your finance board, and when your club&apos;s year starts.
+        Pick the reports on your finance board, and when your organization&apos;s year starts.
       </StepIntro>
 
       <StepBody className="gap-5">
@@ -158,18 +160,22 @@ export function FinanceStep({
                 aria-checked={on}
                 onClick={() => toggle(card.id)}
                 className={cn(
-                  "bg-card flex cursor-pointer items-start gap-3 rounded-field border px-4 py-3 text-left transition-colors",
+                  "bg-card rounded-field flex cursor-pointer items-start gap-3 border px-4 py-3 text-left transition-colors",
                   on ? "border-foreground" : "border-foreground/10 hover:border-foreground/25",
                 )}
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="text-[15px] font-semibold">{card.title}</span>
-                  <span className="text-muted-foreground text-[13px] leading-snug">{card.detail}</span>
+                  <span className="text-muted-foreground text-[13px] leading-snug">
+                    {card.detail}
+                  </span>
                 </span>
                 <span
                   className={cn(
                     "mt-0.5 grid size-5 flex-none place-items-center rounded-full border-[1.5px]",
-                    on ? "bg-primary border-foreground text-primary-foreground" : "border-foreground/22",
+                    on
+                      ? "bg-primary border-foreground text-primary-foreground"
+                      : "border-foreground/22",
                   )}
                 >
                   {on && <Check className="size-3" strokeWidth={3.5} aria-hidden="true" />}

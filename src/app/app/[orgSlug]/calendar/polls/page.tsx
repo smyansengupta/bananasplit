@@ -1,4 +1,4 @@
-import { CalendarClock, Plus, Vote } from "lucide-react";
+import { CalendarClock, Plus, Vote } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -51,7 +51,7 @@ export default async function PollsListPage({
           <>
             {all.length > 0
               ? `${openCount} open · ${votes === 1 ? "1 person" : `${votes} people`} voted so far. `
-              : "Ask the club a question and let people vote. "}
+              : "Ask the organization a question and let people vote. "}
             Picking a meeting time?{" "}
             <Link
               href={`${base}/calendar/find-a-time`}
@@ -77,7 +77,7 @@ export default async function PollsListPage({
         <EmptyState
           icon={Vote}
           title="No polls yet"
-          description="Ask a question, give a few options, and let the club vote: where to eat, which date, who should run the table."
+          description="Ask a question, give a few options, and let the organization vote: where to eat, which date, who should run the table."
           action={
             <Button size="sm" variant="outline" asChild>
               <Link href={`${base}/calendar/find-a-time`}>

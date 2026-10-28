@@ -1,4 +1,4 @@
-import { CalendarClock, ListTodo, Pencil } from "lucide-react";
+import { CalendarClock, ListTodo, Pencil } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -35,7 +35,10 @@ export function teamColor(slot: number): string {
   return `var(--chart-${((slot - 1) % 5) + 1})`;
 }
 
-export function dueText(dueKey: string, todayKey: string): { text: string; tone: "danger" | "bold" | "muted" } {
+export function dueText(
+  dueKey: string,
+  todayKey: string,
+): { text: string; tone: "danger" | "bold" | "muted" } {
   if (dueKey < todayKey) return { text: formatDueKey(dueKey, todayKey), tone: "danger" };
   if (dueKey === todayKey) return { text: "Today", tone: "danger" };
   if (dueKey === addDaysToKey(todayKey, 1)) return { text: "Tomorrow", tone: "bold" };
@@ -97,7 +100,11 @@ export function PersonProfile({
       );
     }
     return (
-      <Link key={ref.key} href={personHref(orgSlug, ref.userId)} className="font-medium underline-offset-4 hover:underline">
+      <Link
+        key={ref.key}
+        href={personHref(orgSlug, ref.userId)}
+        className="font-medium underline-offset-4 hover:underline"
+      >
         {label}
       </Link>
     );
@@ -130,12 +137,16 @@ export function PersonProfile({
         <div className="min-w-0">
           <Heading id={headingId} className="display-title text-[23px] break-words">
             {name}
-            {isSelf && <span className="text-muted-foreground ml-2 text-sm font-normal">(you)</span>}
+            {isSelf && (
+              <span className="text-muted-foreground ml-2 text-sm font-normal">(you)</span>
+            )}
           </Heading>
           {subtitle && <p className="text-muted-foreground mt-1 text-sm">{subtitle}</p>}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">{ROLE_LABELS[person.role]}</Badge>
-            {person.team && <TagChip color={teamColor(person.team.slot)}>{person.team.name}</TagChip>}
+            {person.team && (
+              <TagChip color={teamColor(person.team.slot)}>{person.team.name}</TagChip>
+            )}
             {person.freeNow && <Badge variant="success">Free now</Badge>}
           </div>
         </div>
@@ -144,7 +155,9 @@ export function PersonProfile({
           {person.email && <CopyEmailButton email={person.email} name={first} />}
           {!isSelf && (
             <Button asChild variant="secondary" size="sm">
-              <Link href={`/app/${encodeURIComponent(orgSlug)}/calendar/find-a-time/new?with=${encodeURIComponent(person.id)}`}>
+              <Link
+                href={`/app/${encodeURIComponent(orgSlug)}/calendar/find-a-time/new?with=${encodeURIComponent(person.id)}`}
+              >
                 <CalendarClock aria-hidden="true" />
                 Find a time
               </Link>
@@ -173,7 +186,10 @@ export function PersonProfile({
           ) : isSelf ? (
             <p className="text-muted-foreground text-sm">
               You haven&apos;t written a bio yet.{" "}
-              <Link href={profileHref(orgSlug, "details")} className="text-foreground underline underline-offset-4">
+              <Link
+                href={profileHref(orgSlug, "details")}
+                className="text-foreground underline underline-offset-4"
+              >
                 Add one
               </Link>
               .
@@ -190,11 +206,15 @@ export function PersonProfile({
             <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 text-sm">
               <dt className="text-muted-foreground">Position</dt>
               <dd className="min-w-0 break-words">
-                {person.positions.map((p) => p.title + (p.isAdvisor ? " (advisor)" : "")).join(", ")}
+                {person.positions
+                  .map((p) => p.title + (p.isAdvisor ? " (advisor)" : ""))
+                  .join(", ")}
               </dd>
               <dt className="text-muted-foreground">Reports to</dt>
               <dd className="flex min-w-0 flex-col items-start gap-0.5">
-                {person.reportsTo.length ? person.reportsTo.map(refLink) : "No one, top of the chart"}
+                {person.reportsTo.length
+                  ? person.reportsTo.map(refLink)
+                  : "No one, top of the chart"}
               </dd>
               <dt className="text-muted-foreground">Leads</dt>
               <dd className="flex min-w-0 flex-col items-start gap-0.5">
@@ -210,7 +230,10 @@ export function PersonProfile({
               {isSelf ? (
                 <>
                   You haven&apos;t shared when you&apos;re free.{" "}
-                  <Link href={profileHref(orgSlug, "availability")} className="text-foreground underline underline-offset-4">
+                  <Link
+                    href={profileHref(orgSlug, "availability")}
+                    className="text-foreground underline underline-offset-4"
+                  >
                     Add it
                   </Link>
                 </>
@@ -225,7 +248,10 @@ export function PersonProfile({
                 {isSelf ? (
                   <>
                     Others see only busy or free.{" "}
-                    <Link href={profileHref(orgSlug, "availability")} className="text-foreground underline underline-offset-4">
+                    <Link
+                      href={profileHref(orgSlug, "availability")}
+                      className="text-foreground underline underline-offset-4"
+                    >
                       Edit
                     </Link>
                   </>
@@ -235,7 +261,9 @@ export function PersonProfile({
               </p>
             </>
           ) : (
-            <p className="text-muted-foreground text-sm">This club doesn&apos;t share members&apos; busy times.</p>
+            <p className="text-muted-foreground text-sm">
+              This organization doesn&apos;t share members&apos; busy times.
+            </p>
           )}
         </Section>
 
@@ -248,7 +276,10 @@ export function PersonProfile({
                 const due = t.dueKey ? dueText(t.dueKey, person.todayKey) : null;
                 return (
                   <li key={t.id} className="flex items-center gap-2.5 py-1.5 text-sm">
-                    <span aria-hidden="true" className="border-muted-foreground/50 size-[18px] shrink-0 rounded-full border-[1.5px]" />
+                    <span
+                      aria-hidden="true"
+                      className="border-muted-foreground/50 size-[18px] shrink-0 rounded-full border-[1.5px]"
+                    />
                     <span className="min-w-0 flex-1 truncate">{t.title}</span>
                     {due && (
                       <span
@@ -267,7 +298,10 @@ export function PersonProfile({
               })}
               {person.taskCount > person.tasks.length && (
                 <li className="pt-1 text-sm">
-                  <Link href={personTasksHref(orgSlug, person.id)} className="underline underline-offset-4">
+                  <Link
+                    href={personTasksHref(orgSlug, person.id)}
+                    className="underline underline-offset-4"
+                  >
                     See all {person.taskCount}
                   </Link>
                 </li>
@@ -280,7 +314,9 @@ export function PersonProfile({
           <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 text-sm">
             <dt className="text-muted-foreground">Email</dt>
             <dd className="min-w-0 break-words">
-              {person.email ?? <span className="text-muted-foreground">Only admins see emails here</span>}
+              {person.email ?? (
+                <span className="text-muted-foreground">Only admins see emails here</span>
+              )}
             </dd>
             {studies && (
               <>
@@ -298,7 +334,15 @@ export function PersonProfile({
   );
 }
 
-function Section({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
+function Section({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count?: number;
+  children: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-muted-foreground flex items-center gap-2 text-[13px] font-semibold">

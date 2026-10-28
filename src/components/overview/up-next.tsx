@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarCheck2 } from "lucide-react";
+import { ArrowUpRight, CalendarCheck2 } from "@/components/icons";
 import Link from "next/link";
 
 import { BlockCard } from "@/components/ui/block-card";

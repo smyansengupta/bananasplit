@@ -27,7 +27,7 @@ describe("sidebar navigation", () => {
     ]);
     expect(navSections("cbc", visibleSidebar(null)).map((s) => s.label)).toEqual([
       null,
-      "Club",
+      "Organization",
       "Data",
     ]);
     expect(item("Files").href).toBe("/app/cbc/notes");
@@ -140,7 +140,7 @@ describe("sidebar navigation", () => {
     expect(labels).toContain("Members");
     expect(navSections("cbc", visibleSidebar(config)).map((s) => s.label)).toEqual([
       null,
-      "Club",
+      "Organization",
       "Records",
     ]);
     // Overview can't be hidden, whatever is saved.
@@ -210,13 +210,17 @@ describe("the sidebar in each space", () => {
     expect(isExactPage("/app/me", "/app/me")).toBe(true);
   });
 
-  it("gives a club on its trial (running or paused) every section", () => {
+  it("gives a running trial every section, and an ended one (Team Free) all but Finance", () => {
     expect(nav(club("TRIAL", new Date(Date.now() + 86_400_000))).map((i) => i.label)).toEqual(
       links().map((i) => i.label),
     );
-    expect(nav(club("TRIAL", new Date(Date.now() - 86_400_000))).map((i) => i.label)).toEqual(
-      links().map((i) => i.label),
+    const ended = club("TRIAL", new Date(Date.now() - 86_400_000));
+    expect(nav(ended).map((i) => i.label)).toEqual(
+      links()
+        .map((i) => i.label)
+        .filter((l) => l !== "Finance"),
     );
+    expect(nav(ended, true).find((i) => i.label === "Finance")?.locked).toBe(true);
   });
 
   it("locks nothing on Club and Society", () => {

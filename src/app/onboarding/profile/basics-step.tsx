@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, LocateFixed, MessageCircle, PenLine, UserRound } from "lucide-react";
+import { Globe, LocateFixed, MessageCircle, PenLine, UserRound } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 import { AvatarEditor } from "@/app/app/[orgSlug]/profile/avatar-editor";

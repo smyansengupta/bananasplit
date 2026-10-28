@@ -24,7 +24,9 @@ const financeAction: typeof withOrgAction = (handler, options) =>
  * import arrives as several calls sharing one batch id.
  */
 
-const NOT_FINANCE = { error: "Only the club's owners and treasurers can import finance records." };
+const NOT_FINANCE = {
+  error: "Only the organization's owners and treasurers can import finance records.",
+};
 
 export const importFinanceRecords = financeAction(
   async (ctx, input: unknown): Promise<{ error?: string; outcome?: ImportOutcome }> => {
@@ -68,5 +70,4 @@ export const checkImportDuplicates = financeAction(
     if (!parsed.success) return { duplicates: [] };
     return { duplicates: await findDuplicates(ctx, parsed.data) };
   },
-  { whenPaused: "allow" },
 );

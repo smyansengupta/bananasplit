@@ -35,13 +35,13 @@ export interface StartedStep {
 export const STARTED_STEPS: readonly StartedStep[] = [
   {
     key: "name",
-    label: "Name the club",
+    label: "Name the organization",
     hint: "The name members and guests see everywhere.",
     path: "/settings/general",
   },
   {
     key: "picture",
-    label: "Add a club picture",
+    label: "Add an organization picture",
     hint: "Your logo on the sidebar, invites and RSVP pages.",
     path: "/settings/general",
   },

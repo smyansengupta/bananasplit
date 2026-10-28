@@ -1,6 +1,6 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 export interface SegmentedOption {
   value: string;
   label: ReactNode;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   href?: string;
   /** Hide the label below `sm`, keeping the icon (and the label for screen readers). */
   compact?: boolean;

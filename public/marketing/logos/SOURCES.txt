@@ -1,0 +1,17 @@
+Integration logos, full colour, via Iconify (https://iconify.design), fetched Oct 27, 2026.
+The marks are trademarks of their owners, shown to say Bananasplit works with them.
+
+  claude.svg            logos:claude-icon             Gil Barbara, svg-logos (CC0 1.0)
+  chatgpt.svg           logos:openai-icon             Gil Barbara, svg-logos (CC0 1.0)
+  google-workspace.svg  logos:google-icon             Gil Barbara, svg-logos (CC0 1.0)
+  zoom.svg              logos:zoom-icon               Gil Barbara, svg-logos (CC0 1.0)
+  microsoft-teams.svg   logos:microsoft-teams         Gil Barbara, svg-logos (CC0 1.0)
+  google-meet.svg       logos:google-meet             Gil Barbara, svg-logos (CC0 1.0)
+  supabase.svg          logos:supabase-icon           Gil Barbara, svg-logos (CC0 1.0)
+  granola.svg           thesvg-color:granola-light    thesvg.org (MIT)
+  outlook.svg           thesvg-color:microsoft-outlook thesvg.org (MIT)
+  canvas.svg            selfhst:instructure-canvas    selfh.st icons (CC BY 4.0, attribution required)
+  wispr-flow.svg        arcticons:wispr-flow          Donnnno, Arcticons (CC BY-SA 4.0, attribution required)
+
+BrandMark (src/components/marketing/brand-mark.tsx) shows <slug>.svg on a white tile.
+Swap any of these for the company's official press-kit logo with the same file name.

@@ -66,5 +66,4 @@ export const searchWorkspaceAction = withOrgAction(
       { query, scope },
     );
   },
-  { whenPaused: "allow" },
 );

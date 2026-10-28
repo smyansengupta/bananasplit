@@ -186,7 +186,8 @@ export default async function FlyerPage({ params }: PageProps<"/e/[slug]/flyer">
 
           <div className="bg-ink text-cream flex items-center justify-center gap-2 py-[0.08in] text-[9pt]">
             <CoreMark size={12} />
-            RSVP pages for your club, free at bananasplit · split the cost, bring lists, QR check-in
+            RSVP pages for your organization, free at bananasplit · split the cost, bring lists, QR
+            check-in
           </div>
         </article>
 

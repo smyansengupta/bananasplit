@@ -4,7 +4,7 @@ import type { NamedTeam } from "@/lib/org-chart/teams";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Sparkles, UserPlus, Users } from "lucide-react";
+import { Sparkles, UserPlus, Users } from "@/components/icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

@@ -14,8 +14,8 @@ import {
   TriangleAlert,
   Users,
   Wallet,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
@@ -79,7 +79,7 @@ export interface FinanceSetupProps {
   board: BoardWidget[];
 }
 
-const STEP_ICON: Record<SetupStepId, LucideIcon> = {
+const STEP_ICON: Record<SetupStepId, IconComponent> = {
   period: CalendarRange,
   balance: Wallet,
   budget: PiggyBank,
@@ -90,8 +90,8 @@ const STEP_ICON: Record<SetupStepId, LucideIcon> = {
 
 const STEP_INTRO: Record<SetupStepId, string> = {
   period:
-    "Clubs budget by school year, semester or calendar year. Money is tracked one period at a time.",
-  balance: "How much the club has right now, so the balance is right from day one.",
+    "Budget by school year, semester or calendar year. Money is tracked one period at a time.",
+  balance: "How much the organization has right now, so the balance is right from day one.",
   budget:
     "How much each kind of spending may use this period. Rough numbers are fine; change them any time.",
   people:
@@ -531,7 +531,7 @@ function BalanceStep({ orgId, today, state, onSaved }: StepProps) {
       )}
       <div className="grid gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,12rem)]">
         <label className="space-y-1.5">
-          <FieldLabel>The club has</FieldLabel>
+          <FieldLabel>The organization has</FieldLabel>
           <div className="relative">
             <span className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-sm">
               $
@@ -554,7 +554,7 @@ function BalanceStep({ orgId, today, state, onSaved }: StepProps) {
       </div>
       <p className="text-muted-foreground text-[13px]">
         Add up the bank account, Venmo, cash box and anything the school holds for you. Put a minus
-        in front if the club owes money. Enter 0 to remove it.
+        in front if the organization owes money. Enter 0 to remove it.
       </p>
       {amount.trim() !== "" && cents === null && (
         <p className="text-tint-danger-foreground text-sm">That isn&apos;t an amount.</p>
@@ -707,7 +707,8 @@ function BudgetStep({ orgId, state, lines, onSaved }: StepProps) {
         {balance !== null && total > balance && (
           <span className="flex items-start gap-2 text-[13px]">
             <TriangleAlert className="text-warning mt-px size-4 shrink-0" aria-hidden="true" />
-            That&apos;s more than the club has right now, which is fine if money is coming in.
+            That&apos;s more than the organization has right now, which is fine if money is coming
+            in.
           </span>
         )}
       </div>

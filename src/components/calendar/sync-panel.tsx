@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { Check, Copy } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -136,7 +136,7 @@ export function SyncPanel({
               </Badge>
             </CardTitle>
             <CardDescription>
-              Upcoming public events as JSON (what the club website reads at build time) and as a
+              Upcoming public events as JSON (what your website reads at build time) and as a
               calendar feed anyone can subscribe to. Cached for five minutes at the CDN.
               {!status.publicEventsEnabled && (
                 <>
@@ -221,7 +221,7 @@ export function SyncPanel({
               </>
             ) : (
               <p className="text-muted-foreground">
-                Not connected. Connect the club&apos;s Google account in{" "}
+                Not connected. Connect the organization&apos;s Google account in{" "}
                 <Link className="underline" href={`/app/${orgSlug}/settings/integrations`}>
                   Admin panel › Integrations
                 </Link>

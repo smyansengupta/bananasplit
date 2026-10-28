@@ -84,7 +84,7 @@ export function PrivacyForm({
     >
       <SettingsCard
         title="Members, contacts and the public feed"
-        description="What members can see of each other and of your website's contacts, and what the club publishes."
+        description="What members can see of each other and of your website's contacts, and what the organization publishes."
         status={status && <SettingsStatus status={status} />}
         footer={
           canEdit && (

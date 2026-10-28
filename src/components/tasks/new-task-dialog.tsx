@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons";
 import { useId, useRef, useState, useTransition } from "react";
 
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
@@ -433,7 +433,7 @@ function NewTaskForm({
                 />
                 {dueRequired && (
                   <p className="text-muted-foreground text-xs">
-                    Every task in this club needs a due date.
+                    Every task in this organization needs a due date.
                   </p>
                 )}
               </div>
@@ -517,7 +517,7 @@ function NewTaskForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={TaskVisibility.ORG}>Everyone in the club</SelectItem>
+                    <SelectItem value={TaskVisibility.ORG}>Everyone in the organization</SelectItem>
                     <SelectItem value={TaskVisibility.PRIVATE}>Only its people</SelectItem>
                   </SelectContent>
                 </Select>

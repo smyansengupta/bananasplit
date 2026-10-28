@@ -1,4 +1,4 @@
-import { Clock, PauseCircle } from "lucide-react";
+import { Clock, Sparkles } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,14 @@ import { spaceStatus, trialDaysLeft, type SpaceInfo } from "@/lib/billing/space"
 export const TRIAL_NOTICE_DAYS = 7;
 
 /**
- * The line above every page of a club about its plan (the org layout):
- * - paused (the trial ended before a plan was picked): owners and admins
- *   get "Choose a plan"; members a calm note that the officers were asked.
- *   Nothing is deleted and everything still opens.
- * - the trial's last TRIAL_NOTICE_DAYS days: owners and admins only.
+ * The line above every page of an organization about its plan (the org
+ * layout), for owners and admins only:
+ * - the trial's last TRIAL_NOTICE_DAYS days: when it ends and the plans.
+ * - the trial ended before a plan was picked: the organization is on Free,
+ *   nothing was deleted, and the paid features are a click away. It stops
+ *   once the owner picks a plan (Free included).
  * Members never see a price, a trial or a paywall. Nothing for Personal or
- * a paid club.
+ * an organization that picked its plan.
  */
 export function SpaceBanner({
   space,
@@ -30,30 +31,28 @@ export function SpaceBanner({
 }) {
   const status = spaceStatus(space, now);
   const planHref = `/app/${orgSlug}/settings/plan`;
+  if (!canChoosePlan) return null;
 
-  if (status === "paused") {
+  if (status === "free" && space.plan === "TRIAL") {
     return (
       <div
         role="status"
-        className="bg-muted/60 mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm"
+        className="bg-muted/40 mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm"
       >
-        <PauseCircle className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+        <Sparkles className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
         <p className="min-w-0 flex-1">
-          {canChoosePlan
-            ? "Your club's free trial has ended, so it's paused: everything is still here to read, but nothing can be added or changed until you choose a plan."
-            : "This club is paused for now. Your officers have been asked to choose a plan. You can still open and read everything."}
+          Your free trial of Team Advanced has ended, so your organization is on Free. Nothing was
+          deleted: finance, reports, the org chart and AI come back with Team or Team Advanced.
         </p>
-        {canChoosePlan && (
-          <Button asChild size="sm">
-            <Link href={planHref}>Choose a plan</Link>
-          </Button>
-        )}
+        <Button asChild size="sm" variant="outline">
+          <Link href={planHref}>See plans</Link>
+        </Button>
       </div>
     );
   }
 
   const days = trialDaysLeft(space, now);
-  if (status === "trial" && canChoosePlan && days !== null && days <= TRIAL_NOTICE_DAYS) {
+  if (status === "trial" && days !== null && days <= TRIAL_NOTICE_DAYS) {
     return (
       <div
         role="status"
@@ -61,8 +60,8 @@ export function SpaceBanner({
       >
         <Clock className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
         <p className="min-w-0 flex-1">
-          Your club&apos;s free trial ends in {days} {days === 1 ? "day" : "days"}. Choose Team or
-          Team Advanced to keep going without a pause.
+          Your organization&apos;s free trial ends in {days} {days === 1 ? "day" : "days"}. After
+          that it moves to Free, or keep everything with Team or Team Advanced.
         </p>
         <Button asChild size="sm" variant="outline">
           <Link href={planHref}>See plans</Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Command as CommandPrimitive } from "cmdk";
-import { AlertCircle, Loader2, RotateCw, Search, SearchX } from "lucide-react";
+import { AlertCircle, Loader2, RotateCw, Search, SearchX } from "@/components/icons";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
@@ -253,7 +253,7 @@ export function CommandPalette({
       open={open}
       onOpenChange={onOpenChange}
       title="Search"
-      description="Search everything in this club, or jump to a page"
+      description="Search everything in this organization, or jump to a page"
       className="top-[8vh] flex max-h-[84vh] flex-col sm:top-[12vh] sm:max-w-2xl"
     >
       <CommandPrimitive

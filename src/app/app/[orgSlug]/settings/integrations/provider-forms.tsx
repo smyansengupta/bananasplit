@@ -120,7 +120,7 @@ export function AiModelForm({
           value={apiKey}
           onChange={setApiKey}
           placeholder={vendor.keyHint}
-          help={`Create one at ${vendor.keysUrl}, on an account your club pays for. Changing the provider needs that provider's key.`}
+          help={`Create one at ${vendor.keysUrl}, on an account your organization pays for. Changing the provider needs that provider's key.`}
         />
         <div className="grid gap-1.5">
           <Label htmlFor="ai-model">Model</Label>
@@ -188,7 +188,7 @@ export function ClaudeForm({
           value={apiKey}
           onChange={setApiKey}
           placeholder="sk-ant-…"
-          help="Create one at console.anthropic.com under API keys, in a workspace your club pays for."
+          help="Create one at console.anthropic.com under API keys, in a workspace your organization pays for."
         />
         <div className="grid gap-1.5">
           <Label htmlFor="claude-model">Model</Label>
@@ -211,7 +211,7 @@ export function ClaudeForm({
           </select>
           <p className="text-muted-foreground text-[13px]">
             {selected?.note} About {perImport !== null ? formatUsd(perImport) : "—"} per import of a
-            chart the size of a club board&apos;s (
+            chart for a typical leadership team (
             {selected
               ? `$${selected.inputPerMTok} in / $${selected.outputPerMTok} out per million
           tokens`
@@ -275,7 +275,7 @@ export function EmailSenderForm({
       >
         <SettingsCard
           title="Sender"
-          description="Who your club's email comes from, and the Resend key that sends it."
+          description="Who your organization's email comes from, and the Resend key that sends it."
           status={save.feedback && <FeedbackLine feedback={save.feedback} />}
           footer={
             canWrite && (
@@ -301,7 +301,7 @@ export function EmailSenderForm({
                 id="from-address"
                 type="email"
                 value={fromAddress}
-                placeholder="team@mail.yourclub.org"
+                placeholder="team@mail.yourorg.com"
                 onChange={(e) => setFromAddress(e.target.value)}
               />
             </div>
@@ -311,7 +311,7 @@ export function EmailSenderForm({
                 id="reply-to"
                 type="email"
                 value={replyTo}
-                placeholder="president@yourclub.org"
+                placeholder="president@yourorg.com"
                 onChange={(e) => setReplyTo(e.target.value)}
               />
             </div>
@@ -553,7 +553,7 @@ export function GoogleCalendarPanel({
             description={
               dto.hasSecret && connected
                 ? `Connected${dto.config.accountEmail ? ` as ${str(dto.config.accountEmail)}` : ""}. Reconnect to switch accounts.`
-                : "Sign in with the Google account that owns your club's calendars."
+                : "Sign in with the Google account that owns your organization's calendars."
             }
             status={
               !configured && (

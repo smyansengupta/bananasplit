@@ -1,4 +1,4 @@
-import { CalendarClock, Info } from "lucide-react";
+import { CalendarClock, Info } from "@/components/icons";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
@@ -92,7 +92,7 @@ export default async function PublicPollPage({ params }: PageProps<"/poll/[pollI
                 href={signInPath(`/poll/${poll.id}`)}
                 className="text-foreground underline-offset-4 hover:underline"
               >
-                In this club? Sign in
+                A member? Sign in
               </Link>{" "}
               to answer as yourself.
             </p>

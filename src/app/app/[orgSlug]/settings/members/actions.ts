@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { NotificationType, Role } from "@/generated/prisma/client";
+import { FUNNEL_EVENTS } from "@/lib/analytics/events";
+import { trackServer } from "@/lib/analytics/server";
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { canManageMembers, removalDenial, roleChangeDenial } from "@/lib/auth/member-roles";
 import { can, requirePermission } from "@/lib/auth/permissions";
@@ -137,9 +139,9 @@ export const inviteMember = withOrgAction(
       targetId: invitation.id,
       diff: { role },
     });
+    ctx.afterCommit(() => trackServer(FUNNEL_EVENTS.teammateInvited, { role }));
     return {};
   },
-  { whenPaused: "allow" },
 );
 
 /** Sends a fresh link (the old one stops working) and restarts the 7-day expiry. */
@@ -172,7 +174,6 @@ export const resendInvitation = withOrgAction(
     });
     return {};
   },
-  { whenPaused: "allow" },
 );
 
 export const revokeInvitation = withOrgAction(
@@ -192,7 +193,6 @@ export const revokeInvitation = withOrgAction(
     }
     return {};
   },
-  { whenPaused: "allow" },
 );
 
 // ---------------------------------------------------------------- Members
@@ -241,7 +241,6 @@ export const changeMemberRole = withOrgAction(
     refreshMembers(ctx);
     return {};
   },
-  { whenPaused: "allow" },
 );
 
 /** The per-org title ("VP Ops & Programs"), separate from the role and the chart position. */
@@ -285,7 +284,6 @@ export const setMemberTitle = withOrgAction(
     refreshMembers(ctx);
     return {};
   },
-  { whenPaused: "allow" },
 );
 
 export const removeMember = withOrgAction(
@@ -294,7 +292,7 @@ export const removeMember = withOrgAction(
       throw new ForbiddenError("Only owners and admins can manage members.");
     }
     if (targetUserId === ctx.userId) {
-      return { error: "You can't remove yourself. Use Leave club instead." };
+      return { error: "You can't remove yourself. Use Leave organization instead." };
     }
 
     const locked = await lockOwnersAnd(ctx, [targetUserId]);
@@ -337,7 +335,6 @@ export const removeMember = withOrgAction(
     refreshMembers(ctx);
     return {};
   },
-  { whenPaused: "allow" },
 );
 
 /**
@@ -390,45 +387,41 @@ export const transferOwnership = withOrgAction(
     refreshMembers(ctx);
     return {};
   },
-  { whenPaused: "allow" },
 );
 
 /**
  * Leaves the org (deletes the caller's own Membership row). The last OWNER
  * must transfer ownership first. Redirects to /app on success.
  */
-export const leaveOrg = withOrgAction(
-  async (ctx): Promise<ActionResult> => {
-    requirePermission(ctx, "members.leave");
-    const locked = await lockOwnersAnd(ctx, [ctx.userId]);
-    const self = locked.find(ctx.userId);
-    if (!self) throw new NotFoundError();
-    if (self.role === Role.OWNER && locked.ownerCount <= 1) {
-      return {
-        error:
-          "You're the only owner. Transfer ownership to another member (or delete the organization) before leaving.",
-      };
-    }
-    const outstanding = await outstandingExpenses(ctx.db, ctx.organizationId, ctx.userId);
-    if (outstanding > 0) return { error: outstandingExpensesMessage(outstanding, true) };
+export const leaveOrg = withOrgAction(async (ctx): Promise<ActionResult> => {
+  requirePermission(ctx, "members.leave");
+  const locked = await lockOwnersAnd(ctx, [ctx.userId]);
+  const self = locked.find(ctx.userId);
+  if (!self) throw new NotFoundError();
+  if (self.role === Role.OWNER && locked.ownerCount <= 1) {
+    return {
+      error:
+        "You're the only owner. Transfer ownership to another member (or delete the organization) before leaving.",
+    };
+  }
+  const outstanding = await outstandingExpenses(ctx.db, ctx.organizationId, ctx.userId);
+  if (outstanding > 0) return { error: outstandingExpensesMessage(outstanding, true) };
 
-    await untieDepartingMember(ctx.db, ctx.organizationId, ctx.userId);
-    // Written before the delete: once the row is gone the caller is no longer
-    // a member and app.write_org_audit refuses them.
-    await writeOrgAuditLog(ctx.db, {
-      organizationId: ctx.organizationId,
-      action: "member.left",
-      targetType: "User",
-      targetId: ctx.userId,
-      diff: { role: self.role },
-    });
-    await ctx.db.membership.delete({
-      where: { userId_organizationId: { userId: ctx.userId, organizationId: ctx.organizationId } },
-    });
-    const { organizationId, userId } = ctx;
-    ctx.afterCommit(() => cleanupAfterDeparture(organizationId, userId, userId));
-    refreshMembers(ctx);
-    redirect("/app");
-  },
-  { whenPaused: "allow" },
-);
+  await untieDepartingMember(ctx.db, ctx.organizationId, ctx.userId);
+  // Written before the delete: once the row is gone the caller is no longer
+  // a member and app.write_org_audit refuses them.
+  await writeOrgAuditLog(ctx.db, {
+    organizationId: ctx.organizationId,
+    action: "member.left",
+    targetType: "User",
+    targetId: ctx.userId,
+    diff: { role: self.role },
+  });
+  await ctx.db.membership.delete({
+    where: { userId_organizationId: { userId: ctx.userId, organizationId: ctx.organizationId } },
+  });
+  const { organizationId, userId } = ctx;
+  ctx.afterCommit(() => cleanupAfterDeparture(organizationId, userId, userId));
+  refreshMembers(ctx);
+  redirect("/app");
+});

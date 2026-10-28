@@ -16,7 +16,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
-  type LucideIcon,
+  type IconComponent,
   Minus,
   Pilcrow,
   Quote,
@@ -25,7 +25,7 @@ import {
   SquareCode,
   Table as TableIcon,
   Vote,
-} from "lucide-react";
+} from "@/components/icons";
 import type { Editor, Range } from "@tiptap/core";
 
 import { todayKey } from "@/lib/notes/dates";
@@ -37,7 +37,7 @@ export interface SlashCommandItem {
   key: string;
   title: string;
   description: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   group: string;
   keywords: string[];
   hint?: string;
@@ -274,7 +274,7 @@ export const SLASH_COMMAND_ITEMS: SlashCommandItem[] = [
   {
     key: "database",
     title: "Database view",
-    description: "A card that opens one of the club's databases",
+    description: "A card that opens one of the organization's databases",
     icon: Database,
     group: LIVE,
     keywords: ["database", "table", "data", "view", "embed"],
@@ -283,7 +283,7 @@ export const SLASH_COMMAND_ITEMS: SlashCommandItem[] = [
   {
     key: "poll",
     title: "Poll",
-    description: "A card that opens a club poll",
+    description: "A card that opens an organization poll",
     icon: Vote,
     group: LIVE,
     keywords: ["poll", "vote", "survey", "question"],

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, X } from "@/components/icons";
 import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";

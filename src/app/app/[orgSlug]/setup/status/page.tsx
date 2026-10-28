@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, Plug } from "lucide-react";
+import { AlertTriangle, Clock, Plug } from "@/components/icons";
 import Link from "next/link";
 
 import { SyncPanel } from "@/components/databases/sync-panel";

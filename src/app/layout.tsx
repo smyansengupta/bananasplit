@@ -1,7 +1,9 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Hanken_Grotesk, JetBrains_Mono, Young_Serif } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import "./globals.css";
+import { IconMotion } from "@/components/icons/icon-motion";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth/config";
 
@@ -38,7 +40,7 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Bananasplit",
   description:
-    "The all-in-one workspace for student clubs: tasks, polls, RSVPs, notes, databases and the club budget.",
+    "One workspace for your organization: projects, docs, databases, events, scheduling and the budget.",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
@@ -61,6 +63,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <SessionProvider session={session}>
           <TooltipProvider>{children}</TooltipProvider>
         </SessionProvider>
+        {/*
+          Vercel Web Analytics: cookieless page views and the funnel's custom
+          events (src/lib/analytics). Production only: in development it loads a
+          debug script from Vercel's CDN, which the CSP (rightly) blocks.
+        */}
+        {process.env.NODE_ENV === "production" && <Analytics />}
+        <IconMotion />
       </body>
     </html>
   );

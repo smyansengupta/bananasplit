@@ -9,7 +9,7 @@ import {
   MessageSquareText,
   Trash2,
   Users,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
@@ -631,8 +631,8 @@ export function RsvpSettings({
             <span>
               A confirmation email, then reminders a day and an hour before.{" "}
               {messaging.email === "org"
-                ? "Sent from your club's email sender."
-                : "Sent as your club via Bananasplit until you connect your own sender in Admin panel › Integrations."}
+                ? "Sent from your organization's email sender."
+                : "Sent as your organization via Bananasplit until you connect your own sender in Admin panel › Integrations."}
             </span>
           </p>
           <p className="text-muted-foreground flex gap-2 text-xs leading-relaxed">

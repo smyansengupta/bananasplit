@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,8 @@ export interface PlanCard {
   name: string;
   price: string;
   per: string;
+  /** Under the price: the yearly total, or that the student price applies. */
+  note?: string;
   who: string;
   /** "Includes", "Everything in Team, plus". */
   intro: string;
@@ -29,12 +31,20 @@ export interface PlanCard {
 }
 
 /** Up or down the ladder: a trial is Team Advanced, so choosing Team from it locks its extras. */
-const RANK: Record<OrgPlan, number> = { FREE: 0, PERSONAL_PLUS: 1, CLUB: 1, SOCIETY: 2, TRIAL: 2 };
+const RANK: Record<OrgPlan, number> = {
+  FREE: 0,
+  PERSONAL_PLUS: 1,
+  TEAM_FREE: 0,
+  CLUB: 1,
+  SOCIETY: 2,
+  TRIAL: 2,
+};
 
 /**
- * The two tiers a space can be on, side by side, the current one marked
- * (neither during a club's trial): Personal Free and Personal Plus for a
- * Personal space, Team and Team Advanced for a club. The owner gets a
+ * The tiers a space can be on, side by side, the current one marked (none
+ * during an organization's trial): Personal Free and Personal Plus for a
+ * Personal space; Free, Team and Team Advanced for an organization. The
+ * owner gets a
  * button on the other (with a confirm that says what changes, and that a
  * space left over its storage only stops taking uploads); everyone else
  * sees who can choose.
@@ -81,7 +91,10 @@ export function PlanCards({
     });
     if (!ok) return;
     toast({
-      title: kind === "PERSONAL" ? `You're on ${card.name}` : `Your club is on the ${card.name} plan`,
+      title:
+        kind === "PERSONAL"
+          ? `You're on ${card.name}`
+          : `Your organization is on the ${card.name} plan`,
       tone: "success",
     });
     router.refresh();
@@ -89,7 +102,7 @@ export function PlanCards({
 
   return (
     <>
-      <div className="grid gap-4.5 md:grid-cols-2">
+      <div className={cn("grid gap-4.5 md:grid-cols-2", cards.length > 2 && "lg:grid-cols-3")}>
         {cards.map((card) => {
           const isCurrent = card.plan === current;
           return (
@@ -107,10 +120,13 @@ export function PlanCards({
                 </div>
                 <p className="text-muted-foreground text-sm">{card.who}</p>
               </div>
-              <p className="flex flex-wrap items-baseline gap-x-1.5">
-                <span className="numeral text-3xl">{card.price}</span>
-                <span className="text-muted-foreground text-sm">{card.per}</span>
-              </p>
+              <div className="space-y-1">
+                <p className="flex flex-wrap items-baseline gap-x-1.5">
+                  <span className="numeral text-3xl">{card.price}</span>
+                  <span className="text-muted-foreground text-sm">{card.per}</span>
+                </p>
+                {card.note && <p className="text-muted-foreground text-xs">{card.note}</p>}
+              </div>
               <div className="space-y-2">
                 <p className="eyebrow">{card.intro}</p>
                 <ul className="space-y-1.5 text-sm">

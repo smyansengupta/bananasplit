@@ -9,7 +9,7 @@ import {
   ClipboardPaste,
   Layers,
   Plus,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";

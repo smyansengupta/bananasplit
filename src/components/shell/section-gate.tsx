@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff } from "lucide-react";
+import { EyeOff } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -52,7 +52,7 @@ export function SectionGate({
   return (
     <EmptyState
       title="This section is turned off"
-      description="Your club's admins turned it off."
+      description="Your organization's admins turned it off."
       action={
         <Link href={base} className="text-sm underline underline-offset-4">
           Back to the Overview

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, TriangleAlert } from "lucide-react";
+import { Loader2, TriangleAlert } from "@/components/icons";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";

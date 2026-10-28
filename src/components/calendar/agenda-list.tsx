@@ -8,7 +8,7 @@ import {
   Globe,
   Lock,
   MapPin,
-} from "lucide-react";
+} from "@/components/icons";
 import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";

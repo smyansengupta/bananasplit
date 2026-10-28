@@ -164,7 +164,7 @@ const LOOKUP_LIMIT = { limit: 10, windowSec: 15 * 60 };
 const LOOKUP_IP_LIMIT = { limit: 30, windowSec: 60 * 60 };
 
 /** A miss says nothing about why, so a guess can't tell a dead code from none. */
-const NO_MATCH = "That code doesn't match a club. Check it with whoever sent it.";
+const NO_MATCH = "That code doesn't match an organization. Check it with whoever sent it.";
 
 export interface JoinCodeOrg {
   organizationId: string;

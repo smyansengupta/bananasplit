@@ -122,7 +122,9 @@ export function BringStep({
                 <span className="text-muted-foreground text-[12px]">{i.meta}</span>
               </PreviewTile>
             ))}
-          {count > 6 && <p className="text-muted-foreground m-0 text-[12px]">and {count - 6} more</p>}
+          {count > 6 && (
+            <p className="text-muted-foreground m-0 text-[12px]">and {count - 6} more</p>
+          )}
           {moved.length > 0 && (
             <p className="text-muted-foreground m-0 mt-auto text-[13px] leading-normal">
               Already in {clubName}: {moved.join("; ")}.
@@ -140,7 +142,7 @@ export function BringStep({
         {moved.length > 0 && (
           <p
             role="status"
-            className="bg-tint-success text-tint-success-foreground m-0 rounded-field px-3.5 py-2.5 text-[14px] font-semibold"
+            className="bg-tint-success text-tint-success-foreground rounded-field m-0 px-3.5 py-2.5 text-[14px] font-semibold"
           >
             Moved {moved[moved.length - 1]} into {clubName}.
           </p>
@@ -180,7 +182,7 @@ export function BringStep({
                       <li key={item.id}>
                         <label
                           className={cn(
-                            "bg-card border-foreground/10 hover:border-foreground/25 flex min-h-10 cursor-pointer items-center gap-3 rounded-field border px-4 py-2.5",
+                            "bg-card border-foreground/10 hover:border-foreground/25 rounded-field flex min-h-10 cursor-pointer items-center gap-3 border px-4 py-2.5",
                             ticked.has(item.id) && "border-foreground/40",
                           )}
                         >
@@ -193,7 +195,9 @@ export function BringStep({
                           />
                           <span className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate text-[15px] font-semibold">{item.title}</span>
-                            <span className="text-muted-foreground truncate text-[13px]">{item.meta}</span>
+                            <span className="text-muted-foreground truncate text-[13px]">
+                              {item.meta}
+                            </span>
                           </span>
                         </label>
                       </li>
@@ -222,7 +226,7 @@ export function BringStep({
         ) : (
           <ContinuePill
             pending={finishing}
-            pendingLabel="Opening your club…"
+            pendingLabel="Opening your organization…"
             disabled={busy}
             onClick={finish}
           >

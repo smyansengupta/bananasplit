@@ -4,8 +4,8 @@ import {
   GraduationCap,
   Link2,
   NotebookPen,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -49,11 +49,12 @@ const META: Record<ProfileStep, { title: string; description: string }> = {
   basics: {
     title: "A real profile about you.",
     description:
-      "Your clubs see it. Start with your name and photo; everything after this step is optional.",
+      "Your organizations see it. Start with your name and photo; everything after this step is optional.",
   },
   school: {
     title: "What do you study?",
-    description: "Your major and when you graduate. Your role in a club is set when you join it.",
+    description:
+      "Your major and when you graduate. Your role in an organization is set when you join it.",
   },
   bio: {
     title: "A line about you.",
@@ -62,7 +63,7 @@ const META: Record<ProfileStep, { title: string; description: string }> = {
   availability: {
     title: "When can't you meet?",
     description:
-      "Mark the hours you can't meet, so meetings land when you're free. Clubs only ever see “busy,” never why.",
+      "Mark the hours you can't meet, so meetings land when you're free. Organizations only ever see “busy,” never why.",
   },
   review: {
     title: "Everything look right?",
@@ -125,7 +126,7 @@ export default async function ProfileStepPage({
           <div className="mt-4">
             <VerifyEmailNotice
               email={profile.email}
-              action="join or start a club. You can set up your profile in the meantime"
+              action="join or start an organization. You can set up your profile in the meantime"
             />
           </div>
         )}
@@ -240,7 +241,7 @@ function Review({ profile }: { profile: OnboardingProfile }) {
   const subtitle = [profile.pronouns, zoneShort(profile.timezone)].filter(Boolean).join(" · ");
   const blocked = blockedHoursPerWeek(profile.availability);
 
-  const rows: { icon: LucideIcon; label: string; value: React.ReactNode; edit: ProfileStep }[] = [
+  const rows: { icon: IconComponent; label: string; value: React.ReactNode; edit: ProfileStep }[] = [
     { icon: BookOpen, label: "Major", value: profile.major ?? "—", edit: "school" },
     { icon: GraduationCap, label: "Grad year", value: profile.gradYear ?? "—", edit: "school" },
     {
@@ -265,7 +266,7 @@ function Review({ profile }: { profile: OnboardingProfile }) {
 
   return (
     <div className="flex flex-1 flex-col gap-5">
-      <div className="bg-muted/40 flex items-center gap-3.5 rounded-field border p-3.5">
+      <div className="bg-muted/40 rounded-field flex items-center gap-3.5 border p-3.5">
         <UserAvatar
           user={{
             name: profile.name,
@@ -288,7 +289,7 @@ function Review({ profile }: { profile: OnboardingProfile }) {
         </Link>
       </div>
 
-      <dl className="divide-y rounded-field border">
+      <dl className="rounded-field divide-y border">
         {rows.map((row) => (
           <div key={row.label} className="group flex items-center gap-3 px-3.5 py-2.5 text-sm">
             <row.icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />

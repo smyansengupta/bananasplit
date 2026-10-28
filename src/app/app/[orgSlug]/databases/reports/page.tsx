@@ -1,4 +1,4 @@
-import { ChartNoAxesColumn } from "lucide-react";
+import { ChartNoAxesColumn } from "@/components/icons";
 import { Suspense, type ReactNode } from "react";
 import { notFound } from "next/navigation";
 
@@ -158,7 +158,7 @@ export default async function ReportsPage({
           <EmptyState
             icon={ChartNoAxesColumn}
             title="No reports to show"
-            description="The databases these reports read are not visible to your role in this club."
+            description="The databases these reports read are not visible to your role in this organization."
           />
         ) : (
           <ReportsBody className="grid grid-cols-1 gap-4.5 lg:grid-cols-3">

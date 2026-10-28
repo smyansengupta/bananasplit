@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { BackLink } from "@/components/back-link";

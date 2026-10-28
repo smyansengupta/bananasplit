@@ -20,7 +20,7 @@ import {
   PencilLine,
   RotateCcw,
   Trash2,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";

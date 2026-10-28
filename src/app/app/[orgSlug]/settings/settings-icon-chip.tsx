@@ -9,15 +9,15 @@ import {
   Mail,
   Plug,
   Sparkles,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 import { IconChip } from "@/components/ui/stat";
 
 import { SETTINGS_ICONS } from "./settings-icons";
 
 /** Icons the settings pages put in chips, by name (server pages can't pass the component). */
-const ICONS: Record<string, LucideIcon> = {
+const ICONS: Record<string, IconComponent> = {
   ...SETTINGS_ICONS,
   Bot,
   CalendarSync,

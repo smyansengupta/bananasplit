@@ -53,16 +53,89 @@ export interface SectionDef {
 // Main is the everyday three; Club is the people things (RSVPs among them);
 // Data opens with Files, the club's documents.
 export const SECTIONS: readonly SectionDef[] = [
-  { id: "overview", label: "Overview", icon: "LayoutDashboard", path: "", exact: true, group: "main", locked: true, description: "Each member's home page." },
-  { id: "tasks", label: "Tasks", icon: "CheckSquare", path: "/tasks", group: "main", description: "Who's doing what, and by when." },
-  { id: "calendar", label: "Calendar", icon: "CalendarDays", path: "/calendar", group: "main", description: "Meetings and events." },
-  { id: "people", label: "People", icon: "Users", path: "/people", also: ["/org-chart"], group: "club", description: "The member directory and the org chart." },
-  { id: "polls", label: "Polls", icon: "CalendarCheck", path: "/calendar/polls", group: "club", description: "Ask the club a question and let people vote." },
-  { id: "find-a-time", label: "Find a time", icon: "CalendarClock", path: "/calendar/find-a-time", group: "club", description: "Offer some times and see when everyone's free." },
-  { id: "rsvps", label: "RSVPs", icon: "Ticket", path: "/calendar/rsvp", group: "club", description: "Sign-up pages for events, and your tickets." },
-  { id: "notes", label: "Files", icon: "FolderOpen", path: "/notes", group: "data", description: "Notes, documents and uploads." },
-  { id: "databases", label: "Databases", icon: "Database", path: "/databases", group: "data", description: "Attendance, sign-ups, votes and reports." },
-  { id: "finance", label: "Finance", icon: "Wallet", path: "/finance", group: "data", description: "Budget, transactions and reimbursements." },
+  {
+    id: "overview",
+    label: "Overview",
+    icon: "LayoutDashboard",
+    path: "",
+    exact: true,
+    group: "main",
+    locked: true,
+    description: "Each member's home page.",
+  },
+  {
+    id: "tasks",
+    label: "Tasks",
+    icon: "CheckSquare",
+    path: "/tasks",
+    group: "main",
+    description: "Who's doing what, and by when.",
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    icon: "CalendarDays",
+    path: "/calendar",
+    group: "main",
+    description: "Meetings and events.",
+  },
+  {
+    id: "people",
+    label: "People",
+    icon: "Users",
+    path: "/people",
+    also: ["/org-chart"],
+    group: "club",
+    description: "The member directory and the org chart.",
+  },
+  {
+    id: "polls",
+    label: "Polls",
+    icon: "CalendarCheck",
+    path: "/calendar/polls",
+    group: "club",
+    description: "Ask the organization a question and let people vote.",
+  },
+  {
+    id: "find-a-time",
+    label: "Find a time",
+    icon: "CalendarClock",
+    path: "/calendar/find-a-time",
+    group: "club",
+    description: "Offer some times and see when everyone's free.",
+  },
+  {
+    id: "rsvps",
+    label: "RSVPs",
+    icon: "Ticket",
+    path: "/calendar/rsvp",
+    group: "club",
+    description: "Sign-up pages for events, and your tickets.",
+  },
+  {
+    id: "notes",
+    label: "Files",
+    icon: "FolderOpen",
+    path: "/notes",
+    group: "data",
+    description: "Notes, documents and uploads.",
+  },
+  {
+    id: "databases",
+    label: "Databases",
+    icon: "Database",
+    path: "/databases",
+    group: "data",
+    description: "Attendance, sign-ups, votes and reports.",
+  },
+  {
+    id: "finance",
+    label: "Finance",
+    icon: "Wallet",
+    path: "/finance",
+    group: "data",
+    description: "Budget, transactions and reimbursements.",
+  },
 ];
 
 /** The plan feature behind each section (src/lib/billing/features.ts). */
@@ -89,7 +162,11 @@ const ADDED_FROM: Partial<Record<SectionId, SectionId>> = {
   rsvps: "calendar",
 };
 
-export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = { main: null, club: "Club", data: "Data" };
+export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = {
+  main: null,
+  club: "Organization",
+  data: "Data",
+};
 
 const label = z
   .string()

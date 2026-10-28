@@ -10,11 +10,19 @@ import {
   type PlanFeature,
   type PricedPlan,
 } from "@/lib/billing/features";
-import { CLUB_PLANS, dollars, PERSONAL_PLANS } from "@/lib/billing/plans";
+import {
+  clubPlanIdOf,
+  dollars,
+  PERSONAL_PLANS,
+  type PriceTrack,
+  studentPricing,
+  TEAM_PRICES,
+  teamQuote,
+} from "@/lib/billing/plans";
 import { spaceLimits, spaceStatus, trialDaysLeft } from "@/lib/billing/space";
 import { formatStorage } from "@/lib/billing/storage";
 import { StorageMeter } from "@/components/billing/storage-meter";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readStorageUsed } from "@/server/storage/quota";
 import { storageBreakdown } from "@/server/storage/usage";
 
@@ -35,8 +43,34 @@ const PERSONAL_LABELS: Partial<Record<PlanFeature, string>> = {
   ai: "AI imports",
 };
 
+/** Who the organization is, for its price: the owner's address and how many members it has. */
+interface PriceContext {
+  ownerEmail: string | null;
+  members: number;
+}
+
+/** A paid team plan's price line: standard per member a month, or a student organization's flat price. */
+function teamPrice(plan: "CLUB" | "SOCIETY", price: PriceContext) {
+  const id = clubPlanIdOf(plan)!;
+  const track: PriceTrack = studentPricing(id, { email: price.ownerEmail }, price.members);
+  const prices = TEAM_PRICES[id];
+  if (track === "student") {
+    return {
+      price: dollars(prices.studentPerYear),
+      per: `a year, or ${dollars(prices.studentPerSemester)} a semester`,
+      note: `Student price: flat, up to ${prices.studentMemberCap} members.`,
+    };
+  }
+  const yearly = teamQuote(id, "standard", price.members);
+  return {
+    price: dollars(prices.perMemberPerMonth),
+    per: "per member a month, billed yearly",
+    note: `${dollars(yearly.total)} a year for ${price.members} ${price.members === 1 ? "member" : "members"}.`,
+  };
+}
+
 /** What sets a card apart from the one before it: its features, then its limits. */
-function card(plan: PricedPlan, previous: PricedPlan | null): PlanCard {
+function card(plan: PricedPlan, previous: PricedPlan | null, price: PriceContext): PlanCard {
   const before = new Set(previous ? featuresOf(previous) : []);
   const features = featuresOf(plan)
     .filter((f) => !before.has(f))
@@ -67,33 +101,39 @@ function card(plan: PricedPlan, previous: PricedPlan | null): PlanCard {
         per: `a month, or ${dollars(PERSONAL_PLANS.plus.perYear)} a year`,
         who: "For one person who wants more room.",
       };
+    case "TEAM_FREE":
+      return {
+        ...base,
+        price: "$0",
+        per: "forever, unlimited members",
+        who: "For any team getting started.",
+      };
     case "CLUB":
       return {
         ...base,
-        price: dollars(CLUB_PLANS.club.perMemberPerSemester),
-        per: "per member / semester",
-        who: "For active clubs with an officer team.",
+        ...teamPrice("CLUB", price),
+        who: "For growing teams that run their money and people here.",
       };
     case "SOCIETY":
       return {
         ...base,
-        price: dollars(CLUB_PLANS.society.perMemberPerSemester),
-        per: "per member / semester",
-        who: "For big clubs and societies that want every feature.",
+        ...teamPrice("SOCIETY", price),
+        who: "For teams that want every feature, AI included.",
       };
   }
 }
 
 /**
  * Settings › Plan and storage › Plan (docs/features/personal-and-clubs.md,
- * redesign guide 11.1). A Personal space chooses Personal Free or Personal
- * Plus; a club, during its trial or after it, Team or Team Advanced. The
- * OWNER chooses (also enforced in the database: app.organization_guard and
- * app.organization_space_guard); admins can look. A paused club (trial
- * over, no plan yet) is sent here by its banner: choosing a plan is the one
- * change it accepts. Billing isn't connected yet, so a choice takes effect
- * at once; when it is, it goes through checkout instead (changeOrgPlan is
- * the seam).
+ * the Bananasplit business model). A Personal space chooses Personal Free
+ * or Personal Plus; an organization Free, Team or Team Advanced, during its
+ * trial or after it (an ended trial is already Free). Team prices are the
+ * standard ones, or a student organization's flat ones when its owner has
+ * a school address (studentPricing). The OWNER chooses (also enforced in
+ * the database: app.organization_guard and app.organization_space_guard);
+ * admins can look. Billing isn't connected yet, so a choice takes effect at
+ * once; when it is, paid plans go through checkout instead (changeOrgPlan
+ * is the seam).
  */
 export default async function PlanSettingsPage({
   params,
@@ -107,12 +147,27 @@ export default async function PlanSettingsPage({
   const status = spaceStatus(organization);
   const days = trialDaysLeft(organization);
   const canSwitch = can({ role }, "org.plan.write");
-  const [usedBytes, storageParts] = await Promise.all([
+  const [usedBytes, storageParts, price] = await Promise.all([
     readStorageUsed(organization.id),
     storageBreakdown(organization.id),
+    personal
+      ? Promise.resolve({ ownerEmail: null, members: 1 })
+      : withOrgTx(organization.id, async ({ db }): Promise<PriceContext> => {
+          const [owner, members] = await Promise.all([
+            db.membership.findFirst({
+              where: { organizationId: organization.id, role: "OWNER" },
+              orderBy: { joinedAt: "asc" },
+              select: { user: { select: { email: true } } },
+            }),
+            db.membership.count({ where: { organizationId: organization.id } }),
+          ]);
+          return { ownerEmail: owner?.user.email ?? null, members: Math.max(1, members) };
+        }),
   ]);
-  const [first, second] = planChoicesFor(organization.kind);
-  const cards = [card(first!, null), card(second!, first!)];
+  const choices = planChoicesFor(organization.kind);
+  const cards = choices.map((plan, i) => card(plan, i === 0 ? null : choices[i - 1]!, price));
+  const current = spaceStatus(organization) === "free" ? "TEAM_FREE" : organization.plan;
+  const effective = PLAN_NAMES[current];
 
   const summary = personal ? (
     <>
@@ -126,35 +181,32 @@ export default async function PlanSettingsPage({
       <strong className="text-foreground">
         {days} {days === 1 ? "day" : "days"} left
       </strong>
-      . Choose Team or Team Advanced before it ends to keep going without a pause.
+      . When it ends {organization.name} moves to Free, unless{" "}
+      {canSwitch ? "you choose" : "the owner chooses"} Team or Team Advanced.
     </>
-  ) : status === "paused" ? (
+  ) : status === "free" && organization.plan === "TRIAL" ? (
     <>
-      The free trial has ended, so {organization.name} is paused: everything is still here and
-      everyone can read it, but nothing can be added or changed until{" "}
-      {canSwitch ? "you choose" : "the owner chooses"} a plan.
+      The free trial has ended, so {organization.name} is on{" "}
+      <strong className="text-foreground">Free</strong>. Nothing was deleted: what Team and Team
+      Advanced add is locked, and comes back when {canSwitch ? "you choose" : "the owner chooses"}{" "}
+      one.
     </>
   ) : (
     <>
-      {organization.name} is on the{" "}
-      <strong className="text-foreground">{PLAN_NAMES[organization.plan]}</strong> plan. Switching
-      never deletes anything: what a plan leaves out is locked, and comes back when you switch
-      again.
+      {organization.name} is on the <strong className="text-foreground">{effective}</strong> plan.
+      Switching never deletes anything: what a plan leaves out is locked, and comes back when you
+      switch again.
     </>
   );
 
   return (
     <div className="max-w-4xl space-y-7.5">
-      <PlanHeader
-        orgSlug={organization.slug}
-        title={status === "paused" ? "Choose a plan" : "Plan and storage"}
-        description={summary}
-      />
+      <PlanHeader orgSlug={organization.slug} title="Plan and storage" description={summary} />
       <StorageMeter
         usedBytes={usedBytes}
         limitBytes={spaceLimits(organization).storageBytes}
         maxFileBytes={spaceLimits(organization).maxFileBytes}
-        planName={PLAN_NAMES[organization.plan]}
+        planName={effective}
         parts={storageParts}
         personal={personal}
         href={`/app/${organization.slug}/settings/plan/storage`}
@@ -162,7 +214,7 @@ export default async function PlanSettingsPage({
       <PlanCards
         orgId={organization.id}
         kind={organization.kind}
-        current={organization.plan}
+        current={current}
         cards={cards}
         canSwitch={canSwitch}
         usedBytes={usedBytes}

@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarRange, Link2, Trash2, UserPlus, Vote } from "lucide-react";
+import { CalendarRange, Link2, Trash2, UserPlus, Vote } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 

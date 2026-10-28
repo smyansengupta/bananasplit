@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { Users } from "@/components/icons";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 

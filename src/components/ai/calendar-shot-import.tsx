@@ -9,7 +9,7 @@ import {
   Repeat,
   Video,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";

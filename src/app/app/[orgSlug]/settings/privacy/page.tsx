@@ -1,4 +1,4 @@
-import { Database } from "lucide-react";
+import { Database } from "@/components/icons";
 
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";

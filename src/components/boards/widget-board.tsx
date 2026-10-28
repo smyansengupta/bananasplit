@@ -38,8 +38,8 @@ import {
   Wallet,
   X,
   Zap,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
@@ -64,7 +64,7 @@ import {
 } from "@/lib/boards";
 import { cn } from "@/lib/utils";
 
-export const BOARD_ICONS: Record<string, LucideIcon> = {
+export const BOARD_ICONS: Record<string, IconComponent> = {
   Activity,
   ArrowLeftRight,
   CalendarDays,

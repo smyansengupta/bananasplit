@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarSync, Ticket } from "lucide-react";
+import { CalendarClock, CalendarSync, Ticket } from "@/components/icons";
 import Link from "next/link";
 
 import { EventCalendar, type CalendarItem } from "@/components/calendar/event-calendar";

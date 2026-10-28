@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, ScrollText } from "lucide-react";
+import { ArrowLeft, ArrowRight, ScrollText } from "@/components/icons";
 import Link from "next/link";
 
 import { TableFrame } from "@/components/databases/table-frame";

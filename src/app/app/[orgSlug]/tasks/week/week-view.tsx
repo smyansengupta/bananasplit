@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CalendarX2, ChevronRight, TriangleAlert } from "lucide-react";
+import { Ban, CalendarX2, ChevronRight, TriangleAlert } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -110,12 +110,12 @@ export function WeekView({
 
   const mine = ws.query.scope === "mine";
   // The verb agrees with the subject, not with the number of tasks: "You
-  // have 1 open", "The club has 22 open".
+  // have 1 open", "The organization has 22 open".
   const [whose, verb] = mine
     ? (["You", "have"] as const)
     : ws.query.scope === "team"
       ? (["Your team", "has"] as const)
-      : (["The club", "has"] as const);
+      : (["The organization", "has"] as const);
 
   if (open.length === 0 && completed.length === 0) {
     return (
@@ -131,7 +131,7 @@ export function WeekView({
           ws.filterCount > 0
             ? "Loosen a filter, or clear them all to see the whole week."
             : mine
-              ? "Nothing open is assigned to you. Switch to Everyone to see what the club is carrying, or start something."
+              ? "Nothing open is assigned to you. Switch to Everyone to see what the organization is carrying, or start something."
               : "Nobody has an open task here yet."
         }
         action={

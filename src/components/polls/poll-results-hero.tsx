@@ -1,4 +1,4 @@
-import { CalendarCheck, Users } from "lucide-react";
+import { CalendarCheck, Users } from "@/components/icons";
 
 import { intervalParts } from "@/components/calendar/poll-format";
 import {

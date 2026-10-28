@@ -28,7 +28,7 @@ export default async function AiModelIntegrationPage({
         orgSlug={orgSlug}
         title="Other AI models"
         dto={dto}
-        description="Optional. The AI imports (a pasted list of action items into tasks, a calendar screenshot into events) use whichever model your club connects: this one, or Claude. Members pick between them when both are set up."
+        description="Optional. The AI imports (a pasted list of action items into tasks, a calendar screenshot into events) use whichever model your organization connects: this one, or Claude. Members pick between them when both are set up."
       />
       <div className="space-y-4.5">
         <StatusPanel dto={dto} secretLabel="API key" />

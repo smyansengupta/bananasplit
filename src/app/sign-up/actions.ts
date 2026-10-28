@@ -12,6 +12,8 @@ import { onboardingHref } from "@/lib/onboarding/steps";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { signUpPerIpLimit } from "@/lib/auth/ip-limits";
 import { getClientIp } from "@/lib/request-ip";
+import { FUNNEL_EVENTS } from "@/lib/analytics/events";
+import { trackServer } from "@/lib/analytics/server";
 import { authDb } from "@/server/db/clients";
 import { enqueueVerificationEmail } from "@/server/email/verification";
 
@@ -105,6 +107,8 @@ export async function signUpAction(
     },
     select: { id: true },
   });
+
+  await trackServer(FUNNEL_EVENTS.signedUp, { method: "email" });
 
   // The confirmation link goes out through the outbox (a verify-email
   // platform job, sent right after this request). An account that is never

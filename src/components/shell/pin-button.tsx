@@ -1,6 +1,6 @@
 "use client";
 
-import { Pin } from "lucide-react";
+import { Pin } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 

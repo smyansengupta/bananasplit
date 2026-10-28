@@ -31,7 +31,7 @@ const SOURCE: Record<string, string> = {
 const READER: Record<string, string> = {
   BUILTIN: "read here",
   CLAUDE: "read by Claude",
-  TEMPLATE: "club template",
+  TEMPLATE: "starter template",
   MANUAL: "by hand",
 };
 

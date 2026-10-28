@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -79,7 +79,7 @@ export function ConnectionPicker({
           >
             Admin panel › Integrations
           </Link>
-          . The club&apos;s own key pays for it.
+          . The organization&apos;s own key pays for it.
         </p>
       </div>
     );

@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 
+import { FUNNEL_EVENTS } from "@/lib/analytics/events";
+import { trackServer } from "@/lib/analytics/server";
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
 import { requireUser } from "@/lib/auth/session";
 import { ACCEPT_ERROR_MESSAGES } from "@/lib/invitations";
@@ -39,6 +41,9 @@ export async function createOrganizationAction(
   });
   if (!result.ok) return { error: result.error };
 
+  await trackServer(FUNNEL_EVENTS.organizationCreated, {
+    flow: field(formData, "flow") === "onboarding" ? "onboarding" : "app",
+  });
   await setActiveOrgCookie(result.orgId);
   // From onboarding, org setup continues with the first of ORG_STEPS.
   if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, ORG_STEPS[0]));

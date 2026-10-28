@@ -1,6 +1,6 @@
 "use client";
 
-import { Merge } from "lucide-react";
+import { Merge } from "@/components/icons";
 import { useState } from "react";
 
 import { deleteSessionAction, dismissReviewAction } from "@/app/app/[orgSlug]/databases/actions";

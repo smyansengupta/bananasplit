@@ -262,7 +262,8 @@ export async function movePersonalItems(
     if (error instanceof ForbiddenError || sqlStateOf(error) === "42501") {
       return {
         ok: false,
-        error: "You can bring things only into a club you own or run, while it isn't paused.",
+        error:
+          "You can bring things only into an organization you own or run, while it isn't paused.",
       };
     }
     if (sqlStateOf(error) === "22023") {

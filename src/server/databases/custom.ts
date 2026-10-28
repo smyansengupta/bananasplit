@@ -419,7 +419,7 @@ async function insertDefinition(
   });
   if (count >= LIMITS.databasesPerClub) {
     throw new DatabaseInputError(
-      `A club can have up to ${LIMITS.databasesPerClub} databases. Archive one first.`,
+      `An organization can have up to ${LIMITS.databasesPerClub} databases. Archive one first.`,
     );
   }
   const name = cleanName(input.name, "database");

@@ -1,4 +1,4 @@
-import { ArrowRight, Check, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, type IconComponent } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ export function FieldLabel({
 }: {
   htmlFor?: string;
   id?: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   children: ReactNode;
   aside?: ReactNode;
 }) {
@@ -53,7 +53,7 @@ export function Chip({
   shape?: "pill" | "box";
   className?: string;
   disabled?: boolean;
-  icon?: LucideIcon;
+  icon?: IconComponent;
 }) {
   return (
     <button
@@ -92,7 +92,7 @@ export function DashedButton({
   children: ReactNode;
   className?: string;
   disabled?: boolean;
-  icon?: LucideIcon;
+  icon?: IconComponent;
 }) {
   return (
     <button
@@ -120,7 +120,7 @@ export function ChoiceTileBody({
   detail,
   primary = false,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: ReactNode;
   detail: ReactNode;
   primary?: boolean;

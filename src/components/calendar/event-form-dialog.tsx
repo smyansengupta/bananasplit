@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Globe, Ticket, TriangleAlert } from "lucide-react";
+import { ChevronDown, Globe, Ticket, TriangleAlert } from "@/components/icons";
 import { useParams, useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 
@@ -401,7 +401,7 @@ function EventForm({
             <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
               Public events are world-readable: the title, description, location and RSVP link
-              appear on the club website, the public events feed and the public Google Calendar.
+              appear on your website, the public events feed and the public Google Calendar.
               Attendees and meeting links never do.
             </span>
           </p>

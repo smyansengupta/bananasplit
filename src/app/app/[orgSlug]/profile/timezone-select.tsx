@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, LocateFixed } from "lucide-react";
+import { Check, ChevronsUpDown, LocateFixed } from "@/components/icons";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,7 @@ export function TimezoneSelect({
             {value
               ? timeZoneLabel(value)
               : orgTimezone
-                ? `Club's timezone (${timeZoneLabel(orgTimezone)})`
+                ? `Organization's timezone (${timeZoneLabel(orgTimezone)})`
                 : "Pick your time zone"}
           </span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />

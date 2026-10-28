@@ -1,4 +1,4 @@
-import { ExternalLink, Globe, Link as LinkIcon } from "lucide-react";
+import { ExternalLink, Globe, Link as LinkIcon } from "@/components/icons";
 
 import { linkDisplayText, type ProfileLink } from "@/lib/profile/links";
 import { cn } from "@/lib/utils";

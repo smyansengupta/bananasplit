@@ -1,6 +1,6 @@
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
-import { EyeOff, Lock, Vote } from "lucide-react";
+import { EyeOff, Lock, Vote } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
@@ -316,7 +316,7 @@ export default async function DatabaseViewPage({
               description={
                 admin
                   ? "Import a poll definition to see its results here."
-                  : "Results show up here once your club runs a poll."
+                  : "Results show up here once your organization runs a poll."
               }
               action={
                 admin ? (

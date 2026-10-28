@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info } from "@/components/icons";
 
 import { platformNoReplyAddress, resolveOrgMailRouting } from "@/server/email/mailer";
 import { planGate } from "@/server/billing/plan-gate";
@@ -71,7 +71,7 @@ export default async function EmailIntegrationPage({
         )}
         <SetupHelp title="How to set up a sending domain">
           <ol className="list-decimal space-y-1.5 pl-5">
-            <li>In Resend, add your domain (for example mail.yourclub.org) under Domains.</li>
+            <li>In Resend, add your domain (for example mail.yourorg.com) under Domains.</li>
             <li>
               Add the SPF, DKIM and return-path records Resend lists at your DNS host (for a
               Netlify-managed domain: Netlify &gt; Domains &gt; DNS records), plus a DMARC record.

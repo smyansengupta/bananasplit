@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, Link2, Loader2, Lock, UserPlus, Users, X } from "lucide-react";
+import { Check, ChevronsUpDown, Link2, Loader2, Lock, UserPlus, Users, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -69,20 +69,20 @@ const ACCESS_OPTIONS: { value: NoteGeneralAccess; label: string; description: st
   },
   {
     value: "CLUB_VIEW",
-    label: "Everyone in the club can view",
+    label: "Everyone in the organization can view",
     description: "Every member can read it; only editors change it.",
   },
   {
     value: "CLUB_EDIT",
-    label: "Everyone in the club can edit",
+    label: "Everyone in the organization can edit",
     description: "Every member can read and change it.",
   },
 ];
 
 /** "Only you", "Shared with 3", "Club can view", "Club can edit". */
 function accessSummary(access: NoteGeneralAccess, shareCount: number, isAuthor: boolean): string {
-  if (access === "CLUB_EDIT") return "Club can edit";
-  if (access === "CLUB_VIEW") return shareCount > 0 ? `Club + ${shareCount}` : "Club can view";
+  if (access === "CLUB_EDIT") return "Org can edit";
+  if (access === "CLUB_VIEW") return shareCount > 0 ? `Org + ${shareCount}` : "Org can view";
   if (shareCount === 0) return isAuthor ? "Only you" : "Private";
   return `Shared with ${shareCount}`;
 }
@@ -214,7 +214,7 @@ export function ShareNoteDialog({
           <DialogTitle className="truncate">Share “{title.trim() || "Untitled note"}”</DialogTitle>
           <DialogDescription>
             {canShare
-              ? "Add members as viewers or editors, and choose what the rest of the club gets."
+              ? "Add members as viewers or editors, and choose what the rest of the organization gets."
               : sharing.myRole === "EDITOR" || access === "CLUB_EDIT"
                 ? "You can edit this note. Its author decides who else has access."
                 : "You can view this note. Its author decides who else has access."}
@@ -257,7 +257,7 @@ export function ShareNoteDialog({
                   <CommandList>
                     <CommandEmpty>
                       {candidates.length === 0
-                        ? "Everyone in the club has access already."
+                        ? "Everyone in the organization has access already."
                         : "No members found."}
                     </CommandEmpty>
                     <CommandGroup>
@@ -384,7 +384,7 @@ export function ShareNoteDialog({
             htmlFor="note-general-access"
             className="text-muted-foreground text-xs font-medium"
           >
-            Everyone else in the club
+            Everyone else in the organization
           </label>
           <select
             id="note-general-access"
@@ -408,7 +408,7 @@ export function ShareNoteDialog({
             {ACCESS_OPTIONS.find((o) => o.value === access)?.description}
             {canShare &&
               access !== "RESTRICTED" &&
-              " Owners and admins can always edit club notes."}
+              " Owners and admins can always edit organization notes."}
           </p>
         </div>
 

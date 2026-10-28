@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Link2, Share2 } from "lucide-react";
+import { Check, Link2, Share2 } from "@/components/icons";
 import { useState, useSyncExternalStore } from "react";
 
 import { cn } from "@/lib/utils";

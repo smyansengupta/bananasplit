@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Check, Plus, Trash2, Unlink } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Plus, Trash2, Unlink } from "@/components/icons";
 import { useId } from "react";
 
 import { Badge } from "@/components/ui/badge";

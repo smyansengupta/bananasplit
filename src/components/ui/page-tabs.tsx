@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Menu, type LucideIcon } from "lucide-react";
+import { Check, Menu, type IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -31,7 +31,7 @@ const PHONE_MAX_TABS = 3;
 export interface PageTab {
   href: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   exact?: boolean;
   active?: boolean;
 }

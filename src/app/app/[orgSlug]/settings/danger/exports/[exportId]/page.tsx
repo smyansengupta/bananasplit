@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download } from "@/components/icons";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";

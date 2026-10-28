@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, UserPlus } from "lucide-react";
+import { ExternalLink, UserPlus } from "@/components/icons";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 

@@ -392,7 +392,7 @@ describe("the Moonstone Overview", () => {
     db.budgetPeriod.count.mockResolvedValue(0);
     db.databaseDefinition.count.mockResolvedValue(0);
     const html = await render();
-    expect(html).toContain("Get your club started");
+    expect(html).toContain("Get your organization started");
     expect(html).toContain("Set up your budgets");
     expect(html).toContain("Create a task or an epic");
     expect(html).not.toContain("sections");
@@ -409,7 +409,7 @@ describe("the Moonstone Overview", () => {
       role: "OWNER",
       settings: { startedSkipped: ["database"] },
     });
-    expect(await render()).not.toContain("Get your club started");
+    expect(await render()).not.toContain("Get your organization started");
   });
 
   it("starts a new board with Up next and the Weekly pulse", async () => {

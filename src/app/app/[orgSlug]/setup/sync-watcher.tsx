@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Loader2 } from "lucide-react";
+import { Clock, Loader2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 

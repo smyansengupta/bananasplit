@@ -12,7 +12,7 @@ import { withOrgAction } from "@/server/db/context";
  */
 
 const readAction: typeof withOrgAction = (handler, options) =>
-  withOrgAction(handler, { onRefused: "return", whenPaused: "allow", ...options });
+  withOrgAction(handler, { onRefused: "return", ...options });
 
 const idsSchema = z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).max(100);
 

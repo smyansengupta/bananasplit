@@ -11,8 +11,8 @@ import {
   Table2,
   Upload,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
@@ -51,7 +51,7 @@ import { TableFrame } from "../table-frame";
 
 const IMPORT_STEPS = ["Choose a file", "Check the preview", "Import"] as const;
 
-const TEMPLATE_ICONS: Record<string, LucideIcon> = {
+const TEMPLATE_ICONS: Record<string, IconComponent> = {
   Table2,
   Sheet,
   Users,
@@ -237,7 +237,7 @@ export function NewDatabaseDialog({
           <DialogDescription>
             {personal
               ? "Stored in Bananasplit and saved as you type. Only you can see it."
-              : "Stored in Bananasplit and saved as you type. Only your club can see it, and you choose which members."}
+              : "Stored in Bananasplit and saved as you type. Only your organization can see it, and you choose which members."}
           </DialogDescription>
         </DialogHeader>
 

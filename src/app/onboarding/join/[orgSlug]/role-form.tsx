@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck } from "@/components/icons";
 import Link from "next/link";
 import { useState, useTransition, type ReactNode } from "react";
 

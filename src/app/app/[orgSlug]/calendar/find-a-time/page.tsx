@@ -1,4 +1,4 @@
-import { CalendarClock, Plus } from "lucide-react";
+import { CalendarClock, Plus } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";

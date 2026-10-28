@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Check } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check } from "@/components/icons";
 import Link from "next/link";
 
 import { ProgressBar, StatusWord, StepMarker } from "@/components/setup/setup-ui";

@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight, Lock } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Lock } from "@/components/icons";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -74,8 +74,8 @@ export default async function SettingsPage({ params }: PageProps<"/app/[orgSlug]
           <div className="min-w-0 flex-1 basis-64">
             <p className="heading text-[15px]">Connect tools</p>
             <p className="text-muted-foreground mt-0.5 text-sm">
-              The club website, Google Calendar and a Claude key, one at a time, with a test for
-              each. All optional.
+              Your website, Google Calendar and a Claude key, one at a time, with a test for each.
+              All optional.
             </p>
           </div>
           <Button asChild variant="outline">

@@ -89,7 +89,7 @@ describe("ShareNoteDialog", () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: /^Share/ }));
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Everyone else in the club"), {
+      fireEvent.change(screen.getByLabelText("Everyone else in the organization"), {
         target: { value: "CLUB_EDIT" },
       });
     });
@@ -108,7 +108,8 @@ describe("ShareNoteDialog", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByRole("combobox", { name: "Add people" })).toBeNull();
     expect(
-      (within(dialog).getByLabelText("Everyone else in the club") as HTMLSelectElement).disabled,
+      (within(dialog).getByLabelText("Everyone else in the organization") as HTMLSelectElement)
+        .disabled,
     ).toBe(true);
     expect(within(dialog).getByRole("button", { name: "Remove me" })).toBeTruthy();
   });

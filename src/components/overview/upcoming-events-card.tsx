@@ -5,8 +5,8 @@ import {
   CircleX,
   Mail,
   MapPin,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
 import { KIND_META, RSVP_META } from "@/components/calendar/kinds";
@@ -15,7 +15,7 @@ import type { RSVPStatus } from "@/generated/prisma/enums";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { formatEventWhen } from "@/lib/calendar/format";
 
-const RSVP_ICON: Record<RSVPStatus, LucideIcon> = {
+const RSVP_ICON: Record<RSVPStatus, IconComponent> = {
   PENDING: Mail,
   YES: CircleCheck,
   NO: CircleX,
@@ -42,7 +42,7 @@ export function UpcomingEventsCard({
   now: Date;
   className?: string;
   title?: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   /** What to show with nothing coming up, with a next step. */
   empty?: React.ReactNode;
   /** Inside a board widget, which has its own frame and title. */

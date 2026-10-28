@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Search } from "@/components/icons";
 
 import { useModKey } from "@/components/command-palette/use-mod-key";
 import { capsuleButtonClass, CapsuleSeparator } from "@/components/shell/capsule";

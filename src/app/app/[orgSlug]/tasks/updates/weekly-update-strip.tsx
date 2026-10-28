@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, NotebookPen } from "lucide-react";
+import { CheckCircle2, NotebookPen } from "@/components/icons";
 import Link from "next/link";
 
 import { useTasks } from "@/components/tasks/tasks-context";

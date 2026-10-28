@@ -12,11 +12,11 @@ import {
   Tags,
   TriangleAlert,
   Users,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 
 /** The icon for each settings section (settings-nav.ts names them). */
-export const SETTINGS_ICONS: Record<string, LucideIcon> = {
+export const SETTINGS_ICONS: Record<string, IconComponent> = {
   Activity,
   Bell,
   Building2,

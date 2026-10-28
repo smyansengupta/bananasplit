@@ -61,9 +61,8 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
     id: "data",
     provider: "SUPABASE_SOURCE",
     settingsSegment: "data-source",
-    title: "Club website data",
-    summary:
-      "Read check-ins, signups and ballots from the Supabase project behind your club website.",
+    title: "Website data",
+    summary: "Read check-ins, signups and ballots from the Supabase project behind your website.",
     unlocks: [
       "Attendance, Signups, Ballots and People stop being empty",
       "Reports start working: attendance over time, retention, stamp cards",
@@ -74,7 +73,7 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
       "Someone with access to the website's Supabase project has to run one SQL file there first. It takes a minute, and step 1 below is exactly that.",
     where: [
       {
-        text: "Open your club website's repository and copy the whole of supabase/suite-export.sql.",
+        text: "Open your website's repository and copy the whole of supabase/suite-export.sql.",
         code: "supabase/suite-export.sql",
       },
       {
@@ -104,9 +103,9 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
     provider: "GOOGLE_CALENDAR",
     settingsSegment: "google-calendar",
     title: "Google Calendar",
-    summary: "Mirror the sessions you schedule here onto the club's Google calendar.",
+    summary: "Mirror the sessions you schedule here onto the organization's Google calendar.",
     unlocks: [
-      "Sessions created here show up on the club calendar automatically",
+      "Sessions created here show up on the organization's calendar automatically",
       "Events already in Google can be brought in, after you review them",
       "Officers see one calendar instead of two",
     ],
@@ -114,7 +113,7 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
     prerequisite: null,
     where: [
       {
-        text: "Press Connect below. Sign in with the Google account that owns the club's calendars — for most clubs that is the club's own Gmail, not your personal account.",
+        text: "Press Connect below. Sign in with the Google account that owns the organization's calendars — usually a shared account the organization owns, not your personal account.",
       },
       {
         text: "Google asks for two permissions: manage the events this app creates, and see the list of your calendars. Both are required; there is no narrower pair.",
@@ -127,7 +126,7 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
       "The portal writes only to the calendar you pick, and only events it created itself. It cannot read, edit or delete anything else on that account — Google enforces this, not us.",
       "Public events go to the calendar you choose for public. Internal events go to the internal calendar, or nowhere if you leave that blank.",
       "Disconnecting revokes the access at Google. Events already mirrored stay on the calendar; they stop updating.",
-      "Signing in with a personal account means the club's calendar leaves when you do. Use the club account.",
+      "Signing in with a personal account means the organization's calendar leaves when you do. Use the shared account.",
     ],
     ifSkipped:
       "Sessions live only in this portal. The calendar page still works, and the public events feed still works; nothing appears on Google.",
@@ -145,9 +144,9 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
     minutes: 3,
     prerequisite: null,
     where: [
-      { text: "At console.anthropic.com, sign in with the account your club pays on." },
+      { text: "At console.anthropic.com, sign in with the account your organization pays on." },
       {
-        text: "Open Settings, then Workspaces, and create a workspace for the club. This keeps the club's spend separate from anything else on the account, and lets you put a monthly limit on it. Optional, but do it.",
+        text: "Open Settings, then Workspaces, and create a workspace for the organization. This keeps the organization's spend separate from anything else on the account, and lets you put a monthly limit on it. Optional, but do it.",
       },
       { text: "Open API keys, press Create Key, and attach it to that workspace." },
       {
@@ -156,7 +155,7 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
       },
     ],
     consequences: [
-      "Reading one document is one Claude API call, billed to your club's own Anthropic workspace. At Claude Opus 5 that is a few cents a document; Sonnet and Haiku cost less and are in the list below.",
+      "Reading one document is one Claude API call, billed to your organization's own Anthropic workspace. At Claude Opus 5 that is a few cents a document; Sonnet and Haiku cost less and are in the list below.",
       "Nothing here runs on a schedule and nothing else in the portal calls Claude. You are billed when somebody presses Import on an org chart, and at no other time.",
       "The document you upload is sent to Anthropic's API to be read.",
       "Set a monthly spend limit on the workspace. A key with no limit is a key with no limit.",

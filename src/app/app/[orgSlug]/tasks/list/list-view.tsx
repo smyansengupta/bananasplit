@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, CircleCheck, Plus } from "lucide-react";
+import { ChevronRight, CircleCheck, Plus } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 

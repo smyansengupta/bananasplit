@@ -162,9 +162,9 @@ export function TeamsStep({
 
       <StepBody className="gap-3">
         {state.hasPublishedChart && (
-          <p className="bg-muted text-muted-foreground m-0 rounded-field px-3.5 py-2.5 text-[13px]">
-            Your club already has an org chart. Continuing publishes these teams as a new version;
-            the old one stays in the chart&apos;s history.
+          <p className="bg-muted text-muted-foreground rounded-field m-0 px-3.5 py-2.5 text-[13px]">
+            Your organization already has an org chart. Continuing publishes these teams as a new
+            version; the old one stays in the chart&apos;s history.
           </p>
         )}
         <div className="flex flex-col gap-2">
@@ -187,7 +187,7 @@ export function TeamsStep({
           )}
         </div>
 
-        <div className="border-foreground/10 divide-border divide-y rounded-field border">
+        <div className="border-foreground/10 divide-border rounded-field divide-y border">
           <Toggle
             checked={addMeetings}
             onChange={setAddMeetings}
@@ -262,7 +262,7 @@ function TeamRow({
   return (
     <div
       className={cn(
-        "bg-card focus-within-banana flex flex-col gap-2 rounded-field border px-4 py-3",
+        "bg-card focus-within-banana rounded-field flex flex-col gap-2 border px-4 py-3",
         top ? "border-foreground/30" : "border-foreground/10",
       )}
     >
@@ -279,7 +279,9 @@ function TeamRow({
           onChange={(e) => onChange({ name: e.target.value })}
           className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold outline-none"
         />
-        {top && <span className="text-muted-foreground flex-none text-[13px]">Top of the chart</span>}
+        {top && (
+          <span className="text-muted-foreground flex-none text-[13px]">Top of the chart</span>
+        )}
         {onRemove && <RemoveButton label={`Remove ${team.name || "team"}`} onClick={onRemove} />}
       </div>
       <div className="flex flex-wrap items-center gap-2 pl-[22px]">

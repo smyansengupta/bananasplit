@@ -1,4 +1,4 @@
-import { ArrowUpRight, Users } from "lucide-react";
+import { ArrowUpRight, Users } from "@/components/icons";
 import Link from "next/link";
 
 import { intervalParts } from "@/components/calendar/poll-format";

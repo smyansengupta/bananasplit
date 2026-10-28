@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, X, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, X, XCircle } from "@/components/icons";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";

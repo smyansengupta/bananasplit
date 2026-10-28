@@ -10,7 +10,7 @@ import {
   Trash2,
   UserPlus,
   UserX,
-} from "lucide-react";
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 

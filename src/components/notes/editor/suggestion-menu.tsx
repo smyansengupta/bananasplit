@@ -1,6 +1,6 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
+import type { IconComponent } from "@/components/icons";
 import { ReactRenderer } from "@tiptap/react";
 import type { SuggestionKeyDownProps, SuggestionProps } from "@tiptap/suggestion";
 import {
@@ -24,7 +24,7 @@ export interface MenuItem {
   key: string;
   title: string;
   description?: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   /** Shown instead of the icon (an avatar, an emoji). */
   leading?: ReactNode;
   /** The heading this item sits under ("Basic blocks", "People"...). */

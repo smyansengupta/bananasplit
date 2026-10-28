@@ -1,4 +1,4 @@
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 

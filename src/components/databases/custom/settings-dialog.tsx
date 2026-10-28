@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Lock, ShieldCheck } from "lucide-react";
+import { Archive, Lock, ShieldCheck } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -30,7 +30,7 @@ import type { CustomDatabase } from "@/server/databases/custom";
 import { notice } from "../styles";
 
 const WHO: { value: MemberVisibility; label: string; hint: string }[] = [
-  { value: "MEMBERS", label: "Everyone in the club", hint: "Every member can open it." },
+  { value: "MEMBERS", label: "Everyone in the organization", hint: "Every member can open it." },
   { value: "ADMINS", label: "Owners and admins", hint: "Members don't see it at all." },
   { value: "OWNER", label: "Owners only", hint: "For the most sensitive data." },
 ];
@@ -89,7 +89,7 @@ export function DatabaseSettingsDialog({
       title: `Archive ${database.name}?`,
       description: personal
         ? "It disappears from Databases. Nothing is deleted: its rows stay in your data and in your export."
-        : "It disappears from Databases for everyone. Nothing is deleted: its rows stay in your club's data and in the owner's export.",
+        : "It disappears from Databases for everyone. Nothing is deleted: its rows stay in your organization's data and in the owner's export.",
       confirmLabel: "Archive database",
       run: async () => (await archiveDatabaseAction(orgId, database.id)).error,
     });
@@ -105,8 +105,8 @@ export function DatabaseSettingsDialog({
         <DialogHeader>
           <DialogTitle>Database settings</DialogTitle>
           <DialogDescription>
-            Everything here is saved in Bananasplit and only {personal ? "you" : "your club"} can
-            see it.
+            Everything here is saved in Bananasplit and only{" "}
+            {personal ? "you" : "your organization"} can see it.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -185,9 +185,9 @@ export function DatabaseSettingsDialog({
               </div>
               <p className="text-muted-foreground flex gap-2 text-xs">
                 <ShieldCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                The database itself enforces these: other clubs can never read your data, and
-                members can&apos;t open what&apos;s limited to admins, whatever page or link they
-                use.
+                The database itself enforces these: other organizations can never read your data,
+                and members can&apos;t open what&apos;s limited to admins, whatever page or link
+                they use.
               </p>
             </>
           )}

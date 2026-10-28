@@ -67,5 +67,4 @@ export const getSignedReceiptUrl = financeAction(
 
     return { url: receiptDownloadUrl(receiptId, ctx.organizationId) };
   },
-  { whenPaused: "allow" },
 );

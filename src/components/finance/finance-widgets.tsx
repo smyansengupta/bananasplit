@@ -10,8 +10,8 @@ import {
   PiggyBank,
   ReceiptText,
   Target,
-  type LucideIcon,
-} from "lucide-react";
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -96,7 +96,7 @@ function Big({ value, sub, tone }: { value: ReactNode; sub?: ReactNode; tone?: "
   );
 }
 
-function ChartEmpty({ text, icon }: { text: string; icon?: LucideIcon }) {
+function ChartEmpty({ text, icon }: { text: string; icon?: IconComponent }) {
   return (
     <div className="text-muted-foreground flex min-h-28 flex-col items-center justify-center gap-2.5 py-6 text-center text-sm">
       {icon && <IconChip icon={icon} className="text-muted-foreground" />}
@@ -153,7 +153,7 @@ function Shortcut({
   detail,
 }: {
   href: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   detail: string;
 }) {

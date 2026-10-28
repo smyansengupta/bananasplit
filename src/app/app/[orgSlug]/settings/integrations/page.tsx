@@ -1,4 +1,4 @@
-import { ArrowUpRight, ChevronRight, Info, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Info, TriangleAlert } from "@/components/icons";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
@@ -138,7 +138,7 @@ export default async function IntegrationsSettingsPage({
           </ul>
         </Card>
         <p className="text-muted-foreground px-1 text-[13px]">
-          Each integration uses this club&apos;s own keys, stored encrypted and never shown
+          Each integration uses this organization&apos;s own keys, stored encrypted and never shown
           again after saving. Owners and admins can connect and test; only owners can remove.
         </p>
       </div>

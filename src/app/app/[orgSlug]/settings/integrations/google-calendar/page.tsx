@@ -1,4 +1,4 @@
-import { CircleCheck, TriangleAlert } from "lucide-react";
+import { CircleCheck, TriangleAlert } from "@/components/icons";
 
 import { SyncPanel } from "@/components/calendar/sync-panel";
 import { withOrgTx } from "@/server/db/context";
