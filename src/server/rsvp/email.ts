@@ -1,5 +1,6 @@
 import { escapeHtml, safeHref } from "@/server/email/escape";
 import { EMAIL_COLORS as C, layout, paragraph, type RenderedEmail } from "@/server/email/templates";
+import { reminderLead } from "@/lib/meetings/reminders";
 import { mapsSearchUrl } from "@/lib/rsvp/format";
 
 import type { RsvpEmailTemplate } from "./service";
@@ -12,12 +13,14 @@ import type { RsvpEmailTemplate } from "./service";
 
 export interface RsvpMessageInput {
   template: RsvpEmailTemplate;
+  /** A "reminder": how many minutes before the start it goes out. */
+  offsetMinutes?: number;
   guestName: string;
   orgName: string;
   title: string;
   /** "Thursday, October 15, 6:00 – 7:00 PM EDT". */
   when: string;
-  /** "6:00 PM", for the hour-before text. */
+  /** "6:00 PM", for a reminder under a day out. */
   startTime: string;
   /** Null when the host hides it from this guest (guestPlace). */
   location: string | null;
@@ -57,9 +60,23 @@ export function guestPlace(
   };
 }
 
+/**
+ * How far off a reminder says the event is, in reminderLead's words ("in an
+ * hour", "tomorrow", "in 2 days"). A reminder a day or more out names the
+ * day rather than the time: an all-day event has no start time to give.
+ */
+function reminderWords(i: RsvpMessageInput): { lead: string; dayOrMore: boolean } {
+  const offset = i.offsetMinutes ?? 60;
+  return { lead: reminderLead(offset), dayOrMore: offset >= 1440 };
+}
+
 const COPY: Record<
   RsvpEmailTemplate,
-  { subject: (title: string) => string; lead: (i: RsvpMessageInput) => string; cta: string }
+  {
+    subject: (title: string, i: RsvpMessageInput) => string;
+    lead: (i: RsvpMessageInput) => string;
+    cta: string;
+  }
 > = {
   registered: {
     subject: (t) => `You're going: ${t}`,
@@ -77,14 +94,18 @@ const COPY: Record<
     lead: (i) => `Good news: a spot opened up at ${i.title}, and it's yours. You're going.`,
     cta: "View your RSVP",
   },
-  "reminder-day": {
-    subject: (t) => `Tomorrow: ${t}`,
-    lead: (i) => `A reminder that ${i.title} is tomorrow.`,
-    cta: "View event",
-  },
-  "reminder-hour": {
-    subject: (t) => `Starting soon: ${t}`,
-    lead: (i) => `${i.title} starts at ${i.startTime}. Here's how to find it.`,
+  reminder: {
+    subject: (t, i) => {
+      const { lead, dayOrMore } = reminderWords(i);
+      if (lead === "tomorrow") return `Tomorrow: ${t}`;
+      return dayOrMore ? `Coming up ${lead}: ${t}` : `Starting ${lead}: ${t}`;
+    },
+    lead: (i) => {
+      const { lead, dayOrMore } = reminderWords(i);
+      return dayOrMore
+        ? `A reminder that ${i.title} is ${lead}.`
+        : `${i.title} starts ${lead}, at ${i.startTime}. Here's how to find it.`;
+    },
     cta: "View event",
   },
   "event-cancelled": {
@@ -153,7 +174,7 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
   const greeting = `Hi ${input.guestName.trim().split(/\s+/)[0] || "there"},`;
 
   return layout({
-    subject: copy.subject(input.title),
+    subject: copy.subject(input.title, input),
     eyebrow: input.orgName,
     bodyHtml: [
       `<h1 style="margin:0 0 12px;font-size:22px;line-height:1.25">${escapeHtml(input.title)}</h1>`,
@@ -169,13 +190,12 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
 
 /** The reminder text (reminders only; the rest are email). */
 export function rsvpText(input: RsvpMessageInput): string | null {
+  if (input.template !== "reminder") return null;
   const where = input.location ? ` at ${input.location}` : input.joinUrl ? " online" : "";
-  if (input.template === "reminder-day") {
-    return `Reminder: ${input.title} is tomorrow, ${input.when}${where}. Details: ${input.pageUrl}`;
+  const { lead, dayOrMore } = reminderWords(input);
+  if (dayOrMore) {
+    return `Reminder: ${input.title} is ${lead}, ${input.when}${where}. Details: ${input.pageUrl}`;
   }
-  if (input.template === "reminder-hour") {
-    const directions = input.locationDetails ? ` ${input.locationDetails}` : "";
-    return `${input.title} starts at ${input.startTime}${where}.${directions} Details: ${input.pageUrl}`;
-  }
-  return null;
+  const directions = input.locationDetails ? ` ${input.locationDetails}` : "";
+  return `${input.title} starts ${lead} (${input.startTime})${where}.${directions} Details: ${input.pageUrl}`;
 }

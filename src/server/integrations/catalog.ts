@@ -183,8 +183,45 @@ export const PROVIDERS: readonly ProviderInfo[] = [
   },
 ];
 
+/**
+ * The meeting providers (docs/features/meetings.md) are integrations in every
+ * way that matters - an OrgIntegration row, an encrypted refresh token - but
+ * they are NOT in PROVIDERS, so they do not appear on Settings > Integrations.
+ * You connect them where you use them, in Meetings. They still need an entry
+ * for the secrets layer and the connect flow to read.
+ */
+export const MEETING_PROVIDER_INFO: readonly ProviderInfo[] = [
+  {
+    provider: "GOOGLE_MEET",
+    segment: "google-meet",
+    label: "Google Meet",
+    description: "Creates a Meet link for each online meeting.",
+    secretKind: "REFRESH_TOKEN",
+    configKeys: ["accountEmail", "scopes", "connectedAt"],
+  },
+  {
+    provider: "ZOOM",
+    segment: "zoom",
+    label: "Zoom",
+    description: "Creates a Zoom meeting for each online meeting.",
+    secretKind: "REFRESH_TOKEN",
+    configKeys: ["accountEmail", "scopes", "connectedAt"],
+  },
+  {
+    provider: "MICROSOFT_TEAMS",
+    segment: "microsoft-teams",
+    label: "Microsoft Teams",
+    description: "Creates a Teams meeting for each online meeting.",
+    secretKind: "REFRESH_TOKEN",
+    configKeys: ["accountEmail", "scopes", "connectedAt"],
+  },
+];
+
+/** Every provider that has an OrgIntegration row, listed or not. */
+export const ALL_PROVIDER_INFO: readonly ProviderInfo[] = [...PROVIDERS, ...MEETING_PROVIDER_INFO];
+
 export function providerInfo(provider: IntegrationProvider): ProviderInfo {
-  const info = PROVIDERS.find((p) => p.provider === provider);
+  const info = ALL_PROVIDER_INFO.find((p) => p.provider === provider);
   if (!info) throw new TypeError(`unknown provider ${provider}`);
   return info;
 }

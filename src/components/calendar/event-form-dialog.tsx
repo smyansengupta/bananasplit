@@ -1,8 +1,16 @@
 "use client";
 
-import { ChevronDown, Globe, Ticket, TriangleAlert } from "@/components/icons";
+import {
+  ChevronDown,
+  Globe,
+  MapPin,
+  Ticket,
+  TriangleAlert,
+  Video,
+  type IconComponent,
+} from "@/components/icons";
 import { useParams, useRouter } from "next/navigation";
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 
 import { createEvent, deleteEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { turnOnRsvpPage } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
@@ -30,9 +38,13 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { allDaySpan } from "@/lib/calendar/dates";
+import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
+import { DEFAULT_REMINDER_MINUTES, sameReminderOffsets } from "@/lib/meetings/reminders";
+import { SHAPES, SHAPE_META, shapeFields, type MeetingShape } from "@/lib/meetings/shape";
 import { cn } from "@/lib/utils";
 
-import { ConferenceProviderSelect } from "./conference-provider-select";
+import { ConferencePicker, useMeetingConnections } from "@/components/meetings/conference-picker";
+import { ReminderPicker } from "@/components/meetings/reminder-picker";
 import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
 import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 import { toDateInputValue, toDateTimeLocalValue } from "./utils";
@@ -55,7 +67,19 @@ import { toDateInputValue, toDateTimeLocalValue } from "./utils";
  *   visible without doing the arithmetic.
  * - The disclosure opens itself when an event already uses anything inside
  *   it, so editing never hides a filled-in field.
+ * - A NEW event starts by picking its shape (online, in person or event), which
+ *   decides whether the form asks for a place, a call or both, and whether a
+ *   sign-up page is turned on when it is saved. The answers to a question the
+ *   shape does not ask are kept while the form is open, so switching back finds
+ *   them, but Save never sends them. EDITING asks everything, so a meeting
+ *   can gain a call or a place later.
+ * - Online starts on the first video call the organization has connected, and
+ *   will not save without one (a link to paste counts): a meeting with no call
+ *   and no place would be stored as In person and say nothing about where it is.
  */
+
+/** Said when an online meeting would be saved with no call. */
+const NO_CALL_ERROR = "Choose a video call or paste a link, or pick In person.";
 
 /** The event as the form edits it (serializable from a server component). */
 export interface EventFormEvent {
@@ -66,8 +90,12 @@ export interface EventFormEvent {
   endsAt: Date;
   allDay: boolean;
   location: string | null;
+  /** How to find the place ("Second floor, past the elevators"). */
+  locationDetails: string | null;
   conferenceProvider: ConferenceProvider;
   conferenceUrl: string | null;
+  /** True when Bananasplit made this meeting at the provider. */
+  conferenceManaged?: boolean;
   kind: EventKind;
   visibility: EventVisibility;
   hostUserId: string | null;
@@ -78,6 +106,8 @@ export interface EventFormEvent {
   publicNote: string | null;
   stampSlot: number | null;
   attendeeIds: string[];
+  /** Minutes before the start that people are reminded. */
+  reminderMinutes: number[];
 }
 
 interface Props {
@@ -89,9 +119,31 @@ interface Props {
   event: EventFormEvent | null;
   defaultStart?: Date | null;
   defaultAllDay?: boolean;
-  /** A new event starts with "Take RSVPs with a public page" switched on. */
-  defaultRsvpPage?: boolean;
+  /**
+   * The shape a new event starts as; the Event shape turns a public sign-up
+   * page on. Left out, In person. An existing event has no shape: editing asks
+   * every question. A `?new=` link names one (`shapeFromParam`).
+   */
+  defaultShape?: MeetingShape;
+  /**
+   * What a new one is called: "New event" and "Create event" (the Calendar's
+   * wording, and the default), or "New meeting" and "Create meeting" (Meetings').
+   * Editing reads "Edit event" in both.
+   */
+  noun?: "event" | "meeting";
+  /**
+   * The organization's reminder times (OrgSettings.meetingReminderMinutes): a
+   * new event starts with them, and an event whose own differ opens "More
+   * details". Left out, the built-in default.
+   */
+  defaultReminderMinutes?: number[];
   members: CalendarMember[];
+  /**
+   * Where a newly created meeting goes next (Meetings: its own page), or null
+   * to stay and refresh, as the Calendar does. Not asked for an edit. A new
+   * Event goes on to its sign-up settings instead, before this is asked.
+   */
+  afterCreate?: (eventId: string) => string | null;
   onSaved?: () => void;
   onDeleted?: () => void;
 }
@@ -118,6 +170,15 @@ export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...re
 const NO_HOST = "__none";
 const GUEST_HOST = "__guest";
 
+const SHAPE_ICON: Record<MeetingShape, IconComponent> = {
+  online: Video,
+  "in-person": MapPin,
+  event: Ticket,
+};
+
+/** An existing event is asked everything, and never turns a sign-up page on from here. */
+const EDIT_FIELDS = { place: true, call: true, signUp: false } as const;
+
 function initialTimes(
   event: EventFormEvent | null,
   defaultStart: Date | null | undefined,
@@ -136,7 +197,10 @@ function initialTimes(
 }
 
 /** True when this event already uses something behind the disclosure. */
-function usesMoreDetails(event: EventFormEvent | null): boolean {
+function usesMoreDetails(
+  event: EventFormEvent | null,
+  defaultReminderMinutes: readonly number[],
+): boolean {
   if (!event) return false;
   return Boolean(
     event.description ||
@@ -147,9 +211,8 @@ function usesMoreDetails(event: EventFormEvent | null): boolean {
     event.stampSlot ||
     event.capacityFull ||
     event.featured ||
-    event.conferenceUrl ||
-    event.conferenceProvider !== ConferenceProvider.NONE ||
-    event.attendeeIds.length > 0,
+    event.attendeeIds.length > 0 ||
+    !sameReminderOffsets(event.reminderMinutes, defaultReminderMinutes),
   );
 }
 
@@ -160,8 +223,11 @@ function EventForm({
   event,
   defaultStart,
   defaultAllDay,
-  defaultRsvpPage,
+  defaultShape,
+  noun = "event",
+  defaultReminderMinutes = [...DEFAULT_REMINDER_MINUTES],
   members,
+  afterCreate,
   onSaved,
   onDeleted,
 }: Omit<Props, "open">) {
@@ -188,11 +254,28 @@ function EventForm({
   );
   const [startValue, setStartValue] = useState(initial.start);
   const [endValue, setEndValue] = useState(initial.end);
+  const [shape, setShape] = useState<MeetingShape>(defaultShape ?? "in-person");
   const [location, setLocation] = useState(event?.location ?? "");
+  const [locationDetails, setLocationDetails] = useState(event?.locationDetails ?? "");
   const [provider, setProvider] = useState<ConferenceProvider>(
     event?.conferenceProvider ?? ConferenceProvider.NONE,
   );
   const [conferenceUrl, setConferenceUrl] = useState(event?.conferenceUrl ?? "");
+  // The picker draws these, and a new online meeting starts on the first one
+  // that is connected: when Online is chosen (below), or, if the form opened
+  // on Online, once the connections arrive. Only that once; after it, a call
+  // you took off (or a provider you connected in another tab) is left alone.
+  const connections = useMeetingConnections(orgId);
+  const connected = firstConnectedProvider(connections);
+  const [connectionsSeen, setConnectionsSeen] = useState(false);
+  if (!connectionsSeen && connections !== null) {
+    setConnectionsSeen(true);
+    if (!event && shape === "online" && provider === ConferenceProvider.NONE && connected) {
+      setProvider(connected);
+      // Save pressed before they loaded asked for a call; there is one now.
+      setError((current) => (current === NO_CALL_ERROR ? null : current));
+    }
+  }
   const [host, setHost] = useState<string>(
     event?.hostUserId ?? (event?.hostName ? GUEST_HOST : NO_HOST),
   );
@@ -203,13 +286,39 @@ function EventForm({
   const [publicNote, setPublicNote] = useState(event?.publicNote ?? "");
   const [stampSlot, setStampSlot] = useState(event?.stampSlot ? String(event.stampSlot) : "");
   const [attendeeIds, setAttendeeIds] = useState<string[]>(event?.attendeeIds ?? []);
+  // A new event starts from the organization's reminders; an existing one keeps its own.
+  const [reminderMinutes, setReminderMinutes] = useState<number[]>(
+    () => event?.reminderMinutes ?? defaultReminderMinutes,
+  );
   const [notifyAttendees, setNotifyAttendees] = useState(true);
-  const [showMore, setShowMore] = useState(() => usesMoreDetails(event));
-  // New events only: also turn on a public RSVP page and go set it up.
-  const [withRsvpPage, setWithRsvpPage] = useState(defaultRsvpPage ?? false);
+  const [showMore, setShowMore] = useState(() => usesMoreDetails(event, defaultReminderMinutes));
   const params = useParams<{ orgSlug?: string }>();
 
   const isPublic = visibility === EventVisibility.PUBLIC;
+  // What this form asks. A new event asks what its shape asks, and the Event
+  // shape is the one that also turns a public sign-up page on and goes to set
+  // it up. Whatever was typed for a question that is not asked is not sent.
+  const fields = event ? EDIT_FIELDS : shapeFields(shape);
+  const callProvider = fields.call ? provider : ConferenceProvider.NONE;
+
+  /** The error that asks for a call goes once there is one to choose (or another shape). */
+  function dropNoCallError() {
+    setError((current) => (current === NO_CALL_ERROR ? null : current));
+  }
+
+  function chooseShape(next: MeetingShape) {
+    setShape(next);
+    dropNoCallError();
+    // Online with no call chosen starts on the one the organization has connected.
+    if (next === "online" && provider === ConferenceProvider.NONE && connected) {
+      setProvider(connected);
+    }
+  }
+
+  function chooseProvider(next: ConferenceProvider) {
+    setProvider(next);
+    dropNoCallError();
+  }
 
   function toggleAllDay(next: boolean) {
     setAllDay(next);
@@ -250,9 +359,10 @@ function EventForm({
       // All-day: the first and last day; timed: the browser's wall time as an instant.
       startsAt: allDay ? startValue : new Date(startValue).toISOString(),
       endsAt: allDay ? endValue : new Date(endValue).toISOString(),
-      location: location || null,
-      conferenceProvider: provider,
-      conferenceUrl: provider === ConferenceProvider.NONE ? null : conferenceUrl || null,
+      location: fields.place ? location || null : null,
+      locationDetails: fields.place ? locationDetails || null : null,
+      conferenceProvider: callProvider,
+      conferenceUrl: callProvider === ConferenceProvider.NONE ? null : conferenceUrl || null,
       kind,
       visibility,
       hostUserId: host !== NO_HOST && host !== GUEST_HOST ? host : null,
@@ -263,6 +373,7 @@ function EventForm({
       publicNote: publicNote || null,
       stampSlot: stampSlot ? Number(stampSlot) : null,
       attendeeIds,
+      reminderMinutes,
       notifyAttendees,
     };
   }
@@ -282,6 +393,11 @@ function EventForm({
       setError("The event ends before it starts. Check the end time.");
       return;
     }
+    // An online meeting with no call would be saved as In person, with no place.
+    if (!event && shape === "online" && callProvider === ConferenceProvider.NONE) {
+      setError(NO_CALL_ERROR);
+      return;
+    }
     startTransition(async () => {
       const result = event
         ? await updateEvent(orgId, event.id, payload())
@@ -290,18 +406,22 @@ function EventForm({
         setError(result.error);
         return;
       }
-      if (!event && withRsvpPage && result.eventId && params.orgSlug) {
+      if (!event && fields.signUp && result.eventId && params.orgSlug) {
         const page = await turnOnRsvpPage(orgId, result.eventId);
         onOpenChange(false);
         // The event exists either way; the RSVP screen offers the page again if this failed.
         router.push(
-          `/app/${params.orgSlug}/calendar/${result.eventId}/rsvp${page.error ? "" : "?new=1"}`,
+          `/app/${params.orgSlug}/meetings/${result.eventId}/rsvp${page.error ? "" : "?new=1"}`,
         );
         return;
       }
       onOpenChange(false);
       onSaved?.();
-      router.refresh();
+      // A new meeting goes where the page that opened this says; with nowhere
+      // to go (the Calendar, or an edit) the page stays and is refreshed.
+      const next = !event && result.eventId ? afterCreate?.(result.eventId) : null;
+      if (next) router.push(next);
+      else router.refresh();
     });
   }
 
@@ -332,7 +452,7 @@ function EventForm({
   return (
     <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="contents">
       <DialogHeader>
-        <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
+        <DialogTitle>{event ? "Edit event" : `New ${noun}`}</DialogTitle>
         <DialogDescription>
           {event
             ? "Changes reach the website and Google Calendar the same way the original did."
@@ -341,6 +461,8 @@ function EventForm({
       </DialogHeader>
 
       <div className="space-y-4">
+        {!event && <ShapePicker value={shape} onChange={chooseShape} />}
+
         <div className="grid gap-1.5">
           <Label htmlFor="event-title">Title</Label>
           <Input
@@ -454,35 +576,54 @@ function EventForm({
           </p>
         </fieldset>
 
-        <div className="grid gap-1.5">
-          <Label htmlFor="event-location">Location</Label>
-          <Input
-            id="event-location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Room, address, or leave blank"
-            maxLength={300}
-          />
-        </div>
+        {fields.place && (
+          <>
+            <div className="grid gap-1.5">
+              <Label htmlFor="event-location">
+                {callProvider === ConferenceProvider.NONE ? "Location" : "Location (optional)"}
+              </Label>
+              <Input
+                id="event-location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder={
+                  callProvider === ConferenceProvider.NONE
+                    ? "Room, address, or leave blank"
+                    : "Add a room too, for anyone coming in person"
+                }
+                maxLength={300}
+              />
+            </div>
 
-        {!event && (
-          <label
-            htmlFor="event-rsvp-page"
-            className={cn(
-              "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-              withRsvpPage ? "border-primary bg-primary/5" : "hover:bg-muted/50",
-            )}
-          >
-            <Ticket aria-hidden className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-            <span className="min-w-0 flex-1 space-y-0.5">
-              <span className="block text-sm font-medium">Take RSVPs with a public page</span>
-              <span className="text-muted-foreground block text-xs leading-relaxed">
-                Anyone with the link signs up with their name, email and phone. You&apos;ll set the
-                spots, cover and privacy next.
-              </span>
-            </span>
-            <Switch id="event-rsvp-page" checked={withRsvpPage} onCheckedChange={setWithRsvpPage} />
-          </label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="event-location-details">How to find it</Label>
+              <Textarea
+                id="event-location-details"
+                value={locationDetails}
+                onChange={(e) => setLocationDetails(e.target.value)}
+                rows={2}
+                maxLength={1000}
+                className="min-h-16"
+                placeholder="e.g. Second floor, past the elevators"
+              />
+            </div>
+          </>
+        )}
+
+        {/*
+          Last, on purpose: you set the meeting up, then say where the call
+          should be. One menu, so the answer is one click and the form does
+          not open with five provider buttons across it.
+        */}
+        {fields.call && (
+          <ConferencePicker
+            connections={connections}
+            provider={provider}
+            onProviderChange={chooseProvider}
+            conferenceUrl={conferenceUrl}
+            onUrlChange={setConferenceUrl}
+            managed={event?.conferenceManaged ?? false}
+          />
         )}
 
         <div>
@@ -500,7 +641,7 @@ function EventForm({
             {showMore ? "Fewer details" : "More details"}
             {!showMore && (
               <span className="text-muted-foreground/80 ml-1 text-xs font-normal">
-                host, RSVP link, invites, description
+                host, RSVP link, invites, description, reminders
               </span>
             )}
           </button>
@@ -601,23 +742,6 @@ function EventForm({
               </fieldset>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label>Video call</Label>
-                <ConferenceProviderSelect value={provider} onChange={setProvider} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="event-conference-url">Meeting link</Label>
-                <Input
-                  id="event-conference-url"
-                  value={conferenceUrl}
-                  onChange={(e) => setConferenceUrl(e.target.value)}
-                  disabled={provider === ConferenceProvider.NONE}
-                  placeholder="https://…"
-                />
-              </div>
-            </div>
-
             <div className="grid gap-1.5">
               <Label htmlFor="event-description">Description</Label>
               <Textarea
@@ -626,6 +750,15 @@ function EventForm({
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 placeholder="What it covers, what to bring, anything the website should say."
+              />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="event-reminders">Reminders</Label>
+              <ReminderPicker
+                id="event-reminders"
+                value={reminderMinutes}
+                onChange={setReminderMinutes}
               />
             </div>
 
@@ -681,11 +814,83 @@ function EventForm({
             Cancel
           </Button>
           <Button type="submit" disabled={isPending || !title.trim()}>
-            {isPending ? "Saving…" : event ? "Save" : "Create event"}
+            {isPending ? "Saving…" : event ? "Save" : `Create ${noun}`}
           </Button>
         </div>
       </DialogFooter>
     </form>
+  );
+}
+
+/**
+ * The shape of a new meeting: three cards, one chosen, a radio group's
+ * keyboard. Tab reaches the chosen card only, and the arrow keys move the
+ * choice (and focus) to the next or the one before, wrapping round.
+ */
+function ShapePicker({
+  value,
+  onChange,
+}: {
+  value: MeetingShape;
+  onChange: (next: MeetingShape) => void;
+}) {
+  const id = useId();
+  const cards = useRef<Partial<Record<MeetingShape, HTMLButtonElement | null>>>({});
+
+  function onKeyDown(keyEvent: React.KeyboardEvent, index: number) {
+    if (keyEvent.altKey || keyEvent.ctrlKey || keyEvent.metaKey) return;
+    const step =
+      keyEvent.key === "ArrowRight" || keyEvent.key === "ArrowDown"
+        ? 1
+        : keyEvent.key === "ArrowLeft" || keyEvent.key === "ArrowUp"
+          ? -1
+          : 0;
+    if (step === 0) return;
+    keyEvent.preventDefault();
+    const next = SHAPES[(index + step + SHAPES.length) % SHAPES.length]!;
+    onChange(next);
+    cards.current[next]?.focus();
+  }
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Kind of meeting"
+      className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+    >
+      {SHAPES.map((shape, index) => {
+        const selected = shape === value;
+        const Icon = SHAPE_ICON[shape];
+        return (
+          <button
+            key={shape}
+            ref={(node) => {
+              cards.current[shape] = node;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-labelledby={`${id}-${shape}-label`}
+            aria-describedby={`${id}-${shape}-hint`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(shape)}
+            onKeyDown={(keyEvent) => onKeyDown(keyEvent, index)}
+            className={cn(
+              "focus-visible:outline-foreground flex min-w-0 flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
+              selected ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+            )}
+          >
+            <span className="flex items-center gap-1.5 text-sm font-medium">
+              <Icon aria-hidden className="text-muted-foreground size-4 shrink-0" />
+              <span id={`${id}-${shape}-label`}>{SHAPE_META[shape].label}</span>
+            </span>
+            <span id={`${id}-${shape}-hint`} className="text-muted-foreground text-xs leading-snug">
+              {SHAPE_META[shape].hint}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

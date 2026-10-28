@@ -116,6 +116,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   // Someone who joined through an emailed invite before finishing profile
   // setup finishes it first (the flowchart's "Profile complete?").
   const prefs = await getViewerPrefs(ctx.user.id);
+
   if (!prefs.onboardedAt) redirect("/onboarding");
   // The org's OrgTheme row rides along with the per-request org context
   // (React cache()), resolved and re-validated as strict hex before render;

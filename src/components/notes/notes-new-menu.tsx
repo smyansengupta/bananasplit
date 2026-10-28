@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
+import { FieldSelect } from "@/components/ui/field-select";
 import { formatStorage } from "@/lib/billing/storage";
 import { NOTE_FILE_ACCEPT } from "@/lib/files/types";
 import { uploadNoteFile } from "@/lib/files/upload";
@@ -113,10 +114,11 @@ function FolderSelect({
   return (
     <label className="grid gap-1 text-sm">
       <span className="text-muted-foreground text-xs font-medium">Folder</span>
-      <select
+      <FieldSelect
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="border-input h-8 rounded-lg border bg-transparent px-2 text-sm"
+        className="rounded-lg"
+        size="sm"
       >
         <option value="">No folder</option>
         {folders.map((f) => (
@@ -124,7 +126,7 @@ function FolderSelect({
             {f.name}
           </option>
         ))}
-      </select>
+      </FieldSelect>
     </label>
   );
 }

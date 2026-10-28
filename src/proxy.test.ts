@@ -54,6 +54,7 @@ describe("proxy — per-request nonce CSP (0A Fix 13)", () => {
       "/onboarding",
       "/onboarding/:path*",
       "/checkout",
+      "/connect",
       "/forgot-password",
       "/reset-password/:path*",
     ]);
@@ -94,6 +95,7 @@ describe("the proxy matcher", () => {
     "/onboarding/profile/basics",
     "/onboarding/organization/club/labels",
     "/checkout",
+    "/connect",
     "/forgot-password",
     "/reset-password/tok",
   ])("covers the nonce route %s", (path) => {

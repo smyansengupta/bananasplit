@@ -36,6 +36,10 @@ org equality. The wrappers in `src/server/db/context.ts`:
 - `withOrgTxAs(userId, orgId, fn)`, app_user for a member named by a
   verified signed request instead of a session: the collaboration bridge
   only (see "Live collaboration" below);
+- `withConnectorUserTx(connector, fn)` and
+  `withConnectorOrgTx(connector, grant, orgId, options, fn)`, app_user for
+  a member named by a verified AuthKit token (a `VerifiedConnector`)
+  instead of a session: AI connectors only (see "AI connectors" below);
 - `getOrgContextBySlug(slug)`, React `cache()`-deduped, for the org layout.
 
 `ctx = { user, organizationId, role, db, afterCommit }`. No network I/O inside
@@ -207,8 +211,10 @@ the link page share one resend limit per account.
 - importing `serviceDb`, `authDb` or `getClient` outside
   `CLIENT_ALLOWLIST` (the identity plane, the rate limiter, the ICS feed, the
   cron routes and job runner, the health check, scripts and the data layer;
-  adding a path is a security review item), and `withOrgTxAs` outside
-  `COLLAB_BRIDGE` (the collaboration bridge routes; same review rule);
+  adding a path is a security review item), `withOrgTxAs` outside
+  `COLLAB_BRIDGE` (the collaboration bridge routes; same review rule), and
+  `withConnectorUserTx`/`withConnectorOrgTx` outside `CONNECTORS`
+  (`src/server/connectors/**`; same review rule);
 - `redirect`/`notFound` in `src/server` services (except `context.ts`), and
   request-context imports in cached loaders.
 
@@ -242,6 +248,44 @@ credentials. The rules that matter here:
   note never merge into duplicated text (`src/lib/collab/note-doc.ts`).
 - **Fallback.** With the flag off, or the server unreachable at load, the
   editor is the autosave editor, unchanged.
+
+## AI connectors (MCP)
+
+Off unless `CONNECTORS_ENABLED`, `WORKOS_API_KEY` and
+`WORKOS_AUTHKIT_DOMAIN` are all set; the plan, the decisions and what is
+built are in `docs/features/ai-connectors.md`. Members connect Claude,
+ChatGPT, Cursor or VS Code to `/api/mcp`. WorkOS AuthKit issues the OAuth
+tokens; Auth.js stays the only sign-in (`/connect` is AuthKit's External
+Sign-in URI). The rules that matter here:
+
+- **The token path.** `src/server/connectors/token.ts` verifies AuthKit's
+  RS256 JWT (issuer, the exact MCP URL as audience, expiry) and returns a
+  `VerifiedConnector`: our user id from a JWT-template claim, the client,
+  the consent (`sid`) and the WorkOS user. It is branded with a symbol the
+  module keeps to itself, and it is the only identity the connector
+  wrappers accept.
+- **Our grant row decides.** WorkOS has no revocation endpoint and no grant
+  webhooks, so every request resolves its `ConnectorGrant` (one per user and
+  client: read or read-and-change, one space or all, `revokedAt`). A revoked
+  grant answers 401 until the member consents again. Disconnect, a password
+  reset and the Google gate's password strip set `revokedAt`; WorkOS is told
+  after the response, best effort.
+- **Tools run as the member.** `withConnectorOrgTx` is `withOrgAction` for
+  a token instead of a session: RLS with the member's context, `NotFoundError`
+  for a non-member, then the club switch (`OrgSettings.connectorsEnabled`),
+  then `checkSpace` with the `connectors` feature. `ctx.user` is the
+  member's own row, so services that take an `OrgContext` work unchanged.
+  Every failure is an `isError` tool result (`src/server/connectors/errors.ts`).
+- **Read tools open a space one way.** `inSpace` (`src/server/connectors/tools/space.ts`)
+  wraps `withConnectorOrgTx` with reads allowed while paused, the tool's plan
+  feature, and the club's hidden sidebar sections refused to members (as
+  search leaves them out). Item ids are opaque `<kind>:<spaceId>:<id>`, so
+  `fetch` and the `get_` tools find the space from the id; the lookup still
+  filters on `organizationId`.
+- **RLS.** `ConnectorGrant`'s policies test only `"userId" = app.user_id()`.
+  Two definer functions: `app.connector_spaces()` (app_user: the caller's
+  spaces with each switch) and `app.revoke_connector_grants(user)` (app_auth
+  only, for the identity plane).
 
 ## 0C: legacy modules on the RLS path (done)
 
@@ -413,6 +457,7 @@ rolled-back action still counts. Keys hash their identifying parts
 (`rateLimitKey(scope, ...parts)`), so the table holds no emails, IPs or
 tokens. Sign-in (per IP and per email), sign-up (per IP and per email),
 verification-link resends (per account), invites (per org), poll responses
-(per IP), receipt uploads (per user), CSP reports (per IP) and the ICS feed
-(per token hash) are limited; the client IP comes from `x-real-ip`, never the
+(per IP), receipt uploads (per user), CSP reports (per IP), the ICS feed
+(per token hash), AI connector requests (per connected app) and `/connect`
+completions (per user) are limited; the client IP comes from `x-real-ip`, never the
 client-controlled first `x-forwarded-for` hop.

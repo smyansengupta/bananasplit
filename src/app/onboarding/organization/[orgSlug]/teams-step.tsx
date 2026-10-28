@@ -15,6 +15,7 @@ import {
   StepIntro,
 } from "@/components/onboarding/setup-shell";
 import { Switch } from "@/components/ui/switch";
+import { FieldSelect } from "@/components/ui/field-select";
 import { DAY_LABELS } from "@/lib/availability";
 import { CADENCES, MAX_TEAMS, type Cadence, type TeamInput } from "@/lib/onboarding/org";
 import { cn } from "@/lib/utils";
@@ -285,7 +286,7 @@ function TeamRow({
         {onRemove && <RemoveButton label={`Remove ${team.name || "team"}`} onClick={onRemove} />}
       </div>
       <div className="flex flex-wrap items-center gap-2 pl-[22px]">
-        <select
+        <FieldSelect
           aria-label="Lead"
           value={team.leadUserId ?? ""}
           onChange={(e) => onChange({ leadUserId: e.target.value || null })}
@@ -297,8 +298,8 @@ function TeamRow({
               Lead: {m.name}
             </option>
           ))}
-        </select>
-        <select
+        </FieldSelect>
+        <FieldSelect
           aria-label="Meeting day"
           value={meeting ? meeting.day : ""}
           onChange={(e) =>
@@ -321,10 +322,10 @@ function TeamRow({
               {d}
             </option>
           ))}
-        </select>
+        </FieldSelect>
         {meeting && (
           <>
-            <select
+            <FieldSelect
               aria-label="Meeting time"
               value={meeting.minutes}
               onChange={(e) =>
@@ -337,8 +338,8 @@ function TeamRow({
                   {timeLabel(t)}
                 </option>
               ))}
-            </select>
-            <select
+            </FieldSelect>
+            <FieldSelect
               aria-label="How often"
               value={meeting.cadence}
               onChange={(e) =>
@@ -351,7 +352,7 @@ function TeamRow({
                   {c.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </>
         )}
       </div>

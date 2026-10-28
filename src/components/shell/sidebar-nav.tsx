@@ -17,6 +17,7 @@ import {
   Plus,
   Ticket,
   Users,
+  Video,
   Wallet,
   X,
   type IconComponent,
@@ -60,10 +61,11 @@ export const NAV_ICONS: Record<string, IconComponent> = {
   NotebookText,
   Ticket,
   Users,
+  Video,
   Wallet,
 };
 
-/** Lucide at the redesign's lighter stroke. */
+/** The icons at the redesign's lighter stroke. */
 export const ICON_STROKE = 1.75;
 
 /**

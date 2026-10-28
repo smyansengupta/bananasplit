@@ -2,16 +2,24 @@ import { PageHeader } from "@/components/page-header";
 import { appOrigin } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
+import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { getOrgContextBySlug } from "@/server/db/context";
 
 import { SettingsNoAccess } from "../settings-no-access";
-import { LogoForm, NameForm, SlugForm, TimezoneForm, WeeklyUpdateDayForm } from "./general-forms";
+import {
+  LogoForm,
+  MeetingRemindersForm,
+  NameForm,
+  SlugForm,
+  TimezoneForm,
+  WeeklyUpdateDayForm,
+} from "./general-forms";
 
 /**
  * Settings > General: name and timezone (OWNER/ADMIN), the club picture (OWNER/ADMIN),
- * the URL (OWNER only; old URLs redirect and stay reserved), and the weekly
- * update day (OWNER/ADMIN, in a club).
+ * the URL (OWNER only; old URLs redirect and stay reserved), the reminders a
+ * new meeting starts with, and the weekly update day (OWNER/ADMIN, in a club).
  */
 export default async function GeneralSettingsPage({
   params,
@@ -45,6 +53,11 @@ export default async function GeneralSettingsPage({
           appOrigin={appOrigin()}
         />
         <TimezoneForm orgId={organization.id} timezone={organization.timezone} canEdit={canWrite} />
+        <MeetingRemindersForm
+          orgId={organization.id}
+          minutes={settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES]}
+          canEdit={canWrite}
+        />
         {spaceIncludes(organization, "teamwork") && (
           <WeeklyUpdateDayForm
             orgId={organization.id}

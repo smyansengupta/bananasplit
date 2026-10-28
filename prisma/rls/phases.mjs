@@ -27,6 +27,9 @@ const GRANTS = {
   Contact: ["SIUD", "SIUD", ""],
   ContactEmail: ["SIUD", "SIUD", ""],
   ContactTermStats: ["S", "SIUD", ""],
+  // AI connectors: a user's own grants (owner-only, whatever the org
+  // context); app_auth revokes through app.revoke_connector_grants only.
+  ConnectorGrant: ["SIUD", "", ""],
   DataSourceSyncState: ["S", "SIUD", ""],
   DatabaseDefinition: ["SIU", "SIUD", ""],
   // Club-made databases: rows and fields, guarded per database by
@@ -38,6 +41,12 @@ const GRANTS = {
   // RSVP page sign-ups: owners/admins in the suite (row policy), the public
   // page and the reminder jobs on the service path.
   EventRegistration: ["SIUD", "SIUD", ""],
+  // Who was reminded about an event and when (meetings): the jobs write it
+  // on the service path, owners and admins read it, nobody updates it.
+  EventReminderSend: ["S", "SID", ""],
+  // Cards a member hid from their own "Up next". Own row only; hiding is an
+  // insert and un-hiding a delete, so there is no UPDATE.
+  UpNextDismissal: ["SID", "SD", ""],
   EventLinkLog: ["SI", "SI", ""],
   FinanceAuditLog: ["S", "S", ""],
   Invitation: ["SIUD", "SIUD", ""],
@@ -177,6 +186,8 @@ const NEW_TENANT_TABLES = [
   "PollOption",
   "PollVote",
   "EventRegistration",
+  "EventReminderSend",
+  "UpNextDismissal",
   "DatabaseField",
   "DatabaseRecord",
   "RsvpItem",
@@ -398,6 +409,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "NOTE_SHARED",
           // The weekly pulse (20261019120000_moonstone_product_update).
           "WEEKLY_PULSE",
+          // A meeting's reminder to a member going (20261026120000_event_reminders).
+          "EVENT_REMINDER",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         indexes: [
@@ -3801,6 +3814,21 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     INSERT INTO "TaskLabel" ("organizationId","taskId","labelId") VALUES ('org_PA','t_PA','l_PA'),('org_PA','t_PA','l_PA2');
     INSERT INTO "TaskAssignee" ("organizationId","taskId","userId") VALUES ('org_PA','t_PA','u_adminA');
     INSERT INTO "TaskComment" ("id","organizationId","taskId","authorId","body") VALUES ('tc_PA','org_PA','t_PA','u_adminA','note');
+    INSERT INTO "NoteFolder" ("id","organizationId","name","createdById","updatedAt") VALUES
+      ('nf_PA_trips','org_PA','Fixture trips','u_adminA',now()),
+      ('nf_PA_docs','org_PA','fixture docs','u_adminA',now()),
+      ('nf_A_docs','org_A','Fixture Docs','u_adminA',now());
+    INSERT INTO "OrgFile" ("id","organizationId","name","contentType","sizeBytes","storageKey","visibility","uploadedById","folderId") VALUES
+      ('of_PA_img','org_PA','map.png','image/png',100,'files/org_PA/img01','PRIVATE','u_adminA',NULL),
+      ('of_PA_trip','org_PA','tickets.txt','text/plain',30,'files/org_PA/trip01','PRIVATE','u_adminA','nf_PA_trips'),
+      ('of_PB','org_PB','b.txt','text/plain',5,'files/org_PB/b01','PRIVATE','u_ownerB',NULL);
+    INSERT INTO "Note" ("id","organizationId","title","contentJson","contentText","visibility","authorId","updatedById","updatedAt","folderId","yjsState") VALUES
+      ('n_PA','org_PA','Packing','{"type":"doc","content":[{"type":"image","attrs":{"src":"/api/orgs/org_PA/files/of_PA_img","fileId":"of_PA_img"}}]}','','PRIVATE','u_adminA','u_adminA',now(),'nf_PA_docs',decode('00','hex'));
+    INSERT INTO "Note" ("id","organizationId","parentId","title","contentJson","contentText","visibility","authorId","updatedById","updatedAt","deletedAt") VALUES
+      ('n_PA_sub','org_PA','n_PA','Day one','{"type":"doc"}','','PRIVATE','u_adminA','u_adminA',now(),NULL),
+      ('n_PA_old','org_PA','n_PA','Old plan','{"type":"doc"}','','PRIVATE','u_adminA','u_adminA',now(),now());
+    INSERT INTO "NoteVersion" ("id","organizationId","noteId","contentJson","createdById") VALUES
+      ('nv_PA','org_PA','n_PA','{"type":"doc","content":[{"type":"image","attrs":{"src":"/api/orgs/org_PA/files/of_PA_img"}}]}','u_adminA');
   `);
   const MOVE = `SELECT app.move_personal_items($1, $2, $3::text[], $4::text[], $5::text[], $6::text[]) AS r`;
   await tcase(
@@ -3810,9 +3838,13 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     { user: "u_adminA", org: "" },
     async (q) => {
       const s = {};
-      s.result = (
-        await q(MOVE, ["org_PA", "org_A", ["e_PA"], ["ap_PA"], ["qp_PA"], ["t_PA"]])
-      ).rows[0].r;
+      const {
+        fileIds,
+        storageUsedBytes: _used,
+        ...counts
+      } = (await q(MOVE, ["org_PA", "org_A", ["e_PA"], ["ap_PA"], ["qp_PA"], ["t_PA"]])).rows[0].r;
+      s.result = counts;
+      s.fileIds = fileIds;
       // The function points app.org_id at the club only while it runs.
       s.org_after = (await q(`SELECT current_setting('app.org_id', true) o`)).rows[0].o;
       await q(`SELECT app.set_context('u_adminA','org_A')`);
@@ -3852,7 +3884,9 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     },
     {
       value: {
-        result: { polls: 1, tasks: 2, events: 1, questionPolls: 1 },
+        // jsonb's key order: by length, then bytes.
+        result: { files: 0, notes: 0, polls: 1, tasks: 2, events: 1, folders: 0, questionPolls: 1 },
+        fileIds: [],
         org_after: "",
         event: "org_A",
         registration: "org_A",
@@ -3908,6 +3942,101 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         foreign_event: "error:22023",
         club_task: "error:22023",
         event_org: "org_PA",
+      },
+    },
+  );
+  // 20261023120000_move_personal_files: notes, folders and uploads. The app
+  // copies each upload's bytes under the club's id first and rebuilds a
+  // linked note's live document; the function refuses (40001) without them.
+  const MOVE_FILES = `SELECT app.move_personal_items($1, $2, '{}', '{}', '{}', '{}',
+    $3::text[], $4::text[], $5::text[], $6::jsonb, $7::jsonb) AS r`;
+  await tcase(
+    "P-MOVE-04",
+    "notes, folders and uploads move with what comes along, re-keyed and private to the mover, only with the club's copies",
+    "app_user",
+    { user: "u_adminA", org: "" },
+    async (q) => {
+      const s = {};
+      const keys = { of_PA_img: "files/org_A/img02", of_PA_trip: "files/org_A/trip02" };
+      const states = { n_PA: { state: "AQID", version: 1 } };
+      const attempt = (args) => tryv(q, MOVE_FILES, ["org_PA", "org_A", ...args]);
+      // The note shows of_PA_img, so it comes along and needs a copy.
+      s.no_keys = await attempt([["n_PA"], [], [], {}, states]);
+      s.wrong_prefix = await attempt([
+        ["n_PA"],
+        [],
+        [],
+        { of_PA_img: "files/org_PA/img02" },
+        states,
+      ]);
+      s.no_state = await attempt([["n_PA"], [], [], keys, {}]);
+      s.stale_state = await attempt([
+        ["n_PA"],
+        [],
+        [],
+        keys,
+        { n_PA: { state: "AQID", version: 7 } },
+      ]);
+      s.foreign_file = await attempt([[], [], ["of_PB"], {}, {}]);
+      s.foreign_folder = await attempt([[], ["nf_A_docs"], [], {}, {}]);
+
+      const {
+        storageUsedBytes: _used,
+        fileIds,
+        ...counts
+      } = (await q(MOVE_FILES, ["org_PA", "org_A", ["n_PA"], ["nf_PA_trips"], [], keys, states]))
+        .rows[0].r;
+      s.counts = counts;
+      s.fileIds = [...fileIds].sort();
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      const row = async (sql) => (await q(sql)).rows[0] ?? null;
+      s.note =
+        await row(`SELECT "organizationId" o, "folderId" f, "visibility"::text v, "version" n,
+                                 encode("yjsState", 'hex') y, "contentJson"::text LIKE '%/api/orgs/org_A/files/of_PA_img%' linked
+                            FROM "Note" WHERE "id" = 'n_PA'`);
+      s.sub = await row(
+        `SELECT "organizationId" o, "parentId" p FROM "Note" WHERE "id" = 'n_PA_sub'`,
+      );
+      s.version_linked =
+        (
+          await row(
+            `SELECT "contentJson"::text LIKE '%/api/orgs/org_A/%' l FROM "NoteVersion" WHERE "id" = 'nv_PA'`,
+          )
+        )?.l ?? null;
+      s.files = (
+        await q(`SELECT "id", "storageKey" k, "visibility"::text v, "folderId" f FROM "OrgFile"
+                  WHERE "id" IN ('of_PA_img','of_PA_trip') ORDER BY 1`)
+      ).rows;
+      s.trips = await row(`SELECT "organizationId" o FROM "NoteFolder" WHERE "id" = 'nf_PA_trips'`);
+      await q(`SELECT app.set_context('u_adminA','org_PA')`);
+      s.old_page = await row(
+        `SELECT "organizationId" o, "parentId" p FROM "Note" WHERE "id" = 'n_PA_old'`,
+      );
+      s.docs_stays = await row(
+        `SELECT "organizationId" o FROM "NoteFolder" WHERE "id" = 'nf_PA_docs'`,
+      );
+      return s;
+    },
+    {
+      value: {
+        no_keys: "error:40001",
+        wrong_prefix: "error:40001",
+        no_state: "error:40001",
+        stale_state: "error:40001",
+        foreign_file: "error:22023",
+        foreign_folder: "error:22023",
+        counts: { files: 2, notes: 2, polls: 0, tasks: 0, events: 0, folders: 1, questionPolls: 0 },
+        fileIds: ["of_PA_img", "of_PA_trip"],
+        note: { o: "org_A", f: "nf_A_docs", v: "PRIVATE", n: 2, y: "010203", linked: true },
+        sub: { o: "org_A", p: "n_PA" },
+        version_linked: true,
+        files: [
+          { id: "of_PA_img", k: "files/org_A/img02", v: "PRIVATE", f: null },
+          { id: "of_PA_trip", k: "files/org_A/trip02", v: "PRIVATE", f: "nf_PA_trips" },
+        ],
+        trips: { o: "org_A" },
+        old_page: { o: "org_PA", p: null },
+        docs_stays: { o: "org_PA" },
       },
     },
   );
@@ -4767,6 +4896,141 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         hidden_admin: true,
       },
     },
+  );
+
+  // ======================= AI connectors =======================
+  await tcase(
+    "P-CONN-01",
+    "ConnectorGrant: a user reads, writes and revokes only their own grants, in any org context",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const grant = (id, user, org) =>
+        `INSERT INTO "ConnectorGrant" ("id","userId","clientId","workosUserId","consentId","organizationId")
+         VALUES ('${id}','${user}','client_${id}','user_01W','app_consent_1',${org ? `'${org}'` : "NULL"})`;
+      const s = {};
+      s.own_insert = await tryq(q, grant("cg_1", "u_memberA", null));
+      s.own_scoped = await tryq(q, grant("cg_2", "u_memberA", "org_A"));
+      s.other_insert = await tryq(q, grant("cg_3", "u_adminA", null));
+      s.own_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      // An admin of the same org sees and revokes nothing of the member's.
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      s.admin_revokes = await rc(
+        q,
+        `UPDATE "ConnectorGrant" SET "revokedAt" = now() WHERE "userId" = 'u_memberA'`,
+      );
+      s.admin_deletes = await rc(q, `DELETE FROM "ConnectorGrant" WHERE "userId" = 'u_memberA'`);
+      s.admin_steals = await tryq(
+        q,
+        `UPDATE "ConnectorGrant" SET "userId" = 'u_adminA' WHERE "id" = 'cg_1'`,
+      );
+      // The member with no org context (withConnectorUserTx, withUserTx).
+      await q(`SELECT app.set_context('u_memberA','')`);
+      s.user_ctx_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      s.user_ctx_revokes = await rc(
+        q,
+        `UPDATE "ConnectorGrant" SET "revokedAt" = now() WHERE "id" = 'cg_1'`,
+      );
+      s.give_away = await tryq(
+        q,
+        `UPDATE "ConnectorGrant" SET "userId" = 'u_adminA' WHERE "id" = 'cg_2'`,
+      );
+      // No context at all: nothing.
+      await q(`SELECT app.set_context('','')`);
+      s.no_ctx_reads = await count(q, `SELECT count(*) n FROM "ConnectorGrant"`);
+      return s;
+    },
+    {
+      value: {
+        own_insert: 1,
+        own_scoped: 1,
+        other_insert: "42501",
+        own_reads: 2,
+        admin_reads: 0,
+        admin_revokes: 0,
+        admin_deletes: 0,
+        admin_steals: 0,
+        user_ctx_reads: 2,
+        user_ctx_revokes: 1,
+        give_away: "42501",
+        no_ctx_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CONN-02",
+    "app.connector_spaces: the caller's own spaces with each club's switch, which only an admin changes",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_switches_off = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "connectorsEnabled" = false WHERE "organizationId" = 'org_A'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_switches_off = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "connectorsEnabled" = false WHERE "organizationId" = 'org_A'`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','')`);
+      s.both = (
+        await q(
+          `SELECT "organizationId" || ':' || "connectorsEnabled" AS v FROM app.connector_spaces()
+            WHERE "organizationId" IN ('org_A','org_B') ORDER BY 1`,
+        )
+      ).rows.map((r) => r.v);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.member_b = (
+        await q(`SELECT "organizationId" AS v FROM app.connector_spaces() ORDER BY 1`)
+      ).rows.map((r) => r.v);
+      await q(`SELECT app.set_context('','')`);
+      s.no_ctx = await count(q, `SELECT count(*) n FROM app.connector_spaces()`);
+      return s;
+    },
+    {
+      value: {
+        member_switches_off: 0,
+        admin_switches_off: 1,
+        both: ["org_A:false", "org_B:true"],
+        member_b: ["org_B"],
+        no_ctx: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CONN-03",
+    "connector functions: connector_spaces for app_user, revoke_connector_grants for app_auth, nothing for PUBLIC",
+    "owner",
+    null,
+    async (q) =>
+      (
+        await q(`SELECT r || ':' || f AS p FROM
+                   unnest(ARRAY['app_user','app_service','app_auth','public']) r,
+                   unnest(ARRAY['app.connector_spaces()','app.revoke_connector_grants(text)']) f
+                 WHERE has_function_privilege(r, f, 'EXECUTE') ORDER BY 1`)
+      ).rows.map((r) => r.p),
+    { value: ["app_auth:app.revoke_connector_grants(text)", "app_user:app.connector_spaces()"] },
+  );
+  await tcase(
+    "P-CONN-04",
+    "app.revoke_connector_grants runs for app_auth (no tenant context) and is refused to app_user",
+    "app_auth",
+    null,
+    async (q) => ({
+      auth_runs: await count(q, `SELECT count(*) n FROM app.revoke_connector_grants('u_memberA')`),
+      auth_reads_table: await tryq(q, `SELECT 1 FROM "ConnectorGrant"`),
+    }),
+    { value: { auth_runs: 0, auth_reads_table: "42501" } },
+  );
+  await tcase(
+    "P-CONN-05",
+    "app_user cannot call the identity plane's revoke",
+    "app_user",
+    A("u_memberA"),
+    async (q) => tryv(q, `SELECT count(*) FROM app.revoke_connector_grants('u_adminA')`),
+    { value: "error:42501" },
   );
 
   await own(`DELETE FROM "Organization" WHERE "id" IN ('org_PA','org_PB','org_PM')`);

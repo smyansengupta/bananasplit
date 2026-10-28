@@ -29,7 +29,7 @@ export interface CatalogEntry {
   detail?: string;
   /** Other words people use for it ("kanban", "dark mode"). */
   keywords: readonly string[];
-  /** A lucide icon name (palette-icons.ts). */
+  /** An icon name (@/components/icons) (palette-icons.ts). */
   icon: string;
   command: PaletteCommand;
 }

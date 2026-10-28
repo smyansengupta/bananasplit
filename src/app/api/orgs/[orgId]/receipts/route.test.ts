@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { serialized } from "@/test/serialized-request";
+
 /**
  * The receipt upload route against fake wrappers: withOrgTx / withOrgAction
  * hand the handler a mocked transaction client and the caller's role (or
@@ -72,7 +74,7 @@ function jpegOfSize(bytes: number): Uint8Array<ArrayBuffer> {
   return data;
 }
 
-function upload(
+async function upload(
   file: { bytes: Uint8Array<ArrayBuffer>; name: string; type: string } | null,
   opts: { transactionId?: string; origin?: string } = {},
 ) {
@@ -86,7 +88,7 @@ function upload(
     body: form,
     headers,
   });
-  return POST(request, { params: Promise.resolve({ orgId: "org_1" }) });
+  return POST(await serialized(request), { params: Promise.resolve({ orgId: "org_1" }) });
 }
 
 beforeEach(() => {
@@ -256,7 +258,7 @@ describe("POST /api/orgs/[orgId]/receipts (0A Fix 15, 0C wrappers)", () => {
 });
 
 describe("the receipt upload gate (redesign guide 11.2)", () => {
-  it("refuses a full club with the numbers, before storing anything", async () => {
+  it("refuses a full organization with the numbers, before storing anything", async () => {
     db.organization.findUnique.mockResolvedValue(
       space({ storageUsedBytes: BigInt(100 * GB - 512 * 1024) }),
     );
@@ -281,7 +283,7 @@ describe("the receipt upload gate (redesign guide 11.2)", () => {
     expect(db.transaction.findFirst).not.toHaveBeenCalled();
   });
 
-  it("refuses a Personal space: finance is for clubs", async () => {
+  it("refuses a Personal space: finance is for organizations", async () => {
     db.organization.findUnique.mockResolvedValue(
       space({ kind: "PERSONAL", plan: "PERSONAL_PLUS" }),
     );

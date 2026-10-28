@@ -1,46 +1,20 @@
-import { notFound, redirect } from "next/navigation";
-
-import { RsvpManager } from "@/components/rsvp/rsvp-manager";
-import { can } from "@/lib/auth/permissions";
-import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { resolveOrgMailRouting } from "@/server/email/mailer";
-import { loadRsvpManager } from "@/server/rsvp/manage";
-import { smsDelivery } from "@/server/sms";
+import { redirect } from "next/navigation";
 
 /**
- * An event's public RSVP page, run from the suite: the guest list (check-in,
- * payments, moving people, adding them, CSV) and the page's settings. Owners
- * and admins only; RLS also limits the sign-ups (emails, phones) to them.
+ * Sign-ups are run from the meeting (docs/features/meetings.md). The old path
+ * still works, because hosts have pasted it into their own notes and messages.
+ * It needs no permission check: the page it forwards to does its own, and
+ * sends anyone who can't edit the event to the meeting itself.
+ *
+ * Only the new-page banner (?new=1) is carried across; anything else on the
+ * old link is dropped.
  */
-export default async function EventRsvpPage({
+export default async function RsvpMoved({
   params,
+  searchParams,
 }: PageProps<"/app/[orgSlug]/calendar/[eventId]/rsvp">) {
   const { orgSlug, eventId } = await params;
-  const ctx = await getOrgContextBySlug(orgSlug);
-  // Members see the event itself (and its public link there).
-  if (!can(ctx, "events.write")) redirect(`/app/${orgSlug}/calendar/${eventId}`);
-  const { organization: org } = ctx;
-
-  const data = await withOrgTx(org.id, ({ db }) =>
-    loadRsvpManager(db, org.id, eventId, org.timezone),
-  );
-  if (!data) notFound();
-  const mail = await resolveOrgMailRouting(org.id);
-  const base = `/app/${orgSlug}/calendar/${eventId}`;
-
-  return (
-    <RsvpManager
-      {...data.props}
-      links={{
-        back: { href: base, label: data.event.title },
-        edit: `${base}?edit=1`,
-        door: `${base}/rsvp/door`,
-        flyer: `/e/${data.event.rsvpSlug}/flyer`,
-      }}
-      messaging={{
-        email: mail.mode === "org" ? "org" : "platform",
-        texts: smsDelivery() === "live",
-      }}
-    />
-  );
+  const { new: fresh } = await searchParams;
+  const isNew = (Array.isArray(fresh) ? fresh[0] : fresh) === "1";
+  redirect(`/app/${orgSlug}/meetings/${eventId}/rsvp${isNew ? "?new=1" : ""}`);
 }

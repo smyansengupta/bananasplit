@@ -22,6 +22,7 @@ import {
 } from "./task-badges";
 import { TaskItemMenu } from "./task-item-menu";
 import { ProgressBar, TaskTypeChip } from "./task-type";
+import { TaskTitle } from "./task-title";
 import { accessSubjectOf, useTasks } from "./tasks-context";
 import type { TaskItem } from "./types";
 
@@ -105,7 +106,7 @@ export function TaskRow({
               <span className="text-muted-foreground">{task.parentTask.title} / </span>
             )}
             <span className={cn("font-medium", done && "text-muted-foreground line-through")}>
-              {task.title}
+              <TaskTitle>{task.title}</TaskTitle>
             </span>
           </span>
           {flagged && <FlagBadge />}

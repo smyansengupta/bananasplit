@@ -22,6 +22,7 @@ import {
 import { spaceLimits, spaceStatus, trialDaysLeft } from "@/lib/billing/space";
 import { formatStorage } from "@/lib/billing/storage";
 import { StorageMeter } from "@/components/billing/storage-meter";
+import { connectorsConfig } from "@/server/connectors/config";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readStorageUsed } from "@/server/storage/quota";
 import { storageBreakdown } from "@/server/storage/usage";
@@ -72,8 +73,10 @@ function teamPrice(plan: "CLUB" | "SOCIETY", price: PriceContext) {
 /** What sets a card apart from the one before it: its features, then its limits. */
 function card(plan: PricedPlan, previous: PricedPlan | null, price: PriceContext): PlanCard {
   const before = new Set(previous ? featuresOf(previous) : []);
+  // AI connectors are listed only once the deployment turns them on.
+  const offered = (f: PlanFeature) => f !== "connectors" || connectorsConfig() !== null;
   const features = featuresOf(plan)
-    .filter((f) => !before.has(f))
+    .filter((f) => !before.has(f) && offered(f))
     .map((f) => (plan === "PERSONAL_PLUS" ? PERSONAL_LABELS[f] : undefined) ?? FEATURE_LABELS[f]);
   const limits = PLAN_LIMITS[plan];
   if (limits.dataConnections > 0 && plan !== "PERSONAL_PLUS") {

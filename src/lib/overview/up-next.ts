@@ -16,7 +16,9 @@ import type { BlockTone } from "@/components/ui/block-card";
 
 export const UP_NEXT_LIMIT = 4;
 
-export type UpNextKind = "task" | "meeting" | "event" | "poll" | "rsvp";
+/** The kinds a block can be, and what UpNextDismissal.kind accepts. */
+export const UP_NEXT_KINDS = ["task", "meeting", "event", "poll", "rsvp"] as const;
+export type UpNextKind = (typeof UP_NEXT_KINDS)[number];
 
 export interface UpNextCandidate {
   id: string;

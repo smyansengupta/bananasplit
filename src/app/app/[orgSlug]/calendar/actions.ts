@@ -11,9 +11,11 @@ import {
 } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { conferenceUrlError, resolveTimes } from "@/lib/calendar/event-input";
+import { MAX_REMINDERS } from "@/lib/meetings/reminders";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
 import * as events from "@/server/events/service";
 import { notifyUsers } from "@/server/notifications";
+import { scheduleEventReminders } from "@/server/rsvp/service";
 
 import { actionError } from "./action-result";
 
@@ -43,6 +45,8 @@ const eventFormSchema = z.object({
   startsAt: z.string().min(1).max(40),
   endsAt: z.string().min(1).max(40),
   location: z.string().max(300).nullish(),
+  /** How to find the place. The sign-up page's settings write it too, with the same cap. */
+  locationDetails: z.string().max(1000).nullish(),
   conferenceProvider: z.enum(ConferenceProvider).optional(),
   conferenceUrl: z.string().max(2000).nullish(),
   kind: z.enum(EventKind).optional(),
@@ -54,6 +58,11 @@ const eventFormSchema = z.object({
   featured: z.boolean().optional(),
   publicNote: z.string().max(500).nullish(),
   stampSlot: z.number().int().min(1).max(12).nullish(),
+  /** Minutes before the start to remind people. The service validates the range and duplicates; left out, a new event takes the organization's default. */
+  reminderMinutes: z
+    .array(z.number().int())
+    .max(MAX_REMINDERS, `Use at most ${MAX_REMINDERS} reminders.`)
+    .optional(),
   attendeeIds: z.array(z.string().min(1).max(100)).max(200).optional(),
   /** Tell existing attendees about a reschedule, a move or a cancellation (default yes). */
   notifyAttendees: z.boolean().optional(),
@@ -110,6 +119,7 @@ function serviceFields(data: z.infer<typeof eventPatchSchema>) {
   if (data.title !== undefined) out.title = data.title;
   if (data.description !== undefined) out.description = data.description;
   if (data.location !== undefined) out.location = data.location;
+  if (data.locationDetails !== undefined) out.locationDetails = data.locationDetails;
   if (data.conferenceProvider !== undefined) out.conferenceProvider = data.conferenceProvider;
   if (data.conferenceUrl !== undefined) out.conferenceUrl = data.conferenceUrl;
   if (data.kind !== undefined) out.kind = data.kind;
@@ -121,6 +131,7 @@ function serviceFields(data: z.infer<typeof eventPatchSchema>) {
   if (data.featured !== undefined) out.featured = data.featured;
   if (data.publicNote !== undefined) out.publicNote = data.publicNote;
   if (data.stampSlot !== undefined) out.stampSlot = data.stampSlot;
+  if (data.reminderMinutes !== undefined) out.reminderMinutes = data.reminderMinutes;
   return out;
 }
 
@@ -233,6 +244,11 @@ const updateEventTx = withOrgAction(
     }
 
     const { event } = await events.updateEvent(ctx, eventId, patch);
+    // Someone new to remind. The service queued the reminders only if the
+    // time or the offsets changed; an event that came in from the Google
+    // import may have none queued yet. Its job keys merge, so queuing again
+    // is harmless.
+    if (added.length > 0) await scheduleEventReminders(ctx.db, event);
     const link = eventLink(org.slug, eventId);
     await notify(ctx, added, NotificationType.EVENT_INVITE, `You were invited to "${event.title}"`, link);
     const rescheduled =

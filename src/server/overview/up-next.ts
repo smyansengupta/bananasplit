@@ -1,4 +1,4 @@
-import type { RSVPStatus } from "@/generated/prisma/client";
+import type { EventKind, RSVPStatus } from "@/generated/prisma/client";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { dayWordOfKey, dueLabel, whenWord } from "@/lib/overview/format";
 import { arrangeUpNext, taskTone, type UpNextCandidate } from "@/lib/overview/up-next";
@@ -16,6 +16,8 @@ import type { EventGoing, PersonFace, PollStat, TaskExtras } from "./queries";
  */
 
 export interface UpNextBlock extends UpNextCandidate {
+  /** The event's kind, so its card can take that kind's colour. */
+  eventKind?: EventKind | null;
   kicker: string;
   title: string;
   subtitle: string | null;
@@ -40,6 +42,8 @@ export function buildUpNext(input: {
   rsvps: ReadonlyMap<string, RSVPStatus>;
   going: ReadonlyMap<string, EventGoing>;
   polls: readonly PollStat[];
+  /** "{kind}:{id}" of the cards this member hid (UpNextDismissal). */
+  hidden?: ReadonlySet<string>;
 }) {
   const base = `/app/${input.orgSlug}`;
   const weekEnd = addDaysToKey(input.todayKey, 7);
@@ -91,6 +95,7 @@ export function buildUpNext(input: {
         id: event.id,
         kind: waiting ? "rsvp" : kind,
         tone: waiting ? "answer" : "quiet",
+        eventKind: event.kind,
         at: event.startsAt,
         kicker: waiting ? `Your RSVP · ${when}` : when,
         title: event.title,
@@ -110,6 +115,12 @@ export function buildUpNext(input: {
 
   for (const poll of input.polls) {
     if (poll.mine) continue;
+    // A poll with no closing date used to be given a fake one 30 weeks out,
+    // which meant it sat in Up next for the rest of the year. An open poll is
+    // worth asking about for a fortnight; after that it is not "up next", and
+    // it is still on Polls for anyone who wants it.
+    const asked = poll.closesAt ?? addDays(poll.createdAt, OPEN_POLL_DAYS);
+    if (asked.getTime() <= input.now.getTime()) continue;
     const closes = poll.closesAt
       ? ` · closes ${dayWordOfKey(localDateKey(poll.closesAt, input.zones.viewer), input.todayKey)}`
       : "";
@@ -117,7 +128,7 @@ export function buildUpNext(input: {
       id: poll.id,
       kind: "poll",
       tone: "answer",
-      at: poll.closesAt ?? new Date(input.now.getTime() + 30 * WEEK_MS),
+      at: asked,
       kicker: `${poll.kind === "question" ? "Your vote" : "Your times"}${closes}`,
       title: poll.title,
       subtitle: poll.kind === "question" ? "Poll" : "Find a time",
@@ -129,5 +140,28 @@ export function buildUpNext(input: {
     });
   }
 
-  return arrangeUpNext(blocks);
+  // Nothing that has already happened. Each kind has its own reason to have
+  // slipped through (an event that ran, a poll that closed, a task whose due
+  // date passed while it stayed open), and the one rule covers all of them.
+  const live = blocks.filter((b) => !isPast(b, input.now));
+  const hidden = input.hidden ?? new Set<string>();
+  return arrangeUpNext(live.filter((b) => !hidden.has(`${b.kind}:${b.id}`)));
+}
+
+/** How long an open poll with no closing date stays in Up next. */
+const OPEN_POLL_DAYS = 14;
+
+function addDays(from: Date, days: number): Date {
+  return new Date(from.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * Whether a block is about something that has already been and gone.
+ *
+ * An overdue task is NOT past: its whole point is that it still needs doing.
+ * An event that has finished, or a poll whose moment has passed, is.
+ */
+function isPast(block: UpNextBlock, now: Date): boolean {
+  if (block.kind === "task") return false;
+  return block.at.getTime() <= now.getTime();
 }

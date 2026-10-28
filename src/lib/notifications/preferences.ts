@@ -224,6 +224,7 @@ export const NOTIFICATION_TYPE_META: Record<
   EVENT_INVITE: { label: "I'm invited to an event", group: "events" },
   EVENT_UPDATED: { label: "An event I'm going to changes", group: "events" },
   EVENT_CANCELLED: { label: "An event I'm going to is cancelled", group: "events" },
+  EVENT_REMINDER: { label: "A reminder before a meeting I'm going to", group: "events" },
   INVITE_ACCEPTED: { label: "Someone accepts an invite I sent", group: "org" },
   NOTE_SHARED: { label: "Someone shares a note with me", group: "org" },
   WEEKLY_PULSE: { label: "My organization's weekly pulse", group: "org" },

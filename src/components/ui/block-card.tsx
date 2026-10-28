@@ -16,6 +16,16 @@ import { cn } from "@/lib/utils";
  * - goal:   progress toward a goal (RSVPs, setup steps, a budget)
  *
  * Colours come from derive.ts (block-*), so they follow the club theme.
+ *
+ * A QUIET card may instead carry an `accent`: an event kind's colour from
+ * the tag palette (src/lib/tag-colors.ts). Four near-black cards in a row
+ * told you nothing about what was in them, and the one thing a meeting
+ * block already knows is its kind, so a quiet card is painted in that
+ * kind's own colour and the row reads as a row of different things. It
+ * still means what quiet means ("coming up, nothing needed yet"), it is
+ * still the only tone that takes one, and the kicker still says the when
+ * in words. The label flips black or white off the fill's own lightness,
+ * because the palette is dark in light mode and light in dark mode.
  * The card lifts and tilts slightly toward the pointer, with a soft glare
  * that follows it (off under reduced motion). With `href` the title is a
  * stretched link; `action` (a ••• menu) stays clickable above it.
@@ -37,8 +47,20 @@ export function blockToneClass(tone: BlockTone) {
   return TONES[tone];
 }
 
+/** Black or white, whichever reads on `--kind` (as calendar.css does it). */
+const ON_KIND = "oklch(from var(--kind) clamp(0, (0.62 - l) * 1000, 1) 0 0)";
+
+/** An accented quiet card paints itself from --kind instead of block-quiet. */
+const ACCENT_STYLE: React.CSSProperties = {
+  background: "var(--kind)",
+  color: ON_KIND,
+  ["--meta" as string]: `color-mix(in oklab, ${ON_KIND} 74%, var(--kind))`,
+  ["--ring-bg" as string]: "var(--kind)",
+};
+
 export function BlockCard({
   tone,
+  accent,
   kicker,
   title,
   subtitle,
@@ -51,6 +73,11 @@ export function BlockCard({
   className,
 }: {
   tone: BlockTone;
+  /**
+   * A quiet card's own colour, as a CSS value (`var(--tag-plum)`). Ignored
+   * on the other tones, whose colour is what they mean.
+   */
+  accent?: string | null;
   /** The line that says what kind of block this is: "Due today", "Tomorrow · 7:00 PM". */
   kicker: ReactNode;
   title?: ReactNode;
@@ -88,18 +115,23 @@ export function BlockCard({
     el.style.setProperty("--ry", "0deg");
   }, []);
 
+  const accented = tone === "quiet" && accent ? accent : null;
+
   return (
     <article
       ref={ref}
       onPointerMove={onMove}
       onPointerLeave={onLeave}
+      style={accented ? { ["--kind" as string]: accented, ...ACCENT_STYLE } : undefined}
       className={cn(
         "group/block rounded-block relative flex min-h-[13.75rem] min-w-0 flex-col p-5 transition-[transform,box-shadow] duration-250 ease-(--ease-ink)",
         "hover:shadow-e2 [transform:perspective(900px)_rotateX(var(--rx,0deg))_rotateY(var(--ry,0deg))_translateY(var(--lift,0px))] hover:[--lift:-3px] motion-reduce:transform-none",
         // A soft top light on every block, and a glare that follows the pointer.
         "before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-linear-to-b before:from-white/7 before:to-transparent before:to-45%",
         "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:bg-[radial-gradient(280px_200px_at_var(--mx,50%)_var(--my,0%),var(--glare),transparent_65%)] after:opacity-0 after:transition-opacity after:duration-300 hover:after:opacity-100",
-        TONES[tone],
+        // An accented card paints itself from the style above; it still
+        // wants the quiet tone's inset ring.
+        accented ? "ring-1 ring-inset ring-black/10 dark:ring-white/10" : TONES[tone],
         className,
       )}
     >

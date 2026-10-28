@@ -65,12 +65,16 @@ import { Segmented } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
+import { TAG_COLOR_NAMES, TAG_COLORS, tagColorOf } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
+
+import { FolderCard, folderTone, type FolderCardPeek } from "./folder-card";
 
 const NOTE_MIME = "application/x-bananasplit-note";
 const FILE_MIME = "application/x-bananasplit-file";
 
-const COLORS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"] as const;
+/** The folder palette, the same one event kinds and epics use. */
+const COLORS = TAG_COLORS;
 
 /** A tile's preview: the first line with words in it. */
 function firstLine(text: string) {
@@ -88,6 +92,8 @@ export interface LibraryFolder {
   color: string | null;
   noteCount: number;
   fileCount: number;
+  /** Its newest few items, for the folder card on Everything (empty elsewhere). */
+  peek?: FolderCardPeek[];
   canEdit: boolean;
 }
 
@@ -155,7 +161,7 @@ function downloadFrom(url: string) {
 }
 
 function folderDot(color: string | null) {
-  return color ? `var(--${color})` : "var(--muted-foreground)";
+  return folderTone(color);
 }
 
 /** Grid or list, as icons only (the names are read out and shown on hover). */
@@ -218,6 +224,10 @@ export function NotesLibrary({
   const [q, setQ] = useState(params.get("q") ?? "");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const folder = params.get("folder");
+  // The root of the tree (Everything, not searching): folders shown as tiles,
+  // and the list below them is only what is in no folder (the page asks for
+  // exactly that).
+  const atRoot = !folder && !params.get("q");
   const view = params.get("layout") === "list" ? "list" : "grid";
   const base = `/app/${orgSlug}/notes`;
   const pinned = new Set(pinnedHrefs);
@@ -256,6 +266,7 @@ export function NotesLibrary({
       const types = Array.from(e.dataTransfer.types);
       if (!types.includes(NOTE_MIME) && !types.includes(FILE_MIME)) return;
       e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
       setOverFolder(id ?? "none");
     },
     onDragLeave: () => setOverFolder((f) => (f === (id ?? "none") ? null : f)),
@@ -321,6 +332,7 @@ export function NotesLibrary({
       const types = Array.from(e.dataTransfer.types);
       if (!types.includes(NOTE_MIME) && !types.includes(FILE_MIME)) return;
       e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
       setOverTrash(true);
     },
     onDragLeave: () => setOverTrash(false),
@@ -533,8 +545,16 @@ export function NotesLibrary({
           {view === "grid" &&
             (family === "image" ? (
               <div className="bg-muted relative h-32 overflow-hidden">
+                {/* Not draggable itself, so the card drags (an image drag carries the
+                    picture as a file, and the page would upload it again). */}
                 {/* eslint-disable-next-line @next/next/no-img-element -- a private, permission-checked file */}
-                <img src={src} alt="" loading="lazy" className="size-full object-cover" />
+                <img
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                  className="size-full object-cover"
+                />
                 <Badge variant="secondary" className="absolute bottom-2 left-3">
                   {FILE_LABELS[family]}
                 </Badge>
@@ -819,19 +839,18 @@ export function NotesLibrary({
                             <button
                               key={c ?? "none"}
                               type="button"
-                              aria-label={c ? `Colour ${c}` : "No colour"}
-                              aria-pressed={f.color === c}
+                              aria-label={
+                                c ? TAG_COLOR_NAMES[c] : "Match the theme"
+                              }
+                              aria-pressed={tagColorOf(f.color) === c}
                               onClick={() =>
                                 run(() => updateFolderAction(orgId, f.id, { color: c }))
                               }
                               className="grid size-5 place-items-center rounded-md border"
-                              style={{ background: c ? `var(--${c})` : undefined }}
+                              style={{ background: folderTone(c) }}
                             >
-                              {f.color === c && (
-                                <Check
-                                  className={cn("size-3", c && "text-background")}
-                                  aria-hidden="true"
-                                />
+                              {tagColorOf(f.color) === c && (
+                                <Check className="text-background size-3" aria-hidden="true" />
                               )}
                             </button>
                           ))}
@@ -1015,10 +1034,49 @@ export function NotesLibrary({
           )}
         </div>
 
+        {/*
+          Everything is the root of the tree: its folders first, as tiles you
+          open or drop a file onto, then whatever is in no folder. A search
+          looks everywhere instead, so the tiles step aside for it.
+        */}
+        {atRoot && folders.length > 0 && (
+          <section aria-label="Folders" className="space-y-6">
+            <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))] gap-x-4 gap-y-5">
+              {folders.map((f) => (
+                <li key={f.id}>
+                  <FolderCard
+                    name={f.name}
+                    color={f.color}
+                    noteCount={f.noteCount}
+                    fileCount={f.fileCount}
+                    peek={f.peek ?? []}
+                    colors={COLORS}
+                    onColor={
+                      f.canEdit
+                        ? (c) => run(() => updateFolderAction(orgId, f.id, { color: c }))
+                        : undefined
+                    }
+                    dropping={overFolder === f.id}
+                    onOpen={() => go({ folder: f.id })}
+                    dropProps={dropProps(f.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+            {entries.length > 0 && (
+              <h3 className="heading flex items-center gap-2 text-[17px]">
+                Not in a folder <Badge variant="secondary">{entries.length}</Badge>
+              </h3>
+            )}
+          </section>
+        )}
+
         {inTrash ? (
           <TrashView trash={trash} pending={pending} onRestore={restore} />
         ) : entries.length === 0 ? (
-          <EmptyState {...emptyCopy()} />
+          atRoot && folders.length > 0 ? null : (
+            <EmptyState {...emptyCopy()} />
+          )
         ) : (
           <ul
             className={cn(

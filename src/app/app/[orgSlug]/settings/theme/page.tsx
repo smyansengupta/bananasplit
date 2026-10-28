@@ -41,7 +41,7 @@ export default async function ThemeSettingsPage({
 
   // The live line: what everyone sees now.
   const themeName =
-    theme.preset === CUSTOM_PRESET_ID ? "Custom" : (findPreset(theme.preset)?.name ?? "Moonstone");
+    theme.preset === CUSTOM_PRESET_ID ? "Custom" : (findPreset(theme.preset)?.name ?? "Graphite");
   const modeLine =
     theme.mode === "LIGHT"
       ? "opens in light"

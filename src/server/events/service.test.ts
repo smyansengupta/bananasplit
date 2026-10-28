@@ -29,11 +29,20 @@ function makeCtx(opts: {
   integrations?: { provider: string; config?: unknown }[];
   existing?: Record<string, unknown> | null;
   hostIsMember?: boolean;
+  /** The org's meeting reminder default; null is an org with no settings row (the default is [1440, 60]). */
+  orgReminders?: number[] | null;
 }) {
   const saved: Record<string, unknown>[] = [];
   const db = {
     membership: { count: vi.fn(async () => (opts.hostIsMember === false ? 0 : 1)) },
     orgIntegration: { findMany: vi.fn(async () => opts.integrations ?? []) },
+    orgSettings: {
+      findUnique: vi.fn(async () =>
+        opts.orgReminders === null
+          ? null
+          : { meetingReminderMinutes: opts.orgReminders ?? [1440, 60] },
+      ),
+    },
     event: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         saved.push(data);
@@ -160,13 +169,92 @@ describe("event service", () => {
     await expect(createEvent(ctx, { ...base, rsvpUrl: "javascript:alert(1)" })).rejects.toBeInstanceOf(
       EventValidationError,
     );
-    await expect(createEvent(ctx, { ...base, conferenceProvider: "ZOOM" })).rejects.toThrow(/meeting link/);
+    // An empty link against a provider we can call is not a mistake: it
+    // means "make the meeting for me" (docs/features/meetings.md). OTHER
+    // still needs one pasted, because there is nothing for us to call.
+    await expect(createEvent(ctx, { ...base, conferenceProvider: "OTHER" })).rejects.toThrow(
+      /meeting link/,
+    );
     await expect(
       createEvent(ctx, { ...base, conferenceProvider: "OTHER", conferenceUrl: "http://insecure.example" }),
     ).rejects.toThrow(/https/);
     await expect(
       createEvent(makeCtx({ hostIsMember: false }).ctx, { ...base, hostUserId: "u_outsider" }),
     ).rejects.toThrow(/member/);
+  });
+
+  it("stores how to find the place trimmed, none when it is empty, and refuses more than 1,000 characters", async () => {
+    const { ctx, saved } = makeCtx({});
+    await createEvent(ctx, {
+      ...base,
+      location: "Curry 344",
+      locationDetails: "  Second floor.  ",
+    });
+    expect(saved[0]).toMatchObject({ location: "Curry 344", locationDetails: "Second floor." });
+
+    await createEvent(ctx, { ...base, locationDetails: "   " });
+    expect(saved[1]!.locationDetails).toBeNull();
+    await createEvent(ctx, { ...base, locationDetails: "x".repeat(1000) });
+    expect(saved[2]!.locationDetails).toBe("x".repeat(1000));
+    await expect(
+      createEvent(ctx, { ...base, locationDetails: "x".repeat(1001) }),
+    ).rejects.toBeInstanceOf(EventValidationError);
+  });
+
+  it("a patch changes how to find the place only when it names it, and can clear it", async () => {
+    const { ctx, saved } = makeCtx({ existing: { ...existing, locationDetails: "Second floor." } });
+    await updateEvent(ctx, "evt_1", { title: "Renamed" });
+    expect(saved[0]).not.toHaveProperty("locationDetails");
+    await updateEvent(ctx, "evt_1", { locationDetails: "Ring the bell." });
+    expect(saved[1]!.locationDetails).toBe("Ring the bell.");
+    await updateEvent(ctx, "evt_1", { locationDetails: null });
+    expect(saved[2]!.locationDetails).toBeNull();
+  });
+
+  it("a new event takes the org's reminder default, or one day and one hour with no settings row", async () => {
+    const withDefault = makeCtx({ orgReminders: [30] });
+    await createEvent(withDefault.ctx, base);
+    expect(withDefault.saved[0]!.reminderMinutes).toEqual([30]);
+    expect(withDefault.db.orgSettings.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { organizationId: ORG } }),
+    );
+
+    const noRow = makeCtx({ orgReminders: null });
+    await createEvent(noRow.ctx, base);
+    expect(noRow.saved[0]!.reminderMinutes).toEqual([1440, 60]);
+  });
+
+  it("an event's own reminders win over the default, are stored earliest first, and skip the lookup", async () => {
+    const { ctx, db, saved } = makeCtx({ orgReminders: [30] });
+    await createEvent(ctx, { ...base, reminderMinutes: [10, 1440] });
+    expect(saved[0]!.reminderMinutes).toEqual([1440, 10]);
+    expect(db.orgSettings.findUnique).not.toHaveBeenCalled();
+
+    // An empty list is a choice (no reminders), not a missing one.
+    await createEvent(ctx, { ...base, reminderMinutes: [] });
+    expect(saved[1]!.reminderMinutes).toEqual([]);
+    expect(db.orgSettings.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bad reminder list with the schema's sentence, before saving anything", async () => {
+    const { ctx, db } = makeCtx({});
+    for (const reminderMinutes of [[60, 60], [0], [40321], [1.5], [1, 2, 3, 4, 5, 6, 7, 8, 9]]) {
+      await expect(createEvent(ctx, { ...base, reminderMinutes })).rejects.toBeInstanceOf(
+        EventValidationError,
+      );
+    }
+    expect(db.event.create).not.toHaveBeenCalled();
+    await expect(
+      updateEvent(makeCtx({ existing }).ctx, "evt_1", { reminderMinutes: [60, 60] }),
+    ).rejects.toBeInstanceOf(EventValidationError);
+  });
+
+  it("a patch changes reminders only when it names them", async () => {
+    const { ctx, saved } = makeCtx({ existing: { ...existing, reminderMinutes: [1440, 60] } });
+    await updateEvent(ctx, "evt_1", { title: "Renamed" });
+    expect(saved[0]).not.toHaveProperty("reminderMinutes");
+    await updateEvent(ctx, "evt_1", { reminderMinutes: [30, 120] });
+    expect(saved[1]!.reminderMinutes).toEqual([120, 30]);
   });
 
   it("updates: 404 for a missing event, re-mirrors an existing Google event, rebuilds on a visibility flip", async () => {

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { FieldSelect } from "@/components/ui/field-select";
 import { AI_VENDORS, aiVendor } from "@/lib/ai/vendors";
 import { claudeModel, estimateParseCostUsd, formatUsd } from "@/lib/org-chart/models";
 import {
@@ -26,10 +27,8 @@ import {
   saveSupabaseAction,
   sendTestEmailAction,
 } from "./actions";
-import { nativeSelectClass, SettingsCard } from "../settings-card";
+import { SettingsCard } from "../settings-card";
 import { FeedbackLine, SecretInput, feedbackOf, type Feedback } from "./integration-ui";
-
-const selectClass = nativeSelectClass;
 
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -94,9 +93,9 @@ export function AiModelForm({
       >
         <div className="grid gap-1.5">
           <Label htmlFor="ai-vendor">Provider</Label>
-          <select
+          <FieldSelect
             id="ai-vendor"
-            className={selectClass}
+            className="w-full"
             value={vendorId}
             onChange={(e) => setVendorId(e.target.value)}
             disabled={!canWrite}
@@ -106,7 +105,7 @@ export function AiModelForm({
                 {v.label}
               </option>
             ))}
-          </select>
+          </FieldSelect>
           <p className="text-muted-foreground text-[13px]">
             Bananasplit only ever calls the provider&apos;s official address (
             {vendor.baseUrl.replace("https://", "")}).
@@ -192,9 +191,9 @@ export function ClaudeForm({
         />
         <div className="grid gap-1.5">
           <Label htmlFor="claude-model">Model</Label>
-          <select
+          <FieldSelect
             id="claude-model"
-            className={selectClass}
+            className="w-full"
             value={model}
             onChange={(e) => setModel(e.target.value)}
           >
@@ -208,7 +207,7 @@ export function ClaudeForm({
                 </option>
               );
             })}
-          </select>
+          </FieldSelect>
           <p className="text-muted-foreground text-[13px]">
             {selected?.note} About {perImport !== null ? formatUsd(perImport) : "—"} per import of a
             chart for a typical leadership team (
@@ -416,9 +415,9 @@ export function SupabaseForm({
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="sb-region">Pooler region</Label>
-            <select
+            <FieldSelect
               id="sb-region"
-              className={selectClass}
+              className="w-full"
               value={poolerRegion}
               onChange={(e) => setPoolerRegion(e.target.value)}
             >
@@ -427,19 +426,19 @@ export function SupabaseForm({
                   {r}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="sb-prefix">Pooler host prefix</Label>
-            <select
+            <FieldSelect
               id="sb-prefix"
-              className={selectClass}
+              className="w-full"
               value={poolerPrefix}
               onChange={(e) => setPoolerPrefix(e.target.value)}
             >
               <option value="aws-0">aws-0</option>
               <option value="aws-1">aws-1</option>
-            </select>
+            </FieldSelect>
           </div>
         </div>
         <p className="bg-muted/60 rounded-field text-muted-foreground px-3.5 py-2.5 text-[13px]">
@@ -606,9 +605,9 @@ export function GoogleCalendarPanel({
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="gcal-public">Public events calendar</Label>
-                <select
+                <FieldSelect
                   id="gcal-public"
-                  className={selectClass}
+                  className="w-full"
                   value={publicId}
                   onChange={(e) => setPublicId(e.target.value)}
                 >
@@ -619,7 +618,7 @@ export function GoogleCalendarPanel({
                       {c.primary ? " (primary)" : ""}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
                 <p className="text-muted-foreground text-[13px]">
                   The import reads existing events from this calendar too. Without one, public
                   events stay off Google and nothing is imported.
@@ -627,9 +626,9 @@ export function GoogleCalendarPanel({
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="gcal-internal">Internal events calendar (optional)</Label>
-                <select
+                <FieldSelect
                   id="gcal-internal"
-                  className={selectClass}
+                  className="w-full"
                   value={internalId}
                   onChange={(e) => setInternalId(e.target.value)}
                 >
@@ -640,7 +639,7 @@ export function GoogleCalendarPanel({
                       {c.primary ? " (primary)" : ""}
                     </option>
                   ))}
-                </select>
+                </FieldSelect>
               </div>
             </div>
           </SettingsCard>

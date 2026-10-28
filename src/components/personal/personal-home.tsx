@@ -283,7 +283,7 @@ function FinishProfileCard({ href, gaps }: { href: string; gaps: ProfileGap[] })
 function ClubsSection({ data, now }: { data: PersonalHomeData; now: Date }) {
   const hasClubs = data.clubs.length > 0;
   return (
-    <HomeCard id="clubs-heading" icon={Users} title="Your organizations">
+    <HomeCard id="organizations-heading" icon={Users} title="Your organizations">
       {hasClubs ? (
         <ul className="grid gap-2.5 sm:grid-cols-2">
           {data.clubs.map((club) => (
@@ -683,7 +683,7 @@ function RsvpsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
       id="rsvps-heading"
       icon={Ticket}
       title="Your RSVPs"
-      action={<CardLink href={`${base}/calendar/rsvp`}>RSVPs</CardLink>}
+      action={<CardLink href={`${base}/meetings`}>Meetings</CardLink>}
     >
       <div className="space-y-4">
         {empty ? (
@@ -694,7 +694,7 @@ function RsvpsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
             description="Events you sign up for show here with your ticket. Hosting something? Make an event page anyone can RSVP to, no account needed."
             action={
               <Button asChild size="sm" variant="outline">
-                <Link href={`${base}/calendar/rsvp`}>Make an event page</Link>
+                <Link href={`${base}/meetings`}>Set up a meeting</Link>
               </Button>
             }
           />

@@ -4,7 +4,11 @@ import type { Prisma } from "@/generated/prisma/client";
 import { DOCX, googleDocId, sniffNoteFile, sniffNoteFileEdges } from "@/lib/files/types";
 import { trashCutoff } from "@/lib/notes/trash";
 import { withOrgTx, type TxClient } from "@/server/db/context";
-import { readZipDirectory, verifyZipEntries, SourceRejectedError } from "@/server/org-chart/extract";
+import {
+  readZipDirectory,
+  verifyZipEntries,
+  SourceRejectedError,
+} from "@/server/org-chart/extract";
 import { everyWord } from "@/server/search/where";
 import {
   deleteBlobs,
@@ -80,7 +84,10 @@ const fileSelect = {
 } as const;
 
 function cleanName(name: string): string {
-  const one = name.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
+  const one = name
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   return (one.length > 200 ? one.slice(0, 200) : one) || "Untitled file";
 }
 
@@ -119,7 +126,8 @@ function recordNoteFile(
       select: fileSelect,
     });
     const fit = await confirmFits(db, input.orgId, file.sizeBytes, role);
-    if (crossedWarning(fit.space, fit)) await warnStorage(db, fit.space, fit.after, `file:${row.id}`);
+    if (crossedWarning(fit.space, fit))
+      await warnStorage(db, fit.space, fit.after, `file:${row.id}`);
     return row;
   });
 }
@@ -131,7 +139,9 @@ function recordNoteFile(
  * otherwise); the blob is written next (never inside a transaction); a
  * failed row write deletes it.
  */
-export async function storeNoteFile(input: NoteFileInput & { bytes: Buffer }): Promise<NoteFileRow> {
+export async function storeNoteFile(
+  input: NoteFileInput & { bytes: Buffer },
+): Promise<NoteFileRow> {
   const contentType = sniffNoteFile(input.bytes, input.filename);
   if (!contentType) throw new FileRejectedError(UNSUPPORTED);
   const refusal = await checkUpload(input.orgId, input.bytes.length, {
@@ -169,7 +179,9 @@ function findByKey(orgId: string, key: string): Promise<NoteFileRow | null> {
  * refused or unreadable upload is deleted from the store. Calling it again
  * for the same key returns the same row.
  */
-export async function recordDirectUpload(input: NoteFileInput & { key: string }): Promise<NoteFileRow> {
+export async function recordDirectUpload(
+  input: NoteFileInput & { key: string },
+): Promise<NoteFileRow> {
   if (!isDirectUploadKey(input.orgId, input.key)) {
     throw new FileRejectedError("That upload isn't one of this space's.", 400);
   }
@@ -193,7 +205,12 @@ export async function recordDirectUpload(input: NoteFileInput & { key: string })
   }
   const excerpt = contentType.startsWith("text/") ? await excerptOf(head, contentType) : null;
   try {
-    return await recordNoteFile(input, { key: input.key, contentType, sizeBytes: blob.size, excerpt });
+    return await recordNoteFile(input, {
+      key: input.key,
+      contentType,
+      sizeBytes: blob.size,
+      excerpt,
+    });
   } catch (error) {
     // A second "complete" for the same key may have won the race: keep its bytes.
     const winner = await findByKey(input.orgId, input.key).catch(() => null);
@@ -213,9 +230,15 @@ export function listNoteFiles(
     where: {
       organizationId: orgId,
       deletedAt: null,
-      ...(filters.folderId ? { folderId: filters.folderId === "none" ? null : filters.folderId } : {}),
+      ...(filters.folderId
+        ? { folderId: filters.folderId === "none" ? null : filters.folderId }
+        : {}),
       // Every word, in the name, the excerpt or the folder's name (as the ⌘K palette finds them).
-      ...everyWord<Prisma.OrgFileWhereInput>(q, (c) => [{ name: c }, { excerpt: c }, { folder: { name: c } }]),
+      ...everyWord<Prisma.OrgFileWhereInput>(q, (c) => [
+        { name: c },
+        { excerpt: c },
+        { folder: { name: c } },
+      ]),
     },
     orderBy: { createdAt: "desc" },
     select: fileSelect,
@@ -223,7 +246,54 @@ export function listNoteFiles(
   });
 }
 
-export function getNoteFile(db: TxClient, orgId: string, fileId: string): Promise<NoteFileRow | null> {
+/** Something on the Files page as a task's `/` picker lists it. */
+export interface FileRefOption {
+  kind: "file" | "note";
+  id: string;
+  name: string;
+}
+
+const REF_LIMIT = 150;
+
+/**
+ * What a task may point at: everything on the Files page, uploads and notes
+ * alike, the most recent first and only what RLS lets this member see (a
+ * private note stays its author's, a private file its uploader's).
+ */
+export async function listFileRefOptions(db: TxClient, orgId: string): Promise<FileRefOption[]> {
+  const [files, notes] = await Promise.all([
+    db.orgFile.findMany({
+      where: { organizationId: orgId, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, createdAt: true },
+      take: REF_LIMIT,
+    }),
+    db.note.findMany({
+      where: { organizationId: orgId, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, title: true, updatedAt: true },
+      take: REF_LIMIT,
+    }),
+  ]);
+  return [
+    ...files.map((f) => ({ kind: "file" as const, id: f.id, name: f.name, at: f.createdAt })),
+    ...notes.map((n) => ({
+      kind: "note" as const,
+      id: n.id,
+      name: n.title || "Untitled note",
+      at: n.updatedAt,
+    })),
+  ]
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .slice(0, REF_LIMIT)
+    .map(({ kind, id, name }) => ({ kind, id, name }));
+}
+
+export function getNoteFile(
+  db: TxClient,
+  orgId: string,
+  fileId: string,
+): Promise<NoteFileRow | null> {
   return db.orgFile.findFirst({
     where: { id: fileId, organizationId: orgId, deletedAt: null },
     select: fileSelect,
@@ -271,7 +341,11 @@ export async function openNoteFile(
  * allows). Its bytes stay NOTE_TRASH_DAYS so it can be restored; the daily
  * maintenance job deletes them after that.
  */
-export async function removeNoteFile(db: TxClient, orgId: string, fileId: string): Promise<string | null> {
+export async function removeNoteFile(
+  db: TxClient,
+  orgId: string,
+  fileId: string,
+): Promise<string | null> {
   const row = await db.orgFile.findFirst({
     where: { id: fileId, organizationId: orgId, deletedAt: null },
     select: { storageKey: true },
@@ -285,7 +359,11 @@ export async function removeNoteFile(db: TxClient, orgId: string, fileId: string
 }
 
 /** Brings a file back from "Recently deleted" (within NOTE_TRASH_DAYS). */
-export async function restoreNoteFile(db: TxClient, orgId: string, fileId: string): Promise<boolean> {
+export async function restoreNoteFile(
+  db: TxClient,
+  orgId: string,
+  fileId: string,
+): Promise<boolean> {
   const { count } = await db.orgFile.updateMany({
     where: { id: fileId, organizationId: orgId, deletedAt: { gte: trashCutoff() } },
     data: { deletedAt: null },
@@ -381,9 +459,12 @@ const GOOGLE_HOSTS = /^(docs\.google\.com|[a-z0-9-]+\.googleusercontent\.com)$/;
  * page, which is reported as a sharing problem. Redirects are followed by
  * hand, only between Google's document hosts, with the size capped.
  */
-export async function fetchGoogleDocAsDocx(link: string): Promise<{ bytes: Buffer; title: string | null }> {
+export async function fetchGoogleDocAsDocx(
+  link: string,
+): Promise<{ bytes: Buffer; title: string | null }> {
   const id = googleDocId(link);
-  if (!id) throw new FileRejectedError("Paste a Google Docs link (docs.google.com/document/…).", 400);
+  if (!id)
+    throw new FileRejectedError("Paste a Google Docs link (docs.google.com/document/…).", 400);
   let url = `https://docs.google.com/document/d/${id}/export?format=docx`;
   const notShared =
     "Google didn't let us open that doc. Share it as “Anyone with the link can view”, or download it as Word (.docx) and upload that.";
@@ -410,10 +491,10 @@ export async function fetchGoogleDocAsDocx(link: string): Promise<{ bytes: Buffe
     if (bytes.length > MAX_UPLOAD_BYTES) throw new FileRejectedError("That doc is over 4 MB.", 413);
     if (sniffNoteFile(bytes, "doc.docx") !== DOCX) throw new FileRejectedError(notShared, 422);
     const disposition = res.headers.get("content-disposition") ?? "";
-    const m = /filename\*=UTF-8''([^;]+)/i.exec(disposition) ?? /filename="([^"]+)"/i.exec(disposition);
+    const m =
+      /filename\*=UTF-8''([^;]+)/i.exec(disposition) ?? /filename="([^"]+)"/i.exec(disposition);
     const title = m ? titleFromFilename(decodeURIComponent(m[1])) : null;
     return { bytes, title };
   }
   throw new FileRejectedError(notShared, 422);
 }
-

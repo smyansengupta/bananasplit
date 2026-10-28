@@ -12,7 +12,7 @@ import { isPersonalSpace, spaceLimits } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listDeletedNoteFiles, listNoteFiles } from "@/server/notes/files";
-import { listFolders } from "@/server/notes/folders";
+import { folderPeeks, listFolders } from "@/server/notes/folders";
 import { countNoteShares } from "@/server/notes/sharing";
 import { noteVisibleWhere } from "@/server/notes/visibility";
 import { listPins } from "@/server/pins";
@@ -58,15 +58,23 @@ export default async function NotesPage({
   const inTrash = query.folder === "trash";
   const folderId = inTrash ? undefined : str(query.folder);
   const q = str(query.q);
+  // Everything is the root of the Files tree: its folders at the top, then
+  // only what is in no folder. It used to list every item wherever it was
+  // filed, so moving a file into a folder left it showing in Everything as
+  // well - which looked exactly like the move had made a copy. A search still
+  // looks everywhere, folders included.
+  const atRoot = !inTrash && !folderId && !q;
+  const listFolderId = atRoot ? "none" : folderId;
   const sort = (NOTE_SORTS as readonly string[]).includes(String(query.sort))
     ? (query.sort as NoteSort)
     : "edited";
 
   const data = await withOrgTx(org.id, async ({ db }) => {
+    const folders = await listFolders(db, org.id, user.id);
     const notes = await getNotesForList(db, org.id, user.id, {
       visibility,
       authorId: author,
-      folderId,
+      folderId: listFolderId,
       q,
       sort,
     });
@@ -77,9 +85,18 @@ export default async function NotesPage({
         org.id,
         notes.map((n) => n.id),
       ),
-      files: await listNoteFiles(db, org.id, { folderId, q }),
+      files: await listNoteFiles(db, org.id, { folderId: listFolderId, q }),
       memberships: await getOrgMembersForFilter(db, org.id),
-      folders: await listFolders(db, org.id, user.id),
+      folders,
+      // What each folder card names, only where the cards are drawn.
+      peeks: atRoot
+        ? await folderPeeks(
+            db,
+            org.id,
+            user.id,
+            folders.map((f) => f.id),
+          )
+        : new Map(),
       pins: await listPins(db, org.id, org.slug, user.id),
       trash: inTrash
         ? {
@@ -182,6 +199,7 @@ export default async function NotesPage({
           color: f.color,
           noteCount: f.noteCount,
           fileCount: f.fileCount,
+          peek: data.peeks.get(f.id) ?? [],
           canEdit: isAdmin || f.createdById === user.id,
         }))}
         notes={data.notes.map((n) => ({

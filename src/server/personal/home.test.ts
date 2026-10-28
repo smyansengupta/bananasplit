@@ -93,7 +93,7 @@ function raw(over: Partial<Raw> = {}): Raw {
 const at = (iso: string) => new Date(iso);
 
 describe("shapePersonalHome", () => {
-  it("builds a card per club with its next meeting, open tasks and unread", () => {
+  it("builds a card per organization with its next meeting, open tasks and unread", () => {
     const meeting = {
       id: "e1",
       title: "General meeting",
@@ -329,7 +329,7 @@ describe("shapePersonalHome", () => {
         going: 7,
         capacity: 20,
         enabled: true,
-        manageHref: "/app/me-abc/calendar/party/rsvp",
+        manageHref: "/app/me-abc/meetings/party/rsvp",
         pageHref: "/e/bday1234",
       }),
     ]);

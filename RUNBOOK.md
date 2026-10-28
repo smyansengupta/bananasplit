@@ -354,6 +354,41 @@ five minutes). **Turning it off** — remove `COLLAB_ENABLED` and redeploy;
 nothing else changes (`Note.yjsState` is kept, and autosaves keep it in
 step, so turning it on again later is safe).
 
+## AI connectors (optional, off by default)
+
+Members connect Claude, ChatGPT, Cursor or VS Code to `https://<app>/api/mcp`
+(`docs/features/ai-connectors.md`). WorkOS AuthKit issues the OAuth tokens;
+the app signs members in as always and keeps its own record of each
+connection. Leave it off until WorkOS production is set up:
+
+1. **WorkOS production environment** — billing on file (AuthKit's custom
+   domain needs it), then:
+   - Connect › Configuration › MCP Auth: turn on **Client ID Metadata
+     Document** and **Dynamic Client Registration**.
+   - Resource Indicators: add `https://<app>/api/mcp`, exactly as the app
+     serves it (`NEXT_PUBLIC_APP_URL` plus `/api/mcp`), and make it the
+     default. Without it every token's `aud` is the environment's client id
+     and the app refuses them all.
+   - External Sign-in URI: `https://<app>/connect`.
+   - JWT template: `{"urn:bananasplit:uid": {{ user.external_id }}}`.
+   - Custom domain `auth.<your domain>` for AuthKit, and the branding
+     (logo, colors) its consent screen shows.
+2. **Vercel, Production scope** — `CONNECTORS_ENABLED=true`,
+   `WORKOS_API_KEY=sk_live_…` and `WORKOS_AUTHKIT_DOMAIN=https://auth.<your
+   domain>` (the issuer changes with the custom domain, so set it up first),
+   then redeploy (migration `20261025120000_connector_grants` applies in the
+   build step). Leave the Preview scope without them.
+3. **Check** — `/api/health` with the `CRON_SECRET` bearer lists
+   `production:connectors` as ok; `curl -i -X POST https://<app>/api/mcp`
+   answers 401 with `resource_metadata` in `WWW-Authenticate`; then connect
+   Claude Code (`claude mcp add --transport http bananasplit
+   https://<app>/api/mcp`, `/mcp` to log in) and ask it to list your spaces.
+
+**Turning it off** — remove `CONNECTORS_ENABLED` and redeploy: `/api/mcp`
+answers 404 and the profile card and the club switch disappear. Connections
+are kept, so turning it back on restores them. **One club** — its owners and
+admins switch it off in Admin panel › Privacy › AI connectors.
+
 ## Email (production)
 
 Verification and password-reset links must arrive on day one: password
@@ -390,14 +425,14 @@ can't verify; test with Google or locally.
 
 ## Security switches (Phase 0A)
 
-- **Org creation lock.** In production (`VERCEL_ENV=production`, or
-  `NODE_ENV=production` off Vercel) only a verified address listed in
-  `PLATFORM_ADMIN_EMAILS` (comma-separated) can create an organization
-  until `PLATFORM_ORG_CREATION_ENABLED=true` is set; then
-  `ORG_CREATION_MODE` (`admins`, `invite` with codes from
-  `/app/platform/org-codes`, or `open`) decides. Everyone else joins by
-  invitation. Previews and local dev are unrestricted. The President creates
-  the CBC org once through `/onboarding`. See docs/features/settings.md.
+- **Org creation.** Any verified account can create a club, everywhere. In
+  production (`VERCEL_ENV=production`, or `NODE_ENV=production` off Vercel)
+  that is limited to one per person per 30 days and 20 a day overall. To
+  narrow it, set `ORG_CREATION_MODE` to `invite` (codes from
+  `/app/platform/org-codes`) or `admins`, or set
+  `PLATFORM_ORG_CREATION_ENABLED=false` to stop new clubs. Verified addresses
+  in `PLATFORM_ADMIN_EMAILS` (comma-separated) can always create one. See
+  docs/features/settings.md.
 - **Email verification.** Password sign-ups must verify their address before
   they can create or join an org, so the platform sender (`RESEND_API_KEY`,
   `EMAIL_FROM` on a verified domain) must work on day one. The link goes out

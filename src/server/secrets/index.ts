@@ -24,18 +24,22 @@ import { keyring } from "./keyring";
  * Supabase password, Netlify hook URL), encrypted at rest ('Secrets at
  * rest' decision; contract 3).
  *
- * The ONLY functions: setSecret, getSecret, removeSecret, testIntegration.
- * This module is the only caller of app.secret_read / secret_write /
- * secret_delete (EXECUTE for app_service only, and each requires the org
- * GUC to equal the org it touches). Isolation between orgs on the service
- * path rests on that, plus the permission check each function makes:
+ * The ONLY functions: setSecret, getSecret, rotateSecret, removeSecret,
+ * testIntegration. This module is the only caller of app.secret_read /
+ * secret_write / secret_delete (EXECUTE for app_service only, and each
+ * requires the org GUC to equal the org it touches). Isolation between orgs
+ * on the service path rests on that, plus the permission check each
+ * function makes:
  *   - setSecret, testIntegration: ADMIN+ (integrations.write)
  *   - removeSecret: OWNER (integrations.remove)
  *   - getSecret: no user check; for jobs and for code that has already
  *     authorized the caller. Its plaintext must never reach a DTO, a log or
  *     the client.
- * Every change writes OrgAuditLog in the same transaction and alerts every
- * OWNER (SECURITY_ALERT). Decryption and all network calls happen outside
+ *   - rotateSecret: no user check either; a job keeping the token its
+ *     provider rotated, and only while the stored one is the one it used.
+ * Every change a person makes writes OrgAuditLog in the same transaction
+ * and alerts every OWNER (SECURITY_ALERT); a provider's routine rotation
+ * (rotateSecret) does neither. Decryption and all network calls happen outside
  * any transaction. The UI is write-only: it shows last4 and status.
  *
  * Do not import this module from client components.
@@ -62,6 +66,9 @@ const PROVIDER_LABEL: Record<IntegrationProvider, string> = {
   SUPABASE_SOURCE: "website data source password",
   NETLIFY_BUILD_HOOK: "website build hook",
   OPENAI_COMPATIBLE: "AI model API key",
+  GOOGLE_MEET: "Google Meet connection",
+  ZOOM: "Zoom connection",
+  MICROSOFT_TEAMS: "Microsoft Teams connection",
 };
 
 interface SecretRow {
@@ -253,6 +260,75 @@ export async function getSecret(input: GetSecretInput): Promise<string | null> {
   );
 }
 
+export interface RotateSecretInput {
+  orgId: string;
+  provider: IntegrationProvider;
+  kind: SecretKind;
+  /** The value the caller just used; it must still be the one stored. */
+  previous: string;
+  /** What the provider rotated it to. */
+  value: string;
+}
+
+/**
+ * Replaces a secret with the one its provider rotated it to (Zoom issues a
+ * new refresh token on every refresh; Microsoft recommends replacing it).
+ * Service path only, like getSecret: no actor, no permission check, never
+ * inside a transaction.
+ *
+ * A compare-and-set on the fingerprint under a row lock: returns true when
+ * it replaced the secret, false when the stored one is no longer `previous`
+ * (another refresh already rotated it, or someone reconnected), which is
+ * left as it is.
+ *
+ * Unlike setSecret it writes no audit row and alerts no owner, and it leaves
+ * status, lastError and connectedById alone: this is the provider's routine
+ * rotation, not a person changing a credential, and setSecret's "was
+ * replaced" alert would page every owner on every refresh.
+ */
+export async function rotateSecret(input: RotateSecretInput): Promise<boolean> {
+  checkKind(input.kind);
+  const value = input.value.trim();
+  if (!value) throw new TypeError("secret value is empty");
+  if (Buffer.byteLength(value, "utf8") > MAX_SECRET_BYTES) throw new TypeError("secret value is too large");
+  assertNoTx("rotateSecret");
+
+  const ring = keyring();
+  const expected = secretFingerprint(input.previous.trim());
+  const last4 = secretLast4(value);
+  const fingerprint = secretFingerprint(value);
+
+  return withSystemOrgTx(input.orgId, async ({ db }) => {
+    const rows = await db.$queryRaw<{ id: string; secretFingerprint: string | null }[]>`
+      SELECT "id", "secretFingerprint" FROM "OrgIntegration"
+       WHERE "organizationId" = ${input.orgId}
+         AND "provider" = ${input.provider}::"IntegrationProvider"
+         FOR UPDATE`;
+    const integration = rows[0];
+    if (!integration || integration.secretFingerprint !== expected) return false;
+    if ((await readSecretRow(db, input.orgId, integration.id, input.kind)) === null) return false;
+
+    const loc: SecretLocator = {
+      orgId: input.orgId,
+      integrationId: integration.id,
+      provider: input.provider,
+      kind: input.kind,
+    };
+    const enc = encryptSecret(value, loc, ring);
+    await db.$queryRaw`
+      SELECT app.secret_write(
+        ${input.orgId}, ${integration.id}, ${input.kind},
+        ${enc.ciphertext}, ${enc.iv}, ${enc.authTag},
+        ${enc.wrappedDek}, ${enc.dekIv}, ${enc.dekTag}, ${enc.kekVersion}::int
+      ) AS id`;
+    await db.orgIntegration.update({
+      where: { id: integration.id },
+      data: { secretLast4: last4, secretFingerprint: fingerprint },
+    });
+    return true;
+  });
+}
+
 export interface RemoveSecretInput {
   orgId: string;
   actor: SecretActor;
@@ -261,17 +337,26 @@ export interface RemoveSecretInput {
   kind?: SecretKind;
 }
 
-/** Deletes the secret(s) and marks the integration DISCONNECTED. OWNER only. */
+/**
+ * Deletes the secret(s) and marks the integration DISCONNECTED. OWNER only.
+ *
+ * Locks the OrgIntegration row first, then deletes the OrgSecret rows: the
+ * order rotateSecret and setSecret take them in. Delete-then-lock would
+ * deadlock with a refresh keeping a rotated token, which holds the
+ * integration row and waits for the secret row this holds.
+ */
 export async function removeSecret(input: RemoveSecretInput): Promise<boolean> {
   requirePermission(input.actor, "integrations.remove");
   if (input.kind) checkKind(input.kind);
   const kinds = input.kind ? [input.kind] : [...SECRET_KINDS];
 
   return withSystemOrgTx(input.orgId, { userId: input.actor.userId }, async ({ db }) => {
-    const integration = await db.orgIntegration.findUnique({
-      where: { organizationId_provider: { organizationId: input.orgId, provider: input.provider } },
-      select: { id: true },
-    });
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "OrgIntegration"
+       WHERE "organizationId" = ${input.orgId}
+         AND "provider" = ${input.provider}::"IntegrationProvider"
+         FOR UPDATE`;
+    const integration = rows[0];
     if (!integration) return false;
     let removed = false;
     for (const kind of kinds) {

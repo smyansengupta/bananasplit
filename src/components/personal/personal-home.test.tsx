@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PersonalHomeData } from "@/server/personal/home";
 
+// Up next is a client component: hiding a card redraws the Overview.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
 /**
  * The Personal dashboard as rendered: each section with data, and the empty
  * states that teach what goes there and how to start.
@@ -71,7 +74,7 @@ describe("PersonalHome", () => {
     expect(html).toContain("Nothing in the next 14 days");
     expect(html).toContain("Nothing due this week");
     expect(html).toContain("No RSVPs yet");
-    expect(html).toContain('href="/app/me-abc/calendar/rsvp"');
+    expect(html).toContain('href="/app/me-abc/meetings"');
     expect(html).toContain("No polls waiting");
     expect(html).toContain('href="/app/me-abc/calendar/find-a-time/new"');
     expect(html).not.toContain("Finish your profile");
@@ -99,10 +102,10 @@ describe("PersonalHome", () => {
     expect(html).toContain("Finish your profile");
     expect(html).toContain("Add your bio and links and when you can&#x27;t meet.");
     expect(html).toContain('href="/onboarding/profile/bio"');
-    expect(html.indexOf("Debate Society")).toBeLessThan(html.indexOf("clubs-heading"));
+    expect(html.indexOf("Debate Society")).toBeLessThan(html.indexOf("organizations-heading"));
   });
 
-  it("renders club cards that open the club, with role, next meeting, tasks and unread", () => {
+  it("renders organization cards that open the organization, with role, next meeting, tasks and unread", () => {
     const html = render({
       ...empty,
       clubs: [
@@ -215,7 +218,7 @@ describe("PersonalHome", () => {
           going: 7,
           waitlist: 2,
           capacity: 20,
-          manageHref: "/app/me-abc/calendar/h1/rsvp",
+          manageHref: "/app/me-abc/meetings/h1/rsvp",
           pageHref: "/e/bday1234",
         },
       ],

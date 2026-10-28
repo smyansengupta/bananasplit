@@ -9,19 +9,21 @@ import { normalizeEmail } from "@/lib/auth/normalize-email";
  *   can never hold a Membership (it would be the new org's OWNER).
  * - Platform admins (PLATFORM_ADMIN_EMAILS) may always create orgs: they
  *   operate the platform and issue org-creation codes.
- * - PLATFORM_ORG_CREATION_ENABLED: while it is false, nobody else may. It
- *   defaults to false in production and true elsewhere (previews, local).
- * - ORG_CREATION_MODE (defaults: "admins" in production, "open" elsewhere):
- *     admins  only platform admins;
- *     invite  anyone with a single-use org-creation code (14 days), issued
- *             by a platform admin at /app/platform/org-codes;
+ * - By default any verified user may create a club, in every environment.
+ *   The two switches below only narrow that, when an operator needs to:
+ * - PLATFORM_ORG_CREATION_ENABLED (default true): while it is false, nobody
+ *   else may.
+ * - ORG_CREATION_MODE (default "open"):
  *     open    any verified user. In production, open mode is limited to one
  *             org per user per 30 days and 20 new orgs per day platform-wide
- *             (ORG_CREATION_LIMITS).
+ *             (ORG_CREATION_LIMITS);
+ *     invite  anyone with a single-use org-creation code (14 days), issued
+ *             by a platform admin at /app/platform/org-codes;
+ *     admins  only platform admins.
  * Every mode keeps the base limit of 3 new orgs per user per day.
  *
  * "Production" is VERCEL_ENV=production, or NODE_ENV=production on a host
- * that is not Vercel (fail safe: a self-hosted production build is locked).
+ * that is not Vercel.
  */
 
 type Env = NodeJS.ProcessEnv | Record<string, string | undefined>;
@@ -86,15 +88,15 @@ function flag(value: string | undefined): boolean | null {
   return null;
 }
 
-/** PLATFORM_ORG_CREATION_ENABLED, defaulting to false in production. */
+/** PLATFORM_ORG_CREATION_ENABLED, defaulting to true. */
 export function orgCreationEnabled(env: Env = process.env): boolean {
-  return flag(env.PLATFORM_ORG_CREATION_ENABLED) ?? !isProductionDeployment(env);
+  return flag(env.PLATFORM_ORG_CREATION_ENABLED) ?? true;
 }
 
 export function orgCreationMode(env: Env = process.env): OrgCreationMode {
   const raw = (env.ORG_CREATION_MODE ?? "").trim().toLowerCase();
   if (raw === "admins" || raw === "invite" || raw === "open") return raw;
-  return isProductionDeployment(env) ? "admins" : "open";
+  return "open";
 }
 
 export function orgCreationPolicy(

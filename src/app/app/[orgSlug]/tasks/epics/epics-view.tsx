@@ -85,6 +85,8 @@ export function EpicsView({
   members,
   colors,
   epics,
+  /** Rendered inside the task workspace, which supplies its own page title. */
+  embedded = false,
 }: {
   org: { id: string; slug: string };
   viewerId: string;
@@ -93,6 +95,7 @@ export function EpicsView({
   /** Colours an epic can take: the club's chart slots, then a few brights. */
   colors: string[];
   epics: EpicCardRow[];
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<EpicCardRow | "new" | null>(null);
@@ -136,16 +139,28 @@ export function EpicsView({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Epics"
-        description={summary}
-        actions={
-          <Button variant="create" onClick={() => setEditing("new")}>
+      {embedded ? (
+        // Inside the workspace the page already has a title and a New task
+        // split button; this is just the line that says where things stand.
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-muted-foreground text-sm">{summary}</p>
+          <Button variant="outline" size="sm" onClick={() => setEditing("new")}>
             <Plus className="size-4" aria-hidden="true" />
             New epic
           </Button>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Epics"
+          description={summary}
+          actions={
+            <Button variant="create" onClick={() => setEditing("new")}>
+              <Plus className="size-4" aria-hidden="true" />
+              New epic
+            </Button>
+          }
+        />
+      )}
 
       {epics.length > 0 && (
         <Segmented

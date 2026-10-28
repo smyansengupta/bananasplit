@@ -85,7 +85,8 @@ export const saveOrgTheme = themesAction(async (ctx, input: unknown): Promise<Sa
     targetType: "OrgTheme",
     targetId: ctx.organizationId,
     diff: {
-      from: previous ?? { preset: "default" },
+      // Nothing saved means the unthemed default, which is Graphite.
+      from: previous ?? { preset: "graphite" },
       to: {
         preset: record.preset,
         mode: record.mode,

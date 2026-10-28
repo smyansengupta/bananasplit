@@ -16,6 +16,7 @@ import { NotFoundError } from "@/lib/auth/errors";
 import { requireUser, type SessionUser } from "@/lib/auth/session";
 import type { PlanFeature } from "@/lib/billing/features";
 import { spaceRefusal, type SpaceRefusal } from "@/lib/billing/space";
+import type { VerifiedConnector } from "@/server/connectors/token";
 
 import { appDb, serviceDb } from "./clients";
 import { AppError, mapDbError } from "./errors";
@@ -402,6 +403,129 @@ export function withOrgTxAs<T>(
       retryOnStartFailure: false,
     },
     (ctx) => fn({ ...ctx, userId, organizationId, role: ctx.role as Role }),
+  );
+}
+
+/**
+ * A connector call refused before its handler ran (src/server/connectors):
+ * the member connected the app to a different space, or the club turned AI
+ * connectors off. The message is meant for the member, through their app.
+ */
+export class ConnectorRefusedError extends AppError {
+  readonly reason: "scope" | "switch";
+
+  constructor(reason: "scope" | "switch", clubName?: string) {
+    super(
+      reason === "scope"
+        ? "This app was connected to one space only, and this isn't it. To use another, disconnect the app on your Bananasplit profile and connect it again."
+        : `${clubName ?? "This club"} has turned off AI apps. Its owners and admins can turn them back on in Admin panel › Privacy.`,
+      403,
+      reason === "scope" ? "CONNECTOR_SCOPE" : "CONNECTORS_OFF",
+    );
+    this.name = "ConnectorRefusedError";
+    this.reason = reason;
+  }
+}
+
+/**
+ * A connected AI app's own rows for its member, with no org context: the
+ * grant itself and the member's list of spaces (docs/features/ai-connectors.md).
+ * Otherwise exactly withUserTx, for a member authenticated by a verified
+ * AuthKit token instead of a session (VerifiedConnector is built only by
+ * src/server/connectors/token.ts). No retry. ESLint limits the importers
+ * (CONNECTORS in eslint.config.mjs, a security review item).
+ */
+export function withConnectorUserTx<T>(
+  connector: VerifiedConnector,
+  fn: (ctx: UserContext) => Promise<T>,
+): Promise<T> {
+  return runInTx(
+    {
+      client: appDb,
+      kind: "user",
+      userId: connector.userId,
+      organizationId: null,
+      requireMember: false,
+      retryOnStartFailure: false,
+    },
+    (ctx) => fn({ ...ctx, userId: connector.userId, organizationId: null }),
+  );
+}
+
+/** The part of a ConnectorGrant the org wrapper checks: null is every space. */
+export interface ConnectorGrantScope {
+  organizationId: string | null;
+}
+
+/**
+ * A connected AI app acting in one space for its member: app_user under RLS
+ * with the member's context, as withOrgAction, for a member authenticated
+ * by a verified AuthKit token instead of a session. Refuses, in order:
+ * - a grant scoped to another space (ConnectorRefusedError "scope");
+ * - a non-member, or a space scheduled for deletion (NotFoundError, so a
+ *   tool can't probe whether an org exists);
+ * - a club with AI connectors switched off (ConnectorRefusedError "switch"),
+ *   whatever the grant says;
+ * - what the space's plan leaves out (SpaceRefusedError): feature
+ *   "connectors", then the tool's own `feature`. (A trial that ends drops
+ *   to Free; nothing is paused, so reads and writes are refused alike.)
+ * The handler gets an OrgContext whose `user` is the member's own row, so
+ * services that read ctx.user work unchanged. ESLint limits the importers
+ * (CONNECTORS in eslint.config.mjs, a security review item).
+ */
+export function withConnectorOrgTx<T>(
+  connector: VerifiedConnector,
+  grant: ConnectorGrantScope,
+  organizationId: string,
+  options: Omit<OrgActionOptions, "onRefused">,
+  fn: (ctx: OrgContext) => Promise<T>,
+): Promise<T> {
+  if (grant.organizationId !== null && grant.organizationId !== organizationId) {
+    return Promise.reject(new ConnectorRefusedError("scope"));
+  }
+  return runInTx(
+    {
+      client: appDb,
+      kind: "action",
+      userId: connector.userId,
+      organizationId,
+      requireMember: true,
+      retryOnStartFailure: false,
+    },
+    async (ctx) => {
+      // Sequential: one connection per transaction.
+      const space = await ctx.db.organization.findUnique({
+        where: { id: organizationId },
+        select: {
+          name: true,
+          kind: true,
+          plan: true,
+          trialEndsAt: true,
+          deletedAt: true,
+          settings: { select: { connectorsEnabled: true } },
+        },
+      });
+      if (!space || space.deletedAt) throw new NotFoundError();
+      if (space.settings && !space.settings.connectorsEnabled) {
+        throw new ConnectorRefusedError("switch", space.name);
+      }
+      const refusal =
+        spaceRefusal(space, { feature: "connectors" }) ??
+        spaceRefusal(space, { feature: options.feature });
+      if (refusal) throw new SpaceRefusedError(refusal);
+      const user = await ctx.db.user.findUnique({
+        where: { id: connector.userId },
+        select: { id: true, email: true, name: true },
+      });
+      if (!user) throw new NotFoundError();
+      return fn({
+        ...ctx,
+        user,
+        userId: connector.userId,
+        organizationId,
+        role: ctx.role as Role,
+      });
+    },
   );
 }
 

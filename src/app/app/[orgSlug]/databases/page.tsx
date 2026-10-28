@@ -504,7 +504,7 @@ export default async function DatabasesPage({
       ) : (
         <>
           {/*
-            One list: the club's own databases and the built-in ones together,
+            One list: the organization's own databases and the built-in ones together,
             each tagged with where its rows live (Bananasplit or the website's
             Supabase). Empty built-ins fold away under the list.
           */}

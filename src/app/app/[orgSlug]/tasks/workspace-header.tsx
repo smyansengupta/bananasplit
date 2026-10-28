@@ -8,9 +8,10 @@ import {
   CircleDot,
   ClipboardPaste,
   Layers,
+  ListFilter,
   Plus,
+  X,
 } from "@/components/icons";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -120,7 +121,7 @@ export function WorkspaceHeader({
 
   return (
     <div className="mb-[30px] space-y-[30px] max-md:mb-5 max-md:space-y-4">
-      {/* On a phone: the title, and New task at the top right (Epics is in Filters). */}
+      {/* On a phone: the title, and New task at the top right. */}
       <div className="flex flex-wrap items-end gap-x-4 gap-y-3 max-md:flex-nowrap max-md:items-center">
         <h1 className="page-title mr-auto max-md:min-w-0">{title}</h1>
 
@@ -130,14 +131,7 @@ export function WorkspaceHeader({
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to tasks
             </Button>
-          ) : (
-            <Button variant="outline" className="max-md:hidden" asChild>
-              <Link href={`/app/${org.slug}/tasks/epics`}>
-                <Layers className="size-4" aria-hidden="true" />
-                Epics
-              </Link>
-            </Button>
-          )}
+          ) : null}
 
           {/* New task (the screen's one create), with more ways in its menu. */}
           <CreateSplitButton
@@ -184,13 +178,34 @@ export function WorkspaceHeader({
             value={stats.overdue}
             label="Overdue"
             chip={
-              stats.overdue > 0 ? (
+              stats.overdue > 0 || ws.query.overdue ? (
+                // One control that says what it does, and undoes itself: the
+                // list narrows to exactly the tasks this stat counted, and the
+                // same chip takes the filter off again.
                 <button
                   type="button"
-                  onClick={() => ws.setFilters({ blockers: true })}
+                  aria-pressed={ws.query.overdue}
+                  onClick={() => ws.setFilters({ overdue: !ws.query.overdue })}
                   className="focus-glow rounded-full"
+                  title={
+                    ws.query.overdue
+                      ? "Show every task again"
+                      : "Show only the tasks that are overdue"
+                  }
                 >
-                  <Badge variant="destructive">Show them</Badge>
+                  <Badge variant={ws.query.overdue ? "secondary" : "destructive"} className="gap-1">
+                    {ws.query.overdue ? (
+                      <>
+                        <X className="size-3" aria-hidden="true" />
+                        Clear
+                      </>
+                    ) : (
+                      <>
+                        <ListFilter className="size-3" aria-hidden="true" />
+                        Filter
+                      </>
+                    )}
+                  </Badge>
                 </button>
               ) : undefined
             }

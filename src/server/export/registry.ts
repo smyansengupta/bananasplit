@@ -82,6 +82,9 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // An RSVP page's bring list, and who is bringing each line.
   { model: "RsvpItem", key: ID },
   { model: "RsvpItemClaim", key: ["itemId", "registrationId"] },
+  // Which reminders went out for a meeting, and to whom (meetings). Same
+  // standing as the sign-ups themselves: OWNER-only, like the rest.
+  { model: "EventReminderSend", key: ID },
   { model: "EventLinkLog", key: ID },
   { model: "AvailabilityPoll", key: ID },
   { model: "PollSlot", key: ID },
@@ -121,6 +124,8 @@ export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   OrgSecret: "Encrypted integration secrets: ciphertext is never exported.",
   Notification:
     "Each member's own inbox: personal, not organization data, and only its recipient can read it.",
+  UpNextDismissal:
+    "Cards each member hid from their own Overview: a personal preference, not organization data.",
   OrgJoinCode:
     "The live invite code is a credential for joining the org; an export must not carry it.",
   Job: "Background job bookkeeping (ids and sanitized errors), not org data.",
@@ -130,6 +135,8 @@ export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
   Pin: "Each member's own shortcuts; the service role cannot read them.",
   RecentVisit: "Each member's own browsing history in the app; private, and not org data.",
   MemberPrefs: "Each member's own display settings; the service role cannot read them.",
+  ConnectorGrant:
+    "Each member's own AI app connections (organizationId is only the space one is scoped to); the service role cannot read them.",
   NoteShare:
     "Who a note is shared with by name: mostly private notes, which the export leaves out, and access settings rather than organization data.",
   NoteVersion:

@@ -25,6 +25,7 @@ vi.mock("./mailer", () => ({
 
 import { verifyPassword } from "@/lib/auth/password";
 import { authDb, disconnectAll } from "@/server/db/clients";
+import { withUserTx } from "@/server/db/context";
 
 import { passwordChangedEmailJob, passwordResetEmailJob } from "./jobs";
 import {
@@ -132,6 +133,29 @@ describe.skipIf(!reachable)("password reset against the local database", () => {
       ok: false,
       reason: "invalid",
     });
+  });
+
+  it("revokes every AI app the account connected, in the reset's own transaction", async () => {
+    const user = await makeUser("connectors");
+    await withUserTx(user.id, ({ db }) =>
+      db.connectorGrant.createMany({
+        data: ["client_a", "client_b"].map((clientId) => ({
+          userId: user.id,
+          clientId: `${clientId}_${stamp}`,
+          workosUserId: "user_01WORKOS",
+          consentId: "app_consent_1",
+        })),
+      }),
+    );
+    await job(user.id);
+    expect(await resetPassword(tokenFromLastMail(), "a new passphrase")).toMatchObject({
+      ok: true,
+    });
+    const grants = await withUserTx(user.id, ({ db }) =>
+      db.connectorGrant.findMany({ where: { userId: user.id }, select: { revokedAt: true } }),
+    );
+    expect(grants).toHaveLength(2);
+    expect(grants.every((g) => g.revokedAt instanceof Date)).toBe(true);
   });
 
   it("refuses an expired link and removes it", async () => {

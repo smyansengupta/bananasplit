@@ -1,4 +1,5 @@
 import { appOrigin } from "@/lib/app-url";
+import { connectorsConfigProblems, connectorsWanted } from "@/server/connectors/config";
 import { getClient } from "@/server/db/clients";
 import { DB_ROLE_NAMES, type DbRole } from "@/server/db/urls";
 import { emailConfigProblems, emailDelivery } from "@/server/email/config";
@@ -24,7 +25,8 @@ import { blobStoreIdFromToken } from "@/server/storage/drivers";
  *   PREVIEW_KEK_FINGERPRINT, SECRETS_KEK_ENV=preview).
  * On VERCEL_ENV=production: email is configured (or deliberately off);
  *   CRON_SECRET, the Auth.js secret (AUTH_SECRET) and the secrets keyring
- *   are present; links resolve to an https app URL.
+ *   are present; links resolve to an https app URL; and with
+ *   CONNECTORS_ENABLED=true, the WorkOS settings AI connectors need are set.
  */
 
 export interface HealthCheck {
@@ -275,6 +277,16 @@ function productionChecks(env: Env): HealthCheck[] {
     });
   } catch (error) {
     checks.push({ name: "production:app_url", ok: false, detail: describe(error) });
+  }
+  // AI connectors (docs/features/ai-connectors.md): asked for but unusable
+  // would leave /api/mcp answering 404 to every connected app.
+  if (connectorsWanted(env)) {
+    const problems = connectorsConfigProblems(env);
+    checks.push({
+      name: "production:connectors",
+      ok: problems.length === 0,
+      detail: problems.join("; ") || undefined,
+    });
   }
   return checks;
 }

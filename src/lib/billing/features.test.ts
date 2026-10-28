@@ -23,7 +23,7 @@ const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
 describe("what each plan includes", () => {
-  it("gives Personal Free RSVP pages, tasks, polls, notes and files, databases, and settings", () => {
+  it("gives Personal Free RSVP pages, tasks, polls, notes and files, databases, settings and AI connectors", () => {
     expect(featuresOf("FREE")).toEqual([
       "rsvp",
       "tasks",
@@ -32,6 +32,7 @@ describe("what each plan includes", () => {
       "admin",
       "files",
       "databases",
+      "connectors",
     ]);
     for (const f of ["teamwork", "people", "finance", "reports", "overview", "themes"] as const) {
       expect(planIncludes("FREE", f)).toBe(false);
@@ -77,7 +78,7 @@ describe("what each plan includes", () => {
     }
   });
 
-  it("keeps the club ladder ordered: Team has Personal Free's, Team Advanced has everything", () => {
+  it("keeps the organization ladder ordered: Team has Personal Free's, Team Advanced has everything", () => {
     expect(featuresOf("SOCIETY")).toEqual(ALL);
     for (const f of ALL) {
       if (planIncludes("FREE", f)) {
@@ -89,7 +90,7 @@ describe("what each plan includes", () => {
     }
   });
 
-  it("knows which Personal plan has a feature, or that only clubs do", () => {
+  it("knows which Personal plan has a feature, or that only organizations do", () => {
     expect(personalPlanFor("files")).toBe("FREE");
     expect(personalPlanFor("themes")).toBe("PERSONAL_PLUS");
     expect(personalPlanFor("integrations")).toBe("PERSONAL_PLUS");

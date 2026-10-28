@@ -12,22 +12,23 @@ import {
   Ticket,
   Trash2,
   Video,
-  type IconComponent,
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
-import { deleteEvent, rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { deleteEvent, rsvpToEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
+import { ReminderPicker } from "@/components/meetings/reminder-picker";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { BlockCard } from "@/components/ui/block-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusDot } from "@/components/ui/chip";
+import { Fact } from "@/components/ui/fact";
 import { Gauge } from "@/components/ui/meters";
 import { IconChip } from "@/components/ui/stat";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -35,6 +36,7 @@ import { toast } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import type { CalendarSyncState, RSVPStatus } from "@/generated/prisma/enums";
 import { formatEventWhen } from "@/lib/calendar/format";
+import { reminderLabel } from "@/lib/meetings/reminders";
 import { cn } from "@/lib/utils";
 
 import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
@@ -91,6 +93,11 @@ export function EventDetailView({
   currentUserId,
   canEdit,
   startInEdit = false,
+  section = "calendar",
+  joinCard,
+  locationDetails = null,
+  showMapLink = false,
+  defaultReminderMinutes,
 }: {
   orgId: string;
   orgSlug: string;
@@ -102,8 +109,27 @@ export function EventDetailView({
   canEdit: boolean;
   /** Opened from the calendar's "Edit" (?edit=1), so the form is already up. */
   startInEdit?: boolean;
+  /**
+   * Which section this page is shown in: where the back link goes, and where
+   * Delete returns to. A meeting's own page (/meetings/{id}) is "meetings".
+   */
+  section?: "calendar" | "meetings";
+  /**
+   * A meeting's join details (MeetingJoinCard). Replaces the plain "Join
+   * meeting" button, and is shown even before the link exists, so the page
+   * can say it is on its way.
+   */
+  joinCard?: ReactNode;
+  /** How to find the place, in the host's words ("Second floor, past the elevators"). */
+  locationDetails?: string | null;
+  /** Offer "Open in Maps" under the place. */
+  showMapLink?: boolean;
+  /** The organization's reminder times, which the edit form compares this event's with. */
+  defaultReminderMinutes?: number[];
 }) {
   const router = useRouter();
+  // The list this page belongs to: the back link, and where a delete lands.
+  const sectionHref = `/app/${orgSlug}/${section}`;
   const [editOpen, setEditOpen] = useState(canEdit && startInEdit);
   const [isPending, startTransition] = useTransition();
   const [confirmEl, confirm] = useConfirm();
@@ -130,7 +156,7 @@ export function EventDetailView({
     });
     if (!ok) return;
     toast({ title: "Event deleted", description: event.title });
-    router.push(`/app/${orgSlug}/calendar`);
+    router.push(sectionHref);
   }
 
   function handleCreateMeetingNotes() {
@@ -147,11 +173,13 @@ export function EventDetailView({
   const zone = useViewerTimeZone(timeZone);
   const going = event.attendees.filter((a) => a.rsvp === "YES");
   const capacityPct = rsvp.capacity ? (rsvp.going / rsvp.capacity) * 100 : 0;
+  // A meeting with no call (stored as In person), on its own page, for those who can edit it.
+  const canAddCall = section === "meetings" && canEdit && event.conferenceProvider === "NONE";
 
   return (
     <div className="mx-auto max-w-5xl space-y-7">
       {confirmEl}
-      <BackLink href={`/app/${orgSlug}/calendar`} label="Calendar" />
+      <BackLink href={sectionHref} label={section === "meetings" ? "Meetings" : "Calendar"} />
 
       <PageHeader
         title={<span className="break-words">{event.title}</span>}
@@ -227,6 +255,23 @@ export function EventDetailView({
                   {event.location && (
                     <Fact icon={MapPin} label="Where">
                       {event.location}
+                      {locationDetails && (
+                        <span className="mt-1 block text-[13px] font-normal">
+                          <span className="text-muted-foreground block">How to find it</span>
+                          <span className="block whitespace-pre-wrap">{locationDetails}</span>
+                        </span>
+                      )}
+                      {showMapLink && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1 text-[13px] font-normal underline-offset-4 hover:underline"
+                        >
+                          <ExternalLink aria-hidden className="size-3.5" />
+                          Open in Maps
+                        </a>
+                      )}
                     </Fact>
                   )}
                   {hostLabel && (
@@ -255,12 +300,20 @@ export function EventDetailView({
               )}
 
               <div className="flex flex-wrap gap-2">
-                {event.conferenceUrl && (
-                  <Button asChild>
-                    <a href={event.conferenceUrl} target="_blank" rel="noopener noreferrer">
-                      <Video className="size-4" />
-                      Join meeting
-                    </a>
+                {joinCard ??
+                  (event.conferenceUrl && (
+                    <Button asChild>
+                      <a href={event.conferenceUrl} target="_blank" rel="noopener noreferrer">
+                        <Video className="size-4" />
+                        Join meeting
+                      </a>
+                    </Button>
+                  ))}
+                {/* An in-person meeting can gain its call later: the edit form asks for it. */}
+                {canAddCall && (
+                  <Button variant="secondary" onClick={() => setEditOpen(true)}>
+                    <Video aria-hidden className="size-4" />
+                    Add a video call
                   </Button>
                 )}
                 <Button variant="outline" asChild>
@@ -278,6 +331,15 @@ export function EventDetailView({
               </div>
             </CardContent>
           </Card>
+
+          {section === "meetings" && (
+            <RemindersCard
+              orgId={orgId}
+              eventId={event.id}
+              minutes={event.reminderMinutes}
+              canEdit={canEdit}
+            />
+          )}
 
           <Card>
             <CardHeader className="flex flex-wrap items-center gap-2">
@@ -362,7 +424,7 @@ export function EventDetailView({
                 tone="goal"
                 kicker="RSVP page · Live"
                 title="Sign-ups"
-                href={`/app/${orgSlug}/calendar/${event.id}/rsvp`}
+                href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}
                 figure={rsvp.going}
                 figureLabel={`of ${rsvp.capacity} spots${rsvp.waitlist > 0 ? ` · ${rsvp.waitlist} waitlisted` : ""}`}
                 aside={<Gauge value={capacityPct} size={132} />}
@@ -417,9 +479,13 @@ export function EventDetailView({
                       variant={rsvp.enabled ? "outline" : "secondary"}
                       className="w-full"
                     >
-                      <Link href={`/app/${orgSlug}/calendar/${event.id}/rsvp`}>
+                      <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}>
                         {rsvp.enabled ? <Settings2 aria-hidden /> : <Ticket aria-hidden />}
-                        {rsvp.enabled ? "Manage guests and page" : "Set up an RSVP page"}
+                        {rsvp.enabled
+                          ? "Manage guests and page"
+                          : section === "meetings"
+                            ? "Add a sign-up page"
+                            : "Set up an RSVP page"}
                       </Link>
                     </Button>
                   )}
@@ -486,10 +552,100 @@ export function EventDetailView({
           onOpenChange={setEditOpen}
           event={event}
           members={members}
-          onDeleted={() => router.push(`/app/${orgSlug}/calendar`)}
+          defaultReminderMinutes={defaultReminderMinutes}
+          onDeleted={() => router.push(sectionHref)}
         />
       )}
     </div>
+  );
+}
+
+/**
+ * When this meeting reminds people: the times, or "No reminders". Whoever can
+ * edit the meeting can change them here without opening the whole form, with
+ * the same picker the form has. Saving sends only the reminders, so nothing
+ * else about the meeting is touched.
+ */
+function RemindersCard({
+  orgId,
+  eventId,
+  minutes,
+  canEdit,
+}: {
+  orgId: string;
+  eventId: string;
+  minutes: number[];
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<number[]>(minutes);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function startEditing() {
+    setDraft(minutes);
+    setError(null);
+    setEditing(true);
+  }
+
+  function save() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateEvent(orgId, eventId, { reminderMinutes: draft });
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  const labels = [...minutes].sort((a, b) => b - a).map(reminderLabel);
+
+  return (
+    <Card>
+      <CardHeader className="flex items-center gap-2">
+        <CardTitle>Reminders</CardTitle>
+        <span className="flex-1" />
+        {canEdit && !editing && (
+          <Button variant="outline" size="sm" aria-label="Edit reminders" onClick={startEditing}>
+            <Pencil aria-hidden className="size-4" />
+            Edit
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {editing ? (
+          <>
+            <ReminderPicker value={draft} onChange={setDraft} disabled={isPending} />
+            {error && (
+              <p className="text-destructive text-sm" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button size="sm" onClick={save} disabled={isPending}>
+                {isPending ? "Saving…" : "Save"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing(false)}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </>
+        ) : labels.length > 0 ? (
+          <p className="text-sm">{labels.join(" · ")}</p>
+        ) : (
+          <p className="text-muted-foreground text-sm">No reminders</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -511,24 +667,6 @@ export function FaceStack({ people, className }: { people: UserAvatarUser[]; cla
         )}
       </span>
     </span>
-  );
-}
-
-function Fact({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: IconComponent;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-[auto_6rem_minmax(0,1fr)] items-start gap-3 py-1.5 text-sm">
-      <Icon aria-hidden className="text-muted-foreground mt-0.5 size-4" />
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium break-words">{children}</dd>
-    </div>
   );
 }
 

@@ -19,6 +19,7 @@ import { useCompleteTask } from "./quick-controls";
 import { DueLabel } from "./task-badges";
 import { TaskCheck } from "./task-check";
 import { ProgressBar, TaskTypeChip } from "./task-type";
+import { TaskTitle } from "./task-title";
 import { useTasks } from "./tasks-context";
 import type { SubtaskItem } from "./types";
 
@@ -157,7 +158,7 @@ export function Subtasks({
                   )}
                   onClick={() => onOpen?.(s.id)}
                 >
-                  {s.title}
+                  <TaskTitle>{s.title}</TaskTitle>
                 </button>
                 {story && own.total > 0 && (
                   <ProgressBar

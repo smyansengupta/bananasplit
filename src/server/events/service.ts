@@ -6,23 +6,26 @@ import {
   EventKind,
   EventVisibility,
   IntegrationProvider,
+  MeetingFormat,
   IntegrationStatus,
   Prisma,
   type Role,
 } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
+import { DEFAULT_REMINDER_MINUTES, reminderOffsetsSchema } from "@/lib/meetings/reminders";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
 import { publicEvents, reports } from "@/server/cache/tags";
 import type { TxClient, TxKind } from "@/server/db/context";
+import {
+  isMeetingIntegration,
+  MEETING_INTEGRATIONS,
+  providerForConference,
+} from "@/server/conference/providers";
 import { parseGoogleConfig } from "@/server/google-calendar/config";
 import { enqueueJob } from "@/server/jobs/enqueue";
-import {
-  notifyEventCancelled,
-  resetRsvpReminders,
-  scheduleRsvpReminders,
-} from "@/server/rsvp/service";
+import { notifyEventCancelled, scheduleEventReminders } from "@/server/rsvp/service";
 import { markReportsDataChanged } from "@/server/reports/data-version";
 
 /**
@@ -42,6 +45,9 @@ import { markReportsDataChanged } from "@/server/reports/data-version";
  *     gcal:{eventId} when the org has a Google connection (Phase 7 worker);
  *     site-rebuild:{orgId} (runAt +60s, coalesced) when a PUBLIC event
  *       changes and the org has a website build hook;
+ *     rsvp-fanout:{eventId}:r{offset}:{startMinute}, one per reminder time,
+ *       when an event is created here, moved or given other reminder times
+ *       (scheduleEventReminders);
  *     an OrgAuditLog row;
  *     invalidate() of tags.publicEvents(org) (when a PUBLIC event is
  *       involved) and tags.reports(org), after commit.
@@ -122,6 +128,8 @@ const eventFields = {
   endsAt: z.coerce.date(),
   allDay: z.boolean(),
   location: optionalText(300),
+  /** How to find the place ("Second floor, past the elevators"). The sign-up page shows it too. */
+  locationDetails: optionalText(1000),
   conferenceProvider: z.enum(ConferenceProvider),
   conferenceUrl: optionalText(2000),
   kind: z.enum(EventKind),
@@ -137,6 +145,12 @@ const eventFields = {
   capacityFull: z.boolean(),
   featured: z.boolean(),
   publicNote: optionalText(500),
+  /**
+   * Minutes before the start to remind people, earliest first once parsed.
+   * Deliberately no default here: a create without it takes the org's
+   * default (createEvent), and a patch without it leaves the column alone.
+   */
+  reminderMinutes: reminderOffsetsSchema.optional(),
 };
 
 /** Input for createEvent. Defaults: INTERNAL, OTHER, not all-day, no conference. */
@@ -165,6 +179,7 @@ export const EVENT_SELECT = {
   endsAt: true,
   allDay: true,
   location: true,
+  locationDetails: true,
   conferenceProvider: true,
   conferenceUrl: true,
   kind: true,
@@ -177,12 +192,16 @@ export const EVENT_SELECT = {
   capacityFull: true,
   featured: true,
   publicNote: true,
+  reminderMinutes: true,
   rsvpEnabled: true,
   createdById: true,
   deletedAt: true,
   mergedIntoId: true,
   googleEventId: true,
   googleSyncState: true,
+  format: true,
+  conferenceManaged: true,
+  conferenceMeetingId: true,
   syncVersion: true,
   updatedAt: true,
 } satisfies Prisma.EventSelect;
@@ -246,7 +265,14 @@ function checkShape(e: EventShape): void {
       throw new EventValidationError("Remove the link or choose a conferencing provider.");
     return;
   }
-  if (!e.conferenceUrl) throw new EventValidationError("Paste a meeting link for this provider.");
+  // An empty link against Meet, Zoom or Teams is not a mistake: it means
+  // "make the meeting for me", and the conference-sync job fills it in a
+  // moment later (docs/features/meetings.md). Only OTHER still needs one
+  // pasted, because there is nothing for us to call.
+  if (!e.conferenceUrl) {
+    if (providerForConference(e.conferenceProvider)) return;
+    throw new EventValidationError("Paste a meeting link for this provider.");
+  }
   let url: URL;
   try {
     url = new URL(e.conferenceUrl);
@@ -254,6 +280,32 @@ function checkShape(e: EventShape): void {
     throw new EventValidationError("That meeting link doesn't look like a valid URL.");
   }
   if (url.protocol !== "https:") throw new EventValidationError("Meeting links must use https.");
+}
+
+/**
+ * How a meeting happens, from what was chosen (docs/features/meetings.md).
+ *
+ * Stored rather than computed at read time, so the Meetings list and the
+ * sync job can filter on it, but always derived here so the column cannot
+ * drift from the provider and the place it describes. Without this every
+ * event kept the IN_PERSON default and no online meeting would ever be made.
+ */
+function formatOf(e: { conferenceProvider: ConferenceProvider; location: string | null }): MeetingFormat {
+  if (e.conferenceProvider === ConferenceProvider.NONE) return MeetingFormat.IN_PERSON;
+  return e.location?.trim() ? MeetingFormat.HYBRID : MeetingFormat.ONLINE;
+}
+
+/**
+ * What a new meeting is reminded at when its creator did not say: the
+ * organization's default (Settings > General), or a day's and an hour's
+ * notice for an organization with no settings row.
+ */
+async function orgReminderDefault(ctx: EventServiceContext): Promise<number[]> {
+  const settings = await ctx.db.orgSettings.findUnique({
+    where: { organizationId: ctx.organizationId },
+    select: { meetingReminderMinutes: true },
+  });
+  return settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES];
 }
 
 async function checkHost(
@@ -271,6 +323,8 @@ async function checkHost(
 interface Integrations {
   google: { connected: boolean; hasPublicCalendar: boolean; hasInternalCalendar: boolean };
   buildHook: boolean;
+  /** Meeting providers this org has connected (docs/features/meetings.md). */
+  conference: ReadonlySet<IntegrationProvider>;
 }
 
 async function loadIntegrations(ctx: EventServiceContext): Promise<Integrations> {
@@ -278,7 +332,11 @@ async function loadIntegrations(ctx: EventServiceContext): Promise<Integrations>
     where: {
       organizationId: ctx.organizationId,
       provider: {
-        in: [IntegrationProvider.GOOGLE_CALENDAR, IntegrationProvider.NETLIFY_BUILD_HOOK],
+        in: [
+          IntegrationProvider.GOOGLE_CALENDAR,
+          IntegrationProvider.NETLIFY_BUILD_HOOK,
+          ...MEETING_INTEGRATIONS,
+        ],
       },
       status: IntegrationStatus.CONNECTED,
     },
@@ -295,7 +353,33 @@ async function loadIntegrations(ctx: EventServiceContext): Promise<Integrations>
       hasInternalCalendar: calendars.internalCalendarId !== null,
     },
     buildHook: rows.some((r) => r.provider === IntegrationProvider.NETLIFY_BUILD_HOOK),
+    conference: new Set(rows.map((r) => r.provider).filter(isMeetingIntegration)),
   };
+}
+
+/**
+ * Whether the conference-sync job has work to do for this event state
+ * (docs/features/meetings.md).
+ *
+ * Three cases: a meeting we made needs moving or cancelling; a meeting we
+ * made is being taken away (the format went in-person, or the provider
+ * changed); or an online meeting is wanted and does not exist yet. A link
+ * someone pasted by hand is none of these - we never touch it.
+ */
+function needsConferenceSync(
+  integrations: Integrations,
+  after: ServiceEvent,
+  before: ServiceEvent | null,
+): boolean {
+  if (after.conferenceManaged || before?.conferenceManaged) return true;
+  const gone = after.deletedAt !== null || after.mergedIntoId !== null;
+  if (gone) return false;
+  if (after.format === MeetingFormat.IN_PERSON) return false;
+  const def = providerForConference(after.conferenceProvider);
+  if (!def) return false;
+  // A pasted link is the member's own; only an empty one asks us to make it.
+  if (after.conferenceUrl) return false;
+  return integrations.conference.has(def.integration);
 }
 
 /** Whether the Google mirror has work to do for this event state. */
@@ -312,6 +396,28 @@ function needsGoogleSync(
     : integrations.google.hasInternalCalendar;
 }
 
+/**
+ * Whether a save changed when this meeting's reminders go out: created
+ * here (not brought in by the Google import or the website sync, whose
+ * events were not made to remind anyone), moved, or given other reminder
+ * times. scheduleEventReminders' job keys merge, so queuing again for a
+ * start that already has them is harmless.
+ */
+function remindersChanged(
+  before: ServiceEvent | null,
+  after: ServiceEvent,
+  origin: NonNullable<EventSaveOptions["origin"]>,
+): boolean {
+  if (!before) return origin === "suite";
+  if (before.startsAt.getTime() !== after.startsAt.getTime()) return true;
+  if (before.allDay !== after.allDay) return true;
+  // The column is nullable in the database (an array column always is);
+  // a row with none has no reminders.
+  const offsets = (list: readonly number[] | null) =>
+    [...(list ?? [])].sort((a, b) => a - b).join(",");
+  return offsets(before.reminderMinutes) !== offsets(after.reminderMinutes);
+}
+
 async function afterSave(
   ctx: EventServiceContext,
   action: "event.created" | "event.updated" | "event.deleted",
@@ -319,11 +425,27 @@ async function afterSave(
   after: ServiceEvent,
   integrations: Integrations,
   googleSync: boolean,
+  origin: NonNullable<EventSaveOptions["origin"]> = "suite",
 ): Promise<string[]> {
   if (googleSync) {
     await enqueueJob(ctx.db, {
       orgId: ctx.organizationId,
       kind: "gcal",
+      key: after.id,
+      payload: { eventId: after.id },
+    });
+  }
+  if (needsConferenceSync(integrations, after, before)) {
+    // PENDING first, so the Meetings list can say "getting the link" rather
+    // than showing an online meeting with nowhere to join. Raw, like the
+    // Google backfill: marking a row PENDING is not an edit, so updatedAt
+    // stays where it was.
+    await ctx.db.$executeRaw`
+      UPDATE "Event" SET "conferenceSyncState" = 'PENDING'::"CalendarSyncState"
+       WHERE "organizationId" = ${ctx.organizationId} AND "id" = ${after.id}`;
+    await enqueueJob(ctx.db, {
+      orgId: ctx.organizationId,
+      kind: "conference-sync",
       key: after.id,
       payload: { eventId: after.id },
     });
@@ -339,21 +461,18 @@ async function afterSave(
       runAt: new Date(Date.now() + 60_000),
     });
   }
-  // A move also forgets which reminders went out (they were for the old
-  // time), even while the page is off, so turning it back on reminds again.
-  const moved = before !== null && before.startsAt.getTime() !== after.startsAt.getTime();
-  if (moved && action !== "event.deleted") {
-    await resetRsvpReminders(ctx.db, ctx.organizationId, after.id);
-  }
-  // An RSVP page's guests: reminders follow the start time, and a deleted
-  // event tells them it's off (not a merge: mergeEvents won't merge away a
-  // live page that people signed up on).
-  if (after.rsvpEnabled) {
-    if (action === "event.deleted") {
-      if (!after.mergedIntoId) await notifyEventCancelled(ctx.db, ctx.organizationId, after.id);
-    } else if (!before || moved) {
-      await scheduleRsvpReminders(ctx.db, after);
+  if (action === "event.deleted") {
+    // An RSVP page's guests are told it's off (not a merge: mergeEvents
+    // won't merge away a live page that people signed up on). Its queued
+    // reminders find it gone and send nothing.
+    if (after.rsvpEnabled && !after.mergedIntoId) {
+      await notifyEventCancelled(ctx.db, ctx.organizationId, after.id);
     }
+  } else if (remindersChanged(before, after, origin)) {
+    // One fanout per reminder time, for members and guests alike. After a
+    // move the old time's fanouts find the start changed and do nothing,
+    // and the new ones forget what went out for the old time.
+    await scheduleEventReminders(ctx.db, after);
   }
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
@@ -387,6 +506,7 @@ export async function createEvent(
   await checkHost(ctx, data.hostUserId);
 
   const integrations = await loadIntegrations(ctx);
+  const reminderMinutes = data.reminderMinutes ?? (await orgReminderDefault(ctx));
   const link = options.google;
   const googleSync = link
     ? false
@@ -394,10 +514,15 @@ export async function createEvent(
   const event = await ctx.db.event.create({
     data: {
       ...data,
+      reminderMinutes,
       organizationId: ctx.organizationId,
       createdById: ctx.userId,
       conferenceUrl:
         data.conferenceProvider === ConferenceProvider.NONE ? null : data.conferenceUrl,
+      format: formatOf({
+        conferenceProvider: data.conferenceProvider,
+        location: data.location ?? null,
+      }),
       hostName: data.hostUserId ? null : data.hostName,
       suiteEditedAt: (options.origin ?? "suite") === "suite" ? new Date() : null,
       syncVersion: 1,
@@ -411,7 +536,15 @@ export async function createEvent(
     },
     select: EVENT_SELECT,
   });
-  const tags = await afterSave(ctx, "event.created", null, event, integrations, googleSync);
+  const tags = await afterSave(
+    ctx,
+    "event.created",
+    null,
+    event,
+    integrations,
+    googleSync,
+    options.origin ?? "suite",
+  );
   return { event, tags };
 }
 
@@ -452,6 +585,10 @@ export async function updateEvent(
     data: {
       ...changes,
       conferenceUrl,
+      format: formatOf({
+        conferenceProvider: merged.conferenceProvider,
+        location: merged.location ?? null,
+      }),
       ...(changes.hostUserId ? { hostName: null } : {}),
       ...((options.origin ?? "suite") === "suite" ? { suiteEditedAt: new Date() } : {}),
       syncVersion: { increment: 1 },
@@ -462,7 +599,15 @@ export async function updateEvent(
     },
     select: EVENT_SELECT,
   });
-  const tags = await afterSave(ctx, "event.updated", before, event, integrations, googleSync);
+  const tags = await afterSave(
+    ctx,
+    "event.updated",
+    before,
+    event,
+    integrations,
+    googleSync,
+    options.origin ?? "suite",
+  );
   return { event, tags };
 }
 

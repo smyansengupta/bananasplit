@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { listAiConnectionsAction } from "@/app/app/[orgSlug]/_shell/ai-actions";
 import type { AiConnectionId, AiConnectionInfo } from "@/lib/ai/types";
+import { FieldSelect } from "@/components/ui/field-select";
 
 /**
  * Which connected model reads the import, and where the data goes. Loaded
@@ -90,17 +91,17 @@ export function ConnectionPicker({
         {list.length > 1 ? (
           <label className="flex items-center gap-2">
             <span className="text-muted-foreground">Read with</span>
-            <select
-              className="border-input bg-card rounded-field focus-visible:border-foreground h-8 border px-3 text-sm outline-none"
+            <FieldSelect
               value={selected?.id}
               onChange={(e) => onChoose(e.target.value as AiConnectionId)}
+              size="sm"
             >
               {list.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label} ({c.detail})
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </label>
         ) : (
           <span>

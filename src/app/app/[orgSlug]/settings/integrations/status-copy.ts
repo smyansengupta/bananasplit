@@ -27,6 +27,9 @@ export const PROVIDER_ICONS: Record<IntegrationProvider, string> = {
   GOOGLE_CALENDAR: "CalendarSync",
   SUPABASE_SOURCE: "Database",
   NETLIFY_BUILD_HOOK: "Globe",
+  GOOGLE_MEET: "Video",
+  ZOOM: "Video",
+  MICROSOFT_TEAMS: "Video",
 };
 
 const checkedFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });

@@ -50,6 +50,7 @@ const SECTIONS: Record<string, string> = {
   tasks: "Tasks",
   notes: "Files",
   calendar: "Calendar",
+  meetings: "Meetings",
   databases: "Databases",
   finance: "Finance",
   "org-chart": "Org chart",
@@ -66,7 +67,7 @@ const SUBPAGES: Record<string, string> = {
   "calendar/polls": "Polls",
   "calendar/polls/ask": "Ask a question",
   "calendar/polls/new": "New find-a-time poll",
-  "calendar/rsvp": "RSVPs",
+  "meetings": "Meetings",
   "calendar/sync": "Calendar sync",
   "databases/reports": "Reports",
   "finance/budget": "Budget",
@@ -193,7 +194,18 @@ export function describePath(orgSlug: string, address: string): PageInfo | null 
   if (section === "calendar" && parts.length === 2 && ID.test(second)) {
     return { href, kind: "event", label: "Event", lookup: { type: "event", id: second } };
   }
-  if (section === "calendar" && parts.length === 3 && third === "rsvp" && ID.test(second)) {
+  // A meeting is an event, so its page is looked up the same way. Its sign-up
+  // screen moved here from the Calendar; the old path stays described, for
+  // pins saved before the move.
+  if (section === "meetings" && parts.length === 2 && ID.test(second)) {
+    return { href, kind: "event", label: "Meeting", lookup: { type: "event", id: second } };
+  }
+  if (
+    (section === "meetings" || section === "calendar") &&
+    parts.length === 3 &&
+    third === "rsvp" &&
+    ID.test(second)
+  ) {
     return {
       href,
       kind: "event",

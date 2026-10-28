@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { FieldSelect } from "@/components/ui/field-select";
 
-import { nativeSelectClass, SettingsCard, SettingsStatus } from "../settings-card";
+import { SettingsCard, SettingsStatus } from "../settings-card";
 import {
   type PrivacyInput,
   updateBallotVisibility,
+  updateConnectorsEnabled,
   updateDatabaseVisibility,
   updatePrivacy,
 } from "./actions";
@@ -140,9 +141,9 @@ export function PrivacyForm({
             label="Who sees website contacts' emails"
             help="In the People, Attendance and Signups databases."
           >
-            <select
+            <FieldSelect
               id="contact-emails"
-              className={cn(nativeSelectClass, "w-auto min-w-48")}
+              className="w-auto min-w-48"
               value={value.contactEmailVisibility}
               disabled={!canEdit}
               onChange={(e) =>
@@ -157,7 +158,7 @@ export function PrivacyForm({
                   {o.label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
           </Row>
           <Row
             id="public-events"
@@ -219,9 +220,9 @@ export function BallotVisibilityForm({
       >
         <div className="grid max-w-md gap-1.5">
           <Label htmlFor="ballot-visibility">Who can see individual votes</Label>
-          <select
+          <FieldSelect
             id="ballot-visibility"
-            className={nativeSelectClass}
+            className="w-full"
             value={value}
             disabled={!canEdit}
             onChange={(e) => setValue(e.target.value)}
@@ -229,7 +230,7 @@ export function BallotVisibilityForm({
             <option value="OWNER_ONLY">Owners only (default)</option>
             <option value="OWNER_AND_ADMINS">Owners and admins</option>
             <option value="NOBODY">Nobody (also left out of exports)</option>
-          </select>
+          </FieldSelect>
         </div>
       </SettingsCard>
     </form>
@@ -259,9 +260,9 @@ export function DatabaseVisibilityRow({
       </label>
       <div className="flex items-center gap-3">
         <SettingsStatus status={status} />
-        <select
+        <FieldSelect
           id={`db-${id}`}
-          className={cn(nativeSelectClass, "w-auto min-w-48")}
+          className="w-auto min-w-48"
           defaultValue={initial}
           disabled={!canEdit || isPending}
           onChange={(e) => {
@@ -283,8 +284,57 @@ export function DatabaseVisibilityRow({
               {o.label}
             </option>
           ))}
-        </select>
+        </FieldSelect>
       </div>
     </li>
+  );
+}
+
+/** AI connectors: saves as it is switched, like the database rows. */
+export function ConnectorsSwitchForm({
+  orgId,
+  value: initial,
+  canEdit,
+}: {
+  orgId: string;
+  value: boolean;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(initial);
+  const [status, setStatus] = useState<Status>(null);
+  const [isPending, startTransition] = useTransition();
+  return (
+    <SettingsCard
+      title="AI connectors"
+      description="Members can use this organization from AI apps they connect, such as Claude or ChatGPT. An app only ever sees what that member can see here."
+      status={status && <SettingsStatus status={status} />}
+    >
+      <Row
+        id="connectors-enabled"
+        label="Allow AI apps"
+        help="Turning this off stops every member's AI apps from using the organization right away. Nothing is disconnected, so turning it back on restores them."
+      >
+        <Switch
+          id="connectors-enabled"
+          checked={value}
+          disabled={!canEdit || isPending}
+          onCheckedChange={(next) => {
+            setValue(next);
+            startTransition(async () => {
+              setStatus(null);
+              const result = await updateConnectorsEnabled(orgId, next);
+              if (result.error) {
+                setValue(!next);
+                setStatus({ tone: "error", text: result.error });
+                return;
+              }
+              setStatus({ tone: "ok", text: next ? "AI apps allowed." : "AI apps turned off." });
+              router.refresh();
+            });
+          }}
+        />
+      </Row>
+    </SettingsCard>
   );
 }

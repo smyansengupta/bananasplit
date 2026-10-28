@@ -8,6 +8,7 @@ import { ArrowLeft } from "@/components/brand/arrows";
 import { Logo } from "@/components/brand/logo";
 import { pill } from "@/components/brand/pill";
 import { Segmented } from "@/components/ui/segmented";
+import { FieldSelect } from "@/components/ui/field-select";
 import {
   type ClubPlanId,
   dollars,
@@ -476,10 +477,9 @@ function CardFieldsPlaceholder() {
         </label>
         <div className={GROUP}>
           <div className="border-input relative flex items-center border-b">
-            <select
+            <FieldSelect
               id={countryId}
               defaultValue="US"
-              autoComplete="off"
               className={cn(GROUP_INPUT, "w-full cursor-pointer appearance-none pr-9")}
             >
               {COUNTRIES.map(([code, label]) => (
@@ -487,7 +487,7 @@ function CardFieldsPlaceholder() {
                   {label}
                 </option>
               ))}
-            </select>
+            </FieldSelect>
             <ChevronDown
               aria-hidden="true"
               className="text-muted-foreground pointer-events-none absolute right-3.5 size-4"

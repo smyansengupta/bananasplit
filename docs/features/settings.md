@@ -177,15 +177,15 @@ listed in the organization switcher and on `/onboarding`). Its URL is never reus
 
 **Who may create organizations.** Platform admins (verified addresses in
 `PLATFORM_ADMIN_EMAILS`) always may. For everyone else `PLATFORM_ORG_CREATION_ENABLED` is the
-master switch (default `false` in production, `true` on previews and locally); when on,
+master switch (default `true` everywhere; set `false` to stop new clubs); when on,
 `ORG_CREATION_MODE` decides:
 
-- `admins` (production default): platform admins only.
+- `open` (the default): any verified user; in production one new organization per user per
+  30 days and 20 per day platform-wide.
 - `invite`: anyone with a single-use **org-creation code**. Platform admins issue codes at
   `/app/platform/org-codes` (shown once, stored hashed, valid 14 days). Codes can't be issued
   while the switch is off.
-- `open` (default off production): any verified user; in production one new organization
-  per user per 30 days and 20 per day platform-wide.
+- `admins`: platform admins only.
 
 Every mode keeps a limit of 3 new organizations per user per day, and every creator must have
 a verified email.

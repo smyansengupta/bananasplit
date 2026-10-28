@@ -73,7 +73,7 @@ export async function BrandRoot({
     );
   }
   return (
-    <ThemeProvider defaultTheme="dark" nonce={nonce}>
+    <ThemeProvider defaultTheme="light" nonce={nonce}>
       <div className={cn("brand corona flex min-h-svh flex-1 flex-col", className)}>{children}</div>
     </ThemeProvider>
   );

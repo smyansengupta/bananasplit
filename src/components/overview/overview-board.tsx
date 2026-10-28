@@ -15,6 +15,7 @@ export function OverviewBoard({
   bodies,
   headerActions,
   intro,
+  introDescription,
   stats,
   notice,
 }: {
@@ -27,6 +28,8 @@ export function OverviewBoard({
   headerActions?: Record<string, ReactNode>;
   /** The page's greeting, on the Customize button's row. */
   intro?: ReactNode;
+  /** The line under the greeting, under that row. */
+  introDescription?: ReactNode;
   /** What always heads the page under the greeting: the stat strip, Up next, Get your club started. */
   stats?: ReactNode;
   /** The admin's setup prompt or the new club's invite card, under the widgets (Up next leads). */
@@ -40,6 +43,7 @@ export function OverviewBoard({
       bodies={bodies}
       headerActions={headerActions}
       intro={intro}
+      introDescription={introDescription}
       belowIntro={stats}
       footer={notice}
       hiddenOnPhone={["recent"]}

@@ -19,6 +19,7 @@ import { SpaceList } from "@/components/shell/space-list";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
 import { Toaster } from "@/components/ui/toaster";
+import { ContextActionsHost } from "@/components/context-actions";
 import type { Role } from "@/generated/prisma/enums";
 import { serializeSidebarCookie, type SidebarMode } from "@/lib/sidebar-mode";
 import { cn } from "@/lib/utils";
@@ -227,6 +228,8 @@ export function AppShell({
           onOpenChange={setCommandOpen}
         />
         <Toaster />
+        {/* One listener for every right-click menu in the app. */}
+        <ContextActionsHost />
       </div>
     </PinsProvider>
   );

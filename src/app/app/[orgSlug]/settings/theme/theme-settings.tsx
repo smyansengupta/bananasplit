@@ -44,7 +44,7 @@ import {
 } from "@/lib/theme/derive";
 import {
   CUSTOM_PRESET_ID,
-  DEFAULT_PRESET_ID,
+  UNTHEMED_PRESET_ID,
   findPreset,
   presetGlow,
   THEME_PRESETS,
@@ -271,10 +271,10 @@ export function ThemeSettings({
           setStatus({ kind: "error", text: result.error });
           return;
         }
-        const defaults = findPreset(DEFAULT_PRESET_ID)!;
+        const defaults = findPreset(UNTHEMED_PRESET_ID)!;
         const next: ThemeDraft = {
-          preset: DEFAULT_PRESET_ID,
-          mode: "SYSTEM",
+          preset: UNTHEMED_PRESET_ID,
+          mode: "LIGHT",
           lockMode: false,
           logoDisplay: "LOGO_AND_NAME",
           light: defaults.light,
@@ -296,8 +296,8 @@ export function ThemeSettings({
   const lightWarnings = warnings.filter((w) => w.mode === "light");
   const darkWarnings = warnings.filter((w) => w.mode === "dark");
   // Preset cards render in the mode the viewer is in, like the app around them
-  // (dark, Moonstone's first mode, until the client knows).
-  const cardMode: ColorMode = hydrated && resolvedTheme === "light" ? "light" : "dark";
+  // (light, the default, until the client knows).
+  const cardMode: ColorMode = hydrated && resolvedTheme === "dark" ? "dark" : "light";
   const savedPreset = findPreset(saved.preset) ? saved.preset : CUSTOM_PRESET_ID;
 
   return (
@@ -325,7 +325,7 @@ export function ThemeSettings({
               badge={
                 savedPreset === preset.id
                   ? "In use"
-                  : preset.id === DEFAULT_PRESET_ID
+                  : preset.id === UNTHEMED_PRESET_ID
                     ? "Default"
                     : null
               }
@@ -813,8 +813,8 @@ function ResetButton({ disabled, onConfirm }: { disabled: boolean; onConfirm: ()
         <DialogHeader>
           <DialogTitle>Reset the theme?</DialogTitle>
           <DialogDescription>
-            Everyone goes back to the default colours (Moonstone), the device&apos;s light or dark
-            mode, and the logo beside the name. You can pick a theme again at any time.
+            Everyone goes back to the default colours (Graphite) in light mode, and the logo
+            beside the name. You can pick a theme again at any time.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

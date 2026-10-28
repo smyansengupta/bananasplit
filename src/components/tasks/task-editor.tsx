@@ -32,6 +32,8 @@ import { canChangeVisibility, namedAudienceIds } from "@/lib/tasks/visibility";
 import { cn } from "@/lib/utils";
 
 import { MentionTextarea } from "./mention-textarea";
+import { TaskTitle } from "./task-title";
+import { TitleTextarea } from "./task-title-field";
 import { useConfirmFlagged } from "./prompts";
 import { Subtasks } from "./subtasks";
 import { TaskActivity } from "./task-activity";
@@ -417,19 +419,26 @@ export function TaskEditor({
         <label htmlFor="task-title" className="sr-only">
           Title
         </label>
-        <textarea
-          id="task-title"
-          rows={1}
-          value={title}
-          disabled={readOnly}
-          autoFocus={isNew}
-          placeholder="Untitled task"
-          onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) e.preventDefault();
-          }}
-          className="placeholder:text-muted-foreground/70 field-sizing-content w-full resize-none border-0 bg-transparent p-0 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] outline-none disabled:opacity-100"
-        />
+        {readOnly ? (
+          // Nothing to type into: the title reads as text, and its file
+          // references are the links through to the files.
+          <p className="text-[26px] leading-[1.25] font-semibold tracking-[-0.015em]">
+            <TaskTitle linked>{title || "Untitled task"}</TaskTitle>
+          </p>
+        ) : (
+          <TitleTextarea
+            id="task-title"
+            rows={1}
+            value={title}
+            autoFocus={isNew}
+            placeholder="Untitled task"
+            onChange={(next) => setTitle(next.replace(/\n/g, " "))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) e.preventDefault();
+            }}
+            className="placeholder:text-muted-foreground/70 field-sizing-content w-full resize-none border-0 bg-transparent p-0 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] outline-none disabled:opacity-100"
+          />
+        )}
         {!readOnly && <HashTagHint title={title} />}
         <label htmlFor="task-description" className="sr-only">
           Description
@@ -448,7 +457,7 @@ export function TaskEditor({
             onChange={setDescription}
             onSubmitShortcut={() => void save()}
             rows={2}
-            placeholder="Add a description. Markdown and @mentions work."
+            placeholder="Add a description. Markdown, @mentions and /file links work."
             className="text-foreground/80 placeholder:text-muted-foreground/70 field-sizing-content min-h-0 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-[1.55] shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
           />
         )}

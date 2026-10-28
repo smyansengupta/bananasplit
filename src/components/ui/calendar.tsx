@@ -104,8 +104,11 @@ function Calendar({
           "rounded-(--cell-radius) bg-muted text-foreground data-[selected=true]:rounded-none",
           defaultClassNames.today,
         ),
+        // The neighbouring months' days: lighter again than a muted day, so
+        // the current month reads as the block it is (the month grid does
+        // the same with its tiles).
         outside: cn(
-          "text-muted-foreground aria-selected:text-muted-foreground",
+          "text-muted-foreground opacity-60 aria-selected:text-muted-foreground",
           defaultClassNames.outside,
         ),
         disabled: cn("text-muted-foreground opacity-50", defaultClassNames.disabled),

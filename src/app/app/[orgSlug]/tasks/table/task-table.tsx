@@ -15,6 +15,7 @@ import {
   isTaskFlagged,
   isTaskPrivate,
 } from "@/components/tasks/task-badges";
+import { TaskTitle } from "@/components/tasks/task-title";
 import { accessSubjectOf, useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
 import { TaskTypeChip } from "@/components/tasks/task-type";
@@ -438,7 +439,9 @@ export function TaskTable({
                         )}
                         {isTaskPrivate(task) && <PrivateMark />}
                         {task.type !== "TASK" && <TaskTypeChip type={task.type} iconOnly />}
-                        <span className="truncate">{task.title}</span>
+                        <span className="truncate">
+                          <TaskTitle>{task.title}</TaskTitle>
+                        </span>
                         {task.subtasks.length > 0 && (
                           <span className="text-muted-foreground shrink-0 text-xs">
                             ({doneSubtasks}/{task.subtasks.length})

@@ -26,8 +26,9 @@ function initials(name: string): string {
  * Move to a club (docs/features/personal-and-clubs.md): from Personal, pick
  * a club you own or run and you land on its "Bring anything in?" list with
  * ?item ticked; or start a club, and club setup ends on that list with it
- * ticked. Personal only. Link here from an event or poll as
- * /app/{personal slug}/move?item={eventId|pollId|taskId}.
+ * ticked. Personal only. Link here from an item as
+ * /app/{personal slug}/move?item={id}: an event, poll, task, folder, note
+ * or file.
  */
 export default async function MoveToClubPage({
   params,
@@ -57,7 +58,8 @@ export default async function MoveToClubPage({
           }
         />
         <p className="text-muted-foreground max-w-prose text-sm">
-          Events, polls and tasks move one way, with their links, RSVPs, tickets and responses.
+          Events, polls, tasks, notes and files move one way, with their links, RSVPs, tickets and
+          responses. Notes and files arrive private to you.
         </p>
       </div>
 

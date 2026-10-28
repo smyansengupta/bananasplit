@@ -1,6 +1,15 @@
 "use client";
 
-import { Check, ChevronsUpDown, Link2, Loader2, Lock, UserPlus, Users, X } from "@/components/icons";
+import {
+  Check,
+  ChevronsUpDown,
+  Link2,
+  Loader2,
+  Lock,
+  UserPlus,
+  Users,
+  X,
+} from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -30,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
+import { FieldSelect } from "@/components/ui/field-select";
 import { UserAvatar } from "@/components/user-avatar";
 import type { NoteGeneralAccess } from "@/lib/notes/access";
 import { cn } from "@/lib/utils";
@@ -86,9 +96,6 @@ function accessSummary(access: NoteGeneralAccess, shareCount: number, isAuthor: 
   if (shareCount === 0) return isAuthor ? "Only you" : "Private";
   return `Shared with ${shareCount}`;
 }
-
-const selectClass =
-  "border-input h-8 rounded-lg border bg-transparent px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
  * The note's Share button and dialog, like a shared document's: add club
@@ -287,15 +294,15 @@ export function ShareNoteDialog({
                 </Command>
               </PopoverContent>
             </Popover>
-            <select
+            <FieldSelect
               aria-label="Their access"
               value={role}
               onChange={(e) => setRole(e.target.value as ShareRole)}
-              className={selectClass}
+              size="sm"
             >
               <option value="EDITOR">Editor</option>
               <option value="VIEWER">Viewer</option>
-            </select>
+            </FieldSelect>
             <Button
               type="button"
               size="sm"
@@ -330,7 +337,7 @@ export function ShareNoteDialog({
                   right={
                     canShare ? (
                       <span className="flex items-center gap-1">
-                        <select
+                        <FieldSelect
                           aria-label={`${s.user.name ?? "Member"}'s access`}
                           value={s.role}
                           disabled={pending}
@@ -339,11 +346,12 @@ export function ShareNoteDialog({
                               updateNoteShare(orgId, noteId, s.userId, e.target.value as ShareRole),
                             )
                           }
-                          className={cn(selectClass, "h-7 text-xs")}
+                          className="h-7 text-xs"
+                          size="sm"
                         >
                           <option value="EDITOR">Editor</option>
                           <option value="VIEWER">Viewer</option>
-                        </select>
+                        </FieldSelect>
                         <Button
                           type="button"
                           variant="ghost"
@@ -386,12 +394,13 @@ export function ShareNoteDialog({
           >
             Everyone else in the organization
           </label>
-          <select
+          <FieldSelect
             id="note-general-access"
             value={access}
             disabled={!canShare || pending}
             onChange={(e) => changeAccess(e.target.value as NoteGeneralAccess)}
-            className={cn(selectClass, "w-full")}
+            className="w-full"
+            size="sm"
           >
             {ACCESS_OPTIONS.map((o) => (
               <option
@@ -403,7 +412,7 @@ export function ShareNoteDialog({
                 {o.label}
               </option>
             ))}
-          </select>
+          </FieldSelect>
           <p className="text-muted-foreground text-xs">
             {ACCESS_OPTIONS.find((o) => o.value === access)?.description}
             {canShare &&

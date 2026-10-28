@@ -6,6 +6,8 @@ import {
   buildStaticCsp,
   cspHeaderName,
   cspMode,
+  DOOR_MODE_SOURCES,
+  DOOR_PERMISSIONS_HEADER,
   generateNonce,
   isNonceRoute,
   NONCE_ROUTE_PREFIXES,
@@ -51,6 +53,41 @@ describe("nonce policy (0A Fix 13)", () => {
     expect(policy.get("img-src")).toContain("https://*.public.blob.vercel-storage.com");
     expect(policy.has("upgrade-insecure-requests")).toBe(true);
     expect(policy.get("report-uri")).toBe("/api/csp-report");
+  });
+
+  it("lets /connect's Continue redirect to AuthKit when AI connectors are configured", () => {
+    const withAuthkit = directives(
+      buildNonceCsp("n", {
+        env: env({
+          NODE_ENV: "production",
+          CONNECTORS_ENABLED: "true",
+          WORKOS_AUTHKIT_DOMAIN: "https://club-123.authkit.app/",
+        }),
+      }),
+    );
+    expect(withAuthkit.get("form-action")).toBe(
+      "'self' https://accounts.google.com https://club-123.authkit.app",
+    );
+    const malformed = directives(
+      buildNonceCsp("n", {
+        env: env({
+          NODE_ENV: "production",
+          CONNECTORS_ENABLED: "true",
+          WORKOS_AUTHKIT_DOMAIN: "nope",
+        }),
+      }),
+    );
+    expect(malformed.get("form-action")).toBe("'self' https://accounts.google.com");
+    // The flag off: AuthKit stays out, whatever the domain says.
+    const off = directives(
+      buildNonceCsp("n", {
+        env: env({
+          NODE_ENV: "production",
+          WORKOS_AUTHKIT_DOMAIN: "https://club-123.authkit.app/",
+        }),
+      }),
+    );
+    expect(off.get("form-action")).toBe("'self' https://accounts.google.com");
   });
 
   it("adds 'unsafe-eval' in development only", () => {
@@ -115,11 +152,20 @@ describe("static policy for every other route", () => {
       "/checkout",
       "/forgot-password",
       "/reset-password/tok",
+      "/connect",
     ]) {
       expect(regex.test(path), path).toBe(false);
       expect(isNonceRoute(path), path).toBe(true);
     }
-    for (const path of ["/", "/application", "/events", "/api/health", "/api/public/cbc/events"]) {
+    for (const path of [
+      "/",
+      "/application",
+      "/events",
+      "/api/health",
+      "/api/public/cbc/events",
+      "/api/mcp",
+      "/.well-known/oauth-protected-resource/api/mcp",
+    ]) {
       expect(regex.test(path), path).toBe(true);
       expect(isNonceRoute(path), path).toBe(false);
     }
@@ -197,6 +243,18 @@ describe("mode and headers", () => {
       "/checkout",
       "/forgot-password",
       "/reset-password",
+      "/connect",
     ]);
+  });
+});
+
+describe("door mode's camera", () => {
+  it("is allowed on a meeting's door page, and only there", () => {
+    // Door mode moved from /calendar/{id}/rsvp/door to the meeting. If this
+    // source goes stale the page still loads, but ticket scanning is blocked.
+    expect([...DOOR_MODE_SOURCES]).toEqual(["/app/:orgSlug/meetings/:id/rsvp/door"]);
+    expect(DOOR_PERMISSIONS_HEADER.value).toContain("camera=(self)");
+    const everywhere = STATIC_SECURITY_HEADERS.find((h) => h.key === "Permissions-Policy");
+    expect(everywhere?.value).toContain("camera=()");
   });
 });

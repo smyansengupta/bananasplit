@@ -13,7 +13,7 @@ import type { TaskStats } from "@/server/tasks/queries";
  * Personal home alike (redesign guide 7.4, 9): your tasks due this week
  * (with what's due today), overdue (or "All clear"), what's on the
  * calendar in the next two weeks and, at home, your RSVPs. A client
- * component so it can hand Lucide icons to Stat; pages pass plain numbers.
+ * component so it can hand icon components to Stat; pages pass plain numbers.
  */
 export function OverviewStats({
   dueSoon,
@@ -41,7 +41,7 @@ export function OverviewStats({
 }) {
   return (
     <>
-      {/* A phone: the very same bar as Tasks' (the club's tasks, the same split). */}
+      {/* A phone: the very same bar as Tasks' (the organization's tasks, the same split). */}
       {taskBar && (
         <OpenTasksBar
           open={taskBar.open}

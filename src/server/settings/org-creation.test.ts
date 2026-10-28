@@ -69,8 +69,16 @@ describe("createOrganization", () => {
     expect(fake.systemCalls).toHaveLength(0);
   });
 
-  it("in production with creation disabled, refuses a non-admin even on a direct call", async () => {
+  it("in production, lets any verified account create an organization by default", async () => {
     vi.stubEnv("VERCEL_ENV", "production");
+    const result = await createOrganization(user, input);
+    expect(result).toMatchObject({ ok: true, slug: "new-club" });
+    expect(fake.systemDb.organization.create).toHaveBeenCalledOnce();
+  });
+
+  it("in production with creation switched off, refuses a non-admin even on a direct call", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("PLATFORM_ORG_CREATION_ENABLED", "false");
     vi.stubEnv("PLATFORM_ADMIN_EMAILS", "president@example.edu");
     const result = await createOrganization(user, input);
     expect(result).toMatchObject({ ok: false, error: expect.stringMatching(/switched off/i) });

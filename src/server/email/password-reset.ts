@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { hashPassword } from "@/lib/auth/password";
+import {
+  forgetAtWorkosAfterResponse,
+  revokeAllConnectorGrants,
+  type RevokedGrant,
+} from "@/server/connectors/revoke";
 import { authDb } from "@/server/db/clients";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
@@ -14,8 +19,10 @@ import { enqueueJob } from "@/server/jobs/enqueue";
  * - peekPasswordResetToken(raw): whether a link works, without using it up
  *   (the page consumes only on POST, so mail scanners can't spend it).
  * - resetPassword(raw, password): single use. Sets the new password, bumps
- *   the session version (every existing session ends), marks the address
- *   verified (the link proved it), and clears the user's other links.
+ *   the session version (every existing session ends), revokes every AI
+ *   app the account connected (docs/features/ai-connectors.md), marks the
+ *   address verified (the link proved it), and clears the user's other
+ *   links.
  */
 
 /** How long a reset link works. */
@@ -60,7 +67,8 @@ export async function resetPassword(rawToken: string, password: string): Promise
   // locked for as short a time as possible.
   const passwordHash = await hashPassword(password);
 
-  return authDb.$transaction(async (tx) => {
+  let revoked: RevokedGrant[] = [];
+  const result = await authDb.$transaction(async (tx) => {
     const row = await tx.passwordResetToken.findUnique({
       where: { tokenHash },
       select: { id: true, userId: true, expiresAt: true },
@@ -77,6 +85,9 @@ export async function resetPassword(rawToken: string, password: string): Promise
       create: { userId: row.userId, passwordHash, sessionVersion: 1 },
       update: { passwordHash, sessionVersion: { increment: 1 } },
     });
+    // Whoever reset the password may not be whoever connected the account's
+    // AI apps: they stop working until the member connects them again.
+    revoked = await revokeAllConnectorGrants(tx, row.userId);
     await tx.user.updateMany({
       where: { id: row.userId, emailVerified: null },
       data: { emailVerified: new Date() },
@@ -89,6 +100,8 @@ export async function resetPassword(rawToken: string, password: string): Promise
     await tx.verificationToken.deleteMany({ where: { identifier: user.email } });
     return { ok: true, userId: row.userId } as const;
   });
+  if (result.ok) forgetAtWorkosAfterResponse(revoked);
+  return result;
 }
 
 /** The "your password was changed" notice, queued after a successful reset. */

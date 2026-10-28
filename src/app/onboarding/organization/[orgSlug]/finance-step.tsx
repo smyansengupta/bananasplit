@@ -15,6 +15,7 @@ import {
   StepIntro,
 } from "@/components/onboarding/setup-shell";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldSelect } from "@/components/ui/field-select";
 import { FINANCE_CARDS } from "@/lib/finance/dashboard-cards";
 import { fiscalYearFor, MONTHS } from "@/lib/onboarding/org";
 import { cn } from "@/lib/utils";
@@ -190,7 +191,7 @@ export function FinanceStep({
             Your year starts
           </label>
           <div className="flex flex-wrap items-center gap-3">
-            <select
+            <FieldSelect
               id="fy-start"
               value={month}
               onChange={(e) => setMonth(Number(e.target.value))}
@@ -201,7 +202,7 @@ export function FinanceStep({
                   {m} 1
                 </option>
               ))}
-            </select>
+            </FieldSelect>
             <span className="bg-muted rounded-full px-3 py-1.5 text-[13px] font-semibold">
               {fy.label}
               <span className="text-muted-foreground font-normal">

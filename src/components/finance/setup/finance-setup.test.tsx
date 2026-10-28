@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { optionLabels, stubPointerEvents } from "@/test/select";
+
 import type { FinanceSetupState } from "@/lib/finance/setup";
 
 /**
@@ -23,7 +25,10 @@ vi.mock("@/app/app/[orgSlug]/finance/periods-actions", () => ({
   createBudgetPeriod: m.createPeriod,
   updateBudgetPeriod: m.updatePeriod,
 }));
-vi.mock("@/app/app/[orgSlug]/finance/setup-actions", () => ({ setStartingBalance: m.balance, saveBudgetLines: m.lines }));
+vi.mock("@/app/app/[orgSlug]/finance/setup-actions", () => ({
+  setStartingBalance: m.balance,
+  saveBudgetLines: m.lines,
+}));
 vi.mock("@/app/app/[orgSlug]/settings/members/actions", () => ({ changeMemberRole: m.role }));
 vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({ saveBoardAction: m.board }));
 vi.mock("@/app/app/[orgSlug]/finance/import-actions", () => ({
@@ -32,7 +37,9 @@ vi.mock("@/app/app/[orgSlug]/finance/import-actions", () => ({
   importFinanceBudget: vi.fn(),
   checkImportDuplicates: vi.fn(),
 }));
-vi.mock("@/app/app/[orgSlug]/_shell/ai-actions", () => ({ listAiConnectionsAction: vi.fn().mockResolvedValue([]) }));
+vi.mock("@/app/app/[orgSlug]/_shell/ai-actions", () => ({
+  listAiConnectionsAction: vi.fn().mockResolvedValue([]),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: m.push, refresh: vi.fn() }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -67,7 +74,14 @@ function show(state: FinanceSetupState) {
       orgSlug="cbc"
       today="2026-10-01"
       state={state}
-      lines={state.period ? [{ id: "c1", name: "Food", allocatedCents: 0 }, { id: "c2", name: "Travel", allocatedCents: 5000 }] : []}
+      lines={
+        state.period
+          ? [
+              { id: "c1", name: "Food", allocatedCents: 0 },
+              { id: "c2", name: "Travel", allocatedCents: 5000 },
+            ]
+          : []
+      }
       periods={state.period ? [{ ...state.period, isActive: true }] : []}
       allCategories={[]}
       members={[
@@ -83,7 +97,9 @@ function show(state: FinanceSetupState) {
 }
 
 beforeEach(() => {
-  for (const fn of [m.createPeriod, m.updatePeriod, m.balance, m.lines, m.role]) fn.mockResolvedValue({});
+  stubPointerEvents();
+  for (const fn of [m.createPeriod, m.updatePeriod, m.balance, m.lines, m.role])
+    fn.mockResolvedValue({});
   m.board.mockResolvedValue({ ok: true });
 });
 
@@ -93,13 +109,17 @@ afterEach(() => {
 });
 
 describe("FinanceSetup", () => {
-  it("starts a new club at its budget year and moves on once it's saved", async () => {
+  it("starts a new organization at its budget year and moves on once it's saved", async () => {
     show(fresh);
     expect(screen.getByRole("heading", { name: "Your money year" })).toBeTruthy();
     expect(screen.getByText("0 of 6 done")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Start tracking" }));
     await waitFor(() =>
-      expect(m.createPeriod).toHaveBeenCalledWith("org_1", { label: "2026–27", startsOn: "2026-08-01", endsOn: "2027-07-31" }),
+      expect(m.createPeriod).toHaveBeenCalledWith("org_1", {
+        label: "2026–27",
+        startsOn: "2026-08-01",
+        endsOn: "2027-07-31",
+      }),
     );
     expect(await screen.findByRole("heading", { name: "What you have now" })).toBeTruthy();
   });
@@ -107,9 +127,13 @@ describe("FinanceSetup", () => {
   it("records the starting balance in cents, signed", async () => {
     show(fresh);
     fireEvent.click(screen.getByRole("button", { name: /What you have now/ }));
-    fireEvent.change(screen.getByLabelText("Starting balance in dollars"), { target: { value: "-1,250.50" } });
+    fireEvent.change(screen.getByLabelText("Starting balance in dollars"), {
+      target: { value: "-1,250.50" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save -$1,250.50" }));
-    await waitFor(() => expect(m.balance).toHaveBeenCalledWith("org_1", { cents: -125050, asOf: "2026-10-01" }));
+    await waitFor(() =>
+      expect(m.balance).toHaveBeenCalledWith("org_1", { cents: -125050, asOf: "2026-10-01" }),
+    );
   });
 
   it("opens where setup left off, and saves the budget as a list", async () => {
@@ -133,9 +157,9 @@ describe("FinanceSetup", () => {
   it("makes a member treasurer, and offers only plain members", async () => {
     show(started);
     fireEvent.click(screen.getByRole("button", { name: /Who handles money/ }));
-    const select = screen.getByRole("combobox", { name: "Make a member treasurer" }) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.text)).toEqual(["Choose a member…", "Mehr Anand"]);
-    fireEvent.change(select, { target: { value: "u3" } });
+    const select = screen.getByRole("combobox", { name: "Make a member treasurer" });
+    expect(optionLabels(select)).toEqual(["Choose a member…", "Mehr Anand"]);
+    fireEvent.click(screen.getByRole("option", { name: "Mehr Anand" }));
     fireEvent.click(screen.getByRole("button", { name: "Make treasurer" }));
     await waitFor(() => expect(m.role).toHaveBeenCalledWith("org_1", "u3", "TREASURER"));
   });
@@ -147,7 +171,9 @@ describe("FinanceSetup", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /^Balance ?Money in minus/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save my dashboard" }));
     await waitFor(() =>
-      expect(m.board).toHaveBeenCalledWith("org_1", "finance", [{ id: "shortcuts", type: "shortcuts", w: 2, h: null }]),
+      expect(m.board).toHaveBeenCalledWith("org_1", "finance", [
+        { id: "shortcuts", type: "shortcuts", w: 2, h: null },
+      ]),
     );
   });
 });

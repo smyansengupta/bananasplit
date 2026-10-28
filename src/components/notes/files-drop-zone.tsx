@@ -56,6 +56,10 @@ export function FilesDropZone({
   const [pageDrag, setPageDrag] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const busy = uploads.some((u) => u.state === "waiting" || u.state === "uploading");
+  // A drag that began on this page (a card being filed in a folder) is never
+  // an upload, even when the browser attaches a file to it.
+  const fromPage = useRef(false);
+  const isUpload = (e: DragEvent | React.DragEvent) => !fromPage.current && hasFiles(e);
 
   const level = storageLevel(storage.usedBytes, storage.limitBytes);
   const full = level === "full";
@@ -96,32 +100,42 @@ export function FilesDropZone({
   // Files dragged anywhere over the page: the whole page becomes the target.
   useEffect(() => {
     let depth = 0;
+    const start = () => {
+      fromPage.current = true;
+    };
+    const end = () => {
+      fromPage.current = false;
+    };
     const enter = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
+      if (!isUpload(e)) return;
       depth += 1;
       setPageDrag(true);
     };
     const leave = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
+      if (!isUpload(e)) return;
       depth = Math.max(0, depth - 1);
       if (depth === 0) setPageDrag(false);
     };
     const overPage = (e: DragEvent) => {
-      if (hasFiles(e)) e.preventDefault();
+      if (isUpload(e)) e.preventDefault();
     };
     const drop = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
+      if (!isUpload(e)) return;
       e.preventDefault();
       depth = 0;
       setPageDrag(false);
       setOver(false);
       void uploadAll(Array.from(e.dataTransfer?.files ?? []));
     };
+    window.addEventListener("dragstart", start);
+    window.addEventListener("dragend", end);
     window.addEventListener("dragenter", enter);
     window.addEventListener("dragleave", leave);
     window.addEventListener("dragover", overPage);
     window.addEventListener("drop", drop);
     return () => {
+      window.removeEventListener("dragstart", start);
+      window.removeEventListener("dragend", end);
       window.removeEventListener("dragenter", enter);
       window.removeEventListener("dragleave", leave);
       window.removeEventListener("dragover", overPage);
@@ -136,7 +150,9 @@ export function FilesDropZone({
       <button
         type="button"
         onClick={() => input.current?.click()}
-        onDragEnter={() => setOver(true)}
+        onDragEnter={(e) => {
+          if (isUpload(e)) setOver(true);
+        }}
         onDragLeave={() => setOver(false)}
         disabled={full}
         className={cn(

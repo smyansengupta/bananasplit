@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { MAX_REMINDER_MINUTES } from "@/lib/meetings/reminders";
+
 import type { JobHandler } from "./types";
 
 /**
@@ -67,6 +69,8 @@ const id = z
   .regex(/^[A-Za-z0-9_-]+$/, "ids only");
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const isoInstant = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/);
+/** Minutes before a meeting's start (app.reminder_offsets_ok's range). */
+const reminderOffset = z.number().int().min(1).max(MAX_REMINDER_MINUTES);
 
 /** Templates the generic `email` kind can render (src/server/email/jobs.ts). */
 export const EMAIL_JOB_TEMPLATES = ["treasurer-digest"] as const;
@@ -201,7 +205,7 @@ export const JOB_KINDS = {
     sendsEmail: true,
     handler: () => import("@/server/tasks/jobs").then((m) => m.weeklyUpdateReminderJob),
     description:
-      "18:00 local reminder, on the club's weekly update day, to a lead who hasn't posted the week's update (once=true), enqueued by /api/cron/task-digest.",
+      "18:00 local reminder, on the organization's weekly update day, to a lead who hasn't posted the week's update (once=true), enqueued by /api/cron/task-digest.",
   }),
 
   // ---- The weekly pulse (src/server/pulse) ----
@@ -214,7 +218,7 @@ export const JOB_KINDS = {
     afterEligible: false,
     handler: () => import("@/server/pulse/jobs").then((m) => m.weeklyPulseJob),
     description:
-      "The club's weekly pulse at OrgSettings.pulseDay and pulseHourLocal (once=true per week): compiles and stores the PulseIssue, writes the Team Advanced summary, marks it sent, notifies in-app and queues pulse-email; enqueued by /api/cron/task-digest.",
+      "The organization's weekly pulse at OrgSettings.pulseDay and pulseHourLocal (once=true per week): compiles and stores the PulseIssue, writes the Team Advanced summary, marks it sent, notifies in-app and queues pulse-email; enqueued by /api/cron/task-digest.",
   }),
   "pulse-email": kind({
     payload: z.object({ issueId: id, userId: id }).strict(),
@@ -240,6 +244,20 @@ export const JOB_KINDS = {
     handler: () => import("@/server/google-calendar/sync").then((m) => m.gcalJob),
     description: "Mirror one Event to Google Calendar (the event service enqueues it).",
   }),
+  // ---- Meetings (docs/features/meetings.md) ----
+  "conference-sync": kind({
+    payload: z.object({ eventId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 30_000,
+    leaseSeconds: 90,
+    tier: "fast",
+    // Runs right after the save that queued it, so the join link appears
+    // within a second or two of creating the meeting.
+    afterEligible: true,
+    handler: () => import("@/server/conference/sync").then((m) => m.conferenceSyncJob),
+    description:
+      "Create, move or cancel one Event's online meeting at Google Meet, Zoom or Teams (key conference-sync:{eventId}; the event service enqueues it).",
+  }),
   "site-rebuild": kind({
     payload: z.object({}).strict(),
     scope: "org",
@@ -259,14 +277,24 @@ export const JOB_KINDS = {
           "registered",
           "waitlisted",
           "promoted",
+          "reminder",
+          // Queued by the code before reminder offsets, and still pending
+          // when it deploys: read as "reminder" at 1440 and 60 minutes.
           "reminder-day",
           "reminder-hour",
           "event-cancelled",
         ]),
+        /** "reminder": how many minutes before the start it is for. */
+        offsetMinutes: reminderOffset.optional(),
         /** Reminders: the start they were queued for (a moved event skips them). */
         startsAt: isoInstant.optional(),
       })
-      .strict(),
+      .strict()
+      .refine(
+        (p) =>
+          p.template !== "reminder" || (p.offsetMinutes !== undefined && p.startsAt !== undefined),
+        "a reminder names its offset and start",
+      ),
     scope: "org",
     maxRuntimeMs: 20_000,
     leaseSeconds: 60,
@@ -275,16 +303,26 @@ export const JOB_KINDS = {
     sendsEmail: true,
     handler: () => import("@/server/rsvp/jobs").then((m) => m.rsvpEmailJob),
     description:
-      "One RSVP email to a guest (confirmation, waitlist, a spot opened, reminders with a text, cancelled); key rsvp-email:{registrationId}:{template}[...]",
+      "One RSVP email to a guest (confirmation, waitlist, a spot opened, a reminder with a text, cancelled); key rsvp-email:{registrationId}:{template}[...], a reminder's rsvp-email:{registrationId}:reminder:r{offsetMinutes}:{startMinute}. A reminder is claimed as an EventReminderSend row before it is sent and released if the send fails.",
   }),
   "rsvp-fanout": kind({
     payload: z
       .object({
         eventId: id,
-        stage: z.enum(["day", "hour", "cancelled"]),
+        // "day" and "hour" were queued by the code before reminder offsets
+        // and are still pending when it deploys: read as "reminder" at 1440
+        // and 60 minutes.
+        stage: z.enum(["day", "hour", "reminder", "cancelled"]),
+        /** "reminder": how many minutes before the start it is for. */
+        offsetMinutes: reminderOffset.optional(),
         startsAt: isoInstant.optional(),
       })
-      .strict(),
+      .strict()
+      .refine(
+        (p) =>
+          p.stage !== "reminder" || (p.offsetMinutes !== undefined && p.startsAt !== undefined),
+        "a reminder names its offset and start",
+      ),
     scope: "org",
     maxRuntimeMs: 20_000,
     leaseSeconds: 60,
@@ -295,7 +333,7 @@ export const JOB_KINDS = {
     afterEligible: true,
     handler: () => import("@/server/rsvp/jobs").then((m) => m.rsvpFanoutJob),
     description:
-      "One rsvp-email per guest, queued in bulk: the 24h and 1h reminders to everyone going (key rsvp-fanout:{eventId}:{stage}:{startMinute}, runAt before the start; no 1h one for an all-day event), or the cancellation when the event is deleted (key rsvp-fanout:{eventId}:cancelled).",
+      "A meeting's reminder at one offset, to members and guests alike (key rsvp-fanout:{eventId}:r{offsetMinutes}:{startMinute}, runAt the start minus the offset; none under a day for an all-day event): an in-app EVENT_REMINDER to each attendee who did not decline, and one rsvp-email, queued in bulk, to each sign-up going; EventReminderSend keeps it to once per person, offset and start. Or the cancellation to everyone signed up when the event is deleted (key rsvp-fanout:{eventId}:cancelled).",
   }),
   "google-import": kind({
     payload: z.object({ integrationId: id, mode: z.enum(["dry-run", "apply"]) }).strict(),

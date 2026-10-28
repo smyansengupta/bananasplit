@@ -18,6 +18,7 @@ import { timeZoneOptions } from "@/lib/timezones";
 import { cn } from "@/lib/utils";
 
 import { checkSlugAvailability, createOrganizationAction } from "../actions";
+import { FieldSelect } from "@/components/ui/field-select";
 
 /** What a new club's sidebar opens with, for the preview. */
 const SPACES = [
@@ -189,7 +190,7 @@ export function ClubBasicsStep({
               </div>
             </BrandField>
             <BrandField id="org-timezone" label="Time zone">
-              <select
+              <FieldSelect
                 id="org-timezone"
                 name="timezone"
                 value={timezone}
@@ -201,7 +202,7 @@ export function ClubBasicsStep({
                     {zone.replace(/_/g, " ")}
                   </option>
                 ))}
-              </select>
+              </FieldSelect>
             </BrandField>
             {requiresCode && (
               <BrandField id="org-code" label="Organization creation code">
