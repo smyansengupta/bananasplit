@@ -12,9 +12,11 @@
 --                lets an owner move an organization to it (it refuses only
 --                TRIAL, FREE and PERSONAL_PLUS).
 --   app.move_personal_items
---                restated from 20261020130000_projects_into_epics without
---                the refusal for an organization whose trial ended: there
---                is no paused state any more.
+--                restated from 20261023120000_move_personal_files (the
+--                current signature, with files and folders) without the
+--                refusal for an organization whose trial ended: there is no
+--                paused state any more. Same signature, so it replaces that
+--                function instead of adding an overload.
 --
 -- The new enum value is not used in this transaction (a value added with
 -- ADD VALUE can't be), so nothing below compares with it.
@@ -28,7 +30,12 @@ CREATE OR REPLACE FUNCTION app.move_personal_items(
   p_event_ids text[],
   p_poll_ids text[],
   p_question_poll_ids text[],
-  p_task_ids text[]
+  p_task_ids text[],
+  p_note_ids text[] DEFAULT NULL,
+  p_folder_ids text[] DEFAULT NULL,
+  p_file_ids text[] DEFAULT NULL,
+  p_file_keys jsonb DEFAULT NULL,
+  p_note_states jsonb DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp
 AS $$
@@ -41,12 +48,22 @@ DECLARE
   v_polls text[];
   v_qpolls text[];
   v_tasks text[];
+  v_notes text[];
+  v_folders text[];
+  v_files text[];
+  v_moved_folders text[];
   v_all text[];
   v_found integer;
+  v_bad text;
   v_labels jsonb;
   v_parents jsonb;
+  v_folder_info jsonb;
+  v_folder_map jsonb;
   v_from_prefix text;
   v_to_prefix text;
+  v_api_from text := '/api/orgs/' || p_from_org || '/files/';
+  v_api_to text := '/api/orgs/' || p_to_org || '/files/';
+  v_used bigint;
   v_prev_org text;
 BEGIN
   IF v_user IS NULL OR p_from_org IS NULL OR p_to_org IS NULL THEN
@@ -79,7 +96,11 @@ BEGIN
   v_polls := ARRAY(SELECT DISTINCT x FROM unnest(coalesce(p_poll_ids, '{}')) x WHERE x IS NOT NULL);
   v_qpolls := ARRAY(SELECT DISTINCT x FROM unnest(coalesce(p_question_poll_ids, '{}')) x WHERE x IS NOT NULL);
   v_tasks := ARRAY(SELECT DISTINCT x FROM unnest(coalesce(p_task_ids, '{}')) x WHERE x IS NOT NULL);
-  IF cardinality(v_events) + cardinality(v_polls) + cardinality(v_qpolls) + cardinality(v_tasks) > 500 THEN
+  v_notes := ARRAY(SELECT DISTINCT x FROM unnest(coalesce(p_note_ids, '{}')) x WHERE x IS NOT NULL);
+  v_folders := ARRAY(SELECT DISTINCT x FROM unnest(coalesce(p_folder_ids, '{}')) x WHERE x IS NOT NULL);
+  v_files := ARRAY(SELECT DISTINCT x FROM unnest(coalesce(p_file_ids, '{}')) x WHERE x IS NOT NULL);
+  IF cardinality(v_events) + cardinality(v_polls) + cardinality(v_qpolls) + cardinality(v_tasks)
+     + cardinality(v_notes) + cardinality(v_folders) + cardinality(v_files) > 500 THEN
     RAISE EXCEPTION 'move_personal_items: at most 500 items at once' USING ERRCODE = '22023';
   END IF;
 
@@ -112,6 +133,27 @@ BEGIN
   IF v_found <> cardinality(v_tasks) THEN
     RAISE EXCEPTION 'move_personal_items: a task is not in your Personal space' USING ERRCODE = '22023';
   END IF;
+  SELECT count(*) INTO v_found FROM (
+    SELECT 1 FROM public."Note" n
+     WHERE n."id" = ANY (v_notes) AND n."organizationId" = p_from_org AND n."deletedAt" IS NULL
+     FOR UPDATE) s;
+  IF v_found <> cardinality(v_notes) THEN
+    RAISE EXCEPTION 'move_personal_items: a note is not in your Personal space' USING ERRCODE = '22023';
+  END IF;
+  SELECT count(*) INTO v_found FROM (
+    SELECT 1 FROM public."NoteFolder" f
+     WHERE f."id" = ANY (v_folders) AND f."organizationId" = p_from_org
+     FOR UPDATE) s;
+  IF v_found <> cardinality(v_folders) THEN
+    RAISE EXCEPTION 'move_personal_items: a folder is not in your Personal space' USING ERRCODE = '22023';
+  END IF;
+  SELECT count(*) INTO v_found FROM (
+    SELECT 1 FROM public."OrgFile" f
+     WHERE f."id" = ANY (v_files) AND f."organizationId" = p_from_org AND f."deletedAt" IS NULL
+     FOR UPDATE) s;
+  IF v_found <> cardinality(v_files) THEN
+    RAISE EXCEPTION 'move_personal_items: a file is not in your Personal space' USING ERRCODE = '22023';
+  END IF;
 
   -- What comes along: a poll's finalized event, a task's live subtasks.
   v_events := ARRAY(
@@ -129,11 +171,50 @@ BEGIN
       SELECT c."id" FROM public."Task" c JOIN tree ON c."parentTaskId" = tree."id"
        WHERE c."organizationId" = p_from_org AND c."deletedAt" IS NULL
     ) SELECT "id" FROM tree);
-  v_all := v_events || v_polls || v_qpolls || v_tasks;
+  -- A folder's live notes, every live sub-page under a moving note, and
+  -- the live uploads in a folder or shown in a moving note's body (the
+  -- app finds the same set before copying: src/server/personal/move-files.ts).
+  v_notes := ARRAY(
+    WITH RECURSIVE tree AS (
+      SELECT n."id" FROM public."Note" n
+       WHERE n."organizationId" = p_from_org AND n."deletedAt" IS NULL
+         AND (n."id" = ANY (v_notes) OR n."folderId" = ANY (v_folders))
+      UNION
+      SELECT c."id" FROM public."Note" c JOIN tree ON c."parentId" = tree."id"
+       WHERE c."organizationId" = p_from_org AND c."deletedAt" IS NULL
+    ) SELECT "id" FROM tree);
+  v_files := ARRAY(
+    SELECT f."id" FROM public."OrgFile" f
+     WHERE f."organizationId" = p_from_org AND f."deletedAt" IS NULL
+       AND (f."id" = ANY (v_files) OR f."folderId" = ANY (v_folders)
+            OR f."id" IN (SELECT jsonb_path_query(n."contentJson", 'lax $.**.fileId') #>> '{}'
+                            FROM public."Note" n WHERE n."id" = ANY (v_notes))));
+  PERFORM 1 FROM public."Note" WHERE "id" = ANY (v_notes) FOR UPDATE;
+  PERFORM 1 FROM public."OrgFile" WHERE "id" = ANY (v_files) FOR UPDATE;
+  v_all := v_events || v_polls || v_qpolls || v_tasks || v_notes || v_files;
 
   IF EXISTS (SELECT 1 FROM public."Attendance" a
               WHERE a."organizationId" = p_from_org AND a."eventId" = ANY (v_events)) THEN
     RAISE EXCEPTION 'move_personal_items: an event with check-ins can''t move' USING ERRCODE = '55000';
+  END IF;
+
+  -- Every upload has its copy in the club, and every note whose live
+  -- document links an upload has that document rebuilt, from the version
+  -- it is at now.
+  SELECT f."id" INTO v_bad FROM public."OrgFile" f
+   WHERE f."id" = ANY (v_files)
+     AND coalesce(p_file_keys ->> f."id", '') !~ ('^files/' || p_to_org || '/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$')
+   LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'move_personal_items: a file has no copy in the club yet; try again' USING ERRCODE = '40001';
+  END IF;
+  SELECT n."id" INTO v_bad FROM public."Note" n
+   WHERE n."id" = ANY (v_notes) AND n."yjsState" IS NOT NULL
+     AND strpos(n."contentJson"::text, v_api_from) > 0
+     AND (p_note_states -> n."id") ->> 'version' IS DISTINCT FROM n."version"::text
+   LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'move_personal_items: a note changed while it was moving; try again' USING ERRCODE = '40001';
   END IF;
 
   -- The rows land in the club: its member-of-parent-org triggers
@@ -161,9 +242,10 @@ BEGIN
      );
 
   -- -------------------------------------------------------------- events
-  -- What stays behind lets go of a moved event.
+  -- What stays behind lets go of a moved event (a moving note keeps it).
   UPDATE public."Note" SET "eventId" = NULL
-   WHERE "organizationId" = p_from_org AND "eventId" = ANY (v_events);
+   WHERE "organizationId" = p_from_org AND "eventId" = ANY (v_events)
+     AND NOT ("id" = ANY (v_notes));
   UPDATE public."Transaction" SET "eventId" = NULL
    WHERE "organizationId" = p_from_org AND "eventId" = ANY (v_events);
   UPDATE public."BallotDefinition" SET "linkedEventId" = NULL
@@ -278,6 +360,118 @@ BEGIN
      WHERE n."organizationId" = p_from_org AND n."taskId" = ANY (v_tasks);
   END IF;
 
+  -- -------------------------------------------------------------- folders
+  IF cardinality(v_notes) + cardinality(v_folders) + cardinality(v_files) > 0 THEN
+    -- The folders in play, by name: the picked ones and those of the
+    -- moving notes and uploads.
+    SELECT coalesce(jsonb_object_agg(f."id", jsonb_build_object(
+             'n', f."name", 'c', f."color", 's', f."sortOrder")), '{}')
+      INTO v_folder_info
+      FROM public."NoteFolder" f
+     WHERE f."organizationId" = p_from_org
+       AND (f."id" = ANY (v_folders)
+            OR f."id" IN (SELECT n."folderId" FROM public."Note" n WHERE n."id" = ANY (v_notes))
+            OR f."id" IN (SELECT o."folderId" FROM public."OrgFile" o WHERE o."id" = ANY (v_files)));
+
+    -- A picked folder the club has no namesake for moves itself (one per
+    -- name). What stays in it (the trash) is let go of it first.
+    v_moved_folders := ARRAY(
+      SELECT DISTINCT ON (lower(f."name")) f."id" FROM public."NoteFolder" f
+       WHERE f."id" = ANY (v_folders)
+         AND NOT EXISTS (SELECT 1 FROM public."NoteFolder" c
+                          WHERE c."organizationId" = p_to_org AND lower(c."name") = lower(f."name"))
+       ORDER BY lower(f."name"), f."sortOrder", f."id");
+    UPDATE public."Note" SET "folderId" = NULL
+     WHERE "organizationId" = p_from_org AND "folderId" = ANY (v_moved_folders)
+       AND NOT ("id" = ANY (v_notes));
+    UPDATE public."OrgFile" SET "folderId" = NULL
+     WHERE "organizationId" = p_from_org AND "folderId" = ANY (v_moved_folders)
+       AND NOT ("id" = ANY (v_files));
+    UPDATE public."NoteFolder" SET "organizationId" = p_to_org, "updatedAt" = app.utc_now()
+     WHERE "id" = ANY (v_moved_folders);
+
+    -- Every other name gets a club folder like it, at the end of the list.
+    INSERT INTO public."NoteFolder" ("id", "organizationId", "name", "color", "sortOrder", "createdById", "updatedAt")
+    SELECT DISTINCT ON (lower(x.value ->> 'n'))
+           'c' || substr(md5(random()::text || x.key || clock_timestamp()::text), 1, 24),
+           p_to_org, x.value ->> 'n', x.value ->> 'c',
+           coalesce((SELECT max(c."sortOrder") FROM public."NoteFolder" c
+                      WHERE c."organizationId" = p_to_org), 0) + 1,
+           v_user, app.utc_now()
+      FROM jsonb_each(v_folder_info) x
+     WHERE NOT EXISTS (SELECT 1 FROM public."NoteFolder" c
+                        WHERE c."organizationId" = p_to_org AND lower(c."name") = lower(x.value ->> 'n'))
+     ORDER BY lower(x.value ->> 'n'), (x.value ->> 's')::integer, x.key;
+
+    -- Personal folder id -> the club folder of its name (itself, if it moved).
+    SELECT coalesce(jsonb_object_agg(x.key, (
+             SELECT c."id" FROM public."NoteFolder" c
+              WHERE c."organizationId" = p_to_org AND lower(c."name") = lower(x.value ->> 'n')
+              ORDER BY (c."id" = x.key) DESC, c."sortOrder", c."id"
+              LIMIT 1)), '{}')
+      INTO v_folder_map
+      FROM jsonb_each(v_folder_info) x;
+  END IF;
+
+  -- ---------------------------------------------------------------- notes
+  IF cardinality(v_notes) > 0 THEN
+    -- What stays behind lets go of a moved note: a sub-page in the trash
+    -- (the composite key would drag it along otherwise), and an upload
+    -- that was made into it.
+    UPDATE public."Note" SET "parentId" = NULL
+     WHERE "organizationId" = p_from_org AND "parentId" = ANY (v_notes)
+       AND NOT ("id" = ANY (v_notes));
+    UPDATE public."OrgFile" SET "noteId" = NULL
+     WHERE "organizationId" = p_from_org AND "noteId" = ANY (v_notes)
+       AND NOT ("id" = ANY (v_files));
+    -- Private to the caller in the club, as in Personal.
+    DELETE FROM public."NoteShare"
+     WHERE "organizationId" = p_from_org AND "noteId" = ANY (v_notes);
+
+    -- Comments and versions follow through the composite keys. Sub-pages
+    -- under a moving parent keep it: the keys are checked at the end of
+    -- the statement, when both are in the club.
+    UPDATE public."Note" n
+       SET "organizationId" = p_to_org,
+           "folderId" = v_folder_map ->> n."folderId",
+           "parentId" = CASE WHEN n."parentId" = ANY (v_notes) THEN n."parentId" END,
+           "eventId" = CASE WHEN n."eventId" = ANY (v_events) THEN n."eventId" END,
+           "visibility" = 'PRIVATE',
+           "memberCanEdit" = false,
+           "authorId" = v_user,
+           "contentJson" = CASE WHEN strpos(n."contentJson"::text, v_api_from) > 0
+                                THEN replace(n."contentJson"::text, v_api_from, v_api_to)::jsonb
+                                ELSE n."contentJson" END,
+           "yjsState" = CASE WHEN n."yjsState" IS NOT NULL AND strpos(n."contentJson"::text, v_api_from) > 0
+                             THEN decode((p_note_states -> n."id") ->> 'state', 'base64')
+                             ELSE n."yjsState" END,
+           "version" = n."version" + CASE WHEN strpos(n."contentJson"::text, v_api_from) > 0 THEN 1 ELSE 0 END
+     WHERE n."id" = ANY (v_notes);
+
+    -- History restores its body into the live note: its links too.
+    UPDATE public."NoteVersion" v
+       SET "contentJson" = replace(v."contentJson"::text, v_api_from, v_api_to)::jsonb
+     WHERE v."organizationId" = p_to_org AND v."noteId" = ANY (v_notes)
+       AND strpos(v."contentJson"::text, v_api_from) > 0;
+  END IF;
+
+  -- -------------------------------------------------------------- uploads
+  IF cardinality(v_files) > 0 THEN
+    UPDATE public."OrgFile" f
+       SET "organizationId" = p_to_org,
+           "storageKey" = p_file_keys ->> f."id",
+           "visibility" = 'PRIVATE',
+           "uploadedById" = v_user,
+           "folderId" = v_folder_map ->> f."folderId",
+           "noteId" = CASE WHEN f."noteId" = ANY (v_notes) THEN f."noteId" END
+     WHERE f."id" = ANY (v_files);
+  END IF;
+
+  -- A picked folder that merged into the club's namesake is empty now;
+  -- the trash in it lets go (ON DELETE SET NULL).
+  DELETE FROM public."NoteFolder"
+   WHERE "organizationId" = p_from_org AND "id" = ANY (v_folders);
+
   -- ------------------------------------------------- the caller's shortcuts
   v_from_prefix := '/app/' || v_from_slug || '/';
   v_to_prefix := '/app/' || v_to_slug || '/';
@@ -296,11 +490,18 @@ BEGIN
 
   PERFORM pg_catalog.set_config('app.org_id', coalesce(v_prev_org, ''), true);
 
+  SELECT o."storageUsedBytes" INTO v_used FROM public."Organization" o WHERE o."id" = p_to_org;
+
   RETURN jsonb_build_object(
     'events', cardinality(v_events),
     'polls', cardinality(v_polls),
     'questionPolls', cardinality(v_qpolls),
-    'tasks', cardinality(v_tasks));
+    'tasks', cardinality(v_tasks),
+    'notes', cardinality(v_notes),
+    'folders', cardinality(v_folders),
+    'files', cardinality(v_files),
+    'fileIds', to_jsonb(v_files),
+    'storageUsedBytes', v_used);
 END $$;
-REVOKE ALL ON FUNCTION app.move_personal_items(text, text, text[], text[], text[], text[]) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.move_personal_items(text, text, text[], text[], text[], text[]) TO app_user;
+REVOKE ALL ON FUNCTION app.move_personal_items(text, text, text[], text[], text[], text[], text[], text[], text[], jsonb, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.move_personal_items(text, text, text[], text[], text[], text[], text[], text[], text[], jsonb, jsonb) TO app_user;
