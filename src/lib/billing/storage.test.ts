@@ -52,7 +52,7 @@ describe("each tier's limits at the gate", () => {
   ])("%s: files up to its largest, and up to its storage", (_name, make, maxFile, storage) => {
     expect(uploadRefusal(make(), maxFile, files)).toBeNull();
     expect(uploadRefusal(make(), maxFile + 1, files)?.refused).toBe("too-large");
-    expect(storageState(make()).limitBytes).toBe(storage);
+    expect(storageState(make(), NOW).limitBytes).toBe(storage);
     // Exactly full is allowed; one byte past it isn't.
     expect(uploadRefusal(make(storage - MB), MB, files)).toBeNull();
     expect(uploadRefusal(make(storage - MB), MB + 1, files)?.refused).toBe("full");
