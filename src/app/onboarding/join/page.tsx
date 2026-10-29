@@ -5,6 +5,7 @@ import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
 import { ArrowRight } from "@/components/brand/arrows";
 import { AuthCard, AuthTitle } from "@/components/brand/auth-card";
 import { requireUser } from "@/lib/auth/session";
+import { shareMetadata } from "@/lib/metadata/share";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
 import { findPendingInvitationsForMe } from "@/server/settings/invitations";
 
@@ -13,7 +14,18 @@ import { JoinForm } from "./join-form";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Enter your invite code · Bananasplit" };
+/*
+ * The link an officer shares is /onboarding/join?code=XXXX-XXXX, so this is
+ * what that message previews as, with the drawn card beside this file. It
+ * cannot name the club: the page is behind sign-in, so whatever unfurls the
+ * link is redirected away before it sees any of this, and the code alone is
+ * not something a signed-out caller may trade for a club's name.
+ */
+export const metadata = shareMetadata({
+  title: "Join your club",
+  description: "Enter the invite code whoever invited you sent, and join their workspace.",
+  noIndex: true,
+});
 
 const WHERE = [
   "Check the invite email from your organization.",

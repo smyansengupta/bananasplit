@@ -1,1 +1,1 @@
-Bananasplit: one workspace for everything your team runs.
+Bananasplit: the workspace that runs itself, beside a text thread where it moves a standup and approves a receipt.

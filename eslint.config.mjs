@@ -18,7 +18,8 @@ const TESTS = ["**/*.test.ts", "**/*.test.tsx"];
 const NEXT_CACHE = {
   name: "next/cache",
   importNames: ["updateTag", "revalidateTag", "revalidatePath"],
-  message: "Use invalidate() from @/server/cache/invalidate (after commit, the right API per context).",
+  message:
+    "Use invalidate() from @/server/cache/invalidate (after commit, the right API per context).",
 };
 
 /**
@@ -29,8 +30,16 @@ const NEXT_CACHE = {
 const PRIVILEGED_CLIENT_MESSAGE =
   "serviceDb, authDb and getClient are for the allowlisted paths in eslint.config.mjs (CLIENT_ALLOWLIST); use the wrappers in @/server/db/context.";
 const PRIVILEGED_DB_CLIENTS = [
-  { name: "@/server/db/clients", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
-  { name: "@/server/db", importNames: ["serviceDb", "authDb", "getClient"], message: PRIVILEGED_CLIENT_MESSAGE },
+  {
+    name: "@/server/db/clients",
+    importNames: ["serviceDb", "authDb", "getClient"],
+    message: PRIVILEGED_CLIENT_MESSAGE,
+  },
+  {
+    name: "@/server/db",
+    importNames: ["serviceDb", "authDb", "getClient"],
+    message: PRIVILEGED_CLIENT_MESSAGE,
+  },
 ];
 /**
  * withOrgTxAs opens a member's RLS context for a user id the CALLER
@@ -40,7 +49,8 @@ const PRIVILEGED_DB_CLIENTS = [
 const AS_USER_TX = {
   name: "@/server/db/context",
   importNames: ["withOrgTxAs"],
-  message: "withOrgTxAs trusts a caller-supplied user id: only the collaboration bridge routes (COLLAB_BRIDGE in eslint.config.mjs) may use it.",
+  message:
+    "withOrgTxAs trusts a caller-supplied user id: only the collaboration bridge routes (COLLAB_BRIDGE in eslint.config.mjs) may use it.",
 };
 /**
  * The connector wrappers open a member's RLS context for an AI app's
@@ -51,14 +61,16 @@ const AS_USER_TX = {
 const CONNECTOR_TX = {
   name: "@/server/db/context",
   importNames: ["withConnectorUserTx", "withConnectorOrgTx"],
-  message: "The connector wrappers act for an AI app's verified token: only src/server/connectors (CONNECTORS in eslint.config.mjs) may use them.",
+  message:
+    "The connector wrappers act for an AI app's verified token: only src/server/connectors (CONNECTORS in eslint.config.mjs) may use them.",
 };
 const PRIVILEGED_CLIENTS = [...PRIVILEGED_DB_CLIENTS, AS_USER_TX, CONNECTOR_TX];
 /** Navigation belongs to the action and page layer, not to services. */
 const NAVIGATION = {
   name: "next/navigation",
   importNames: ["redirect", "permanentRedirect", "notFound", "forbidden", "unauthorized"],
-  message: "Services throw AppErrors (@/lib/auth/errors); pages and actions decide how to navigate.",
+  message:
+    "Services throw AppErrors (@/lib/auth/errors); pages and actions decide how to navigate.",
 };
 /** Cached loaders run outside the request: explicit arguments, their own withSystemOrgTx. */
 const REQUEST_CONTEXT = {
@@ -185,7 +197,8 @@ const CLIENT_SERVER_IMPORTS = [
   {
     selector:
       "Program:has(> ExpressionStatement[directive='use client']) ImportDeclaration[importKind!='type'][source.value=/^@.server.(secrets|db)([^a-z-]|$)/]",
-    message: "Client components must not import @/server/secrets or @/server/db; pass DTOs from a server component.",
+    message:
+      "Client components must not import @/server/secrets or @/server/db; pass DTOs from a server component.",
   },
 ];
 
@@ -194,7 +207,8 @@ const DATABASE_URL_ENV = [
   {
     selector:
       "MemberExpression[object.type='MemberExpression'][object.object.name='process'][object.property.name='env'][property.name=/^DATABASE_URL/]",
-    message: "Only src/server/db/urls.ts (and prisma.config.ts, the seed and owner scripts) read DATABASE_URL.",
+    message:
+      "Only src/server/db/urls.ts (and prisma.config.ts, the seed and owner scripts) read DATABASE_URL.",
   },
 ];
 
@@ -211,7 +225,8 @@ const restrictSyntax = (...selectors) => ["error", ...selectors.flat()];
  */
 const PALETTE_CLASS =
   /(?:^|[\s"'`:!])(?:bg|text|border|ring|fill|stroke|from|to|via|outline|decoration|divide|accent|caret|shadow|placeholder)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/;
-const RAW_COLOR = /(?:^|[\s:(,'"])#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(?:rgba?|hsla?)\(\s*\d/;
+const RAW_COLOR =
+  /(?:^|[\s:(,'"])#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(?:rgba?|hsla?)\(\s*\d/;
 const themePlugin = {
   rules: {
     "no-raw-colors": {
@@ -219,7 +234,8 @@ const themePlugin = {
         type: "suggestion",
         schema: [],
         messages: {
-          palette: "Use a theme token (bg-primary, text-success, text-warning, bg-chart-1, ...) instead of a Tailwind palette colour.",
+          palette:
+            "Use a theme token (bg-primary, text-success, text-warning, bg-chart-1, ...) instead of a Tailwind palette colour.",
           raw: "Use a theme token (var(--primary), var(--chart-1), ...) instead of a raw colour value.",
         },
       },
@@ -262,9 +278,19 @@ const eslintConfig = defineConfig([
       // the tenant context (test T29). Tagged-template $queryRaw only.
       "no-restricted-properties": [
         "error",
-        { property: "$queryRawUnsafe", message: "Use the tagged-template $queryRaw (values are bound)." },
-        { property: "$executeRawUnsafe", message: "Use the tagged-template $executeRaw (values are bound)." },
-        { object: "Prisma", property: "raw", message: "Prisma.raw splices text into SQL; bind values instead." },
+        {
+          property: "$queryRawUnsafe",
+          message: "Use the tagged-template $queryRaw (values are bound).",
+        },
+        {
+          property: "$executeRawUnsafe",
+          message: "Use the tagged-template $executeRaw (values are bound).",
+        },
+        {
+          object: "Prisma",
+          property: "raw",
+          message: "Prisma.raw splices text into SQL; bind values instead.",
+        },
       ],
       "no-restricted-syntax": restrictSyntax(
         CACHE_TAG_LITERALS,
@@ -290,7 +316,12 @@ const eslintConfig = defineConfig([
   {
     files: ["src/server/cached/**/*.ts", "src/server/org-chart/queries.ts"],
     rules: {
-      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_CLIENTS, NAVIGATION, REQUEST_CONTEXT),
+      "no-restricted-imports": restrictImports(
+        NEXT_CACHE,
+        PRIVILEGED_CLIENTS,
+        NAVIGATION,
+        REQUEST_CONTEXT,
+      ),
     },
   },
   // The client allowlist: the service and auth clients are allowed.
@@ -301,14 +332,21 @@ const eslintConfig = defineConfig([
   // The collaboration bridge: withOrgTxAs, and still no service or auth client.
   {
     files: COLLAB_BRIDGE,
-    rules: { "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS, CONNECTOR_TX) },
+    rules: {
+      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS, CONNECTOR_TX),
+    },
   },
   // AI connectors: the connector wrappers, and still no service or auth
   // client, no withOrgTxAs and (a service) no navigation.
   {
     files: CONNECTORS,
     rules: {
-      "no-restricted-imports": restrictImports(NEXT_CACHE, PRIVILEGED_DB_CLIENTS, AS_USER_TX, NAVIGATION),
+      "no-restricted-imports": restrictImports(
+        NEXT_CACHE,
+        PRIVILEGED_DB_CLIENTS,
+        AS_USER_TX,
+        NAVIGATION,
+      ),
     },
   },
   {
@@ -357,8 +395,11 @@ const eslintConfig = defineConfig([
     ignores: [
       ...TESTS,
       // Brand marks with fixed colours, email HTML (no CSS variables in mail
-      // clients) and the note PDF (react-pdf styles are not CSS).
+      // clients), the note PDF (react-pdf styles are not CSS) and the
+      // link-preview cards (drawn once and captured to PNG, so they must not
+      // follow a theme).
       "src/components/google-icon.tsx",
+      "src/components/marketing/og/og-cards.tsx",
       "src/components/meeting-logos.tsx",
       "src/server/email/**",
       "src/server/notes/pdf.tsx",

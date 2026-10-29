@@ -6,12 +6,15 @@ import { CONTAINER, SectionTitle } from "@/components/marketing/section-title";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
+import { shareMetadata } from "@/lib/metadata/share";
+
 import { DemoForm } from "./demo-form";
 
-export const metadata: Metadata = {
-  title: "Request a demo · Bananasplit",
+// The drawn card beside this file, demo/opengraph-image.png.
+export const metadata: Metadata = shareMetadata({
+  title: "Request a demo",
   description: "A 15-minute walkthrough of Bananasplit, set up for your kind of team.",
-};
+});
 
 const WHAT_YOU_GET = [
   "Set up for your kind of team",

@@ -5,12 +5,14 @@ import { FinalCta } from "@/components/marketing/final-cta";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { PricingPlans } from "@/components/marketing/pricing-plans";
 import { getSession } from "@/lib/auth/session";
+import { shareMetadata } from "@/lib/metadata/share";
 
-export const metadata: Metadata = {
-  title: "Pricing: Bananasplit",
+// The drawn card beside this file, pricing/opengraph-image.png.
+export const metadata: Metadata = shareMetadata({
+  title: "Pricing",
   description:
     "Every new team starts with 14 days of everything, free, no card. Free holds up to 10 members; Team and Team Advanced add finance, integrations, iMessage, reports and AI, with flat yearly prices for student organizations.",
-};
+});
 
 const PRICING_FAQS: readonly FaqItem[] = [
   {

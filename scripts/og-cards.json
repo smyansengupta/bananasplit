@@ -1,0 +1,37 @@
+{
+  "home": {
+    "targets": ["src/app/opengraph-image.png", "src/app/twitter-image.png"],
+    "alt": "Bananasplit: the workspace that runs itself, beside a text thread where it moves a standup and approves a receipt."
+  },
+  "pricing": {
+    "targets": ["src/app/pricing/opengraph-image.png"],
+    "alt": "Bananasplit pricing: fourteen days of everything, free, then Free, Team and Team Advanced."
+  },
+  "demo": {
+    "targets": ["src/app/demo/opengraph-image.png"],
+    "alt": "Bananasplit: a fifteen-minute demo, set up for your team."
+  },
+  "product": {
+    "targets": ["src/app/product/[slug]/opengraph-image.png"],
+    "alt": "Bananasplit: everything your team runs in one place — texting, AI, docs and files, meetings, finance."
+  },
+  "join": {
+    "targets": ["src/app/onboarding/join/opengraph-image.png"],
+    "alt": "Join your club on Bananasplit: an eight-box invite code."
+  },
+  "invite": {
+    "targets": ["src/app/invite/[token]/opengraph-image.png"],
+    "alt": "You're invited to join a club's workspace on Bananasplit."
+  },
+  "poll": {
+    "targets": [
+      "src/app/poll/[pollId]/opengraph-image.png",
+      "src/app/poll/[pollId]/twitter-image.png"
+    ],
+    "alt": "Bananasplit: find a time that works — a week of times with a few marked."
+  },
+  "event": {
+    "targets": ["src/app/e/[slug]/opengraph-image.png"],
+    "alt": "Bananasplit: save your spot at this event, then RSVP."
+  }
+}
