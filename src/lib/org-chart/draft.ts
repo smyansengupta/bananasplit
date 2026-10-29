@@ -6,8 +6,8 @@ import type { ValidationNode } from "./validate";
 
 /**
  * The draft editor's state and its pure operations: reparent and reorder
- * (drag and drop, or the "Reports to" and move buttons), add, remove,
- * match confirmation. Every operation returns a new array; ranks are
+ * (drag and drop, or the "Reports to" and move buttons), extra managers
+ * (dotted lines), add, remove, match confirmation. Every operation returns a new array; ranks are
  * fractional-indexing keys among siblings.
  */
 
@@ -23,6 +23,8 @@ export interface DraftPosition {
   matchScore: number | null;
   suggestedUserIds: string[];
   reportsTo: string | null;
+  /** Extra managers (dotted lines): ids of other positions in the draft. */
+  alsoReportsTo?: string[];
   isOpen: boolean;
   isAdvisor: boolean;
   responsibilities: string[];
@@ -86,7 +88,13 @@ export function moveDraft(
     const next = zone === "before" ? target : (siblings[i + 1] ?? null);
     rank = safeKeyBetween(prev?.rank ?? null, next?.rank ?? null);
   }
-  return positions.map((p) => (p.id === dragId ? { ...p, reportsTo: parent, rank } : p));
+  return positions.map((p) => (p.id === dragId ? withManager(p, parent, rank) : p));
+}
+
+/** A new primary manager; it stops being an extra one. */
+function withManager(p: DraftPosition, reportsTo: string | null, rank: string): DraftPosition {
+  const also = p.alsoReportsTo?.filter((id) => id !== reportsTo);
+  return { ...p, reportsTo, rank, ...(also ? { alsoReportsTo: also } : {}) };
 }
 
 /** Sets a new manager (the "Reports to" picker), appending at the end of its reports. */
@@ -94,12 +102,38 @@ export function setManager(positions: readonly DraftPosition[], id: string, mana
   if (managerId === null) {
     const last = siblingsOf(positions, null, id).at(-1);
     const rank = safeKeyBetween(last?.rank ?? null, null);
-    return positions.map((p) => (p.id === id ? { ...p, reportsTo: null, rank } : p));
+    return positions.map((p) => (p.id === id ? withManager(p, null, rank) : p));
   }
   if (managerId === id || descendantIds(toTree(positions), id).has(managerId)) return null;
   const last = siblingsOf(positions, managerId, id).at(-1);
   const rank = safeKeyBetween(last?.rank ?? null, null);
-  return positions.map((p) => (p.id === id ? { ...p, reportsTo: managerId, rank } : p));
+  return positions.map((p) => (p.id === id ? withManager(p, managerId, rank) : p));
+}
+
+/**
+ * Who `id` could also report to: anyone but itself, its manager, its
+ * current extra managers, an advisor (nobody reports to one) and the
+ * positions below it (that would be a loop).
+ */
+export function extraManagerOptions(positions: readonly DraftPosition[], id: string): DraftPosition[] {
+  const self = positions.find((p) => p.id === id);
+  if (!self) return [];
+  const below = descendantIds(toTree(positions), id);
+  const taken = new Set(self.alsoReportsTo ?? []);
+  return positions.filter((p) => !below.has(p.id) && !p.isAdvisor && p.id !== self.reportsTo && !taken.has(p.id));
+}
+
+/** Adds an extra manager (a dotted line); null when it isn't one of extraManagerOptions. */
+export function addAlsoReportsTo(positions: readonly DraftPosition[], id: string, managerId: string): DraftPosition[] | null {
+  if (!extraManagerOptions(positions, id).some((p) => p.id === managerId)) return null;
+  return positions.map((p) => (p.id === id ? { ...p, alsoReportsTo: [...(p.alsoReportsTo ?? []), managerId] } : p));
+}
+
+/** Removes an extra manager. */
+export function removeAlsoReportsTo(positions: readonly DraftPosition[], id: string, managerId: string): DraftPosition[] {
+  return positions.map((p) =>
+    p.id === id && p.alsoReportsTo ? { ...p, alsoReportsTo: p.alsoReportsTo.filter((m) => m !== managerId) } : p,
+  );
 }
 
 /** Moves a position one place up or down among its siblings. */
@@ -149,13 +183,16 @@ export function addPosition(
   ];
 }
 
-/** Removes a position; its reports move up to its manager. */
+/** Removes a position; its reports move up to its manager, and its dotted lines go. */
 export function removePosition(positions: readonly DraftPosition[], id: string): DraftPosition[] {
   const self = positions.find((p) => p.id === id);
   if (!self) return [...positions];
   return positions
     .filter((p) => p.id !== id)
-    .map((p) => (p.reportsTo === id ? { ...p, reportsTo: self.reportsTo } : p));
+    .map((p) => {
+      const next = p.reportsTo === id ? withManager(p, self.reportsTo, p.rank) : p;
+      return next.alsoReportsTo?.includes(id) ? { ...next, alsoReportsTo: next.alsoReportsTo.filter((m) => m !== id) } : next;
+    });
 }
 
 /** Links a member (an admin's confirmation). */
@@ -201,6 +238,7 @@ export function toValidationNodes(positions: readonly DraftPosition[]): Validati
     key: p.key || p.id,
     title: p.title,
     reportsTo: p.reportsTo,
+    alsoReportsTo: p.alsoReportsTo ?? [],
     isAdvisor: p.isAdvisor,
     isOpen: p.isOpen,
     userId: p.userId,

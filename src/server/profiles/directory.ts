@@ -87,6 +87,7 @@ export interface ChartForPeople {
     userId: string | null;
     personName: string | null;
     reportsToId: string | null;
+    alsoReportsToIds: string[];
     isAdvisor: boolean;
     isOpen: boolean;
     rank: string;
@@ -113,6 +114,7 @@ export async function loadChartForPeople(db: Db, organizationId: string): Promis
           userId: true,
           personName: true,
           reportsToId: true,
+          alsoReportsToIds: true,
           isAdvisor: true,
           isOpen: true,
           rank: true,
@@ -334,6 +336,8 @@ export interface PersonSheet {
   /** Their positions on the published chart, in chart order. */
   positions: { key: string; title: string; isAdvisor: boolean }[];
   reportsTo: SheetPositionRef[];
+  /** Extra managers (dotted lines on the chart). */
+  alsoReportsTo: SheetPositionRef[];
   leads: SheetPositionRef[];
   tasks: SheetTask[];
   taskCount: number;
@@ -413,6 +417,11 @@ export async function getPersonSheet(
       .filter((p): p is NonNullable<typeof p> => Boolean(p) && !mineIds.has(p!.id))
       .filter((p, i, all) => all.findIndex((q) => q.id === p.id) === i)
       .map(ref);
+    const reportsToIds = new Set(reportsTo.map((r) => r.key));
+    const alsoReportsTo = mine
+      .flatMap((p) => p.alsoReportsToIds.flatMap((id) => byId.get(id) ?? []))
+      .filter((p, i, all) => !mineIds.has(p.id) && !reportsToIds.has(p.key) && all.findIndex((q) => q.id === p.id) === i)
+      .map(ref);
     const leads = chart.positions
       .filter((p) => p.reportsToId && mineIds.has(p.reportsToId) && !mineIds.has(p.id) && !p.isAdvisor)
       .map(ref);
@@ -446,6 +455,7 @@ export async function getPersonSheet(
       team: team ? { key: team.key, name: team.name, slot: team.slot } : null,
       positions: mine.map((p) => ({ key: p.key, title: p.title, isAdvisor: p.isAdvisor })),
       reportsTo,
+      alsoReportsTo,
       leads,
       tasks,
       taskCount: open.ownedCount + open.involvedCount,

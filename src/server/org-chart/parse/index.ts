@@ -68,6 +68,8 @@ interface Draft {
   isAdvisor: boolean;
   /** A reference (id, title, or person name) resolved by normalizeOrgChart. */
   reportsTo: string | null;
+  /** Extra managers (dotted lines), references like reportsTo. */
+  alsoReportsTo: string[];
   manages: string[];
   advisorRefs: string[];
   responsibilities: string[];
@@ -90,6 +92,7 @@ class Builder {
       isOpen: role.isOpen,
       isAdvisor: role.isAdvisor,
       reportsTo: null,
+      alsoReportsTo: [],
       manages: [],
       advisorRefs: [],
       responsibilities: [],
@@ -108,6 +111,9 @@ function applyField(draft: Draft, field: FieldName, value: string): void {
   switch (field) {
     case "reportsTo":
       if (!isNoneValue(value)) draft.reportsTo = cleanLine(value);
+      break;
+    case "alsoReportsTo":
+      draft.alsoReportsTo.push(...splitList(value));
       break;
     case "manages":
       draft.manages.push(...splitList(value));
@@ -137,7 +143,7 @@ function applyField(draft: Draft, field: FieldName, value: string): void {
   }
 }
 
-const STRUCTURAL: ReadonlySet<FieldName> = new Set(["reportsTo", "manages", "advisor", "person", "title"]);
+const STRUCTURAL: ReadonlySet<FieldName> = new Set(["reportsTo", "alsoReportsTo", "manages", "advisor", "person", "title"]);
 
 // ------------------------------------------------------------------ sections
 
@@ -496,6 +502,7 @@ function toRawPositions(drafts: readonly Draft[]): RawPosition[] {
     title: d.title,
     person_name: d.personName,
     reports_to: d.reportsTo,
+    also_reports_to: d.alsoReportsTo,
     manages: d.manages,
     responsibilities: d.responsibilities,
     decides_alone: d.decidesAlone,

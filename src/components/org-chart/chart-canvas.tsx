@@ -37,7 +37,8 @@ import { PositionNode, subtitleFor, type PositionFlowNode } from "./position-nod
  * chart pages. Pan by dragging, zoom with the wheel, pinch on touch, and
  * the controls zoom and fit the view. Positions are pill tiles coloured by
  * their team (the chart's top-level branches, chart slots 1..5); a branch
- * folds away with the toggle under its lead. With `exportName` the corner
+ * folds away with the toggle under its lead. Extra managers are dashed
+ * curves from the extra manager to the position. With `exportName` the corner
  * offers Download PNG and Print (Save as PDF). `focus` centers a node.
  */
 
@@ -143,7 +144,16 @@ function Canvas({
   }, [nodes, collapsed, parents]);
 
   const layout = useMemo(
-    () => layoutOrgChart(visible.map((n) => ({ id: n.id, reportsToId: n.reportsToId, isAdvisor: n.isAdvisor, rank: n.rank }))),
+    () =>
+      layoutOrgChart(
+        visible.map((n) => ({
+          id: n.id,
+          reportsToId: n.reportsToId,
+          alsoReportsToIds: n.alsoReportsToIds,
+          isAdvisor: n.isAdvisor,
+          rank: n.rank,
+        })),
+      ),
     [visible],
   );
 
@@ -182,7 +192,18 @@ function Canvas({
   const edges = useMemo<Edge[]>(
     () =>
       layout.edges.map((e) =>
-        e.kind === "advisor"
+        e.kind === "dotted"
+          ? {
+              id: e.id,
+              source: e.source,
+              target: e.target,
+              type: "default",
+              className: "dotted",
+              selectable: false,
+              focusable: false,
+              markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12 },
+            }
+          : e.kind === "advisor"
           ? {
               id: e.id,
               source: e.source,

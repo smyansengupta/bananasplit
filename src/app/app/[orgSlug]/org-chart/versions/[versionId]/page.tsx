@@ -27,6 +27,7 @@ function toNodes(detail: VersionDetail): ChartNodeDTO[] {
       ? { id: p.user.id, name: p.user.name, image: p.user.image, avatar: p.user.avatar }
       : null,
     reportsToId: p.reportsToId,
+    alsoReportsToIds: p.alsoReportsToIds,
     isOpen: p.isOpen,
     isAdvisor: p.isAdvisor,
     responsibilities: p.responsibilities,
@@ -41,6 +42,7 @@ function toDiff(detail: VersionDetail): DiffPosition[] {
     key: n.key,
     title: n.title,
     reportsToKey: n.reportsToId ? (byId.get(n.reportsToId)?.key ?? null) : null,
+    alsoReportsToKeys: (n.alsoReportsToIds ?? []).flatMap((id) => byId.get(id)?.key ?? []),
     userId: n.userId,
     personLabel: personLabel(n),
     personName: n.isOpen ? null : (n.user?.name ?? n.personName),
@@ -61,6 +63,13 @@ function describe(change: DiffChange): string {
       return `Renamed ${change.from} to ${change.to}`;
     case "reparented":
       return `${change.title} now reports to ${change.to ?? "nobody (top of the chart)"} instead of ${change.from ?? "nobody"}`;
+    case "dotted":
+      return [
+        change.added.length ? `${change.title} now also reports to ${change.added.join(", ")}` : "",
+        change.removed.length ? `${change.title} no longer also reports to ${change.removed.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("; ");
     case "person":
       return `${change.title}: ${change.from} → ${change.to}`;
     case "advisor":

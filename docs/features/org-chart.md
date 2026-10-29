@@ -23,6 +23,7 @@ President — @Maya Patel
   Advisor: Faculty advisor — Dr. Lee
   VP Events — @Ana Kim
     Open: Events coordinator
+    Designer — Sam Ortiz (also reports to Maya Patel)
 ```
 
 - Indent a line under another to make it report to it. **Tab** indents,
@@ -35,6 +36,9 @@ President — @Maya Patel
   **Invite**.
 - **Open:** (or a person of Open, TBD, Vacant) marks an open role;
   **Advisor:** or `(advisor)` an advisor.
+- `(also reports to Name)` at the end of a line adds a second manager, by
+  title or person (commas between several). The indent stays the main
+  line.
 - **Not on the chart yet** lists members without a position: click one (or
   drag it into the outline) to add them.
 - **Start from members** drafts positions from the titles members already
@@ -86,6 +90,8 @@ Details that are picked up wherever they appear:
   `Manages:` / `Direct reports:` the other way round. Odd casing and a small
   typo are tolerated (`Reports To`, `REPORTS-TO`, `Reprots to`). `N/A`,
   `None` and `-` mean "top of the chart".
+- **Second managers**: `Also reports to:` or `Dotted line:` (commas between
+  several). The main line stays `Reports to:`.
 - **Advisors**: an `Advisor: Mehr` line, a title containing "advisor", or
   `(advisor)` after a name. An advisor sits beside their manager on a dashed
   side branch and has no reports.
@@ -109,6 +115,10 @@ Below that, the editor lists every position in an outline:
   reports to that row) or onto a row's top or bottom edge (it sits before or
   after it). On a phone, touch and hold the handle. From the keyboard, use
   **Reports to**, **Move up** and **Move down** in the editor.
+- **Also reports to** adds a second manager (or more): pick a position under
+  **Add a manager…**, remove one with its ×. The position stays under its
+  main manager; the chart draws a dashed line to each extra one. Anyone
+  but an advisor or someone below the position can be an extra manager.
 - **Rename** titles and people inline, and edit the **Responsibilities** and
   **Decides alone** bullets (Enter adds a bullet).
 - **People**: only names are read. The portal suggests matching members
@@ -119,9 +129,10 @@ Below that, the editor lists every position in an outline:
 - **Open hire** marks a vacancy (no person). **Advisor** places the position
   beside its manager on a dashed side branch instead of in the hierarchy.
 - **Add position**, **Add a report** and **Delete position** (its reports
-  move up to its manager).
+  move up to its manager, and dotted lines to it are removed).
 - The **checklist** lists problems that block publishing (loops, advisors
-  with reports, a vacancy linked to a member) and things to check (several
+  with reports, an extra manager who is an advisor or below the position, a
+  vacancy linked to a member) and things to check (several
   top positions, unconfirmed matches, placeholders), plus notes from reading
   the document. **Open items** are questions the document left open.
 - **Preview** shows the chart as members will see it.
@@ -174,7 +185,7 @@ own parser.
 (read here, read by Claude, club template, by hand) and, for the portal's own
 reader, how much of the document it understood. Open a version to see its
 positions and the changes against any other version (added, removed, renamed,
-moved, person changed, advisor, bullets). **Restore** copies an old version
+moved, extra managers, person changed, advisor, bullets). **Restore** copies an old version
 forward as a new version and publishes it; nothing is ever deleted. Members
 who have left since show as placeholders in the restored chart.
 
@@ -185,9 +196,11 @@ who have left since show as placeholders in the restored chart.
   top-level branches, in the theme's chart colours). The toggle under a
   lead folds its branch; **Collapse teams** folds them all. **PNG**
   downloads the chart as an image and **PDF** prints it (choose Save as
-  PDF). **List** is the same chart as an accessible nested list.
+  PDF). **List** is the same chart as an accessible nested list. A dashed
+  curve is a second manager (a dotted line); the solid lines are the tree.
 - Click a position (or press Enter on it) to open its panel: title, person,
-  reports to and manages (click to jump to them), advisors, responsibilities,
+  reports to, also reports to, manages and dotted-line reports (click to
+  jump to them), advisors, responsibilities,
   decides alone, a link to the person's profile and their open tasks. The
   panel is linkable: `/app/{org}/org-chart?position={key}`.
 
@@ -216,6 +229,7 @@ who have left since show as placeholders in the restored chart.
 | Services | `src/server/org-chart/service.ts` (upload, drafts, publish, rollback, reads); `queries.ts` (cached published chart, `getReportingSubtree`) |
 | Who edits | `orgchart.write` is every role (`src/lib/auth/permissions.ts`). RLS lets every member write versions and positions in their own org (`20261019150000_org_chart_member_edits`); publishing moves `Organization.activeOrgChartVersionId` through `app.set_active_org_chart`, since Organization UPDATE stays owner/admin. Setting titles on publish is `members.setTitle` |
 | Pure logic | `src/lib/org-chart/` (schema, normalize, match, validate, layout, diff, draft operations, `outline.ts` for the typed chart, `teams.ts`, `export.ts`) and `__fixtures__/` |
+| Second managers | `OrgChartPosition.alsoReportsToIds` (`20261028120000_org_chart_also_reports_to`): ids of other positions in the same version, at most 10, checked by the `also_reports_to_same_version` trigger (RLS case P3-06). `reportsToId` stays the one line the tree, teams, the side panel's "Reports to" and the Tasks hand-down rule (`getReportingSubtree`) follow; extra managers are drawn as `dotted` edges (`layout.ts`) and copied with the positions by `insertPositions` / `rowsToWrites`, so drafts, publish, restore and imports (`also_reports_to` in Claude's schema, `Also reports to:` for the built-in parser) carry them |
 | UI | `src/components/org-chart/` (canvas, list, side panel, editor, `editor/outline-editor.tsx`, `editor/title-sync.tsx`, `export-chart.ts`, `editor/parse-report.tsx`) |
 
 ### How the two readers fit together

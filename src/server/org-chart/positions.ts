@@ -4,7 +4,7 @@ import { generateNKeysBetween } from "fractional-indexing";
 
 import { Prisma } from "@/generated/prisma/client";
 import { matchPerson, type MatchCandidate } from "@/lib/org-chart/match";
-import type { NormalizedChart } from "@/lib/org-chart/normalize";
+import { LIMITS, type NormalizedChart } from "@/lib/org-chart/normalize";
 import type { MatchState } from "@/lib/org-chart/types";
 
 /**
@@ -14,11 +14,14 @@ import type { MatchState } from "@/lib/org-chart/types";
  * Positions are inserted in one createMany with their manager left empty,
  * then every reporting line is set in one UPDATE ... FROM (VALUES ...):
  * the same-org trigger on reportsToId checks each manager row, which then
- * exists. Ids are generated here so references resolve before the insert;
+ * exists, and the extra managers (alsoReportsToIds) go in the same way. Ids are generated here so references resolve before the insert;
  * a caller may keep existing ids (draft saves).
  */
 
 type Db = Prisma.TransactionClient;
+
+/** At most this many extra managers per position (a CHECK in the database). */
+export const MAX_ALSO_REPORTS_TO = LIMITS.alsoReportsTo;
 
 export interface PositionWrite {
   /** Unique within the batch; reportsToRef points at another entry's ref. */
@@ -33,6 +36,8 @@ export interface PositionWrite {
   matchScore: number | null;
   suggestedUserIds: string[];
   reportsToRef: string | null;
+  /** Extra managers (dotted lines): other entries' refs. */
+  alsoReportsToRefs?: readonly string[];
   isOpen: boolean;
   isAdvisor: boolean;
   responsibilities: string[];
@@ -105,6 +110,22 @@ export async function insertPositions(
          AND p."versionId" = ${versionId}
          AND p."organizationId" = ${organizationId}`;
   }
+  const dotted = list.flatMap((p) => {
+    const managers = [...new Set(p.alsoReportsToRefs ?? [])]
+      .filter((ref) => ref !== p.ref && ref !== p.reportsToRef && ids.has(ref))
+      .slice(0, MAX_ALSO_REPORTS_TO)
+      .map((ref) => ids.get(ref) as string);
+    return managers.length > 0 ? [Prisma.sql`(${ids.get(p.ref)}::text, ${managers}::text[])`] : [];
+  });
+  if (dotted.length > 0) {
+    await db.$executeRaw`
+      UPDATE "OrgChartPosition" AS p
+         SET "alsoReportsToIds" = v.managers
+        FROM (VALUES ${Prisma.join(dotted)}) AS v(id, managers)
+       WHERE p."id" = v.id
+         AND p."versionId" = ${versionId}
+         AND p."organizationId" = ${organizationId}`;
+  }
   return ids;
 }
 
@@ -127,6 +148,7 @@ export function chartToWrites(chart: NormalizedChart, candidates: readonly Match
       matchScore: match?.score ?? null,
       suggestedUserIds: match?.suggestions.map((s) => s.userId) ?? [],
       reportsToRef: p.reportsTo,
+      alsoReportsToRefs: p.alsoReportsTo,
       isOpen: p.isOpen,
       isAdvisor: p.isAdvisor,
       responsibilities: p.responsibilities,
@@ -160,6 +182,7 @@ export const positionSelect = {
   matchScore: true,
   suggestedUserIds: true,
   reportsToId: true,
+  alsoReportsToIds: true,
   isOpen: true,
   isAdvisor: true,
   responsibilities: true,
@@ -191,6 +214,7 @@ export function rowsToWrites(
       matchScore: stillMember ? r.matchScore : null,
       suggestedUserIds: options.memberIds ? r.suggestedUserIds.filter((id) => options.memberIds!.has(id)) : r.suggestedUserIds,
       reportsToRef: r.reportsToId,
+      alsoReportsToRefs: r.alsoReportsToIds,
       isOpen: r.isOpen,
       isAdvisor: r.isAdvisor,
       responsibilities: r.responsibilities,

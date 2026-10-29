@@ -35,6 +35,7 @@ import { BUILTIN_CONFIDENCE_THRESHOLD } from "./parse";
 import {
   chartToWrites,
   insertPositions,
+  MAX_ALSO_REPORTS_TO,
   memberCandidates,
   positionSelect,
   rowsToWrites,
@@ -491,6 +492,7 @@ export const SaveDraftSchema = z.object({
         matchScore: z.number().min(0).max(1).nullable(),
         suggestedUserIds: z.array(z.string().max(100)).max(10),
         reportsTo: z.string().max(100).nullable(),
+        alsoReportsTo: z.array(z.string().max(100)).max(MAX_ALSO_REPORTS_TO).optional(),
         isOpen: z.boolean(),
         isAdvisor: z.boolean(),
         responsibilities: z.array(z.string().max(2000)).max(100),
@@ -612,6 +614,8 @@ export async function saveDraft(ctx: Ctx, raw: unknown): Promise<SaveDraftResult
       suggestedUserIds: p.suggestedUserIds.filter((id) => members.ids.has(id)).slice(0, 3),
       reportsToRef:
         p.reportsTo && p.reportsTo !== p.id && clientIds.has(p.reportsTo) ? p.reportsTo : null,
+      // insertPositions drops self, the manager, repeats and ids not in the draft.
+      alsoReportsToRefs: p.alsoReportsTo ?? [],
       isOpen,
       isAdvisor: p.isAdvisor,
       responsibilities: cleanBullets(p.responsibilities, LIMITS.bullets, LIMITS.bullet),
@@ -658,6 +662,7 @@ function toValidationNodes(rows: readonly PositionRow[]) {
     key: r.key,
     title: r.title,
     reportsTo: r.reportsToId,
+    alsoReportsTo: r.alsoReportsToIds,
     isAdvisor: r.isAdvisor,
     isOpen: r.isOpen,
     userId: r.userId,

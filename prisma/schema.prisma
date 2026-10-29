@@ -2238,6 +2238,10 @@ model OrgChartPosition {
   // Structure. reportsTo must be in the same version (checked in code and at
   // publish); advisors sit beside their manager, outside the hierarchy.
   reportsToId      String?
+  /// Extra managers (dotted lines): ids of other positions in the same
+  /// version, checked by a trigger. reportsToId stays the one line the tree
+  /// is built from; these are drawn dashed and never move the position.
+  alsoReportsToIds String[]           @default([])
   isOpen           Boolean            @default(false)
   isAdvisor        Boolean            @default(false)
   // Content

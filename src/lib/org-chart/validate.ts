@@ -7,7 +7,8 @@ import type { MatchState } from "./types";
  * Errors block publishing: an empty chart, a missing title, a duplicate
  * key, a manager outside the version, a loop, an advisor with no manager or
  * with reports, an open hire with a linked member, and (server side) a
- * linked user who is no longer a member.
+ * linked user who is no longer a member. Extra managers (dotted lines)
+ * must be in the version, not advisors, and not below the position.
  * Warnings do not: several roots, unconfirmed suggestions and named people
  * who are not on the portal (both publish as placeholders).
  */
@@ -17,6 +18,8 @@ export interface ValidationNode {
   key: string;
   title: string;
   reportsTo: string | null;
+  /** Extra managers (dotted lines). */
+  alsoReportsTo?: readonly string[];
   isAdvisor: boolean;
   isOpen: boolean;
   userId: string | null;
@@ -33,6 +36,9 @@ export type IssueCode =
   | "advisor-no-manager"
   | "advisor-has-reports"
   | "advisor-of-advisor"
+  | "unknown-also-manager"
+  | "also-to-advisor"
+  | "also-loop"
   | "open-with-member"
   | "not-a-member"
   | "multiple-roots"
@@ -119,6 +125,20 @@ export function validateChart(nodes: readonly ValidationNode[], options: Validat
     }
   }
 
+  // Extra managers (dotted lines).
+  for (const n of nodes) {
+    for (const id of n.alsoReportsTo ?? []) {
+      const manager = byId.get(id);
+      if (!manager || id === n.id) {
+        error("unknown-also-manager", `${label(n)} also reports to a position that is not in this chart.`, n.id);
+      } else if (manager.isAdvisor) {
+        error("also-to-advisor", `${label(n)} also reports to an advisor, and nobody can report to an advisor.`, n.id);
+      } else if (isBelow(byId, manager, n.id)) {
+        error("also-loop", `${label(n)} also reports to ${label(manager)}, who is below it.`, n.id);
+      }
+    }
+  }
+
   const roots = nodes.filter((n) => n.reportsTo === null && !n.isAdvisor);
   if (roots.length > 1) {
     warning(
@@ -137,6 +157,18 @@ export function validateChart(nodes: readonly ValidationNode[], options: Validat
   }
 
   return issues;
+}
+
+/** Whether `node` is somewhere below `ancestorId` (following reportsTo; loops tolerated). */
+function isBelow(byId: ReadonlyMap<string, ValidationNode>, node: ValidationNode, ancestorId: string): boolean {
+  const seen = new Set<string>();
+  let current = node.reportsTo;
+  while (current !== null && !seen.has(current)) {
+    if (current === ancestorId) return true;
+    seen.add(current);
+    current = byId.get(current)?.reportsTo ?? null;
+  }
+  return false;
 }
 
 export function hasErrors(issues: readonly ValidationIssue[]): boolean {

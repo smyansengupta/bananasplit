@@ -12,8 +12,9 @@ import { UserAvatar } from "@/components/user-avatar";
 import { nodeVariant, personLabel, type ChartNodeDTO } from "@/lib/org-chart/types";
 
 /**
- * The side panel for one position: title, person, reports-to and manages
- * (each a button that selects and centers that position), advisors,
+ * The side panel for one position: title, person, reports-to, also reports
+ * to, manages and dotted-line reports (each a button that selects and
+ * centers that position), advisors,
  * responsibilities, decides alone, the person's profile link and their
  * open tasks (loaded when the panel opens). A right-hand sheet on desktop,
  * a bottom sheet on phones. Everything from the document renders as plain
@@ -49,7 +50,11 @@ export interface PositionPanelProps {
   orgSlug: string;
   node: ChartNodeDTO | null;
   manager: ChartNodeDTO | null;
+  /** Extra managers (dotted lines). */
+  alsoManagers?: ChartNodeDTO[];
   reports: ChartNodeDTO[];
+  /** Positions with a dotted line to this one. */
+  dottedReports?: ChartNodeDTO[];
   advisors: ChartNodeDTO[];
   side: "right" | "bottom";
   onClose: () => void;
@@ -80,7 +85,9 @@ function PanelBody({
   orgSlug,
   node,
   manager,
+  alsoManagers = [],
   reports,
+  dottedReports = [],
   advisors,
   onNavigate,
   onEdit,
@@ -149,6 +156,18 @@ function PanelBody({
         )}
       </Section>
 
+      {alsoManagers.length > 0 && (
+        <Section title="Also reports to">
+          <ul className="space-y-1">
+            {alsoManagers.map((m) => (
+              <li key={m.id}>
+                <PersonLink node={m} onNavigate={onNavigate} />
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       <Section title={node.isAdvisor ? "Manages" : `Manages (${reports.length})`}>
         {reports.length > 0 ? (
           <ul className="space-y-1">
@@ -162,6 +181,18 @@ function PanelBody({
           <p className="text-muted-foreground text-sm">No direct reports.</p>
         )}
       </Section>
+
+      {dottedReports.length > 0 && (
+        <Section title={`Dotted-line reports (${dottedReports.length})`}>
+          <ul className="space-y-1">
+            {dottedReports.map((r) => (
+              <li key={r.id}>
+                <PersonLink node={r} onNavigate={onNavigate} />
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       {advisors.length > 0 && (
         <Section title="Advisors">
