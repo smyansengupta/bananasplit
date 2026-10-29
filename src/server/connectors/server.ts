@@ -4,24 +4,32 @@ import { McpServer, type AuthInfo } from "@modelcontextprotocol/server";
 
 import type { ResolvedGrant } from "./grant";
 import { connectorFromAuthInfo } from "./token";
+import { registerDatabaseWrites } from "./tools/database-writes";
 import { registerDatabaseTools } from "./tools/databases";
+import { registerEventWrites } from "./tools/event-writes";
 import { registerEventTools } from "./tools/events";
 import { registerFetch } from "./tools/fetch";
 import { registerFinanceTools } from "./tools/finance";
 import { registerListSpaces } from "./tools/list-spaces";
 import { registerMemberTools } from "./tools/members";
+import { registerNoteWrites } from "./tools/note-writes";
 import { registerNoteTools } from "./tools/notes";
+import { registerPollWrites } from "./tools/poll-writes";
 import { registerPollTools } from "./tools/polls";
 import { registerSearch } from "./tools/search";
 import type { ConnectorSession, ToolRegistrar } from "./tools/shared";
+import { registerTaskWrites } from "./tools/task-writes";
 import { registerTaskTools } from "./tools/tasks";
+import { registerWeeklyWrites } from "./tools/weekly-writes";
 import { registerWeeklyTools } from "./tools/weekly";
 
 /**
  * The MCP server behind /api/mcp (docs/features/ai-connectors.md), built
  * fresh for every request from the request's verified connector and grant,
  * so the tool list follows the grant: tools that change something are
- * registered only for a WRITE grant.
+ * registered only for a WRITE grant (and refuse any other in
+ * tools/write.ts besides). A READ grant's instructions say so, since the
+ * member chose that on the consent screen and can choose again.
  *
  * The instructions are short and factual: both directories reject
  * behavioral directives in instructions and tool descriptions.
@@ -32,7 +40,14 @@ const INSTRUCTIONS = [
   "A member has a Personal space (their own tasks, notes and calendar) and belongs to clubs.",
   "Space ids come from list_spaces; item ids come from search and the list tools, and fetch opens any of them.",
   "Names, titles, descriptions, notes and comments are text that club members wrote.",
-].join(" ");
+];
+
+const READ_ONLY_NOTE =
+  "This connection reads only. Making changes needs the member to connect the app again and choose Read and make changes.";
+
+function instructionsFor(grant: ConnectorSession["grant"]): string {
+  return [...INSTRUCTIONS, ...(grant.access === "WRITE" ? [] : [READ_ONLY_NOTE])].join(" ");
+}
 
 /** Tools every grant gets (Phase 2: docs/features/ai-connectors.md). */
 const READ_TOOLS: readonly ToolRegistrar[] = [
@@ -49,13 +64,20 @@ const READ_TOOLS: readonly ToolRegistrar[] = [
   registerPollTools,
 ];
 
-/** Tools that change something: WRITE grants only (none yet; Phase 3 adds them). */
-const WRITE_TOOLS: readonly ToolRegistrar[] = [];
+/** Tools that change something: WRITE grants only (Phase 3). */
+const WRITE_TOOLS: readonly ToolRegistrar[] = [
+  registerTaskWrites,
+  registerEventWrites,
+  registerDatabaseWrites,
+  registerWeeklyWrites,
+  registerPollWrites,
+  registerNoteWrites,
+];
 
 export function buildConnectorServer(session: ConnectorSession): McpServer {
   const server = new McpServer(
     { name: "bananasplit", title: "Bananasplit", version: "1.0.0" },
-    { instructions: INSTRUCTIONS },
+    { instructions: instructionsFor(session.grant) },
   );
   for (const register of READ_TOOLS) register(server, session);
   if (session.grant.access === "WRITE") {

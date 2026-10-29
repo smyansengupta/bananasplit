@@ -282,6 +282,14 @@ Sign-in URI). The rules that matter here:
   search leaves them out). Item ids are opaque `<kind>:<spaceId>:<id>`, so
   `fetch` and the `get_` tools find the space from the id; the lookup still
   filters on `organizationId`.
+- **Write tools change a space one way.** `writeInSpace`
+  (`src/server/connectors/tools/write.ts`) refuses a READ grant, counts
+  `connector.write` (120 an hour per grant), then runs `withConnectorOrgTx`
+  with `whenPaused: "refuse"` and the hidden-section rule, the app's own
+  service (the task service, `setOwnRsvp`, the grid's `createRecord` and
+  `updateCell`, `createNote`) and a `connector.<tool>` audit row in one
+  transaction. A READ grant's server doesn't register the write tools at
+  all.
 - **RLS.** `ConnectorGrant`'s policies test only `"userId" = app.user_id()`.
   Two definer functions: `app.connector_spaces()` (app_user: the caller's
   spaces with each switch) and `app.revoke_connector_grants(user)` (app_auth

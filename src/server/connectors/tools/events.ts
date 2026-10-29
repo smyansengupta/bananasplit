@@ -38,7 +38,7 @@ import { zonedIso } from "./text";
  * events as the club's days), with RSVP counts and the member's own answer.
  */
 
-const CALENDAR = { feature: "rsvp", section: "calendar" } as const;
+export const CALENDAR = { feature: "rsvp", section: "calendar" } as const;
 
 const RSVP_OUT: Record<RSVPStatus, "going" | "maybe" | "not_going" | "no_answer"> = {
   YES: "going",
@@ -58,7 +58,7 @@ const KIND_OUT: Record<EventKind, string> = {
 
 const rsvpField = z.enum(["going", "maybe", "not_going", "no_answer"]);
 
-const eventSummary = z.object({
+export const eventSummary = z.object({
   id: z.string().describe("The event's id, for get_event and fetch."),
   title: z.string(),
   starts: z
@@ -265,6 +265,26 @@ export async function listEvents(
 
 const ATTENDEES = 100;
 
+/** How an event's invited members answered, and this member's own answer. */
+function answersOf(ctx: OrgContext, attendees: { userId: string; rsvp: RSVPStatus }[]) {
+  const counts = { ...NO_ANSWERS };
+  for (const a of attendees) counts[countKey(a.rsvp)] += 1;
+  return { counts, mine: attendees.find((a) => a.userId === ctx.userId)?.rsvp };
+}
+
+/** One event as list_events shows it; null when it isn't there. */
+export async function findEventSummary(
+  ctx: OrgContext,
+  space: ToolSpace,
+  eventId: string,
+  now: Date,
+): Promise<EventSummary | null> {
+  const event = await getEventById(ctx.db, space.id, eventId, ctx.userId);
+  if (!event) return null;
+  const { counts, mine } = answersOf(ctx, event.attendees);
+  return summaryOf(space, event, mine, counts, now);
+}
+
 async function loadEvent(
   ctx: OrgContext,
   space: ToolSpace,
@@ -273,9 +293,7 @@ async function loadEvent(
 ): Promise<EventDetail> {
   const event = await getEventById(ctx.db, space.id, eventId, ctx.userId);
   if (!event) throw new NotFoundError();
-  const counts = { ...NO_ANSWERS };
-  for (const a of event.attendees) counts[countKey(a.rsvp)] += 1;
-  const mine = event.attendees.find((a) => a.userId === ctx.userId)?.rsvp;
+  const { counts, mine } = answersOf(ctx, event.attendees);
   return {
     ...summaryOf(space, event, mine, counts, now),
     space: { id: space.id, name: space.name },

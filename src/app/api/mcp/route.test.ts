@@ -181,7 +181,7 @@ function spaceDb(organizationId: string): unknown {
   });
 }
 
-/** Every tool a grant gets today: the read tools (Phase 3 adds the write ones). */
+/** The tools every grant gets. */
 const READ_TOOLS = [
   "list_spaces",
   "search",
@@ -199,6 +199,19 @@ const READ_TOOLS = [
   "list_my_reimbursements",
   "list_open_polls",
 ];
+
+/** What a WRITE grant adds (Phase 3), and whether each one overwrites. */
+const WRITE_TOOLS: Record<string, { destructiveHint: boolean; idempotentHint: boolean }> = {
+  create_task: { destructiveHint: false, idempotentHint: false },
+  update_task: { destructiveHint: true, idempotentHint: true },
+  add_task_comment: { destructiveHint: false, idempotentHint: false },
+  rsvp_to_event: { destructiveHint: true, idempotentHint: true },
+  add_database_record: { destructiveHint: false, idempotentHint: false },
+  update_database_record: { destructiveHint: true, idempotentHint: true },
+  post_weekly_update: { destructiveHint: false, idempotentHint: true },
+  vote_in_poll: { destructiveHint: true, idempotentHint: true },
+  create_note: { destructiveHint: false, idempotentHint: false },
+};
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: rateLimit,
   rateLimitKey: (scope: string, ...parts: string[]) => [scope, ...parts].join(":"),
@@ -405,7 +418,8 @@ describe("/api/mcp, 2025-11-25", () => {
     expect(init.status).toBe(200);
     expect((await message(init)).result).toMatchObject({
       serverInfo: { name: "bananasplit", title: "Bananasplit" },
-      instructions: expect.stringContaining("list_spaces"),
+      // A READ grant is told it reads only (what the member chose at consent).
+      instructions: expect.stringMatching(/list_spaces.*This connection reads only/),
     });
     // The first request recorded the grant: no consent claims, so READ and every space.
     expect(state.grant).toMatchObject({
@@ -461,12 +475,30 @@ describe("/api/mcp, 2025-11-25", () => {
     });
   });
 
-  it("lists only the space a scoped grant names, and no write tools yet for a WRITE grant", async () => {
+  it("lists only the space a scoped grant names, and the write tools for a WRITE grant", async () => {
     const auth = await bearer({ [SPACE_CLAIM]: "org_club", [ACCESS_CLAIM]: "write" });
-    const list = await rpc("tools/list", {}, { ...auth, "MCP-Protocol-Version": LEGACY });
-    expect(((await message(list)).result?.tools as { name: string }[]).map((t) => t.name)).toEqual(
-      READ_TOOLS,
+    const init = await rpc(
+      "initialize",
+      { protocolVersion: LEGACY, capabilities: {}, clientInfo: { name: "test", version: "1.0.0" } },
+      auth,
     );
+    expect(((await message(init)).result as { instructions: string }).instructions).not.toContain(
+      "reads only",
+    );
+    const list = await rpc("tools/list", {}, { ...auth, "MCP-Protocol-Version": LEGACY });
+    const tools = (await message(list)).result?.tools as ListedTool[];
+    expect(tools.map((t) => t.name)).toEqual([...READ_TOOLS, ...Object.keys(WRITE_TOOLS)]);
+    for (const tool of tools.filter((t) => t.name in WRITE_TOOLS)) {
+      // Every write tool: a title, all four hints (destructive only when it overwrites).
+      expect(tool.title, tool.name).toBeTruthy();
+      expect(tool.annotations, tool.name).toEqual({
+        readOnlyHint: false,
+        openWorldHint: false,
+        ...WRITE_TOOLS[tool.name],
+      });
+      expect(tool.inputSchema.type, tool.name).toBe("object");
+      expect(tool.outputSchema?.type, tool.name).toBe("object");
+    }
     expect(state.grant).toMatchObject({ access: "WRITE", organizationId: "org_club" });
 
     const call = await callTool("list_spaces", auth);
@@ -475,6 +507,39 @@ describe("/api/mcp, 2025-11-25", () => {
     };
     expect(result.structuredContent.access).toBe("read_and_change");
     expect(result.structuredContent.spaces.map((s) => s.id)).toEqual(["org_club"]);
+  });
+
+  it("keeps the write tools from a READ grant", async () => {
+    const call = await callTool("create_task", await bearer(), {
+      space: "org_personal",
+      title: "Hi",
+    });
+    const reply = await message(call);
+    const text =
+      reply.error?.message ?? (reply.result?.content as { text: string }[] | undefined)?.[0]?.text;
+    expect(reply.result?.structuredContent).toBeUndefined();
+    expect(text).toMatch(/create_task/);
+  });
+
+  it("limits each grant to 120 writes an hour, as an isError result", async () => {
+    const auth = await bearer({ [ACCESS_CLAIM]: "write" });
+    rateLimit.mockImplementation(async (key: string) =>
+      key.startsWith("connector.write")
+        ? { allowed: false, retryAfterMs: 720_000 }
+        : { allowed: true },
+    );
+    const call = await callTool("create_task", auth, { space: "org_personal", title: "Hi" });
+    expect(call.status).toBe(200);
+    expect((await message(call)).result).toMatchObject({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "This app has made too many changes for now. Try again in 12 minutes.",
+        },
+      ],
+    });
+    expect(rateLimit).toHaveBeenCalledWith("connector.write:grant_1", 120, 3600);
   });
 
   it("turns a failure inside a tool into an isError result, not a protocol error", async () => {

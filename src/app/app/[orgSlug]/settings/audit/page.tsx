@@ -32,6 +32,7 @@ const GROUPS = [
   { key: "integration.", label: "Integrations" },
   { key: "privacy.", label: "Privacy" },
   { key: "export.", label: "Exports" },
+  { key: "connector.", label: "AI apps" },
 ] as const;
 
 const ACTION_COPY: Record<string, string> = {
@@ -126,6 +127,17 @@ const ACTION_COPY: Record<string, string> = {
   "ballot_definition.updated": "changed a ballot",
   "ai.action_items_read": "pulled action items from notes with AI",
   "finance.setup": "set up finance",
+  "privacy.connectors_changed": "turned AI apps on or off",
+  // A member's connected AI app acting for them (docs/features/ai-connectors.md).
+  "connector.create_task": "created a task from an AI app",
+  "connector.update_task": "changed a task from an AI app",
+  "connector.add_task_comment": "commented on a task from an AI app",
+  "connector.rsvp_to_event": "answered an invitation from an AI app",
+  "connector.add_database_record": "added a database row from an AI app",
+  "connector.update_database_record": "changed a database row from an AI app",
+  "connector.post_weekly_update": "posted a weekly update from an AI app",
+  "connector.vote_in_poll": "voted in a poll from an AI app",
+  "connector.create_note": "created a note from an AI app",
 };
 
 /** An action with no sentence above, in words: "database.rows_deleted" -> "database: rows deleted". */
@@ -151,6 +163,8 @@ function summarize(diff: unknown): string {
       parts.push(key === "last4" ? `••••${String(v)}` : `${key}: ${String(v)}`);
     }
   }
+  // An AI app's change names the app, once its name is known.
+  if (typeof d.client === "string") parts.push(`app: ${d.client}`);
   return parts.join(" · ").slice(0, 160);
 }
 
