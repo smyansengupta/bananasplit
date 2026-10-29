@@ -9,10 +9,15 @@
 --
 --   Organization_plan_after_trial: only an organization, only one of its
 --   priced plans.
+--   The column's UPDATE grant for the app roles (Organization grants
+--   UPDATE per column).
 --   app.organization_guard, restated from 20261013170000_personal_spaces_and_trials
 --   with planAfterTrial among the OWNER-only columns.
 
 ALTER TABLE "Organization" ADD COLUMN "planAfterTrial" "OrgPlan";
+-- Organization's UPDATE grant is per column (20261019120000_moonstone_product_update),
+-- so a new column is writable only once granted; organization_guard keeps it OWNER-only.
+GRANT UPDATE ("planAfterTrial") ON "Organization" TO app_user, app_service;
 
 ALTER TABLE "Organization" ADD CONSTRAINT "Organization_plan_after_trial"
   CHECK ("planAfterTrial" IS NULL

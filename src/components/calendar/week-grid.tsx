@@ -15,7 +15,7 @@ import {
 
 import { useMediaQuery, useNowMinutes } from "./hooks";
 import { type CalendarItem, itemLabel, shortTime, timeRange } from "./item";
-import { itemStyle, KIND_META, kindStyle, VISIBILITY_META } from "./kinds";
+import { itemStyle, KIND_META, VISIBILITY_META } from "./kinds";
 import { longDate } from "./month-grid";
 
 /**
@@ -142,11 +142,7 @@ export function WeekGrid({
                 </span>
                 <span aria-hidden className="cal-daystrip__dots">
                   {dayItems.slice(0, 3).map((item) => (
-                    <span
-                      key={item.id}
-                      className="cal-daystrip__dot"
-                      style={kindStyle(item.kind)}
-                    />
+                    <span key={item.id} className="cal-daystrip__dot" style={itemStyle(item)} />
                   ))}
                 </span>
                 <span className="sr-only">
@@ -270,7 +266,7 @@ function Slot({
       type="button"
       className="cal-slot"
       style={{
-        ...kindStyle(item.kind),
+        ...itemStyle(item),
         top: `${top}px`,
         height: `${Math.max(height - 2, 18)}px`,
         left: `calc(${lane * width}% + 2px)`,

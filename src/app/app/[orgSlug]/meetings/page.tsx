@@ -1,4 +1,5 @@
 import { Ticket, Video } from "@/components/icons";
+import { parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -76,6 +77,7 @@ export default async function MeetingsPage({
   // ?new= opens New meeting on arrival (and only for someone who can make one).
   const askedNew = canManage ? newMeetingAsk(first(sp[NEW_EVENT_PARAM])) : null;
   // A new meeting starts with the organization's reminders (Settings > General).
+  const meetingTypes = parseMeetingTypes(ctx.settings?.eventTypes);
   const defaultReminderMinutes = ctx.settings?.meetingReminderMinutes ?? [
     ...DEFAULT_REMINDER_MINUTES,
   ];
@@ -196,6 +198,7 @@ export default async function MeetingsPage({
         timeZone={timeZone}
         members={members}
         defaultReminderMinutes={defaultReminderMinutes}
+        meetingTypes={meetingTypes}
         initialShape={opensOnArrival ? (askedNew?.shape ?? null) : null}
         startOpen={opensOnArrival && askedNew !== null}
         variant={variant}

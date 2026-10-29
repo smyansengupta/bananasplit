@@ -48,9 +48,10 @@ import { everyWord } from "./where";
  * scoreFields() then ranks them, the same way for every kind, so the
  * palette can order whole groups by their best hit.
  *
- * What the database does not enforce, this does: finance beyond the
- * member's own expenses only for owners, admins and treasurers (the RLS policy
- * lets any member read the ledger; the pages gate it), member emails only
+ * The database keeps finance to the owner, admins and treasurers (a member
+ * reads only their own expenses, and category names through
+ * app.expense_categories); this says the same, so a member's search never
+ * asks for more. What it does not enforce, this does: member emails only
  * for admins, and sections the org hid only for owners and admins.
  */
 
@@ -824,10 +825,25 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
   const { db, viewer, q } = ctx;
   const manager = can({ role: viewer.role }, "finance.manage");
   const cents = ctx.browsing ? null : amountQuery(q.text);
+  // A member can't read category rows (finance only): their categories by
+  // name come from app.expense_categories, matched here.
+  const memberCategories = manager
+    ? []
+    : await db.$queryRaw<{ id: string; name: string }[]>`
+        SELECT "id", "name" FROM app.expense_categories()`;
+  const categoryName = new Map(memberCategories.map((c) => [c.id, c.name]));
   const words = everyWord<Prisma.TransactionWhereInput>(q.terms, (c) => [
     { description: c },
     { counterparty: c },
-    { category: { name: c } },
+    manager
+      ? { category: { name: c } }
+      : {
+          categoryId: {
+            in: memberCategories
+              .filter((m) => m.name.toLowerCase().includes(c.contains.toLowerCase()))
+              .map((m) => m.id),
+          },
+        },
   ]);
   const transactions = await db.transaction.findMany({
     where: {
@@ -849,6 +865,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
       status: true,
       occurredAt: true,
       voidedAt: true,
+      categoryId: true,
       category: { select: { name: true } },
     },
     take: ctx.pool,
@@ -877,6 +894,8 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
   const hits = [
     ...transactions.map((t) => {
       const amount = formatCents(t.amountCents, t.currency);
+      const category =
+        t.category?.name ?? (t.categoryId ? categoryName.get(t.categoryId) : undefined);
       return hit("transaction", t.id, {
         title: t.description,
         href: manager
@@ -886,7 +905,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
         detail: join(
           formatFinanceDate(t.occurredAt),
           t.counterparty,
-          t.category?.name,
+          category,
           t.voidedAt ? "Voided" : TX_STATUS[t.status],
         ),
         meta: `${t.direction === "IN" ? "+" : "−"}${amount}`,
@@ -897,7 +916,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
                 [
                   { text: t.description, weight: 3 },
                   { text: t.counterparty, weight: 2 },
-                  { text: t.category?.name, weight: 1 },
+                  { text: category, weight: 1 },
                 ],
                 q,
               ),

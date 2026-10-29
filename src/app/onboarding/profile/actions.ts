@@ -51,7 +51,16 @@ export async function saveBasicsStep(input: unknown): Promise<StepSaveResult> {
     await updateOwnProfile(user.id, parsed.data);
     await markProfileSetupComplete(user.id);
     await ensurePersonalSpace(user.id);
-    if (parsed.data.timezone) await setPersonalSpaceTimezone(user.id, parsed.data.timezone);
+    // Best effort: the profile is saved by now, so a failed sync is logged,
+    // never "couldn't save" (the space keeps the zone it was made in).
+    if (parsed.data.timezone) {
+      await setPersonalSpaceTimezone(user.id, parsed.data.timezone).catch((error: unknown) =>
+        console.error(
+          "[onboarding] personal space time zone not synced",
+          error instanceof Error ? error.message : error,
+        ),
+      );
+    }
   }, "basics");
 }
 

@@ -31,9 +31,13 @@ export interface DemoState {
 
 /** Five requests an hour from one network is plenty for a real person. */
 const PER_IP = { limit: 5, windowSec: 60 * 60 };
-/** One address asks twice a day at most. */
+/** One address is emailed about twice a day at most (more are still saved). */
 const PER_EMAIL = { limit: 2, windowSec: 24 * 60 * 60 };
-/** And the whole site sends the inbox this many a day, whatever the IPs: a ceiling for a script. */
+/**
+ * And the inbox gets this many a day from the whole site, whatever the IPs:
+ * a ceiling a script can reach, so past it requests are still saved, just
+ * not emailed. A real lead is never turned away by someone else's flood.
+ */
 const SITE_WIDE = { limit: 100, windowSec: 24 * 60 * 60 };
 
 /** The hidden field (DemoForm) people never see or fill; a bot filling every input does. */
@@ -86,8 +90,7 @@ export async function requestDemoAction(_prev: DemoState, formData: FormData): P
     ),
     checkRateLimit(rateLimitKey("demo-all", "all"), SITE_WIDE.limit, SITE_WIDE.windowSec),
   ]);
-  if (!byEmail.allowed) return fail("We have your request. We'll be in touch soon.");
-  if (!siteWide.allowed) return fail("We couldn't send that just now. Try again tomorrow.");
+  const sendEmail = byEmail.allowed && siteWide.allowed;
 
   const inbox = process.env.DEMO_REQUEST_INBOX || DEFAULT_INBOX;
   const { name, email, organization, size, message } = parsed.data;
@@ -99,20 +102,22 @@ export async function requestDemoAction(_prev: DemoState, formData: FormData): P
     ...(message ? [`Message: ${message}`] : []),
   ];
   let emailedAt: Date | null = null;
-  try {
-    await getPlatformMailer().send({
-      to: inbox,
-      ...layout({
-        subject: `Demo request: ${organization} (${size})`,
-        eyebrow: "New demo request",
-        bodyHtml: rows.map(paragraph).join(""),
-        bodyText: rows.join("\n"),
-        footer: `Reply to ${email} to set up the 15-minute call.`,
-      }),
-    });
-    emailedAt = new Date();
-  } catch (error) {
-    console.error("[demo] could not send", error instanceof Error ? error.message : error);
+  if (sendEmail) {
+    try {
+      await getPlatformMailer().send({
+        to: inbox,
+        ...layout({
+          subject: `Demo request: ${organization} (${size})`,
+          eyebrow: "New demo request",
+          bodyHtml: rows.map(paragraph).join(""),
+          bodyText: rows.join("\n"),
+          footer: `Reply to ${email} to set up the 15-minute call.`,
+        }),
+      });
+      emailedAt = new Date();
+    } catch (error) {
+      console.error("[demo] could not send", error instanceof Error ? error.message : error);
+    }
   }
 
   let saved = false;

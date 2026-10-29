@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { type CalendarItem, timeRange } from "./item";
-import { KIND_META, RSVP_META, SYNC_META, VISIBILITY_META } from "./kinds";
+import { itemStyle, KIND_META, RSVP_META, SYNC_META, VISIBILITY_META } from "./kinds";
 import { shortDay } from "./day-label";
 
 /**
@@ -128,12 +128,8 @@ export function EventPeek({
       aria-label={`${item.title}, detail`}
     >
       <p className="cal-pop__kind">
-        <span
-          aria-hidden
-          className="cal-chip__dot"
-          style={{ ["--kind" as string]: `var(${kind.token})` }}
-        />
-        {kind.label}
+        <span aria-hidden className="cal-chip__dot" style={itemStyle(item)} />
+        {item.meetingType || kind.label}
       </p>
 
       <h3 className="heading mt-2 text-[17px] leading-snug break-words">{item.title}</h3>

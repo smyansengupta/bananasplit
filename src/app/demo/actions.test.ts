@@ -113,14 +113,16 @@ describe("requestDemoAction", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  it("caps one address and the whole site, whatever the network", async () => {
-    rateLimit.mockImplementation(async (key: string) => ({
-      allowed: !key.startsWith("demo-email"),
-    }));
-    expect((await requestDemoAction({}, form(VALID))).error).toMatch(/We have your request/);
-    rateLimit.mockImplementation(async (key: string) => ({ allowed: !key.startsWith("demo-all") }));
-    expect((await requestDemoAction({}, form(VALID))).error).toMatch(/Try again tomorrow/);
-    expect(send).not.toHaveBeenCalled();
+  it("past the per-address or site-wide cap, still saves the request and moves on, just no email", async () => {
+    for (const capped of ["demo-email", "demo-all"]) {
+      vi.clearAllMocks();
+      rateLimit.mockImplementation(async (key: string) => ({ allowed: !key.startsWith(capped) }));
+      await expect(requestDemoAction({}, form(VALID))).rejects.toMatchObject({
+        url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization",
+      });
+      expect(send).not.toHaveBeenCalled();
+      expect(save).toHaveBeenCalledWith(expect.objectContaining({ emailedAt: null }));
+    }
   });
 
   it("tells the person only when both the email and the save fail", async () => {

@@ -68,12 +68,15 @@ export function emailPatch(switches: Record<EmailGroupId, boolean>): Notificatio
 
 /**
  * Where the Emails step starts from User.emailPreferences: every switch on
- * (the morning summary too) for someone who has never chosen, else what they
- * chose. The switches are account-wide, so a second organization's setup
+ * (the morning summary too) for someone who has never chosen (the column's
+ * default is {}), else what they chose. The switches are account-wide, so a second organization's setup
  * must not turn back on what was switched off before.
  */
 export function setupEmailSwitches(saved: unknown): Record<EmailGroupId, boolean> {
-  if (saved == null) {
+  const neverChosen =
+    saved == null ||
+    (typeof saved === "object" && !Array.isArray(saved) && Object.keys(saved).length === 0);
+  if (neverChosen) {
     const on = { digest: true } as Record<EmailGroupId, boolean>;
     for (const group of EMAIL_GROUPS) on[group.id] = true;
     return on;

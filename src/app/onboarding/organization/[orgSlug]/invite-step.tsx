@@ -15,6 +15,7 @@ import {
   StepIntro,
 } from "@/components/onboarding/setup-shell";
 import { Role } from "@/generated/prisma/enums";
+import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 import { cn } from "@/lib/utils";
 
 import { useGoNext } from "./step-flow";
@@ -144,7 +145,16 @@ export function InviteStep({
           </div>
         )}
 
-        <form onSubmit={invite} className="flex flex-col gap-2">
+        <form
+          noValidate
+          onSubmit={(e) => {
+            // Red outline on an empty box, not the browser's bubble.
+            if (highlightInvalid(e)) return;
+            invite(e);
+          }}
+          onInput={clearInvalid}
+          className="flex flex-col gap-2"
+        >
           <label htmlFor="invite-email" className="sr-only">
             Invite by email
           </label>

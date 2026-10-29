@@ -1,6 +1,7 @@
 "use client";
 
-import type { MeetingType } from "@/lib/meetings/meeting-types";
+import { meetingTypeColor, type MeetingType } from "@/lib/meetings/meeting-types";
+import { TagChip } from "@/components/ui/chip";
 import {
   AlertTriangle,
   CalendarPlus,
@@ -213,6 +214,15 @@ export function EventDetailView({
       />
 
       <div className="-mt-3 flex flex-wrap gap-1.5">
+        {event.meetingType && (
+          <TagChip
+            color={
+              meetingTypeColor(meetingTypes ?? [], event.meetingType) ?? "var(--muted-foreground)"
+            }
+          >
+            {event.meetingType}
+          </TagChip>
+        )}
         <KindBadge kind={event.kind} />
         <VisibilityBadge visibility={event.visibility} />
         {canEdit && <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />}

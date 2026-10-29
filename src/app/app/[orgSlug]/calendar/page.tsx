@@ -96,6 +96,7 @@ export default async function CalendarPage({
       id: e.id,
       title: e.title,
       kind: e.kind,
+      meetingType: e.meetingType,
       typeColor: meetingTypeColor(meetingTypes, e.meetingType),
       visibility: e.visibility,
       location: e.location,

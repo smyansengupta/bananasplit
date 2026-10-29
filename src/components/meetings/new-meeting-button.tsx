@@ -1,5 +1,6 @@
 "use client";
 
+import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { Plus } from "@/components/icons";
 import dynamic from "next/dynamic";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -36,6 +37,7 @@ export function NewMeetingButton({
   timeZone,
   members,
   defaultReminderMinutes,
+  meetingTypes,
   initialShape = null,
   startOpen = false,
   variant = "create",
@@ -46,6 +48,8 @@ export function NewMeetingButton({
   members: CalendarMember[];
   /** The organization's reminder times, which a new meeting starts with. */
   defaultReminderMinutes: number[];
+  /** The organization's meeting types (OrgSettings.eventTypes), offered on the form. */
+  meetingTypes?: MeetingType[];
   /** The shape the form opens on (from ?new=), or none for its own default. */
   initialShape?: MeetingShape | null;
   /** Open on arrival (?new= is on the address). */
@@ -104,6 +108,7 @@ export function NewMeetingButton({
           defaultShape={shape ?? undefined}
           noun="meeting"
           defaultReminderMinutes={defaultReminderMinutes}
+          meetingTypes={meetingTypes}
           members={members}
           afterCreate={(eventId) =>
             params.orgSlug ? `/app/${params.orgSlug}/meetings/${eventId}` : null
