@@ -168,8 +168,7 @@ function Hero({ signedIn }: { signedIn: boolean }) {
         <div className="flex max-w-[920px] flex-col items-center gap-6 text-center">
           {/* The category, named. On phones the size follows the screen width, so "Ambient Workplace." fits one line. */}
           <h1 className="display-title animate-home-rise m-0 text-[9.4vw] leading-[0.95] tracking-[-0.05em] whitespace-nowrap sm:text-[clamp(48px,7.2vw,96px)]">
-            The First{" "}
-            <br />
+            The First <br />
             Ambient Workplace.
           </h1>
           <p
