@@ -1,7 +1,8 @@
-import { NotificationType, type Role } from "@/generated/prisma/client";
+import { NotificationType, type Prisma, type Role } from "@/generated/prisma/client";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { sameEmail } from "@/lib/auth/normalize-email";
 import type { SessionUser } from "@/lib/auth/session";
+import { orgLogoUrl } from "@/lib/org-logo";
 import {
   hashInvitationToken,
   type AcceptInvitationResult,
@@ -13,6 +14,7 @@ import { invalidate } from "@/server/cache/invalidate";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { notifyUser } from "@/server/notifications";
 import { ownPreferredTitle } from "@/server/onboarding/title";
+import { memberCapRefusal } from "./member-cap";
 
 /**
  * Joining an org by invitation, off the legacy role (Phase 1 / 0C PR 1).
@@ -64,6 +66,7 @@ interface PendingRow {
   expiresAt: Date;
   orgName: string;
   orgSlug: string;
+  orgLogo: Prisma.JsonValue | null;
 }
 
 export interface PendingInvitation {
@@ -72,6 +75,8 @@ export interface PendingInvitation {
   role: Role;
   expiresAt: Date;
   orgName: string;
+  /** The organization's picture (64px), or null. */
+  orgLogoUrl: string | null;
 }
 
 /** Pending invitations to the caller's verified address (onboarding Join). */
@@ -80,7 +85,7 @@ export async function findPendingInvitationsForMe(userId: string): Promise<Pendi
     userId,
     ({ db }) =>
       db.$queryRaw<PendingRow[]>`
-      SELECT "id", "organizationId", "role", "expiresAt", "orgName", "orgSlug"
+      SELECT "id", "organizationId", "role", "expiresAt", "orgName", "orgSlug", "orgLogo"
         FROM app.pending_invitations_for_me()`,
   );
   return rows
@@ -90,6 +95,7 @@ export async function findPendingInvitationsForMe(userId: string): Promise<Pendi
       role: r.role,
       expiresAt: r.expiresAt,
       orgName: r.orgName,
+      orgLogoUrl: orgLogoUrl(r.orgLogo, 64),
     }))
     .sort((a, b) => a.orgName.localeCompare(b.orgName));
 }
@@ -156,6 +162,9 @@ export async function acceptInvitation(
       where: { userId_organizationId: { userId: user.id, organizationId: orgId } },
       select: { id: true },
     });
+    if (!existing && (await memberCapRefusal(db, orgId))) {
+      return { ok: false as const, reason: "org_full" as const };
+    }
     if (!existing) {
       await db.membership.create({
         data: { userId: user.id, organizationId: orgId, role: row.role, title },

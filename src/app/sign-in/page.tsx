@@ -53,7 +53,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
 
   return (
     <AuthCard footer={<SignedInAs />}>
-      <AuthTitle title="Welcome back." description="Log in to your workspace." />
+      <AuthTitle title="Welcome back." />
       {notice === "password-reset" && !errorMessage && (
         <FormMessage tone="info">Your password is changed. Log in with the new one.</FormMessage>
       )}

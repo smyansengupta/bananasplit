@@ -260,16 +260,16 @@ describe("POST /api/orgs/[orgId]/receipts (0A Fix 15, 0C wrappers)", () => {
 describe("the receipt upload gate (redesign guide 11.2)", () => {
   it("refuses a full organization with the numbers, before storing anything", async () => {
     db.organization.findUnique.mockResolvedValue(
-      space({ storageUsedBytes: BigInt(100 * GB - 512 * 1024) }),
+      space({ storageUsedBytes: BigInt(50 * GB - 512 * 1024) }),
     );
     const response = await upload({ bytes: jpegOfSize(MB), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
     const body = await response.json();
     expect(body.code).toBe("STORAGE_FULL");
     expect(body.error).toBe(
-      "Not enough space: 99.9 GB of 100 GB used. Ask an owner or admin to make room.",
+      "Not enough space: 49.9 GB of 50 GB used. Ask an owner or admin to make room.",
     );
-    expect(body.limitBytes).toBe(100 * GB);
+    expect(body.limitBytes).toBe(50 * GB);
     expect(putBlobMock).not.toHaveBeenCalled();
   });
 
@@ -295,9 +295,9 @@ describe("the receipt upload gate (redesign guide 11.2)", () => {
   it("rolls the row back and deletes the blob when a racing upload took the last of the room", async () => {
     // Under the limit at the gate; over it once the database has counted this receipt.
     db.organization.findUnique
-      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(100 * GB - 2 * MB) }))
-      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(100 * GB - 2 * MB) }))
-      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(100 * GB + 512 * 1024) }));
+      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(50 * GB - 2 * MB) }))
+      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(50 * GB - 2 * MB) }))
+      .mockResolvedValueOnce(space({ storageUsedBytes: BigInt(50 * GB + 512 * 1024) }));
     const response = await upload({ bytes: jpegOfSize(MB), name: "r.jpg", type: "image/jpeg" });
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe("STORAGE_FULL");

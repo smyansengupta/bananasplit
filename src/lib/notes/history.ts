@@ -1,5 +1,4 @@
-import { spaceLimits } from "@/lib/billing/space";
-import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
+import { spaceLimits, type PlanSpace } from "@/lib/billing/space";
 
 /**
  * Version history (NoteVersion): how often autosave snapshots are taken and
@@ -18,10 +17,8 @@ import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
 /** At most one autosave snapshot per note in this long. */
 export const SNAPSHOT_INTERVAL_MS = 10 * 60 * 1000;
 
-export interface HistorySpace {
-  kind: OrgKind;
-  plan: OrgPlan;
-}
+/** The space's plan columns, the trial's included (a Personal Plus trial keeps a year). */
+export type HistorySpace = PlanSpace;
 
 /** The note-history window for a space's plan, in days. */
 export function noteHistoryWindowDays(space: HistorySpace): number {

@@ -59,6 +59,33 @@ export async function getCategoriesForPeriods(
   return rows.sort((a, b) => (rank.get(a.budgetPeriodId) ?? 0) - (rank.get(b.budgetPeriodId) ?? 0));
 }
 
+/** A category to file an expense under: no amounts, so anyone in the org may see it. */
+export interface CategoryOption {
+  id: string;
+  budgetPeriodId: string;
+  name: string;
+  sortOrder: number;
+}
+
+/**
+ * The categories of `periods` for the expense form and a member's own list,
+ * in the periods' order, through app.expense_categories: the category rows
+ * (and their allocated amounts) are finance's alone, so a member reads this
+ * instead, and so does every page a member opens.
+ */
+export async function getCategoryOptions(
+  db: TxClient,
+  periods: readonly { id: string }[],
+): Promise<CategoryOption[]> {
+  if (periods.length === 0) return [];
+  const rows = await db.$queryRaw<CategoryOption[]>`
+    SELECT "id", "budgetPeriodId", "name", "sortOrder" FROM app.expense_categories()`;
+  const rank = new Map(periods.map((p, i) => [p.id, i]));
+  return rows
+    .filter((c) => rank.has(c.budgetPeriodId))
+    .sort((a, b) => rank.get(a.budgetPeriodId)! - rank.get(b.budgetPeriodId)!);
+}
+
 export function getOrgMembersForPicker(db: TxClient, organizationId: string) {
   return db.membership.findMany({
     where: { organizationId },
@@ -473,7 +500,7 @@ export async function getDashboardData(
   };
 }
 
-/** Expense requests submitted and waiting for an owner or treasurer to approve them. */
+/** Expense requests submitted and waiting for an owner, admin or treasurer to approve them. */
 export function countAwaitingApproval(db: TxClient, organizationId: string): Promise<number> {
   return db.transaction.count({
     where: {

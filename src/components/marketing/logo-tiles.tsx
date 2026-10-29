@@ -58,7 +58,7 @@ export function LogoTiles({
         ))}
       </ul>
       <span aria-live="polite" className="text-foreground/70 h-5 text-[13px] font-semibold">
-        {name ?? "Tap a logo to see the app"}
+        {name}
       </span>
     </div>
   );

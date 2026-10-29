@@ -51,8 +51,12 @@ async function makeUser(local: string) {
 
 const used = async (orgId: string) =>
   Number(
-    (await ownerDb.organization.findUniqueOrThrow({ where: { id: orgId }, select: { storageUsedBytes: true } }))
-      .storageUsedBytes,
+    (
+      await ownerDb.organization.findUniqueOrThrow({
+        where: { id: orgId },
+        select: { storageUsedBytes: true },
+      })
+    ).storageUsedBytes,
   );
 
 /** A file row written as the owner under RLS, with the gate's in-transaction check. */
@@ -162,28 +166,34 @@ describe("the upload gate", () => {
   it("lets a Personal Free space upload notes files, within 10 MB a file", async () => {
     if (!reachable) return;
     requireUserMock.mockResolvedValue(owner);
-    expect((await gateUpload(personalId, 5 * 1024 * 1024, { feature: "files" })).refusal).toBeNull();
+    expect(
+      (await gateUpload(personalId, 5 * 1024 * 1024, { feature: "files" })).refusal,
+    ).toBeNull();
     const big = await gateUpload(personalId, 11 * 1024 * 1024, { feature: "files" });
     expect(big.refusal?.code).toBe("FILE_TOO_LARGE");
     expect(big.refusal?.error).toBe("This file is 11 MB. Your plan allows files up to 10 MB.");
-    expect((await gateUpload(personalId, 1, { feature: "finance" })).refusal?.code).toBe("SPACE_FEATURE");
+    expect((await gateUpload(personalId, 1, { feature: "finance" })).refusal?.code).toBe(
+      "SPACE_FEATURE",
+    );
   });
 
   it("rolls back a row that lands over the limit, and the counter with it", async () => {
     if (!reachable) return;
-    // A trial has Team Advanced's 500 GB: bring the club to 10 bytes short (the owner role may).
+    // A trial has Team Advanced's 100 GB: bring the club to 10 bytes short (the owner role may).
     await ownerDb.organization.update({
       where: { id: club.id },
-      data: { storageUsedBytes: BigInt(500 * GB - 10) },
+      data: { storageUsedBytes: BigInt(100 * GB - 10) },
     });
     requireUserMock.mockResolvedValue(owner);
     const gate = await gateUpload(club.id, 100, { feature: "files" });
     expect(gate.refusal?.code).toBe("STORAGE_FULL");
-    expect(gate.refusal?.error).toBe("Not enough space: 499.9 GB of 500 GB used. Empty the trash or upgrade.");
+    expect(gate.refusal?.error).toBe(
+      "Not enough space: 99.9 GB of 100 GB used. Empty the trash or upgrade.",
+    );
 
     await expect(addFile(club.id, 100)).rejects.toBeInstanceOf(UploadRefusedError);
-    expect(await used(club.id)).toBe(500 * GB - 10);
+    expect(await used(club.id)).toBe(100 * GB - 10);
     expect(await addFile(club.id, 10)).toMatch(/\w+/);
-    expect(await used(club.id)).toBe(500 * GB);
+    expect(await used(club.id)).toBe(100 * GB);
   });
 });

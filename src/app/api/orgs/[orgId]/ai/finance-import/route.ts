@@ -16,7 +16,7 @@ import { readUpload, uploadErrorResponse } from "@/server/storage/upload";
 /**
  * POST /api/orgs/{orgId}/ai/finance-import
  *
- * Owners and treasurers (finance.manage): the club's connected AI model
+ * Owners, admins and treasurers (finance.manage): the club's connected AI model
  * reads past money records.
  * - JSON `{ mode: "sheet", sample }`: a spreadsheet the browser parsed; the
  *   model sees a sample of rows and each text column's distinct values and
@@ -81,7 +81,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
   }
   if (!ctx.canManageFinance) {
     return json(403, {
-      error: "Only the organization's owners and treasurers can import finance records.",
+      error: "Only the organization's owners, admins and treasurers can import finance records.",
     });
   }
 

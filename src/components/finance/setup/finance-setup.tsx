@@ -94,8 +94,7 @@ const STEP_INTRO: Record<SetupStepId, string> = {
   balance: "How much the organization has right now, so the balance is right from day one.",
   budget:
     "How much each kind of spending may use this period. Rough numbers are fine; change them any time.",
-  people:
-    "Owners and treasurers manage the money. Treasurers can't manage members; admins can't see the money.",
+  people: "Owners, admins and treasurers manage the money. Treasurers can't manage members.",
   records: "Bring in last year's spreadsheet, a bank or Venmo export, receipts or an old budget.",
   board: "Pick what your finance dashboard shows. You can add, move and resize widgets later.",
 };
@@ -798,8 +797,8 @@ function PeopleStep({ orgId, members, canAppoint, currentUserId }: FinanceSetupP
         </p>
       )}
       <p className="text-muted-foreground text-[13px]">
-        Members can always ask to be paid back for what they bought; a treasurer or owner approves
-        it, and nobody approves their own.
+        Members can always ask to be paid back for what they bought; an owner, admin or treasurer
+        approves it, and nobody approves their own.
       </p>
       <ErrorLine error={error} />
     </div>

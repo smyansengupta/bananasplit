@@ -3,6 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const send = vi.fn();
 const track = vi.fn();
 const rateLimit = vi.fn();
+const save = vi.fn();
+const session = vi.fn();
+const redirect = vi.fn((url: string) => {
+  throw Object.assign(new Error(`NEXT_REDIRECT ${url}`), { url });
+});
+
+vi.mock("next/navigation", () => ({ redirect: (url: string) => redirect(url) }));
+vi.mock("@/server/demo/requests", () => ({
+  saveDemoRequest: (...args: unknown[]) => save(...args),
+}));
+vi.mock("@/lib/auth/session", () => ({ getSession: () => session() }));
 
 vi.mock("@/server/email/mailer", () => ({ getPlatformMailer: () => ({ send }) }));
 vi.mock("@/lib/analytics/server", () => ({ trackServer: (...args: unknown[]) => track(...args) }));
@@ -33,14 +44,26 @@ describe("requestDemoAction", () => {
     vi.stubEnv("DEMO_REQUEST_INBOX", "sales@bananasplit.test");
     rateLimit.mockResolvedValue({ allowed: true });
     send.mockResolvedValue({ id: "m1", transport: "sink" });
+    save.mockResolvedValue(undefined);
+    session.mockResolvedValue(null);
   });
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.clearAllMocks();
   });
 
-  it("emails the request to the inbox and records the event with the team size only", async () => {
-    expect(await requestDemoAction({}, form(VALID))).toEqual({ sent: true });
+  it("emails and saves the request, then sends them to create their organization", async () => {
+    await expect(requestDemoAction({}, form(VALID))).rejects.toMatchObject({
+      url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization",
+    });
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "alex@orbit.dev",
+        organization: "Orbit Labs",
+        teamSize: "11–50",
+        emailedAt: expect.any(Date),
+      }),
+    );
     expect(send).toHaveBeenCalledTimes(1);
     const message = send.mock.calls[0]![0];
     expect(message.to).toBe("sales@bananasplit.test");
@@ -59,11 +82,21 @@ describe("requestDemoAction", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("says so instead of pretending to send when no inbox is set", async () => {
+  it("emails the default inbox when none is set, and goes straight to setup when signed in", async () => {
     vi.stubEnv("DEMO_REQUEST_INBOX", "");
-    expect((await requestDemoAction({}, form(VALID))).error).toMatch(/aren't switched on yet/);
-    expect(send).not.toHaveBeenCalled();
-    expect(track).not.toHaveBeenCalled();
+    session.mockResolvedValue({ user: { id: "u1" } });
+    await expect(requestDemoAction({}, form(VALID))).rejects.toMatchObject({
+      url: "/onboarding/organization",
+    });
+    expect(send.mock.calls[0]![0].to).toBe("jack.lam251@gmail.com");
+  });
+
+  it("still saves the request when the email fails, and moves on", async () => {
+    send.mockRejectedValue(new Error("network"));
+    await expect(requestDemoAction({}, form(VALID))).rejects.toMatchObject({
+      url: expect.any(String),
+    });
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ emailedAt: null }));
   });
 
   it("stops a flood from one network", async () => {
@@ -72,8 +105,27 @@ describe("requestDemoAction", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("tells the person when sending fails", async () => {
+  it("lets a bot that fills the hidden field through, sending and saving nothing", async () => {
+    await expect(
+      requestDemoAction({}, form({ ...VALID, website: "https://spam.example" })),
+    ).rejects.toMatchObject({ url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization" });
+    expect(send).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("caps one address and the whole site, whatever the network", async () => {
+    rateLimit.mockImplementation(async (key: string) => ({
+      allowed: !key.startsWith("demo-email"),
+    }));
+    expect((await requestDemoAction({}, form(VALID))).error).toMatch(/We have your request/);
+    rateLimit.mockImplementation(async (key: string) => ({ allowed: !key.startsWith("demo-all") }));
+    expect((await requestDemoAction({}, form(VALID))).error).toMatch(/Try again tomorrow/);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("tells the person only when both the email and the save fail", async () => {
     send.mockRejectedValue(new Error("network"));
+    save.mockRejectedValue(new Error("database"));
     expect((await requestDemoAction({}, form(VALID))).error).toMatch(/couldn't send/);
     expect(track).not.toHaveBeenCalled();
   });

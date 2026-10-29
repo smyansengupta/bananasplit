@@ -1,3 +1,5 @@
+import { TRIAL_DAYS } from "@/lib/billing/space";
+
 /**
  * Where "Get started free" goes: straight to setup when signed in, else
  * sign-up first (Google or email), coming back to setup. Every primary
@@ -11,6 +13,9 @@ export function startHref(signedIn: boolean): string {
 
 /** The secondary, sales action ("Request a demo"): the /demo form, which emails DEMO_REQUEST_INBOX. */
 export const DEMO_HREF = "/demo";
+
+/** Under the hero's and the closing panel's buttons: the trial, and that no card is asked. */
+export const TRIAL_PROMISE = `${TRIAL_DAYS} days of every feature, free. No credit card needed.`;
 
 /**
  * The page's buttons (SaaS homepage report: the primary is the one colour

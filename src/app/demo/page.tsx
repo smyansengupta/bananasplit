@@ -10,12 +10,11 @@ import { DemoForm } from "./demo-form";
 
 export const metadata: Metadata = {
   title: "Request a demo · Bananasplit",
-  description:
-    "See Bananasplit set up for your organization: projects, docs, events, the budget and the apps you already use.",
+  description: "A 15-minute walkthrough of Bananasplit, set up for your kind of team.",
 };
 
 const WHAT_YOU_GET = [
-  "A 30-minute walkthrough set up for your kind of team",
+  "Set up for your kind of team",
   "How Bananasplit connects to the apps you use today",
   "A plan for moving your projects, docs and budget in",
   "Pricing for your team size, and a quote you can share",
@@ -38,11 +37,11 @@ export default async function DemoPage() {
       >
         <div className="flex flex-col gap-6">
           <SectionTitle as="h1" className="text-[clamp(40px,5.6vw,68px)] leading-[1] text-balance">
-            See Bananasplit run your organization.
+            Get a 15-minute walkthrough.
           </SectionTitle>
           <p className="text-foreground/80 max-w-[520px] text-[18px] leading-[1.55] text-pretty">
-            Tell us about your team and we&apos;ll show you exactly how your projects, docs, events
-            and budget would work in one place.
+            Tell us about your team. We&apos;ll show you how it would run on Bananasplit, on a quick
+            call.
           </p>
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {WHAT_YOU_GET.map((item) => (

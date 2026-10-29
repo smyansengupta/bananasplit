@@ -15,3 +15,14 @@ The marks are trademarks of their owners, shown to say Bananasplit works with th
 
 BrandMark (src/components/marketing/brand-mark.tsx) shows <slug>.svg on a white tile.
 Swap any of these for the company's official press-kit logo with the same file name.
+
+Import sources (onboarding's Import step), same set, fetched Oct 28, 2026:
+
+  notion.svg            logos:notion-icon             Gil Barbara, svg-logos (CC0 1.0)
+  jira.svg              logos:jira                    Gil Barbara, svg-logos (CC0 1.0)
+  monday.svg            logos:monday-icon             Gil Barbara, svg-logos (CC0 1.0)
+  asana.svg             logos:asana-icon              Gil Barbara, svg-logos (CC0 1.0)
+  trello.svg            logos:trello                  Gil Barbara, svg-logos (CC0 1.0)
+  clickup.svg           logos:clickup-icon            Gil Barbara, svg-logos (CC0 1.0)
+  linear.svg            logos:linear-icon             Gil Barbara, svg-logos (CC0 1.0)
+  airtable.svg          logos:airtable                Gil Barbara, svg-logos (CC0 1.0)

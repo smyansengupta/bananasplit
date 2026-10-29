@@ -88,6 +88,8 @@ const CLIENT_ALLOWLIST = [
   "src/lib/auth/session-version.ts",
   "src/server/email/password-reset.ts",
   "src/lib/rate-limit.ts",
+  // authDb only: DemoRequest, insert only (the /demo form).
+  "src/server/demo/requests.ts",
   // serviceDb only: app.blob_* (StoredBlob, file bytes when there's no Blob store).
   "src/server/storage/database-driver.ts",
   "src/app/api/calendar/feed/**",

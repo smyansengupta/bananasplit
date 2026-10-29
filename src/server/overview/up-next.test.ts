@@ -57,6 +57,7 @@ function event(id: string, startsAt: Date) {
     allDay: false,
     location: null,
     kind: "OTHER" as const,
+    meetingType: null,
     visibility: "INTERNAL" as const,
     needsReview: false,
     googleSyncState: "NOT_APPLICABLE" as const,

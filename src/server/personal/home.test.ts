@@ -352,9 +352,15 @@ describe("profileGapsOf / Finish your profile", () => {
       hasAvailability: false,
     };
     expect(profileGapsOf(skipped)).toEqual(["school", "bio", "availability"]);
-    const data = shapePersonalHome(raw({ user: { ...user, hasAvailability: false } }), NOW);
+    const data = shapePersonalHome(
+      raw({
+        user: { ...user, hasAvailability: false },
+        spaces: [{ space: personal, digest: digest() }],
+      }),
+      NOW,
+    );
     expect(data.profileGaps).toEqual(["availability"]);
-    expect(data.finishProfileHref).toBe("/onboarding/profile/availability");
+    expect(data.finishProfileHref).toBe("/app/me-abc/profile");
   });
 
   it("counts links alone as a bio", () => {

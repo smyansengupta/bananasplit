@@ -92,7 +92,7 @@ export interface CheckoutFormProps {
  * (left), the card form in a card (right). Stacked below lg, the order on
  * top. A team plan is per member a month, billed yearly, or for a student
  * organization a flat price per academic year or semester; Personal Plus
- * is one person, monthly or yearly (free for students).
+ * is one person, monthly or yearly.
  *
  * Billing isn't connected: Subscribe only says so. The form never submits
  * anywhere (onSubmit prevents it, and no field has a `name`, so even a
@@ -370,9 +370,9 @@ function ClubOrder({
 }
 
 /** Personal Plus: one person, billed monthly or yearly. */
-function PlusOrder({ email, schoolEmail }: CheckoutFormProps) {
+function PlusOrder({ email }: CheckoutFormProps) {
   const [period, setPeriod] = useState<Period>("year");
-  const amount = schoolEmail ? 0 : period === "year" ? PLUS.perYear : PLUS.perMonth;
+  const amount = period === "year" ? PLUS.perYear : PLUS.perMonth;
   const total = usd.format(amount);
   const saved = usd.format(PLUS.perMonth * 12 - PLUS.perYear);
   return (
@@ -398,11 +398,9 @@ function PlusOrder({ email, schoolEmail }: CheckoutFormProps) {
         </div>
 
         <OrderNote>
-          {schoolEmail
-            ? "Personal Plus is free with a school email: 25 GB, files up to 250 MB and a year of note history."
-            : period === "year"
-              ? `Yearly saves ${saved}: three months free. Your Personal space gets 25 GB, files up to 250 MB and a year of note history.`
-              : `Switch to yearly to save ${saved}. Your Personal space gets 25 GB, files up to 250 MB and a year of note history.`}
+          {period === "year"
+            ? `Yearly saves ${saved}: three months free. Your Personal space gets integrations, 25 GB, files up to 250 MB and a year of note history.`
+            : `Switch to yearly to save ${saved}. Your Personal space gets integrations, 25 GB, files up to 250 MB and a year of note history.`}
         </OrderNote>
 
         <div className="bg-border h-px" />

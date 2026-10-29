@@ -14,6 +14,7 @@ import { tags } from "@/server/cache/tags";
 import { withSystemOrgTx, withUserTx, type TxClient } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
 import { notifyUser } from "@/server/notifications";
+import { memberCapRefusal } from "@/server/settings/member-cap";
 
 import { ownPreferredTitle } from "./title";
 
@@ -319,6 +320,8 @@ export async function joinWithCode(
       where: { userId_organizationId: { userId: user.id, organizationId: org.organizationId } },
       select: { id: true },
     });
+    const full = existing ? null : await memberCapRefusal(db, org.organizationId);
+    if (full) return { ok: false as const, message: full };
     if (!existing) {
       await db.membership.create({
         data: { userId: user.id, organizationId: org.organizationId, role: Role.MEMBER, title },

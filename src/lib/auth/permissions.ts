@@ -18,7 +18,8 @@ import { ForbiddenError } from "./errors";
 const ALL: readonly Role[] = [Role.OWNER, Role.ADMIN, Role.TREASURER, Role.MEMBER];
 const ADMINS: readonly Role[] = [Role.OWNER, Role.ADMIN];
 const OWNER: readonly Role[] = [Role.OWNER];
-const FINANCE: readonly Role[] = [Role.OWNER, Role.TREASURER];
+/** Finance: the owner, admins and treasurers (app.is_finance in the database). */
+const FINANCE: readonly Role[] = [Role.OWNER, Role.ADMIN, Role.TREASURER];
 
 export const PERMISSIONS = {
   // Settings > General

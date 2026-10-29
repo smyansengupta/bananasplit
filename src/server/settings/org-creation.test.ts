@@ -106,8 +106,8 @@ describe("createOrganization", () => {
     });
     const { trialEndsAt } = fake.systemDb.organization.create.mock.calls[0][0].data;
     const days = (trialEndsAt.getTime() - before) / 86_400_000;
-    expect(days).toBeGreaterThan(29.99);
-    expect(days).toBeLessThan(30.01);
+    expect(days).toBeGreaterThan(13.99);
+    expect(days).toBeLessThan(14.01);
     expect(fake.systemDb.membership.create).toHaveBeenCalledWith({
       data: { organizationId: orgId, userId: "user_1", role: "OWNER", title: "Project Manager" },
     });

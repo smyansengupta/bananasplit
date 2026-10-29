@@ -1,5 +1,4 @@
 import { Logo } from "@/components/brand/logo";
-import { ThemeSwitch } from "@/components/brand/theme-switch";
 import { CONTACT_HREF, PRIVACY_HREF, TERMS_HREF } from "@/lib/brand/links";
 
 import { startHref } from "./links";
@@ -45,7 +44,7 @@ const COLUMNS = [
 
 /**
  * The logo and tagline, four columns of links, then the copyright, the
- * legal links and the light/dark switch. Signed in, "Log in" opens the app.
+ * legal links. Signed in, "Log in" opens the app.
  */
 export function SiteFooter({ signedIn = false }: { signedIn?: boolean }) {
   return (
@@ -90,7 +89,6 @@ export function SiteFooter({ signedIn = false }: { signedIn?: boolean }) {
               Terms
             </SiteLink>
           </div>
-          <ThemeSwitch />
         </div>
       </div>
     </footer>

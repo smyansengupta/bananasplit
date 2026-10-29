@@ -316,6 +316,23 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+/// A "Get a 15-minute walkthrough" request from /demo, kept so none is lost
+/// when mail fails; it is also emailed (DEMO_REQUEST_INBOX). Platform data:
+/// written by app_auth (insert only), read by the owner role (Supabase).
+model DemoRequest {
+  id           String   @id @default(cuid())
+  name         String
+  email        String
+  organization String
+  teamSize     String
+  message      String?
+  /// When the email to the inbox went out; null if it didn't.
+  emailedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // --- Organizations, membership, invitations ---
 
 enum Role {
@@ -353,10 +370,15 @@ model Organization {
   /// only between FREE and PERSONAL_PLUS, a club never onto either
   /// (app.organization_space_guard).
   plan                    OrgPlan   @default(TRIAL)
-  /// TRIAL: when the trial ends (30 days after the club was started); the
-  /// club is paused after it until the owner picks a plan. Never changed by
-  /// the app roles.
+  /// When the space's trial ends (14 days after it was started): a club on
+  /// TRIAL, or a Personal space on FREE (Personal Plus until then). After
+  /// it the space is on planAfterTrial, else its free plan. Never changed
+  /// by the app roles.
   trialEndsAt             DateTime?
+  /// TRIAL only: the plan the owner picked during the trial (TEAM_FREE,
+  /// CLUB or SOCIETY), which starts when the trial ends. Picking one never
+  /// cuts the trial short. OWNER-only (app.organization_guard).
+  planAfterTrial          OrgPlan?
   /// Bytes stored by the space: OrgFile (trashed files count until they are
   /// deleted for good), Receipt and NoteVersion sizes. Kept by the
   /// app.storage_used_track triggers; the app roles never write it (no
@@ -1038,6 +1060,8 @@ model Event {
   // Sessions (Phase 4a): a Session in Databases and a calendar event are the
   // same record. Members may only create/edit their own INTERNAL events.
   kind               EventKind          @default(OTHER)
+  /// One of the org's meeting types (OrgSettings.eventTypes), by name; the calendar draws it in that type's colour.
+  meetingType        String?
   visibility         EventVisibility    @default(INTERNAL)
   hostUserId         String?
   /// Free-text host when the host is not a member (guest speaker).
@@ -1979,6 +2003,9 @@ model OrgSettings {
   pulseAudience                 PulseAudience    @default(EVERYONE)
   pulseEmail                    Boolean          @default(true)
   pulseInApp                    Boolean          @default(true)
+  /// The organization's own event types, [{ name, color }] (onboarding's
+  /// Event types step). NULL: none named yet.
+  eventTypes                    Json?
   // What members (not only OWNER/ADMIN) may create; RLS reads these.
   memberCanCreateTags           Boolean          @default(true)
   /// Members may use the club from AI apps they connect (Admin panel ›

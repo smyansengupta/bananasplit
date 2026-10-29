@@ -30,6 +30,7 @@ import { sameReminderOffsets } from "@/lib/meetings/reminders";
 import { slugify } from "@/lib/slug";
 import { WEEKDAY_NAMES } from "@/lib/tasks/dates";
 import { timeZoneOptions } from "@/lib/timezones";
+import { cn } from "@/lib/utils";
 
 import { SettingsCard, SettingsStatus } from "../settings-card";
 import {
@@ -427,11 +428,14 @@ export function LogoForm({
   logoUrl,
   orgName,
   canEdit,
+  bare = false,
 }: {
   orgId: string;
   logoUrl: string | null;
   orgName: string;
   canEdit: boolean;
+  /** Onboarding: just the big square to click, no card and no copy. */
+  bare?: boolean;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -439,6 +443,7 @@ export function LogoForm({
   const [cropError, setCropError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     if (!source) return;
@@ -473,7 +478,11 @@ export function LogoForm({
   function pick(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
+    if (file) take(file);
+  }
+
+  /** A picked or dropped file: checked, then on to the crop. */
+  function take(file: File) {
     if (!(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
       setStatus({ tone: "error", text: "Choose a JPEG, PNG or WebP image." });
       return;
@@ -505,6 +514,83 @@ export function LogoForm({
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase())
     .join("");
+
+  const fileInput = (
+    <input
+      ref={input}
+      id="org-logo"
+      type="file"
+      accept={ACCEPTED_IMAGE_TYPES.join(",")}
+      className="sr-only"
+      tabIndex={-1}
+      aria-hidden="true"
+      onChange={pick}
+    />
+  );
+  const crop = source && (
+    <CropDialog
+      imageSrc={source}
+      busy={busy}
+      error={cropError}
+      title="Crop the organization picture"
+      shape="rect"
+      onCancel={() => setSource(null)}
+      onConfirm={confirm}
+    />
+  );
+
+  if (bare) {
+    return (
+      <div className="flex w-full flex-col items-center gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => input.current?.click()}
+          onPointerEnter={() => void loadCropDialog()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) take(file);
+          }}
+          aria-label={logoUrl ? "Change the logo" : "Upload a logo"}
+          className={cn(
+            "group flex w-full cursor-pointer items-center gap-5 rounded-[24px] border-2 border-dashed p-5 text-left transition-colors disabled:cursor-default",
+            dragging
+              ? "border-foreground bg-muted"
+              : "border-border hover:border-foreground/40 hover:bg-muted/50",
+          )}
+        >
+          <span className="bg-muted ring-foreground/8 grid size-24 flex-none place-items-center overflow-hidden rounded-[22px] ring-1">
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- pre-sized WebP variant
+              <img src={logoUrl} alt="" width={96} height={96} className="size-full object-cover" />
+            ) : busy ? (
+              <Loader2 className="text-muted-foreground size-6 animate-spin" aria-hidden="true" />
+            ) : (
+              <ImageUp className="text-muted-foreground size-7" aria-hidden="true" />
+            )}
+          </span>
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="text-[16px] font-semibold">
+              {logoUrl ? "Change logo" : "Drop your logo here"}
+            </span>
+            <span className="text-muted-foreground text-[13px]">
+              {logoUrl ? "Click or drop a new one." : "Or click to choose. PNG, JPG or WebP."}
+            </span>
+          </span>
+        </button>
+        {status && <StatusLine status={status} />}
+        {fileInput}
+        {crop}
+      </div>
+    );
+  }
 
   return (
     <SettingsCard
@@ -574,28 +660,9 @@ export function LogoForm({
         ) : (
           <p className="text-muted-foreground text-sm">Owners and admins can change it.</p>
         )}
-        <input
-          ref={input}
-          id="org-logo"
-          type="file"
-          accept={ACCEPTED_IMAGE_TYPES.join(",")}
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-          onChange={pick}
-        />
+        {fileInput}
       </div>
-      {source && (
-        <CropDialog
-          imageSrc={source}
-          busy={busy}
-          error={cropError}
-          title="Crop the organization picture"
-          shape="rect"
-          onCancel={() => setSource(null)}
-          onConfirm={confirm}
-        />
-      )}
+      {crop}
     </SettingsCard>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import type { MeetingType } from "@/lib/meetings/meeting-types";
 import {
   CalendarClock,
   CalendarDays,
@@ -109,12 +110,15 @@ export function EventCalendar({
   orgTodayKey,
   tasksLayer = true,
   defaultReminderMinutes,
+  meetingTypes,
 }: {
   orgId: string;
   orgSlug: string;
   timeZone: string;
   /** The organization's reminder times, which a new event starts with. */
   defaultReminderMinutes?: number[];
+  /** The organization's meeting types, offered on a new event. */
+  meetingTypes?: MeetingType[];
   items: CalendarItem[];
   members: CalendarMember[];
   /** OWNER/ADMIN: create, edit, drag and delete (the server re-checks every write). */
@@ -640,6 +644,7 @@ export function EventCalendar({
           defaultAllDay={dialog.allDay}
           defaultShape={dialog.shape}
           defaultReminderMinutes={defaultReminderMinutes}
+          meetingTypes={meetingTypes}
           members={members}
           onSaved={() => setDialog(null)}
         />

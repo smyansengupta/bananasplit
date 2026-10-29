@@ -6,7 +6,6 @@ import { exitClass, SetupShell } from "@/components/onboarding/setup-shell";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { ORG_CREATION_DENIAL_MESSAGES, orgCreationPolicy } from "@/lib/auth/org-creation";
 import { requireUser } from "@/lib/auth/session";
-import { ORG_STEP_COUNT, ORG_STEP_NAMES } from "@/lib/onboarding/steps";
 import { needsProfileSetup } from "@/server/onboarding/profile";
 
 import { ClubBasicsStep } from "./club-basics-step";
@@ -20,9 +19,7 @@ export const metadata = { title: "Set up your organization · Bananasplit" };
 export default async function ClubBasicsPage() {
   const user = await requireUser();
   if (await needsProfileSetup(user.id)) {
-    redirect(
-      `/onboarding/profile/basics?callbackUrl=${encodeURIComponent("/onboarding/organization")}`,
-    );
+    redirect(`/onboarding?callbackUrl=${encodeURIComponent("/onboarding/organization")}`);
   }
   const identity = await getUserIdentity(user.id);
   const policy = orgCreationPolicy(identity);
@@ -39,20 +36,13 @@ export default async function ClubBasicsPage() {
   return (
     <SetupShell
       subject="your organization"
-      steps={ORG_STEP_NAMES}
-      current={1}
       exit={
         <Link href="/onboarding" className={exitClass}>
           Exit
         </Link>
       }
     >
-      <ClubBasicsStep
-        index={1}
-        total={ORG_STEP_COUNT}
-        requiresCode={policy.requiresCode}
-        notice={notice}
-      />
+      <ClubBasicsStep requiresCode={policy.requiresCode} notice={notice} />
     </SetupShell>
   );
 }

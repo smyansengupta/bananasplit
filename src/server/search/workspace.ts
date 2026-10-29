@@ -49,7 +49,7 @@ import { everyWord } from "./where";
  * palette can order whole groups by their best hit.
  *
  * What the database does not enforce, this does: finance beyond the
- * member's own expenses only for owners and treasurers (the RLS policy
+ * member's own expenses only for owners, admins and treasurers (the RLS policy
  * lets any member read the ledger; the pages gate it), member emails only
  * for admins, and sections the org hid only for owners and admins.
  */
@@ -816,7 +816,7 @@ function amountQuery(text: string): number | null {
 }
 
 /**
- * Finance. Owners and treasurers: the ledger (description, counterparty,
+ * Finance. Owners, admins and treasurers: the ledger (description, counterparty,
  * category, or the amount itself) and sponsors. Everyone else: only their
  * own expenses, which open on My reimbursements.
  */

@@ -14,6 +14,8 @@ import { withOrgAction, type OrgContext } from "@/server/db/context";
 import { ensureActivePeriod } from "@/server/finance/periods";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
+import { getCategoryOptions } from "./queries";
+
 /** Every action here belongs to finance (withOrgAction's space check). */
 const financeAction: typeof withOrgAction = (handler, options) =>
   withOrgAction(handler, { onRefused: "return", ...options, feature: "finance" });
@@ -79,11 +81,18 @@ async function assertCategoryBelongsToPeriod(
   budgetPeriodId: string,
 ) {
   if (!categoryId) return null;
+  const wrong = "That category doesn't belong to the selected budget period.";
+  // A member can't read category rows (finance only): their check is the
+  // expense form's own list, app.expense_categories.
+  if (!can(ctx, "finance.manage")) {
+    const options = await getCategoryOptions(ctx.db, [{ id: budgetPeriodId }]);
+    return options.some((c) => c.id === categoryId) ? null : wrong;
+  }
   const category = await ctx.db.budgetCategory.findFirst({
     where: { id: categoryId, budgetPeriodId, organizationId: ctx.organizationId },
     select: { id: true },
   });
-  return category ? null : "That category doesn't belong to the selected budget period.";
+  return category ? null : wrong;
 }
 
 /**
@@ -121,7 +130,7 @@ export const createTransaction = financeAction(
     const data = parsed.data;
 
     if (data.kind !== TransactionKind.EXPENSE && !can(ctx, "finance.manage")) {
-      return { error: "Only a treasurer or owner can record this kind of transaction." };
+      return { error: "Only an owner, admin or treasurer can record this kind of transaction." };
     }
 
     const expectedDirection = EXPECTED_DIRECTION[data.kind];
@@ -310,7 +319,7 @@ export const deleteTransaction = financeAction(
     if (!can(ctx, "finance.manage") && !ownOpen) {
       return {
         error:
-          "Only a treasurer or owner can delete this. You can delete your own requests until they're approved.",
+          "Only an owner, admin or treasurer can delete this. You can delete your own requests until they're approved.",
       };
     }
     if (existing.reconciledAt) {
@@ -348,7 +357,7 @@ export const restoreTransaction = financeAction(
       existing.kind === TransactionKind.EXPENSE &&
       (existing.status === "DRAFT" || existing.status === "SUBMITTED");
     if (!can(ctx, "finance.manage") && !ownOpen) {
-      return { error: "Only a treasurer or owner can restore this." };
+      return { error: "Only an owner, admin or treasurer can restore this." };
     }
 
     const updated = await ctx.db.transaction.update({

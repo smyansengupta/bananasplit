@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
@@ -51,9 +51,23 @@ export interface SignUpState {
  * (Fix 4(c)), and an abandoned one is purged after 72 hours.
  */
 export async function signUpAction(
-  _prevState: SignUpState,
+  prevState: SignUpState,
   formData: FormData,
 ): Promise<SignUpState> {
+  try {
+    return await createAccount(prevState, formData);
+  } catch (error) {
+    // The redirect into onboarding is thrown; let it through.
+    unstable_rethrow(error);
+    // Anything else (the database out of reach, say) is a message on the
+    // form, never an uncaught error. This is before the account exists;
+    // afterAccountCreated has its own message for failures after.
+    console.error("[sign-up] failed", error instanceof Error ? error.message : error);
+    return { error: "We couldn't create your account just now. Try again in a minute." };
+  }
+}
+
+async function createAccount(_prevState: SignUpState, formData: FormData): Promise<SignUpState> {
   const parsed = signUpSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -61,6 +75,9 @@ export async function signUpAction(
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  if (formData.get("confirmPassword") !== parsed.data.password) {
+    return { error: "The passwords don't match." };
   }
 
   const ip = await getClientIp();
@@ -108,6 +125,29 @@ export async function signUpAction(
     select: { id: true },
   });
 
+  try {
+    return await afterAccountCreated(user.id, parsed.data, mustVerify, formData);
+  } catch (error) {
+    // The redirect into onboarding is thrown; let it through.
+    unstable_rethrow(error);
+    // The account exists now, so never "couldn't create": say so, and
+    // offer the way in (a retry would only hit "already exists").
+    console.error(
+      "[sign-up] failed after the account was made",
+      error instanceof Error ? error.message : error,
+    );
+    const created = `Your account was created, but we couldn't sign you in. ${SIGN_IN_UNAVAILABLE_MESSAGE}`;
+    return mustVerify ? { checkEmail: parsed.data.email, error: created } : { error: created };
+  }
+}
+
+/** Everything after the account row exists: the funnel event, the verification email, signing in. */
+async function afterAccountCreated(
+  userId: string,
+  account: { email: string; password: string },
+  mustVerify: boolean,
+  formData: FormData,
+): Promise<SignUpState> {
   await trackServer(FUNNEL_EVENTS.signedUp, { method: "email" });
 
   // The confirmation link goes out through the outbox (a verify-email
@@ -117,7 +157,7 @@ export async function signUpAction(
   // "Resend verification email".
   if (mustVerify) {
     try {
-      await enqueueVerificationEmail(user.id);
+      await enqueueVerificationEmail(userId);
     } catch (error) {
       console.error(
         "[sign-up] could not queue the verification email",
@@ -129,7 +169,7 @@ export async function signUpAction(
   // On to "Your profile"; someone sent here from a specific page (an invite
   // link, a poll, "Start a club") goes back there after its first step.
   const next = onboardingHref(safeCallbackUrl(formData.get("callbackUrl")));
-  const signedIn = await credentialsSignIn(parsed.data.email, parsed.data.password, next);
+  const signedIn = await credentialsSignIn(account.email, account.password, next);
   if (signedIn.ok) redirect(next);
 
   // The account exists either way. A server-side failure is said as such
@@ -140,8 +180,8 @@ export async function signUpAction(
       : undefined;
   if (mustVerify) {
     return unavailable
-      ? { checkEmail: parsed.data.email, error: unavailable }
-      : { checkEmail: parsed.data.email };
+      ? { checkEmail: account.email, error: unavailable }
+      : { checkEmail: account.email };
   }
   return { error: unavailable ?? "Could not sign you in. Try signing in with your new password." };
 }

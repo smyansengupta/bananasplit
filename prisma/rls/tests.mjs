@@ -1477,6 +1477,44 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     { value: { member: 0, treasurer: 1 } },
   );
 
+  await tcase(
+    "T23b",
+    "finance rows: a member reads only their own expenses, never the audit log; an ADMIN reads them all",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.member_transactions = await count(q, `SELECT count(*) n FROM "Transaction"`);
+      s.member_others = await count(
+        q,
+        `SELECT count(*) n FROM "Transaction" WHERE "submittedById" <> 'u_memberA'`,
+      );
+      s.member_audit = await count(q, `SELECT count(*) n FROM "FinanceAuditLog"`);
+      // Budget amounts too: no category rows, only the names to file under.
+      s.member_categories = await count(q, `SELECT count(*) n FROM "BudgetCategory"`);
+      s.member_category_names = (
+        await q(`SELECT "id", "name" FROM app.expense_categories()`)
+      ).rows.map((r) => `${r.id}:${r.name}`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_transactions = await count(q, `SELECT count(*) n FROM "Transaction"`);
+      s.admin_audit = await count(q, `SELECT count(*) n FROM "FinanceAuditLog"`);
+      s.admin_categories = await count(q, `SELECT count(*) n FROM "BudgetCategory"`);
+      return s;
+    },
+    {
+      value: {
+        member_transactions: 2,
+        member_others: 0,
+        member_audit: 0,
+        member_categories: 0,
+        member_category_names: ["bc_A:Food A"],
+        admin_transactions: 4,
+        admin_audit: 1,
+        admin_categories: 1,
+      },
+    },
+  );
+
   // 0C closed the strangler window: app_legacy held FOR ALL USING(true)
   // policies on 23 tables, so row-level security was effectively off for
   // it. The role now holds nothing here, and nothing connects as it.
@@ -2081,6 +2119,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "connector_spaces",
         "enqueue_job",
         "event_defaults",
+        // Budgets for finance: a member's category list, without the amounts.
+        "expense_categories",
         "explode_ballot",
         "finish_job",
         "folder_in_same_org",
@@ -2349,6 +2389,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       claim_jobs: "s",
       ctx_valid: "usa",
       enqueue_job: "usa",
+      expense_categories: "u",
       finish_job: "s",
       ics_token_created_at: "u",
       immutable_columns: "",

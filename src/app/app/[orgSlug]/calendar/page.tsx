@@ -16,6 +16,7 @@ import {
 } from "@/lib/calendar/dates";
 import { weekWindowFor } from "@/lib/calendar/grid";
 import { parseCalendarRange } from "@/lib/calendar/range";
+import { meetingTypeColor, parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { sectionLabel } from "@/lib/nav/sidebar";
 
@@ -89,11 +90,13 @@ export default async function CalendarPage({
   });
   const members = canManage ? await getOrgMembersForPicker(org.id) : [];
 
+  const meetingTypes = parseMeetingTypes(settings?.eventTypes);
   const items: CalendarItem[] = events.map((e) => {
     const shared = {
       id: e.id,
       title: e.title,
       kind: e.kind,
+      typeColor: meetingTypeColor(meetingTypes, e.meetingType),
       visibility: e.visibility,
       location: e.location,
       syncState: e.googleSyncState,
@@ -179,6 +182,7 @@ export default async function CalendarPage({
         orgSlug={orgSlug}
         timeZone={org.timezone}
         defaultReminderMinutes={defaultReminderMinutes}
+        meetingTypes={meetingTypes}
         items={items}
         members={members.map((m) => ({
           id: m.id,

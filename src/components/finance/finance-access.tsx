@@ -8,7 +8,7 @@ import { can } from "@/lib/auth/permissions";
 
 /**
  * What Finance says to someone who doesn't manage the club's money (only
- * owners and treasurers do, enforced by the database): who does, and what
+ * owners, admins and treasurers do, enforced by the database): who does, and what
  * they can do from here. An admin can make another member treasurer; an
  * owner can give anyone access; anyone can ask to be paid back. Shown in
  * place of the treasurer pages, never as an error: a calm card with
@@ -83,7 +83,7 @@ export function FinanceAccessNotice({
         <Wallet className="text-muted-foreground mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1">
           <h2 id="finance-access-title" className="heading text-sm">
-            The organization&apos;s money is managed by its owners and treasurers
+            The organization&apos;s money is managed by its owners, admins and treasurers
           </h2>
           <p className="text-muted-foreground text-sm">{body}</p>
         </div>
@@ -110,7 +110,7 @@ export function FinanceAccessNotice({
       </span>
       <div className="max-w-prose space-y-2">
         <h2 id="finance-access-title" className="heading text-[17px]">
-          Only owners and treasurers see the organization&apos;s money
+          Only owners, admins and treasurers see the organization&apos;s money
         </h2>
         <p className="text-muted-foreground text-sm">{body}</p>
       </div>

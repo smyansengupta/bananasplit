@@ -28,3 +28,6 @@ export type LabelColor = (typeof LABEL_COLOR_PALETTE)[number];
 export function labelTextColor(color: string): string {
   return contrastRatio(color, "#ffffff") < 3 ? "#1c1810" : "#ffffff";
 }
+
+/** The ten colours onboarding's colour picker offers: the palette without its near-black. */
+export const TAG_PICKER_COLORS = LABEL_COLOR_PALETTE.filter((c) => c !== "#1c1810");

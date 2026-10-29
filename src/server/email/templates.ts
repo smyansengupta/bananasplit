@@ -186,9 +186,9 @@ export function treasurerDigestEmail(input: {
     subject: `${n} expense${n === 1 ? "" : "s"} awaiting your review in ${input.orgName}`,
     eyebrow: input.orgName,
     bodyHtml:
-      paragraph(`These expenses are waiting on a treasurer or owner in ${input.orgName}:`) +
+      paragraph(`These expenses are waiting on an owner, admin or treasurer in ${input.orgName}:`) +
       `<ul style="margin:0 0 14px;padding-left:20px">${items}</ul>`,
-    bodyText: `These expenses are waiting on a treasurer or owner in ${input.orgName}:\n\n${input.pending
+    bodyText: `These expenses are waiting on an owner, admin or treasurer in ${input.orgName}:\n\n${input.pending
       .map((p) => `- ${p.description} — ${p.amountFormatted} (${p.submitterName})`)
       .join("\n")}`,
     cta: { label: "Review expenses", url: input.url },
@@ -253,6 +253,47 @@ ${body}
 ${notYou}`,
     cta: { label: "Reset my password", url: input.resetUrl },
     footer: `You're receiving this because the password changed on your ${PRODUCT} account.`,
+  });
+}
+
+/**
+ * "Your free trial is almost up": to a space's owners TRIAL_NOTICE_DAYS
+ * before its trial ends (the trial-reminder-email job). No card was taken,
+ * so nothing is charged: the space moves to its free plan unless they pick one.
+ */
+export function trialEndingEmail(input: {
+  name?: string | null;
+  /** The organization's name; absent for a Personal space. */
+  orgName?: string | null;
+  trialPlan: string;
+  freePlan: string;
+  daysLeft: number;
+  /** The owner picked `freePlan` during the trial (Team, Team Advanced), so it isn't free. */
+  picked?: boolean;
+  /** "Thursday, November 6". */
+  endsOn: string;
+  url: string;
+}): RenderedEmail {
+  const greeting = input.name ? `Hi ${input.name},` : "Hi,";
+  const days = `${input.daysLeft} ${input.daysLeft === 1 ? "day" : "days"}`;
+  const whose = input.orgName ? `${input.orgName}'s` : "Your";
+  const intro = `${whose} free trial of ${input.trialPlan} ends in ${days}, on ${input.endsOn}.`;
+  const after = input.picked
+    ? `After that, ${input.orgName ?? "your space"} moves to ${input.freePlan}, the plan you picked. Nothing is deleted.`
+    : input.orgName
+      ? `After that, ${input.orgName} moves to ${input.freePlan}. Nothing is deleted, and you won't be charged: we never asked for a card. Pick Team or Team Advanced to keep finance, reports, the org chart and AI.`
+      : `After that, you move to ${input.freePlan}. Nothing is deleted, and you won't be charged: we never asked for a card. Pick ${input.trialPlan} to keep themes, integrations and AI.`;
+  return layout({
+    subject: "Your free trial is almost up",
+    eyebrow: input.orgName ?? undefined,
+    bodyHtml: paragraph(greeting) + paragraph(intro) + paragraph(after),
+    bodyText: `${greeting}
+
+${intro}
+
+${after}`,
+    cta: { label: "See plans", url: input.url },
+    footer: `You're receiving this because you own ${input.orgName ?? "a space"} on ${PRODUCT}.`,
   });
 }
 

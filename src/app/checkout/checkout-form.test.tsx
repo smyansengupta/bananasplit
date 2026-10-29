@@ -67,22 +67,22 @@ describe("CheckoutForm", () => {
     expect(screen.getByText(/Student pricing covers up to 100 members/)).toBeTruthy();
   });
 
-  it("makes Personal Plus free with a school address", () => {
+  it("charges Personal Plus in full with a school address: there is no student price", () => {
     render(<CheckoutForm {...props} plan="plus" schoolEmail />);
-    expect(screen.getAllByText("$0.00")).toHaveLength(3);
-    expect(screen.getByText(/free with a school email/)).toBeTruthy();
+    expect(screen.getAllByText("$72.00")).toHaveLength(3);
+    expect(screen.queryByText("$0.00")).toBeNull();
   });
 
   it("sells Personal Plus yearly by default, or monthly, with no seats", () => {
     render(<CheckoutForm {...props} plan="plus" />);
     expect(screen.getByRole("heading", { name: "Subscribe to Personal Plus" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "More members" })).toBeNull();
-    expect(screen.getAllByText("$36.00")).toHaveLength(3);
-    expect(screen.getByText(/Yearly saves \$12\.00/)).toBeTruthy();
+    expect(screen.getAllByText("$72.00")).toHaveLength(3);
+    expect(screen.getByText(/Yearly saves \$24\.00/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Monthly" }));
-    expect(screen.getAllByText("$4.00")).toHaveLength(3);
-    expect(screen.queryByText("$36.00")).toBeNull();
+    expect(screen.getAllByText("$8.00")).toHaveLength(3);
+    expect(screen.queryByText("$72.00")).toBeNull();
   });
 
   it("does not submit: Subscribe says card payments aren't connected", () => {

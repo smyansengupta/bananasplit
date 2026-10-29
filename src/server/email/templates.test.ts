@@ -10,6 +10,7 @@ import {
   reimbursementStatusEmail,
   testEmail,
   treasurerDigestEmail,
+  trialEndingEmail,
   verifyEmailEmail,
 } from "./templates";
 
@@ -92,6 +93,37 @@ describe("templates", () => {
     });
     expect(approved.subject).toBe('Your expense "Pizza" was approved');
     expect(approved.text).not.toContain("leftover");
+  });
+});
+
+describe("trialEndingEmail", () => {
+  const base = {
+    name: "Maya",
+    freePlan: "Free",
+    trialPlan: "Team Advanced",
+    daysLeft: 3,
+    endsOn: "Saturday, November 8",
+    url: "https://app.example.com/app/robotics/settings/plan",
+  };
+
+  it("tells an organization's owner the trial is almost up, and that no card was taken", () => {
+    const email = trialEndingEmail({ ...base, orgName: "Robotics Club" });
+    expect(email.subject).toBe("Your free trial is almost up");
+    expect(email.text).toContain("Robotics Club's free trial of Team Advanced ends in 3 days");
+    expect(email.text).toContain("you won't be charged");
+    expect(email.html).toContain("See plans");
+  });
+
+  it("speaks to the person for a Personal space", () => {
+    const email = trialEndingEmail({
+      ...base,
+      orgName: null,
+      trialPlan: "Personal Plus",
+      freePlan: "Personal Free",
+      daysLeft: 1,
+    });
+    expect(email.text).toContain("Your free trial of Personal Plus ends in 1 day");
+    expect(email.text).toContain("you move to Personal Free");
   });
 });
 

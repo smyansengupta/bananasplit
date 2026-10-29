@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ForbiddenError } from "@/lib/auth/errors";
-import { nextOrgStep, ORG_STEP_NAMES, ORG_STEPS, previousOrgStep } from "@/lib/onboarding/steps";
 import { DEFAULT_PULSE_SETTINGS, PULSE_DAYS, hourLabel } from "@/lib/pulse/settings";
 
 const audit = vi.hoisted(() => ({ writeOrgAuditLog: vi.fn(async () => "a_1") }));
@@ -75,14 +74,7 @@ describe("savePulseSettings", () => {
   });
 });
 
-describe("the Weekly pulse step", () => {
-  it("comes right after Teams, before inviting officers", () => {
-    expect(nextOrgStep("teams")).toBe("pulse");
-    expect(previousOrgStep("invite")).toBe("pulse");
-    expect(ORG_STEP_NAMES[ORG_STEPS.indexOf("pulse") + 1]).toBe("Weekly pulse");
-    expect(ORG_STEP_NAMES).toHaveLength(ORG_STEPS.length + 1);
-  });
-
+describe("the weekly pulse defaults", () => {
   it("defaults to Friday at 5 PM, to everyone, in the app and by email", () => {
     expect(DEFAULT_PULSE_SETTINGS).toEqual({
       pulseEnabled: true,
@@ -92,7 +84,15 @@ describe("the Weekly pulse step", () => {
       pulseEmail: true,
       pulseInApp: true,
     });
-    expect(PULSE_DAYS.map((d) => d.label)).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+    expect(PULSE_DAYS.map((d) => d.label)).toEqual([
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+      "Sat",
+      "Sun",
+    ]);
     expect(hourLabel(17)).toBe("5:00 PM");
     expect(hourLabel(0)).toBe("12:00 AM");
     expect(hourLabel(12)).toBe("12:00 PM");

@@ -7,7 +7,14 @@ import { cn } from "@/lib/utils";
 
 import { BrandMark } from "./brand-mark";
 import { BRANDS, brandBySlug } from "./brands";
-import { DEMO_HREF, PRIMARY_CTA, PRODUCT_SHADOW, SECONDARY_CTA, startHref } from "./links";
+import {
+  DEMO_HREF,
+  PRIMARY_CTA,
+  PRODUCT_SHADOW,
+  SECONDARY_CTA,
+  startHref,
+  TRIAL_PROMISE,
+} from "./links";
 import { LogoTiles } from "./logo-tiles";
 import { RotatingWord } from "./rotating-word";
 import { IMESSAGE } from "./palette";
@@ -150,6 +157,7 @@ export function Hero({ signedIn = false }: { signedIn?: boolean }) {
             Request a demo
           </SiteLink>
         </div>
+        {!signedIn && <p className="text-muted-foreground text-[14px]">{TRIAL_PROMISE}</p>}
       </div>
 
       <div

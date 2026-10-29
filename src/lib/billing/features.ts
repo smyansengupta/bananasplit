@@ -12,18 +12,18 @@ import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
  *                  tasks (every view, for one person), the calendar,
  *                  availability polls, notes and files, databases it makes
  *                  itself, and its own settings.
- *   PERSONAL_PLUS  Personal Plus: Personal Free plus themes, calendar sync
- *                  (data connections, for Google Calendar) and AI imports,
+ *   PERSONAL_PLUS  Personal Plus: Personal Free plus themes, integrations
+ *                  (data connections: Google Calendar and the rest) and AI imports,
  *                  with more storage, bigger files and longer note history.
- *   TEAM_FREE      Team Free: an organization, free, unlimited members.
+ *   TEAM_FREE      Team Free: an organization, free, up to 10 members.
  *                  Everything Personal Free has, plus the overview, weekly
  *                  updates, tags, the member directory, the sidebar and
  *                  privacy settings. Where a trial ends.
- *   CLUB           Team: Team Free plus finance, the org chart, reports
- *                  and data connections.
- *   SOCIETY        Team Advanced: everything, plus themes, AI,
+ *   CLUB           Team: Team Free plus finance, the org chart and every
+ *                  integration (data connections).
+ *   SOCIETY        Team Advanced: everything, plus reports, themes, AI,
  *                  sponsorships, website sync and the audit log. An
- *                  organization's 30-day trial (TRIAL) is Team Advanced,
+ *                  organization's 14-day trial (TRIAL) is Team Advanced,
  *                  limits included; an ended one is Team Free.
  *
  * The plan values keep their database names (FREE, PERSONAL_PLUS, TRIAL,
@@ -32,7 +32,7 @@ import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
  * is on TRIAL, TEAM_FREE, CLUB or SOCIETY (the database guards both).
  */
 
-/** A plan that has a price and a card (TRIAL is a club's first 30 days of Team Advanced). */
+/** A plan that has a price and a card (TRIAL is a club's first 14 days of Team Advanced). */
 export type PricedPlan = Exclude<OrgPlan, "TRIAL">;
 
 /** The order the tiers are shown in: the two for one person, then the three for an organization. */
@@ -70,6 +70,8 @@ export const PLAN_FEATURES = {
    * ones it makes (LISTED_DEFINITIONS, src/server/databases/types.ts).
    */
   databases: "FREE",
+  /** Task tags (Admin panel > Labels): shared in an organization, your own in Personal. */
+  labels: "FREE",
   /**
    * AI connectors: the member's own AI app (Claude, ChatGPT, Cursor, VS
    * Code) reads and changes what they can see here, over MCP
@@ -82,8 +84,7 @@ export const PLAN_FEATURES = {
   overview: "TEAM_FREE",
   /** Weekly updates: work between people. */
   teamwork: "TEAM_FREE",
-  /** Shared task labels (Admin panel > Labels). */
-  labels: "TEAM_FREE",
+
   /** The member directory and profiles. */
   people: "TEAM_FREE",
   /** Arranging the sidebar (Admin panel > Sidebar). */
@@ -95,10 +96,11 @@ export const PLAN_FEATURES = {
   orgChart: "CLUB",
   /** The finance board, budget, transactions and reimbursements. */
   finance: "CLUB",
-  /** Reports over the club's databases. */
-  reports: "CLUB",
   /** Data connections: Google Calendar sync, an email sender, a data source, guided setup. */
   integrations: "CLUB",
+
+  /** Reports over the club's databases (Team Advanced: the plan that runs on the go). */
+  reports: "SOCIETY",
 
   /** Custom colors, logo display and the light or dark default. */
   themes: "SOCIETY",
@@ -115,8 +117,9 @@ export const PLAN_FEATURES = {
 export type PlanFeature = keyof typeof PLAN_FEATURES;
 
 /**
- * What Personal Plus adds to Personal Free: themes, calendar sync (Google
- * Calendar is a data connection) and AI imports. Nothing else of a club's.
+ * What Personal Plus adds to Personal Free: themes, integrations (Google
+ * Calendar and the other data connections) and AI imports. Nothing else of
+ * a club's.
  */
 export const PERSONAL_PLUS_EXTRAS = [
   "themes",
@@ -142,7 +145,7 @@ export interface PlanLimits {
   noteHistoryDays: number;
   /** Data connections (Google Calendar, an email sender, a data source). */
   dataConnections: number;
-  /** Members a space can have: Personal is one person; clubs have no cap. */
+  /** Members a space can have: Personal is one person, Free 10; the rest have no cap. */
   members: number | null;
 }
 
@@ -157,26 +160,30 @@ const PERSONAL_PLUS_LIMITS: PlanLimits = {
   storageBytes: 25 * GB,
   maxFileBytes: 250 * MB,
   noteHistoryDays: 365,
-  // Calendar sync: one Google Calendar.
-  dataConnections: 1,
+  // Integrations: Google Calendar and two more.
+  dataConnections: 3,
   members: 1,
 };
+/** Members on Free (a trial, Team and Team Advanced have no cap). */
+export const TEAM_FREE_MEMBER_CAP = 10;
+
 const TEAM_FREE_LIMITS: PlanLimits = {
   storageBytes: 5 * GB,
   maxFileBytes: 100 * MB,
   noteHistoryDays: 30,
   dataConnections: 0,
-  members: null,
+  members: TEAM_FREE_MEMBER_CAP,
 };
 const TEAM_LIMITS: PlanLimits = {
-  storageBytes: 100 * GB,
+  storageBytes: 50 * GB,
   maxFileBytes: 250 * MB,
   noteHistoryDays: 90,
-  dataConnections: 2,
+  // The same integrations as Team Advanced: integrations are not what sets them apart.
+  dataConnections: 6,
   members: null,
 };
 const TEAM_ADVANCED_LIMITS: PlanLimits = {
-  storageBytes: 500 * GB,
+  storageBytes: 100 * GB,
   maxFileBytes: 1 * GB,
   noteHistoryDays: 365,
   dataConnections: 6,

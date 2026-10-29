@@ -2,20 +2,26 @@ import { Clock, Sparkles } from "@/components/icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { spaceStatus, trialDaysLeft, type SpaceInfo } from "@/lib/billing/space";
-
-/** Owners and admins hear about the trial from this many days before it ends. */
-export const TRIAL_NOTICE_DAYS = 7;
+import {
+  spaceStatus,
+  TRIAL_NOTICE_DAYS,
+  trialDaysLeft,
+  trialFallbackName,
+  trialPlanName,
+  type SpaceInfo,
+} from "@/lib/billing/space";
 
 /**
- * The line above every page of an organization about its plan (the org
- * layout), for owners and admins only:
- * - the trial's last TRIAL_NOTICE_DAYS days: when it ends and the plans.
- * - the trial ended before a plan was picked: the organization is on Free,
+ * The line above every page of a space about its plan (the org layout), for
+ * owners and admins only:
+ * - the trial's last TRIAL_NOTICE_DAYS days: when it ends, what it moves to,
+ *   and the plans. A Personal space's trial (Personal Plus) too.
+ * - an organization's trial ended before a plan was picked: it is on Free,
  *   nothing was deleted, and the paid features are a click away. It stops
- *   once the owner picks a plan (Free included).
- * Members never see a price, a trial or a paywall. Nothing for Personal or
- * an organization that picked its plan.
+ *   once the owner picks a plan (Free included). A Personal space hears it
+ *   once, from TrialEndedDialog, since it has no plan to pick to stop it.
+ * Members never see a price, a trial or a paywall. Nothing for a space that
+ * picked its plan.
  */
 export function SpaceBanner({
   space,
@@ -52,7 +58,8 @@ export function SpaceBanner({
   }
 
   const days = trialDaysLeft(space, now);
-  if (status === "trial" && days !== null && days <= TRIAL_NOTICE_DAYS) {
+  if (days !== null && days > 0 && days <= TRIAL_NOTICE_DAYS) {
+    const personal = space.kind === "PERSONAL";
     return (
       <div
         role="status"
@@ -60,8 +67,10 @@ export function SpaceBanner({
       >
         <Clock className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
         <p className="min-w-0 flex-1">
-          Your organization&apos;s free trial ends in {days} {days === 1 ? "day" : "days"}. After
-          that it moves to Free, or keep everything with Team or Team Advanced.
+          Your free trial is almost up: {personal ? "your" : "your organization's"}{" "}
+          {trialPlanName(space)} trial ends in {days} {days === 1 ? "day" : "days"}. After that{" "}
+          {personal ? "you move" : "it moves"} to {trialFallbackName(space)}, or keep everything
+          with {personal ? trialPlanName(space) : "Team or Team Advanced"}.
         </p>
         <Button asChild size="sm" variant="outline">
           <Link href={planHref}>See plans</Link>

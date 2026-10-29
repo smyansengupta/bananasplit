@@ -82,6 +82,7 @@ export async function readStorageSpace(db: TxClient, orgId: string): Promise<Sto
       kind: true,
       plan: true,
       trialEndsAt: true,
+      planAfterTrial: true,
       storageUsedBytes: true,
     },
   });
@@ -184,7 +185,7 @@ export function storagePageHref(slug: string): string {
  * (the same bytes against a lower limit).
  */
 export function crossedWarning(
-  space: Pick<StorageRow, "kind" | "plan">,
+  space: Pick<StorageRow, "kind" | "plan" | "trialEndsAt" | "planAfterTrial">,
   usage: { before: number; after: number } | { usedBytes: number; fromLimit: number },
 ): boolean {
   const limit = spaceLimits(space).storageBytes;

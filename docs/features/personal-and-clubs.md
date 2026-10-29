@@ -13,12 +13,15 @@ plan from a9b3141 and the old free /rsvp pages.
   2026-10-19) notes and files, and the databases its owner makes (see "Files
   and Databases in Personal" below). No members, invitations, roles,
   people, org chart, finance or reports. It is on **Personal Free** (`FREE`)
-  or **Personal Plus** (`PERSONAL_PLUS`, $4 a month or $36 a year: themes,
-  calendar sync, AI imports, more storage); its owner switches in Settings ›
-  Plan and storage.
+  or **Personal Plus** (`PERSONAL_PLUS`, $8 a month or $72 a year: themes,
+  integrations, AI imports, more storage); its owner switches in Settings ›
+  Plan and storage. A new account's space gets a **14-day free trial** of
+  Personal Plus, no card: plan `FREE` with a `trialEndsAt`, read as Personal
+  Plus until then. There is no student price for Personal.
 - **Organization**: a shared space (`kind = CLUB`). Anyone can start one. A
-  new organization gets a **30-day free trial** of everything (Team
-  Advanced), no card. When the trial ends it moves to **Free**
+  new organization gets a **14-day free trial** of everything (Team
+  Advanced), no card. Owners get an email and a banner three days before it
+  ends, and a dialog once it has. When the trial ends it moves to **Free**
   (`TEAM_FREE`, a reverse trial): nothing pauses or is deleted, and what
   Team and Team Advanced add is locked until the owner picks **Team**
   (`CLUB`) or **Team Advanced** (`SOCIETY`). The row stays `TRIAL` until a
@@ -47,13 +50,13 @@ database values stay FREE, PERSONAL_PLUS, CLUB, SOCIETY and TRIAL; only
 Every number lives in `src/lib/billing/features.ts` (`PLAN_LIMITS`,
 `PLAN_FEATURES`, `PLAN_NAMES`) and `src/lib/billing/plans.ts` (prices).
 
-| | Personal Free | Personal Plus | Team | Team Advanced (and the trial) |
-|---|---|---|---|---|
-| Price | $0 | $4/month or $36/year | $4/member/semester | $7/member/semester |
-| Storage | 1 GB | 25 GB | 100 GB | 500 GB |
-| Largest file | 10 MB | 250 MB | 250 MB | 1 GB |
-| Note history | 7 days | 1 year | 90 days | 1 year |
-| Data connections | 0 | 1 | 2 | 6 |
+|                  | Personal Free | Personal Plus        | Team               | Team Advanced (and the trial) |
+| ---------------- | ------------- | -------------------- | ------------------ | ----------------------------- |
+| Price            | $0            | $4/month or $36/year | $4/member/semester | $7/member/semester            |
+| Storage          | 1 GB          | 25 GB                | 100 GB             | 500 GB                        |
+| Largest file     | 10 MB         | 250 MB               | 250 MB             | 1 GB                          |
+| Note history     | 7 days        | 1 year               | 90 days            | 1 year                        |
+| Data connections | 0             | 1                    | 2                  | 6                             |
 
 - Storage counts Notes files (and images in notes), receipts, note history
   and the trash, until it is emptied (`Organization.storageUsedBytes`, kept

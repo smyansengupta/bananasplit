@@ -4,8 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 
 import {
   ContinuePill,
-  PreviewHeader,
-  PreviewTile,
   SetupCard,
   StepBody,
   StepError,
@@ -29,8 +27,6 @@ export function BringStep({
   orgId,
   orgSlug,
   clubName,
-  index,
-  total,
   backHref,
   sections,
   preselected,
@@ -39,8 +35,6 @@ export function BringStep({
   orgId: string;
   orgSlug: string;
   clubName: string;
-  index: number;
-  total: number;
   backHref: string | null;
   sections: BringSection[];
   /** Ticked to start with (only ids that are in `sections`). */
@@ -96,39 +90,10 @@ export function BringStep({
   const nothingLeft = items.length === 0;
 
   return (
-    <SetupCard
-      preview={
-        <>
-          <PreviewHeader meta={clubName} label="Coming with you" />
-          {count === 0 && moved.length === 0 && (
-            <p className="text-muted-foreground m-0 text-[13px] leading-normal">
-              Nothing picked yet. Anything you leave stays in Personal, and you can move it later.
-            </p>
-          )}
-          {items
-            .filter((i) => ticked.has(i.id))
-            .slice(0, 6)
-            .map((i) => (
-              <PreviewTile key={i.id}>
-                <span className="truncate text-[14px] font-semibold">{i.title}</span>
-                <span className="text-muted-foreground text-[12px]">{i.meta}</span>
-              </PreviewTile>
-            ))}
-          {count > 6 && (
-            <p className="text-muted-foreground m-0 text-[12px]">and {count - 6} more</p>
-          )}
-          {moved.length > 0 && (
-            <p className="text-muted-foreground m-0 mt-auto text-[13px] leading-normal">
-              Already in {clubName}: {moved.join("; ")}.
-            </p>
-          )}
-        </>
-      }
-    >
-      <StepIntro index={index} total={total} title="Bring anything in?">
-        Move events, polls, tasks, notes and files from Personal into {clubName}. Links, RSVPs,
-        tickets and poll responses keep working, and notes and files stay private to you until you
-        share them. Moving is one way.
+    <SetupCard>
+      <StepIntro title="Bring anything in?">
+        Move what&apos;s in your personal workspace into {clubName}. Links keep working, and notes
+        and files stay private until you share them.
       </StepIntro>
 
       <StepBody className="gap-6">

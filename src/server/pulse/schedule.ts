@@ -71,7 +71,8 @@ export function upcomingPulseSend(
     const key = addDaysToKey(today, i);
     if (weekdayOfKey(key) !== pulseDay) continue;
     const at = zonedInstant(key, hour, tz);
-    if (at.getTime() >= now.getTime()) return { sendKey: key, weekStart: pulseWeekStartOf(key), at };
+    if (at.getTime() >= now.getTime())
+      return { sendKey: key, weekStart: pulseWeekStartOf(key), at };
   }
   // Unreachable: the pulse day comes around within eight days.
   const key = addDaysToKey(today, 7);
@@ -107,6 +108,7 @@ export async function schedulePulse(
         kind: true,
         plan: true,
         trialEndsAt: true,
+        planAfterTrial: true,
         timezone: true,
         deletedAt: true,
         settings: { select: { pulseEnabled: true, pulseDay: true, pulseHourLocal: true } },

@@ -5,18 +5,20 @@ import { requireUser } from "@/lib/auth/session";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
 import { personalHomeHref } from "@/server/personal/space";
 
+import { ReadyAccount } from "./ready-account";
+
 export const metadata = { title: "Welcome · Bananasplit" };
 
 /**
- * /onboarding: where sign-up and sign-in land (docs/features/personal-and-clubs.md).
+ * /onboarding: where sign-up and sign-in land (docs/features/onboarding-flows.md).
  *
- * Not onboarded: "Your profile", step 1, for everyone, even someone already
- * in a club (onboardedAt is checked before memberships: the club's layout
- * sends anyone not onboarded here, so checking clubs first would bounce
- * them between the two forever). Onboarded: where sign-up started
- * (?callbackUrl=, when safe), else the Personal dashboard, made on the way
- * if it's missing. Joining or starting a club, and pending email invites,
- * are on that dashboard.
+ * A new account is ready the moment it exists: the first visit here posts
+ * readyAccountAction (the device's time zone, onboarded, its Personal space
+ * with its trial), with nothing to fill in first. Rendering writes nothing,
+ * so a prefetch can't do it. Then where sign-up started (?callbackUrl=, when safe:
+ * an invite link, "Get started" on the home page), else "What are you here
+ * for?" (/onboarding/start). Someone already set up goes to the callback,
+ * else their Personal home.
  */
 export default async function OnboardingPage({
   searchParams,
@@ -27,12 +29,6 @@ export default async function OnboardingPage({
   const profile = await getOnboardingProfile(user.id);
   if (!profile) redirect("/auth/session-ended");
   const after = safeCallbackUrl((await searchParams)?.callbackUrl);
-  if (!profile.onboardedAt) {
-    redirect(
-      after
-        ? `/onboarding/profile/basics?callbackUrl=${encodeURIComponent(after)}`
-        : "/onboarding/profile/basics",
-    );
-  }
+  if (!profile.onboardedAt) return <ReadyAccount after={after} />;
   redirect(after ?? (await personalHomeHref(user.id)));
 }

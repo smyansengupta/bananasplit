@@ -8,7 +8,11 @@ import { basicsSchema, bioSchema, schoolSchema } from "@/lib/onboarding/steps";
 import { profileFieldErrors } from "@/lib/profile/schema";
 import { personalThemeSchema } from "@/lib/theme/personal";
 import { markProfileSetupComplete, updateOwnOnboardingFields } from "@/server/onboarding/profile";
-import { ensurePersonalSpace, personalHomeHref } from "@/server/personal/space";
+import {
+  ensurePersonalSpace,
+  personalHomeHref,
+  setPersonalSpaceTimezone,
+} from "@/server/personal/space";
 import { updateOwnProfile } from "@/server/profiles/service";
 
 /**
@@ -47,6 +51,7 @@ export async function saveBasicsStep(input: unknown): Promise<StepSaveResult> {
     await updateOwnProfile(user.id, parsed.data);
     await markProfileSetupComplete(user.id);
     await ensurePersonalSpace(user.id);
+    if (parsed.data.timezone) await setPersonalSpaceTimezone(user.id, parsed.data.timezone);
   }, "basics");
 }
 

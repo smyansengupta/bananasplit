@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
 import { bringSections, type BringSection } from "@/lib/onboarding/bring";
+import { orgStepHref } from "@/lib/onboarding/steps";
 import { clearBring, isBringId, rememberBring } from "@/server/personal/bring-cookie";
 import { loadBringable, movedSummary, movePersonalItems } from "@/server/personal/move";
 
@@ -47,7 +48,8 @@ export async function finishBringAction(orgSlug: string, welcome: boolean): Prom
   await requireUser();
   await clearBring();
   const slug = SLUG.test(orgSlug) ? orgSlug : "";
-  redirect(!slug ? "/app" : welcome ? `/app/${slug}?welcome=1` : `/app/${slug}`);
+  // From setup (welcome), your profile comes next; from Move, straight back in.
+  redirect(!slug ? "/app" : welcome ? orgStepHref(slug, "profile") : `/app/${slug}`);
 }
 
 /**

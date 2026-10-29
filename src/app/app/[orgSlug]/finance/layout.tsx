@@ -7,13 +7,13 @@ import { spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
-import { countAwaitingApproval, getCategoriesForPeriods, getOrgPeriods } from "./queries";
+import { countAwaitingApproval, getCategoryOptions, getOrgPeriods } from "./queries";
 
 /**
  * Every finance page's header: the title and a live line (the budget year,
  * and how many requests wait for review); Add transaction (Request a
  * reimbursement for a member) with Import and the setup guide in its "…"
- * menu; and, for owners and treasurers, the pages they use day to day as
+ * menu; and, for owners, admins and treasurers, the pages they use day to day as
  * tabs. A member only has My reimbursements, so they get no tabs.
  */
 export default async function FinanceLayout({
@@ -31,8 +31,9 @@ export default async function FinanceLayout({
     const periods = await getOrgPeriods(db, org.id);
     return {
       periods,
-      categories: await getCategoriesForPeriods(db, org.id, periods),
-      // The header's live line: requests waiting on an owner or treasurer.
+      // Names only (no amounts): a member opens this layout too.
+      categories: await getCategoryOptions(db, periods),
+      // The header's live line: requests waiting on an owner, admin or treasurer.
       toReview: isFinance ? await countAwaitingApproval(db, org.id) : 0,
     };
   }).catch(handleAuthErrorInPage);

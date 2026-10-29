@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { Role, TransactionKind, TransactionStatus } from "@/generated/prisma/client";
 import { appUrl } from "@/lib/app-url";
+import { trialDaysLeft, trialFallbackName, trialPlanName } from "@/lib/billing/space";
 import { formatCents } from "@/lib/finance/money";
 import { isEmailEnabled } from "@/lib/notification-preferences";
 import { authDb } from "@/server/db/clients";
@@ -19,6 +20,7 @@ import {
   passwordResetEmail,
   reimbursementStatusEmail,
   treasurerDigestEmail,
+  trialEndingEmail,
   verifyEmailEmail,
 } from "./templates";
 
@@ -108,7 +110,10 @@ export const notifyEmailJob: JobHandler<{ notificationId: string }> = async (run
     );
   } catch (error) {
     await withSystemOrgTx(orgId, ({ db }) =>
-      db.notification.updateMany({ where: { id, emailSentAt: stamp }, data: { emailSentAt: null } }),
+      db.notification.updateMany({
+        where: { id, emailSentAt: stamp },
+        data: { emailSentAt: null },
+      }),
     );
     throw error;
   }
@@ -228,10 +233,17 @@ async function sendTreasurerDigest(
 ): Promise<JobOutcome | void> {
   const data = await withSystemOrgTx(orgId, async ({ db }) => {
     const recipient = await db.membership.findFirst({
-      where: { organizationId: orgId, userId, role: { in: [Role.OWNER, Role.TREASURER] } },
-      select: { user: { select: { email: true } }, organization: { select: { name: true, slug: true } } },
+      where: {
+        organizationId: orgId,
+        userId,
+        role: { in: [Role.OWNER, Role.ADMIN, Role.TREASURER] },
+      },
+      select: {
+        user: { select: { email: true } },
+        organization: { select: { name: true, slug: true } },
+      },
     });
-    if (!recipient) return null; // no longer a treasurer or owner
+    if (!recipient) return null; // no longer an owner, admin or treasurer
     const pending = await db.transaction.findMany({
       where: {
         organizationId: orgId,
@@ -374,4 +386,67 @@ export const passwordChangedEmailJob: JobHandler<{ userId: string }> = async (ru
     },
     { signal: run.signal },
   );
+};
+
+/**
+ * trial-reminder-email:{orgId} — "Your free trial is almost up", to each
+ * owner (platform sender). Enqueued when the space is made, to run
+ * TRIAL_NOTICE_DAYS before the trial ends (scheduleTrialReminder). Nothing
+ * is sent once the trial has ended, a plan was picked, or the space is
+ * closing.
+ */
+export const trialReminderEmailJob: JobHandler<Record<string, never>> = async (run) => {
+  const orgId = requireOrg(run.organizationId);
+  const data = await withSystemOrgTx(orgId, async ({ db }) => {
+    const org = await db.organization.findUnique({
+      where: { id: orgId },
+      select: {
+        name: true,
+        slug: true,
+        kind: true,
+        plan: true,
+        trialEndsAt: true,
+        planAfterTrial: true,
+        timezone: true,
+        deletedAt: true,
+      },
+    });
+    if (!org || org.deletedAt) return null;
+    const owners = await db.membership.findMany({
+      where: { organizationId: orgId, role: Role.OWNER },
+      select: { userId: true, user: { select: { email: true, name: true } } },
+    });
+    return { org, owners };
+  });
+  if (!data?.org.trialEndsAt) return;
+  const { org, owners } = data;
+  const trialEndsAt = data.org.trialEndsAt;
+  const daysLeft = trialDaysLeft(org);
+  if (!daysLeft) return; // ended, or a plan was picked
+  const personal = org.kind === "PERSONAL";
+  const endsOn = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: org.timezone,
+  }).format(trialEndsAt);
+  const mailer = getPlatformMailer();
+  for (const owner of owners) {
+    await mailer.send(
+      {
+        to: owner.user.email,
+        ...trialEndingEmail({
+          name: owner.user.name,
+          orgName: personal ? null : org.name,
+          trialPlan: trialPlanName(org),
+          freePlan: trialFallbackName(org),
+          picked: org.planAfterTrial === "CLUB" || org.planAfterTrial === "SOCIETY",
+          daysLeft,
+          endsOn,
+          url: appUrl(`/app/${org.slug}/settings/plan`),
+        }),
+      },
+      { signal: run.signal, idempotencyKey: `trial-reminder-${orgId}-${owner.userId}` },
+    );
+  }
 };

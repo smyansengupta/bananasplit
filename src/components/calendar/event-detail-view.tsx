@@ -1,5 +1,6 @@
 "use client";
 
+import type { MeetingType } from "@/lib/meetings/meeting-types";
 import {
   AlertTriangle,
   CalendarPlus,
@@ -98,6 +99,7 @@ export function EventDetailView({
   locationDetails = null,
   showMapLink = false,
   defaultReminderMinutes,
+  meetingTypes,
 }: {
   orgId: string;
   orgSlug: string;
@@ -126,6 +128,8 @@ export function EventDetailView({
   showMapLink?: boolean;
   /** The organization's reminder times, which the edit form compares this event's with. */
   defaultReminderMinutes?: number[];
+  /** The organization's meeting types, offered when editing. */
+  meetingTypes?: MeetingType[];
 }) {
   const router = useRouter();
   // The list this page belongs to: the back link, and where a delete lands.
@@ -553,6 +557,7 @@ export function EventDetailView({
           event={event}
           members={members}
           defaultReminderMinutes={defaultReminderMinutes}
+          meetingTypes={meetingTypes}
           onDeleted={() => router.push(sectionHref)}
         />
       )}

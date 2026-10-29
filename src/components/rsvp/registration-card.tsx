@@ -201,7 +201,7 @@ function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCa
             id="rsvp-name"
             name="name"
             autoComplete="name"
-            placeholder="Your full name"
+            placeholder="Name"
             required
             maxLength={100}
             {...bind("name")}
@@ -215,7 +215,7 @@ function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCa
             type="email"
             autoComplete="email"
             inputMode="email"
-            placeholder="you@example.com"
+            placeholder="Email"
             required
             maxLength={254}
             {...bind("email")}
@@ -229,28 +229,21 @@ function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCa
             type="tel"
             autoComplete="tel"
             inputMode="tel"
-            placeholder="(555) 123-4567"
+            placeholder="Phone"
             required
             maxLength={32}
             {...bind("phone")}
             {...invalid("phone")}
           />
         </BrandField>
-        <BrandField
-          id="rsvp-instagram"
-          label={
-            <>
-              Instagram <span className="text-muted-foreground font-normal">(optional)</span>
-            </>
-          }
-        >
+        <BrandField id="rsvp-instagram" label="Instagram (optional)">
           <BrandInput
             id="rsvp-instagram"
             name="instagram"
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
-            placeholder="@yourhandle"
+            placeholder="Instagram (optional)"
             maxLength={200}
             aria-describedby="rsvp-instagram-hint"
             {...bind("instagram")}

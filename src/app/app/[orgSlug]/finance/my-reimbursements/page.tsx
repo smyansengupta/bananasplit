@@ -8,7 +8,7 @@ import { planGate } from "@/server/billing/plan-gate";
 
 import { FinanceAccessGate } from "../finance-access-gate";
 import {
-  getCategoriesForPeriods,
+  getCategoryOptions,
   getMoneyOwedToUser,
   getMyReimbursements,
   getOrgPeriods,
@@ -23,16 +23,27 @@ export default async function MyReimbursementsPage({
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
   const isFinance = can({ role }, "finance.manage");
 
-  const { transactions, periods, categories, owedCents } = await withOrgTx(
-    org.id,
-    async ({ db }) => {
-      const transactions = await getMyReimbursements(db, org.id, user.id);
-      const periods = await getOrgPeriods(db, org.id);
-      const categories = await getCategoriesForPeriods(db, org.id, periods);
-      const owedCents = await getMoneyOwedToUser(db, org.id, user.id);
-      return { transactions, periods, categories, owedCents };
-    },
-  ).catch(handleAuthErrorInPage);
+  const {
+    transactions: rows,
+    periods,
+    categories,
+    owedCents,
+  } = await withOrgTx(org.id, async ({ db }) => {
+    const transactions = await getMyReimbursements(db, org.id, user.id);
+    const periods = await getOrgPeriods(db, org.id);
+    // Names only: the category rows are finance's, and a member sees this page.
+    const categories = await getCategoryOptions(db, periods);
+    const owedCents = await getMoneyOwedToUser(db, org.id, user.id);
+    return { transactions, periods, categories, owedCents };
+  }).catch(handleAuthErrorInPage);
+  // A member can't read the category rows (finance only), so their own
+  // expenses come back without the category; its name comes from the list.
+  const names = new Map(categories.map((c) => [c.id, c.name]));
+  const transactions = rows.map((t) =>
+    t.category || !t.categoryId || !names.has(t.categoryId)
+      ? t
+      : { ...t, category: { id: t.categoryId, name: names.get(t.categoryId)! } },
+  );
 
   const pending = transactions.filter(
     (t) => !t.voidedAt && (t.status === "SUBMITTED" || t.status === "APPROVED"),

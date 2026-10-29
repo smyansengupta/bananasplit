@@ -19,7 +19,13 @@ import {
   TEAM_PRICES,
   teamQuote,
 } from "@/lib/billing/plans";
-import { spaceLimits, spaceStatus, trialDaysLeft } from "@/lib/billing/space";
+import {
+  effectivePlan,
+  planPickedForAfterTrial,
+  spaceLimits,
+  spaceStatus,
+  trialDaysLeft,
+} from "@/lib/billing/space";
 import { formatStorage } from "@/lib/billing/storage";
 import { StorageMeter } from "@/components/billing/storage-meter";
 import { connectorsConfig } from "@/server/connectors/config";
@@ -40,7 +46,7 @@ function historyLabel(days: number): string {
 
 /** What Personal Plus's extras are called for one person (Google Calendar is its data connection). */
 const PERSONAL_LABELS: Partial<Record<PlanFeature, string>> = {
-  integrations: "Calendar sync",
+  integrations: "Integrations, Google Calendar included",
   ai: "AI imports",
 };
 
@@ -79,8 +85,10 @@ function card(plan: PricedPlan, previous: PricedPlan | null, price: PriceContext
     .filter((f) => !before.has(f) && offered(f))
     .map((f) => (plan === "PERSONAL_PLUS" ? PERSONAL_LABELS[f] : undefined) ?? FEATURE_LABELS[f]);
   const limits = PLAN_LIMITS[plan];
-  if (limits.dataConnections > 0 && plan !== "PERSONAL_PLUS") {
-    features.push(`Up to ${limits.dataConnections} data connections`);
+  if (limits.dataConnections > 0) {
+    features.push(
+      `Up to ${limits.dataConnections} ${plan === "PERSONAL_PLUS" ? "integrations" : "data connections"}`,
+    );
   }
   const base = {
     plan,
@@ -108,7 +116,7 @@ function card(plan: PricedPlan, previous: PricedPlan | null, price: PriceContext
       return {
         ...base,
         price: "$0",
-        per: "forever, unlimited members",
+        per: "forever, up to 10 members",
         who: "For any team getting started.",
       };
     case "CLUB":
@@ -169,38 +177,62 @@ export default async function PlanSettingsPage({
   ]);
   const choices = planChoicesFor(organization.kind);
   const cards = choices.map((plan, i) => card(plan, i === 0 ? null : choices[i - 1]!, price));
-  const current = spaceStatus(organization) === "free" ? "TEAM_FREE" : organization.plan;
-  const effective = PLAN_NAMES[current];
+  const pickedForAfter = planPickedForAfterTrial(organization);
+  const current =
+    pickedForAfter ??
+    (organization.plan === "TRIAL" ? effectivePlan(organization) : organization.plan);
+  const effective = PLAN_NAMES[effectivePlan(organization)];
 
-  const summary = personal ? (
-    <>
-      You&apos;re on <strong className="text-foreground">{PLAN_NAMES[organization.plan]}</strong>.
-      Switching never deletes anything: what a plan leaves out is locked, and comes back when you
-      switch again.
-    </>
-  ) : status === "trial" && days !== null ? (
-    <>
-      {organization.name} is on its free trial, with everything in Team Advanced:{" "}
-      <strong className="text-foreground">
-        {days} {days === 1 ? "day" : "days"} left
-      </strong>
-      . When it ends {organization.name} moves to Free, unless{" "}
-      {canSwitch ? "you choose" : "the owner chooses"} Team or Team Advanced.
-    </>
-  ) : status === "free" && organization.plan === "TRIAL" ? (
-    <>
-      The free trial has ended, so {organization.name} is on{" "}
-      <strong className="text-foreground">Free</strong>. Nothing was deleted: what Team and Team
-      Advanced add is locked, and comes back when {canSwitch ? "you choose" : "the owner chooses"}{" "}
-      one.
-    </>
-  ) : (
-    <>
-      {organization.name} is on the <strong className="text-foreground">{effective}</strong> plan.
-      Switching never deletes anything: what a plan leaves out is locked, and comes back when you
-      switch again.
-    </>
-  );
+  const summary =
+    personal && days !== null && days > 0 && organization.plan === "FREE" ? (
+      <>
+        You&apos;re on your free trial, with everything in Personal Plus:{" "}
+        <strong className="text-foreground">
+          {days} {days === 1 ? "day" : "days"} left
+        </strong>
+        . When it ends you move to Personal Free, unless you choose Personal Plus. No card needed.
+      </>
+    ) : personal ? (
+      <>
+        You&apos;re on <strong className="text-foreground">{PLAN_NAMES[organization.plan]}</strong>.
+        Switching never deletes anything: what a plan leaves out is locked, and comes back when you
+        switch again.
+      </>
+    ) : status === "trial" && days !== null ? (
+      <>
+        {organization.name} is on its free trial, with everything in Team Advanced:{" "}
+        <strong className="text-foreground">
+          {days} {days === 1 ? "day" : "days"} left
+        </strong>
+        .{" "}
+        {pickedForAfter ? (
+          <>
+            When it ends {organization.name} moves to{" "}
+            <strong className="text-foreground">{PLAN_NAMES[pickedForAfter]}</strong>, the plan{" "}
+            {canSwitch ? "you" : "the owner"} picked. Picking a plan never cuts the trial short.
+          </>
+        ) : (
+          <>
+            When it ends {organization.name} moves to Free, unless{" "}
+            {canSwitch ? "you choose" : "the owner chooses"} Team or Team Advanced. Picking one now
+            keeps the trial running to the end.
+          </>
+        )}
+      </>
+    ) : status === "free" && organization.plan === "TRIAL" ? (
+      <>
+        The free trial has ended, so {organization.name} is on{" "}
+        <strong className="text-foreground">Free</strong>. Nothing was deleted: what Team and Team
+        Advanced add is locked, and comes back when {canSwitch ? "you choose" : "the owner chooses"}{" "}
+        one.
+      </>
+    ) : (
+      <>
+        {organization.name} is on the <strong className="text-foreground">{effective}</strong> plan.
+        Switching never deletes anything: what a plan leaves out is locked, and comes back when you
+        switch again.
+      </>
+    );
 
   return (
     <div className="max-w-4xl space-y-7.5">

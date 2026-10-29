@@ -20,6 +20,8 @@ export interface CalendarItem extends GridItem {
   end: string;
   allDay: boolean;
   kind: EventKind;
+  /** The meeting type's colour (src/lib/meetings/meeting-types.ts), drawn instead of the kind's. */
+  typeColor?: string | null;
   visibility: EventVisibility;
   location: string | null;
   syncState: CalendarSyncState;

@@ -82,7 +82,7 @@ async function aiOnPlan(orgId: string): Promise<boolean> {
   const org = await withSystemOrgTx(orgId, ({ db }) =>
     db.organization.findUnique({
       where: { id: orgId },
-      select: { kind: true, plan: true, trialEndsAt: true },
+      select: { kind: true, plan: true, trialEndsAt: true, planAfterTrial: true },
     }),
   );
   return Boolean(org && spaceIncludes(org, "ai"));

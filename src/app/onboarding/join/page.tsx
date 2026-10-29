@@ -34,12 +34,12 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
   if (!profile) redirect("/auth/session-ended");
   const { code } = await searchParams;
   const initialCode = typeof code === "string" ? code.slice(0, 20) : "";
-  // "Your profile", step 1, comes first; it brings them back here.
+  // A brand-new account is readied by /onboarding first; it brings them back here.
   if (!profile.onboardedAt) {
     const back = initialCode
       ? `/onboarding/join?code=${encodeURIComponent(initialCode)}`
       : "/onboarding/join";
-    redirect(`/onboarding/profile/basics?callbackUrl=${encodeURIComponent(back)}`);
+    redirect(`/onboarding?callbackUrl=${encodeURIComponent(back)}`);
   }
 
   const invites = profile.emailVerified ? await findPendingInvitationsForMe(user.id) : [];
@@ -70,11 +70,7 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
         </div>
       }
     >
-      <AuthTitle
-        eyebrow="Join an organization"
-        title="Enter your invite code."
-        description="Paste it or type it in. You'll see the organization before you join."
-      />
+      <AuthTitle title="Enter your invite code." />
       {profile.emailVerified ? (
         <JoinForm initialCode={initialCode} />
       ) : (
@@ -87,14 +83,7 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
             Or accept an email invite to {profile.email}
           </h2>
           {invites.map((invitation) => (
-            <PendingInviteCard
-              key={invitation.id}
-              invitation={{
-                id: invitation.id,
-                role: invitation.role,
-                orgName: invitation.orgName,
-              }}
-            />
+            <PendingInviteCard key={invitation.id} invitation={invitation} />
           ))}
         </section>
       )}

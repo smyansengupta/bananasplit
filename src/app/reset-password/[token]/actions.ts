@@ -39,6 +39,9 @@ export async function resetPasswordAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Choose a different password." };
   }
+  if (formData.get("confirmPassword") !== parsed.data) {
+    return { error: "The passwords don't match." };
+  }
 
   const result = await resetPassword(typeof token === "string" ? token : "", parsed.data);
   if (!result.ok) {

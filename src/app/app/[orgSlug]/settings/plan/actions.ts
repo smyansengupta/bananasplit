@@ -11,7 +11,9 @@ import { crossedWarning, readStorageSpace, warnStorage } from "@/server/storage/
 /**
  * Settings › Plan and storage: the OWNER switches the plan. A Personal
  * space moves between Personal Free and Personal Plus; an organization
- * picks Free, Team or Team Advanced, during its trial or after it. Billing isn't connected yet, so the switch
+ * picks Free, Team or Team Advanced, during its trial or after it. A pick
+ * during the trial starts when the trial ends (changeOrgPlan keeps the
+ * trial whole). Billing isn't connected yet, so the switch
  * takes effect at once (and is audit-logged); once it is, an upgrade goes
  * through checkout instead and this keeps the downgrades. Back to a trial,
  * an organization on a Personal plan or a Personal space on an
@@ -47,6 +49,7 @@ export const switchPlan = withOrgAction(async (ctx, plan: unknown): Promise<Plan
   const usedBytes = Number(space.storageUsedBytes);
   if (
     result.changed &&
+    !result.scheduled &&
     crossedWarning(after, { usedBytes, fromLimit: PLAN_LIMITS[result.from].storageBytes })
   ) {
     await warnStorage(ctx.db, after, usedBytes, `plan:${ctx.organizationId}:${Date.now()}`);

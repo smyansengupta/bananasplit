@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, LocateFixed, MessageCircle, PenLine, UserRound } from "@/components/icons";
+import { Globe, MessageCircle, PenLine, UserRound } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 import { AvatarEditor } from "@/app/app/[orgSlug]/profile/avatar-editor";
@@ -12,49 +12,52 @@ import { PRONOUN_CHOICES } from "@/lib/onboarding/steps";
 import { PROFILE_LIMITS } from "@/lib/profile/schema";
 import { isValidTimeZone } from "@/lib/profile/timezone";
 
-import { saveBasicsStep } from "./actions";
-import { StepNav, useStepSave } from "./step-nav";
+export interface BasicsValue {
+  name: string;
+  pronouns: string;
+  timezone: string | null;
+}
 
-/** Step 1 · Basics: picture, full name, pronouns, time zone. The one required step. */
-export function BasicsStep({
+/**
+ * About you, for the profile form: picture (saved on its own), full name,
+ * time zone (detected from the device when there's none yet) and pronouns.
+ */
+export function BasicsFields({
   user,
-  initial,
-  after,
+  value,
+  onChange,
+  errors,
+  pronouns: askPronouns = true,
 }: {
   user: UserAvatarUser;
-  initial: { name: string; pronouns: string; timezone: string | null };
-  /** Where to go once saved: where sign-up started (a safe callbackUrl), else step 2. */
-  after?: string | null;
+  value: BasicsValue;
+  onChange: (value: BasicsValue) => void;
+  errors: Record<string, string>;
+  /** Show the pronoun chips (not in a personal workspace). */
+  pronouns?: boolean;
 }) {
-  const { pending, errors, saveAndContinue } = useStepSave("basics", after);
-  const [name, setName] = useState(initial.name);
-  const preset = (PRONOUN_CHOICES as readonly string[]).includes(initial.pronouns);
-  const [pronouns, setPronouns] = useState(initial.pronouns);
-  const [custom, setCustom] = useState(!preset && initial.pronouns !== "");
-  const [timezone, setTimezone] = useState<string | null>(initial.timezone);
-  const [detected, setDetected] = useState(false);
+  const { name, pronouns, timezone } = value;
+  const set = (patch: Partial<BasicsValue>) => onChange({ ...value, ...patch });
+  const preset = (PRONOUN_CHOICES as readonly string[]).includes(pronouns);
+  const [custom, setCustom] = useState(!preset && pronouns !== "");
 
-  // "Eastern Time (detected)": the device's zone, until they pick another.
+  // The device's zone, until they pick another.
   useEffect(() => {
-    if (initial.timezone) return;
+    if (timezone) return;
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (isValidTimeZone(zone)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- the browser zone is only known on the client
-      setTimezone(zone);
-      setDetected(true);
+      onChange({ ...value, timezone: zone });
     }
-  }, [initial.timezone]);
-
-  function submit() {
-    saveAndContinue(() => saveBasicsStep({ name, pronouns: pronouns || null, timezone }));
-  }
+    // Once, on mount: the zone is filled in from the device a single time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div className="flex flex-1 flex-col gap-5">
+    <>
       <AvatarEditor user={user} compact />
 
       <div className="grid gap-1.5">
-        <FieldLabel htmlFor="ob-name" icon={UserRound}>
+        <FieldLabel htmlFor="ob-name" icon={UserRound} hidden>
           Full name
         </FieldLabel>
         <Input
@@ -62,78 +65,68 @@ export function BasicsStep({
           value={name}
           maxLength={PROFILE_LIMITS.name}
           autoComplete="name"
-          onChange={(e) => setName(e.target.value)}
+          placeholder="Full name"
+          onChange={(e) => set({ name: e.target.value })}
           aria-invalid={Boolean(errors.name) || undefined}
         />
         <FieldError message={errors.name} />
       </div>
 
       <div className="grid gap-1.5">
-        <FieldLabel id="ob-pronouns-label" icon={MessageCircle}>
-          Pronouns
-        </FieldLabel>
-        <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="ob-pronouns-label">
-          {PRONOUN_CHOICES.map((p) => (
-            <Chip
-              key={p}
-              selected={!custom && pronouns === p}
-              onClick={() => {
-                setCustom(false);
-                setPronouns(pronouns === p ? "" : p);
-              }}
-            >
-              {p}
-            </Chip>
-          ))}
-          <Chip
-            icon={PenLine}
-            selected={custom}
-            onClick={() => {
-              setCustom(!custom);
-              if (!custom) setPronouns("");
-            }}
-          >
-            Custom
-          </Chip>
-        </div>
-        {custom && (
-          <Input
-            aria-label="Your pronouns"
-            placeholder="e.g. he/they"
-            value={pronouns}
-            maxLength={PROFILE_LIMITS.pronouns}
-            onChange={(e) => setPronouns(e.target.value)}
-            autoFocus
-          />
-        )}
-        <FieldError message={errors.pronouns} />
-      </div>
-
-      <div className="grid gap-1.5">
-        <FieldLabel htmlFor="ob-tz" icon={Globe}>
+        <FieldLabel htmlFor="ob-tz" icon={Globe} hidden>
           Time zone
         </FieldLabel>
         <TimezoneSelect
           id="ob-tz"
           value={timezone}
           orgTimezone={null}
-          onChange={(zone) => {
-            setTimezone(zone);
-            setDetected(false);
-          }}
+          onChange={(zone) => set({ timezone: zone })}
           invalid={Boolean(errors.timezone)}
         />
-        {detected && (
-          <p className="text-muted-foreground flex items-center gap-1 text-xs">
-            <LocateFixed className="size-3" aria-hidden="true" />
-            Detected from this device.
-          </p>
-        )}
         <FieldError message={errors.timezone} />
       </div>
-
-      <FieldError message={errors.form} />
-      <StepNav step="basics" pending={pending} onContinue={submit} disabled={!name.trim()} />
-    </div>
+      {askPronouns && (
+        <div className="grid gap-1.5">
+          <FieldLabel id="ob-pronouns-label" icon={MessageCircle} hidden>
+            Pronouns
+          </FieldLabel>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="ob-pronouns-label">
+            {PRONOUN_CHOICES.map((p) => (
+              <Chip
+                key={p}
+                selected={!custom && pronouns === p}
+                onClick={() => {
+                  setCustom(false);
+                  set({ pronouns: pronouns === p ? "" : p });
+                }}
+              >
+                {p}
+              </Chip>
+            ))}
+            <Chip
+              icon={PenLine}
+              selected={custom}
+              onClick={() => {
+                setCustom(!custom);
+                if (!custom) set({ pronouns: "" });
+              }}
+            >
+              Custom
+            </Chip>
+          </div>
+          {custom && (
+            <Input
+              aria-label="Your pronouns"
+              placeholder="Pronouns"
+              value={pronouns}
+              maxLength={PROFILE_LIMITS.pronouns}
+              onChange={(e) => set({ pronouns: e.target.value })}
+              autoFocus
+            />
+          )}
+          <FieldError message={errors.pronouns} />
+        </div>
+      )}
+    </>
   );
 }

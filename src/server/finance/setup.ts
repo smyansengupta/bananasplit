@@ -29,7 +29,7 @@ export async function loadFinancePeople(
   organizationId: string,
 ): Promise<{ owners: string[]; treasurers: string[] }> {
   const rows = await db.membership.findMany({
-    where: { organizationId, role: { in: [Role.OWNER, Role.TREASURER] } },
+    where: { organizationId, role: { in: [Role.OWNER, Role.ADMIN, Role.TREASURER] } },
     select: { role: true, user: { select: { name: true } } },
     orderBy: { joinedAt: "asc" },
     take: 20,
@@ -41,9 +41,15 @@ export async function loadFinancePeople(
   };
 }
 
-export async function loadSetupState(db: TxClient, organizationId: string, userId: string): Promise<FinanceSetupState> {
+export async function loadSetupState(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+): Promise<FinanceSetupState> {
   const period = await db.budgetPeriod.findFirst({ where: { organizationId, isActive: true } });
-  const treasurerCount = await db.membership.count({ where: { organizationId, role: Role.TREASURER } });
+  const treasurerCount = await db.membership.count({
+    where: { organizationId, role: Role.TREASURER },
+  });
   const prefs = await db.memberPrefs.findUnique({
     where: { organizationId_userId: { organizationId, userId } },
     select: { financeWidgets: true },
@@ -62,7 +68,12 @@ export async function loadSetupState(db: TxClient, organizationId: string, userI
   }
   const starting = await findStartingBalance(db, organizationId, period.id);
   const transactionCount = await db.transaction.count({
-    where: { organizationId, budgetPeriodId: period.id, voidedAt: null, ...(starting ? { id: { not: starting.id } } : {}) },
+    where: {
+      organizationId,
+      budgetPeriodId: period.id,
+      voidedAt: null,
+      ...(starting ? { id: { not: starting.id } } : {}),
+    },
   });
   const categories = await db.budgetCategory.findMany({
     where: { organizationId, budgetPeriodId: period.id },
@@ -76,7 +87,10 @@ export async function loadSetupState(db: TxClient, organizationId: string, userI
       endsOn: toDateValue(period.endsOn),
     },
     startingBalance: starting
-      ? { cents: starting.direction === "IN" ? starting.amountCents : -starting.amountCents, asOf: toDateValue(starting.occurredAt) }
+      ? {
+          cents: starting.direction === "IN" ? starting.amountCents : -starting.amountCents,
+          asOf: toDateValue(starting.occurredAt),
+        }
       : null,
     transactionCount,
     categoryCount: categories.length,

@@ -9,8 +9,8 @@ import { PLAN_NAMES } from "./features";
  * billing is connected. Names come from PLAN_NAMES and what each plan
  * includes from src/lib/billing/features.ts.
  *
- * Two families. Personal, for one person: Free, and Plus at $4 a month or
- * $36 a year (free for students). Teams, for any group: Free (unlimited
+ * Two families. Personal, for one person: Free, and Plus at $8 a month or
+ * $72 a year (no student price). Teams, for any group: Free (up to 10
  * members), Team and Team Advanced. Team plans have two prices:
  *
  *   standard   per member a month, billed yearly.
@@ -46,11 +46,8 @@ export const TEAM_PRICES = {
 
 export const PERSONAL_PLANS = {
   free: { plan: "FREE", name: PLAN_NAMES.FREE, perMonth: 0, perYear: 0 },
-  plus: { plan: "PERSONAL_PLUS", name: PLAN_NAMES.PERSONAL_PLUS, perMonth: 4, perYear: 36 },
+  plus: { plan: "PERSONAL_PLUS", name: PLAN_NAMES.PERSONAL_PLUS, perMonth: 8, perYear: 72 },
 } as const;
-
-/** Personal Plus for a student: free while the school email holds. */
-export const PERSONAL_PLUS_STUDENT_PER_MONTH = 0;
 
 /** A custom contract for a school: every student organization on Team Advanced. */
 export const SCHOOL_LICENSE = { perOrgPerYear: 25, minimumPerYear: 7500 } as const;
