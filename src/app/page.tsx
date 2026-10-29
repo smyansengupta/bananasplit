@@ -1,41 +1,27 @@
 import type { Metadata } from "next";
 
-import { Security } from "@/components/marketing/connect";
-import { Features } from "@/components/marketing/features";
-import { FinalCta } from "@/components/marketing/final-cta";
-import { Hero } from "@/components/marketing/hero";
-import { Integrations } from "@/components/marketing/integrations";
+import { HomePage } from "@/components/marketing/home/home-page";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
-import { Solutions } from "@/components/marketing/solutions";
 import { getSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Bananasplit: the new era of team keeping",
+  title: "Bananasplit: The First Ambient Workplace",
   description:
-    "Bananasplit brings your team's projects, docs, events and money into one smart workspace, and it works with the apps you already use.",
+    "Your team's work keeps itself up to date. Bananasplit listens where you already work, handles the busywork, and texts you only when something needs you.",
 };
 
 /**
- * The marketing home page, centred and laid out like Notion's, in Graphite
- * (light or dark), in the SaaS homepage report's section order: the hero
- * (headline, the two buttons, the risk remover, the real product, the apps
- * it works with), the features (a bento, a swipeable row on phones, most
- * important first: texting, projects, docs, events, calendar, finance, AI),
- * tabs by kind of organization, the one integrations section, a slim
- * security strip, and the final band repeating the hero's buttons. Pricing and its
- * questions live on /pricing (in the nav).
+ * The marketing home page: "The First Ambient Workplace"
+ * (docs/AMBIENT-WORKPLACE.md), its sections in
+ * src/components/marketing/home/home-page.tsx. Pricing and its questions
+ * live on /pricing (in the nav).
  */
 export default async function Home() {
   const signedIn = Boolean(await getSession());
 
   return (
     <MarketingShell signedIn={signedIn}>
-      <Hero signedIn={signedIn} />
-      <Features />
-      <Solutions signedIn={signedIn} />
-      <Integrations />
-      <Security />
-      <FinalCta signedIn={signedIn} />
+      <HomePage signedIn={signedIn} />
     </MarketingShell>
   );
 }

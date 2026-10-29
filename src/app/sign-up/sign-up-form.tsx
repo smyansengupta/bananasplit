@@ -58,10 +58,7 @@ export function SignUpForm({
 
   return (
     <>
-      <AuthTitle
-        title="Create your account."
-        description="14 days of Personal Plus, free. No card."
-      />
+      <AuthTitle title="Create your account." />
       {google}
       <form
         noValidate

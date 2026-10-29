@@ -8,19 +8,19 @@ const COLUMNS = [
   {
     title: "Product",
     links: [
-      { label: "Projects", href: "/#features" },
-      { label: "Docs", href: "/#features" },
-      { label: "Databases", href: "/#features" },
-      { label: "Calendar", href: "/#features" },
-      { label: "Integrations", href: "/#integrations" },
+      { label: "Texting", href: "/product/texting" },
+      { label: "Docs and files", href: "/product/docs" },
+      { label: "AI", href: "/product/ai" },
+      { label: "Meetings", href: "/product/meetings" },
+      { label: "Finance", href: "/product/finance" },
     ],
   },
   {
-    title: "Solutions",
+    title: "Works with",
     links: [
-      { label: "Startups", href: "/#solutions" },
-      { label: "Nonprofits", href: "/#solutions" },
-      { label: "Agencies", href: "/#solutions" },
+      { label: "Integrations", href: "/#integrations" },
+      { label: "Claude and ChatGPT", href: "/#integrations" },
+      { label: "Granola and Wispr Flow", href: "/#integrations" },
     ],
   },
   {
@@ -56,7 +56,7 @@ export function SiteFooter({ signedIn = false }: { signedIn?: boolean }) {
               <Logo size={26} textSize={19} />
             </SiteLink>
             <p className="text-muted-foreground text-[15px] leading-[1.55]">
-              One workspace for your organization&apos;s projects, docs, events and people.
+              The first ambient workplace: your team&apos;s work keeps itself up to date.
             </p>
           </div>
           <div className="grid flex-[3_1_520px] grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-8">

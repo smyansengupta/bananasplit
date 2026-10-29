@@ -35,13 +35,9 @@ export const PRIMARY_CTA_SM = PRIMARY_CTA.replace("h-12 ", "h-10 ").replace(
 
 /** The header's and footer's sections of the home page, absolute so /pricing can use them. */
 export const NAV = [
-  { label: "Product", href: "/#features" },
-  { label: "Solutions", href: "/#solutions" },
+  { label: "How it works", href: "/#texting" },
+  { label: "Product", href: "/#product" },
   { label: "Integrations", href: "/#integrations" },
   { label: "Security", href: "/#security" },
   { label: "Pricing", href: "/pricing" },
 ] as const;
-
-/** The product screenshot's lift: a hairline shadow and two soft, deep ones (Notion's framing). */
-export const PRODUCT_SHADOW =
-  "shadow-[0_1px_2px_rgb(0_0_0/0.04),0_24px_64px_-24px_rgb(0_0_0/0.28),0_64px_120px_-48px_rgb(0_0_0/0.22)]";

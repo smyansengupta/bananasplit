@@ -128,6 +128,49 @@ export function MeetingsArt({ size = "md" }: { size?: ArtSize }) {
   );
 }
 
+const SPEND = [
+  { name: "Events", pct: 72 },
+  { name: "Marketing", pct: 85 },
+  { name: "Food", pct: 100, over: true },
+] as const;
+
+/** Finance: the budget by category, runway, and a receipt waiting to be paid back. */
+export function FinanceArt({ size = "md" }: { size?: ArtSize }) {
+  return (
+    <Stage tone="bg-(--tag-forest)/12" size={size}>
+      <div className="bg-card absolute top-7 left-[8%] flex w-[54%] max-w-[270px] flex-col gap-2.5 rounded-[16px] p-3.5 shadow-[var(--elevation-2)]">
+        <span className="flex items-baseline justify-between text-[12px] font-semibold">
+          Fall budget
+          <span className="text-muted-foreground text-[11px] font-medium">$5,750 of $7,000</span>
+        </span>
+        {SPEND.map((c) => (
+          <span key={c.name} className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium">{c.name}</span>
+            <span className="bg-foreground/10 h-1.5 overflow-hidden rounded-full">
+              <span
+                className={cn(
+                  "block h-full rounded-full",
+                  "over" in c ? "bg-destructive" : "bg-banana",
+                )}
+                style={{ width: `${c.pct}%` }}
+              />
+            </span>
+          </span>
+        ))}
+      </div>
+      <div className="bg-card absolute top-8 right-[8%] flex w-[110px] flex-col items-center gap-1 rounded-[16px] p-3 shadow-[var(--elevation-2)]">
+        <span className="text-muted-foreground text-[11px] font-semibold">Runway</span>
+        <span className="numeral text-[34px] leading-none">14</span>
+        <span className="text-muted-foreground text-[11px]">months</span>
+      </div>
+      <Chip className="right-[10%] bottom-[12%]">
+        <Receipt className="size-4" />
+        Receipt · $86 · to approve
+      </Chip>
+    </Stage>
+  );
+}
+
 /** The illustration for a product page's slug (the homepage card and the page's hero). */
 export { Chip, Stage, TextingArt, type ArtSize };
 
@@ -135,7 +178,7 @@ export function ProductArt({
   slug,
   size = "md",
 }: {
-  slug: "texting" | "ai" | "docs" | "meetings";
+  slug: "texting" | "ai" | "docs" | "meetings" | "finance";
   size?: ArtSize;
 }) {
   switch (slug) {
@@ -147,5 +190,7 @@ export function ProductArt({
       return <DocsArt size={size} />;
     case "meetings":
       return <MeetingsArt size={size} />;
+    case "finance":
+      return <FinanceArt size={size} />;
   }
 }
