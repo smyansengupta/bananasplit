@@ -1,120 +1,225 @@
+import { Check, FileText, Video } from "@/components/icons";
+import Image from "next/image";
+import Link from "next/link";
+
 import { ArrowRight } from "@/components/brand/arrows";
 import { cn } from "@/lib/utils";
 
-import { type Avatar, AvatarStack } from "./avatar-stack";
-import { Screenshot } from "./screenshot";
-
-const GOING: readonly Avatar[] = [{ tone: "bg-banana" }, { tone: "bg-wheat" }, { tone: "bg-ink" }];
+import { BrandMark } from "./brand-mark";
+import { BRANDS, brandBySlug } from "./brands";
+import { DEMO_HREF, PRIMARY_CTA, PRODUCT_SHADOW, SECONDARY_CTA, startHref } from "./links";
+import { LogoTiles } from "./logo-tiles";
+import { RotatingWord } from "./rotating-word";
+import { IMESSAGE } from "./palette";
+import { CONTAINER } from "./section-title";
+import { SiteLink } from "./site-link";
 
 /**
- * A proof card floating over the screenshot. There's no room for them on
- * narrow screens (they'd cover the screenshot), so they only show from 1024px
- * (CSS, not a resize listener).
+ * A screenshot of the hub itself (a workspace's Overview, 2560×1360). To
+ * retake it in the Graphite theme, sign in as a seeded user on a local
+ * database and capture /app/<org> at 1280×680, 2× scale.
  */
-function FloatCard({ className, children }: { className: string; children: React.ReactNode }) {
-  return (
-    <div
-      className={cn(
-        "border-ink/8 bg-paper shadow-float absolute hidden items-center gap-3 rounded-2xl border px-4 py-3.5 text-left lg:flex",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
+const HUB_SCREENSHOT = "/marketing/app-overview.webp";
 
-/** A floating card's two lines: what happened, and where. */
-function CardText({ title, detail }: { title: string; detail: string }) {
+/** A product moment's card: floating on the stage's edge on wide screens, in a row below it otherwise. */
+const MOMENT =
+  "border-foreground/10 bg-card flex w-[248px] flex-col gap-2 rounded-[16px] border p-3.5 text-left shadow-[var(--elevation-2)]";
+
+/** Its app's logo and what happened, on one line. */
+function MomentHead({ slug, label }: { slug: string; label: string }) {
   return (
-    <span className="flex flex-col gap-0.5">
-      <span className="text-[14px] font-bold">{title}</span>
-      <span className="text-ink-soft text-[13px]">{detail}</span>
+    <span className="flex items-center gap-2 text-[12px] font-semibold">
+      <BrandMark brand={brandBySlug(slug)} size={22} />
+      {label}
     </span>
   );
 }
 
 /**
- * The headline over a cream-to-banana gradient, then the product: the
- * Overview in a browser frame with Tasks on a phone overlapping its
- * bottom-right corner, the section cropping the phone's last 32px. On
- * phones only the phone shows, centred, its lower part cropped.
+ * The four product moments: a task from iMessage, Claude adding work, a Zoom
+ * call booked, Granola notes filed. `at` places each on the stage's edge.
  */
-export function Hero() {
-  return (
-    <section className="bg-hero relative overflow-hidden">
-      <div aria-hidden="true" className="bg-hero-grid absolute inset-0" />
-      <div className="relative mx-auto flex max-w-[1240px] flex-col items-center gap-6 px-6 pt-[clamp(56px,7vw,88px)] text-center">
-        <h1 className="font-heading max-w-[940px] text-[clamp(42px,6.4vw,84px)] leading-none tracking-[-0.035em] text-balance">
-          Running your club shouldn&apos;t be bananas.
-        </h1>
-        <p className="text-ink-muted max-w-[600px] text-[clamp(18px,1.6vw,21px)] leading-[1.55] text-pretty">
-          Tasks, availability polls, RSVPs, notes, databases and the club budget in one workspace.
-          Replace the pile of apps your board juggles today.
-        </p>
-        <div className="mt-1 flex flex-wrap justify-center gap-3">
-          <a
-            href="#pricing"
-            className="bg-ink text-cream shadow-cta hover:bg-ink-hover hover:text-cream inline-flex items-center gap-2.5 rounded-full px-[26px] py-4 text-[16px] font-semibold whitespace-nowrap"
-          >
-            Create your club <ArrowRight />
-          </a>
-        </div>
+const MOMENTS: readonly { id: string; at: string; tilt: string; body: React.ReactNode }[] = [
+  {
+    id: "imessage",
+    at: "top-[12%] -left-[36px]",
+    tilt: "-rotate-1",
+    body: (
+      <>
+        <span className="text-muted-foreground text-[11px] font-semibold">iMessage</span>
+        <span
+          className="self-end rounded-[16px] rounded-br-[6px] px-3 py-2 text-[12.5px] leading-[1.4]"
+          style={{ backgroundColor: IMESSAGE.blue, color: IMESSAGE.white }}
+        >
+          Maya books the venue by Friday.
+        </span>
+        <span className="bg-muted self-start rounded-[16px] rounded-bl-[6px] px-3 py-2 text-[12.5px]">
+          Done. It&apos;s on her list.
+        </span>
+      </>
+    ),
+  },
+  {
+    id: "claude",
+    at: "top-[8%] -right-[36px]",
+    tilt: "rotate-1",
+    body: (
+      <>
+        <MomentHead slug="claude" label="Claude" />
+        <span className="text-[12.5px] leading-[1.45]">
+          Added 4 tasks to <b>Fall launch</b> in Bananasplit.
+        </span>
+        <span className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+          <Check className="size-3" strokeWidth={3} /> Owners and due dates set
+        </span>
+      </>
+    ),
+  },
+  {
+    id: "zoom",
+    at: "bottom-[14%] -left-[28px]",
+    tilt: "-rotate-1",
+    body: (
+      <>
+        <MomentHead slug="zoom" label="Design review · Thu 2 PM" />
+        <span className="flex items-center gap-1.5 rounded-[10px] bg-(--tag-forest)/12 px-2.5 py-1.5 text-[11.5px] font-semibold text-(--tag-forest)">
+          <Video className="size-3.5" /> Zoom link created, 6 invites sent
+        </span>
+      </>
+    ),
+  },
+  {
+    id: "granola",
+    at: "-right-[28px] bottom-[12%]",
+    tilt: "rotate-1",
+    body: (
+      <>
+        <MomentHead slug="granola" label="Granola" />
+        <span className="flex items-center gap-1.5 text-[12.5px]">
+          <FileText className="text-muted-foreground size-3.5" /> Notes saved to <b>Launch plan</b>
+        </span>
+      </>
+    ),
+  },
+];
 
-        <div className="relative mt-4 w-full px-[clamp(0px,5vw,72px)] sm:mt-8">
-          <div className="border-ink/12 bg-paper shadow-browser hidden overflow-hidden rounded-t-[18px] border border-b-0 sm:block">
-            <div className="border-ink/8 flex h-10 items-center gap-[7px] border-b px-4">
-              <span className="bg-straw size-2.5 rounded-full" />
-              <span className="bg-straw size-2.5 rounded-full" />
-              <span className="bg-straw size-2.5 rounded-full" />
-              <span className="bg-oat text-ink-faint mx-auto rounded-md px-10 py-[3px] font-mono text-[12px]">
-                bananasplit.fyi
-              </span>
-            </div>
-            <Screenshot
-              src="/marketing/app-overview.webp"
-              eager
-              alt="A club's Overview: open tasks, the next meeting and what's up next this week"
-              sizes="(min-width: 1240px) 1100px, 90vw"
-              className="aspect-[16/8.5]"
+/**
+ * The hero, centred like Notion's and Jira's, to the SaaS homepage report's
+ * spec ("What the research says"): a short headline in high contrast
+ * (Reber & Schwarz), a one-line subhead that says what Bananasplit is, one filled primary and one outline secondary, then
+ * the real product (NN/g: images with information get looked at) on a soft
+ * stage, with four product moments resting on its edges on wide screens and in a
+ * swipeable row overlapping its bottom edge everywhere else. The only motion
+ * is the headline's changing word (team, life, club, company).
+ */
+export function Hero({ signedIn = false }: { signedIn?: boolean }) {
+  return (
+    <section
+      className={cn(CONTAINER, "relative flex flex-col items-center pt-[clamp(48px,7vw,96px)]")}
+    >
+      <div className="flex max-w-[920px] flex-col items-center gap-6 text-center">
+        {/* On phones the size follows the screen width, so "company keeping." always fits one line. */}
+        <h1
+          aria-label="The new era of team keeping."
+          className="display-title text-[10.5vw] leading-[0.95] tracking-[-0.05em] whitespace-nowrap sm:text-[clamp(48px,8vw,104px)]"
+        >
+          <span aria-hidden="true">
+            The new era of
+            <br />
+            <RotatingWord /> keeping.
+          </span>
+        </h1>
+        <p className="text-foreground/80 max-w-[580px] text-[clamp(18px,1.7vw,21px)] leading-[1.5] text-pretty">
+          The only workspace that runs your organization, and plugs into the apps you already use.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <Link
+            href={startHref(signedIn)}
+            className={PRIMARY_CTA}
+            data-cta="get_started"
+            data-cta-location="hero"
+          >
+            Get started free <ArrowRight />
+          </Link>
+          <SiteLink
+            href={DEMO_HREF}
+            className={SECONDARY_CTA}
+            data-cta="request_demo"
+            data-cta-location="hero"
+          >
+            Request a demo
+          </SiteLink>
+        </div>
+      </div>
+
+      <div
+        id="product"
+        className="bg-muted/60 relative mt-[clamp(48px,6vw,80px)] w-full scroll-mt-24 rounded-[28px] p-[clamp(12px,4vw,56px)] max-xl:pb-16 max-sm:pb-14"
+      >
+        {MOMENTS.map(({ id, at, body }) => (
+          <div
+            key={id}
+            aria-hidden="true"
+            className={cn(MOMENT, "absolute z-10 hidden xl:flex", at)}
+          >
+            {body}
+          </div>
+        ))}
+        <div
+          className={cn(
+            "border-foreground/10 bg-card mx-auto max-w-[1080px] overflow-hidden rounded-[14px] border",
+            PRODUCT_SHADOW,
+          )}
+        >
+          <div className="border-foreground/8 flex h-8 items-center gap-1.5 border-b px-3.5">
+            <span className="bg-foreground/15 size-2.5 rounded-full" />
+            <span className="bg-foreground/15 size-2.5 rounded-full" />
+            <span className="bg-foreground/15 size-2.5 rounded-full" />
+          </div>
+          <div className="relative aspect-[2560/1360] sm:aspect-[2560/1120]">
+            <Image
+              src={HUB_SCREENSHOT}
+              alt="The Bananasplit hub: a workspace's Overview with open tasks, what's due and what's up next this week"
+              fill
+              priority
+              sizes="(min-width: 1120px) 1080px, 95vw"
+              className="object-cover object-left-top"
             />
           </div>
-
-          <FloatCard className="top-[18%] left-0">
-            <span className="bg-banana text-ink grid size-[34px] place-items-center rounded-full text-[15px] font-extrabold">
-              ✓
-            </span>
-            <CardText title="Venue booked" detail="Maya · Fall Showcase" />
-          </FloatCard>
-          <FloatCard className="top-[56%] left-[3%]">
-            <AvatarStack avatars={GOING} itemClassName="border-paper size-[26px]" overlap="-ml-2" />
-            <CardText title="34 going" detail="General meeting, Thu 6pm" />
-          </FloatCard>
-          <FloatCard className="right-[clamp(140px,22vw,290px)] bottom-6">
-            <span className="flex flex-col gap-0.5">
-              <span className="text-ink-soft text-[12px]">Budget left this term</span>
-              <span className="font-heading text-[24px] tracking-[-0.02em]">$1,240</span>
-            </span>
-            <span className="bg-leaf text-leaf-ink rounded-full px-[9px] py-1 text-[12px] font-bold whitespace-nowrap">
-              9 weeks runway
-            </span>
-          </FloatCard>
-
-          <div className="bg-ink shadow-phone relative mx-auto -mb-[38%] aspect-[9/18] w-[min(240px,70vw)] rounded-[38px] p-2 sm:absolute sm:right-[clamp(0px,2vw,24px)] sm:-bottom-8 sm:mx-0 sm:mb-0 sm:w-[clamp(140px,21vw,270px)] sm:rounded-[clamp(30px,4vw,44px)] sm:p-[clamp(6px,0.8vw,9px)]">
-            <Screenshot
-              src="/marketing/app-tasks-phone.webp"
-              eager
-              alt="Tasks on a phone: open work grouped by epic"
-              sizes="270px"
-              className="size-full rounded-[30px] sm:rounded-[clamp(24px,3.3vw,36px)]"
-            >
-              <span
-                aria-hidden="true"
-                className="bg-void absolute top-2.5 left-1/2 h-5 w-[34%] -translate-x-1/2 rounded-full sm:top-[clamp(7px,1vw,11px)] sm:h-[clamp(14px,1.9vw,24px)]"
-              />
-            </Screenshot>
-          </div>
         </div>
+      </div>
+
+      <ul
+        aria-hidden="true"
+        className="relative z-10 m-0 -mt-10 flex w-[calc(100%+48px)] snap-x snap-mandatory scroll-px-6 [scrollbar-width:none] list-none gap-3 overflow-x-auto px-6 pt-1 pb-3 sm:-mt-14 xl:hidden [&>li:first-child]:ml-auto [&>li:last-child]:mr-auto"
+      >
+        {MOMENTS.map(({ id, body, tilt }) => (
+          <li key={id} className={cn(MOMENT, "flex-none snap-start", tilt)}>
+            {body}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-10 flex w-full flex-col items-center gap-5 sm:mt-16 sm:gap-6">
+        <span className="text-foreground/60 text-[14px]">Works with the apps you already use</span>
+        {/* Phones: the logos in colour as tiles that name themselves when tapped; wider: each logo with its name, in grey. */}
+        <div className="md:hidden">
+          <LogoTiles
+            apps={BRANDS.map((brand) => ({
+              slug: brand.slug,
+              name: brand.name,
+              mark: <BrandMark brand={brand} size={28} />,
+            }))}
+          />
+        </div>
+        <ul className="m-0 hidden max-w-[1080px] list-none flex-wrap items-center justify-center gap-x-8 gap-y-4 p-0 md:flex">
+          {BRANDS.map((brand) => (
+            <li key={brand.slug} className="text-foreground/75 flex items-center gap-2.5">
+              <BrandMark brand={brand} size={26} tone="mono" />
+              <span className="text-[15px] font-semibold tracking-[-0.01em]">{brand.name}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

@@ -21,12 +21,7 @@ vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 
 import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { authDb, disconnectAll } from "@/server/db/clients";
-import {
-  ConnectorRefusedError,
-  SpaceRefusedError,
-  withConnectorOrgTx,
-  withUserTx,
-} from "@/server/db/context";
+import { ConnectorRefusedError, withConnectorOrgTx, withUserTx } from "@/server/db/context";
 import { ensurePersonalSpace } from "@/server/personal/space";
 import { createOrganization } from "@/server/settings/org-creation";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
@@ -142,7 +137,8 @@ beforeAll(async () => {
     });
     if (!theirs.ok) throw new Error(JSON.stringify(theirs));
     other = { id: theirs.orgId, slug: theirs.slug };
-    // A club whose trial ended yesterday (the table owner may set any end).
+    // A club whose trial ended yesterday, so it is on Free now (the table
+    // owner may set any end). The id keeps its old name for the other tests.
     await ownerDb.organization.create({
       data: {
         id: pausedId,
@@ -304,7 +300,7 @@ describe("the connector wrappers against the local database", () => {
       connector,
       { organizationId: null },
       club.id,
-      { whenPaused: "allow" },
+      {},
       async (ctx) => ({ user: ctx.user, role: ctx.role, org: ctx.organizationId }),
     );
     expect(seen).toEqual({
@@ -327,13 +323,7 @@ describe("the connector wrappers against the local database", () => {
     if (!reachable) return;
     const connector = await connect(alice);
     await expect(
-      withConnectorOrgTx(
-        connector,
-        { organizationId: null },
-        other.id,
-        { whenPaused: "allow" },
-        async () => "ran",
-      ),
+      withConnectorOrgTx(connector, { organizationId: null }, other.id, {}, async () => "ran"),
     ).rejects.toBeInstanceOf(NotFoundError);
     await expect(
       withConnectorOrgTx(
@@ -354,34 +344,25 @@ describe("the connector wrappers against the local database", () => {
     ).rejects.toMatchObject({ name: "ConnectorRefusedError", reason: "scope" });
   });
 
-  it("refuses writes in a paused club and lets reads through", async () => {
+  it("lets reads and writes through in an organization whose trial ended (it is on Free)", async () => {
     if (!reachable) return;
     const connector = await connect(alice);
-    await expect(
-      withConnectorOrgTx(connector, { organizationId: null }, pausedId, {}, async () => "ran"),
-    ).rejects.toBeInstanceOf(SpaceRefusedError);
     expect(
       await withConnectorOrgTx(
         connector,
         { organizationId: null },
         pausedId,
-        { whenPaused: "allow" },
+        {},
         async () => "ran",
       ),
     ).toBe("ran");
   });
 
-  it("refuses every call for a club that switched AI connectors off, and restores them when on", async () => {
+  it("refuses every call for an organization that switched AI connectors off, and restores them when on", async () => {
     if (!reachable) return;
     const connector = await connect(alice);
     const call = () =>
-      withConnectorOrgTx(
-        connector,
-        { organizationId: null },
-        club.id,
-        { whenPaused: "allow" },
-        async () => "ran",
-      );
+      withConnectorOrgTx(connector, { organizationId: null }, club.id, {}, async () => "ran");
     await ownerDb.orgSettings.update({
       where: { organizationId: club.id },
       data: { connectorsEnabled: false },
@@ -401,7 +382,7 @@ describe("the connector wrappers against the local database", () => {
     expect((await consentSpaces(alice.id)).map((s) => s.id)).toContain(club.id);
   });
 
-  it("lists Personal first, then the member's clubs, and only the scoped one for a scoped grant", async () => {
+  it("lists Personal first, then the member's organizations, and only the scoped one for a scoped grant", async () => {
     if (!reachable) return;
     const connector = await connect(alice);
     const spaces = await listConnectorSpaces(connector, { organizationId: null });
@@ -412,7 +393,7 @@ describe("the connector wrappers against the local database", () => {
       role: "owner",
     });
     expect(spaces.map((s) => s.id).sort()).toEqual([club.id, pausedId, personalId].sort());
-    expect(spaces.find((s) => s.id === pausedId)).toMatchObject({ paused: true, role: "owner" });
+    expect(spaces.find((s) => s.id === pausedId)).toMatchObject({ role: "owner" });
     expect(spaces.map((s) => s.id)).not.toContain(other.id);
 
     const scoped = await listConnectorSpaces(connector, { organizationId: club.id });

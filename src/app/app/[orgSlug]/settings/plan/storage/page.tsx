@@ -60,7 +60,7 @@ export default async function StoragePage({
         description={
           personal
             ? "What your notes and files use, and room to grow."
-            : "What your club's files, receipts and notes use."
+            : "What your organization's files, receipts and notes use."
         }
       />
 
@@ -83,7 +83,9 @@ export default async function StoragePage({
           </Button>
         </div>
         <p className="flex flex-wrap items-baseline gap-x-2">
-          <span className={level === "full" ? "numeral text-destructive text-4xl" : "numeral text-4xl"}>
+          <span
+            className={level === "full" ? "numeral text-destructive text-4xl" : "numeral text-4xl"}
+          >
             {formatUsed(usedBytes, limit)}
           </span>
           <span className="text-muted-foreground">of {formatStorage(limit)} used</span>
@@ -100,15 +102,17 @@ export default async function StoragePage({
               <span
                 aria-hidden="true"
                 style={{ background: s.hatch ? undefined : s.color }}
-                className={s.hatch ? "bg-muted-strong size-2.5 rounded-[3px]" : "size-2.5 rounded-[3px]"}
+                className={
+                  s.hatch ? "bg-muted-strong size-2.5 rounded-[3px]" : "size-2.5 rounded-[3px]"
+                }
               />
               {s.label} <b className="figure font-semibold">{formatStorage(s.value)}</b>
             </li>
           ))}
         </ul>
         <p className="text-muted-foreground text-sm">
-          {formatStorage(free)} free · up to {formatStorage(limits.maxFileBytes)} per file. Nothing is
-          ever deleted for being over: uploads stop at 100% until there&apos;s room again.
+          {formatStorage(free)} free · up to {formatStorage(limits.maxFileBytes)} per file. Nothing
+          is ever deleted for being over: uploads stop at 100% until there&apos;s room again.
         </p>
       </section>
 

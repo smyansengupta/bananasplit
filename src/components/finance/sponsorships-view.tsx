@@ -84,7 +84,12 @@ const STATUS_LABEL: Record<SponsorshipStatus, string> = {
 };
 
 const TYPE_OPTIONS = [
-  { value: SponsorshipType.CASH, label: "Cash", hint: "Money paid to the club", icon: Banknote },
+  {
+    value: SponsorshipType.CASH,
+    label: "Cash",
+    hint: "Money paid to the organization",
+    icon: Banknote,
+  },
   {
     value: SponsorshipType.CREDITS,
     label: "Credits",

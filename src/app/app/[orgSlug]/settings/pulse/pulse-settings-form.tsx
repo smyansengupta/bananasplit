@@ -42,7 +42,7 @@ export function PulseSettingsForm({
           <span className="heading block text-[17px]">Send the weekly pulse</span>
           <span className="text-muted-foreground mt-1 block text-sm">
             {value.pulseEnabled
-              ? `${describePulseSchedule(value)}, in the club's time zone.`
+              ? `${describePulseSchedule(value)}, in the organization's time zone.`
               : "Off: no recap goes out, and the Overview card shows the trend only."}
           </span>
         </span>

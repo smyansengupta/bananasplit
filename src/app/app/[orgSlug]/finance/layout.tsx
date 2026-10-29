@@ -45,7 +45,7 @@ export default async function FinanceLayout({
           ? `${toReview} ${toReview === 1 ? "request" : "requests"} to review`
           : "nothing to review",
       ].join(" · ")
-    : "Your expenses, and what the club owes you";
+    : "Your expenses, and what the organization owes you";
 
   return (
     <div className="space-y-7.5">

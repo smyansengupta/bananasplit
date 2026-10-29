@@ -73,7 +73,7 @@ describe("createTag (inline, from any tag field)", () => {
     fake.role = Role.MEMBER;
     fake.db = makeDb({ membersCanCreate: false });
     expect(await createTag("org_1", { name: "catering" })).toEqual({
-      error: "Only an owner or admin can make new tags in this club.",
+      error: "Only an owner or admin can make new tags in this organization.",
     });
     expect(fake.db.label.create).not.toHaveBeenCalled();
   });

@@ -30,5 +30,4 @@ export const searchWorkspaceAction = withOrgAction(
     if (!viewer) return { query, scope, groups: [] };
     return searchWorkspace(ctx.db, viewer, { query, scope });
   },
-  { whenPaused: "allow" },
 );

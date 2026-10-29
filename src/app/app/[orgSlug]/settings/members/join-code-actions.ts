@@ -45,13 +45,10 @@ async function guarded(run: () => Promise<JoinCodeResult>): Promise<JoinCodeResu
   }
 }
 
-const rotateInTx = withOrgAction(
-  async (ctx) => {
-    requirePermission(ctx, "members.invite");
-    return view(await rotateJoinCode(ctx.db, ctx.organizationId, ctx.userId));
-  },
-  { whenPaused: "allow" },
-);
+const rotateInTx = withOrgAction(async (ctx) => {
+  requirePermission(ctx, "members.invite");
+  return view(await rotateJoinCode(ctx.db, ctx.organizationId, ctx.userId));
+});
 
 export async function rotateJoinCodeAction(orgId: string): Promise<JoinCodeResult> {
   return guarded(() => rotateInTx(orgId));
@@ -64,14 +61,11 @@ const settingsSchema = z
   })
   .strict();
 
-const updateInTx = withOrgAction(
-  async (ctx, input: z.infer<typeof settingsSchema>) => {
-    requirePermission(ctx, "members.invite");
-    const result = await updateJoinCodeSettings(ctx.db, ctx.organizationId, ctx.userId, input);
-    return result.ok ? view(result.code) : result;
-  },
-  { whenPaused: "allow" },
-);
+const updateInTx = withOrgAction(async (ctx, input: z.infer<typeof settingsSchema>) => {
+  requirePermission(ctx, "members.invite");
+  const result = await updateJoinCodeSettings(ctx.db, ctx.organizationId, ctx.userId, input);
+  return result.ok ? view(result.code) : result;
+});
 
 export async function updateJoinCodeAction(orgId: string, input: unknown): Promise<JoinCodeResult> {
   const parsed = settingsSchema.safeParse(input);

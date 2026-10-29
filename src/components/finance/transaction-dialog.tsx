@@ -411,7 +411,7 @@ function TransactionForm({
             value={paymentMethod}
             onChange={(e) => setPaymentMethod(e.target.value)}
             disabled={!canEditFields}
-            placeholder="Club card, cash, check…"
+            placeholder="Company card, cash, check…"
           />
         </div>
       </div>
@@ -448,8 +448,8 @@ function TransactionForm({
         ) : (
           <DialogDescription>
             {restrictToExpense
-              ? "What you bought for the club. A treasurer approves it and pays you back."
-              : "Money in or out of the club's books."}
+              ? "What you bought for the organization. A treasurer approves it and pays you back."
+              : "Money in or out of the organization's books."}
           </DialogDescription>
         )}
       </DialogHeader>

@@ -66,7 +66,7 @@ export function TimezoneSelect({
             {value
               ? timeZoneLabel(value)
               : orgTimezone
-                ? `Club's timezone (${timeZoneLabel(orgTimezone)})`
+                ? `Organization's timezone (${timeZoneLabel(orgTimezone)})`
                 : "Pick your time zone"}
           </span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />

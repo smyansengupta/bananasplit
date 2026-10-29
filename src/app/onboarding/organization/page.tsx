@@ -11,7 +11,7 @@ import { needsProfileSetup } from "@/server/onboarding/profile";
 
 import { ClubBasicsStep } from "./club-basics-step";
 
-export const metadata = { title: "Set up your club · Bananasplit" };
+export const metadata = { title: "Set up your organization · Bananasplit" };
 
 /**
  * B1 · Club basics (onboarding Flow B, entered from A7's "Create a club").
@@ -29,16 +29,16 @@ export default async function ClubBasicsPage() {
 
   const notice =
     policy.denial === "unverified" ? (
-      <VerifyEmailNotice email={identity?.email ?? user.email} action="create a club" />
+      <VerifyEmailNotice email={identity?.email ?? user.email} action="create an organization" />
     ) : policy.denial ? (
-      <p className="bg-muted text-muted-foreground m-0 rounded-field px-4 py-3.5 text-[15px] leading-normal">
+      <p className="bg-muted text-muted-foreground rounded-field m-0 px-4 py-3.5 text-[15px] leading-normal">
         {ORG_CREATION_DENIAL_MESSAGES[policy.denial]}
       </p>
     ) : undefined;
 
   return (
     <SetupShell
-      subject="your club"
+      subject="your organization"
       steps={ORG_STEP_NAMES}
       current={1}
       exit={

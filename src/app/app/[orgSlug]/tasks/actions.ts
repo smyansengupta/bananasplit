@@ -209,16 +209,13 @@ export async function postWeeklyUpdate(
   return run(() => postWeeklyTx(orgId, input));
 }
 
-const loadCommentsTx = withOrgAction(
-  async (ctx, taskId: string, before: string | null) => {
-    const page = await getComments(ctx.db, ctx.organizationId, taskId, {
-      before,
-      take: COMMENTS_PAGE_SIZE,
-    });
-    return page;
-  },
-  { whenPaused: "allow" },
-);
+const loadCommentsTx = withOrgAction(async (ctx, taskId: string, before: string | null) => {
+  const page = await getComments(ctx.db, ctx.organizationId, taskId, {
+    before,
+    take: COMMENTS_PAGE_SIZE,
+  });
+  return page;
+});
 
 /** A page of comments for the dialog (lazy-loaded; oldest first). */
 export async function loadTaskComments(
@@ -235,9 +232,8 @@ export async function loadTaskComments(
   }
 }
 
-const loadActivityTx = withOrgAction(
-  async (ctx, taskId: string) => getActivity(ctx.db, ctx.organizationId, taskId),
-  { whenPaused: "allow" },
+const loadActivityTx = withOrgAction(async (ctx, taskId: string) =>
+  getActivity(ctx.db, ctx.organizationId, taskId),
 );
 
 export async function loadTaskActivity(orgId: string, taskId: string): Promise<TaskActivityItem[]> {
@@ -249,9 +245,8 @@ export async function loadTaskActivity(orgId: string, taskId: string): Promise<T
   }
 }
 
-const loadTaskTx = withOrgAction(
-  async (ctx, taskId: string) => getTaskDetail(ctx.db, ctx.organizationId, taskId),
-  { whenPaused: "allow" },
+const loadTaskTx = withOrgAction(async (ctx, taskId: string) =>
+  getTaskDetail(ctx.db, ctx.organizationId, taskId),
 );
 
 /** One task in the list shape (the dialog opens subtasks with it). */

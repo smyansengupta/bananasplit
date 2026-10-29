@@ -49,7 +49,7 @@ export async function consentSpaces(userId: string): Promise<ConsentSpace[]> {
 }
 
 export function consentOptions(spaces: readonly ConsentSpace[]): ConsentOption[] {
-  const all = { value: ALL_SPACES, label: "Personal and all my clubs" };
+  const all = { value: ALL_SPACES, label: "Personal and all my organizations" };
   const personal = spaces
     .filter((s) => s.kind === "personal")
     .map((s) => ({ value: s.id, label: "Personal only" }));

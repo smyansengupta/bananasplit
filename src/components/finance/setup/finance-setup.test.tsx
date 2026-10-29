@@ -109,7 +109,7 @@ afterEach(() => {
 });
 
 describe("FinanceSetup", () => {
-  it("starts a new club at its budget year and moves on once it's saved", async () => {
+  it("starts a new organization at its budget year and moves on once it's saved", async () => {
     show(fresh);
     expect(screen.getByRole("heading", { name: "Your money year" })).toBeTruthy();
     expect(screen.getByText("0 of 6 done")).toBeTruthy();

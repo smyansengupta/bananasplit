@@ -100,24 +100,22 @@ beforeEach(() => {
 });
 
 describe("withOrgAction: the space check", () => {
-  const PAUSED = { kind: "CLUB", plan: "TRIAL", trialEndsAt: new Date(Date.now() - 60_000) };
+  const ENDED = { kind: "CLUB", plan: "TRIAL", trialEndsAt: new Date(Date.now() - 60_000) };
   const PERSONAL = { kind: "PERSONAL", plan: "FREE", trialEndsAt: null };
 
-  it("refuses a write in a paused club, before the handler, with a message for people", async () => {
-    app.space = PAUSED;
-    const handler = vi.fn();
-    const refused = withOrgAction(handler)("org1");
-    await expect(refused).rejects.toBeInstanceOf(SpaceRefusedError);
-    await expect(withOrgAction(handler)("org1")).rejects.toThrow(/paused/);
-    expect(handler).not.toHaveBeenCalled();
-    expect(app.log.at(-1)).toBe("app:ROLLBACK");
+  it("runs writes once a trial ends: the organization is on Team Free, never paused", async () => {
+    app.space = ENDED;
+    await expect(withOrgAction(async () => "ok")("org1")).resolves.toBe("ok");
+    await expect(withOrgAction(async () => "ok", { feature: "tasks" })("org1")).resolves.toBe("ok");
   });
 
-  it("runs reads and the plan choice in a paused club (whenPaused: allow)", async () => {
-    app.space = PAUSED;
-    await expect(withOrgAction(async () => "read", { whenPaused: "allow" })("org1")).resolves.toBe(
-      "read",
-    );
+  it("refuses a paid feature once a trial ends, before the handler", async () => {
+    app.space = ENDED;
+    const handler = vi.fn();
+    const refused = withOrgAction(handler, { feature: "finance" })("org1");
+    await expect(refused).rejects.toBeInstanceOf(SpaceRefusedError);
+    expect(handler).not.toHaveBeenCalled();
+    expect(app.log.at(-1)).toBe("app:ROLLBACK");
   });
 
   it("runs writes during a trial and on a paid plan", async () => {
@@ -130,12 +128,12 @@ describe("withOrgAction: the space check", () => {
   it("refuses an action of a feature the space lacks, even a read", async () => {
     app.space = PERSONAL;
     const handler = vi.fn();
-    await expect(
-      withOrgAction(handler, { feature: "finance", whenPaused: "allow" })("org1"),
-    ).rejects.toThrow("Finance is for clubs. Start a club or join one to use it.");
+    await expect(withOrgAction(handler, { feature: "finance" })("org1")).rejects.toThrow(
+      "Finance is for organizations. Start an organization or join one to use it.",
+    );
     app.space = { kind: "CLUB", plan: "CLUB", trialEndsAt: null };
     await expect(withOrgAction(handler, { feature: "sponsorships" })("org1")).rejects.toThrow(
-      /isn't on this club's plan/,
+      /isn't on this organization's plan/,
     );
     expect(handler).not.toHaveBeenCalled();
     await expect(withOrgAction(async () => "ok", { feature: "finance" })("org1")).resolves.toBe(
@@ -144,11 +142,13 @@ describe("withOrgAction: the space check", () => {
   });
 
   it("hands back the refusal as an { error } result with onRefused: return", async () => {
-    app.space = PAUSED;
-    await expect(withOrgAction(vi.fn(), { onRefused: "return" })("org1")).resolves.toMatchObject({
+    app.space = ENDED;
+    await expect(
+      withOrgAction(vi.fn(), { feature: "finance", onRefused: "return" })("org1"),
+    ).resolves.toMatchObject({
       ok: false,
-      refused: "paused",
-      error: expect.stringContaining("paused"),
+      refused: "feature",
+      error: expect.stringContaining("Finance"),
     });
   });
 

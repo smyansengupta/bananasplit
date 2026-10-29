@@ -107,7 +107,7 @@ export default async function NoteFilePage({
                   ) : (
                     <Users className="size-3" aria-hidden="true" />
                   )}
-                  {row.visibility === "PRIVATE" ? "Only you" : "Everyone in the club"}
+                  {row.visibility === "PRIVATE" ? "Only you" : "Everyone in the organization"}
                 </Badge>
               )}
             </p>

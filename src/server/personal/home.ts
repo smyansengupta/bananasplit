@@ -10,7 +10,7 @@ import type {
   TaskStatus,
 } from "@/generated/prisma/client";
 import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
-import { isPaused, type SpaceInfo } from "@/lib/billing/space";
+import { type SpaceInfo } from "@/lib/billing/space";
 import { DUE_SOON_DAYS, UPCOMING_DAYS } from "@/lib/personal/home-windows";
 import { profileStepHref, type ProfileStep } from "@/lib/onboarding/steps";
 import { parseStoredLinks } from "@/lib/profile/links";
@@ -95,8 +95,6 @@ export interface PersonalHomeClub {
   openTasks: number;
   /** Unread notifications from this club. */
   unread: number;
-  /** The trial ended before an owner chose a plan: read-only for now. */
-  paused: boolean;
   /** The club's zone, for its all-day meetings. */
   timeZone: string;
 }
@@ -651,7 +649,6 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
         nextMeeting: digest?.nextMeeting ?? null,
         openTasks: digest?.openTasks ?? 0,
         unread: digest?.unread ?? 0,
-        paused: isPaused(space, now),
         timeZone: space.timezone,
       });
     }

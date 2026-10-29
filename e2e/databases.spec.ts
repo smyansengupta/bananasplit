@@ -15,7 +15,7 @@ test("a club makes its own database, and it saves as you type", async ({ page })
   await page.goto(`/app/${orgSlug}/databases`);
   // Nothing to connect first: the club's own databases are right here.
   await expect(
-    page.getByText(/only your club can see|no other club can see/i).first(),
+    page.getByText(/only your organization can see|no other organization can see/i).first(),
   ).toBeVisible();
   await page.getByRole("button", { name: "New database" }).first().click();
   await page.getByRole("radio", { name: /Equipment/ }).click();

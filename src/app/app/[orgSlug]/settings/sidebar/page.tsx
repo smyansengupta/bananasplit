@@ -28,7 +28,7 @@ export default async function SidebarSettingsPage({
   const summary = [
     `${items.length - hidden} section${items.length - hidden === 1 ? "" : "s"} shown`,
     hidden > 0 ? `${hidden} hidden` : null,
-    customized ? "customized for the club" : "the default layout",
+    customized ? "customized for the organization" : "the default layout",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -38,9 +38,9 @@ export default async function SidebarSettingsPage({
       <div className="space-y-3">
         <PageHeader title="Sidebar" description={summary} />
         <p className="text-muted-foreground max-w-prose text-sm">
-          Make {organization.name}&apos;s sidebar fit how your club works: hide what you don&apos;t
-          use, drag sections into the order you want or under another heading, and rename them.
-          Everyone in the club gets this sidebar.
+          Make {organization.name}&apos;s sidebar fit how your organization works: hide what you
+          don&apos;t use, drag sections into the order you want or under another heading, and rename
+          them. Everyone in the organization gets this sidebar.
         </p>
       </div>
       <SidebarEditor

@@ -36,8 +36,8 @@ export function PersonalThemeNotice({
       <div className="min-w-0 flex-1 text-sm">
         <p className="font-semibold">You&apos;re seeing your own theme ({themeName}).</p>
         <p className="text-xs opacity-85">
-          Changes here apply to everyone who matches the club, but not to you while your personal
-          theme is on. You can change it in{" "}
+          Changes here apply to everyone who matches the organization, but not to you while your
+          personal theme is on. You can change it in{" "}
           <a href={profileHref} className="underline underline-offset-2">
             your profile
           </a>
@@ -62,7 +62,7 @@ export function PersonalThemeNotice({
         }
       >
         {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-        Match the club instead
+        Match the organization instead
       </Button>
     </div>
   );

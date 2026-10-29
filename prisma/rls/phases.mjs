@@ -4759,7 +4759,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       value: {
         extension: "public",
         indexes: ["Membership_title_idx", "User_name_idx"],
-        plans: ["FREE", "PERSONAL_PLUS", "TRIAL", "CLUB", "SOCIETY"],
+        plans: ["FREE", "PERSONAL_PLUS", "TRIAL", "TEAM_FREE", "CLUB", "SOCIETY"],
         task_types: ["EPIC", "STORY", "TASK"],
       },
     },

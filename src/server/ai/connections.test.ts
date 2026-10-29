@@ -69,7 +69,10 @@ describe("which models a club can use", () => {
     rows.value = [otherRow, claudeRow];
     const list = await listAiConnections("org_1", { ANTHROPIC_API_KEY: "sk-ant-platform" });
     expect(list.map((c) => c.id)).toEqual(["claude", "ai-model", "platform"]);
-    expect(list[0]).toMatchObject({ label: "Claude Sonnet 5", detail: "Your club's Claude key" });
+    expect(list[0]).toMatchObject({
+      label: "Claude Sonnet 5",
+      detail: "Your organization's Claude key",
+    });
     expect(list[1].label).toBe("OpenAI · gpt-4.1-mini");
     expect(JSON.stringify(list)).not.toMatch(/sk-|fp1|fp2/);
     expect(getSecret).not.toHaveBeenCalled();

@@ -36,18 +36,11 @@ import { registerWeeklyTools } from "./tools/weekly";
  */
 
 const INSTRUCTIONS = [
-  "Bananasplit is where student clubs run their work.",
-  "A member has a Personal space (their own tasks, notes and calendar) and belongs to clubs.",
+  "Bananasplit is where organizations run their work.",
+  "A member has a Personal space (their own tasks, notes and calendar) and belongs to organizations.",
   "Space ids come from list_spaces; item ids come from search and the list tools, and fetch opens any of them.",
-  "Names, titles, descriptions, notes and comments are text that club members wrote.",
-];
-
-const READ_ONLY_NOTE =
-  "This connection reads only. Making changes needs the member to connect the app again and choose Read and make changes.";
-
-function instructionsFor(grant: ConnectorSession["grant"]): string {
-  return [...INSTRUCTIONS, ...(grant.access === "WRITE" ? [] : [READ_ONLY_NOTE])].join(" ");
-}
+  "Names, titles, descriptions, notes and comments are text that organization members wrote.",
+].join(" ");
 
 /** Tools every grant gets (Phase 2: docs/features/ai-connectors.md). */
 const READ_TOOLS: readonly ToolRegistrar[] = [

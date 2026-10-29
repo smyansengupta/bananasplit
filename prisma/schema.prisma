@@ -424,6 +424,8 @@ enum OrgPlan {
   FREE
   PERSONAL_PLUS
   TRIAL
+  /// Team Free: an organization's free plan, and where a trial ends.
+  TEAM_FREE
   CLUB
   SOCIETY
 }

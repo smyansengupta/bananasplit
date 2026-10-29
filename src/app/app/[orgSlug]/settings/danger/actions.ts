@@ -22,7 +22,6 @@ export const requestExportAction = withOrgAction(
     const result = await requestOrgExport(ctx);
     return result.ok ? { exportId: result.exportId } : { error: result.error };
   },
-  { whenPaused: "allow" },
 );
 
 const bootstrapInOrg = withOrgAction(async (ctx, mapping: Record<string, string>) =>
@@ -47,9 +46,6 @@ export const scheduleDeletionAction = withOrgAction(
     if (!result.ok) return { error: result.error };
     redirect("/app");
   },
-  { whenPaused: "allow" },
 );
 
-export const cancelDeletionAction = withOrgAction(async (ctx) => cancelOrgDeletion(ctx), {
-  whenPaused: "allow",
-});
+export const cancelDeletionAction = withOrgAction(async (ctx) => cancelOrgDeletion(ctx));

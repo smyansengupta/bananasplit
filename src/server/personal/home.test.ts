@@ -93,7 +93,7 @@ function raw(over: Partial<Raw> = {}): Raw {
 const at = (iso: string) => new Date(iso);
 
 describe("shapePersonalHome", () => {
-  it("builds a card per club with its next meeting, open tasks, unread and pause", () => {
+  it("builds a card per organization with its next meeting, open tasks and unread", () => {
     const meeting = {
       id: "e1",
       title: "General meeting",
@@ -119,11 +119,10 @@ describe("shapePersonalHome", () => {
         nextMeeting: meeting,
         openTasks: 3,
         unread: 2,
-        paused: false,
         timeZone: "America/New_York",
       }),
       // A club that failed to load still has its card, just without numbers.
-      expect.objectContaining({ id: "c2", nextMeeting: null, openTasks: 0, paused: true }),
+      expect.objectContaining({ id: "c2", nextMeeting: null, openTasks: 0 }),
     ]);
     expect(data.moreClubs).toBe(2);
     expect(data.firstName).toBe("Maya");

@@ -134,14 +134,14 @@ export function JoinForm({ initialCode }: { initialCode: string }) {
             : ready && org
               ? `Join ${org.name}`
               : complete && checking
-                ? "Finding your club…"
+                ? "Finding your organization…"
                 : `Enter all ${code.length} characters`}
         </button>
       )}
 
       <div className="text-muted-foreground flex justify-between gap-4 text-[14px]">
         <Link href="/onboarding/organization" className="text-muted-foreground font-semibold">
-          Starting a new club instead?
+          Starting a new organization instead?
         </Link>
         <button
           type="button"

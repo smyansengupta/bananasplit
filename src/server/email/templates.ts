@@ -241,7 +241,8 @@ export function passwordChangedEmail(input: {
 }): RenderedEmail {
   const greeting = input.name ? `Hi ${input.name},` : "Hi,";
   const body = `The password for your ${PRODUCT} account was just changed, and every device that was signed in has been signed out.`;
-  const notYou = "If you didn't do this, reset your password now and tell your club's admins.";
+  const notYou =
+    "If you didn't do this, reset your password now and tell your organization's admins.";
   return layout({
     subject: `Your ${PRODUCT} password was changed`,
     bodyHtml: paragraph(greeting) + paragraph(body) + paragraph(notYou),

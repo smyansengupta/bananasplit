@@ -131,7 +131,7 @@ afterAll(async () => {
 });
 
 describe("list_databases", () => {
-  it("lists the built-in databases and the club's own, but not one hidden from members", async () => {
+  it("lists the built-in databases and the organization's own, but not one hidden from members", async () => {
     if (!fx) return;
     const { alice, bob, club, personalId } = fx;
     const listed = await listDatabasesTool(await fx.session(alice), { space: club.id });
@@ -157,7 +157,7 @@ describe("list_databases", () => {
 });
 
 describe("query_database", () => {
-  it("reads a club-made database's rows as the grid shows them, by words and page", async () => {
+  it("reads an organization-made database's rows as the grid shows them, by words and page", async () => {
     if (!fx) return;
     const { alice, club } = fx;
     const session = await fx.session(alice);
@@ -250,7 +250,7 @@ describe("query_database", () => {
     }
   });
 
-  it("reads a paused club's databases, and refuses the club switch, another scope and hidden Databases", async () => {
+  it("reads a paused organization's databases, and refuses the organization switch, another scope and hidden Databases", async () => {
     if (!fx) return;
     const { alice, bob, club, pausedId, personalId } = fx;
     const session = await fx.session(alice);

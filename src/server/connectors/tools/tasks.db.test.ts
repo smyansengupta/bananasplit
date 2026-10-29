@@ -160,13 +160,13 @@ describe("list_tasks", () => {
     ).rejects.toMatchObject({ name: "CursorError" });
   });
 
-  it("reads a paused club's tasks", async () => {
+  it("reads a paused organization's tasks", async () => {
     if (!fx) return;
     const res = await listTasks(await fx.session(fx.alice), { space: fx.pausedId });
     expect(res.tasks.map((t) => t.title)).toEqual([`Paused task ${fx.tag}`]);
   });
 
-  it("answers another org as not found, and refuses the club switch, another scope and hidden Tasks", async () => {
+  it("answers another org as not found, and refuses the organization switch, another scope and hidden Tasks", async () => {
     if (!fx) return;
     const { alice, bob, club, other, personalId } = fx;
     const session = await fx.session(alice);

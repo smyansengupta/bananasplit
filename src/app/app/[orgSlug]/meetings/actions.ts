@@ -34,7 +34,7 @@ const connectionsTx = withOrgAction(
     if (!can(ctx, "events.write")) return [];
     return loadMeetingConnections(ctx.organizationId);
   },
-  { feature: "rsvp", whenPaused: "allow" },
+  { feature: "rsvp" },
 );
 
 export async function meetingConnectionsAction(

@@ -58,7 +58,7 @@ export default async function MyReimbursementsPage({
         categories={categories}
         isFinance={isFinance}
         currentUserId={user.id}
-        emptyDescription="Nothing yet. Use “Request a reimbursement” to be paid back for something you bought for the club."
+        emptyDescription="Nothing yet. Use “Request a reimbursement” to be paid back for something you bought for the organization."
       />
     </div>
   );

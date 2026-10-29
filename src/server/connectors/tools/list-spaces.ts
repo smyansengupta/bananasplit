@@ -3,7 +3,6 @@ import "server-only";
 import { z } from "zod";
 
 import { appUrl } from "@/lib/app-url";
-import { isPaused } from "@/lib/billing/space";
 import { withConnectorUserTx } from "@/server/db/context";
 
 import { toolError } from "../errors";
@@ -19,7 +18,7 @@ import { jsonResult, READ_ONLY, type ToolRegistrar } from "./shared";
 
 const spaceSchema = z.object({
   id: z.string().describe("The space's id, for the other tools."),
-  name: z.string().describe("The club's name, or \"Personal\" for the member's own space."),
+  name: z.string().describe("The organization's name, or \"Personal\" for the member's own space."),
   kind: z.enum(["personal", "club"]),
   role: z
     .enum(["owner", "admin", "treasurer", "member"])
@@ -27,10 +26,9 @@ const spaceSchema = z.object({
   url: z.string().describe("The space in Bananasplit."),
   connectorsOn: z
     .boolean()
-    .describe("Whether the club allows AI apps. When false, every other tool refuses this space."),
-  paused: z
-    .boolean()
-    .describe("A club whose trial ended: it can be read, but nothing can be added or changed."),
+    .describe(
+      "Whether the organization allows AI apps. When false, every other tool refuses this space.",
+    ),
 });
 
 const outputSchema = z.object({
@@ -47,7 +45,6 @@ export type ListSpacesOutput = z.infer<typeof outputSchema>;
 export async function listConnectorSpaces(
   connector: VerifiedConnector,
   grant: Pick<ResolvedGrant, "organizationId">,
-  now: Date = new Date(),
 ): Promise<ConnectorSpace[]> {
   return withConnectorUserTx(connector, async ({ db }) => {
     // OrgSettings is readable only in the current org; this reads every
@@ -63,7 +60,7 @@ export async function listConnectorSpaces(
       select: {
         role: true,
         organization: {
-          select: { id: true, name: true, slug: true, kind: true, plan: true, trialEndsAt: true },
+          select: { id: true, name: true, slug: true, kind: true },
         },
       },
       orderBy: { organization: { name: "asc" } },
@@ -78,7 +75,6 @@ export async function listConnectorSpaces(
         role: role.toLowerCase() as ConnectorSpace["role"],
         url: appUrl(`/app/${org.slug}`),
         connectorsOn: on.get(org.id) ?? true,
-        paused: isPaused(org, now),
       };
     });
     return [
@@ -94,7 +90,7 @@ export const registerListSpaces: ToolRegistrar = (server, { connector, grant }) 
     {
       title: "List spaces",
       description:
-        "Lists the Bananasplit spaces this connection can use: the member's Personal space and the clubs they belong to. Each has its id, the member's role, a link, whether the club allows AI apps, and whether it is paused.",
+        "Lists the Bananasplit spaces this connection can use: the member's Personal space and the organizations they belong to. Each has its id, the member's role, a link, whether the organization allows AI apps, and whether it is paused.",
       inputSchema: z.object({}),
       outputSchema,
       annotations: READ_ONLY,

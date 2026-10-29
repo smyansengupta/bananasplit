@@ -413,8 +413,7 @@ interface MovedRow extends MovedCounts {
   storageUsedBytes: number;
 }
 
-const NOT_YOUR_CLUB =
-  "You can bring things only into a club you own or run, while it isn't paused.";
+const NOT_YOUR_CLUB = "You can bring things only into an organization you own or run.";
 
 export type MoveResult = { ok: true; moved: MovedCounts } | { ok: false; error: string };
 

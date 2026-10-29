@@ -266,9 +266,6 @@ async function runInTx<T>(opts: RunOptions, fn: (ctx: TxContext) => Promise<T>):
  * - feature: the action belongs to it (finance, databases, files, people,
  *   ...); a space without it refuses the action, so a typed request can't
  *   reach a locked feature any more than a page can.
- * - whenPaused: "refuse" (the default) for anything that creates or changes
- *   club content; "allow" for reads, choosing a plan, leaving, deleting and
- *   the member's own things (pins), which a paused club still lets through.
  * - onRefused: "throw" (the default) throws SpaceRefusedError, an AppError
  *   whose message is meant for the person (the actions' error mappers turn
  *   it into `{ error }`); "return" hands back a SpaceRefusal instead of
@@ -276,7 +273,6 @@ async function runInTx<T>(opts: RunOptions, fn: (ctx: TxContext) => Promise<T>):
  */
 export interface OrgActionOptions {
   feature?: PlanFeature;
-  whenPaused?: "refuse" | "allow";
   onRefused?: "return" | "throw";
 }
 
@@ -285,7 +281,7 @@ export class SpaceRefusedError extends AppError {
   readonly refusal: SpaceRefusal;
 
   constructor(refusal: SpaceRefusal) {
-    super(refusal.error, 403, refusal.refused === "paused" ? "SPACE_PAUSED" : "SPACE_FEATURE");
+    super(refusal.error, 403, "SPACE_FEATURE");
     this.name = "SpaceRefusedError";
     this.refusal = refusal;
   }
@@ -332,8 +328,8 @@ export async function orgSpaceRefusal(
  *     ctx.afterCommit(() => invalidate([tags.things(ctx.organizationId)]));
  *   });
  *
- * Before the handler it asks the space (OrgActionOptions): a paused club
- * refuses writes, and an action of a feature the space lacks is refused
+ * Before the handler it asks the space (OrgActionOptions): an action of a
+ * feature the space lacks is refused
  * (SpaceRefusedError, or with onRefused "return" a SpaceRefusal in place of
  * the handler's result: only for handlers whose results are `{ error }`).
  */
@@ -470,9 +466,9 @@ export interface ConnectorGrantScope {
  *   tool can't probe whether an org exists);
  * - a club with AI connectors switched off (ConnectorRefusedError "switch"),
  *   whatever the grant says;
- * - what the space refuses (SpaceRefusedError): feature "connectors", then
- *   the tool's own `feature` and `whenPaused` (reads "allow", writes the
- *   default "refuse").
+ * - what the space's plan leaves out (SpaceRefusedError): feature
+ *   "connectors", then the tool's own `feature`. (A trial that ends drops
+ *   to Free; nothing is paused, so reads and writes are refused alike.)
  * The handler gets an OrgContext whose `user` is the member's own row, so
  * services that read ctx.user work unchanged. ESLint limits the importers
  * (CONNECTORS in eslint.config.mjs, a security review item).
@@ -514,8 +510,8 @@ export function withConnectorOrgTx<T>(
         throw new ConnectorRefusedError("switch", space.name);
       }
       const refusal =
-        spaceRefusal(space, { feature: "connectors", whenPaused: "allow" }) ??
-        spaceRefusal(space, { feature: options.feature, whenPaused: options.whenPaused });
+        spaceRefusal(space, { feature: "connectors" }) ??
+        spaceRefusal(space, { feature: options.feature });
       if (refusal) throw new SpaceRefusedError(refusal);
       const user = await ctx.db.user.findUnique({
         where: { id: connector.userId },
@@ -625,7 +621,7 @@ export interface OrgContextBySlug {
     kind: OrgKind;
     /** What the space includes (src/lib/billing/space.ts: spaceIncludes). */
     plan: OrgPlan;
-    /** TRIAL: when the trial ends (after it, the club is paused). */
+    /** TRIAL: when the trial ends (after it, the organization is on Team Free). */
     trialEndsAt: Date | null;
   };
   role: Role;

@@ -160,7 +160,7 @@ export const registerFinanceTools: ToolRegistrar = (server, session) => {
     {
       title: "List my reimbursements",
       description:
-        "Lists the member's own expense requests in a club, newest first: the amount, what it was for, its status (submitted, approved, reimbursed, rejected) and when it was paid back.",
+        "Lists the member's own expense requests in an organization, newest first: the amount, what it was for, its status (submitted, approved, reimbursed, rejected) and when it was paid back.",
       inputSchema: listInput,
       outputSchema: listOutput,
       annotations: READ_ONLY,

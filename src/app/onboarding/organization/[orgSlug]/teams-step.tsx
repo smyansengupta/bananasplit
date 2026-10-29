@@ -164,8 +164,8 @@ export function TeamsStep({
       <StepBody className="gap-3">
         {state.hasPublishedChart && (
           <p className="bg-muted text-muted-foreground rounded-field m-0 px-3.5 py-2.5 text-[13px]">
-            Your club already has an org chart. Continuing publishes these teams as a new version;
-            the old one stays in the chart&apos;s history.
+            Your organization already has an org chart. Continuing publishes these teams as a new
+            version; the old one stays in the chart&apos;s history.
           </p>
         )}
         <div className="flex flex-col gap-2">

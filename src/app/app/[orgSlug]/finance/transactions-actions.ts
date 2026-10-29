@@ -145,7 +145,7 @@ export const createTransaction = financeAction(
         if (!active) {
           return {
             error:
-              "Your club's treasurer hasn't set up the budget yet, so requests can't be filed. Ask them to open Finance once.",
+              "Your treasurer hasn't set up the budget yet, so requests can't be filed. Ask them to open Finance once.",
           };
         }
         periodId = active.id;

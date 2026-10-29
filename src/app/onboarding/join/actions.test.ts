@@ -87,7 +87,7 @@ describe("saveClubRoleAction", () => {
   it("refuses a club the caller isn't in, and a too-long role", async () => {
     mocks.getJoinedClub.mockResolvedValue(null);
     expect(await saveClubRoleAction("elsewhere", { title: "VP" })).toEqual({
-      error: "You're not a member of this club.",
+      error: "You're not a member of this organization.",
     });
     expect((await saveClubRoleAction("robotics", { title: "x".repeat(81) })).error).toMatch(
       /under 80/,
@@ -98,7 +98,7 @@ describe("saveClubRoleAction", () => {
   it("leaves the title to admins once the join window has passed", async () => {
     mocks.setOwnClubTitle.mockResolvedValue(false);
     expect(await saveClubRoleAction("robotics", { title: "President" })).toEqual({
-      error: "Your role here is set by the club's admins now.",
+      error: "Your role here is set by the organization's admins now.",
     });
   });
 });

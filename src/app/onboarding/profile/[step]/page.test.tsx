@@ -83,7 +83,7 @@ describe("/onboarding/profile/[step]", () => {
     mocks.profile.mockResolvedValue(profile({ onboardedAt: null }));
     const html = await render("basics");
     expect(html).toContain("A real profile about you.");
-    expect(html).toContain("Your clubs see it.");
+    expect(html).toContain("Your organizations see it.");
     expect(html).toContain("Step 1 of 5");
     for (const name of ["About you", "School", "Bio and links", "When you can't meet", "Review"])
       expect(html).toContain(name);

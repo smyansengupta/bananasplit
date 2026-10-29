@@ -16,16 +16,20 @@ plan from a9b3141 and the old free /rsvp pages.
   or **Personal Plus** (`PERSONAL_PLUS`, $4 a month or $36 a year: themes,
   calendar sync, AI imports, more storage); its owner switches in Settings ›
   Plan and storage.
-- **Club**: a shared space (`kind = CLUB`). Anyone can start one. A new club
-  gets a **30-day free trial** of everything (Team Advanced), no card.
-  When the trial ends the owner picks **Team** (`CLUB`) or **Team
-  Advanced** (`SOCIETY`). Until then
-  the club is **paused**: everyone can still open and read everything,
-  nothing is deleted, public RSVP and poll links keep working for guests,
-  but members can't create or edit club content; owners and admins see a
-  "Choose a plan" screen. Billing isn't connected yet: picking a plan
-  applies at once (as Admin panel > Plan does today), behind the same seam
-  (`changeOrgPlan`) a real checkout will call.
+- **Organization**: a shared space (`kind = CLUB`). Anyone can start one. A
+  new organization gets a **30-day free trial** of everything (Team
+  Advanced), no card. When the trial ends it moves to **Free**
+  (`TEAM_FREE`, a reverse trial): nothing pauses or is deleted, and what
+  Team and Team Advanced add is locked until the owner picks **Team**
+  (`CLUB`) or **Team Advanced** (`SOCIETY`). The row stays `TRIAL` until a
+  plan is picked; the app reads an ended trial as `TEAM_FREE`
+  (`src/lib/billing/space.ts`). Owners and admins see a note that the
+  trial ended. Prices: standard per member a month, billed yearly, or for
+  a student organization (owner on a school address, within the plan's
+  member cap) a flat price per academic year or semester
+  (`src/lib/billing/plans.ts`). Billing isn't connected yet: picking a plan
+  applies at once, behind the same seam (`changeOrgPlan`) a real checkout
+  will call.
 - **Joining a club is always free.** A joiner never sees a price, a trial
   or a paywall. Only owners and admins see plan prompts.
 - Guests (people who RSVP or answer a poll) never need an account.
@@ -55,7 +59,7 @@ Every number lives in `src/lib/billing/features.ts` (`PLAN_LIMITS`,
   and the trash, until it is emptied (`Organization.storageUsedBytes`, kept
   by database triggers; the app never writes it).
 - Every upload passes one gate (`src/server/storage/quota.ts`): the space
-  has the feature and isn't paused, the file is within the plan's largest
+  has the feature, the file is within the plan's largest
   file, and it fits. Refusals say the numbers. Files over 4 MB go straight
   to Vercel Blob with a short-lived, size-capped token
   (`src/server/storage/direct.ts`); the browser side is `uploadNoteFile()`
@@ -155,7 +159,7 @@ opening the same list with `?from=move`.
 The move is `app.move_personal_items` (migration
 `20261013190000_move_personal_items`, which documents every row it
 touches): one transaction, ids kept, the caller must own the Personal space
-and be OWNER or ADMIN of a club that isn't paused. Events move with
+and be OWNER or ADMIN of the organization. Events move with
 sign-ups, tickets, bring list and pending RSVP jobs, and become INTERNAL
 (nothing lands on the club's public feed by itself). Polls move with slots,
 responses, options and votes; a poll's scheduled event comes along. Tasks

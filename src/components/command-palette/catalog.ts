@@ -269,7 +269,15 @@ const PAGES: readonly PageDef[] = [
     title: "Admin panel",
     permission: "settings.view",
     icon: "ShieldCheck",
-    keywords: ["settings", "preferences", "configuration", "admin", "options", "club settings"],
+    keywords: [
+      "settings",
+      "preferences",
+      "configuration",
+      "admin",
+      "options",
+      "organization settings",
+      "org settings",
+    ],
   },
   {
     path: "/settings/members",
@@ -331,7 +339,7 @@ const PAGES: readonly PageDef[] = [
 
 /** Other words for each settings page (settings-nav has the names and permissions). */
 const SETTINGS_KEYWORDS: Record<string, readonly string[]> = {
-  general: ["club name", "url", "slug", "timezone", "picture", "logo"],
+  general: ["organization name", "org name", "url", "slug", "timezone", "picture", "logo"],
   sidebar: ["sections", "navigation", "hide", "rename", "menu", "order"],
   theme: ["colors", "branding", "logo", "dark mode", "light mode", "appearance"],
   labels: ["tags", "task labels"],
@@ -441,7 +449,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
   action(
     {
       key: "action:ask",
-      title: "Ask the club a question",
+      title: "Ask the organization a question",
       detail: "A quick vote",
       keywords: ["new poll", "create poll", "vote", "survey", "question"],
       icon: "MessageCircleQuestion",
@@ -453,7 +461,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
     {
       key: "action:expense",
       title: "Submit an expense",
-      detail: "Get paid back for club spending",
+      detail: "Get paid back for organization spending",
       keywords: ["reimbursement", "receipt", "new expense", "pay me back"],
       icon: "Receipt",
       command: { type: "href", href: `${base}/finance/my-reimbursements` },
@@ -507,8 +515,8 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
     action({
       key: `action:org:${org.slug}`,
       title: `Switch to ${org.name}`,
-      detail: org.kind === "PERSONAL" ? "Personal" : "Club",
-      keywords: ["switch", "organization", "club", "org"],
+      detail: org.kind === "PERSONAL" ? "Personal" : "Organization",
+      keywords: ["switch", "organization", "org", "workspace"],
       icon: "ArrowRightLeft",
       command: { type: "href", href: `/app/${org.slug}` },
     });

@@ -45,7 +45,7 @@ export function ThemeForm({
         return;
       }
       setTheme(value ? value.mode : clubMode);
-      setStatus({ ok: true, text: value ? "Theme saved." : "Following the club's theme." });
+      setStatus({ ok: true, text: value ? "Theme saved." : "Following the organization's theme." });
       router.refresh();
     });
   }

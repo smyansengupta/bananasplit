@@ -69,7 +69,7 @@ describe("createOrganization", () => {
     expect(fake.systemCalls).toHaveLength(0);
   });
 
-  it("in production, lets any verified account create a club by default", async () => {
+  it("in production, lets any verified account create an organization by default", async () => {
     vi.stubEnv("VERCEL_ENV", "production");
     const result = await createOrganization(user, input);
     expect(result).toMatchObject({ ok: true, slug: "new-club" });

@@ -7,11 +7,17 @@ import { useId, useState, type FormEvent } from "react";
 import { ArrowLeft } from "@/components/brand/arrows";
 import { Logo } from "@/components/brand/logo";
 import { pill } from "@/components/brand/pill";
-import { PERSONAL_PLUS, perMemberRate, TIER_NAMES } from "@/components/marketing/tiers";
 import { Segmented } from "@/components/ui/segmented";
 import { FieldSelect } from "@/components/ui/field-select";
-import type { ClubPlanId } from "@/lib/billing/plans";
-import type { SemesterSeason } from "@/lib/billing/semester";
+import {
+  type ClubPlanId,
+  dollars,
+  PERSONAL_PLANS,
+  type PriceTrack,
+  type StudentTerm,
+  TEAM_PRICES,
+  teamQuote,
+} from "@/lib/billing/plans";
 import { PRIVACY_HREF, TERMS_HREF } from "@/lib/brand/links";
 import { cn } from "@/lib/utils";
 
@@ -20,8 +26,15 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" 
 
 const NOT_CONNECTED = "Card payments aren't connected yet, so nothing was charged.";
 
-/** What checkout sells: a club plan (?plan=club is Team, society is Team Advanced) or Personal Plus. */
+/** What checkout sells: a team plan (?plan=club is Team, society is Team Advanced) or Personal Plus. */
 export type CheckoutPlan = ClubPlanId | "plus";
+
+const PLUS = PERSONAL_PLANS.plus;
+
+/** The plan's name on the order. */
+function planName(plan: CheckoutPlan): string {
+  return plan === "plus" ? PLUS.name : TEAM_PRICES[plan].name;
+}
 
 type Period = "month" | "year";
 
@@ -57,23 +70,29 @@ const COUNTRIES = [
 
 export interface CheckoutFormProps {
   plan: CheckoutPlan;
-  /** The club the plan is for ("your club" with none); unused for Personal Plus. */
+  /** The organization the plan is for ("your organization" with none); unused for Personal Plus. */
   clubName: string;
-  /** The club's member count (at least 1), or the sample 40 with no club. */
+  /** The organization's member count (at least 1), or the sample 40 with none. */
   initialMembers: number;
   email: string;
+  /** Whether `email` is a school's (isSchoolEmail): the student prices are offered. */
+  schoolEmail: boolean;
   backHref: string;
   backLabel: string;
-  /** "Jan 12, 2027" (placeholder semester dates; see src/lib/billing/semester.ts). */
-  renewsOn: string;
-  renewsFor: SemesterSeason;
+  /**
+   * When each kind of plan renews ("Aug 25, 2027"): standard a year from
+   * today, student at the next academic year or semester (placeholder
+   * dates; see src/lib/billing/semester.ts).
+   */
+  renews: { standard: string; year: string; semester: string };
 }
 
 /**
  * Checkout, Stripe Checkout style, in Moonstone: the order on the page
  * (left), the card form in a card (right). Stacked below lg, the order on
- * top. A club plan prices its seats per member per semester; Personal Plus
- * is one person, monthly or yearly.
+ * top. A team plan is per member a month, billed yearly, or for a student
+ * organization a flat price per academic year or semester; Personal Plus
+ * is one person, monthly or yearly (free for students).
  *
  * Billing isn't connected: Subscribe only says so. The form never submits
  * anywhere (onSubmit prevents it, and no field has a `name`, so even a
@@ -154,7 +173,8 @@ export function CheckoutForm(props: CheckoutFormProps) {
           </div>
           <p className="text-muted-foreground text-center text-[12px] leading-[1.5]">
             By subscribing, you allow Bananasplit to charge your card for this payment and future
-            renewals. Cancel any time in {props.plan === "plus" ? "your profile" : "club settings"}.
+            renewals. Cancel any time in{" "}
+            {props.plan === "plus" ? "your profile" : "organization settings"}.
           </p>
 
           <div className="text-muted-foreground flex justify-center gap-3.5 text-[12px]">
@@ -180,7 +200,7 @@ function OrderTotal({ plan, total, per }: { plan: CheckoutPlan; total: string; p
   return (
     <div className="flex flex-col gap-2">
       <h1 className="text-muted-foreground text-[16px] font-medium">
-        Subscribe to {TIER_NAMES[plan]}
+        Subscribe to {planName(plan)}
       </h1>
       <p className="flex items-baseline gap-2.5">
         <span className="numeral text-[44px]">{total}</span>
@@ -226,21 +246,55 @@ function OrderLine({
   );
 }
 
-/** A club plan: the seat stepper, priced per member per semester. */
+/**
+ * A team plan. Standard: the seat stepper, per member a month, billed
+ * yearly. Student (a school address, within the plan's member cap): a flat
+ * price for the academic year or a semester, whatever the member count.
+ */
 function ClubOrder({
   plan,
   clubName,
   initialMembers,
-  renewsOn,
-  renewsFor,
+  schoolEmail,
+  renews,
 }: CheckoutFormProps & { plan: ClubPlanId }) {
   const [members, setMembers] = useState(initialMembers);
-  const rate = perMemberRate(plan);
-  const total = usd.format(rate * members);
-  const name = TIER_NAMES[plan];
+  const [chosen, setChosen] = useState<PriceTrack | null>(null);
+  const [term, setTerm] = useState<StudentTerm>("year");
+  const prices = TEAM_PRICES[plan];
+  const studentOk = schoolEmail && members <= prices.studentMemberCap;
+  const track: PriceTrack = studentOk ? (chosen ?? "student") : "standard";
+  const quote = teamQuote(plan, track, members, term);
+  const total = usd.format(quote.total);
+  const name = prices.name;
+  const renewsOn = track === "standard" ? renews.standard : renews[term];
   return (
     <>
-      <OrderTotal plan={plan} total={total} per="per semester" />
+      <OrderTotal plan={plan} total={total} per={quote.per.replace(/^a /, "per ")} />
+      {schoolEmail && (
+        <div className="flex flex-wrap gap-2">
+          <Segmented
+            label="Price"
+            value={track}
+            onSelect={(value) => setChosen(value as PriceTrack)}
+            options={[
+              { value: "student", label: "Student organization" },
+              { value: "standard", label: "Standard" },
+            ]}
+          />
+          {track === "student" && (
+            <Segmented
+              label="Billing period"
+              value={term}
+              onSelect={(value) => setTerm(value as StudentTerm)}
+              options={[
+                { value: "year", label: "Academic year" },
+                { value: "semester", label: "Semester" },
+              ]}
+            />
+          )}
+        </div>
+      )}
       <div className="flex flex-col gap-4">
         <div className="flex justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2.5">
@@ -272,26 +326,43 @@ function ClubOrder({
                   <Plus className="size-3.5" aria-hidden="true" />
                 </button>
               </span>
-              {/* Two flex items: the gap sets "$7" apart. */}
-              <span>members ×</span>
-              <span>${rate}</span>
+              {track === "standard" ? (
+                <>
+                  {/* Two flex items: the gap sets "$8" apart. */}
+                  <span>members ×</span>
+                  <span>{dollars(prices.perMemberPerMonth)} a month</span>
+                </>
+              ) : (
+                <span>members, flat</span>
+              )}
             </span>
           </div>
           <span className="text-[15px] font-semibold tabular-nums">{total}</span>
         </div>
 
         <OrderNote>
-          Pick how many members you have now. New members can join any time this semester, and the
-          extra seats are only billed at your next renewal, not today.
+          {track === "student"
+            ? `${quote.basis} Student organizations of up to ${prices.studentMemberCap} members pay one price, billed for the ${term === "year" ? "academic year, August to May, never the summer" : "semester"}.`
+            : schoolEmail && members > prices.studentMemberCap
+              ? `Student pricing covers up to ${prices.studentMemberCap} members, so this is the standard price: ${quote.basis.toLowerCase()}.`
+              : `${quote.basis}. Pick how many members you have now; new members can join any time and are billed at renewal, not today.`}
         </OrderNote>
 
         <div className="bg-border h-px" />
         <OrderLine label="Subtotal" amount={total} />
-        <OrderLine label="Student pricing" amount="Applied" muted />
+        <OrderLine
+          label={track === "student" ? "Student price" : "Standard price"}
+          amount={track === "student" ? "Applied" : "Billed yearly"}
+          muted
+        />
         <div className="bg-border h-px" />
         <OrderLine label="Total due today" amount={total} strong />
         <span className="text-muted-foreground text-[13px]">
-          Renews {renewsOn} for the {renewsFor} semester.
+          Renews {renewsOn}
+          {track === "student"
+            ? ` for the next ${term === "year" ? "academic year" : "semester"}`
+            : ""}
+          .
         </span>
       </div>
     </>
@@ -299,11 +370,11 @@ function ClubOrder({
 }
 
 /** Personal Plus: one person, billed monthly or yearly. */
-function PlusOrder({ email }: CheckoutFormProps) {
+function PlusOrder({ email, schoolEmail }: CheckoutFormProps) {
   const [period, setPeriod] = useState<Period>("year");
-  const amount = period === "year" ? PERSONAL_PLUS.perYear : PERSONAL_PLUS.perMonth;
+  const amount = schoolEmail ? 0 : period === "year" ? PLUS.perYear : PLUS.perMonth;
   const total = usd.format(amount);
-  const saved = usd.format(PERSONAL_PLUS.perMonth * 12 - PERSONAL_PLUS.perYear);
+  const saved = usd.format(PLUS.perMonth * 12 - PLUS.perYear);
   return (
     <>
       <OrderTotal plan="plus" total={total} per={period === "year" ? "per year" : "per month"} />
@@ -320,16 +391,18 @@ function PlusOrder({ email }: CheckoutFormProps) {
         />
         <div className="flex justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-[15px] font-semibold">{TIER_NAMES.plus}</span>
+            <span className="text-[15px] font-semibold">{PLUS.name}</span>
             <span className="text-muted-foreground truncate text-[13px]">For {email}</span>
           </div>
           <span className="text-[15px] font-semibold tabular-nums">{total}</span>
         </div>
 
         <OrderNote>
-          {period === "year"
-            ? `Yearly saves ${saved}: three months free. Your Personal space gets 25 GB, files up to 250 MB and a year of note history.`
-            : `Switch to yearly to save ${saved}. Your Personal space gets 25 GB, files up to 250 MB and a year of note history.`}
+          {schoolEmail
+            ? "Personal Plus is free with a school email: 25 GB, files up to 250 MB and a year of note history."
+            : period === "year"
+              ? `Yearly saves ${saved}: three months free. Your Personal space gets 25 GB, files up to 250 MB and a year of note history.`
+              : `Switch to yearly to save ${saved}. Your Personal space gets 25 GB, files up to 250 MB and a year of note history.`}
         </OrderNote>
 
         <div className="bg-border h-px" />

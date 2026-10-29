@@ -238,7 +238,7 @@ export function NewDatabaseDialog({
           <DialogDescription>
             {personal
               ? "Stored in Bananasplit and saved as you type. Only you can see it."
-              : "Stored in Bananasplit and saved as you type. Only your club can see it, and you choose which members."}
+              : "Stored in Bananasplit and saved as you type. Only your organization can see it, and you choose which members."}
           </DialogDescription>
         </DialogHeader>
 

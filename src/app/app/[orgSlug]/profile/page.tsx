@@ -68,7 +68,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
     [profile.major, profile.gradYear ? `’${String(profile.gradYear).slice(-2)}` : null]
       .filter(Boolean)
       .join(" "),
-    `${titledOrgs.length} club${titledOrgs.length === 1 ? "" : "s"}`,
+    `${titledOrgs.length} organization${titledOrgs.length === 1 ? "" : "s"}`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -90,8 +90,8 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           </Button>
         </header>
         <p className="text-muted-foreground max-w-prose text-sm">
-          Members of your clubs see your name, picture, pronouns, major, bio and links. Your email
-          is not shown on people pages.
+          Members of your organizations see your name, picture, pronouns, major, bio and links. Your
+          email is not shown on people pages.
         </p>
 
         <nav aria-label="Profile sections" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -121,7 +121,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           />
           <SettingsCard
             title="Your titles"
-            description="Each club's admins set your title there, separately from your role."
+            description="Each organization's admins set your title there, separately from your role."
           >
             <ul className="divide-border/70 divide-y">
               {titledOrgs.map((m) => (

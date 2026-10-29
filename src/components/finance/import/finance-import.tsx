@@ -344,7 +344,7 @@ export function FinanceImport(props: FinanceImportProps) {
             <p className="flex items-start gap-2.5">
               <FileText className="mt-px size-4 shrink-0" aria-hidden="true" />
               <span>
-                PDFs and photos are read by your club&apos;s AI model (
+                PDFs and photos are read by your organization&apos;s AI model (
                 {ai.selected ? ai.selected.label : "when one is connected"}).{" "}
                 <button
                   type="button"

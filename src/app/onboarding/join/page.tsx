@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Enter your invite code · Bananasplit" };
 
 const WHERE = [
-  "Check the invite email from your club.",
-  "Or ask any officer. It's on their club settings page.",
+  "Check the invite email from your organization.",
+  "Or ask any admin. It's on their organization settings page.",
 ] as const;
 
 /**
@@ -71,14 +71,14 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
       }
     >
       <AuthTitle
-        eyebrow="Join a club"
+        eyebrow="Join an organization"
         title="Enter your invite code."
-        description="Paste it or type it in. You'll see the club before you join."
+        description="Paste it or type it in. You'll see the organization before you join."
       />
       {profile.emailVerified ? (
         <JoinForm initialCode={initialCode} />
       ) : (
-        <VerifyEmailNotice email={profile.email} action="join a club" />
+        <VerifyEmailNotice email={profile.email} action="join an organization" />
       )}
 
       {invites.length > 0 && (

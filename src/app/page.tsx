@@ -1,49 +1,41 @@
 import type { Metadata } from "next";
 
-import { checkoutAvailable } from "@/app/checkout/availability";
-import { BrandRoot } from "@/components/brand/brand-root";
-import { Faq } from "@/components/marketing/faq";
-import { FeatureBoard } from "@/components/marketing/feature-board";
+import { Security } from "@/components/marketing/connect";
+import { Features } from "@/components/marketing/features";
 import { FinalCta } from "@/components/marketing/final-cta";
-import { Finance } from "@/components/marketing/finance";
 import { Hero } from "@/components/marketing/hero";
-import { Pricing } from "@/components/marketing/pricing";
-import { Ripeness } from "@/components/marketing/ripeness";
-import { SiteFooter } from "@/components/marketing/site-footer";
-import { SiteHeader } from "@/components/marketing/site-header";
+import { Integrations } from "@/components/marketing/integrations";
+import { MarketingShell } from "@/components/marketing/marketing-shell";
+import { Solutions } from "@/components/marketing/solutions";
 import { getSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Bananasplit: the workspace for student clubs",
+  title: "Bananasplit: the new era of team keeping",
   description:
-    "Tasks, availability polls, RSVPs, notes, databases and the club budget in one workspace for your club's board.",
+    "Bananasplit brings your team's projects, docs, events and money into one smart workspace, and it works with the apps you already use.",
 };
 
 /**
- * The marketing home page (the design handoff's "Bananasplit Home"), in its
- * cream-and-banana look, with the Moonstone glass header and the four plans.
- * It is the home page for everyone, signed in or not; signed-in visitors get
- * an "Open your club" way into the app (/app) instead of Log in.
- *
- * `overflow-x-clip` keeps wide decoration from scrolling the page sideways
- * without breaking the sticky header, as `hidden` would.
+ * The marketing home page, centred and laid out like Notion's, in Graphite
+ * (light or dark), in the SaaS homepage report's section order: the hero
+ * (headline, the two buttons, the risk remover, the real product, the apps
+ * it works with), the features (a bento, a swipeable row on phones, most
+ * important first: texting, projects, docs, events, calendar, finance, AI),
+ * tabs by kind of organization, the one integrations section, a slim
+ * security strip, and the final band repeating the hero's buttons. Pricing and its
+ * questions live on /pricing (in the nav).
  */
 export default async function Home() {
   const signedIn = Boolean(await getSession());
 
   return (
-    <BrandRoot look="cream" className="overflow-x-clip">
-      <SiteHeader signedIn={signedIn} />
-      <main id="top">
-        <Hero />
-        <FeatureBoard />
-        <Ripeness />
-        <Finance />
-        <Pricing signedIn={signedIn} checkout={checkoutAvailable()} />
-        <Faq />
-        <FinalCta />
-      </main>
-      <SiteFooter signedIn={signedIn} />
-    </BrandRoot>
+    <MarketingShell signedIn={signedIn}>
+      <Hero signedIn={signedIn} />
+      <Features />
+      <Solutions signedIn={signedIn} />
+      <Integrations />
+      <Security />
+      <FinalCta signedIn={signedIn} />
+    </MarketingShell>
   );
 }
