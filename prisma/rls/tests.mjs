@@ -2370,6 +2370,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       ).rows.map((r) => r.relname),
     {
       value: [
+        "DemoRequest",
         "OrgCreationCode",
         "OrgDeletionLog",
         "OrgSecret",
