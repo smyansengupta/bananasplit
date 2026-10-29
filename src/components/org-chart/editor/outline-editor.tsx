@@ -387,7 +387,8 @@ export function OutlineEditor({
           One position per line: &ldquo;Title — @Name&rdquo;. <kbd className="font-mono">Tab</kbd> reports to the line
           above, <kbd className="font-mono">Shift Tab</kbd> goes back up, <kbd className="font-mono">Esc</kbd> then{" "}
           <kbd className="font-mono">Tab</kbd> leaves the field. &ldquo;Open:&rdquo; marks an open role,
-          &ldquo;Advisor:&rdquo; an advisor. Paste a list or a drawn tree and it keeps its shape.
+          &ldquo;Advisor:&rdquo; an advisor, &ldquo;(also reports to Name)&rdquo; a second manager. Paste a list or a
+          drawn tree and it keeps its shape.
         </p>
 
         {unknown.length > 0 && (

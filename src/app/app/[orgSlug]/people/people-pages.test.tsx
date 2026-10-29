@@ -81,6 +81,7 @@ function sheet() {
     team: { key: "p_ops", name: "Ops & Programs", slot: 2 },
     positions: [{ key: "vp-ops", title: "VP Ops & Programs", isAdvisor: false }],
     reportsTo: [{ key: "president", title: "President", person: "Jackson Lamoureux", userId: "u_jackson" }],
+    alsoReportsTo: [{ key: "head-of-growth", title: "Head of Growth", person: "Kristine Min", userId: "u_kristine" }],
     leads: [{ key: "head-of-tech", title: "Head of Tech", person: "Smyan Sengupta", userId: "u_smyan" }],
     tasks: [{ id: "t1", title: "Exec sync agenda", dueKey: "2026-10-20" }],
     taskCount: 1,
@@ -130,6 +131,8 @@ describe("people pages privacy", () => {
     expect(html).toContain("Business Administration · Class of 2027");
     expect(html).toContain("Runs the exec sync.");
     expect(html).toContain("Jackson Lamoureux, President");
+    expect(html).toContain("Also reports to");
+    expect(html).toContain("Kristine Min, Head of Growth");
     expect(html).toContain("Ops &amp; Programs");
     expect(html).toContain("Tomorrow");
     expect(html).toContain('href="/app/cbc/tasks?view=table&amp;assignee=u_oliver"');

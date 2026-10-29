@@ -65,6 +65,7 @@ export default async function OrgChartPage({
       ? { id: p.user.id, name: p.user.name, image: p.user.image, avatar: p.user.avatar }
       : null,
     reportsToId: p.reportsToId,
+    alsoReportsToIds: p.alsoReportsToIds,
     isOpen: p.isOpen,
     isAdvisor: p.isAdvisor,
     responsibilities: p.responsibilities,

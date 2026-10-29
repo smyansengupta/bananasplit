@@ -216,6 +216,12 @@ export function PersonProfile({
                   ? person.reportsTo.map(refLink)
                   : "No one, top of the chart"}
               </dd>
+              {person.alsoReportsTo.length > 0 && (
+                <>
+                  <dt className="text-muted-foreground">Also reports to</dt>
+                  <dd className="flex min-w-0 flex-col items-start gap-0.5">{person.alsoReportsTo.map(refLink)}</dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Leads</dt>
               <dd className="flex min-w-0 flex-col items-start gap-0.5">
                 {person.leads.length ? person.leads.map(refLink) : "No one"}

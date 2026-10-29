@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Check, Plus, Trash2, Unlink } from "@/components/icons";
+import { ArrowDown, ArrowUp, Check, Plus, Trash2, Unlink, X } from "@/components/icons";
 import { useId } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UserAvatar } from "@/components/user-avatar";
-import { confirmMember, toTree, unlinkMember, type DraftPosition } from "@/lib/org-chart/draft";
+import {
+  confirmMember,
+  extraManagerOptions,
+  toTree,
+  unlinkMember,
+  type DraftPosition,
+} from "@/lib/org-chart/draft";
 import { matchPerson } from "@/lib/org-chart/match";
 import { descendantIds } from "@/lib/org-chart/tree";
 import type { ValidationIssue } from "@/lib/org-chart/validate";
@@ -21,12 +27,19 @@ import { MemberPicker, type EditorMember } from "./member-picker";
 /**
  * Editing one position of a draft: title, person (link a member, confirm a
  * suggestion, or keep a placeholder name), reporting line (the keyboard and
- * touch alternative to dragging), advisor and open-hire toggles, and the
+ * touch alternative to dragging), extra managers (dotted lines on the
+ * chart; the position stays under its main manager), advisor and open-hire
+ * toggles, and the
  * responsibilities and decides-alone bullets. Source quotes from the parse
  * are shown read-only so whoever is editing can check them.
  */
 
 const NOBODY = "__none__";
+const ADD = "__add__";
+
+function optionLabel(p: DraftPosition): string {
+  return `${p.title || "Untitled position"}${p.personName ? ` · ${p.personName}` : ""}`;
+}
 
 export function PositionEditor({
   position,
@@ -35,6 +48,8 @@ export function PositionEditor({
   issues,
   onChange,
   onSetManager,
+  onAddAlsoManager,
+  onRemoveAlsoManager,
   onMove,
   onAddReport,
   onRemove,
@@ -45,6 +60,8 @@ export function PositionEditor({
   issues: ValidationIssue[];
   onChange: (next: DraftPosition) => void;
   onSetManager: (managerId: string | null) => void;
+  onAddAlsoManager: (managerId: string) => void;
+  onRemoveAlsoManager: (managerId: string) => void;
   onMove: (direction: -1 | 1) => void;
   onAddReport: () => void;
   onRemove: () => void;
@@ -57,6 +74,9 @@ export function PositionEditor({
     .filter((p) => !blocked.has(p.id) && !p.isAdvisor)
     .sort((a, b) => a.title.localeCompare(b.title));
   const hasReports = positions.some((p) => p.reportsTo === position.id);
+  const byId = new Map(positions.map((p) => [p.id, p]));
+  const alsoManagers = (position.alsoReportsTo ?? []).filter((id) => id !== position.reportsTo);
+  const alsoOptions = extraManagerOptions(positions, position.id).sort((a, b) => a.title.localeCompare(b.title));
   const suggestions = position.suggestedUserIds
     .map((id) => membersById.get(id))
     .filter((m): m is EditorMember => Boolean(m));
@@ -211,8 +231,7 @@ export function PositionEditor({
             <SelectItem value={NOBODY}>Nobody (top of the chart)</SelectItem>
             {managerOptions.map((p) => (
               <SelectItem key={p.id} value={p.id}>
-                {p.title || "Untitled position"}
-                {p.personName ? ` · ${p.personName}` : ""}
+                {optionLabel(p)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -228,6 +247,52 @@ export function PositionEditor({
           </Button>
         </div>
       </div>
+
+      {(alsoManagers.length > 0 || (!position.isAdvisor && position.reportsTo !== null)) && (
+        <div className="space-y-2">
+          <Label htmlFor={`${uid}-also`}>Also reports to</Label>
+          <p className="text-muted-foreground text-xs">A dotted line on the chart. The position stays under its main manager.</p>
+          {alsoManagers.length > 0 && (
+            <ul className="space-y-1" aria-label="Also reports to">
+              {alsoManagers.map((id) => {
+                const manager = byId.get(id);
+                const name = manager ? optionLabel(manager) : "A position not in this draft";
+                return (
+                  <li key={id} className="bg-muted/50 flex items-center gap-2 rounded-md border py-1 pr-1 pl-3">
+                    <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Remove ${manager?.title || "this manager"}`}
+                      onClick={() => onRemoveAlsoManager(id)}
+                    >
+                      <X aria-hidden="true" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {!position.isAdvisor && alsoOptions.length > 0 && (
+            <Select value={ADD} onValueChange={(value) => value !== ADD && onAddAlsoManager(value)}>
+              <SelectTrigger id={`${uid}-also`} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ADD} disabled>
+                  Add a manager…
+                </SelectItem>
+                {alsoOptions.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {optionLabel(p)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
 
       <div className="flex items-start justify-between gap-3">
         <div>

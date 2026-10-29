@@ -16,6 +16,7 @@ import { compareRank } from "./types";
  *     Advisor: Faculty advisor — Dr. Lee
  *     VP Events — @Ana Kim
  *       Open: Events coordinator
+ *       Designer — Sam Ortiz (also reports to Ana Kim)
  *
  * - A line indented more than the one above reports to it; equal is a
  *   sibling; less goes back up to the last line at that depth (any
@@ -27,6 +28,8 @@ import { compareRank } from "./types";
  *   suggestion to confirm (nothing is linked behind the admin's back).
  * - "Open:" (or a person of Open, TBD, Vacant, [open hire]) marks an
  *   unfilled role; "Advisor:" or "(advisor)" an advisor.
+ * - "(also reports to Name)" at the end adds extra managers (dotted lines),
+ *   by title or person, separated by commas; the indent stays the main line.
  */
 
 export interface OutlineLine {
@@ -42,7 +45,11 @@ export interface OutlineLine {
   mention: boolean;
   isOpen: boolean;
   isAdvisor: boolean;
+  /** Extra managers as typed (titles or names), from "(also reports to ...)". */
+  also: string[];
 }
+
+const ALSO = /\s*\(\s*also(?:\s+reports?\s+to\s*:?|\s*:)\s*([^()]*)\)\s*/gi;
 
 const LEAD = /^[\s│┃|├┣└┗┬┼╰╠╚`+\\─━—–\-*•‣◦▪·>]*/u;
 const NUMBERED = /^(?:\d+(?:\.\d+)*[.)]|[a-zA-Z][.)])\s+/;
@@ -110,6 +117,16 @@ export function parseOutline(text: string): OutlineLine[] {
       isAdvisor = true;
       rest = rest.replace(/\s*\(\s*advisor\s*\)\s*/gi, " ").trim();
     }
+    const also: string[] = [];
+    rest = rest
+      .replace(ALSO, (_m, refs: string) => {
+        for (const ref of refs.split(/\s*(?:,|;|&|\band\b)\s*/i)) {
+          const clean = ref.replace(/^@+/, "").trim();
+          if (clean && also.length < LIMITS.alsoReportsTo) also.push(clean.slice(0, LIMITS.title));
+        }
+        return " ";
+      })
+      .trim();
     if (/\[\s*open(?:\s+hire)?\s*\]|\(\s*(?:open|vacant)\s*\)/i.test(rest)) {
       isOpen = true;
       rest = rest.replace(/\s*(?:\[\s*open(?:\s+hire)?\s*\]|\(\s*(?:open|vacant)\s*\))\s*/gi, " ").trim();
@@ -144,6 +161,7 @@ export function parseOutline(text: string): OutlineLine[] {
       mention,
       isOpen,
       isAdvisor,
+      also,
     });
     stack.push({ width: w, index: out.length - 1 });
   }
@@ -178,11 +196,25 @@ export function outlineOrder(positions: readonly DraftPosition[]): { position: D
 /** The text for `positions` (what the editor shows when it opens). */
 export function serializeOutline(positions: readonly DraftPosition[], members: readonly OutlineMember[]): string {
   const names = new Map(members.map((m) => [m.id, m.name]));
+  const byId = new Map(positions.map((p) => [p.id, p]));
+  // An extra manager by its person when that name is unique, else by its title.
+  const count = (values: string[]) => values.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map<string, number>());
+  const titles = count(positions.map((p) => normTitle(p.title)));
+  const people = count(positions.map((p) => personOf(p, names)).filter(Boolean));
+  const refFor = (p: DraftPosition) => {
+    const person = p.isOpen ? null : p.userId ? (names.get(p.userId) ?? p.personName) : p.personName;
+    if (person && people.get(norm(person)) === 1 && !titles.has(normTitle(person))) return person;
+    return p.title;
+  };
   return outlineOrder(positions)
     .map(({ position: p, depth }) => {
       const linked = p.userId && p.matchState === "CONFIRMED" ? (names.get(p.userId) ?? p.personName) : null;
       const person = p.isOpen ? null : linked ? `@${linked}` : p.personName;
-      return `${"  ".repeat(depth)}${p.isAdvisor ? "Advisor: " : ""}${p.isOpen ? "Open: " : ""}${p.title}${person ? ` — ${person}` : ""}`;
+      const also = (p.alsoReportsTo ?? []).flatMap((id) => {
+        const manager = byId.get(id);
+        return manager && id !== p.reportsTo ? [refFor(manager)] : [];
+      });
+      return `${"  ".repeat(depth)}${p.isAdvisor ? "Advisor: " : ""}${p.isOpen ? "Open: " : ""}${p.title}${person ? ` — ${person}` : ""}${also.length ? ` (also reports to ${also.join(", ")})` : ""}`;
     })
     .join("\n");
 }
@@ -237,7 +269,7 @@ export function applyOutline(
 
   const ids = lines.map((_, i) => reuse[i]?.id ?? newPositionId());
   const ranks = generateNKeysBetween(null, null, lines.length);
-  return lines.map((line, i) => {
+  const drafted = lines.map((line, i) => {
     const prev = reuse[i];
     const base: DraftPosition = prev
       ? { ...prev }
@@ -295,6 +327,37 @@ export function applyOutline(
       reportsTo: line.parent === null ? null : ids[line.parent],
       rank: ranks[i],
     };
+  });
+  return withTypedAlso(drafted, lines, names);
+}
+
+/**
+ * Each line's "(also reports to ...)" as extra managers: a reference is a
+ * title, a person's full name, or a first name that only one person has.
+ * The text is the source of truth, so a line without one has none.
+ */
+function withTypedAlso(
+  positions: DraftPosition[],
+  lines: readonly OutlineLine[],
+  names: ReadonlyMap<string, string | null>,
+): DraftPosition[] {
+  const unique = (list: DraftPosition[]) => (list.length === 1 ? list[0] : undefined);
+  const resolve = (ref: string): DraftPosition | undefined => {
+    const t = normTitle(ref);
+    const n = norm(ref);
+    return (
+      unique(positions.filter((p) => normTitle(p.title) === t)) ??
+      unique(positions.filter((p) => n && personOf(p, names) === n)) ??
+      (/\s/.test(n) ? undefined : unique(positions.filter((p) => n && personOf(p, names).split(/\s+/)[0] === n)))
+    );
+  };
+  return positions.map((p, i) => {
+    const also: string[] = [];
+    for (const ref of lines[i].also) {
+      const manager = resolve(ref);
+      if (manager && manager.id !== p.id && manager.id !== p.reportsTo && !also.includes(manager.id)) also.push(manager.id);
+    }
+    return { ...p, alsoReportsTo: also };
   });
 }
 

@@ -11,6 +11,8 @@ export interface DiffPosition {
   title: string;
   /** Key of the manager in the same version. */
   reportsToKey: string | null;
+  /** Keys of the extra managers (dotted lines) in the same version. */
+  alsoReportsToKeys?: string[];
   userId: string | null;
   /** What the chart shows for the person: member name, placeholder name or "Open hire". */
   personLabel: string;
@@ -27,6 +29,7 @@ export type DiffChange =
   | { type: "removed"; key: string; title: string; person: string }
   | { type: "retitled"; key: string; from: string; to: string }
   | { type: "reparented"; key: string; title: string; from: string | null; to: string | null }
+  | { type: "dotted"; key: string; title: string; added: string[]; removed: string[] }
   | { type: "person"; key: string; title: string; from: string; to: string }
   | { type: "advisor"; key: string; title: string; value: boolean }
   | {
@@ -93,6 +96,19 @@ export function diffCharts(before: readonly DiffPosition[], after: readonly Diff
         to: afterTitle(q.reportsToKey),
       });
     }
+    const fromAlso = new Set((p.alsoReportsToKeys ?? []).map((k) => renamed.get(k) ?? k));
+    const toAlso = new Set(q.alsoReportsToKeys ?? []);
+    const alsoAdded = [...toAlso].filter((k) => !fromAlso.has(k));
+    const alsoRemoved = (p.alsoReportsToKeys ?? []).filter((k) => !toAlso.has(renamed.get(k) ?? k));
+    if (alsoAdded.length || alsoRemoved.length) {
+      changes.push({
+        type: "dotted",
+        key: q.key,
+        title: q.title,
+        added: alsoAdded.map((k) => afterTitle(k) as string),
+        removed: alsoRemoved.map((k) => beforeTitle(k) as string),
+      });
+    }
     if (p.userId !== q.userId || p.personLabel !== q.personLabel || p.isOpen !== q.isOpen) {
       changes.push({ type: "person", key: q.key, title: q.title, from: p.personLabel, to: q.personLabel });
     }
@@ -114,9 +130,10 @@ export function diffCharts(before: readonly DiffPosition[], after: readonly Diff
     removed: 1,
     retitled: 2,
     reparented: 3,
-    person: 4,
-    advisor: 5,
-    content: 6,
+    dotted: 4,
+    person: 5,
+    advisor: 6,
+    content: 7,
   };
   return changes.sort((a, b) => order[a.type] - order[b.type]);
 }

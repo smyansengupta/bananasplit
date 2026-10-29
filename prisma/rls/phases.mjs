@@ -1199,6 +1199,43 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     { value: { foreign_active: "23503", own_active: 1, foreign_reports_to: "23503" } },
   );
   await tcase(
+    "P3-06",
+    "extra managers (alsoReportsToIds) are other positions of the same version, in the org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const set = (ids) =>
+        tryq(
+          q,
+          `UPDATE "OrgChartPosition" SET "alsoReportsToIds" = $1::text[] WHERE "id" = 'pos_A1_vp'`,
+          [ids],
+        );
+      return {
+        same_version: await set(["pos_A1_pres"]),
+        other_version: await set(["pos_A2_pres"]),
+        foreign: await set(["pos_B1_pres"]),
+        missing: await set(["pos_nope"]),
+        duplicate: await set(["pos_A1_pres", "pos_A1_pres"]),
+        self: await set(["pos_A1_vp"]),
+        foreign_row: await rc(
+          q,
+          `UPDATE "OrgChartPosition" SET "alsoReportsToIds" = '{}' WHERE "id" = 'pos_B1_pres'`,
+        ),
+      };
+    },
+    {
+      value: {
+        same_version: 1,
+        other_version: "23503",
+        foreign: "23503",
+        missing: "23503",
+        duplicate: "23503",
+        self: "23514",
+        foreign_row: 0,
+      },
+    },
+  );
+  await tcase(
     "P3-05",
     "any member deletes positions only from a DRAFT of their own org",
     "app_user",

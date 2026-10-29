@@ -30,11 +30,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  addAlsoReportsTo,
   addPosition,
   confirmAllExact,
   exactMatches,
   moveDraft,
   moveSibling,
+  removeAlsoReportsTo,
   removePosition,
   setManager,
   toValidationNodes,
@@ -59,7 +61,8 @@ const ChartCanvas = dynamic(() => import("../chart-canvas"), {
 /**
  * The draft editor (any member). Parsing is never trusted blindly: every
  * position can be renamed, re-linked, moved (drag and drop in the outline,
- * or the Reports to picker and move buttons), toggled advisor or open hire,
+ * or the Reports to picker and move buttons), given extra managers (dotted
+ * lines), toggled advisor or open hire,
  * and its bullets edited, with a live checklist and a read-only preview of
  * the chart. Saves use optimistic concurrency (editVersion); publishing
  * saves first, then validates again on the server.
@@ -234,6 +237,7 @@ export function DraftEditor({
         matchScore: p.matchScore,
         suggestedUserIds: p.suggestedUserIds,
         reportsTo: p.reportsTo,
+        alsoReportsTo: p.alsoReportsTo ?? [],
         isOpen: p.isOpen,
         isAdvisor: p.isAdvisor,
         responsibilities: p.responsibilities.filter((b) => b.trim()),
@@ -264,12 +268,16 @@ export function DraftEditor({
     setSaveError(false);
     const ids = "ids" in result ? result.ids : {};
     const remap = (id: string | null) => (id && ids[id] ? ids[id] : id);
-    setPositions((current) => current.map((p) => ({ ...p, id: remap(p.id) as string, reportsTo: remap(p.reportsTo) })));
+    const remapPosition = (p: DraftPosition): DraftPosition => ({
+      ...p,
+      id: remap(p.id) as string,
+      reportsTo: remap(p.reportsTo),
+      ...(p.alsoReportsTo ? { alsoReportsTo: p.alsoReportsTo.map((m) => remap(m) as string) } : {}),
+    });
+    setPositions((current) => current.map(remapPosition));
     setSelectedId((id) => remap(id));
     editVersionRef.current = result.editVersion;
-    history.current = history.current.map((snap) =>
-      snap.map((p) => ({ ...p, id: remap(p.id) as string, reportsTo: remap(p.reportsTo) })),
-    );
+    history.current = history.current.map((snap) => snap.map(remapPosition));
     // Still unsaved if something changed while the save was on its way.
     if (changes.current === mark) setDirty(false);
     return result.editVersion;
@@ -341,6 +349,7 @@ export function DraftEditor({
           userId: p.userId,
           user: m ? { id: m.id, name: m.name, image: m.image, avatar: m.avatar } : null,
           reportsToId: p.reportsTo,
+          alsoReportsToIds: p.alsoReportsTo,
           isOpen: p.isOpen,
           isAdvisor: p.isAdvisor,
           responsibilities: p.responsibilities,
@@ -539,6 +548,10 @@ export function DraftEditor({
               onSetManager={(managerId) =>
                 update(setManager(positions, selected.id, managerId), "That would make the chart loop back on itself.")
               }
+              onAddAlsoManager={(managerId) =>
+                update(addAlsoReportsTo(positions, selected.id, managerId), "That position can't be an extra manager here.")
+              }
+              onRemoveAlsoManager={(managerId) => update(removeAlsoReportsTo(positions, selected.id, managerId))}
               onMove={(direction) => update(moveSibling(positions, selected.id, direction))}
               onAddReport={() => {
                 const next = addPosition(positions, selected.id);

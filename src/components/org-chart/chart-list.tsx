@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * The accessible list view of a chart: a nested list, top-down, with each
- * position's advisors listed under it. Server-rendered (?view=list), and
- * the fallback while the canvas loads. Every name links to the side panel
- * (?position=key) when `hrefFor` is given.
+ * position's advisors listed under it and its extra managers named on it.
+ * Server-rendered (?view=list), and the fallback while the canvas loads.
+ * Every name links to the side panel (?position=key) when `hrefFor` is given.
  */
 
 export function ChartList({
@@ -30,7 +30,12 @@ export function ChartList({
     const advisors = index.advisorsOf(node.id);
     return (
       <li className="space-y-1">
-        <Row node={node} hrefFor={hrefFor} selected={node.key === selectedKey} />
+        <Row
+          node={node}
+          hrefFor={hrefFor}
+          selected={node.key === selectedKey}
+          alsoReportsTo={index.alsoManagersOf(node.id).map((m) => m.title)}
+        />
         {advisors.length > 0 && (
           <ul aria-label={`Advisors to ${node.title}`} className="border-muted ml-5 space-y-1 border-l border-dashed pl-4">
             {advisors.map((a) => (
@@ -64,10 +69,13 @@ function Row({
   node,
   hrefFor,
   selected,
+  alsoReportsTo = [],
 }: {
   node: ChartNodeDTO;
   hrefFor?: (key: string) => string;
   selected: boolean;
+  /** Titles of its extra managers. */
+  alsoReportsTo?: string[];
 }) {
   const variant = nodeVariant(node);
   const body = (
@@ -88,6 +96,7 @@ function Row({
           {node.title}
           {node.isAdvisor && " · Advisor"}
           {variant === "placeholder" && " · Not on the portal"}
+          {alsoReportsTo.length > 0 && ` · Also reports to ${alsoReportsTo.join(", ")}`}
         </span>
       </span>
     </>

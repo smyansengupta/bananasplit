@@ -2085,6 +2085,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
     {
       value: [
         "active_org_ids",
+        // Org chart second managers: same version and org (P3-06).
+        "assert_also_reports_to",
         "assert_member_of_parent_org",
         "assert_org_active_chart",
         "assert_org_member",
@@ -2448,6 +2450,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       log_org_deletion: "s",
       // Phase 3
       assert_org_active_chart: "",
+      // Org chart second managers (a trigger; nobody executes it directly).
+      assert_also_reports_to: "",
       // Any member publishes the org chart (member path only).
       set_active_org_chart: "u",
       // Phase 4a
