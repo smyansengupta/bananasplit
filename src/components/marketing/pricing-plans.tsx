@@ -42,10 +42,10 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
   return [
     {
       name: TEAM_PRICES.free.name,
-      who: "For any team getting started",
+      who: "For small teams getting started",
       price: "$0",
       per: "free forever",
-      note: `Unlimited members. New teams get ${TRIAL_DAYS} days of Team Advanced first.`,
+      note: `Up to ${PLAN_LIMITS.TEAM_FREE.members} members. Starts with ${TRIAL_DAYS} days of Team Advanced, free, no card.`,
       bullets: [
         "Tasks with every view",
         "Docs and databases",
@@ -63,13 +63,13 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
       per: student ? "a year, flat" : "per member a month",
       note: student
         ? `Up to ${TEAM.studentMemberCap} members, who never pay. Or ${dollars(TEAM.studentPerSemester)} a semester.`
-        : "Billed yearly.",
+        : `Billed yearly. Starts with ${TRIAL_DAYS} days of Team Advanced, free.`,
       bullets: [
-        "Everything in Free",
+        "Everything in Free, with unlimited members",
         "Finance: budgets, transactions and reimbursements",
         "Org chart and handover",
-        "Reports and attendance",
-        `${PLAN_LIMITS.CLUB.dataConnections} data connections, ${formatStorage(PLAN_LIMITS.CLUB.storageBytes)}`,
+        "Integrations: Google Calendar, Gmail, Zoom, Granola and Supabase",
+        `${formatStorage(PLAN_LIMITS.CLUB.storageBytes)} of files`,
       ],
       cta: { label: `Start with ${TEAM.name}`, href: start },
     },
@@ -82,13 +82,15 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
       per: student ? "a year, flat" : "per member a month",
       note: student
         ? `Up to ${ADVANCED.studentMemberCap} members, who never pay. Or ${dollars(ADVANCED.studentPerSemester)} a semester.`
-        : "Billed yearly.",
+        : "Billed yearly. Try it free first, no credit card.",
       bullets: [
-        "Everything in Team",
-        "AI suggestions and imports",
-        "Sponsorships and runway",
+        "Everything in Team, every integration included",
+        "iMessage: text in tasks, events and expenses",
+        "Run your organization on the go, from your phone",
+        "Reports and attendance",
+        "AI suggestions, sponsorships and runway",
         "Website sync, audit log and themes",
-        `${PLAN_LIMITS.SOCIETY.dataConnections} data connections, ${formatStorage(PLAN_LIMITS.SOCIETY.storageBytes)}`,
+        `${formatStorage(PLAN_LIMITS.SOCIETY.storageBytes)} of files`,
       ],
       cta: { label: "Start free trial", href: start },
     },
@@ -118,9 +120,12 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
   ];
 }
 
-/** The two personal cards in one mode. */
-function personalCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
+/** The two personal cards (standard prices only: there is no student price for Personal). */
+function personalCards(signedIn: boolean): readonly Card[] {
   const plus = PERSONAL_PLANS.plus;
+  const cta = signedIn
+    ? { label: "Open Bananasplit", href: "/app" }
+    : { label: "Sign up free", href: "/sign-up" };
   return [
     {
       name: PERSONAL_PLANS.free.name,
@@ -132,27 +137,22 @@ function personalCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
         "RSVP pages and polls",
         "Notes, files and databases, 1 GB",
       ],
-      cta: signedIn
-        ? { label: "Open Bananasplit", href: "/app" }
-        : { label: "Sign up free", href: "/sign-up" },
+      cta,
     },
     {
       name: plus.name,
       who: "For one person",
-      chip: mode === "student" ? "Free for students" : undefined,
-      price: mode === "student" ? "$0" : dollars(plus.perMonth),
-      per:
-        mode === "student"
-          ? "with a verified school email"
-          : `a month, or ${dollars(plus.perYear)} a year`,
+      chip: `${TRIAL_DAYS}-day free trial`,
+      price: dollars(plus.perMonth),
+      per: `a month, or ${dollars(plus.perYear)} a year`,
+      note: "Every new account starts here, free for two weeks. No credit card.",
       bullets: [
         "Everything in Personal Free",
-        "Themes, Google Calendar sync and AI imports",
+        `Integrations: Google Calendar and ${PLAN_LIMITS.PERSONAL_PLUS.dataConnections - 1} more`,
+        "AI imports and themes",
         "25 GB and a year of note history",
       ],
-      cta: signedIn
-        ? { label: "Open Bananasplit", href: "/app" }
-        : { label: "Sign up free", href: "/sign-up" },
+      cta: signedIn ? cta : { label: "Start free trial", href: "/sign-up" },
     },
   ];
 }
@@ -161,7 +161,9 @@ function PlanCard({ card, compact = false }: { card: Card; compact?: boolean }) 
   return (
     <div
       className={cn(
-        "bg-card edge rounded-card relative flex flex-col gap-5 p-6",
+        // Four rows (name, price, button, list) on the parent's subgrid, so
+        // every card's button sits on the same line whatever is above it.
+        "bg-card edge rounded-card relative row-span-4 grid grid-rows-subgrid gap-y-5 p-6",
         card.featured && "ring-foreground ring-2",
       )}
     >
@@ -183,7 +185,7 @@ function PlanCard({ card, compact = false }: { card: Card; compact?: boolean }) 
       </div>
       <SiteLink
         href={card.cta.href}
-        className={cn(card.featured ? PRIMARY_CTA : SECONDARY_CTA, "h-11 w-full")}
+        className={cn(card.featured ? PRIMARY_CTA : SECONDARY_CTA, "h-11 w-full self-start")}
         data-cta={card.cta.label === "Request a demo" ? "request_demo" : "get_started"}
         data-cta-location={`pricing_${card.name.toLowerCase().replace(/\s+/g, "_")}`}
       >
@@ -201,6 +203,30 @@ function PlanCard({ card, compact = false }: { card: Card; compact?: boolean }) 
   );
 }
 
+/** How student pricing works: under the student cards only. */
+function StudentNote() {
+  return (
+    <div
+      id="student"
+      className="bg-muted/60 rounded-block mx-auto flex max-w-[880px] scroll-mt-24 flex-col gap-2 px-6 py-5 text-center text-[14px] leading-[1.6] text-pretty"
+    >
+      <span className="font-semibold">How student pricing works</span>
+      <span className="text-muted-foreground">
+        The organization&apos;s owner verifies a school email once, and the flat price applies for
+        the academic year, August to May, with no summer bills. At the officer handover the new
+        owner verifies and the price carries over. Teams that leave school keep everything and move
+        to the standard price.{" "}
+        <Link
+          href="#custom"
+          className="text-foreground font-semibold underline-offset-4 hover:underline"
+        >
+          Licensing a whole school?
+        </Link>
+      </span>
+    </div>
+  );
+}
+
 function Cards({ mode, signedIn }: { mode: PriceMode; signedIn: boolean }) {
   return (
     <div className="flex flex-col gap-16">
@@ -209,19 +235,23 @@ function Cards({ mode, signedIn }: { mode: PriceMode; signedIn: boolean }) {
           <PlanCard key={card.name} card={card} />
         ))}
       </div>
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="heading text-[20px]">Just for you</h2>
-          <p className="text-muted-foreground text-[15px]">
-            Every account has a personal space, free, and can join any number of organizations.
-          </p>
+      {mode === "student" && <StudentNote />}
+      {mode === "standard" && (
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1.5">
+            <h2 className="heading text-[20px]">Just for you</h2>
+            <p className="text-muted-foreground text-[15px]">
+              Every account has a personal space and can join any number of organizations. It starts
+              with {TRIAL_DAYS} days of {PERSONAL_PLANS.plus.name}, free.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {personalCards(signedIn).map((card) => (
+              <PlanCard key={card.name} card={card} compact />
+            ))}
+          </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {personalCards(mode, signedIn).map((card) => (
-            <PlanCard key={card.name} card={card} compact />
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -244,22 +274,16 @@ const SECTIONS: readonly { title: string; rows: readonly Row[] }[] = [
   {
     title: "Limits",
     rows: [
-      { feature: "Members", marks: ["Unlimited", "Unlimited", "Unlimited", "Unlimited"] },
+      {
+        feature: "Members",
+        marks: [`Up to ${PLAN_LIMITS.TEAM_FREE.members}`, "Unlimited", "Unlimited", "Unlimited"],
+      },
       {
         feature: "Storage",
         marks: [
           `${TEAM_FREE_STORAGE_GB} GB`,
           formatStorage(PLAN_LIMITS.CLUB.storageBytes),
           formatStorage(PLAN_LIMITS.SOCIETY.storageBytes),
-          "Custom",
-        ],
-      },
-      {
-        feature: "Data connections",
-        marks: [
-          false,
-          String(PLAN_LIMITS.CLUB.dataConnections),
-          String(PLAN_LIMITS.SOCIETY.dataConnections),
           "Custom",
         ],
       },
@@ -282,13 +306,19 @@ const SECTIONS: readonly { title: string; rows: readonly Row[] }[] = [
     rows: [
       { feature: "Finance: budgets, transactions and reimbursements", marks: TEAM_UP },
       { feature: "Org chart with versions and handover", marks: TEAM_UP },
-      { feature: "Reports and attendance", marks: TEAM_UP },
+      {
+        feature: "Integrations: Google Calendar, Gmail, Zoom, Granola, Supabase",
+        marks: TEAM_UP,
+      },
       { feature: "Pay by card or purchase order", marks: TEAM_UP },
     ],
   },
   {
     title: "Advanced",
     rows: [
+      { feature: "iMessage: text in tasks, events and expenses", marks: ADVANCED_UP },
+      { feature: "Run it on the go from your phone", marks: ADVANCED_UP },
+      { feature: "Reports and attendance", marks: ADVANCED_UP },
       { feature: "AI suggestions and imports", marks: ADVANCED_UP },
       { feature: "Sponsorships and runway", marks: ADVANCED_UP },
       { feature: "Website sync for events and sign-ups", marks: ADVANCED_UP },
@@ -388,32 +418,15 @@ export function PricingPlans({ signedIn = false }: { signedIn?: boolean }) {
             Simple pricing that grows with your team.
           </SectionTitle>
           <p className="text-foreground/80 max-w-[600px] text-[18px] leading-[1.55] text-pretty">
-            Start free with unlimited members. Pay when you need finance, reports or AI. Student
-            groups pay one flat price a year.
+            Every new account and team gets {TRIAL_DAYS} days of everything, free, with no credit
+            card. After that, stay on Free with up to 10 members, or pay for finance, reports and
+            AI. Student groups pay one flat price a year.
           </p>
         </div>
         <PriceModeSwitch
           standard={<Cards mode="standard" signedIn={signedIn} />}
           student={<Cards mode="student" signedIn={signedIn} />}
         />
-        <div
-          id="student"
-          className="bg-muted/60 rounded-block mx-auto flex max-w-[880px] scroll-mt-24 flex-col gap-2 px-6 py-5 text-center text-[14px] leading-[1.6] text-pretty"
-        >
-          <span className="font-semibold">How student pricing works</span>
-          <span className="text-muted-foreground">
-            The organization&apos;s owner verifies a school email once, and the flat price applies
-            for the academic year, August to May, with no summer bills. At the officer handover the
-            new owner verifies and the price carries over. Teams that leave school keep everything
-            and move to the standard price.{" "}
-            <Link
-              href="#custom"
-              className="text-foreground font-semibold underline-offset-4 hover:underline"
-            >
-              Licensing a whole school?
-            </Link>
-          </span>
-        </div>
       </div>
       <span id="custom" className="-mt-16 scroll-mt-24 sm:-mt-24" aria-hidden="true" />
       <Compare />

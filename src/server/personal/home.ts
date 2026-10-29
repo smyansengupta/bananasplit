@@ -12,7 +12,6 @@ import type {
 import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
 import { type SpaceInfo } from "@/lib/billing/space";
 import { DUE_SOON_DAYS, UPCOMING_DAYS } from "@/lib/personal/home-windows";
-import { profileStepHref, type ProfileStep } from "@/lib/onboarding/steps";
 import { parseStoredLinks } from "@/lib/profile/links";
 import { pollHref } from "@/lib/polls/paths";
 import { addDaysToKey, effectiveTimezone, fromDateKey, localDateKey } from "@/lib/tasks/dates";
@@ -171,7 +170,8 @@ export interface HostedPage {
   pageHref: string | null;
 }
 
-export type ProfileGap = Extract<ProfileStep, "school" | "bio" | "availability">;
+/** A part of the profile left empty (all of it is on the Profile page). */
+export type ProfileGap = "school" | "bio" | "availability";
 
 export interface PersonalHomeData {
   /** The user's first name, for the greeting (null when unknown). */
@@ -520,6 +520,7 @@ async function readRaw(userId: string, now: Date): Promise<PersonalHomeRaw> {
             timezone: true,
             plan: true,
             trialEndsAt: true,
+            planAfterTrial: true,
             personalOwnerId: true,
           },
         },
@@ -767,7 +768,7 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
     rsvps,
     hosting,
     profileGaps,
-    finishProfileHref: profileGaps[0] ? profileStepHref(profileGaps[0]) : null,
+    finishProfileHref: profileGaps[0] && personal ? `/app/${personal.slug}/profile` : null,
   };
 }
 

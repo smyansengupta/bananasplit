@@ -73,6 +73,7 @@ export async function loadToolSpace(ctx: OrgContext): Promise<ToolSpace> {
       kind: true,
       plan: true,
       trialEndsAt: true,
+      planAfterTrial: true,
       timezone: true,
       settings: { select: { sidebar: true } },
     },
@@ -93,6 +94,7 @@ function toolSpace(
     kind: OrgKind;
     plan: OrgPlan;
     trialEndsAt: Date | null;
+    planAfterTrial: OrgPlan | null;
     timezone: string;
     settings: { sidebar: unknown } | null;
   },

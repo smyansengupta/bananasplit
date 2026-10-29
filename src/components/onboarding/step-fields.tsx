@@ -9,21 +9,34 @@ import { cn } from "@/lib/utils";
  * choices and field errors. The step layout itself is setup-shell.tsx.
  */
 
-/** A field label with an optional icon and hint on the right. */
+/**
+ * A field label with an optional icon and hint on the right. `hidden`: for
+ * screen readers only, when the field says what it is itself (a
+ * placeholder, chips, a filled-in select).
+ */
 export function FieldLabel({
   htmlFor,
   id,
   icon: Icon,
   children,
   aside,
+  hidden = false,
 }: {
   htmlFor?: string;
   id?: string;
   icon?: IconComponent;
   children: ReactNode;
   aside?: ReactNode;
+  hidden?: boolean;
 }) {
   const Tag = htmlFor ? "label" : "span";
+  if (hidden) {
+    return (
+      <Tag htmlFor={htmlFor} id={id} className="sr-only">
+        {children}
+      </Tag>
+    );
+  }
   return (
     <div className="flex items-center justify-between gap-2">
       <Tag htmlFor={htmlFor} id={id} className="flex items-center gap-1.5 text-sm font-medium">

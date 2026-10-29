@@ -305,6 +305,36 @@ describe("messy documents", () => {
     expect(chart.positions.map((p) => p.reportsTo)).toEqual([null, "president", "president", "president"]);
   });
 
+  it("reads a second manager from an 'Also reports to' or 'Dotted line' field", () => {
+    const { parse } = parseOrgChartText(
+      [
+        "## President — Jackson Lamoureux",
+        "",
+        "## Director of Programs — Oliver Chen",
+        "Reports to: Jackson Lamoureux",
+        "",
+        "## Head of Growth — Kristine Min",
+        "Reports to: Jackson Lamoureux",
+        "",
+        "## Programs Lead — Alex Doe",
+        "Reports to: Oliver Chen",
+        "Also reports to: Kristine Min",
+        "",
+        "## Events Lead — Sam Ortiz",
+        "Reports to: Oliver Chen",
+        "Dotted line: Jackson Lamoureux",
+      ].join("\n"),
+    );
+    const chart = normalizeOrgChart(parse);
+    expect(chart.positions.map((p) => [p.key, p.reportsTo, p.alsoReportsTo])).toEqual([
+      ["president", null, []],
+      ["director-of-programs", "president", []],
+      ["head-of-growth", "president", []],
+      ["programs-lead", "director-of-programs", ["head-of-growth"]],
+      ["events-lead", "director-of-programs", ["president"]],
+    ]);
+  });
+
   it("gives up rather than inventing a chart out of prose", () => {
     const { parse, report } = parseOrgChartText(
       [

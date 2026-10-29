@@ -92,7 +92,7 @@ describe("Settings › Plan and storage: a club", () => {
 
   it("warns the owners and admins once when a downgrade takes the club past 80%", async () => {
     plan = "SOCIETY";
-    used = 85 * GB; // 17% of Team Advanced's 500 GB, 85% of Team's 100 GB
+    used = 42.5 * GB; // 42.5% of Team Advanced's 100 GB, 85% of Team's 50 GB
     expect(await switchPlan("org_1", "CLUB")).toEqual({});
     expect(fake.db.notification.createMany).toHaveBeenCalledTimes(1);
     const { data } = fake.db.notification.createMany.mock.calls[0][0];
@@ -103,7 +103,7 @@ describe("Settings › Plan and storage: a club", () => {
 
   it("lets a downgrade leave the club over its storage (uploads pause; nothing is deleted)", async () => {
     plan = "SOCIETY";
-    used = 300 * GB;
+    used = 60 * GB;
     expect(await switchPlan("org_1", "CLUB")).toEqual({});
     expect(plan).toBe("CLUB");
     // Already past 80% of Team Advanced? No: 60%. Past Team's 80%: yes, one notice.

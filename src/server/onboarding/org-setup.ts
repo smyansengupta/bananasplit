@@ -1,23 +1,21 @@
+import { z } from "zod";
+
 import { EventKind, EventVisibility, Prisma } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
-import { FINANCE_CARD_IDS } from "@/lib/finance/dashboard-cards";
 import {
   MEETING_WEEKS_AHEAD,
   describeMeeting,
-  financeInputSchema,
-  fiscalYearFor,
   meetingOccurrences,
   taskLabelsInputSchema,
   teamsInputSchema,
 } from "@/lib/onboarding/org";
-import { localDateKey } from "@/lib/tasks/dates";
+import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { writeOrgAuditLog } from "@/server/audit";
 import { invalidate } from "@/server/cache/invalidate";
 import { tags } from "@/server/cache/tags";
 import type { OrgContext } from "@/server/db/context";
 import { createEvent } from "@/server/events/service";
 import { publishDraft, saveDraft, startDraft } from "@/server/org-chart/service";
-import { DEFAULT_CATEGORY_NAMES } from "@/lib/finance/default-categories";
 
 /**
  * Org setup (onboarding Flow B, steps B3-B5), on the member path for an
@@ -133,98 +131,66 @@ export async function saveTaskLabels(ctx: OrgContext, raw: unknown): Promise<Ste
   return { ok: true };
 }
 
-// ---------------------------------------------------------------- B4
+// ---------------------------------------------------------------- Event types
 
-export interface FinanceSetupState {
-  cards: string[];
-  activePeriod: { label: string; startsOn: string; endsOn: string } | null;
-  canManageFinance: boolean;
+/** A meeting type (src/lib/meetings/meeting-types.ts), as the meetings step edits them. */
+export type EventType = MeetingType;
+
+export interface EventTypesSetup {
+  /** The organization's event types (none for a new one). */
+  types: EventType[];
 }
 
-export async function loadFinanceSetup(
-  ctx: Pick<OrgContext, "db" | "organizationId" | "role">,
-): Promise<FinanceSetupState> {
+const eventTypesInputSchema = z
+  .object({
+    types: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1, "Name every meeting type.").max(40),
+            color: z.string().regex(/^#[0-9a-f]{6}$/i),
+          })
+          .strict(),
+      )
+      .max(20),
+  })
+  .strict();
+
+export async function loadEventTypes(
+  ctx: Pick<OrgContext, "db" | "organizationId">,
+): Promise<EventTypesSetup> {
   const settings = await ctx.db.orgSettings.findUnique({
     where: { organizationId: ctx.organizationId },
-    select: { financeDashboardCards: true },
+    select: { eventTypes: true },
   });
-  const period = await ctx.db.budgetPeriod.findFirst({
-    where: { organizationId: ctx.organizationId, isActive: true },
-    select: { label: true, startsOn: true, endsOn: true },
-  });
-  const stored = settings?.financeDashboardCards ?? [];
-  return {
-    cards: stored.length > 0 ? stored : [...FINANCE_CARD_IDS],
-    activePeriod: period
-      ? {
-          label: period.label,
-          startsOn: period.startsOn.toISOString().slice(0, 10),
-          endsOn: period.endsOn.toISOString().slice(0, 10),
-        }
-      : null,
-    canManageFinance: ctx.role === "OWNER" || ctx.role === "TREASURER",
-  };
+  const parsed = eventTypesInputSchema.shape.types.safeParse(settings?.eventTypes);
+  return { types: parsed.success ? parsed.data : [] };
 }
 
-export async function saveFinanceSetup(
-  ctx: OrgContext,
-  raw: unknown,
-  orgTimezone: string,
-): Promise<StepResult> {
+/** Saves the organization's event types (OWNER/ADMIN), each name once. */
+export async function saveEventTypes(ctx: OrgContext, raw: unknown): Promise<StepResult> {
   requirePermission(ctx, "settings.general.write");
-  const parsed = financeInputSchema.safeParse(raw);
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the finance settings." };
-  const { cards, fiscalYearStartMonth, createPeriod } = parsed.data;
-  // The budget itself is the treasurer's: OWNER or TREASURER (RLS agrees).
-  // Checked before any write, so a refusal leaves nothing half-saved.
-  if (createPeriod) requirePermission(ctx, "finance.manage");
-
+  const parsed = eventTypesInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the meeting types." };
+  }
+  const seen = new Set<string>();
+  const types = parsed.data.types.filter((t) => {
+    const key = t.name.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   await ctx.db.orgSettings.update({
     where: { organizationId: ctx.organizationId },
-    // All of them = the default, stored as empty so new reports show up too.
-    data: {
-      financeDashboardCards: cards.length === FINANCE_CARD_IDS.length ? [] : cards,
-      updatedById: ctx.userId,
-    },
+    data: { eventTypes: types, updatedById: ctx.userId },
     select: { organizationId: true },
   });
-
-  let createdPeriod: string | null = null;
-  if (createPeriod) {
-    const active = await ctx.db.budgetPeriod.findFirst({
-      where: { organizationId: ctx.organizationId, isActive: true },
-      select: { id: true },
-    });
-    if (!active) {
-      const fy = fiscalYearFor(localDateKey(new Date(), orgTimezone), fiscalYearStartMonth);
-      await ctx.db.budgetPeriod.create({
-        data: {
-          organizationId: ctx.organizationId,
-          label: fy.label,
-          startsOn: new Date(`${fy.startsOn}T00:00:00Z`),
-          endsOn: new Date(`${fy.endsOn}T00:00:00Z`),
-          isActive: true,
-          categories: {
-            create: DEFAULT_CATEGORY_NAMES.map((name, sortOrder) => ({
-              organizationId: ctx.organizationId,
-              name,
-              allocatedCents: 0,
-              sortOrder,
-            })),
-          },
-        },
-        select: { id: true },
-      });
-      createdPeriod = fy.label;
-    }
-  }
   await writeOrgAuditLog(ctx.db, {
     organizationId: ctx.organizationId,
-    action: "finance.setup",
+    action: "settings.event_types",
     targetType: "OrgSettings",
-    targetId: ctx.organizationId,
-    diff: { cards, fiscalYearStartMonth, createdPeriod },
+    diff: { types: types.map((t) => t.name) },
   });
   return { ok: true };
 }

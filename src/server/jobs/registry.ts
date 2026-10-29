@@ -163,6 +163,19 @@ export const JOB_KINDS = {
     description: "The notice after a password reset (platform sender), enqueued by app_auth.",
   }),
 
+  "trial-reminder-email": kind({
+    payload: z.object({}).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: false,
+    sendsEmail: true,
+    handler: () => import("@/server/email/jobs").then((m) => m.trialReminderEmailJob),
+    description:
+      '"Your free trial is almost up" to the owners (platform sender), enqueued when the space is made, to run TRIAL_NOTICE_DAYS before its trial ends.',
+  }),
+
   // ---- Tasks (Phase 6; handlers owned by B6) ----
   "task-reminder": kind({
     payload: z

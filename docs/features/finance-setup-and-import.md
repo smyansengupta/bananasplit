@@ -1,6 +1,6 @@
 # Finance: setup guide, widgets and imports
 
-Three ways into a club's money, all for owners and treasurers (the only
+Three ways into a club's money, all for owners, admins and treasurers (the only
 roles that see it; the database enforces the same rule):
 
 1. **Finance › Set up** walks a club through its money in about five minutes.
@@ -19,14 +19,14 @@ shows the error's digest so it can be found in the server logs.
 
 ## The setup guide (`/finance/setup`)
 
-| Step | Saves | Done when |
-|---|---|---|
-| Your money year | `createBudgetPeriod` / `updateBudgetPeriod` | an active period exists |
-| What you have now | `setStartingBalance`: one reconciled ADJUSTMENT called "Starting balance" in the active period (signed; 0 removes it) | it exists, or the period has transactions |
-| Your budget | `saveBudgetLines`: renames, amounts, additions; removes a line only if no transaction uses it | any category has money allocated |
-| Who handles money (optional) | `changeMemberRole(…, "TREASURER")` for a member (owners and admins) | the club has a treasurer |
-| Past records (optional) | the import below, embedded | the period has transactions |
-| Your dashboard (optional) | `saveBoardAction("finance")` | this member saved a board |
+| Step                         | Saves                                                                                                                 | Done when                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Your money year              | `createBudgetPeriod` / `updateBudgetPeriod`                                                                           | an active period exists                   |
+| What you have now            | `setStartingBalance`: one reconciled ADJUSTMENT called "Starting balance" in the active period (signed; 0 removes it) | it exists, or the period has transactions |
+| Your budget                  | `saveBudgetLines`: renames, amounts, additions; removes a line only if no transaction uses it                         | any category has money allocated          |
+| Who handles money (optional) | `changeMemberRole(…, "TREASURER")` for a member (owners and admins)                                                   | the club has a treasurer                  |
+| Past records (optional)      | the import below, embedded                                                                                            | the period has transactions               |
+| Your dashboard (optional)    | `saveBoardAction("finance")`                                                                                          | this member saved a board                 |
 
 Progress is derived from the books (`src/lib/finance/setup.ts`,
 `loadSetupState`), never stored. Until the first three are done the dashboard
@@ -36,8 +36,8 @@ shows a banner with what's left; it can be hidden in that browser.
 
 The dashboard is the shared `WidgetBoard`: **Add widget** opens the gallery
 (there's also a tile at the end of the board), and each widget's menu resizes,
-moves or removes it. New in this change: *Left to spend*, *Where money came
-from*, *Reimbursement requests*, *Shortcuts* and *Finance setup*
+moves or removes it. New in this change: _Left to spend_, _Where money came
+from_, _Reimbursement requests_, _Shortcuts_ and _Finance setup_
 (`src/lib/finance/widgets.ts`, bodies in `finance-widgets.tsx`).
 
 ## Importing past records (`/finance/import`)
@@ -49,7 +49,7 @@ leave the computer. Only the rows the treasurer imports are sent, through the
 import action.
 
 **Columns are guessed** (`mapping.ts`): header words first (a bank's
-"Description" beats its "Details", and a *Balance* column is never read as an
+"Description" beats its "Details", and a _Balance_ column is never read as an
 amount), then the values (a column of dates, a column of amounts, the longest
 text). The sign rule follows the sheet: signed amounts read like a bank (negative
 is money out), separate money in and money out columns, a type column
@@ -63,11 +63,11 @@ integer cents (`values.ts`).
 `src/server/ai/finance-import.ts`), using the same connections as the other
 AI imports (see `ai-imports.md`):
 
-- *A spreadsheet*: the model sees the first 32 and last 6 rows and each text
+- _A spreadsheet_: the model sees the first 32 and last 6 rows and each text
   column's distinct values (`sample.ts`), and answers with the column mapping
   plus a category and kind for those values. The browser applies that to every
   row, so a 2,000-row ledger is one short request.
-- *A PDF, a photo or pasted text* (a Venmo history, a statement): the model
+- _A PDF, a photo or pasted text_ (a Venmo history, a statement): the model
   lists the records, up to 300. PDFs need Claude or a vendor that accepts files.
 
 Same rules as the other AI imports: the material is wrapped as untrusted data

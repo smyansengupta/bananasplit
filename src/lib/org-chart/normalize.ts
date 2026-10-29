@@ -12,6 +12,9 @@ import type { ChartWarning, OpenItem } from "./types";
  * - reports_to is canonical. manages only fills a missing reports_to and
  *   raises a warning when it disagrees; manages is then recomputed from
  *   reports_to (advisors listed separately).
+ * - also_reports_to (dotted lines) resolves the same way; one that is the
+ *   manager, the position itself, an advisor or below the position is
+ *   dropped with a warning. It never changes the tree.
  * - Dangling and self references are dropped; cycles are broken at the
  *   earliest position in the cycle; several roots raise a warning.
  * - Advisors must report to someone and manage nobody; otherwise the flag
@@ -29,6 +32,7 @@ export const LIMITS = {
   quote: 500,
   quotes: 10,
   openItems: 50,
+  alsoReportsTo: 10,
   who: 120,
   question: 500,
 } as const;
@@ -39,6 +43,8 @@ export interface NormalizedPosition {
   personName: string | null;
   /** Key of the manager, or null for a root. */
   reportsTo: string | null;
+  /** Keys of the extra managers (dotted lines). */
+  alsoReportsTo: string[];
   /** Keys of the non-advisor direct reports, in document order. */
   manages: string[];
   /** Keys of the advisors beside this position. */
@@ -77,7 +83,9 @@ interface Working {
   sourceQuote: string[];
   reportsToRef: string | null;
   managesRefs: string[];
+  alsoRefs: string[];
   reportsTo: number | null;
+  alsoReportsTo: number[];
 }
 
 function firstToken(name: string): string {
@@ -132,7 +140,9 @@ export function normalizeOrgChart(raw: OrgChartParse): NormalizedChart {
       sourceQuote: cleanBullets(p.source_quote, LIMITS.quotes, LIMITS.quote),
       reportsToRef: cleanLine(p.reports_to) || null,
       managesRefs: p.manages.map((m) => cleanLine(m)).filter(Boolean),
+      alsoRefs: (p.also_reports_to ?? []).map((m) => cleanLine(m)).filter(Boolean),
       reportsTo: null,
+      alsoReportsTo: [],
     });
   }
 
@@ -279,7 +289,46 @@ export function normalizeOrgChart(raw: OrgChartParse): NormalizedChart {
     }
   }
 
-  // 6. Several roots.
+  // 6. Extra managers: in the chart, not the manager, not an advisor, not below.
+  const isBelow = (item: Working, ancestor: number) => {
+    const seen = new Set<number>();
+    for (let cur = item.reportsTo; cur !== null && !seen.has(cur); cur = items[cur].reportsTo) {
+      if (cur === ancestor) return true;
+      seen.add(cur);
+    }
+    return false;
+  };
+  for (const item of items) {
+    for (const ref of item.alsoRefs) {
+      const target = resolve(ref);
+      if (target === undefined) {
+        warn({
+          code: "dangling",
+          positionKey: item.key,
+          message: `${item.title} also reports to "${clamp(ref, 60)}", which is not in the chart.`,
+        });
+        continue;
+      }
+      if (target === item.reportsTo || item.alsoReportsTo.includes(target)) continue;
+      const manager = items[target];
+      if (target === item.index || manager.isAdvisor || isBelow(manager, item.index)) {
+        warn({
+          code: "also-reports-dropped",
+          positionKey: item.key,
+          message:
+            target === item.index
+              ? `${item.title} was listed as also reporting to itself; that line was dropped.`
+              : manager.isAdvisor
+                ? `${item.title} also reports to ${manager.title}, an advisor; that line was dropped.`
+                : `${item.title} also reports to ${manager.title}, who is below it; that line was dropped.`,
+        });
+        continue;
+      }
+      if (item.alsoReportsTo.length < LIMITS.alsoReportsTo) item.alsoReportsTo.push(target);
+    }
+  }
+
+  // 7. Several roots.
   const roots = items.filter((i) => i.reportsTo === null && !i.isAdvisor);
   if (roots.length > 1) {
     warn({
@@ -298,6 +347,7 @@ export function normalizeOrgChart(raw: OrgChartParse): NormalizedChart {
       title: item.title,
       personName: item.personName,
       reportsTo: item.reportsTo === null ? null : items[item.reportsTo].key,
+      alsoReportsTo: item.alsoReportsTo.map((i) => items[i].key),
       manages: reports.filter((r) => !r.isAdvisor).map((r) => r.key),
       advisors: reports.filter((r) => r.isAdvisor).map((r) => r.key),
       responsibilities: item.responsibilities,

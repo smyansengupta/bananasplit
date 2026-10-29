@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "@/components/brand/arrows";
 import { cn } from "@/lib/utils";
 
-import { DEMO_HREF, startHref } from "./links";
+import { DEMO_HREF, startHref, TRIAL_PROMISE } from "./links";
 import { CONTAINER } from "./section-title";
 import { SiteLink } from "./site-link";
 
@@ -44,6 +44,7 @@ export function FinalCta({ signedIn = false }: { signedIn?: boolean }) {
                 Request a demo
               </SiteLink>
             </div>
+            {!signedIn && <p className="text-bark-soft text-[14px]">{TRIAL_PROMISE}</p>}
           </div>
           <div
             aria-hidden="true"

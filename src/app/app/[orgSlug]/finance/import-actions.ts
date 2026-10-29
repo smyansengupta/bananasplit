@@ -25,7 +25,7 @@ const financeAction: typeof withOrgAction = (handler, options) =>
  */
 
 const NOT_FINANCE = {
-  error: "Only the organization's owners and treasurers can import finance records.",
+  error: "Only the organization's owners, admins and treasurers can import finance records.",
 };
 
 export const importFinanceRecords = financeAction(

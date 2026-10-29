@@ -49,7 +49,7 @@ describe("/sign-in", () => {
     const html = await render();
     expect(html).toContain("Continue with Google");
     expect(html).toContain(">or<");
-    expect(html).toContain("Log in to your workspace.");
+    expect(html).toContain("Welcome back.");
     expect(html).toContain('name="password"');
   });
 
@@ -64,7 +64,7 @@ describe("/sign-in", () => {
     expect(html).not.toContain("Continue with Google");
     expect(html).not.toContain(">or<");
     expect(html).not.toContain("Google account");
-    expect(html).toContain("Log in to your workspace.");
+    expect(html).toContain("Welcome back.");
     expect(html).toContain('name="password"');
   });
 });

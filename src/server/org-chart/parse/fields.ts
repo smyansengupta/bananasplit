@@ -2,9 +2,9 @@ import { isOpenMarker } from "@/lib/org-chart/normalize";
 import { cleanLine, foldCase } from "@/lib/org-chart/text";
 
 /**
- * The vocabulary of the built-in parser: the labelled lines a student club
- * writes ("Reports to: Jackson", "Manages: Alex, Smyan", "Decides alone:
- * deadlines"), the role lines that name a position and its person
+ * The vocabulary of the built-in parser: the labelled lines an org chart
+ * document has ("Reports to: Jackson", "Also reports to: Kristine",
+ * "Manages: Alex, Smyan", "Decides alone: deadlines"), the role lines that name a position and its person
  * ("VP Growth — Lucas Salzgeber", "Graphic Designer [OPEN HIRE]") and the
  * small list and casing helpers both need.
  *
@@ -15,6 +15,7 @@ import { cleanLine, foldCase } from "@/lib/org-chart/text";
 
 export type FieldName =
   | "reportsTo"
+  | "alsoReportsTo"
   | "manages"
   | "advisor"
   | "decidesAlone"
@@ -26,6 +27,7 @@ export type FieldName =
 /** Canonical label spellings, folded to letters only for matching. */
 const LABELS: Record<FieldName, readonly string[]> = {
   reportsTo: ["reportsto", "reportto", "reportingto", "reportsinto", "reportsupto", "manager", "managedby", "supervisor", "reportsdirectlyto", "under"],
+  alsoReportsTo: ["alsoreportsto", "alsoreportingto", "alsoreportsinto", "dottedline", "dottedlineto", "dottedlinereportsto", "secondarymanager", "alsomanagedby"],
   manages: ["manages", "manage", "managing", "directreports", "reports", "oversees", "supervises", "leads", "team"],
   advisor: ["advisor", "adviser", "advisors", "advisers", "advises", "advisedby"],
   decidesAlone: ["decidesalone", "decidealone", "decides", "decidessolo", "decisionrights", "decisions", "ownsdecisions", "finalsay", "hasfinalsay", "signsoff", "approves", "canapprove"],

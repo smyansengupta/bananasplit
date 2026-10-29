@@ -295,7 +295,7 @@ async function checkSpace(
 ): Promise<SpaceRefusal | null> {
   const space = await db.organization.findUnique({
     where: { id: organizationId },
-    select: { kind: true, plan: true, trialEndsAt: true },
+    select: { kind: true, plan: true, trialEndsAt: true, planAfterTrial: true },
   });
   if (!space) return null;
   const refusal = spaceRefusal(space, options);
@@ -501,6 +501,7 @@ export function withConnectorOrgTx<T>(
           kind: true,
           plan: true,
           trialEndsAt: true,
+          planAfterTrial: true,
           deletedAt: true,
           settings: { select: { connectorsEnabled: true } },
         },
@@ -621,8 +622,10 @@ export interface OrgContextBySlug {
     kind: OrgKind;
     /** What the space includes (src/lib/billing/space.ts: spaceIncludes). */
     plan: OrgPlan;
-    /** TRIAL: when the trial ends (after it, the organization is on Team Free). */
+    /** When the trial ends (after it, the organization is on planAfterTrial, else Team Free). */
     trialEndsAt: Date | null;
+    /** TRIAL: the plan picked during the trial, which starts when it ends. */
+    planAfterTrial: OrgPlan | null;
   };
   role: Role;
   /** Every live org the user belongs to, by name. */
@@ -668,6 +671,7 @@ export const getOrgContextBySlug = cache(async (slug: string): Promise<OrgContex
           kind: true,
           plan: true,
           trialEndsAt: true,
+          planAfterTrial: true,
         },
       });
       const memberships = await db.membership.findMany({

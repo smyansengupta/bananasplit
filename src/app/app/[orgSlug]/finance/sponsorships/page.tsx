@@ -14,7 +14,7 @@ export default async function SponsorshipsPage({
   const planLock = await planGate(orgSlug, "sponsorships");
   if (planLock) return planLock;
   const { organization: org, role } = await getOrgContextBySlug(orgSlug);
-  // Not an owner or treasurer: who is, and what to do instead (never an error page).
+  // Not an owner, admin or treasurer: who is, and what to do instead (never an error page).
   if (!can({ role }, "finance.manage")) {
     return <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} />;
   }

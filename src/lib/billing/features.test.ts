@@ -32,6 +32,7 @@ describe("what each plan includes", () => {
       "admin",
       "files",
       "databases",
+      "labels",
       "connectors",
     ]);
     for (const f of ["teamwork", "people", "finance", "reports", "overview", "themes"] as const) {
@@ -49,7 +50,6 @@ describe("what each plan includes", () => {
     for (const f of [
       "overview",
       "teamwork",
-      "labels",
       "people",
       "finance",
       "sponsorships",
@@ -67,12 +67,18 @@ describe("what each plan includes", () => {
       "people",
       "finance",
       "databases",
-      "reports",
       "integrations",
     ] as const) {
       expect(planIncludes("CLUB", f)).toBe(true);
     }
-    for (const f of ["themes", "ai", "sponsorships", "websiteSync", "auditLog"] as const) {
+    for (const f of [
+      "reports",
+      "themes",
+      "ai",
+      "sponsorships",
+      "websiteSync",
+      "auditLog",
+    ] as const) {
       expect(planIncludes("CLUB", f)).toBe(false);
       expect(planIncludes("SOCIETY", f)).toBe(true);
     }
@@ -129,7 +135,7 @@ describe("names, prices and limits (redesign guide 11.1, 20.9 a, 20.10 a)", () =
   });
 
   it("prices the business model: Personal Plus $4 or $36, Team $8 and Team Advanced $16 a member a month", () => {
-    expect(PERSONAL_PLANS.plus).toMatchObject({ perMonth: 4, perYear: 36 });
+    expect(PERSONAL_PLANS.plus).toMatchObject({ perMonth: 8, perYear: 72 });
     expect(PERSONAL_PLANS.free).toMatchObject({ perMonth: 0, perYear: 0 });
     expect(TEAM_PRICES.free.perMemberPerMonth).toBe(0);
     expect(TEAM_PRICES.club).toMatchObject({
@@ -189,15 +195,15 @@ describe("names, prices and limits (redesign guide 11.1, 20.9 a, 20.10 a)", () =
       storageBytes: 5 * GB,
       maxFileBytes: 100 * MB,
       noteHistoryDays: 30,
-      members: null,
+      members: 10,
     });
     expect(PLAN_LIMITS.CLUB).toMatchObject({
-      storageBytes: 100 * GB,
+      storageBytes: 50 * GB,
       maxFileBytes: 250 * MB,
       noteHistoryDays: 90,
     });
     expect(PLAN_LIMITS.SOCIETY).toMatchObject({
-      storageBytes: 500 * GB,
+      storageBytes: 100 * GB,
       maxFileBytes: 1 * GB,
       noteHistoryDays: 365,
     });
@@ -206,7 +212,7 @@ describe("names, prices and limits (redesign guide 11.1, 20.9 a, 20.10 a)", () =
   it("keeps the data-connection limits, and gives a trial Team Advanced's limits", () => {
     expect(PLAN_LIMITS.FREE.dataConnections).toBe(0);
     expect(PLAN_LIMITS.TEAM_FREE.dataConnections).toBe(0);
-    expect(PLAN_LIMITS.CLUB.dataConnections).toBe(2);
+    expect(PLAN_LIMITS.CLUB.dataConnections).toBe(6);
     expect(PLAN_LIMITS.SOCIETY.dataConnections).toBe(6);
     expect(PLAN_LIMITS.TRIAL).toEqual(PLAN_LIMITS.SOCIETY);
   });

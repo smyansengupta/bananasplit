@@ -9,7 +9,13 @@ const { authDbMock, signInMock, enqueueMock, rateLimitMock, redirectMock } = vi.
     throw Object.assign(new Error(`NEXT_REDIRECT ${url}`), { url });
   }),
 }));
-vi.mock("next/navigation", () => ({ redirect: redirectMock }));
+vi.mock("next/navigation", () => ({
+  redirect: redirectMock,
+  // Next's own rethrows its redirect; the mock's is the error that says so.
+  unstable_rethrow: (error: unknown) => {
+    if (error instanceof Error && error.message.startsWith("NEXT_REDIRECT")) throw error;
+  },
+}));
 // The Auth.js side (what counts as a rejection vs. a server failure) is
 // covered in src/lib/auth/credentials-sign-in.test.ts.
 vi.mock("@/lib/auth/credentials-sign-in", () => ({
@@ -33,6 +39,7 @@ function form(email: string) {
   data.set("name", "New Person");
   data.set("email", email);
   data.set("password", "correct-horse-battery");
+  data.set("confirmPassword", "correct-horse-battery");
   return data;
 }
 
@@ -172,5 +179,29 @@ describe("signUpAction (0A Fix 4(a,b))", () => {
     expect(state.error).toMatch(/too many sign-up attempts/i);
     expect(authDbMock.user.findUnique).not.toHaveBeenCalled();
     expect(authDbMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses two passwords that don't match, before anything is written", async () => {
+    const data = form("new@example.com");
+    data.set("confirmPassword", "something-else-entirely");
+    expect(await signUpAction({}, data)).toEqual({ error: "The passwords don't match." });
+    expect(authDbMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it("says so on the form when the database can't be reached, instead of throwing", async () => {
+    authDbMock.user.findUnique.mockRejectedValue(new Error("Can't reach database server"));
+    expect(await signUpAction({}, form("new@example.com"))).toEqual({
+      error: "We couldn't create your account just now. Try again in a minute.",
+    });
+  });
+
+  it("says the account was made when signing in throws after it exists, so a retry isn't needed", async () => {
+    signInMock.mockRejectedValue(new Error("session store down"));
+    expect(await signUpAction({}, form("made@example.com"))).toEqual({
+      checkEmail: "made@example.com",
+      error:
+        "Your account was created, but we couldn't sign you in. Sign-in isn't available right now.",
+    });
+    expect(authDbMock.user.create).toHaveBeenCalledTimes(1);
   });
 });

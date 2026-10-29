@@ -114,7 +114,9 @@ function AgendaRow({
       <span className="min-w-0">
         <span className="cal-agenda__title">{item.title}</span>
         <span className="cal-agenda__meta">
-          <span>{item.task ? (item.task.done ? "Task · done" : "Task") : kind.label}</span>
+          <span>
+            {item.task ? (item.task.done ? "Task · done" : "Task") : item.meetingType || kind.label}
+          </span>
           {item.location && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <MapPin aria-hidden className="size-3 shrink-0" />

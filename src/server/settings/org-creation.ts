@@ -12,19 +12,20 @@ import {
   orgCreationPolicy,
 } from "@/lib/auth/org-creation";
 import type { SessionUser } from "@/lib/auth/session";
-import { trialEndsAtFrom } from "@/lib/billing/space";
+import { TRIAL_NOTICE_DAYS, trialEndsAtFrom } from "@/lib/billing/space";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { isReservedSlug } from "@/lib/slug";
 import { isValidTimeZone } from "@/lib/timezones";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
+import { enqueueJob, type JobDb } from "@/server/jobs/enqueue";
 import { ownPreferredTitle } from "@/server/onboarding/title";
 
 /**
  * Creating a club (onboarding and /app/new) and the platform admins'
- * org-creation codes. A club starts on its 30-day trial (plan TRIAL,
- * trialEndsAt). Personal spaces are made by ensurePersonalSpace
+ * org-creation codes. A club starts on its free trial of Team Advanced
+ * (plan TRIAL, trialEndsAt, TRIAL_DAYS long), no card asked. Personal spaces are made by ensurePersonalSpace
  * (src/server/personal/space.ts) and never count toward ORG_CREATION_LIMITS.
  *
  * Creation runs on the service path for the creating user,
@@ -35,6 +36,29 @@ import { ownPreferredTitle } from "@/server/onboarding/title";
  * (membership_guard's bootstrap rule: the first member of a brand-new org
  * may be its OWNER). app_user can insert neither row.
  */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Queues "Your free trial is almost up" for a space made in this
+ * transaction (withSystemOrgTx(orgId)): it runs TRIAL_NOTICE_DAYS before
+ * the trial ends and sends nothing if a plan was picked by then.
+ */
+export async function scheduleTrialReminder(
+  db: JobDb,
+  orgId: string,
+  trialEndsAt: Date,
+): Promise<void> {
+  await enqueueJob(db, {
+    orgId,
+    kind: "trial-reminder-email",
+    key: orgId,
+    payload: {},
+    runAt: new Date(trialEndsAt.getTime() - TRIAL_NOTICE_DAYS * DAY_MS),
+    once: true,
+    noKick: true,
+  });
+}
 
 export const orgNameSchema = z
   .string()
@@ -158,18 +182,13 @@ export async function createOrganization(
         if (rows[0]?.ok !== true)
           return { ok: false as const, error: "That code is invalid, used or expired." };
       }
-      // Every new club starts its 30-day trial of everything now
+      // Every new club starts its free trial of everything now
       // (docs/features/personal-and-clubs.md); the database holds it to that.
+      const trialEndsAt = trialEndsAtFrom();
       await db.organization.create({
-        data: {
-          id: orgId,
-          name,
-          slug,
-          timezone,
-          plan: OrgPlan.TRIAL,
-          trialEndsAt: trialEndsAtFrom(),
-        },
+        data: { id: orgId, name, slug, timezone, plan: OrgPlan.TRIAL, trialEndsAt },
       });
+      await scheduleTrialReminder(db, orgId, trialEndsAt);
       await db.membership.create({
         data: { organizationId: orgId, userId: user.id, role: Role.OWNER, title },
       });

@@ -487,6 +487,8 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
 
   it("the admin confirms matches and edits, a member publishes; the cache is invalidated after commit", async () => {
     const draft = (await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, firstDraft)))!;
+    // Head of Programs stays under VP Ops and also reports to Kristine's position.
+    const social = draft.positions.find((p) => p.key === "head-of-social-membership")!;
     const input: SaveDraftInput = {
       versionId: firstDraft,
       editVersion: draft.version.editVersion,
@@ -500,6 +502,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
         matchScore: p.matchScore,
         suggestedUserIds: p.suggestedUserIds,
         reportsTo: p.reportsToId,
+        alsoReportsTo: p.key === "head-of-programs" ? [social.id] : [],
         isOpen: p.isOpen,
         isAdvisor: p.isAdvisor,
         responsibilities: p.responsibilities,
@@ -543,8 +546,25 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
     const growth = chart!.positions.find((p) => p.key === "vp-growth")!;
     expect(growth.title).toBe("VP Growth & Brand");
     expect(chart!.positions.find((p) => p.key === "president")?.user?.id).toBe(s.jackson.id);
+    const programs = chart!.positions.find((p) => p.key === "head-of-programs")!;
+    expect(programs.reportsToId).toBe(chart!.positions.find((p) => p.key === "vp-ops-programs")?.id);
+    expect(programs.alsoReportsToIds).toEqual([social.id]);
     const original = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, s.originalActive));
     expect(original?.version.status).toBe("ARCHIVED");
+  });
+
+  it("a draft of the published chart keeps its dotted lines, on the copy's own ids", async () => {
+    const copyId = await withOrgAction(async (ctx) => {
+      const { startDraft } = await import("./service");
+      return startDraft(ctx, "current");
+    })(s.cbcId);
+    createdVersions.push(copyId);
+    const copy = (await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, copyId)))!;
+    const byKey = new Map(copy.positions.map((p) => [p.key, p]));
+    expect(byKey.get("head-of-programs")?.alsoReportsToIds).toEqual([
+      byKey.get("head-of-social-membership")?.id,
+    ]);
+    await discard(copyId);
   });
 
   it("a failed publish leaves the chart and the cache untouched", async () => {

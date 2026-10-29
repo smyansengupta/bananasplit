@@ -96,10 +96,10 @@ describe("/invite/[token], signed in", () => {
     mocks.getSession.mockResolvedValue({ user: { id: "u_new", email: "new@example.edu" } });
   });
 
-  it("runs step 1 of the profile first, coming straight back", async () => {
+  it("readies a brand-new account first, coming straight back", async () => {
     mocks.needsProfileSetup.mockResolvedValue(true);
     await expect(render()).rejects.toMatchObject({
-      url: `/onboarding/profile/basics?callbackUrl=${encodeURIComponent(`/invite/${TOKEN}`)}`,
+      url: `/onboarding?callbackUrl=${encodeURIComponent(`/invite/${TOKEN}`)}`,
     });
   });
 

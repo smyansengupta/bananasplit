@@ -6,8 +6,13 @@ import { FUNNEL_EVENTS } from "@/lib/analytics/events";
 import { trackServer } from "@/lib/analytics/server";
 import { setActiveOrgCookie } from "@/lib/active-org-cookie";
 import { requireUser } from "@/lib/auth/session";
+import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { ACCEPT_ERROR_MESSAGES } from "@/lib/invitations";
-import { clubRoleHref, ORG_STEPS, orgStepHref } from "@/lib/onboarding/steps";
+import { clubRoleHref, orgStepHref, START_HREF } from "@/lib/onboarding/steps";
+import { isValidTimeZone } from "@/lib/profile/timezone";
+import { getOnboardingProfile, markProfileSetupComplete } from "@/server/onboarding/profile";
+import { ensurePersonalSpace } from "@/server/personal/space";
+import { updateOwnProfile } from "@/server/profiles/service";
 import { acceptInvitation, findPendingInvitationsForMe } from "@/server/settings/invitations";
 import { createOrganization, isSlugAvailable } from "@/server/settings/org-creation";
 
@@ -45,8 +50,9 @@ export async function createOrganizationAction(
     flow: field(formData, "flow") === "onboarding" ? "onboarding" : "app",
   });
   await setActiveOrgCookie(result.orgId);
-  // From onboarding, org setup continues with the first of ORG_STEPS.
-  if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, ORG_STEPS[0]));
+  // From onboarding, setting it up continues at Import (ORG_STEPS, the profile
+  // last); basics, before it, is only for going back.
+  if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, "import"));
   redirect(`/app/${result.slug}`);
 }
 
@@ -76,6 +82,26 @@ export async function joinPendingInvitationAction(
   if (!result.ok) return { error: ACCEPT_ERROR_MESSAGES[result.reason] };
 
   await setActiveOrgCookie(result.orgId);
-  // Then the one small club step: "Your role in <club>".
+  // Then you in the organization: about you, bio, your role, review.
   redirect(clubRoleHref(result.orgSlug));
+}
+
+/**
+ * Readies a new account (/onboarding posts it once, on arrival): the device's
+ * time zone when the account has none yet, onboarded, and its Personal space
+ * (with its trial), made in that zone. A POST, so a prefetch or a link
+ * preview of /onboarding changes nothing. Then where sign-up started (when
+ * safe), else "What brings you here?".
+ */
+export async function readyAccountAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const profile = await getOnboardingProfile(user.id);
+  if (!profile) redirect("/auth/session-ended");
+  const timezone = field(formData, "timezone");
+  if (!profile.timezone && isValidTimeZone(timezone)) {
+    await updateOwnProfile(user.id, { timezone });
+  }
+  await markProfileSetupComplete(user.id);
+  await ensurePersonalSpace(user.id);
+  redirect(safeCallbackUrl(field(formData, "after")) ?? START_HREF);
 }

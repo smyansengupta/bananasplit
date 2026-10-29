@@ -1,122 +1,72 @@
-# Onboarding: profile setup and creating an organization
+# Onboarding: an account, then joining or creating an organization
 
-Two flows, from the design in the "Onboarding flows" flowchart:
+Organization first, with as little to fill in as possible. Every step is one
+screen in the home page's look (Graphite, Geist headlines, the banana for the
+one action, `src/components/onboarding/setup-shell.tsx`): one card holding
+the step, nothing beside or above it. Where a picture helps, the picture is
+the editor (meeting types are named right on a week of the calendar). No
+stepper and no step counts. Each step has its own URL and saves when you press
+**Continue**; anyone can get through it in about three minutes.
 
-- **Flow A, profile setup.** Every new member runs it once, right after
-  signing up. People who already had an account before it shipped skip it.
-- **Flow B, create an organization.** Only for the person creating one. They
-  become its owner.
+## 1. The account
 
-Both flows use one step screen (the design handoff's "Onboarding"): a top bar
-with what's being set up, a stepper of numbered steps, and a card with the
-step on the left and a live preview on the right
-(`src/components/onboarding/setup-shell.tsx`). Like sign-in and sign-up, it is
-Bananasplit's own look (Moonstone, dark first, inside `BrandRoot`), not a
-club's theme: the screens use the app's tokens and shared components, sentence
-case and pill buttons (docs/design/moonstone.md). Every step saves when you press
-**Continue**, so leaving halfway loses nothing (**Save and exit** goes to the
-club), and each step has its own URL.
+Sign up with Google, or a name, email and password. The first visit to
+`/onboarding` posts `readyAccountAction` from the page (rendering writes
+nothing, so a prefetch can't): the device's time zone when the account has
+none, onboarded, and its Personal space in that zone, with its 14-day trial
+of Personal Plus; there is no profile to fill in first. Then:
 
-## How someone gets in
+- where sign-up started, when it started somewhere (`?callbackUrl=`: an invite
+  link, "Get started" on the home page, which goes straight to creating an
+  organization);
+- otherwise **What are you here for?** (`/onboarding/start`): join an
+  organization, create one, or just me. Email invites to the address show
+  above the three choices, one click to join.
 
-Signing up (or signing in without an organization) lands on `/onboarding`,
-which answers the flowchart's first question, **Profile complete?**:
+An unverified email can look around; joining or creating an organization
+still needs a verified address.
 
-- **No:** go to A1. The org layout and `/app` send anyone who hasn't finished
-  here too. That includes someone who joined through an emailed invite link
-  before setting up their profile.
-- **Yes, and they belong to an org:** go to that org.
-- **Yes, and no org:** the A7 choice. Join with an invite code, accept an
-  email invite, or create an organization.
+## 2. Joining (`/onboarding/join`, then `/onboarding/join/<org>/profile`)
 
-An unverified email can go through profile setup, and A1 shows the "check your
-email" notice. Joining or creating an organization still needs a verified
-address, the same rule as before.
+The 8-character invite code (or its link, or an emailed invite), checked
+against the organization before anyone joins (verified email, the code turned
+on, the allowed domain, Free's 10-member limit). Then your profile, one
+screen: photo, name, time zone (detected from the device), pronouns, bio
+and links. Your title there is the admins' to set. Then in.
 
-## Flow A: profile setup (`/onboarding/profile/<step>`)
+## 3. Creating an organization
 
-| Step | Page           | What it saves                                                                                                                                                       |
-| ---- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1   | `basics`       | Picture (upload, or go back to the Google photo), full name, pronouns (preset or custom), time zone (detected from the device).                                     |
-| A2   | `school`       | Major and an optional second major or minor (stored together in the one major field), grad year, and **your role**, which becomes your title in every org you join. |
-| A3   | `bio`          | A short bio (280 characters here, the profile page allows more) and up to 8 links. The type (LinkedIn, GitHub, X...) is detected from the URL.                      |
-| A4   | `theme`        | A personal theme: a preset or five custom colours, light or dark, with a live preview. It only changes your own view.                                               |
-| A5   | `availability` | When you can't meet: click or drag hours on the week grid, or add rules (a recurring event, an hour or day you never meet, a specific date).                        |
-| A6   | `review`       | Everything above at a glance. **Next:** join with an invite code, or create an organization. Someone who already joined an org gets **Go to <org>** instead.        |
+1. **Basics** (`/onboarding/organization`): name, web address (checked as you
+   type) and time zone (detected). This creates it with you as owner and
+   starts its 14-day trial of Team Advanced, no card.
+2. **Setting it up**, `ORG_STEPS` under `/onboarding/organization/<org>/`. No
+   step counts or stepper; every step but the profile can be skipped.
 
-Pressing a **Next** button on A6 marks the profile complete (`User.onboardedAt`).
+| Step       | What it does                                                                                                                                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `basics`   | Only before Import, for Back: the name and time zone again (the web address changes in Settings › General). Back never offers to make a second organization.                                                                                                                                          |
+| `import`   | First after creating it. **Start fresh** (picked to begin with: "Continue in a new workspace"), or one of the apps people leave, with its logo. A CSV or Excel file imports now, into a database; picking an app says its importer is coming soon, and every step still follows (nothing is skipped). |
+| `picture`  | The organization's logo, the same upload and crop as Settings › General.                                                                                                                                                                                                                              |
+| `labels`   | Task tags: four to start, more one click away, ten colours in a picker over each row.                                                                                                                                                                                                                 |
+| `events`   | Meeting types (team meeting, 1:1, standup...), named right on a week of the calendar (`OrgSettings.eventTypes`). A meeting picks one (`Event.meetingType`) and the calendar draws it in that colour.                                                                                                  |
+| `teams`    | Team names only, published as the org chart. Leads come later, once people join.                                                                                                                                                                                                                      |
+| `emails`   | Your own email notifications (all on for someone who has never chosen, else what you chose; they are account-wide) and the weekly recap for everyone.                                                                                                                                                 |
+| `imessage` | Running it all by text (tasks, meetings, money, answers), shown as a thread. The screen only: the texting service isn't connected yet.                                                                                                                                                                |
+| `tools`    | The home page's integrations, as buttons; connecting each is in Settings › Integrations.                                                                                                                                                                                                              |
+| `invite`   | The invite code and link, and email invites; the box takes a whole pasted list.                                                                                                                                                                                                                       |
+| `bring`    | Events, polls, tasks, notes and files from your Personal space. Skipped when there's nothing to bring.                                                                                                                                                                                                |
+| `profile`  | Last: your profile, as when joining. Then the organization's Overview, as its owner.                                                                                                                                                                                                                  |
 
-All of it stays editable afterwards on the **Profile** page. The profile page
-has two new sections, **Theme** and **When you can't meet**, which use the same
-controls.
+## 4. Just me (`/onboarding/personal/<step>`)
 
-**Personal theme.** The org layout puts your palette and light/dark choice on
-top of the org's theme. If an org locks light or dark, the lock still wins.
-"Use the organization's theme" on the profile page clears your choice.
+Setting up your personal workspace, `PERSONAL_STEPS`: import, tags, emails,
+iMessage, then your profile (no pronouns). No meeting types.
 
-**Availability.** It lives in its own table that only you can read or write,
-enforced by the database. Other members only ever see busy or free for each
-hour of a typical week, on your people page. They never see the labels ("Lab
-section"), the dates or the reasons. Each org decides whether its members see
-busy times (the Teams step). That org's admins, and you, always do.
+## Previewing locally
 
-## Joining (A7, `/onboarding/join`)
-
-There are two ways in, and both are checked against the organization before
-anyone joins:
-
-1. **Invite code.** Each org has one shareable eight-character code (like
-   `RPKA-YWSF`) and a link that fills it in (`/onboarding/join?code=...`).
-   The person types or pastes it into eight boxes, in two groups of four;
-   once all eight are in, the page shows which club it belongs to (name,
-   logo, member count), then they press **Join**. Six-character codes (like
-   `ROBO26`), issued for a short while, still work when pasted or opened from
-   their link. The server checks that:
-   - their email is verified;
-   - the code matches an org, the org isn't being deleted, and the code is
-     turned on;
-   - their email is on the org's allowed domain, if the admins set one (for
-     example `northeastern.edu`, including subdomains).
-
-   People who join with the code become **members**, with the role they picked
-   in A2 as their title. Admins are notified.
-
-2. **Email invite.** Invites sent to the person's verified address are listed
-   on the same page with a **Join** button. This works exactly as it did
-   before: the invite only works for the address it was sent to.
-
-Lookups are rate limited per user (10 every 15 minutes) and need a verified
-email. Codes come from a 30-character alphabet with no look-alikes (0/O, 1/I/L,
-U), so there are about 7.3 × 10⁸ of them. Codes made before the six-box screen
-are `XXXX-XXXX`; they keep working (a pasted or linked one gets eight boxes)
-until an admin makes a new code.
-
-**Managing the code:** **Settings › Members › Invite code**, owners and admins
-only. From there you can copy the code or the link, turn it off, limit it to an
-email domain, or **make a new code**. A new code stops the old one working
-immediately. The same card appears on the org's overview right after org setup
-finishes (the flowchart's "invite link shown on first load").
-
-## Flow B: create an organization
-
-The steps, in the order of `ORG_STEPS` (`src/lib/onboarding/steps.ts`); the
-stepper numbers them 1 to 8.
-
-| #   | Page                                    | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `/onboarding/organization`              | Club basics: name, web address (checked as you type) and time zone, plus a club-creation code where the platform requires one. Creates the club, with you as owner.                                                                                                                                                                                                                                                                                                                |
-| 2   | `/onboarding/organization/<url>/labels` | The club's tags (the same ones as Settings › Labels): keep, rename, recolour, remove or add. A new club starts with four suggestions. The preview shows the newest tasks wearing them.                                                                                                                                                                                                                                                                                             |
-| 3   | `.../finance`                           | Which sections the finance dashboard shows, and when the fiscal year starts. An owner or treasurer can start that year's budget period here, with the usual categories at $0.                                                                                                                                                                                                                                                                                                      |
-| 4   | `.../teams`                             | Teams, each with a lead and a regular meeting. They're published as the org chart: the first team is the top and the rest report to it. The meetings can be added to the calendar for the next 12 weeks (off until asked for). Also: whether members see each other's busy times.                                                                                                                                                                                                  |
-| 5   | `.../pulse`                             | The weekly pulse: the day (a Mon to Sun segmented control, Friday by default), the time (5 PM), who gets it (Everyone, or Officers: owners, admins and treasurers) and how (in the app, email). Saved to `OrgSettings` (`pulseEnabled`, `pulseDay`, `pulseHourLocal`, `pulseAudience`, `pulseInApp`, `pulseEmail`) through `src/server/onboarding/pulse.ts`, the same saver as Admin panel › Weekly pulse. **Don't send one** turns it off. The pulse itself: `src/server/pulse/`. |
-| 6   | `.../invite`                            | Invite officers by email (the same invites as Settings › Members, valid for 7 days, as Admin, Treasurer or Member) and share the invite code.                                                                                                                                                                                                                                                                                                                                      |
-| 7   | `.../data`                              | Connect tools: the club's real connections (club website data, Google Calendar, email sender, Claude), with live status. **Connect** opens the guided setup for that service, which tests it; you come back with **← Back to organization setup**. All optional: the club's data is stored in Bananasplit from the start, so **Continue** always works (with nothing connected it marks them skipped).                                                                             |
-| 8   | `.../bring`                             | Bring things in: events, polls and tasks from the creator's Personal space. Skipped when there's nothing to bring.                                                                                                                                                                                                                                                                                                                                                                 |
-| End | `/app/<url>?welcome=1`                  | The club's Overview, as its admin, with the invite code ready to share.                                                                                                                                                                                                                                                                                                                                                                                                            |
-
-Steps 2 to 8 are for owners and admins. Anyone else who opens them is told so.
-Everything can be changed later in Settings, the Org Chart, Finance and
-Databases.
+`/dev/onboarding/start` (development only) shows every screen with sample
+data, no account or database needed; every button moves to the next screen
+instead of saving.
 
 ## Many organizations
 
@@ -137,15 +87,15 @@ narrow that:
 
 ### What is shared and what stays in one org
 
-| Data                                                                                                                               | Belongs to | Who can see it                                                                                                                          |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Account: email, password, verification                                                                                             | the person | only the sign-in system. Email is never on people pages.                                                                                |
-| Profile: name, picture, pronouns, major, year, bio, links, time zone                                                               | the person | the person, and members of any org they share. It's the same profile in every org.                                                      |
-| Personal theme                                                                                                                     | the person | only changes their own view.                                                                                                            |
-| Availability rules and labels                                                                                                      | the person | only the person (their own table).                                                                                                      |
-| Busy hours                                                                                                                         | the person | the person; the admins of orgs they belong to; other members of an org that shares busy times. Asked per org.                           |
-| Membership: role and title                                                                                                         | one org    | that org. The title starts as the one picked in profile setup, and each org's admins can change it separately.                          |
-| Everything else: tasks, notes, calendar, polls, finance, databases, reports, org chart, invite code, integrations, settings, audit | one org    | only that org's members, with each feature's own rules (finance: owner and treasurer; invite code and integrations: owners and admins). |
+| Data                                                                                                                               | Belongs to | Who can see it                                                                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account: email, password, verification                                                                                             | the person | only the sign-in system. Email is never on people pages.                                                                                                                                     |
+| Profile: name, picture, pronouns, major, year, bio, links, time zone                                                               | the person | the person, and members of any org they share. It's the same profile in every org.                                                                                                           |
+| Personal theme                                                                                                                     | the person | only changes their own view.                                                                                                                                                                 |
+| Availability rules and labels                                                                                                      | the person | only the person (their own table).                                                                                                                                                           |
+| Busy hours                                                                                                                         | the person | the person; the admins of orgs they belong to; other members of an org that shares busy times. Asked per org.                                                                                |
+| Membership: role and title                                                                                                         | one org    | that org. The title starts as the one picked in profile setup, and each org's admins can change it separately.                                                                               |
+| Everything else: tasks, notes, calendar, polls, finance, databases, reports, org chart, invite code, integrations, settings, audit | one org    | only that org's members, with each feature's own rules (finance: owners, admins and treasurers, and a member sees only their own expenses; invite code and integrations: owners and admins). |
 
 **How the database keeps orgs apart.** Every org-owned row carries its org's
 id. The app runs each request as one of four restricted database roles.

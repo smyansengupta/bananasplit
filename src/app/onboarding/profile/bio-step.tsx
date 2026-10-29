@@ -27,9 +27,6 @@ import {
   type ProfileLink,
 } from "@/lib/profile/links";
 
-import { saveBioStep } from "./actions";
-import { StepNav, useStepSave } from "./step-nav";
-
 const KIND_ICONS: Record<LinkKind, IconComponent> = {
   linkedin: Briefcase,
   github: CodeXml,
@@ -54,11 +51,23 @@ function shortUrl(url: string): string {
     .replace(/\/$/, "");
 }
 
-/** Step 3 · Bio + links: up to 8 links, the type detected from the URL. */
-export function BioStep({ initial }: { initial: { bio: string | null; links: ProfileLink[] } }) {
-  const { pending, errors, saveAndContinue } = useStepSave("bio");
-  const [bio, setBio] = useState(initial.bio ?? "");
-  const [links, setLinks] = useState<ProfileLink[]>(initial.links);
+export interface BioValue {
+  bio: string;
+  links: ProfileLink[];
+}
+
+/** Bio and links (up to 8, the type detected from the URL), for the profile form. */
+export function BioFields({
+  value,
+  onChange,
+  errors,
+}: {
+  value: BioValue;
+  onChange: (value: BioValue) => void;
+  errors: Record<string, string>;
+}) {
+  const { bio, links } = value;
+  const setLinks = (next: ProfileLink[]) => onChange({ bio, links: next });
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -82,30 +91,25 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
     setAdding(links.length + 1 < MAX_LINKS);
   }
 
-  function submit() {
-    saveAndContinue(() => saveBioStep({ bio: bio || null, links }));
-  }
-
   return (
-    <div className="flex flex-1 flex-col gap-5">
+    <>
       <div className="grid gap-1.5">
-        <FieldLabel htmlFor="ob-bio" icon={NotebookPen} aside={`${bio.length}/${SETUP_BIO_MAX}`}>
+        <FieldLabel htmlFor="ob-bio" icon={NotebookPen} hidden>
           Bio
         </FieldLabel>
         <Textarea
           id="ob-bio"
-          rows={3}
+          rows={2}
           value={bio}
           maxLength={SETUP_BIO_MAX}
-          placeholder="Junior in CS. I run client projects and like building internal tools."
-          onChange={(e) => setBio(e.target.value)}
-          className="min-h-20 resize-none"
+          placeholder="Bio (optional)"
+          onChange={(e) => onChange({ bio: e.target.value, links })}
+          className="min-h-16 resize-none"
         />
         <FieldError message={errors.bio} />
       </div>
-
       <div className="grid gap-1.5">
-        <FieldLabel icon={Link2} aside={`${links.length} / ${MAX_LINKS}`}>
+        <FieldLabel icon={Link2} hidden>
           Links
         </FieldLabel>
         <ul className="grid gap-1.5">
@@ -144,7 +148,7 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
             <div className="flex gap-1.5">
               <Input
                 aria-label="Link URL"
-                placeholder="linkedin.com/in/your-name"
+                placeholder="Link"
                 value={draft}
                 autoFocus
                 onChange={(e) => {
@@ -184,9 +188,6 @@ export function BioStep({ initial }: { initial: { bio: string | null; links: Pro
           )
         )}
       </div>
-
-      <FieldError message={errors.form} />
-      <StepNav step="bio" pending={pending} onContinue={submit} />
-    </div>
+    </>
   );
 }

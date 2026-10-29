@@ -133,6 +133,8 @@ const eventFields = {
   conferenceProvider: z.enum(ConferenceProvider),
   conferenceUrl: optionalText(2000),
   kind: z.enum(EventKind),
+  /** One of the org's meeting types (OrgSettings.eventTypes), by name. */
+  meetingType: optionalText(40),
   visibility: z.enum(EventVisibility),
   hostUserId: z.string().min(1).max(100).nullish(),
   hostName: optionalText(120),
@@ -183,6 +185,7 @@ export const EVENT_SELECT = {
   conferenceProvider: true,
   conferenceUrl: true,
   kind: true,
+  meetingType: true,
   visibility: true,
   hostUserId: true,
   hostName: true,
@@ -290,7 +293,10 @@ function checkShape(e: EventShape): void {
  * drift from the provider and the place it describes. Without this every
  * event kept the IN_PERSON default and no online meeting would ever be made.
  */
-function formatOf(e: { conferenceProvider: ConferenceProvider; location: string | null }): MeetingFormat {
+function formatOf(e: {
+  conferenceProvider: ConferenceProvider;
+  location: string | null;
+}): MeetingFormat {
   if (e.conferenceProvider === ConferenceProvider.NONE) return MeetingFormat.IN_PERSON;
   return e.location?.trim() ? MeetingFormat.HYBRID : MeetingFormat.ONLINE;
 }

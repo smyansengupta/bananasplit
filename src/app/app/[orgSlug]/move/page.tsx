@@ -103,8 +103,8 @@ export default async function MoveToClubPage({
                 <h2>{clubs.length ? "Or start a new organization" : "Start an organization"}</h2>
               </CardTitle>
               <CardDescription>
-                A new organization is free for 30 days. At the end of setup, you choose what to
-                bring in
+                A new organization gets 14 days of Team Advanced free, no card. At the end of setup,
+                you choose what to bring in
                 {itemId ? ", with this one already picked" : ""}.
               </CardDescription>
             </CardHeader>

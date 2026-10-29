@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 import { BrandField, BrandInput, FormMessage, PrimaryButton } from "@/components/brand/fields";
 
 import { passwordSignInAction } from "./actions";
+import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 
 export function PasswordSignInForm({ callbackUrl }: { callbackUrl?: string | null }) {
   const [state, formAction, isPending] = useActionState(passwordSignInAction, {});
@@ -13,7 +14,13 @@ export function PasswordSignInForm({ callbackUrl }: { callbackUrl?: string | nul
   const [email, setEmail] = useState("");
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form
+      noValidate
+      onSubmit={highlightInvalid}
+      onInput={clearInvalid}
+      action={formAction}
+      className="flex flex-col gap-5"
+    >
       {callbackUrl && <input type="hidden" name="callbackUrl" value={callbackUrl} />}
       <BrandField id="email" label="Email">
         <BrandInput
@@ -22,7 +29,7 @@ export function PasswordSignInForm({ callbackUrl }: { callbackUrl?: string | nul
           type="email"
           required
           autoComplete="email"
-          placeholder="you@example.com"
+          placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
@@ -45,7 +52,7 @@ export function PasswordSignInForm({ callbackUrl }: { callbackUrl?: string | nul
           type="password"
           required
           autoComplete="current-password"
-          placeholder="••••••••"
+          placeholder="Password"
         />
       </BrandField>
       {state.error && <FormMessage>{state.error}</FormMessage>}

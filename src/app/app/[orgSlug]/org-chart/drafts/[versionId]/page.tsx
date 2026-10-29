@@ -107,6 +107,7 @@ export default async function DraftPage({
     matchScore: p.matchScore,
     suggestedUserIds: p.suggestedUserIds,
     reportsTo: p.reportsToId,
+    alsoReportsTo: p.alsoReportsToIds,
     isOpen: p.isOpen,
     isAdvisor: p.isAdvisor,
     responsibilities: p.responsibilities,

@@ -13,7 +13,7 @@ import { planGate } from "@/server/billing/plan-gate";
 import { FinanceAccessGate } from "../finance-access-gate";
 import { getCategoriesForPeriods, getOrgMembersForPicker, getOrgPeriods } from "../queries";
 
-/** Finance › Set up: the guided setup (owners and treasurers). */
+/** Finance › Set up: the guided setup (owners, admins and treasurers). */
 export default async function FinanceSetupPage({
   params,
 }: PageProps<"/app/[orgSlug]/finance/setup">) {

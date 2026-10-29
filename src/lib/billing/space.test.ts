@@ -11,22 +11,47 @@ import {
   trialDaysLeft,
   trialEndsAtFrom,
   type SpaceInfo,
+  trialJustEnded,
+  trialPlanName,
+  trialFallbackName,
+  planPickedForAfterTrial,
 } from "./space";
 
 const ALL = Object.keys(PLAN_FEATURES) as PlanFeature[];
 const NOW = new Date("2026-10-13T12:00:00Z");
 const DAY = 24 * 60 * 60 * 1000;
 
-const personal: SpaceInfo = { kind: "PERSONAL", plan: "FREE", trialEndsAt: null };
-const plus: SpaceInfo = { kind: "PERSONAL", plan: "PERSONAL_PLUS", trialEndsAt: null };
+const personal: SpaceInfo = {
+  kind: "PERSONAL",
+  plan: "FREE",
+  trialEndsAt: null,
+  planAfterTrial: null,
+};
+const plus: SpaceInfo = {
+  kind: "PERSONAL",
+  plan: "PERSONAL_PLUS",
+  trialEndsAt: null,
+  planAfterTrial: null,
+};
 const trial = (endsInDays: number): SpaceInfo => ({
   kind: "CLUB",
   plan: "TRIAL",
   trialEndsAt: new Date(NOW.getTime() + endsInDays * DAY),
+  planAfterTrial: null,
 });
-const teamFree: SpaceInfo = { kind: "CLUB", plan: "TEAM_FREE", trialEndsAt: null };
-const club: SpaceInfo = { kind: "CLUB", plan: "CLUB", trialEndsAt: null };
-const society: SpaceInfo = { kind: "CLUB", plan: "SOCIETY", trialEndsAt: null };
+const teamFree: SpaceInfo = {
+  kind: "CLUB",
+  plan: "TEAM_FREE",
+  trialEndsAt: null,
+  planAfterTrial: null,
+};
+const club: SpaceInfo = { kind: "CLUB", plan: "CLUB", trialEndsAt: null, planAfterTrial: null };
+const society: SpaceInfo = {
+  kind: "CLUB",
+  plan: "SOCIETY",
+  trialEndsAt: null,
+  planAfterTrial: null,
+};
 
 describe("spaceIncludes", () => {
   it("gives both Personal plans tasks (every view), the calendar and RSVP pages, polls, notes and files, databases, and settings", () => {
@@ -58,7 +83,6 @@ describe("spaceIncludes", () => {
     for (const f of [
       "overview",
       "teamwork",
-      "labels",
       "people",
       "finance",
       "reports",
@@ -92,7 +116,8 @@ describe("spaceIncludes", () => {
   });
 
   it("gives Team Free the organization basics and nothing paid", () => {
-    for (const f of ["overview", "teamwork", "labels", "people", "sidebar", "privacy"] as const) {
+    expect(spaceIncludes(personal, "labels", NOW)).toBe(true);
+    for (const f of ["overview", "teamwork", "people", "sidebar", "privacy"] as const) {
       expect(spaceIncludes(teamFree, f, NOW)).toBe(true);
       expect(spaceIncludes(personal, f, NOW)).toBe(false);
     }
@@ -111,8 +136,54 @@ describe("spaceIncludes", () => {
 });
 
 describe("trials", () => {
-  it("runs 30 days from the start", () => {
-    expect(trialEndsAtFrom(NOW).getTime() - NOW.getTime()).toBe(30 * DAY);
+  it("runs 14 days from the start", () => {
+    expect(trialEndsAtFrom(NOW).getTime() - NOW.getTime()).toBe(14 * DAY);
+  });
+
+  it("gives a new Personal space Personal Plus until its trial ends, then Personal Free", () => {
+    const personalTrial = (days: number): SpaceInfo => ({
+      kind: "PERSONAL",
+      plan: "FREE",
+      trialEndsAt: new Date(NOW.getTime() + days * DAY),
+      planAfterTrial: null,
+    });
+    expect(spaceIncludes(personalTrial(3), "ai", NOW)).toBe(true);
+    expect(spaceIncludes(personalTrial(3), "integrations", NOW)).toBe(true);
+    expect(spaceLimits(personalTrial(3), NOW)).toEqual(spaceLimits(plus));
+    expect(trialDaysLeft(personalTrial(3), NOW)).toBe(3);
+    expect(trialJustEnded(personalTrial(3), NOW)).toBe(false);
+    expect(spaceIncludes(personalTrial(-1), "ai", NOW)).toBe(false);
+    expect(spaceLimits(personalTrial(-1), NOW)).toEqual(spaceLimits(personal));
+    expect(trialJustEnded(personalTrial(-1), NOW)).toBe(true);
+    expect(trialJustEnded({ ...personalTrial(-1), plan: "PERSONAL_PLUS" }, NOW)).toBe(false);
+    expect(trialPlanName(personal)).toBe("Personal Plus");
+    expect(trialFallbackName(personal)).toBe("Personal Free");
+    expect(trialPlanName(club)).toBe("Team Advanced");
+    expect(trialFallbackName(club)).toBe("Free");
+  });
+
+  it("keeps the whole trial when a plan is picked during it, then moves to that plan", () => {
+    const picked = (days: number, planAfterTrial: "CLUB" | "SOCIETY" | "TEAM_FREE"): SpaceInfo => ({
+      ...trial(days),
+      planAfterTrial,
+    });
+    expect(effectivePlan(picked(5, "CLUB"), NOW)).toBe("SOCIETY");
+    expect(spaceStatus(picked(5, "CLUB"), NOW)).toBe("trial");
+    expect(planPickedForAfterTrial(picked(5, "CLUB"), NOW)).toBe("CLUB");
+    expect(effectivePlan(picked(-1, "CLUB"), NOW)).toBe("CLUB");
+    expect(spaceStatus(picked(-1, "CLUB"), NOW)).toBe("paid");
+    expect(planPickedForAfterTrial(picked(-1, "CLUB"), NOW)).toBeNull();
+    expect(trialFallbackName(picked(-1, "CLUB"))).toBe("Team");
+    expect(effectivePlan(picked(-1, "TEAM_FREE"), NOW)).toBe("TEAM_FREE");
+    expect(spaceStatus(picked(-1, "TEAM_FREE"), NOW)).toBe("free");
+    expect(spaceLimits(trial(-1), NOW).members).toBe(10);
+    expect(spaceLimits(trial(1), NOW).members).toBeNull();
+  });
+
+  it("says an organization's trial just ended until a plan is picked", () => {
+    expect(trialJustEnded(trial(-1), NOW)).toBe(true);
+    expect(trialJustEnded(trial(1), NOW)).toBe(false);
+    expect(trialJustEnded(teamFree, NOW)).toBe(false);
   });
 
   it("is on Free from the moment the trial ends, never paused", () => {
@@ -145,8 +216,10 @@ describe("spaceLimits", () => {
     expect(spaceLimits(trial(5), NOW)).toEqual(spaceLimits(society));
     expect(spaceLimits(trial(-5), NOW)).toEqual(spaceLimits(teamFree));
     expect(spaceLimits(teamFree).storageBytes).toBe(5 * 1024 ** 3);
-    // Without the trial's end, a trial counts as running.
-    expect(spaceLimits({ kind: "CLUB", plan: "TRIAL" })).toEqual(spaceLimits(society));
+    // A trial with no end on record counts as running.
+    expect(
+      spaceLimits({ kind: "CLUB", plan: "TRIAL", trialEndsAt: null, planAfterTrial: null }),
+    ).toEqual(spaceLimits(society));
   });
 });
 

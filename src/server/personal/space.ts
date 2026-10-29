@@ -1,11 +1,12 @@
 import { randomInt } from "node:crypto";
 
 import { OrgKind, OrgPlan, Role } from "@/generated/prisma/client";
+import { trialEndsAtFrom } from "@/lib/billing/space";
 import { isValidTimeZone } from "@/lib/timezones";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withSystemOrgTx, withUserTx } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
-import { newOrgId } from "@/server/settings/org-creation";
+import { newOrgId, scheduleTrialReminder } from "@/server/settings/org-creation";
 
 /**
  * Personal spaces (docs/features/personal-and-clubs.md). Every account has
@@ -15,6 +16,10 @@ import { newOrgId } from "@/server/settings/org-creation";
  * so those work exactly as in a club (row security, jobs, public links).
  * The database refuses a second member, an invitation or a join code
  * (app.personal_space_guard), and kind never changes.
+ *
+ * A new space starts with a free trial of Personal Plus: plan FREE with a
+ * trialEndsAt TRIAL_DAYS out (src/lib/billing/space.ts), no card asked,
+ * and a reminder queued before it ends.
  *
  * Made by ensurePersonalSpace when the quick profile (onboarding step 1) is
  * saved, and lazily by /app for anyone who doesn't have one yet. It never
@@ -81,6 +86,7 @@ export async function ensurePersonalSpace(userId: string): Promise<PersonalSpace
   const timezone = me.timezone && isValidTimeZone(me.timezone) ? me.timezone : "America/New_York";
   try {
     return await withSystemOrgTx(orgId, { userId }, async ({ db }) => {
+      const trialEndsAt = trialEndsAtFrom();
       const space = await db.organization.create({
         data: {
           id: orgId,
@@ -90,9 +96,11 @@ export async function ensurePersonalSpace(userId: string): Promise<PersonalSpace
           kind: OrgKind.PERSONAL,
           personalOwnerId: userId,
           plan: OrgPlan.FREE,
+          trialEndsAt,
         },
         select: SPACE_SELECT,
       });
+      await scheduleTrialReminder(db, orgId, trialEndsAt);
       await db.membership.create({
         data: { organizationId: orgId, userId, role: Role.OWNER },
       });
@@ -113,6 +121,20 @@ export async function ensurePersonalSpace(userId: string): Promise<PersonalSpace
     }
     throw error;
   }
+}
+
+/**
+ * Gives the user's Personal space their time zone (picked on the profile
+ * step, say, after the space was made from the device's), so its due dates
+ * and all-day events land on the owner's days. Nothing to do without one.
+ */
+export async function setPersonalSpaceTimezone(userId: string, timezone: string): Promise<void> {
+  if (!isValidTimeZone(timezone)) return;
+  const space = await getPersonalSpace(userId);
+  if (!space || space.timezone === timezone) return;
+  await withSystemOrgTx(space.id, { userId }, ({ db }) =>
+    db.organization.update({ where: { id: space.id }, data: { timezone }, select: { id: true } }),
+  );
 }
 
 /** Where the user's Personal space opens: /app/{slug}. */

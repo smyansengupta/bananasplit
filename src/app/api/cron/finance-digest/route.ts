@@ -25,7 +25,9 @@ export async function GET(request: Request) {
   if (denied) return denied;
 
   const day = new Date().toISOString().slice(0, 10);
-  const orgIds = await serviceDb.$queryRaw<{ id: string }[]>`SELECT id FROM app.active_org_ids() AS id`;
+  const orgIds = await serviceDb.$queryRaw<
+    { id: string }[]
+  >`SELECT id FROM app.active_org_ids() AS id`;
 
   let orgsWithPending = 0;
   let digestsQueued = 0;
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
         });
         if (pending === 0) return 0;
         const recipients = await db.membership.findMany({
-          where: { organizationId: orgId, role: { in: [Role.OWNER, Role.TREASURER] } },
+          where: { organizationId: orgId, role: { in: [Role.OWNER, Role.ADMIN, Role.TREASURER] } },
           select: { userId: true },
         });
         for (const r of recipients) {

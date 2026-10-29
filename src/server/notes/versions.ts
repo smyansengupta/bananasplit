@@ -79,7 +79,7 @@ export async function pruneSnapshots(
 ): Promise<number> {
   const space = await db.organization.findUnique({
     where: { id: organizationId },
-    select: { kind: true, plan: true },
+    select: { kind: true, plan: true, trialEndsAt: true, planAfterTrial: true },
   });
   if (!space) return 0;
   const result = await db.noteVersion.deleteMany({

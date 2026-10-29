@@ -4,21 +4,26 @@ import { redirect } from "next/navigation";
 
 import { ForbiddenError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
-import { nextOrgStep, orgStepHref, type OrgStep } from "@/lib/onboarding/steps";
+import {
+  nextSetupStep,
+  setupStepHref,
+  type OrgStep,
+  type SetupFlow,
+  type SetupStep,
+} from "@/lib/onboarding/steps";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
 import { EventValidationError } from "@/server/events/service";
 import {
-  saveFinanceSetup,
+  saveEventTypes,
   saveTaskLabels,
   saveTeamsSetup,
   StepFailure,
   type StepResult,
 } from "@/server/onboarding/org-setup";
-import { savePulseSettings } from "@/server/onboarding/pulse";
-import { loadSetupState, skipStep } from "@/server/setup/progress";
 
 /**
- * Org setup (onboarding Flow B, B2-B7) for an OWNER/ADMIN of the new org.
+ * Setting up an organization (ORG_STEPS) for an OWNER/ADMIN of it, and the
+ * Personal space's steps that share them (tags, the next-step redirect).
  * Each step runs in one withOrgAction transaction as app_user (RLS
  * applies); the services in src/server/onboarding/org-setup.ts check the
  * permissions and validate the input again. A refusal thrown mid-step rolls
@@ -52,30 +57,47 @@ async function orgTimezone(ctx: OrgContext): Promise<string> {
   return org.timezone;
 }
 
-/** B2 "Skip for now": every connection not made yet is marked skipped. */
-export const skipDataStepAction = step(async (ctx) => {
-  requirePermission(ctx, "integrations.write");
-  const state = await loadSetupState(ctx.db, ctx.organizationId);
-  for (const id of state.todo) await skipStep(ctx.db, ctx.organizationId, ctx.userId, id);
-  return { ok: true };
-});
-
 export const saveLabelsStepAction = step((ctx, input: unknown) => saveTaskLabels(ctx, input));
-
-export const saveFinanceStepAction = step(async (ctx, input: unknown) =>
-  saveFinanceSetup(ctx, input, await orgTimezone(ctx)),
-);
 
 export const saveTeamsStepAction = step(async (ctx, input: unknown) =>
   saveTeamsSetup(ctx, input, await orgTimezone(ctx)),
 );
 
-/** The Weekly pulse step: day, time, audience and channels (OrgSettings). */
-export const savePulseStepAction = step((ctx, input: unknown) => savePulseSettings(ctx, input));
+/** Event types: the organization's own, named like its tags (OrgSettings.eventTypes). */
+export const saveEventTypesStepAction = step((ctx, input: unknown) => saveEventTypes(ctx, input));
 
-/** After a step saved: the next step, or the org's home as its admin (B7 -> END). */
-export async function goToNextOrgStep(orgSlug: string, current: OrgStep): Promise<void> {
-  const next = nextOrgStep(current);
+/**
+ * Emails, for everyone in the organization: the weekly recap by email
+ * (OrgSettings.pulseEmail). What each person gets is their own
+ * (saveNotificationPreferences).
+ */
+export const saveOrgEmailsStepAction = step(async (ctx, recapByEmail: unknown) => {
+  requirePermission(ctx, "settings.general.write");
+  if (typeof recapByEmail !== "boolean") return { ok: false, error: "Pick on or off." };
+  await ctx.db.orgSettings.update({
+    where: { organizationId: ctx.organizationId },
+    data: { pulseEmail: recapByEmail, updatedById: ctx.userId },
+    select: { organizationId: true },
+  });
+  return { ok: true };
+});
+
+/**
+ * After a step saved (or was skipped): the next step, else where setup ends: the organization's home as its admin, or
+ * the Personal space.
+ */
+export async function goToNextSetupStep(
+  flow: SetupFlow,
+  orgSlug: string,
+  current: SetupStep,
+): Promise<void> {
+  const next = nextSetupStep(flow, current);
   const slug = /^[a-z0-9-]{1,60}$/.test(orgSlug) ? orgSlug : "";
-  redirect(!slug ? "/app" : next ? orgStepHref(slug, next) : `/app/${slug}?welcome=1`);
+  if (next) redirect(setupStepHref(flow, slug, next));
+  redirect(!slug ? "/app" : flow === "org" ? `/app/${slug}?welcome=1` : `/app/${slug}`);
+}
+
+/** goToNextSetupStep for an organization's setup. */
+export async function goToNextOrgStep(orgSlug: string, current: OrgStep): Promise<void> {
+  await goToNextSetupStep("org", orgSlug, current);
 }

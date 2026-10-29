@@ -9,7 +9,7 @@ deployment/restore procedures.
 
 - **OWNER** — full control, including inviting/removing members and changing
   roles. Usually the club president or whoever set the org up.
-- **ADMIN** — org management (members, labels, most content) but not finance.
+- **ADMIN** — org management (members, labels, most content) and finance, as owners and treasurers have.
 - **TREASURER** — finance access (transactions, budget, sponsorships,
   reimbursements) plus ordinary member access everywhere else. Not a rung on
   the admin ladder — a treasurer who isn't also an admin can't manage
@@ -69,7 +69,7 @@ Events live in the suite; Google Calendar and the club website are copies.
   reach back one to three years — decide how long receipts and transactions
   are kept, and don't quietly let it drift.
 - **Nothing sensitive goes in the app.** No bank account numbers, no routing
-  numbers, no card numbers, no images of checks. The app *records that*
+  numbers, no card numbers, no images of checks. The app _records that_
   reimbursement happened; it doesn't execute payment. If someone asks to
   "just put my Venmo in my profile," that's a deliberate decision to make,
   not something to add by accident.

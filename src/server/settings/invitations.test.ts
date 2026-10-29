@@ -48,6 +48,8 @@ function makeSystemDb() {
         ];
       return [{ id: "x" }];
     }),
+    // The member-cap lock (memberCapRefusal).
+    $executeRaw: vi.fn(async () => 0),
     organization: {
       findUnique: vi.fn(async () => ({ name: "Org One", slug: "org-one", deletedAt: null })),
     },
@@ -111,6 +113,11 @@ describe("acceptInvitation (0A Fix 4, service path)", () => {
     });
     // The inviter (still a member) is notified.
     expect(fake.systemDb.notification.createMany).toHaveBeenCalledOnce();
+    // The org's member-cap lock is taken before the seat is counted: the
+    // same lock a join code takes, so the two ways in can't both fill the last seat.
+    const [lock, key] = fake.systemDb.$executeRaw.mock.calls[0] as [TemplateStringsArray, string];
+    expect(lock.join("?")).toMatch(/pg_advisory_xact_lock/);
+    expect(key).toBe("member-cap:org_1");
   });
 
   it("refuses a verified account with a different address", async () => {

@@ -1,12 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 
 import { BrandField, BrandInput, brandInputClass } from "@/components/brand/fields";
 import {
   ContinuePill,
-  PreviewHeader,
-  PreviewTile,
   SetupCard,
   StepBody,
   StepError,
@@ -19,36 +18,28 @@ import { cn } from "@/lib/utils";
 
 import { checkSlugAvailability, createOrganizationAction } from "../actions";
 import { FieldSelect } from "@/components/ui/field-select";
-
-/** What a new club's sidebar opens with, for the preview. */
-const SPACES = [
-  "Overview",
-  "Tasks",
-  "Calendar",
-  "Notes",
-  "Databases",
-  "Finance",
-  "People",
-] as const;
+import { TRIAL_DAYS } from "@/lib/billing/space";
+import { START_HREF } from "@/lib/onboarding/steps";
+import { usePreviewNext } from "@/components/onboarding/preview-flow";
+import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 
 /**
- * B1 · Club basics: the club's name, web address and time zone. Creating it
- * makes the signed-in person its owner; B2 follows under the new URL. The
- * server re-checks the creation policy, the code, the URL and the limits.
+ * Basics: the organization's name, web address and time zone. Creating it
+ * makes the signed-in person its owner and starts its trial; they then join
+ * it like anyone (about you, bio, role, review) and set it up. The server
+ * re-checks the creation policy, the code, the URL and the limits.
  */
 export function ClubBasicsStep({
-  index,
-  total,
   requiresCode,
   notice,
 }: {
-  index: number;
-  total: number;
   requiresCode: boolean;
   /** Why this person can't create a club yet, in place of the fields. */
   notice?: React.ReactNode;
 }) {
   const [state, formAction, isPending] = useActionState(createOrganizationAction, {});
+  const router = useRouter();
+  const preview = usePreviewNext();
   const [name, setName] = useState("");
   const [manualSlug, setManualSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -74,67 +65,40 @@ export function ClubBasicsStep({
     if (!slug) return;
     const handle = setTimeout(() => {
       startCheck(async () => {
-        setSlugStatus((await checkSlugAvailability(slug)) ? "available" : "taken");
+        // The dev preview has no database to ask: every address is free there.
+        setSlugStatus(preview || (await checkSlugAvailability(slug)) ? "available" : "taken");
       });
     }, 400);
     return () => clearTimeout(handle);
-  }, [slug]);
+  }, [slug, preview]);
 
   const taken = Boolean(slug) && !checking && slugStatus === "taken";
   const available = Boolean(slug) && !checking && slugStatus === "available";
-  const clubName = name.trim() || "Your organization";
 
   return (
-    <SetupCard
-      preview={
-        <>
-          <PreviewHeader meta="Your organization's home" />
-          <PreviewTile className="flex-row items-center gap-3">
-            <span className="bg-primary text-primary-foreground font-heading rounded-field grid size-11 flex-none place-items-center text-[20px]">
-              {clubName[0]?.toUpperCase()}
-            </span>
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate text-[15px] font-bold">{clubName}</span>
-              <span className="text-muted-foreground truncate font-mono text-[12px]">
-                /app/{slug || "your-org"}
-              </span>
-            </span>
-          </PreviewTile>
-          <PreviewTile className="gap-1 p-2">
-            {SPACES.map((space, i) => (
-              <span
-                key={space}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[14px] font-semibold",
-                  i === 0 ? "bg-muted text-foreground" : "text-muted-foreground",
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "size-2 rounded-full",
-                    i === 0 ? "bg-brand-accent" : "bg-foreground/15",
-                  )}
-                />
-                {space}
-              </span>
-            ))}
-          </PreviewTile>
-          <p className="text-muted-foreground m-0 mt-auto text-[12px] leading-normal">
-            Meetings, reminders and reports use {timezone.replace(/_/g, " ")} time.
-          </p>
-        </>
-      }
-    >
-      <StepIntro index={index} total={total} title="Let's start with the basics.">
-        You&apos;ll be the organization&apos;s admin. Everything here can be changed later in the
-        Admin panel.
+    <SetupCard>
+      <StepIntro title="Name your organization.">
+        You&apos;ll be its owner, and its {TRIAL_DAYS} days of Team Advanced start now, free, with
+        no card. You can change all of this later.
       </StepIntro>
 
       {notice ? (
         <StepBody>{notice}</StepBody>
       ) : (
-        <form action={formAction} className="flex flex-1 flex-col">
+        <form
+          action={formAction}
+          noValidate
+          onInput={clearInvalid}
+          onSubmit={(e) => {
+            // Empty fields are outlined in red, not the browser's bubble.
+            if (highlightInvalid(e)) return;
+            // The dev preview creates nothing: on to the next screen.
+            if (!preview) return;
+            e.preventDefault();
+            router.push(preview);
+          }}
+          className="flex flex-1 flex-col"
+        >
           <input type="hidden" name="flow" value="onboarding" />
           <StepBody className="gap-5">
             <BrandField id="org-name" label="Organization name">
@@ -144,7 +108,7 @@ export function ClubBasicsStep({
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Riverside Robotics"
+                placeholder="Organization name"
                 autoComplete="organization"
               />
             </BrandField>
@@ -173,7 +137,7 @@ export function ClubBasicsStep({
                 </span>
               }
             >
-              <div className="bg-card border-input focus-within-banana rounded-field flex h-10 items-center border pl-4 text-[15px] transition-shadow">
+              <div className="bg-card border-input focus-within-banana rounded-field has-aria-invalid:border-destructive has-aria-invalid:ring-destructive/15 flex h-10 items-center border pl-4 text-[15px] transition-shadow has-aria-invalid:ring-3">
                 <span className="text-muted-foreground font-mono text-[13px]">/app/</span>
                 <input
                   id="org-slug"
@@ -184,6 +148,7 @@ export function ClubBasicsStep({
                     setManualSlug(slugify(e.target.value));
                     setSlugEdited(true);
                   }}
+                  placeholder="web-address"
                   aria-invalid={taken || undefined}
                   className="h-full min-w-0 flex-1 bg-transparent pr-4 pl-0.5 outline-none"
                 />
@@ -211,7 +176,7 @@ export function ClubBasicsStep({
                   name="code"
                   required
                   autoComplete="off"
-                  placeholder="XXXX-XXXX-XXXX-XXXX"
+                  placeholder="Creation code"
                   className="font-mono uppercase"
                 />
                 <span className="text-muted-foreground text-[13px]">
@@ -221,7 +186,7 @@ export function ClubBasicsStep({
             )}
           </StepBody>
           <StepError message={state.error} />
-          <StepFooter back={{ href: "/onboarding" }}>
+          <StepFooter back={{ href: START_HREF }}>
             <ContinuePill
               type="submit"
               pending={isPending}
@@ -232,7 +197,7 @@ export function ClubBasicsStep({
         </form>
       )}
 
-      {notice && <StepFooter back={{ href: "/onboarding" }}>{null}</StepFooter>}
+      {notice && <StepFooter back={{ href: START_HREF }}>{null}</StepFooter>}
     </SetupCard>
   );
 }

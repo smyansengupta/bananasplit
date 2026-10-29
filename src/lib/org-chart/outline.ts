@@ -16,6 +16,7 @@ import { compareRank } from "./types";
  *     Advisor: Faculty advisor — Dr. Lee
  *     VP Events — @Ana Kim
  *       Open: Events coordinator
+ *       Designer — Sam Ortiz (also reports to Ana Kim)
  *
  * - A line indented more than the one above reports to it; equal is a
  *   sibling; less goes back up to the last line at that depth (any
@@ -27,6 +28,8 @@ import { compareRank } from "./types";
  *   suggestion to confirm (nothing is linked behind the admin's back).
  * - "Open:" (or a person of Open, TBD, Vacant, [open hire]) marks an
  *   unfilled role; "Advisor:" or "(advisor)" an advisor.
+ * - "(also reports to Name)" at the end adds extra managers (dotted lines),
+ *   by title or person, separated by commas; the indent stays the main line.
  */
 
 export interface OutlineLine {
@@ -42,12 +45,26 @@ export interface OutlineLine {
   mention: boolean;
   isOpen: boolean;
   isAdvisor: boolean;
+  /** Extra managers as typed (titles or names), from "(also reports to ...)", split at , ; & and "and". */
+  also: string[];
+  /**
+   * The same text unsplit, one entry per "(also reports to ...)": what
+   * applyOutline resolves, so a title with a comma, "&" or "and" in it
+   * ("R&D Lead", "Marketing and Sales") still names one position.
+   */
+  alsoText: string[];
 }
+
+/** Splits "(also reports to ...)" text into references, keeping the separators: [ref, sep, ref, ...]. */
+const ALSO_SEPARATOR = /(\s*(?:,|;|&|\band\b)\s*)/i;
+
+const ALSO = /\s*\(\s*also(?:\s+reports?\s+to\s*:?|\s*:)\s*([^()]*)\)\s*/gi;
 
 const LEAD = /^[\s│┃|├┣└┗┬┼╰╠╚`+\\─━—–\-*•‣◦▪·>]*/u;
 const NUMBERED = /^(?:\d+(?:\.\d+)*[.)]|[a-zA-Z][.)])\s+/;
 const HEADING = /^#{1,6}\s+/;
-const OPEN_PERSON = /^(?:\[?\s*open(?:\s+(?:hire|role|position))?\s*\]?|\(?\s*(?:open|vacant|tbd|tba|hiring)\s*\)?|n\/a|none|-|\?)$/i;
+const OPEN_PERSON =
+  /^(?:\[?\s*open(?:\s+(?:hire|role|position))?\s*\]?|\(?\s*(?:open|vacant|tbd|tba|hiring)\s*\)?|n\/a|none|-|\?)$/i;
 const SEPARATORS = [/\s+[—–]+\s*|\s*[—–]+\s+/, /\s+-{1,2}\s+/, /\s*:\s+/, /\s+\|\s+/];
 
 function width(lead: string): number {
@@ -60,9 +77,14 @@ function splitPerson(text: string): { title: string; person: string | null } {
   let best: { index: number; length: number } | null = null;
   for (const re of SEPARATORS) {
     const m = re.exec(text);
-    if (m && m.index > 0 && (!best || m.index < best.index)) best = { index: m.index, length: m[0].length };
+    if (m && m.index > 0 && (!best || m.index < best.index))
+      best = { index: m.index, length: m[0].length };
   }
-  if (best) return { title: text.slice(0, best.index).trim(), person: text.slice(best.index + best.length).trim() || null };
+  if (best)
+    return {
+      title: text.slice(0, best.index).trim(),
+      person: text.slice(best.index + best.length).trim() || null,
+    };
   // "Title @Name" with no separator.
   const at = text.search(/(?:^|\s)@\S/);
   if (at >= 0) {
@@ -110,9 +132,23 @@ export function parseOutline(text: string): OutlineLine[] {
       isAdvisor = true;
       rest = rest.replace(/\s*\(\s*advisor\s*\)\s*/gi, " ").trim();
     }
+    const also: string[] = [];
+    const alsoText: string[] = [];
+    rest = rest
+      .replace(ALSO, (_m, refs: string) => {
+        if (refs.trim()) alsoText.push(refs.trim());
+        for (const ref of refs.split(/\s*(?:,|;|&|\band\b)\s*/i)) {
+          const clean = ref.replace(/^@+/, "").trim();
+          if (clean && also.length < LIMITS.alsoReportsTo) also.push(clean.slice(0, LIMITS.title));
+        }
+        return " ";
+      })
+      .trim();
     if (/\[\s*open(?:\s+hire)?\s*\]|\(\s*(?:open|vacant)\s*\)/i.test(rest)) {
       isOpen = true;
-      rest = rest.replace(/\s*(?:\[\s*open(?:\s+hire)?\s*\]|\(\s*(?:open|vacant)\s*\))\s*/gi, " ").trim();
+      rest = rest
+        .replace(/\s*(?:\[\s*open(?:\s+hire)?\s*\]|\(\s*(?:open|vacant)\s*\))\s*/gi, " ")
+        .trim();
     }
 
     const split = splitPerson(rest);
@@ -144,6 +180,8 @@ export function parseOutline(text: string): OutlineLine[] {
       mention,
       isOpen,
       isAdvisor,
+      also,
+      alsoText,
     });
     stack.push({ width: w, index: out.length - 1 });
   }
@@ -156,8 +194,17 @@ export interface OutlineMember {
 }
 
 /** The positions in outline order (managers before their reports, siblings by rank), with depth. */
-export function outlineOrder(positions: readonly DraftPosition[]): { position: DraftPosition; depth: number }[] {
-  const parents = effectiveParents(positions.map((p) => ({ id: p.id, reportsToId: p.reportsTo, isAdvisor: p.isAdvisor, rank: p.rank })));
+export function outlineOrder(
+  positions: readonly DraftPosition[],
+): { position: DraftPosition; depth: number }[] {
+  const parents = effectiveParents(
+    positions.map((p) => ({
+      id: p.id,
+      reportsToId: p.reportsTo,
+      isAdvisor: p.isAdvisor,
+      rank: p.rank,
+    })),
+  );
   const children = new Map<string | null, DraftPosition[]>();
   for (const p of positions) {
     const parent = parents.get(p.id) ?? null;
@@ -176,13 +223,36 @@ export function outlineOrder(positions: readonly DraftPosition[]): { position: D
 }
 
 /** The text for `positions` (what the editor shows when it opens). */
-export function serializeOutline(positions: readonly DraftPosition[], members: readonly OutlineMember[]): string {
+export function serializeOutline(
+  positions: readonly DraftPosition[],
+  members: readonly OutlineMember[],
+): string {
   const names = new Map(members.map((m) => [m.id, m.name]));
+  const byId = new Map(positions.map((p) => [p.id, p]));
+  // An extra manager by its person when that name is unique, else by its title.
+  const count = (values: string[]) =>
+    values.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map<string, number>());
+  const titles = count(positions.map((p) => normTitle(p.title)));
+  const people = count(positions.map((p) => personOf(p, names)).filter(Boolean));
+  const refFor = (p: DraftPosition) => {
+    const person = p.isOpen
+      ? null
+      : p.userId
+        ? (names.get(p.userId) ?? p.personName)
+        : p.personName;
+    if (person && people.get(norm(person)) === 1 && !titles.has(normTitle(person))) return person;
+    return p.title;
+  };
   return outlineOrder(positions)
     .map(({ position: p, depth }) => {
-      const linked = p.userId && p.matchState === "CONFIRMED" ? (names.get(p.userId) ?? p.personName) : null;
+      const linked =
+        p.userId && p.matchState === "CONFIRMED" ? (names.get(p.userId) ?? p.personName) : null;
       const person = p.isOpen ? null : linked ? `@${linked}` : p.personName;
-      return `${"  ".repeat(depth)}${p.isAdvisor ? "Advisor: " : ""}${p.isOpen ? "Open: " : ""}${p.title}${person ? ` — ${person}` : ""}`;
+      const also = (p.alsoReportsTo ?? []).flatMap((id) => {
+        const manager = byId.get(id);
+        return manager && id !== p.reportsTo ? [refFor(manager)] : [];
+      });
+      return `${"  ".repeat(depth)}${p.isAdvisor ? "Advisor: " : ""}${p.isOpen ? "Open: " : ""}${p.title}${person ? ` — ${person}` : ""}${also.length ? ` (also reports to ${also.join(", ")})` : ""}`;
     })
     .join("\n");
 }
@@ -219,7 +289,10 @@ export function applyOutline(
   const used = new Set<string>();
   const reuse: (DraftPosition | null)[] = lines.map(() => null);
   const passes: ((line: OutlineLine, prev: DraftPosition, i: number, j: number) => boolean)[] = [
-    (l, p) => normTitle(l.title) === normTitle(p.title) && norm(l.person) === personOf(p, names) && l.isOpen === p.isOpen,
+    (l, p) =>
+      normTitle(l.title) === normTitle(p.title) &&
+      norm(l.person) === personOf(p, names) &&
+      l.isOpen === p.isOpen,
     (l, p) => normTitle(l.title) === normTitle(p.title),
     (l, p) => Boolean(l.person) && norm(l.person) === personOf(p, names),
     (_l, _p, i, j) => i === j,
@@ -237,7 +310,7 @@ export function applyOutline(
 
   const ids = lines.map((_, i) => reuse[i]?.id ?? newPositionId());
   const ranks = generateNKeysBetween(null, null, lines.length);
-  return lines.map((line, i) => {
+  const drafted = lines.map((line, i) => {
     const prev = reuse[i];
     const base: DraftPosition = prev
       ? { ...prev }
@@ -259,10 +332,24 @@ export function applyOutline(
           rank: ranks[i],
         };
     const person = line.isOpen ? null : line.person;
-    let link: Pick<DraftPosition, "personName" | "userId" | "matchState" | "matchScore" | "suggestedUserIds">;
+    let link: Pick<
+      DraftPosition,
+      "personName" | "userId" | "matchState" | "matchScore" | "suggestedUserIds"
+    >;
     if (!person) {
-      link = { personName: null, userId: null, matchState: "UNMATCHED", matchScore: null, suggestedUserIds: [] };
-    } else if (prev && prev.userId && personOf(prev, names) === norm(person) && (prev.matchState === "CONFIRMED" || !line.mention)) {
+      link = {
+        personName: null,
+        userId: null,
+        matchState: "UNMATCHED",
+        matchScore: null,
+        suggestedUserIds: [],
+      };
+    } else if (
+      prev &&
+      prev.userId &&
+      personOf(prev, names) === norm(person) &&
+      (prev.matchState === "CONFIRMED" || !line.mention)
+    ) {
       // Same person as before: keep the link (and its confirmation) as it was.
       link = {
         personName: prev.personName ?? names.get(prev.userId) ?? person,
@@ -274,7 +361,13 @@ export function applyOutline(
     } else {
       const exact = byName.get(norm(person)) ?? [];
       if (line.mention && exact.length === 1) {
-        link = { personName: names.get(exact[0]) ?? person, userId: exact[0], matchState: "CONFIRMED", matchScore: 1, suggestedUserIds: [exact[0]] };
+        link = {
+          personName: names.get(exact[0]) ?? person,
+          userId: exact[0],
+          matchState: "CONFIRMED",
+          matchScore: 1,
+          suggestedUserIds: [exact[0]],
+        };
       } else {
         const match = matchPerson(person, candidates);
         link = {
@@ -296,6 +389,102 @@ export function applyOutline(
       rank: ranks[i],
     };
   });
+  return withTypedAlso(drafted, lines, names);
+}
+
+/**
+ * One "(also reports to ...)" text as positions: the longest run of
+ * references that names one position wins, so "R&D Lead, Kristine" is the
+ * R&D Lead and Kristine, not "R", "D Lead" and Kristine. A reference is a
+ * title, a person's full name, or a first name only one person has.
+ * Returns what resolved and the pieces that named nobody.
+ */
+function resolveAlsoText(
+  text: string,
+  positions: readonly DraftPosition[],
+  names: ReadonlyMap<string, string | null>,
+): { found: DraftPosition[]; unknown: string[] } {
+  const unique = (list: DraftPosition[]) => (list.length === 1 ? list[0] : undefined);
+  const resolve = (ref: string): DraftPosition | undefined => {
+    const t = normTitle(ref);
+    const n = norm(ref);
+    if (!t) return undefined;
+    return (
+      unique(positions.filter((p) => normTitle(p.title) === t)) ??
+      unique(positions.filter((p) => n && personOf(p, names) === n)) ??
+      (/\s/.test(n)
+        ? undefined
+        : unique(positions.filter((p) => n && personOf(p, names).split(/\s+/)[0] === n)))
+    );
+  };
+  const parts = text.split(ALSO_SEPARATOR);
+  const refs = parts.filter((_, k) => k % 2 === 0);
+  const seps = parts.filter((_, k) => k % 2 === 1);
+  const found: DraftPosition[] = [];
+  const unknown: string[] = [];
+  for (let a = 0; a < refs.length;) {
+    let hit: { manager: DraftPosition; end: number } | null = null;
+    for (let b = refs.length - 1; b >= a && !hit; b--) {
+      let joined = refs[a];
+      for (let k = a; k < b; k++) joined += seps[k] + refs[k + 1];
+      const manager = resolve(joined.replace(/^@+/, "").trim());
+      if (manager) hit = { manager, end: b };
+    }
+    if (hit) {
+      found.push(hit.manager);
+      a = hit.end + 1;
+    } else {
+      const piece = refs[a].replace(/^@+/, "").trim();
+      if (piece) unknown.push(piece);
+      a += 1;
+    }
+  }
+  return { found, unknown };
+}
+
+/**
+ * Each line's "(also reports to ...)" as extra managers (resolveAlsoText).
+ * The text is the source of truth, so a line without one has none.
+ */
+function withTypedAlso(
+  positions: DraftPosition[],
+  lines: readonly OutlineLine[],
+  names: ReadonlyMap<string, string | null>,
+): DraftPosition[] {
+  return positions.map((p, i) => {
+    const also: string[] = [];
+    for (const text of lines[i].alsoText) {
+      for (const manager of resolveAlsoText(text, positions, names).found) {
+        if (
+          manager.id !== p.id &&
+          manager.id !== p.reportsTo &&
+          !also.includes(manager.id) &&
+          also.length < LIMITS.alsoReportsTo
+        ) {
+          also.push(manager.id);
+        }
+      }
+    }
+    return { ...p, alsoReportsTo: also };
+  });
+}
+
+/**
+ * The "(also reports to ...)" names that match no position in `positions`
+ * (applyOutline's result), line by line, so the editor can say so instead
+ * of dropping them without a word.
+ */
+export function unknownAlsoReportsTo(
+  positions: readonly DraftPosition[],
+  lines: readonly OutlineLine[],
+  members: readonly OutlineMember[],
+): { title: string; name: string }[] {
+  const names = new Map(members.map((m) => [m.id, m.name]));
+  return lines.flatMap((line) =>
+    line.alsoText.flatMap((text) =>
+      resolveAlsoText(text, positions, names).unknown.map((name) => ({ title: line.title, name })),
+    ),
+  );
 }
 
 /** Lines whose person is not a member (shown with an "invite" option). */
@@ -304,7 +493,10 @@ export function unknownPeople(positions: readonly DraftPosition[]): DraftPositio
 }
 
 /** Members who hold no position in `positions` (the "Not on the chart yet" tray). */
-export function membersOffChart<M extends OutlineMember>(positions: readonly DraftPosition[], members: readonly M[]): M[] {
+export function membersOffChart<M extends OutlineMember>(
+  positions: readonly DraftPosition[],
+  members: readonly M[],
+): M[] {
   const on = new Set(positions.map((p) => p.userId).filter(Boolean));
   return members.filter((m) => !on.has(m.id));
 }
@@ -317,9 +509,25 @@ export interface TitledMember extends OutlineMember {
 }
 
 const TOP = /^(?:co-?)?(?:president|chair(?:person)?|captain|ceo|executive director|founder)\b/i;
-const LEAD_TITLE = /\b(?:vice|vp|head|director|lead|chief|treasurer|secretary|officer|manager|chair)\b/i;
+const LEAD_TITLE =
+  /\b(?:vice|vp|head|director|lead|chief|treasurer|secretary|officer|manager|chair)\b/i;
 const ADVISOR = /advis/i;
-const STOP = new Set(["of", "and", "the", "for", "vp", "head", "lead", "director", "chair", "vice", "president", "manager", "officer", "&"]);
+const STOP = new Set([
+  "of",
+  "and",
+  "the",
+  "for",
+  "vp",
+  "head",
+  "lead",
+  "director",
+  "chair",
+  "vice",
+  "president",
+  "manager",
+  "officer",
+  "&",
+]);
 
 function words(title: string): Set<string> {
   return new Set(
@@ -342,12 +550,17 @@ export function draftFromMembers(members: readonly TitledMember[]): string {
   const titled = members
     .filter((m) => m.title && m.title.trim() && !/^members?$/i.test(m.title.trim()))
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  const isTop = (m: TitledMember) => TOP.test(m.title!.trim()) && !/vice|vp/i.test(m.title!) && !ADVISOR.test(m.title!);
-  const ownerFirst = [...titled].sort((a, b) => Number(b.role === "OWNER") - Number(a.role === "OWNER"));
+  const isTop = (m: TitledMember) =>
+    TOP.test(m.title!.trim()) && !/vice|vp/i.test(m.title!) && !ADVISOR.test(m.title!);
+  const ownerFirst = [...titled].sort(
+    (a, b) => Number(b.role === "OWNER") - Number(a.role === "OWNER"),
+  );
   const top = ownerFirst.find(isTop) ?? null;
   const rest = titled.filter((m) => m !== top);
   const advisors = rest.filter((m) => ADVISOR.test(m.title!));
-  const leads = rest.filter((m) => !advisors.includes(m) && (LEAD_TITLE.test(m.title!) || isTop(m)));
+  const leads = rest.filter(
+    (m) => !advisors.includes(m) && (LEAD_TITLE.test(m.title!) || isTop(m)),
+  );
   const others = rest.filter((m) => !advisors.includes(m) && !leads.includes(m));
 
   const line = (m: TitledMember, depth: number, advisor = false) =>

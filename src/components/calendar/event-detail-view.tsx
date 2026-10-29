@@ -1,5 +1,7 @@
 "use client";
 
+import { meetingTypeColor, type MeetingType } from "@/lib/meetings/meeting-types";
+import { TagChip } from "@/components/ui/chip";
 import {
   AlertTriangle,
   CalendarPlus,
@@ -98,6 +100,7 @@ export function EventDetailView({
   locationDetails = null,
   showMapLink = false,
   defaultReminderMinutes,
+  meetingTypes,
 }: {
   orgId: string;
   orgSlug: string;
@@ -126,6 +129,8 @@ export function EventDetailView({
   showMapLink?: boolean;
   /** The organization's reminder times, which the edit form compares this event's with. */
   defaultReminderMinutes?: number[];
+  /** The organization's meeting types, offered when editing. */
+  meetingTypes?: MeetingType[];
 }) {
   const router = useRouter();
   // The list this page belongs to: the back link, and where a delete lands.
@@ -209,6 +214,15 @@ export function EventDetailView({
       />
 
       <div className="-mt-3 flex flex-wrap gap-1.5">
+        {event.meetingType && (
+          <TagChip
+            color={
+              meetingTypeColor(meetingTypes ?? [], event.meetingType) ?? "var(--muted-foreground)"
+            }
+          >
+            {event.meetingType}
+          </TagChip>
+        )}
         <KindBadge kind={event.kind} />
         <VisibilityBadge visibility={event.visibility} />
         {canEdit && <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />}
@@ -553,6 +567,7 @@ export function EventDetailView({
           event={event}
           members={members}
           defaultReminderMinutes={defaultReminderMinutes}
+          meetingTypes={meetingTypes}
           onDeleted={() => router.push(sectionHref)}
         />
       )}

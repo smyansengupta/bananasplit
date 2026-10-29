@@ -22,6 +22,11 @@ import {
   Users,
   Video,
   Bot,
+  ChartColumn,
+  Gauge,
+  HandCoins,
+  PiggyBank,
+  Wallet,
 } from "@/components/icons";
 
 /**
@@ -31,7 +36,7 @@ import {
  * capabilities, then the other main features and the final call to action.
  */
 
-export type ProductSlug = "texting" | "ai" | "docs" | "meetings";
+export type ProductSlug = "texting" | "ai" | "docs" | "meetings" | "finance";
 
 export interface ProductPage {
   slug: ProductSlug;
@@ -252,6 +257,53 @@ export const PRODUCT_PAGES: readonly ProductPage[] = [
         icon: ClipboardList,
         title: "Attendance that counts",
         body: "Every guest lands in your records, so you see who keeps coming back.",
+      },
+    ],
+  },
+  {
+    slug: "finance",
+    label: "Finance",
+    cardTitle: "Finance, handled.",
+    cardBody: "Budgets, receipts, paybacks and runway, live.",
+    title: "Finance, handled.",
+    subtitle:
+      "Budgets by category, receipts that file themselves, paybacks your team can request, and runway you can see at a glance. Only the owner, admins and treasurers see the books.",
+    steps: [
+      { title: "Set the budget", body: "Categories and amounts for the term or the year." },
+      { title: "Spend and snap", body: "Members photograph receipts and ask to be paid back." },
+      { title: "Approve and see it", body: "Approve in a click. Spend and runway update live." },
+    ],
+    capabilitiesTitle: "Your money, in plain sight",
+    capabilities: [
+      {
+        icon: PiggyBank,
+        title: "Budgets by category",
+        body: "See what's left in every category, and what's over.",
+      },
+      {
+        icon: Receipt,
+        title: "Receipts that file themselves",
+        body: "Snap a photo, or text it. It lands on the right transaction.",
+      },
+      {
+        icon: HandCoins,
+        title: "Paybacks",
+        body: "Members ask to be paid back; finance approves and records it.",
+      },
+      {
+        icon: Gauge,
+        title: "Runway",
+        body: "Months of money left, from what's coming in and going out.",
+      },
+      {
+        icon: ChartColumn,
+        title: "Live reports",
+        body: "Spend by month and by category, ready for the board.",
+      },
+      {
+        icon: Wallet,
+        title: "Finance stays private",
+        body: "Only the owner, admins and treasurers see the books.",
       },
     ],
   },

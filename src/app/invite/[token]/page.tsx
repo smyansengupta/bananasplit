@@ -136,7 +136,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   // "Your profile", step 1, comes first (it makes the account's Personal
   // space); it brings them straight back here.
   if (await needsProfileSetup(session.user.id)) {
-    redirect(`/onboarding/profile/basics?callbackUrl=${encodeURIComponent(here)}`);
+    redirect(`/onboarding?callbackUrl=${encodeURIComponent(here)}`);
   }
 
   // The verified-address gate stays (0A Fix 4): an invite link can be

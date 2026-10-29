@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { SpaceBanner } from "@/components/billing/space-banner";
+import { TrialEndedDialog } from "@/components/billing/trial-ended-dialog";
 import { AppShell } from "@/components/shell/app-shell";
 import { navSections } from "@/components/shell/nav-config";
 import type { OrgSummary } from "@/components/shell/types";
@@ -10,7 +11,12 @@ import { OrgBrand } from "@/components/theme/org-brand";
 import { OrgThemeRoot } from "@/components/theme/org-theme-root";
 import { CALLBACK_HEADER } from "@/lib/auth/callback-url";
 import { can } from "@/lib/auth/permissions";
-import { spaceIncludes } from "@/lib/billing/space";
+import {
+  spaceIncludes,
+  trialFallbackName,
+  trialJustEnded,
+  trialPlanName,
+} from "@/lib/billing/space";
 import { getSession, requireUser } from "@/lib/auth/session";
 import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
 import { orgLogoUrl } from "@/lib/org-logo";
@@ -168,11 +174,25 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         taskViews={spaceIncludes(ctx.organization, "taskViews")}
         teamwork={spaceIncludes(ctx.organization, "teamwork")}
         banner={
-          <SpaceBanner
-            space={ctx.organization}
-            orgSlug={ctx.organization.slug}
-            canChoosePlan={can({ role: ctx.role }, "settings.view")}
-          />
+          <>
+            <SpaceBanner
+              space={ctx.organization}
+              orgSlug={ctx.organization.slug}
+              canChoosePlan={can({ role: ctx.role }, "settings.view")}
+            />
+            {can({ role: ctx.role }, "settings.view") &&
+              ctx.organization.trialEndsAt &&
+              trialJustEnded(ctx.organization) && (
+                <TrialEndedDialog
+                  orgId={ctx.organization.id}
+                  orgSlug={ctx.organization.slug}
+                  trialEnd={ctx.organization.trialEndsAt.toISOString()}
+                  trialPlan={trialPlanName(ctx.organization)}
+                  freePlan={trialFallbackName(ctx.organization)}
+                  personal={ctx.organization.kind === "PERSONAL"}
+                />
+              )}
+          </>
         }
         brand={
           <OrgBrand

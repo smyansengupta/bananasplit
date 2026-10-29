@@ -27,7 +27,7 @@ export default async function TransactionsPage({
   const query = await searchParams;
 
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
-  // Not an owner or treasurer: who is, and what to do instead (never an error page).
+  // Not an owner, admin or treasurer: who is, and what to do instead (never an error page).
   if (!can({ role }, "finance.manage")) {
     return <FinanceAccessGate orgId={org.id} orgSlug={orgSlug} role={role} />;
   }

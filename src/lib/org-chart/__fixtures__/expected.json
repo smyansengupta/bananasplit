@@ -5,6 +5,7 @@
       "title": "President",
       "personName": "Jackson Lamoureux",
       "reportsTo": null,
+      "alsoReportsTo": [],
       "manages": [
         "vp-ops-programs",
         "vp-growth",
@@ -39,6 +40,7 @@
       "title": "Founder & Advisor",
       "personName": "Mehr Anand",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -60,6 +62,7 @@
       "title": "VP Ops & Programs",
       "personName": "Oliver Ward",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [
         "head-of-programs",
         "head-of-tech"
@@ -89,6 +92,7 @@
       "title": "VP Growth",
       "personName": "Lucas Salzgeber",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [
         "head-of-social-membership",
         "graphic-designer"
@@ -118,6 +122,7 @@
       "title": "Head of Finance",
       "personName": "Anthony Jones",
       "reportsTo": "president",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -141,6 +146,7 @@
       "title": "Head of Programs",
       "personName": "Alex Green",
       "reportsTo": "vp-ops-programs",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -164,6 +170,7 @@
       "title": "Head of Tech",
       "personName": "Smyan Sengupta",
       "reportsTo": "vp-ops-programs",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -187,6 +194,7 @@
       "title": "Head of Social & Membership",
       "personName": "Kristine Min",
       "reportsTo": "vp-growth",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [
@@ -210,6 +218,7 @@
       "title": "Graphic Designer",
       "personName": null,
       "reportsTo": "vp-growth",
+      "alsoReportsTo": [],
       "manages": [],
       "advisors": [],
       "responsibilities": [

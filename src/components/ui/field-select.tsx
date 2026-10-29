@@ -149,8 +149,15 @@ export function FieldSelect({
   const controlled = value !== undefined;
   const [own, setOwn] = React.useState(() => toKey(defaultValue));
   const key = controlled ? toKey(value) : own;
+  // Named here, not left to Radix: with hundreds of options (time zones)
+  // the closed list hasn't mounted the item that would name the value.
+  const picked = groups.flatMap((g) => g.choices).find((c) => (toKey(c.value) ?? c.value) === key);
 
   const change = (next: string) => {
+    // A raw "" is Radix's hidden native select clearing a value it can't
+    // find among the mounted items (hundreds of time zones), not a pick:
+    // a real empty option comes through as EMPTY.
+    if (next === "") return;
     if (!controlled) setOwn(next);
     const field = { value: fromKey(next), name: name ?? "" };
     onChange?.({ target: field, currentTarget: field });
@@ -167,7 +174,7 @@ export function FieldSelect({
           aria-invalid={ariaInvalid}
           className={className}
         >
-          <SelectValue placeholder={placeholder} />
+          <SelectValue placeholder={placeholder}>{picked?.label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {groups.map((group, i) => (

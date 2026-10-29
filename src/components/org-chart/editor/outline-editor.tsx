@@ -18,6 +18,7 @@ import {
   outlineOrder,
   parseOutline,
   serializeOutline,
+  unknownAlsoReportsTo,
   unknownPeople,
 } from "@/lib/org-chart/outline";
 import type { ChartNodeDTO } from "@/lib/org-chart/types";
@@ -55,7 +56,12 @@ export interface OutlineEditorProps {
   canInvite: boolean;
 }
 
-const PLACEHOLDER = ["President — @Maya Patel", "  VP Events — @Ana Kim", "    Open: Events coordinator", "  Treasurer — @Jay Lin"].join("\n");
+const PLACEHOLDER = [
+  "President — @Maya Patel",
+  "  VP Events — @Ana Kim",
+  "    Open: Events coordinator",
+  "  Treasurer — @Jay Lin",
+].join("\n");
 
 const MIRROR_PROPS = [
   "boxSizing",
@@ -73,7 +79,10 @@ const MIRROR_PROPS = [
 ] as const;
 
 /** Where `pos` sits inside the textarea (no wrapping: white-space is pre). */
-function caretPoint(ta: HTMLTextAreaElement, pos: number): { top: number; left: number; lineHeight: number } {
+function caretPoint(
+  ta: HTMLTextAreaElement,
+  pos: number,
+): { top: number; left: number; lineHeight: number } {
   const cs = getComputedStyle(ta);
   const div = document.createElement("div");
   for (const p of MIRROR_PROPS) div.style[p] = cs[p];
@@ -87,7 +96,11 @@ function caretPoint(ta: HTMLTextAreaElement, pos: number): { top: number; left: 
   mark.textContent = "​";
   div.appendChild(mark);
   document.body.appendChild(div);
-  const point = { top: mark.offsetTop - ta.scrollTop, left: mark.offsetLeft - ta.scrollLeft, lineHeight: parseFloat(cs.lineHeight) || 22 };
+  const point = {
+    top: mark.offsetTop - ta.scrollTop,
+    left: mark.offsetLeft - ta.scrollLeft,
+    lineHeight: parseFloat(cs.lineHeight) || 22,
+  };
   div.remove();
   return point;
 }
@@ -136,9 +149,17 @@ export function OutlineEditor({
   const [mention, setMention] = useState<Mention | null>(null);
   const escaped = useRef(false);
 
-  const outlineMembers = useMemo(() => members.map((m) => ({ id: m.id, name: m.name, title: m.title })), [members]);
+  const outlineMembers = useMemo(
+    () => members.map((m) => ({ id: m.id, name: m.name, title: m.title })),
+    [members],
+  );
   const tray = useMemo(() => membersOffChart(positions, members), [positions, members]);
   const unknown = useMemo(() => unknownPeople(positions), [positions]);
+  // "(also reports to ...)" names that match no position: said here, not dropped silently.
+  const unknownAlso = useMemo(
+    () => unknownAlsoReportsTo(positions, parseOutline(text), outlineMembers),
+    [positions, text, outlineMembers],
+  );
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const open = positions.filter((p) => p.isOpen).length;
   const idLine = useMemo(() => new Map([...lineIds].map(([line, id]) => [id, line])), [lineIds]);
@@ -148,7 +169,11 @@ export function OutlineEditor({
     const q = normalizeName(mention.query);
     return members
       .filter((m) => m.name && (!q || normalizeName(m.name).includes(q)))
-      .sort((a, b) => Number(normalizeName(b.name ?? "").startsWith(q)) - Number(normalizeName(a.name ?? "").startsWith(q)))
+      .sort(
+        (a, b) =>
+          Number(normalizeName(b.name ?? "").startsWith(q)) -
+          Number(normalizeName(a.name ?? "").startsWith(q)),
+      )
       .slice(0, 6);
   }, [mention, members]);
 
@@ -175,7 +200,13 @@ export function OutlineEditor({
     if (m && el.selectionStart === el.selectionEnd) {
       const start = caret - m[1].length - 1;
       const point = caretPoint(el, start);
-      setMention((prev) => ({ start, query: m[1], top: point.top + point.lineHeight + 4, left: Math.max(0, point.left - 4), active: prev?.start === start ? prev.active : 0 }));
+      setMention((prev) => ({
+        start,
+        query: m[1],
+        top: point.top + point.lineHeight + 4,
+        left: Math.max(0, point.left - 4),
+        active: prev?.start === start ? prev.active : 0,
+      }));
     } else {
       setMention(null);
     }
@@ -197,9 +228,11 @@ export function OutlineEditor({
     const rows = block.split("\n");
     const next = rows.map((r) => (outdent ? r.replace(/^(?: {1,2}|\t)/, "") : `  ${r}`)).join("\n");
     if (next === block) return;
-    const firstDelta = (outdent ? rows[0].replace(/^(?: {1,2}|\t)/, "") : `  ${rows[0]}`).length - rows[0].length;
+    const firstDelta =
+      (outdent ? rows[0].replace(/^(?: {1,2}|\t)/, "") : `  ${rows[0]}`).length - rows[0].length;
     replaceRange(el, start, end, next);
-    if (s === e) el.setSelectionRange(Math.max(start, s + firstDelta), Math.max(start, s + firstDelta));
+    if (s === e)
+      el.setSelectionRange(Math.max(start, s + firstDelta), Math.max(start, s + firstDelta));
     else el.setSelectionRange(start, start + next.length);
   }
 
@@ -209,7 +242,10 @@ export function OutlineEditor({
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         const step = e.key === "ArrowDown" ? 1 : -1;
-        setMention({ ...mention, active: (mention.active + step + matches.length) % matches.length });
+        setMention({
+          ...mention,
+          active: (mention.active + step + matches.length) % matches.length,
+        });
         return;
       }
       if (e.key === "Enter" || e.key === "Tab") {
@@ -376,7 +412,9 @@ export function OutlineEditor({
                   >
                     <UserAvatar user={m} size="sm" />
                     <span className="min-w-0 flex-1 truncate font-medium">{m.name}</span>
-                    {m.title && <span className="text-muted-foreground truncate text-xs">{m.title}</span>}
+                    {m.title && (
+                      <span className="text-muted-foreground truncate text-xs">{m.title}</span>
+                    )}
                   </button>
                 ))
               )}
@@ -384,20 +422,53 @@ export function OutlineEditor({
           )}
         </div>
         <p id="outline-hint" className="text-muted-foreground text-[13px]">
-          One position per line: &ldquo;Title — @Name&rdquo;. <kbd className="font-mono">Tab</kbd> reports to the line
-          above, <kbd className="font-mono">Shift Tab</kbd> goes back up, <kbd className="font-mono">Esc</kbd> then{" "}
-          <kbd className="font-mono">Tab</kbd> leaves the field. &ldquo;Open:&rdquo; marks an open role,
-          &ldquo;Advisor:&rdquo; an advisor. Paste a list or a drawn tree and it keeps its shape.
+          One position per line: &ldquo;Title — @Name&rdquo;. <kbd className="font-mono">Tab</kbd>{" "}
+          reports to the line above, <kbd className="font-mono">Shift Tab</kbd> goes back up,{" "}
+          <kbd className="font-mono">Esc</kbd> then <kbd className="font-mono">Tab</kbd> leaves the
+          field. &ldquo;Open:&rdquo; marks an open role, &ldquo;Advisor:&rdquo; an advisor,
+          &ldquo;(also reports to Name)&rdquo; a second manager. Paste a list or a drawn tree and it
+          keeps its shape.
         </p>
 
-        {unknown.length > 0 && (
-          <section aria-label="Names that aren't members" className="bg-tint-danger/40 rounded-tile flex flex-col gap-1.5 p-3 text-sm">
+        {unknownAlso.length > 0 && (
+          <section
+            aria-label="Second managers not found"
+            className="bg-tint-accent/40 rounded-tile flex flex-col gap-1.5 p-3 text-sm"
+          >
             <p className="font-semibold">
-              {unknown.length === 1 ? "1 name isn't a member yet" : `${unknown.length} names aren't members yet`}
+              {unknownAlso.length === 1
+                ? "1 second manager isn't on the chart"
+                : `${unknownAlso.length} second managers aren't on the chart`}
+            </p>
+            <ul className="flex flex-col gap-1">
+              {unknownAlso.map((u, i) => (
+                <li key={`${u.title}:${u.name}:${i}`}>
+                  <b className="font-semibold">{u.name}</b>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · for {u.title}. Use a title or a full name from the chart.
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {unknown.length > 0 && (
+          <section
+            aria-label="Names that aren't members"
+            className="bg-tint-danger/40 rounded-tile flex flex-col gap-1.5 p-3 text-sm"
+          >
+            <p className="font-semibold">
+              {unknown.length === 1
+                ? "1 name isn't a member yet"
+                : `${unknown.length} names aren't members yet`}
             </p>
             <ul className="flex flex-col gap-1">
               {unknown.map((p) => {
-                const suggestion = p.suggestedUserIds[0] ? memberById.get(p.suggestedUserIds[0]) : undefined;
+                const suggestion = p.suggestedUserIds[0]
+                  ? memberById.get(p.suggestedUserIds[0])
+                  : undefined;
                 return (
                   <li key={p.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="min-w-0">
@@ -405,7 +476,13 @@ export function OutlineEditor({
                       <span className="text-muted-foreground"> · {p.title}</span>
                     </span>
                     {suggestion && (
-                      <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => setLinePerson(p.id, suggestion)}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7"
+                        onClick={() => setLinePerson(p.id, suggestion)}
+                      >
                         Link {suggestion.name}
                       </Button>
                     )}
@@ -425,7 +502,10 @@ export function OutlineEditor({
         )}
 
         <section aria-labelledby="tray-title" className="flex flex-col gap-2">
-          <p id="tray-title" className="text-muted-foreground flex items-center gap-2 text-[13px] font-semibold">
+          <p
+            id="tray-title"
+            className="text-muted-foreground flex items-center gap-2 text-[13px] font-semibold"
+          >
             <Users className="size-4" aria-hidden="true" />
             Not on the chart yet
             {tray.length > 0 && <Badge variant="secondary">{tray.length}</Badge>}
@@ -457,14 +537,19 @@ export function OutlineEditor({
         </section>
       </div>
 
-      <section aria-label="Live chart" className="bg-card edge rounded-card flex min-w-0 flex-col overflow-hidden">
+      <section
+        aria-label="Live chart"
+        className="bg-card edge rounded-card flex min-w-0 flex-col overflow-hidden"
+      >
         <div className="flex items-center gap-2 px-5 pt-4 pb-3">
           <h2 className="heading text-[15px]">Live chart</h2>
           <span className="text-muted-foreground text-[13px]">{stats}</span>
         </div>
         <div className="h-[520px] border-t">
           {previewNodes.length === 0 ? (
-            <p className="text-muted-foreground p-6 text-sm">Start typing a position, or add someone from the tray.</p>
+            <p className="text-muted-foreground p-6 text-sm">
+              Start typing a position, or add someone from the tray.
+            </p>
           ) : (
             <ChartCanvas
               nodes={previewNodes}

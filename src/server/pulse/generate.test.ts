@@ -191,7 +191,7 @@ describe("money in the pulse", () => {
   it("is for finance roles only", () => {
     expect(seesPulseFinance("OWNER")).toBe(true);
     expect(seesPulseFinance("TREASURER")).toBe(true);
-    expect(seesPulseFinance("ADMIN")).toBe(false);
+    expect(seesPulseFinance("ADMIN")).toBe(true);
     expect(seesPulseFinance("MEMBER")).toBe(false);
   });
 

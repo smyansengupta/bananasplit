@@ -83,7 +83,7 @@ describe("nextExpenseStatus — a member cannot approve their own expense (spec 
       submitterId: submitter,
       actorHasFinanceAccess: false,
     });
-    expect(result).toEqual({ error: "Only a treasurer or owner can approve expenses." });
+    expect(result).toEqual({ error: "Only an owner, admin or treasurer can approve expenses." });
   });
 });
 

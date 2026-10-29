@@ -1,4 +1,10 @@
-import type { EventKind, EventVisibility, Prisma, Role, RSVPStatus } from "@/generated/prisma/client";
+import type {
+  EventKind,
+  EventVisibility,
+  Prisma,
+  Role,
+  RSVPStatus,
+} from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
@@ -45,6 +51,7 @@ export const calendarEventSelect = {
   endsAt: true,
   allDay: true,
   kind: true,
+  meetingType: true,
   visibility: true,
   location: true,
   googleSyncState: true,
@@ -155,7 +162,9 @@ export async function getEventById(
   viewerId: string,
 ): Promise<EventWithRelations | null> {
   const include = eventInclude(viewerId);
-  const event = await db.event.findFirst({ where: { id: eventId, organizationId, deletedAt: null } });
+  const event = await db.event.findFirst({
+    where: { id: eventId, organizationId, deletedAt: null },
+  });
   if (!event) return null;
   const attendees = await db.eventAttendee.findMany({
     where: { organizationId, eventId },
@@ -223,9 +232,12 @@ export async function getOrgPolls(db: TxClient, organizationId: string, now = ne
     by: ["pollId", "userId", "guestKeyHash", "guestName"],
     where: { organizationId, pollId: { in: pollIds }, availability: { not: "NO" } },
   });
-  const spanOf = new Map(spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]));
+  const spanOf = new Map(
+    spans.map((s) => [s.pollId, { from: s._min.startsAt, to: s._max.endsAt }]),
+  );
   const respondentCount = new Map<string, number>();
-  for (const r of respondents) respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);
+  for (const r of respondents)
+    respondentCount.set(r.pollId, (respondentCount.get(r.pollId) ?? 0) + 1);
   return polls.map((p) => ({
     ...p,
     firstSlotAt: spanOf.get(p.id)?.from ?? null,

@@ -159,11 +159,12 @@ describe("sidebar navigation", () => {
 });
 
 type Space = Parameters<typeof settingsNavItems>[2] & {};
-const PERSONAL: Space = { kind: "PERSONAL", plan: "FREE", trialEndsAt: null };
+const PERSONAL: Space = { kind: "PERSONAL", plan: "FREE", trialEndsAt: null, planAfterTrial: null };
 const club = (plan: "TRIAL" | "CLUB" | "SOCIETY", trialEndsAt: Date | null = null): Space => ({
   kind: "CLUB",
   plan,
   trialEndsAt,
+  planAfterTrial: null,
 });
 
 describe("the sidebar in each space", () => {

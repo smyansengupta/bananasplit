@@ -55,7 +55,7 @@ export function nextExpenseStatus(ctx: TransitionContext): TransitionResult {
         return { error: "Only a submitted expense can be approved." };
       }
       if (!ctx.actorHasFinanceAccess) {
-        return { error: "Only a treasurer or owner can approve expenses." };
+        return { error: "Only an owner, admin or treasurer can approve expenses." };
       }
       if (isSubmitter) return { error: "You can't approve your own expense." };
       return { status: TransactionStatus.APPROVED };
@@ -68,7 +68,7 @@ export function nextExpenseStatus(ctx: TransitionContext): TransitionResult {
         return { error: "Only a submitted or approved expense can be rejected." };
       }
       if (!ctx.actorHasFinanceAccess) {
-        return { error: "Only a treasurer or owner can reject expenses." };
+        return { error: "Only an owner, admin or treasurer can reject expenses." };
       }
       if (isSubmitter) return { error: "You can't reject your own expense." };
       return { status: TransactionStatus.REJECTED };
@@ -78,7 +78,7 @@ export function nextExpenseStatus(ctx: TransitionContext): TransitionResult {
         return { error: "Only an approved expense can be marked reimbursed." };
       }
       if (!ctx.actorHasFinanceAccess) {
-        return { error: "Only a treasurer or owner can mark expenses reimbursed." };
+        return { error: "Only an owner, admin or treasurer can mark expenses reimbursed." };
       }
       if (isSubmitter) return { error: "You can't reimburse your own expense." };
       return { status: TransactionStatus.REIMBURSED };

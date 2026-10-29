@@ -1,5 +1,6 @@
 "use client";
 
+import type { MeetingType } from "@/lib/meetings/meeting-types";
 import {
   ChevronDown,
   Globe,
@@ -108,6 +109,8 @@ export interface EventFormEvent {
   attendeeIds: string[];
   /** Minutes before the start that people are reminded. */
   reminderMinutes: number[];
+  /** One of the org's meeting types, by name (left out: none). */
+  meetingType?: string | null;
 }
 
 interface Props {
@@ -137,6 +140,12 @@ interface Props {
    * details". Left out, the built-in default.
    */
   defaultReminderMinutes?: number[];
+  /**
+   * The organization's meeting types (OrgSettings.eventTypes). With some, the
+   * form asks which this is, and the calendar draws it in that colour; with
+   * none (or left out) it doesn't ask, and an edit leaves the type alone.
+   */
+  meetingTypes?: MeetingType[];
   members: CalendarMember[];
   /**
    * Where a newly created meeting goes next (Meetings: its own page), or null
@@ -168,6 +177,7 @@ export function EventFormDialog({ open, onOpenChange, event, defaultStart, ...re
 }
 
 const NO_HOST = "__none";
+const NO_TYPE = "__no_type";
 const GUEST_HOST = "__guest";
 
 const SHAPE_ICON: Record<MeetingShape, IconComponent> = {
@@ -226,6 +236,7 @@ function EventForm({
   defaultShape,
   noun = "event",
   defaultReminderMinutes = [...DEFAULT_REMINDER_MINUTES],
+  meetingTypes = [],
   members,
   afterCreate,
   onSaved,
@@ -242,6 +253,7 @@ function EventForm({
   // A club runs workshops; the type is the one field whose common answer is
   // knowable, so it starts there instead of on "Other".
   const [kind, setKind] = useState<EventKind>(event?.kind ?? EventKind.WORKSHOP);
+  const [meetingType, setMeetingType] = useState<string>(event?.meetingType ?? NO_TYPE);
   const [visibility, setVisibility] = useState<EventVisibility>(
     event?.visibility ?? EventVisibility.INTERNAL,
   );
@@ -364,6 +376,10 @@ function EventForm({
       conferenceProvider: callProvider,
       conferenceUrl: callProvider === ConferenceProvider.NONE ? null : conferenceUrl || null,
       kind,
+      // Only asked when the org has types; otherwise an edit leaves it alone.
+      ...(meetingTypes.length > 0
+        ? { meetingType: meetingType === NO_TYPE ? null : meetingType }
+        : {}),
       visibility,
       hostUserId: host !== NO_HOST && host !== GUEST_HOST ? host : null,
       hostName: host === GUEST_HOST ? hostName || null : null,
@@ -475,6 +491,34 @@ function EventForm({
             placeholder="e.g. General meeting"
           />
         </div>
+
+        {meetingTypes.length > 0 && (
+          <div className="grid gap-1.5">
+            <Label htmlFor="event-meeting-type">Meeting type</Label>
+            <Select value={meetingType} onValueChange={setMeetingType}>
+              <SelectTrigger id="event-meeting-type" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TYPE}>None</SelectItem>
+                {meetingTypes.map((t) => (
+                  <SelectItem key={t.name} value={t.name}>
+                    <span
+                      aria-hidden
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ background: t.color }}
+                    />
+                    {t.name}
+                  </SelectItem>
+                ))}
+                {/* A type since taken off the list still shows on its meetings. */}
+                {meetingType !== NO_TYPE && !meetingTypes.some((t) => t.name === meetingType) && (
+                  <SelectItem value={meetingType}>{meetingType}</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
           <div className="grid gap-1.5">

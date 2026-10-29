@@ -34,7 +34,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatEventWhen } from "@/lib/calendar/format";
-import { PROFILE_STEP_TITLES } from "@/lib/onboarding/steps";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { DUE_SOON_DAYS, UPCOMING_DAYS } from "@/lib/personal/home-windows";
 import { dateTile } from "@/lib/rsvp/when";
@@ -123,14 +122,7 @@ export function PersonalHome({
           </SectionTitle>
           <div className="grid gap-3 md:grid-cols-2">
             {data.pendingInvites.map((invitation) => (
-              <PendingInviteCard
-                key={invitation.id}
-                invitation={{
-                  id: invitation.id,
-                  role: invitation.role,
-                  orgName: invitation.orgName,
-                }}
-              />
+              <PendingInviteCard key={invitation.id} invitation={invitation} />
             ))}
           </div>
         </section>
@@ -268,7 +260,7 @@ function FinishProfileCard({ href, gaps }: { href: string; gaps: ProfileGap[] })
         <CardAction>
           <Button asChild size="sm">
             <Link href={href}>
-              {PROFILE_STEP_TITLES[gaps[0]]}
+              Open your profile
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
           </Button>
@@ -410,7 +402,7 @@ function JoinOrStart({ prominent }: { prominent: boolean }) {
       </div>
       <p id="join-code-hint" className="text-muted-foreground text-xs">
         You&apos;ll see the organization before you join, and joining is free. An organization you
-        start is free for 30 days.
+        start gets 14 days of Team Advanced free, no card.
       </p>
     </div>
   );

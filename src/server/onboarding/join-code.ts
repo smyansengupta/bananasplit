@@ -14,6 +14,7 @@ import { tags } from "@/server/cache/tags";
 import { withSystemOrgTx, withUserTx, type TxClient } from "@/server/db/context";
 import { sqlStateOf } from "@/server/db/errors";
 import { notifyUser } from "@/server/notifications";
+import { CAP_SELECT, capRefusal, memberCapRefusal } from "@/server/settings/member-cap";
 
 import { ownPreferredTitle } from "./title";
 
@@ -187,7 +188,8 @@ export type JoinCodeCheck =
         | "org_inactive"
         | "wrong_domain"
         | "unverified"
-        | "rate_limited";
+        | "rate_limited"
+        | "org_full";
       message: string;
     };
 
@@ -270,6 +272,16 @@ export async function checkJoinCode(
       message: `${row.orgName} only accepts @${row.allowedDomain} addresses. Sign up with that address, or ask an admin for an email invite.`,
     };
   }
+  // A full Free org says so here, before Join, not after (joinWithCode
+  // checks again under the lock). Its plan is read on the service path: the
+  // person isn't a member yet.
+  if (!alreadyMember) {
+    const plan = await withSystemOrgTx(row.organizationId, { userId: user.id }, ({ db }) =>
+      db.organization.findUnique({ where: { id: row.organizationId }, select: CAP_SELECT }),
+    );
+    const full = plan ? capRefusal(plan, row.memberCount) : null;
+    if (full) return { ok: false, reason: "org_full", message: full };
+  }
   return {
     ok: true,
     alreadyMember,
@@ -319,6 +331,8 @@ export async function joinWithCode(
       where: { userId_organizationId: { userId: user.id, organizationId: org.organizationId } },
       select: { id: true },
     });
+    const full = existing ? null : await memberCapRefusal(db, org.organizationId);
+    if (full) return { ok: false as const, message: full };
     if (!existing) {
       await db.membership.create({
         data: { userId: user.id, organizationId: org.organizationId, role: Role.MEMBER, title },

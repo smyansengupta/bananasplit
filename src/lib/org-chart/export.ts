@@ -68,6 +68,17 @@ export function chartToSvg(
       );
       continue;
     }
+    if (e.kind === "dotted") {
+      const x1 = s.x + NODE_WIDTH / 2;
+      const y1 = s.y + NODE_HEIGHT;
+      const x2 = t.x + NODE_WIDTH / 2;
+      const y2 = t.y;
+      const bend = Math.max(40, Math.abs(y2 - y1) / 2);
+      parts.push(
+        `<path d="M${x1} ${y1} C${x1} ${y1 + bend} ${x2} ${y2 - bend} ${x2} ${y2}" stroke="${palette.mutedForeground}" stroke-width="1.5" stroke-dasharray="3 5" fill="none"/>`,
+      );
+      continue;
+    }
     const x1 = s.x + NODE_WIDTH / 2;
     const y1 = s.y + NODE_HEIGHT;
     const x2 = t.x + NODE_WIDTH / 2;

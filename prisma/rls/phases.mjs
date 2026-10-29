@@ -77,6 +77,8 @@ const GRANTS = {
   OrgExport: ["SI", "SIUD", ""],
   // Notes page files: shared or private to the uploader. DELETE only once
   // trashed (Empty trash for the uploader or an admin; the nightly purge).
+  // Demo requests from /demo: app_auth inserts, nothing reads them in the app.
+  DemoRequest: ["", "", "I"],
   OrgFile: ["SIUD", "SD", ""],
   OrgIntegration: ["SIUD", "SIUD", ""],
   // Onboarding invite code: admins manage it, no DELETE (rotate or turn off).
@@ -135,6 +137,7 @@ const GRANTS = {
 // Tables with no organizationId, each for a reason (Phase 9 org-id coverage).
 const NO_ORG_ID = [
   "Account",
+  "DemoRequest",
   "OrgCreationCode",
   "Organization",
   "PasswordResetToken",
@@ -1194,6 +1197,43 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       ),
     }),
     { value: { foreign_active: "23503", own_active: 1, foreign_reports_to: "23503" } },
+  );
+  await tcase(
+    "P3-06",
+    "extra managers (alsoReportsToIds) are other positions of the same version, in the org",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const set = (ids) =>
+        tryq(
+          q,
+          `UPDATE "OrgChartPosition" SET "alsoReportsToIds" = $1::text[] WHERE "id" = 'pos_A1_vp'`,
+          [ids],
+        );
+      return {
+        same_version: await set(["pos_A1_pres"]),
+        other_version: await set(["pos_A2_pres"]),
+        foreign: await set(["pos_B1_pres"]),
+        missing: await set(["pos_nope"]),
+        duplicate: await set(["pos_A1_pres", "pos_A1_pres"]),
+        self: await set(["pos_A1_vp"]),
+        foreign_row: await rc(
+          q,
+          `UPDATE "OrgChartPosition" SET "alsoReportsToIds" = '{}' WHERE "id" = 'pos_B1_pres'`,
+        ),
+      };
+    },
+    {
+      value: {
+        same_version: 1,
+        other_version: "23503",
+        foreign: "23503",
+        missing: "23503",
+        duplicate: "23503",
+        self: "23514",
+        foreign_row: 0,
+      },
+    },
   );
   await tcase(
     "P3-05",
@@ -2416,7 +2456,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
   // ============ B10: tables no test referenced ============
   await tcase(
     "P-B10-01",
-    "BudgetPeriod: every member reads their org's; only OWNER/TREASURER write",
+    "BudgetPeriod: every member reads their org's; only OWNER/ADMIN/TREASURER write",
     "app_user",
     A("u_memberA"),
     async (q) => {
@@ -2433,7 +2473,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       s.member_update = await rc(q, `UPDATE "BudgetPeriod" SET "label" = 'M' WHERE "id" = 'bp_A'`);
       s.member_delete = await rc(q, `DELETE FROM "BudgetPeriod" WHERE "id" = 'bp_A'`);
       await q(`SELECT app.set_context('u_adminA','org_A')`);
-      // ADMIN is not a finance role.
+      // ADMIN is a finance role (20261028170000_finance_for_finance_roles).
       s.admin_insert = await tryq(
         q,
         `INSERT INTO "BudgetPeriod" ("id","organizationId","label","startsOn","endsOn") VALUES ('bp_ad','org_A','A','2027-01-01','2027-06-30')`,
@@ -2461,8 +2501,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         member_insert: "42501",
         member_update: 0,
         member_delete: 0,
-        admin_insert: "42501",
-        admin_update: 0,
+        admin_insert: 1,
+        admin_update: 1,
         treasurer_insert: 1,
         treasurer_update: 1,
         treasurer_foreign: 0,
@@ -2471,7 +2511,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
   );
   await tcase(
     "P-B10-02",
-    "Sponsor and Sponsorship: members read, OWNER/TREASURER write, and neither crosses an org",
+    "Sponsor and Sponsorship: finance (OWNER/ADMIN/TREASURER) reads and writes, members see none, and neither crosses an org",
     "app_user",
     A("u_treasA"),
     async (q) => {
@@ -2512,11 +2552,11 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         foreign_sponsor: "42501",
         treasurer_sponsorship: 1,
         foreign_period: "23503",
-        member_reads_sponsor: 1,
-        member_reads_sponsorship: 1,
+        member_reads_sponsor: 0,
+        member_reads_sponsorship: 0,
         member_update: 0,
         member_delete: 0,
-        admin_update: 0,
+        admin_update: 1,
         other_org_reads: 0,
       },
     },
@@ -3688,7 +3728,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
   );
   await tcase(
     "P-PERSONAL-02",
-    "a new club starts on a 30-day trial: not on a paid plan, not a longer trial, not Personal's plan",
+    "a new club starts on a 14-day trial: not on a paid plan, not a longer trial, not Personal's plan",
     "app_service",
     { user: "u_invitee", org: "org_N" },
     async (q) => {
@@ -3700,7 +3740,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       s.long_trial = await tryq(
         q,
         `INSERT INTO "Organization" ("id","name","slug","plan","trialEndsAt")
-         VALUES ('org_N','New club','fx-new','TRIAL', now() + interval '90 days')`,
+         VALUES ('org_N','New club','fx-new','TRIAL', now() + interval '20 days')`,
       );
       s.free_club = await tryq(
         q,
@@ -3727,13 +3767,13 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         free_club: "42501",
         club: 1,
         plan: "TRIAL",
-        days: 30,
+        days: 14,
       },
     },
   );
   await tcase(
     "P-PERSONAL-03",
-    "an OWNER moves a club off its trial to Club or Society, never back to a trial or to Free, and can't move the trial's end",
+    "an OWNER moves a club off its trial to Club or Society, never back to a trial or to Free, and can't move the trial's end; only an OWNER picks the plan after the trial",
     "app_user",
     A("u_ownerA"),
     async (q) => {
@@ -3757,6 +3797,19 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         q,
         `UPDATE "Organization" SET "plan" = 'SOCIETY' WHERE "id" = 'org_A'`,
       );
+      s.admin_after_trial = await tryq(
+        q,
+        `UPDATE "Organization" SET "planAfterTrial" = 'CLUB' WHERE "id" = 'org_A'`,
+      );
+      await q(`SELECT app.set_context('u_ownerA','org_A')`);
+      s.owner_after_trial = await tryq(
+        q,
+        `UPDATE "Organization" SET "planAfterTrial" = 'CLUB' WHERE "id" = 'org_A'`,
+      );
+      s.after_trial_personal_plan = await tryq(
+        q,
+        `UPDATE "Organization" SET "planAfterTrial" = 'PERSONAL_PLUS' WHERE "id" = 'org_A'`,
+      );
       return s;
     },
     {
@@ -3767,6 +3820,9 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         back_to_trial: "42501",
         to_club: 1,
         admin_to_society: "42501",
+        admin_after_trial: "42501",
+        owner_after_trial: 1,
+        after_trial_personal_plan: "23514",
       },
     },
   );

@@ -1,4 +1,4 @@
-import { Check, Loader2 } from "@/components/icons";
+import { Loader2 } from "@/components/icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -8,30 +8,23 @@ import { pill } from "@/components/brand/pill";
 import { cn } from "@/lib/utils";
 
 /*
- * The onboarding step screen (design: App screens, 05), one layout for every
- * step: a top bar with the logo and what's being set up, a stepper of named
- * steps, and a framed card holding the step on the left and a live preview
- * on the right. Steps swap the title, the body and the preview.
- *
- * Presentational only, so the client step forms render the card themselves
- * and keep their preview in step with what's typed.
+ * The onboarding step screen, one layout for every step, in the home page's
+ * look (Graphite, Geist headlines, ink pills for actions): a top bar
+ * with the logo and what's being set up, and one card holding the step.
+ * Where a picture helps (the event calendar), the picture is the editor
+ * itself, inside the step.
  */
 
 /** The page: top bar, stepper, then the card. */
 export function SetupShell({
   subject,
   exit,
-  steps,
-  current,
   children,
 }: {
-  /** "Setting up {subject}". */
-  subject: string;
+  /** "Setting up {subject}"; none on a page that isn't a step (the start). */
+  subject?: string;
   /** The top bar's right-hand action (Save and exit, Sign out). */
   exit: ReactNode;
-  steps: readonly string[];
-  /** 1-based. */
-  current: number;
   children: ReactNode;
 }) {
   return (
@@ -41,13 +34,14 @@ export function SetupShell({
           <Link href="/" className="text-foreground" data-plain>
             <Logo size={26} textSize={19} />
           </Link>
-          <span className="text-muted-foreground ml-1.5 hidden truncate text-[14px] sm:inline">
-            Setting up {subject}
-          </span>
+          {subject && (
+            <span className="text-muted-foreground ml-1.5 hidden truncate text-[14px] sm:inline">
+              Setting up {subject}
+            </span>
+          )}
         </div>
         {exit}
       </header>
-      <SetupStepper steps={steps} current={current} />
       {children}
     </div>
   );
@@ -57,108 +51,26 @@ export function SetupShell({
 export const exitClass =
   "text-muted-foreground hover:text-foreground cursor-pointer border-none bg-transparent p-0 text-[14px] font-semibold";
 
-/**
- * Numbered steps joined by 1.5px lines (Moonstone tokens): done is the
- * primary with a check, the current one a ring and a bold label, the rest
- * a muted outline. Lines are filled up to the current step. Every label
- * shows from xl; below that only the current one, and none on a phone
- * (the card says "Step 5 of 8").
- */
-export function SetupStepper({ steps, current }: { steps: readonly string[]; current: number }) {
+/** The step's card: one clean column, nothing beside or above the step. */
+export function SetupCard({ children }: { children: ReactNode }) {
   return (
-    <ol
-      aria-label="Setup steps"
-      className="m-0 flex w-full max-w-[1080px] list-none items-center gap-1.5 p-0 pt-2 pb-7 sm:gap-3"
-    >
-      {steps.map((label, i) => {
-        const n = i + 1;
-        const done = n < current;
-        const here = n === current;
-        return (
-          <li key={label} className="contents">
-            <span
-              aria-current={here ? "step" : undefined}
-              className={cn(
-                "flex items-center gap-2 text-[14px] whitespace-nowrap",
-                done && "text-muted-foreground font-semibold",
-                here && "text-foreground font-bold",
-                !done && !here && "text-muted-foreground font-medium",
-              )}
-            >
-              <span
-                className={cn(
-                  "grid size-5 flex-none place-items-center rounded-full text-[11px] sm:size-6",
-                  done && "bg-primary text-primary-foreground font-extrabold",
-                  here && "bg-card border-foreground border-2 font-extrabold",
-                  !done && !here && "border-foreground/22 text-muted-foreground border-[1.5px] font-bold",
-                )}
-              >
-                {done ? <Check className="size-3" strokeWidth={3.5} aria-label="Done" /> : n}
-              </span>
-              <span className={cn(here ? "max-sm:sr-only" : "sr-only xl:not-sr-only")}>
-                {label}
-              </span>
-            </span>
-            {n < steps.length && (
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "h-[1.5px] min-w-1 flex-1 sm:min-w-4",
-                  n < current ? "bg-primary" : "bg-foreground/15",
-                )}
-              />
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-/**
- * The framed card: a 12px paper frame, the step on the left and the 380px
- * sand preview on the right. Below lg the preview is hidden.
- */
-export function SetupCard({ preview, children }: { preview?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="bg-card text-card-foreground edge ring-foreground/6 rounded-shell flex w-full max-w-[1080px] gap-2.5 p-2.5 ring-1 lg:min-h-[640px]">
+    <div className="bg-card text-card-foreground edge ring-foreground/6 rounded-shell flex w-full max-w-[640px] flex-col p-2.5 ring-1">
       <div className="flex min-w-0 flex-1 flex-col px-4 pt-6 pb-4 sm:px-8 sm:pt-7 sm:pb-5">
         {children}
       </div>
-      {preview && (
-        <aside
-          aria-label="Preview"
-          className="bg-muted glow-corner hidden w-[380px] flex-none flex-col gap-3 rounded-[calc(var(--radius-shell)-0.625rem)] p-6 lg:flex"
-        >
-          {preview}
-        </aside>
-      )}
     </div>
   );
 }
 
-/** "Step 3 of 6", the question in Young Serif, and the helper text. */
-export function StepIntro({
-  index,
-  total,
-  title,
-  children,
-}: {
-  index: number;
-  total: number;
-  title: ReactNode;
-  children?: ReactNode;
-}) {
+/** The question and the line under it. No step counts: onboarding is short, so it doesn't count. */
+export function StepIntro({ title, children }: { title: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2.5">
-      <span className="text-muted-foreground text-[13px] font-semibold">
-        Step {index} of {total}
-      </span>
-      <h1 className="page-title m-0 text-[34px] sm:text-[40px]">
-        {title}
-      </h1>
+      <h1 className="page-title m-0 text-[34px] sm:text-[40px]">{title}</h1>
       {children && (
-        <p className="text-muted-foreground m-0 max-w-[440px] text-[15px] leading-[1.55]">{children}</p>
+        <p className="text-muted-foreground m-0 max-w-[440px] text-[15px] leading-[1.55]">
+          {children}
+        </p>
       )}
     </div>
   );
@@ -225,7 +137,10 @@ export function StepFooter({
   );
 }
 
-/** The ink Continue pill with its arrow; a spinner while the step saves. */
+/** The Continue pill's look, for a link that moves on (a step with nothing to save). */
+export const continueLinkClass = pill({ size: "md" });
+
+/** Continue: the ink pill with its arrow; a spinner while the step saves. */
 export function ContinuePill({
   pending = false,
   disabled,
@@ -250,7 +165,7 @@ export function ContinuePill({
       onClick={onClick}
       disabled={pending || disabled}
       style={style}
-      className={pill({ size: "md" })}
+      className={continueLinkClass}
     >
       {pending ? (
         <>
@@ -264,67 +179,6 @@ export function ContinuePill({
         </>
       )}
     </button>
-  );
-}
-
-/** The dashed "+ Add a label" / "+ Add a team" row under a list. */
-export function AddRowButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-muted-foreground hover:text-foreground flex h-12 w-full cursor-pointer items-center rounded-tile hatch bg-muted px-4 text-left text-[15px] font-semibold transition-colors"
-    >
-      + {children}
-    </button>
-  );
-}
-
-/** The × that removes a row; `label` names what it removes. */
-export function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className="text-muted-foreground hover:text-foreground flex-none cursor-pointer border-none bg-transparent p-0 text-[18px] leading-none"
-    >
-      ×
-    </button>
-  );
-}
-
-/** Stand-in avatar colours for people in a preview. */
-export const PREVIEW_AVATAR_TONES = ["bg-avatar-1", "bg-primary", "bg-avatar-3", "bg-avatar-4"] as const;
-
-/** The preview's header: "Preview" and what it shows. */
-export function PreviewHeader({ meta, label = "Preview" }: { meta?: ReactNode; label?: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground text-[13px] font-semibold">{label}</span>
-      {meta && <span className="text-muted-foreground text-[12px]">{meta}</span>}
-    </div>
-  );
-}
-
-/** A white card in the preview (a task, a team, a person). */
-export function PreviewTile({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn("bg-card shadow-e1 rounded-tile flex flex-col gap-2.5 p-3.5", className)}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** An outlined chip with a colour dot: a label on a task. */
-export function DotChip({ color, children }: { color: string; children: ReactNode }) {
-  return (
-    <span className="text-muted-foreground border-foreground/12 inline-flex min-w-0 items-center gap-1.5 rounded-full border px-[9px] py-[3px] text-[12px] font-semibold">
-      <span className="size-[7px] flex-none rounded-full" style={{ backgroundColor: color }} />
-      <span className="truncate">{children}</span>
-    </span>
   );
 }
 

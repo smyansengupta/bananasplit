@@ -94,8 +94,8 @@ export interface StorageState {
   level: StorageLevel;
 }
 
-export function storageState(space: StorageSpace): StorageState {
-  const limits = spaceLimits(space);
+export function storageState(space: StorageSpace, now: Date = new Date()): StorageState {
+  const limits = spaceLimits(space, now);
   const usedBytes = Number(space.storageUsedBytes);
   return {
     usedBytes,
@@ -147,7 +147,7 @@ export function uploadRefusal(
   sizeBytes: number,
   options: UploadCheckOptions,
 ): UploadRefusal | null {
-  const state = storageState(space);
+  const state = storageState(space, options.now);
   const base = {
     sizeBytes,
     usedBytes: state.usedBytes,

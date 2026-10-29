@@ -9,17 +9,21 @@ import { getSession } from "@/lib/auth/session";
 export const metadata: Metadata = {
   title: "Pricing: Bananasplit",
   description:
-    "Free for teams of any size. Team and Team Advanced add finance, reports and AI, with flat yearly prices for student organizations.",
+    "Every new team starts with 14 days of everything, free, no card. Free holds up to 10 members; Team and Team Advanced add finance, integrations, iMessage, reports and AI, with flat yearly prices for student organizations.",
 };
 
 const PRICING_FAQS: readonly FaqItem[] = [
   {
+    q: "Do I need a credit card to start?",
+    a: "No. Every new account gets 14 days of Personal Plus and every new team 14 days of Team Advanced, free, without a card. You only add one if you choose a paid plan.",
+  },
+  {
     q: "What happens when the free trial ends?",
-    a: "Every new team gets 30 days of Team Advanced. After that it moves to Free unless you pick a paid plan. Nothing is paused or deleted, and you can upgrade at any time.",
+    a: "We email you three days before it ends. After that you move to Free, which holds up to 10 members, or to the plan you picked during the trial. Picking a plan never cuts the trial short. Nothing is paused or deleted, and you can upgrade at any time.",
   },
   {
     q: "Who counts as a member?",
-    a: "Anyone who joins your organization. Guests who RSVP to an event or answer a poll never count and never need an account. On student plans, members never pay: the organization pays one flat price.",
+    a: "Anyone who joins your organization. Free holds up to 10; Team and Team Advanced have no limit. Guests who RSVP to an event or answer a poll never count and never need an account. On student plans, members never pay: the organization pays one flat price.",
   },
   {
     q: "Who qualifies for student pricing?",

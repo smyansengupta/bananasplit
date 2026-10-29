@@ -22,11 +22,13 @@ const financeAction: typeof withOrgAction = (handler, options) =>
 
 /**
  * The finance setup guide's own writes (the period, treasurers and the
- * dashboard reuse the ordinary actions). Owners and treasurers only; the
+ * dashboard reuse the ordinary actions). Owners, admins and treasurers only; the
  * BudgetCategory and Transaction policies enforce the same.
  */
 
-const NOT_FINANCE = { error: "Only the organization's owners and treasurers can set up finance." };
+const NOT_FINANCE = {
+  error: "Only the organization's owners, admins and treasurers can set up finance.",
+};
 
 const balanceSchema = z.object({
   /** Signed: negative when the club starts in debt. Zero removes it. */

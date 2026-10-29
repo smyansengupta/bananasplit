@@ -55,9 +55,14 @@ export function kindStyle(kind: EventKind): React.CSSProperties {
   return { ["--kind" as string]: `var(${KIND_META[kind].token})` };
 }
 
-/** A chip's colour: its kind's, or the primary for a task's due date. */
-export function itemStyle(item: { kind: EventKind; task?: unknown }): React.CSSProperties {
-  return item.task ? { ["--kind" as string]: "var(--primary)" } : kindStyle(item.kind);
+/** A chip's colour: its meeting type's, else its kind's, or the primary for a task's due date. */
+export function itemStyle(item: {
+  kind: EventKind;
+  typeColor?: string | null;
+  task?: unknown;
+}): React.CSSProperties {
+  if (item.task) return { ["--kind" as string]: "var(--primary)" };
+  return item.typeColor ? { ["--kind" as string]: item.typeColor } : kindStyle(item.kind);
 }
 
 export const VISIBILITY_META: Record<EventVisibility, { label: string; hint: string }> = {

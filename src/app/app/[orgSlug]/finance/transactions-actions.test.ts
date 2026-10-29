@@ -59,7 +59,12 @@ function actAs(userId: string, role: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   actAs("member_1", Role.MEMBER);
-  db.$queryRaw.mockResolvedValue([{ id: "audit_1" }]);
+  // The audit log's insert, and app.expense_categories (a member's category check).
+  db.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) =>
+    strings.join("").includes("app.expense_categories()")
+      ? [{ id: "cat_1", budgetPeriodId: "period_1", name: "Food", sortOrder: 0 }]
+      : [{ id: "audit_1" }],
+  );
 });
 
 const validExpenseInput = {
@@ -102,7 +107,7 @@ describe("createTransaction — amounts (spec 5.1 / 5.3)", () => {
       direction: "IN",
       kind: "OTHER_INCOME",
     });
-    expect(result.error).toMatch(/treasurer or owner/i);
+    expect(result.error).toMatch(/owner, admin or treasurer/i);
     expect(db.transaction.create).not.toHaveBeenCalled();
   });
 
@@ -181,7 +186,11 @@ describe("transaction links and categories stay inside the org (0A Fix 2)", () =
     db.event.findFirst.mockImplementation(orgScopedFindFirst(new Set(["event_1"])));
     db.task.findFirst.mockImplementation(orgScopedFindFirst(new Set(["task_1"])));
     db.budgetCategory.findFirst.mockImplementation(
-      async ({ where }: { where: { id: string; organizationId?: string; budgetPeriodId: string } }) => {
+      async ({
+        where,
+      }: {
+        where: { id: string; organizationId?: string; budgetPeriodId: string };
+      }) => {
         if (!where.organizationId) throw new Error("category lookup is missing organizationId");
         return where.id === "cat_1" && where.budgetPeriodId === "period_1" ? { id: "cat_1" } : null;
       },
@@ -350,7 +359,7 @@ describe("finance-only actions and the expense workflow (0C wrappers)", () => {
 
   it("a MEMBER cannot approve, but can submit their own draft (no email)", async () => {
     db.transaction.findFirst.mockResolvedValue({ ...submitted, submittedById: "someone_else" });
-    expect((await approveExpense("org_1", "txn_1")).error).toMatch(/treasurer or owner/);
+    expect((await approveExpense("org_1", "txn_1")).error).toMatch(/owner, admin or treasurer/);
 
     db.transaction.findFirst.mockResolvedValue({ ...submitted, status: "DRAFT" });
     db.transaction.update.mockResolvedValue({ ...submitted, status: "SUBMITTED" });

@@ -66,6 +66,7 @@ export const weeklyPulseJob: JobHandler<{ weekStart: string }> = async (
         kind: true,
         plan: true,
         trialEndsAt: true,
+        planAfterTrial: true,
         timezone: true,
         deletedAt: true,
         settings: {

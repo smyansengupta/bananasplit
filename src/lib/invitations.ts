@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import type { Role } from "@/generated/prisma/enums";
+import { TEAM_FREE_MEMBER_CAP } from "@/lib/billing/features";
 
 /**
  * Invitation tokens and shared copy. The database work (create, resend,
@@ -40,7 +41,8 @@ export type AcceptInvitationResult =
   | { ok: true; orgId: string; orgSlug: string }
   | {
       ok: false;
-      reason: "already_used" | "expired" | "email_mismatch" | "unverified" | "org_inactive";
+      reason:
+        "already_used" | "expired" | "email_mismatch" | "unverified" | "org_inactive" | "org_full";
       invitedEmail?: string;
     };
 
@@ -53,4 +55,5 @@ export const ACCEPT_ERROR_MESSAGES: Record<
   email_mismatch: "This invite was sent to a different email address.",
   unverified: "Verify your email address before accepting this invite.",
   org_inactive: "This organization is no longer active.",
+  org_full: `This organization is on Free, which has room for ${TEAM_FREE_MEMBER_CAP} members, and it's full. Ask an owner to move it to Team so you can join.`,
 };

@@ -23,8 +23,9 @@ const GEIST_HEADINGS =
  * visitor moves from the home page to sign-up without the brand changing:
  * the Graphite preset's tokens, derived like an org theme (neutral greys, a
  * near-black primary), light by default, no banana glow, and headlines in
- * Geist. A visitor's stored choice (the footer's switch, or the user menu
- * in the app) still wins, and "system" follows the device.
+ * Geist. A visitor's stored choice (the user menu in the app) still wins,
+ * and "system" follows the device. `alwaysLight` pins it to light whatever the
+ * visitor chose: the marketing pages (MarketingShell) are always light.
  *
  * `look="moonstone"` keeps the app's own tokens (globals.css), dark by
  * default, with `.corona` lighting the top of the page with the banana glow.
@@ -37,17 +38,24 @@ export async function BrandRoot({
   children,
   className,
   look = "graphite",
+  alwaysLight = false,
 }: {
   children: React.ReactNode;
   className?: string;
   look?: "moonstone" | "cream" | "graphite";
+  /** Graphite only: always light, ignoring the visitor's stored choice. */
+  alwaysLight?: boolean;
 }) {
   const nonce = await getNonce();
   if (look === "graphite") {
     const { light, dark } = GRAPHITE_PRESET;
     const css = themeStyleSheet(deriveTheme(light, dark));
     return (
-      <ThemeProvider defaultTheme="light" nonce={nonce}>
+      <ThemeProvider
+        forcedTheme={alwaysLight ? "light" : undefined}
+        defaultTheme="light"
+        nonce={nonce}
+      >
         {css && <style data-brand-theme="" dangerouslySetInnerHTML={{ __html: css }} />}
         <div
           data-look="graphite"

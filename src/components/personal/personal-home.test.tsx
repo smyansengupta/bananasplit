@@ -90,6 +90,7 @@ describe("PersonalHome", () => {
           organizationId: "c9",
           role: "MEMBER",
           expiresAt: new Date("2026-10-20T00:00:00Z"),
+          orgLogoUrl: null,
           orgName: "Debate Society",
         },
       ],

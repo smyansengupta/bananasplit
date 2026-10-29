@@ -9,7 +9,7 @@ import { planGate } from "@/server/billing/plan-gate";
 import { FinanceAccessGate } from "../finance-access-gate";
 import { getCategoriesForPeriods, getOrgPeriods } from "../queries";
 
-/** Finance › Import: past spreadsheets, bank exports, PDFs and photos into the ledger (owners and treasurers). */
+/** Finance › Import: past spreadsheets, bank exports, PDFs and photos into the ledger (owners, admins and treasurers). */
 export default async function FinanceImportPage({
   params,
 }: PageProps<"/app/[orgSlug]/finance/import">) {

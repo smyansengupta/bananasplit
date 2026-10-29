@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { EventDetailView } from "@/components/calendar/event-detail-view";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
+import { parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
@@ -49,6 +50,7 @@ export default async function EventDetailPage({
       orgSlug={orgSlug}
       timeZone={org.timezone}
       defaultReminderMinutes={settings?.meetingReminderMinutes ?? [...DEFAULT_REMINDER_MINUTES]}
+      meetingTypes={parseMeetingTypes(settings?.eventTypes)}
       event={{
         id: event.id,
         title: event.title,
@@ -79,6 +81,7 @@ export default async function EventDetailPage({
         attendees: event.attendees.map((a) => ({ userId: a.userId, rsvp: a.rsvp, user: a.user })),
         attendeeIds: event.attendees.map((a) => a.userId),
         reminderMinutes: event.reminderMinutes,
+        meetingType: event.meetingType,
         notes: event.notes,
       }}
       members={members.map((m) => ({

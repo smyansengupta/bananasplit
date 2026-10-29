@@ -51,10 +51,7 @@ export default async function ResetPasswordPage({ params }: PageProps<"/reset-pa
 
   return (
     <AuthCard>
-      <AuthTitle
-        title="Choose a new password."
-        description="Use at least 8 characters. A short phrase is easy to remember and hard to guess."
-      />
+      <AuthTitle title="Choose a new password." description="At least 8 characters." />
       <ResetPasswordForm action={resetPasswordAction.bind(null, token)} />
     </AuthCard>
   );
