@@ -37,7 +37,8 @@ import { IPhone, ReplyCard, Thread, type Message } from "./iphone";
 /**
  * The home page (/): light, centred, few words, in
  * Bananasplit's own look (Geist headlines, the banana button, the Young
- * Serif wordmark), leading with the category, "The First Ambient Workplace": the
+ * Serif wordmark), leading with "The workspace that runs itself.", the idea
+ * behind "the first ambient workplace" (named in the texting section): the
  * team's work keeps itself up to date, listening where people already work,
  * handling the busywork, and texting only when something needs a decision
  * (docs/AMBIENT-WORKPLACE.md). Each section says one part of that: it comes
@@ -166,17 +167,17 @@ function Hero({ signedIn }: { signedIn: boolean }) {
     <section className="to-muted/70 relative isolate bg-linear-to-b from-transparent from-40%">
       <div className={cn(CONTAINER, "flex flex-col items-center pt-[clamp(36px,5vw,72px)]")}>
         <div className="flex max-w-[920px] flex-col items-center gap-6 text-center">
-          {/* The category, named. On phones the size follows the screen width, so "Ambient Workplace." fits one line. */}
+          {/* On phones the size follows the screen width, so "The workspace that" fits one line. */}
           <h1 className="display-title animate-home-rise m-0 text-[9.4vw] leading-[0.95] tracking-[-0.05em] whitespace-nowrap sm:text-[clamp(48px,7.2vw,96px)]">
-            The First <br />
-            Ambient Workplace.
+            The workspace that <br />
+            runs itself.
           </h1>
           <p
             className="text-foreground/75 animate-home-rise m-0 max-w-[600px] text-[clamp(17px,1.6vw,20px)] leading-[1.5] text-pretty"
             style={{ animationDelay: "0.12s" }}
           >
-            Your team&apos;s work keeps itself up to date. It listens where you already work,
-            handles the busywork, and texts you only when something needs you.
+            Your team&apos;s tasks, docs, meetings and money in one place. It listens where you
+            already work, handles the busywork, and texts you only when something needs you.
           </p>
           <div
             className="animate-home-rise flex flex-wrap items-center justify-center gap-3 pt-1"
@@ -313,7 +314,7 @@ function OnTheGo() {
       <div id="home-on-the-go">
         <SectionIntro
           title="It comes to you."
-          line="A brief each morning, a nudge when something slips, and anything else by text."
+          line="That's what we call an ambient workplace: a brief each morning, a nudge when something slips, and anything else by text."
         />
       </div>
       <Link

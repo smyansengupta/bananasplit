@@ -5,14 +5,14 @@ import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { getSession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Bananasplit: The First Ambient Workplace",
+  title: "Bananasplit: the workspace that runs itself",
   description:
     "Your team's work keeps itself up to date. Bananasplit listens where you already work, handles the busywork, and texts you only when something needs you.",
 };
 
 /**
- * The marketing home page: "The First Ambient Workplace"
- * (docs/AMBIENT-WORKPLACE.md), its sections in
+ * The marketing home page: "The workspace that runs itself", the idea of an
+ * ambient workplace (docs/AMBIENT-WORKPLACE.md), its sections in
  * src/components/marketing/home/home-page.tsx. Pricing and its questions
  * live on /pricing (in the nav).
  */
