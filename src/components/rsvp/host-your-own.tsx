@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 export function HostYourOwn() {
   return (
     <aside
-      aria-label="Make RSVP pages for your club"
+      aria-label="Make RSVP pages for your organization"
       className="mx-auto w-full max-w-[1120px] px-4 pb-10 sm:px-10"
       style={accentScaleStyle(BRAND_ACCENT_SCALE)}
     >
@@ -30,7 +30,7 @@ export function HostYourOwn() {
               Hosting something? Make a page like this one.
             </h2>
             <p className="text-chrome-foreground/70 m-0 max-w-[520px] text-[15px] leading-[1.55]">
-              Sign-ups, QR check-in, invite links and a bring list come with every club on
+              Sign-ups, QR check-in, invite links and a bring list come with every organization on
               Bananasplit, the Free plan included.
             </p>
           </div>

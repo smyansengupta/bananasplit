@@ -56,7 +56,7 @@ export default async function SetupPage({
         <EmptyState
           icon={Plug}
           title="Setup is for owners and admins"
-          description="Connecting a club's accounts means handling its credentials, so it is limited to owners and admins. Ask one of them to run it."
+          description="Connecting an organization's accounts means handling its credentials, so it is limited to owners and admins. Ask one of them to run it."
           action={
             <Button asChild variant="outline">
               <Link href={`/app/${orgSlug}`}>Back to the overview</Link>
@@ -159,7 +159,7 @@ export default async function SetupPage({
   return (
     <div className="space-y-7.5">
       <div className="space-y-4">
-        {from && <BackLink href={from} label="Club setup" />}
+        {from && <BackLink href={from} label="Organization setup" />}
         <PageHeader
           title="Connect tools"
           description={headerSummary}

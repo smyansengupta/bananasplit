@@ -82,13 +82,13 @@ export function ClubBasicsStep({
 
   const taken = Boolean(slug) && !checking && slugStatus === "taken";
   const available = Boolean(slug) && !checking && slugStatus === "available";
-  const clubName = name.trim() || "Your club";
+  const clubName = name.trim() || "Your organization";
 
   return (
     <SetupCard
       preview={
         <>
-          <PreviewHeader meta="Your club's home" />
+          <PreviewHeader meta="Your organization's home" />
           <PreviewTile className="flex-row items-center gap-3">
             <span className="bg-primary text-primary-foreground font-heading rounded-field grid size-11 flex-none place-items-center text-[20px]">
               {clubName[0]?.toUpperCase()}
@@ -96,7 +96,7 @@ export function ClubBasicsStep({
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="truncate text-[15px] font-bold">{clubName}</span>
               <span className="text-muted-foreground truncate font-mono text-[12px]">
-                /app/{slug || "your-club"}
+                /app/{slug || "your-org"}
               </span>
             </span>
           </PreviewTile>
@@ -127,8 +127,8 @@ export function ClubBasicsStep({
       }
     >
       <StepIntro index={index} total={total} title="Let's start with the basics.">
-        You&apos;ll be the club&apos;s admin. Everything here can be changed later in the Admin
-        panel.
+        You&apos;ll be the organization&apos;s admin. Everything here can be changed later in the
+        Admin panel.
       </StepIntro>
 
       {notice ? (
@@ -137,14 +137,14 @@ export function ClubBasicsStep({
         <form action={formAction} className="flex flex-1 flex-col">
           <input type="hidden" name="flow" value="onboarding" />
           <StepBody className="gap-5">
-            <BrandField id="org-name" label="Club name">
+            <BrandField id="org-name" label="Organization name">
               <BrandInput
                 id="org-name"
                 name="name"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Robotics Club"
+                placeholder="Riverside Robotics"
                 autoComplete="organization"
               />
             </BrandField>
@@ -205,7 +205,7 @@ export function ClubBasicsStep({
               </FieldSelect>
             </BrandField>
             {requiresCode && (
-              <BrandField id="org-code" label="Club creation code">
+              <BrandField id="org-code" label="Organization creation code">
                 <BrandInput
                   id="org-code"
                   name="code"

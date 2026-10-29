@@ -1,30 +1,53 @@
+import Link from "next/link";
+
+import { ArrowRight } from "@/components/brand/arrows";
+import { cn } from "@/lib/utils";
+
+import { DEMO_HREF, startHref } from "./links";
+import { CONTAINER } from "./section-title";
+import { SiteLink } from "./site-link";
+
 /**
- * The closing yellow panel, lit from the top, with a giant wordmark that
- * the panel's bottom edge crops.
+ * The closing panel: the banana yellow, lit from the top, one last headline
+ * and the hero's two buttons word for word (the SaaS homepage report: long-page
+ * readers convert here), over a giant wordmark in the logo's typeface that
+ * the panel's bottom edge crops. Fixed brand colours (ink on banana), so it
+ * reads the same in light and dark.
  */
-export function FinalCta() {
+export function FinalCta({ signedIn = false }: { signedIn?: boolean }) {
   return (
-    <section className="px-[clamp(8px,1.5vw,20px)]">
-      <div className="bg-peel-center relative overflow-hidden rounded-[clamp(24px,3vw,40px)]">
-        <div className="mx-auto flex max-w-[1240px] flex-col items-center gap-6 px-6 pt-[clamp(72px,9vw,112px)] text-center">
-          <h2 className="font-heading max-w-[820px] text-[clamp(36px,4.8vw,64px)] leading-[1.02] tracking-[-0.03em] text-balance">
-            Split the work.
-            <br />
-            Keep the club together.
+    <section className={cn(CONTAINER, "pt-24 pb-24 sm:pt-32 sm:pb-32")}>
+      <div className="bg-peel-center text-ink rounded-shell relative overflow-hidden">
+        <div className="flex flex-col items-center gap-6 px-6 pt-[clamp(64px,9vw,112px)] text-center">
+          <h2 className="display-title max-w-[760px] text-[clamp(36px,5vw,64px)] leading-[1.02] tracking-[-0.04em] text-balance">
+            Running your organization shouldn&apos;t be bananas.
           </h2>
-          <p className="text-bark-soft max-w-[460px] text-[17px] leading-[1.55]">
-            Guided setup walks you through data, tags, finance, teams and your weekly pulse. Invite
-            your officers with a code.
+          <p className="text-bark-soft max-w-[480px] text-[17px] leading-[1.55]">
+            Set up your workspace in minutes and bring the whole team in with one invite code.
           </p>
-          <a
-            href="#pricing"
-            className="bg-ink text-cream shadow-cta-soft hover:bg-ink-hover hover:text-cream rounded-full px-[26px] py-[15px] text-[16px] font-semibold whitespace-nowrap"
-          >
-            Create your club
-          </a>
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link
+                href={startHref(signedIn)}
+                data-cta="get_started"
+                data-cta-location="final"
+                className="bg-ink text-cream hover:bg-ink-hover hover:text-cream shadow-cta-soft inline-flex h-12 items-center gap-2 rounded-full px-6 text-[15px] font-semibold whitespace-nowrap"
+              >
+                Get started free <ArrowRight />
+              </Link>
+              <SiteLink
+                href={DEMO_HREF}
+                data-cta="request_demo"
+                data-cta-location="final"
+                className="border-ink/25 text-ink hover:bg-ink/5 inline-flex h-12 items-center rounded-full border px-6 text-[15px] font-semibold whitespace-nowrap"
+              >
+                Request a demo
+              </SiteLink>
+            </div>
+          </div>
           <div
             aria-hidden="true"
-            className="font-logo text-ink mt-[clamp(32px,5vw,64px)] -mb-[0.12em] text-[clamp(64px,17vw,240px)] leading-[0.78] tracking-[-0.05em] whitespace-nowrap"
+            className="font-logo mt-[clamp(32px,5vw,64px)] -mb-[0.12em] text-[clamp(56px,15.5vw,196px)] leading-[0.78] tracking-[-0.05em] whitespace-nowrap"
           >
             bananasplit
           </div>

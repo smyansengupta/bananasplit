@@ -6,8 +6,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 /**
  * The write wrapper (tools/write.ts) against the real roles and policies
  * (src/test/connector-fixture.ts), for all nine write tools: what refuses
- * a write before it runs (a read-only grant, a paused club, a club the
- * member isn't in, a grant scoped elsewhere, the club switch, a section
+ * a write before it runs (a read-only grant, a club the member isn't
+ * in, a grant scoped elsewhere, the club switch, a section
  * hidden from members, the rate limit), that a refused write leaves
  * nothing behind, and the audit row a write leaves.
  */
@@ -240,17 +240,6 @@ describe("the write wrapper", () => {
       await expect(c.run(session, c.args(fx.club.id)), c.tool).rejects.toBeInstanceOf(
         ReadOnlyGrantError,
       );
-    }
-  });
-
-  it("refuses every write in a paused club, which still reads", async () => {
-    if (!fx) return;
-    const session = await fx.session(fx.alice, { access: "WRITE" });
-    for (const c of CASES) {
-      await expect(c.run(session, c.args(fx.pausedId)), c.tool).rejects.toMatchObject({
-        name: "SpaceRefusedError",
-        refusal: { refused: "paused" },
-      });
     }
   });
 

@@ -120,7 +120,7 @@ interface ActionResult {
 
 const NOT_FOUND = "Note not found.";
 const NO_SHARING =
-  "Only the note's author (or an admin, on a club note) can change who has access.";
+  "Only the note's author (or an admin, on an organization note) can change who has access.";
 
 /**
  * A note whose access changed (turned PRIVATE, deleted, shared differently):
@@ -402,7 +402,6 @@ export const issueNoteCollabToken = filesAction(
     if (!note) return { error: NOT_FOUND };
     return { session: mintNoteCollabSession(config, ctx, note) };
   },
-  { whenPaused: "allow" },
 );
 
 export const deleteNote = filesAction(async (ctx, noteId: string): Promise<ActionResult> => {
@@ -504,7 +503,7 @@ export const shareNote = filesAction(
       select: { userId: true },
     });
     if (members.length !== wanted.length) {
-      return { error: "Notes can only be shared with members of the club." };
+      return { error: "Notes can only be shared with members of the organization." };
     }
     const before = await ctx.db.noteShare.findMany({
       where: { noteId, organizationId: ctx.organizationId, userId: { in: wanted } },

@@ -27,13 +27,13 @@ export function ThemeToggle({ className }: { className?: string }) {
   );
   const locked = Boolean(forcedTheme);
   const dark = (forcedTheme ?? resolvedTheme) === "dark";
-  const label = locked ? "Dark mode (set by your club)" : "Dark mode";
+  const label = locked ? "Dark mode (set by your organization)" : "Dark mode";
 
   return (
     <button
       type="button"
       aria-label={label}
-      title={locked ? "Your club set light or dark for everyone" : "Switch light and dark"}
+      title={locked ? "Your organization set light or dark for everyone" : "Switch light and dark"}
       aria-pressed={hydrated ? dark : undefined}
       aria-disabled={locked || undefined}
       onClick={() => {

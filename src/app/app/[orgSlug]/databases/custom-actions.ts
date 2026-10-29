@@ -67,14 +67,8 @@ function failure(error: unknown): { error: string } {
   return { error: "Something went wrong saving that. Try again." };
 }
 
-function action<Args extends unknown[], T>(
-  fn: (a: Actor, ...args: Args) => Promise<T>,
-  options: { whenPaused?: "refuse" | "allow" } = {},
-) {
-  const tx = databasesAction(
-    async (ctx: OrgContext, ...args: Args) => fn(actor(ctx), ...args),
-    options,
-  );
+function action<Args extends unknown[], T>(fn: (a: Actor, ...args: Args) => Promise<T>) {
+  const tx = databasesAction(async (ctx: OrgContext, ...args: Args) => fn(actor(ctx), ...args));
   return async (organizationId: string, ...args: Args): Promise<Result<T>> => {
     try {
       return { data: await tx(organizationId, ...args) };
@@ -176,7 +170,6 @@ export const loadRecordsAction = action(
     if (!parsed.success) throw new DatabaseInputError("Check the search.");
     return loadRecords(a, id.parse(databaseId), parsed.data);
   },
-  { whenPaused: "allow" },
 );
 
 export const createRecordAction = action(

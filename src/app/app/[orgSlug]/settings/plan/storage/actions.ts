@@ -19,12 +19,9 @@ export interface EmptyTrashResult {
   files?: number;
 }
 
-export const emptyTrashAction = withOrgAction(
-  async (ctx): Promise<EmptyTrashResult> => {
-    if (!canManageStorage(ctx.role)) throw new ForbiddenError();
-    const emptied = await emptyTrash(ctx.db, ctx.organizationId);
-    ctx.afterCommit(() => deleteEmptiedFiles(emptied.fileKeys));
-    return { notes: emptied.notes, files: emptied.files };
-  },
-  { whenPaused: "allow" },
-);
+export const emptyTrashAction = withOrgAction(async (ctx): Promise<EmptyTrashResult> => {
+  if (!canManageStorage(ctx.role)) throw new ForbiddenError();
+  const emptied = await emptyTrash(ctx.db, ctx.organizationId);
+  ctx.afterCommit(() => deleteEmptiedFiles(emptied.fileKeys));
+  return { notes: emptied.notes, files: emptied.files };
+});

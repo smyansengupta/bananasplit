@@ -1,48 +1,62 @@
 import { cn } from "@/lib/utils";
 
-/** A section's headline: Young Serif, 38 to 64px. */
+/** The page's column: 1200px with a 24px gutter, as every section uses. */
+export const CONTAINER = "mx-auto w-full max-w-[1200px] px-6";
+
+/** A section's headline: the display face, 36 to 64px, set tight. */
 export function SectionTitle({
   children,
   className,
+  as: Tag = "h2",
 }: {
   children: React.ReactNode;
   className?: string;
+  as?: "h1" | "h2" | "h3";
 }) {
   return (
-    <h2
+    <Tag
       className={cn(
-        "font-heading text-[clamp(38px,5vw,64px)] leading-[1.02] tracking-[-0.03em]",
+        "display-title text-[clamp(36px,5vw,64px)] leading-[1.02] tracking-[-0.04em]",
         className,
       )}
     >
       {children}
-    </h2>
+    </Tag>
   );
 }
 
 /**
- * The headline on the left and a short description bottom-right, wrapping
- * to stack on narrow screens (the feature board and the growth stages).
+ * A section's opening: a small label, the headline and a line of
+ * description, centred (Notion's sections) or on the left.
  */
 export function SectionIntro({
+  label,
   title,
   children,
+  align = "center",
   className,
 }: {
+  label?: string;
   title: React.ReactNode;
-  children: React.ReactNode;
-  /** The description's width (and wrapping). */
+  children?: React.ReactNode;
+  align?: "center" | "left";
   className?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
-      <div className="flex max-w-[700px] flex-col gap-[18px]">
-        <SectionTitle className="text-balance">{title}</SectionTitle>
-      </div>
-      <p className={cn("text-ink-muted text-[17px] leading-[1.55]", className)}>{children}</p>
+    <div
+      className={cn(
+        "flex flex-col gap-4",
+        align === "center" ? "mx-auto max-w-[760px] items-center text-center" : "max-w-[640px]",
+        className,
+      )}
+    >
+      {label && <span className="text-foreground/70 text-[14px] font-semibold">{label}</span>}
+      <SectionTitle className="text-balance">{title}</SectionTitle>
+      {children && (
+        <p className="text-foreground/80 max-w-[620px] text-[17px] leading-[1.55] text-pretty sm:text-[18px]">
+          {children}
+        </p>
+      )}
     </div>
   );
 }
-
-/** The page's column: 1240px with a 24px gutter, as every section uses. */
-export const CONTAINER = "mx-auto w-full max-w-[1240px] px-6";

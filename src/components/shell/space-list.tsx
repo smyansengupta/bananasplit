@@ -41,7 +41,7 @@ export function SpaceList({
 
   return (
     <div aria-busy={pending || undefined} className="flex flex-col gap-0.5">
-      <GroupLabel label="Personal & clubs" />
+      <GroupLabel label="Personal & orgs" />
       <ul className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
         {spaces.map((org) => {
           const current = org.slug === activeSlug;
@@ -97,7 +97,7 @@ export function SpaceList({
               className={cn(row, tone.text, tone.hover)}
             >
               <KeyRound className="size-4 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
-              Join a club
+              Join an organization
             </Link>
           </li>
         )}

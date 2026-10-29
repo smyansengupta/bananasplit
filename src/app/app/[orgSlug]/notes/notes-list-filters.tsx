@@ -37,7 +37,7 @@ const AUDIENCES = [
   ["all", "Anyone"],
   ["PRIVATE", "Private"],
   ["SHARED", "Shared with me"],
-  ["ORGANIZATION", "Everyone in the club"],
+  ["ORGANIZATION", "Everyone in the organization"],
 ] as const;
 
 /**

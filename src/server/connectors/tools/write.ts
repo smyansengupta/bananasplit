@@ -25,8 +25,7 @@ import { loadToolSpace, type SpaceOptions, type ToolSpace } from "./space";
  *                          (WriteLimitError); counted before the space opens,
  *                          so a refused write still counts, as every limit does
  *   withConnectorOrgTx     the grant's scope, membership, the club switch and
- *                          the tool's plan feature, with whenPaused "refuse":
- *                          a paused club reads but doesn't change
+ *                          the tool's plan feature
  *   the section            hidden from members, as for reads (owners and
  *                          admins still reach it)
  *   the write              the app's own service, in the same transaction
@@ -117,7 +116,7 @@ export async function writeInSpace<T>(
     session.connector,
     session.grant,
     spaceId,
-    { feature: options.feature, whenPaused: "refuse" },
+    { feature: options.feature },
     async (ctx) => {
       const space = await loadToolSpace(ctx);
       if (options.section) space.requireSection(options.section);

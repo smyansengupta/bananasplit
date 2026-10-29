@@ -65,6 +65,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
+import { TAG_COLOR_NAMES, TAG_COLORS, tagColorOf } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 
 import { FolderCard, folderTone, type FolderCardPeek } from "./folder-card";
@@ -72,7 +73,8 @@ import { FolderCard, folderTone, type FolderCardPeek } from "./folder-card";
 const NOTE_MIME = "application/x-bananasplit-note";
 const FILE_MIME = "application/x-bananasplit-file";
 
-const COLORS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"] as const;
+/** The folder palette, the same one event kinds and epics use. */
+const COLORS = TAG_COLORS;
 
 /** A tile's preview: the first line with words in it. */
 function firstLine(text: string) {
@@ -485,7 +487,7 @@ export function NotesLibrary({
                   {n.sharedWithMe
                     ? "Shared with you"
                     : n.memberCanEdit
-                      ? "Club can edit"
+                      ? "Org can edit"
                       : `Shared with ${n.shareCount}`}
                 </span>
               )}
@@ -759,7 +761,7 @@ export function NotesLibrary({
             title={
               personal
                 ? undefined
-                : "Folders are shared with the club; private notes stay private inside them."
+                : "Folders are shared with the organization; private notes stay private inside them."
             }
           >
             Folders
@@ -838,16 +840,16 @@ export function NotesLibrary({
                               key={c ?? "none"}
                               type="button"
                               aria-label={
-                                c ? `Colour ${c.replace("chart-", "")}` : "Match the theme"
+                                c ? TAG_COLOR_NAMES[c] : "Match the theme"
                               }
-                              aria-pressed={f.color === c}
+                              aria-pressed={tagColorOf(f.color) === c}
                               onClick={() =>
                                 run(() => updateFolderAction(orgId, f.id, { color: c }))
                               }
                               className="grid size-5 place-items-center rounded-md border"
                               style={{ background: folderTone(c) }}
                             >
-                              {f.color === c && (
+                              {tagColorOf(f.color) === c && (
                                 <Check className="text-background size-3" aria-hidden="true" />
                               )}
                             </button>

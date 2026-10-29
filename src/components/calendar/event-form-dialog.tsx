@@ -523,7 +523,7 @@ function EventForm({
             <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
               Public events are world-readable: the title, description, location and RSVP link
-              appear on the club website, the public events feed and the public Google Calendar.
+              appear on your website, the public events feed and the public Google Calendar.
               Attendees and meeting links never do.
             </span>
           </p>
@@ -741,7 +741,6 @@ function EventForm({
                 </div>
               </fieldset>
             )}
-
 
             <div className="grid gap-1.5">
               <Label htmlFor="event-description">Description</Label>

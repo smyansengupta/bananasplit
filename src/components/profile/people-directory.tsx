@@ -28,9 +28,20 @@ import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { personHref } from "@/lib/profile/href";
 import { cn } from "@/lib/utils";
-import type { DirectoryPerson, DirectoryTeam, PeopleSearchResult, PersonSheet } from "@/server/profiles/directory";
+import type {
+  DirectoryPerson,
+  DirectoryTeam,
+  PeopleSearchResult,
+  PersonSheet,
+} from "@/server/profiles/directory";
 
-import { applyFilters, groupPeople, localMatch, teamName, type PeopleGroup } from "./directory-model";
+import {
+  applyFilters,
+  groupPeople,
+  localMatch,
+  teamName,
+  type PeopleGroup,
+} from "./directory-model";
 import {
   DIRECTORY_ROLES,
   directorySearch,
@@ -104,7 +115,10 @@ export function PeopleDirectory({
 
   const teamsByKey = useMemo(() => new Map(teams.map((t) => [t.key, t])), [teams]);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
-  const roles = useMemo(() => DIRECTORY_ROLES.filter((r) => people.some((p) => p.role === r)), [people]);
+  const roles = useMemo(
+    () => DIRECTORY_ROLES.filter((r) => people.some((p) => p.role === r)),
+    [people],
+  );
   const years = useMemo(
     () => [...new Set(people.map((p) => p.gradYear).filter((y): y is number => y !== null))].sort(),
     [people],
@@ -120,7 +134,8 @@ export function PeopleDirectory({
   useEffect(() => {
     const qs = directorySearch(query);
     const next = qs ? `${pathname}?${qs}` : pathname;
-    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", next);
+    if (next !== `${window.location.pathname}${window.location.search}`)
+      window.history.replaceState(null, "", next);
   }, [query, pathname]);
 
   // Server search: one request per pause, only the newest answer kept.
@@ -134,7 +149,11 @@ export function PeopleDirectory({
           if (latest.current === term) setResults({ q: term, result });
         })
         .catch(() => {
-          if (latest.current === term) setResults({ q: term, result: { ids: localMatch(people, term, teamsByKey).map((p) => p.id), close: false } });
+          if (latest.current === term)
+            setResults({
+              q: term,
+              result: { ids: localMatch(people, term, teamsByKey).map((p) => p.id), close: false },
+            });
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
@@ -143,7 +162,8 @@ export function PeopleDirectory({
   const answered = term && results?.q === term ? results.result : null;
   const matched = useMemo(() => {
     if (!term) return people;
-    if (answered) return answered.ids.map((id) => byId.get(id)).filter((p): p is DirectoryPerson => Boolean(p));
+    if (answered)
+      return answered.ids.map((id) => byId.get(id)).filter((p): p is DirectoryPerson => Boolean(p));
     return localMatch(people, term, teamsByKey);
   }, [term, answered, people, byId, teamsByKey]);
   const filtered = useMemo(() => applyFilters(matched, query), [matched, query]);
@@ -156,7 +176,11 @@ export function PeopleDirectory({
   );
   const ordered = useMemo(() => groups.flatMap((g) => g.people), [groups]);
   const rows = useMemo<Row[]>(
-    () => groups.flatMap((g) => [{ kind: "header" as const, group: g }, ...g.people.map((p) => ({ kind: "person" as const, person: p }))]),
+    () =>
+      groups.flatMap((g) => [
+        { kind: "header" as const, group: g },
+        ...g.people.map((p) => ({ kind: "person" as const, person: p })),
+      ]),
     [groups],
   );
   const visibleRows = rows.slice(0, limit);
@@ -166,9 +190,12 @@ export function PeopleDirectory({
   useEffect(() => {
     const el = sentinel.current;
     if (!el || limit >= rows.length || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + RENDER_STEP);
-    }, { rootMargin: "600px" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setLimit((n) => n + RENDER_STEP);
+      },
+      { rootMargin: "600px" },
+    );
     observer.observe(el);
     return () => observer.disconnect();
   }, [limit, rows.length]);
@@ -184,14 +211,18 @@ export function PeopleDirectory({
       .then((data) => {
         if (!live) return;
         if (!data) {
-          toast({ title: "That person isn't a member of this club anymore.", tone: "error" });
+          toast({
+            title: "That person isn't a member of this organization anymore.",
+            tone: "error",
+          });
           update({ person: null });
           return;
         }
         setSheets((m) => new Map(m).set(data.id, data));
       })
       .catch(() => {
-        if (live) toast({ title: "Couldn't load that profile. Check your connection.", tone: "error" });
+        if (live)
+          toast({ title: "Couldn't load that profile. Check your connection.", tone: "error" });
       });
     return () => {
       live = false;
@@ -200,7 +231,9 @@ export function PeopleDirectory({
 
   const focusCard = useCallback((id: string) => {
     requestAnimationFrame(() => {
-      const el = listRef.current?.querySelector<HTMLElement>(`[data-person-id="${CSS.escape(id)}"]`);
+      const el = listRef.current?.querySelector<HTMLElement>(
+        `[data-person-id="${CSS.escape(id)}"]`,
+      );
       el?.focus({ preventScroll: false });
       el?.scrollIntoView({ block: "nearest" });
     });
@@ -263,7 +296,11 @@ export function PeopleDirectory({
     const index = rows.findIndex((r) => r.kind === "header" && r.group.label === letter);
     if (index < 0) return;
     if (index >= limit) setLimit(index + RENDER_STEP);
-    requestAnimationFrame(() => document.getElementById(`people-letter-${letter}`)?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`people-letter-${letter}`)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
   };
 
   const profile = sheet ? (
@@ -351,7 +388,11 @@ export function PeopleDirectory({
             onPick={(v) => update({ free: v === "free" })}
             options={[
               { value: "", label: "Anyone" },
-              { value: "free", label: `Free now${freeCount > 0 ? ` (${freeCount})` : ""}`, color: "var(--success)" },
+              {
+                value: "free",
+                label: `Free now${freeCount > 0 ? ` (${freeCount})` : ""}`,
+                color: "var(--success)",
+              },
             ]}
           />
           {teams.length > 0 && (
@@ -361,8 +402,14 @@ export function PeopleDirectory({
               onPick={(v) => update({ team: v || null })}
               options={[
                 { value: "", label: "All teams" },
-                ...teams.map((t) => ({ value: t.key, label: t.name, color: `var(--chart-${((t.slot - 1) % 5) + 1})` })),
-                ...(people.some((p) => !p.teamKey) ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }] : []),
+                ...teams.map((t) => ({
+                  value: t.key,
+                  label: t.name,
+                  color: `var(--chart-${((t.slot - 1) % 5) + 1})`,
+                })),
+                ...(people.some((p) => !p.teamKey)
+                  ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }]
+                  : []),
               ]}
             />
           )}
@@ -371,7 +418,10 @@ export function PeopleDirectory({
               title="Role"
               value={query.role ?? ""}
               onPick={(v) => update({ role: (v || null) as DirectoryRole | null })}
-              options={[{ value: "", label: "All roles" }, ...roles.map((r) => ({ value: r, label: ROLE_LABELS[r] }))]}
+              options={[
+                { value: "", label: "All roles" },
+                ...roles.map((r) => ({ value: r, label: ROLE_LABELS[r] })),
+              ]}
             />
           )}
           {years.length > 0 && (
@@ -379,10 +429,12 @@ export function PeopleDirectory({
               title="Year"
               value={query.year ? String(query.year) : ""}
               onPick={(v) => update({ year: v ? Number(v) : null })}
-              options={[{ value: "", label: "All years" }, ...years.map((y) => ({ value: String(y), label: `Class of ${y}` }))]}
+              options={[
+                { value: "", label: "All years" },
+                ...years.map((y) => ({ value: String(y), label: `Class of ${y}` })),
+              ]}
             />
           )}
-
         </FilterSheet>
 
         <div className="flex flex-wrap items-center gap-2 max-md:hidden">
@@ -409,7 +461,11 @@ export function PeopleDirectory({
           {layoutSwitch}
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 max-md:hidden" role="group" aria-label="Filters">
+        <div
+          className="mt-3 flex flex-wrap items-center gap-2 max-md:hidden"
+          role="group"
+          aria-label="Filters"
+        >
           <button
             type="button"
             aria-pressed={query.free}
@@ -417,18 +473,33 @@ export function PeopleDirectory({
             className={chipClass(query.free)}
             title="Free now, from the busy times members share"
           >
-            <span aria-hidden="true" className="bg-success size-2 rounded-full shadow-[0_0_0_3px_color-mix(in_oklab,var(--success)_24%,transparent)]" />
+            <span
+              aria-hidden="true"
+              className="bg-success size-2 rounded-full shadow-[0_0_0_3px_color-mix(in_oklab,var(--success)_24%,transparent)]"
+            />
             Free now{freeCount > 0 && <span className="figure opacity-70">{freeCount}</span>}
           </button>
           {teams.length > 0 && (
             <FilterMenu
               label="Team"
               value={query.team}
-              display={query.team === NO_TEAM_KEY ? "Not on the chart" : query.team ? teamsByKey.get(query.team)?.name : null}
+              display={
+                query.team === NO_TEAM_KEY
+                  ? "Not on the chart"
+                  : query.team
+                    ? teamsByKey.get(query.team)?.name
+                    : null
+              }
               allLabel="All teams"
               options={[
-                ...teams.map((t) => ({ value: t.key, label: t.name, color: `var(--chart-${((t.slot - 1) % 5) + 1})` })),
-                ...(people.some((p) => !p.teamKey) ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }] : []),
+                ...teams.map((t) => ({
+                  value: t.key,
+                  label: t.name,
+                  color: `var(--chart-${((t.slot - 1) % 5) + 1})`,
+                })),
+                ...(people.some((p) => !p.teamKey)
+                  ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }]
+                  : []),
               ]}
               onChange={(team) => update({ team })}
             />
@@ -454,12 +525,21 @@ export function PeopleDirectory({
             />
           )}
           {activeFilters && (
-            <Button type="button" variant="ghost" size="sm" onClick={() => update({ team: null, role: null, year: null, free: false })}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => update({ team: null, role: null, year: null, free: false })}
+            >
               <X aria-hidden="true" />
               Clear filters
             </Button>
           )}
-          <span className="text-muted-foreground ml-auto text-[13px]" role="status" aria-live="polite">
+          <span
+            className="text-muted-foreground ml-auto text-[13px]"
+            role="status"
+            aria-live="polite"
+          >
             {countText}
             {close && " · close matches"}
           </span>
@@ -475,7 +555,14 @@ export function PeopleDirectory({
                 title="No one matches that"
                 description="Try a first name, a team or a year."
                 action={
-                  <Button type="button" variant="outline" size="sm" onClick={() => update({ q: "", team: null, role: null, year: null, free: false })}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      update({ q: "", team: null, role: null, year: null, free: false })
+                    }
+                  >
                     Clear search and filters
                   </Button>
                 }
@@ -493,14 +580,23 @@ export function PeopleDirectory({
             )}
             {limit < rows.length && (
               <div ref={sentinel} className="text-muted-foreground py-6 text-center text-sm">
-                <Button type="button" variant="outline" size="sm" onClick={() => setLimit((n) => n + RENDER_STEP)}>
-                  Show more ({ordered.length - visibleRows.filter((r) => r.kind === "person").length} left)
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLimit((n) => n + RENDER_STEP)}
+                >
+                  Show more (
+                  {ordered.length - visibleRows.filter((r) => r.kind === "person").length} left)
                 </Button>
               </div>
             )}
           </div>
           {letters.length > 4 && (
-            <nav aria-label="Jump to a letter" className="sticky top-4 hidden max-h-[70vh] flex-col self-start overflow-y-auto sm:flex">
+            <nav
+              aria-label="Jump to a letter"
+              className="sticky top-4 hidden max-h-[70vh] flex-col self-start overflow-y-auto sm:flex"
+            >
               {letters.map((l) => (
                 <button
                   key={l}
@@ -543,7 +639,10 @@ export function PeopleDirectory({
       )}
 
       {!isDesktop && (
-        <Sheet open={Boolean(selectedId)} onOpenChange={(open) => !open && update({ person: null })}>
+        <Sheet
+          open={Boolean(selectedId)}
+          onOpenChange={(open) => !open && update({ person: null })}
+        >
           <SheetContent
             side="bottom"
             data-person-sheet
@@ -591,15 +690,29 @@ function PeopleRows({
             id={`people-${group.key}`}
             className="text-muted-foreground mt-5 mb-2.5 flex scroll-mt-4 items-center gap-2 text-[13px] font-semibold first:mt-3"
           >
-            {group.color && <span aria-hidden="true" className="size-2 rounded-full" style={{ background: group.color }} />}
+            {group.color && (
+              <span
+                aria-hidden="true"
+                className="size-2 rounded-full"
+                style={{ background: group.color }}
+              />
+            )}
             <span>{group.label}</span>
-            <span className="bg-secondary text-muted-foreground rounded-full px-2 text-xs leading-5">{group.people.length}</span>
+            <span className="bg-secondary text-muted-foreground rounded-full px-2 text-xs leading-5">
+              {group.people.length}
+            </span>
           </h2>
           {view === "grid" ? (
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
               {people.map((p) => (
                 <li key={p.id} className="min-w-0">
-                  <PersonCard person={p} team={hideNoTeam ? "" : teamName(p, teamsByKey)} selected={p.id === selectedId} isSelf={p.id === viewerId} onSelect={onSelect} />
+                  <PersonCard
+                    person={p}
+                    team={hideNoTeam ? "" : teamName(p, teamsByKey)}
+                    selected={p.id === selectedId}
+                    isSelf={p.id === viewerId}
+                    onSelect={onSelect}
+                  />
                 </li>
               ))}
             </ul>
@@ -607,7 +720,13 @@ function PeopleRows({
             <ul className="divide-border/70 flex flex-col divide-y">
               {people.map((p) => (
                 <li key={p.id}>
-                  <PersonRow person={p} team={p.teamKey ? teamsByKey.get(p.teamKey) : undefined} selected={p.id === selectedId} isSelf={p.id === viewerId} onSelect={onSelect} />
+                  <PersonRow
+                    person={p}
+                    team={p.teamKey ? teamsByKey.get(p.teamKey) : undefined}
+                    selected={p.id === selectedId}
+                    isSelf={p.id === viewerId}
+                    onSelect={onSelect}
+                  />
                 </li>
               ))}
             </ul>
@@ -625,7 +744,10 @@ function Presence({ person, size }: { person: DirectoryPerson; size: "lg" | "md"
       {person.freeNow && (
         <span
           aria-hidden="true"
-          className={cn("bg-success ring-card absolute right-0 bottom-0 rounded-full ring-2", size === "lg" ? "size-3" : "size-2.5")}
+          className={cn(
+            "bg-success ring-card absolute right-0 bottom-0 rounded-full ring-2",
+            size === "lg" ? "size-3" : "size-2.5",
+          )}
         />
       )}
     </span>
@@ -653,7 +775,7 @@ function PersonCard({
       aria-pressed={selected}
       onClick={() => onSelect(person.id)}
       className={cn(
-        "bg-card text-card-foreground border-foreground/8 rounded-tile focus-glow flex w-full min-w-0 items-center gap-3 border p-3.5 text-left transition duration-200 ease-(--ease-ink) outline-none hover:-translate-y-px hover:shadow-e1 motion-reduce:transform-none",
+        "bg-card text-card-foreground border-foreground/8 rounded-tile focus-glow hover:shadow-e1 flex w-full min-w-0 items-center gap-3 border p-3.5 text-left transition duration-200 ease-(--ease-ink) outline-none hover:-translate-y-px motion-reduce:transform-none",
         selected && "ring-brand-accent shadow-e1 ring-2",
       )}
     >
@@ -700,15 +822,25 @@ function PersonRow({
       <Presence person={person} size="md" />
       <span className="min-w-0 truncate font-semibold">
         {name}
-        {person.pronouns && <span className="text-muted-foreground ml-1.5 text-xs font-normal">{person.pronouns}</span>}
+        {person.pronouns && (
+          <span className="text-muted-foreground ml-1.5 text-xs font-normal">
+            {person.pronouns}
+          </span>
+        )}
         {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
       </span>
       <span className="text-muted-foreground min-w-0 truncate">{person.title ?? "No title"}</span>
       <span className="hidden min-w-0 md:block">
-        {team ? <TagChip color={`var(--chart-${((team.slot - 1) % 5) + 1})`}>{team.name}</TagChip> : <span className="text-muted-foreground">Not on the chart</span>}
+        {team ? (
+          <TagChip color={`var(--chart-${((team.slot - 1) % 5) + 1})`}>{team.name}</TagChip>
+        ) : (
+          <span className="text-muted-foreground">Not on the chart</span>
+        )}
       </span>
       <span className="text-muted-foreground hidden md:block">{ROLE_LABELS[person.role]}</span>
-      <span className="text-muted-foreground figure hidden truncate md:block">{person.gradYear ? `Class of ${person.gradYear}` : ""}</span>
+      <span className="text-muted-foreground figure hidden truncate md:block">
+        {person.gradYear ? `Class of ${person.gradYear}` : ""}
+      </span>
     </button>
   );
 }
@@ -741,7 +873,13 @@ function FilterMenu({
           <DropdownMenuRadioItem value="">{allLabel}</DropdownMenuRadioItem>
           {options.map((o) => (
             <DropdownMenuRadioItem key={o.value} value={o.value}>
-              {o.color && <span aria-hidden="true" className="size-2 rounded-full" style={{ background: o.color }} />}
+              {o.color && (
+                <span
+                  aria-hidden="true"
+                  className="size-2 rounded-full"
+                  style={{ background: o.color }}
+                />
+              )}
               {o.label}
             </DropdownMenuRadioItem>
           ))}

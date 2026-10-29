@@ -80,7 +80,7 @@ export function ConnectionPicker({
           >
             Admin panel › Integrations
           </Link>
-          . The club&apos;s own key pays for it.
+          . The organization&apos;s own key pays for it.
         </p>
       </div>
     );

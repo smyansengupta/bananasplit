@@ -405,12 +405,12 @@ describe("Bring anything in? against the local database", () => {
     expect(b!.files.map((f) => f.id).sort()).toEqual([up.tripFile, up.loose].sort());
   });
 
-  it("lists only the clubs the user owns or runs", async () => {
+  it("lists only the organizations the user owns or runs", async () => {
     if (!reachable) return;
     expect((await clubsUserRuns(maya.id)).map((c) => c.id)).toEqual([clubId]);
   });
 
-  it("refuses a club the user only belongs to, and someone else's Personal items", async () => {
+  it("refuses an organization the user only belongs to, and someone else's Personal items", async () => {
     if (!reachable) return;
     const asMember = await movePersonalItems(maya.id, otherClubId, { eventIds: [ids.rsvpEvent] });
     expect(asMember).toMatchObject({ ok: false });
@@ -423,7 +423,7 @@ describe("Bring anything in? against the local database", () => {
     expect(still?.organizationId).toBe(spaceId);
   });
 
-  it("moves the picked items into the club, and every link still resolves there", async () => {
+  it("moves the picked items into the organization, and every link still resolves there", async () => {
     if (!reachable) return;
     const result = await movePersonalItems(maya.id, clubId, {
       eventIds: [ids.rsvpEvent],
@@ -495,7 +495,7 @@ describe("Bring anything in? against the local database", () => {
     expect(again).toMatchObject({ ok: false });
   });
 
-  it("moves a folder and a note with what comes along, copying the uploads into the club", async () => {
+  it("moves a folder and a note with what comes along, copying the uploads into the organization", async () => {
     if (!reachable) return;
     const files = await ownerDb.orgFile.findMany({
       where: { id: { in: [up.image, up.tripFile] } },
@@ -596,7 +596,7 @@ describe("Bring anything in? against the local database", () => {
     expect(b!.files.map((f) => f.id)).toEqual([up.loose]);
   });
 
-  it("refuses uploads the club has no room for, and moves nothing", async () => {
+  it("refuses uploads the organization has no room for, and moves nothing", async () => {
     if (!reachable) return;
     const size = (await ownerDb.orgFile.findUniqueOrThrow({ where: { id: up.loose } })).sizeBytes;
     // Fill the club to its last few bytes (the counter is the database's; the owner may set it).

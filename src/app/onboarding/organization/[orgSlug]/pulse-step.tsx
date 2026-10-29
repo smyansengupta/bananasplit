@@ -55,7 +55,9 @@ export function PulseStep({
     });
   }
 
-  const channels = [value.pulseInApp && "in the app", value.pulseEmail && "by email"].filter(Boolean);
+  const channels = [value.pulseInApp && "in the app", value.pulseEmail && "by email"].filter(
+    Boolean,
+  );
 
   return (
     <SetupCard
@@ -63,7 +65,9 @@ export function PulseStep({
         <>
           <PreviewHeader meta={describePulseSchedule(value)} />
           <PreviewTile className="gap-3">
-            <span className="text-muted-foreground text-[12px] font-medium">Weekly pulse · {clubName}</span>
+            <span className="text-muted-foreground text-[12px] font-medium">
+              Weekly pulse · {clubName}
+            </span>
             <span className="display-title text-[20px]">Week of Oct 3 to Oct 9</span>
             <span className="text-muted-foreground text-[12px]">
               9 things done · 32 at the General meeting · 4 new members
@@ -81,13 +85,15 @@ export function PulseStep({
             ))}
           </PreviewTile>
           <p className="text-muted-foreground m-0 text-[12px]">
-            {channels.length > 0 ? `Sent ${channels.join(" and ")}.` : "Turn on at least one way to send it."}
+            {channels.length > 0
+              ? `Sent ${channels.join(" and ")}.`
+              : "Turn on at least one way to send it."}
           </p>
         </>
       }
     >
       <StepIntro index={index} total={total} title="When should the weekly pulse go out?">
-        A short recap of what the club got done. You can change this later in Settings.
+        A short recap of what the organization got done. You can change this later in Settings.
       </StepIntro>
       <StepBody className="gap-6">
         <PulseFields value={value} onChange={setValue} disabled={pending} />

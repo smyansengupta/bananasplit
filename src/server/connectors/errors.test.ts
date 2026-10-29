@@ -30,20 +30,22 @@ describe("toolError", () => {
     );
   });
 
-  it("names the club for a role that can't do it", () => {
+  it("names the organization for a role that can't do it", () => {
     expect(toolErrorMessage(new ForbiddenError(), { clubName: "Robotics Club" })).toBe(
       "Your role in Robotics Club can't do that.",
     );
-    expect(toolErrorMessage(new ForbiddenError())).toBe("Your role in this club can't do that.");
+    expect(toolErrorMessage(new ForbiddenError())).toBe(
+      "Your role in this organization can't do that.",
+    );
   });
 
   it("passes on what a space refusal and a connector refusal say", () => {
-    const paused = new SpaceRefusedError({
+    const refused = new SpaceRefusedError({
       ok: false,
-      error: "This club is paused.",
-      refused: "paused",
+      error: "Reports aren't included in this organization's plan.",
+      refused: "feature",
     });
-    expect(toolErrorMessage(paused)).toBe("This club is paused.");
+    expect(toolErrorMessage(refused)).toBe("Reports aren't included in this organization's plan.");
     expect(toolErrorMessage(new ConnectorRefusedError("switch", "Robotics Club"))).toMatch(
       /^Robotics Club has turned off AI apps\./,
     );

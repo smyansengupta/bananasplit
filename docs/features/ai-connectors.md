@@ -692,9 +692,10 @@ Built as the table above says, with these decisions on the way:
      space. It is counted before the space opens, so a refused write
      counts too, as with every limit, and it fails open like them
      (`WriteLimitError`).
-  3. `withConnectorOrgTx` runs with `whenPaused: "refuse"`, which covers
-     the grant's scope, membership, the club switch and the tool's plan
-     feature.
+  3. `withConnectorOrgTx` covers the grant's scope, membership, the club
+     switch and the tool's plan feature. It first ran with `whenPaused:
+     "refuse"`, but the homepage redesign (#72) removed pausing: a trial
+     now ends on Team Free. So no space is refused as paused any more.
   4. A section the club hid is refused to members, as for reads
      (`SectionHiddenError`). Owners and admins still write there.
   5. The write runs, and then the `connector.<tool>` audit row, in the same
@@ -829,8 +830,9 @@ Built as the table above says, with these decisions on the way:
   are in.
 - Every write tool has DB tests, in `src/server/connectors/tools/`:
   - `write.db.test.ts` runs all nine through each refusal: a READ grant, a
-    paused club, a club the member isn't in, a grant scoped elsewhere, the
-    club switch and a hidden section. It then checks that nothing was left
+    club the member isn't in, a grant scoped elsewhere, the club switch
+    and a hidden section. (Its paused-club case went with pausing, in
+    #72.) It then checks that nothing was left
     behind and that no audit row was written.
   - It also covers an owner writing in a hidden section, the audit row's
     shape, and the real limiter refusing write 121 while another grant

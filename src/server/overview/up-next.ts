@@ -1,4 +1,4 @@
-import type { RSVPStatus } from "@/generated/prisma/client";
+import type { EventKind, RSVPStatus } from "@/generated/prisma/client";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { dayWordOfKey, dueLabel, whenWord } from "@/lib/overview/format";
 import { arrangeUpNext, taskTone, type UpNextCandidate } from "@/lib/overview/up-next";
@@ -16,6 +16,8 @@ import type { EventGoing, PersonFace, PollStat, TaskExtras } from "./queries";
  */
 
 export interface UpNextBlock extends UpNextCandidate {
+  /** The event's kind, so its card can take that kind's colour. */
+  eventKind?: EventKind | null;
   kicker: string;
   title: string;
   subtitle: string | null;
@@ -93,6 +95,7 @@ export function buildUpNext(input: {
         id: event.id,
         kind: waiting ? "rsvp" : kind,
         tone: waiting ? "answer" : "quiet",
+        eventKind: event.kind,
         at: event.startsAt,
         kicker: waiting ? `Your RSVP · ${when}` : when,
         title: event.title,

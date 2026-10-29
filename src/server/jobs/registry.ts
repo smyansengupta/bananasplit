@@ -205,7 +205,7 @@ export const JOB_KINDS = {
     sendsEmail: true,
     handler: () => import("@/server/tasks/jobs").then((m) => m.weeklyUpdateReminderJob),
     description:
-      "18:00 local reminder, on the club's weekly update day, to a lead who hasn't posted the week's update (once=true), enqueued by /api/cron/task-digest.",
+      "18:00 local reminder, on the organization's weekly update day, to a lead who hasn't posted the week's update (once=true), enqueued by /api/cron/task-digest.",
   }),
 
   // ---- The weekly pulse (src/server/pulse) ----
@@ -218,7 +218,7 @@ export const JOB_KINDS = {
     afterEligible: false,
     handler: () => import("@/server/pulse/jobs").then((m) => m.weeklyPulseJob),
     description:
-      "The club's weekly pulse at OrgSettings.pulseDay and pulseHourLocal (once=true per week): compiles and stores the PulseIssue, writes the Team Advanced summary, marks it sent, notifies in-app and queues pulse-email; enqueued by /api/cron/task-digest.",
+      "The organization's weekly pulse at OrgSettings.pulseDay and pulseHourLocal (once=true per week): compiles and stores the PulseIssue, writes the Team Advanced summary, marks it sent, notifies in-app and queues pulse-email; enqueued by /api/cron/task-digest.",
   }),
   "pulse-email": kind({
     payload: z.object({ issueId: id, userId: id }).strict(),

@@ -89,14 +89,22 @@ export function unfinishedProfileSteps(profile: {
 // Connecting tools comes after inviting officers: it's optional, and a new
 // club's first minutes are better spent on its own setup and its people.
 // The weekly pulse is picked right after Teams (redesign guide 15.2).
-export const ORG_STEPS = ["labels", "finance", "teams", "pulse", "invite", "data", "bring"] as const;
+export const ORG_STEPS = [
+  "labels",
+  "finance",
+  "teams",
+  "pulse",
+  "invite",
+  "data",
+  "bring",
+] as const;
 export type OrgStep = (typeof ORG_STEPS)[number];
 /** Eight steps in the stepper: B1 plus these seven. */
 export const ORG_STEP_COUNT = ORG_STEPS.length + 1;
 
 /** The stepper's names, in order. */
 export const ORG_STEP_NAMES = [
-  "Club basics",
+  "Organization basics",
   "Tags",
   "Finance",
   "Teams",

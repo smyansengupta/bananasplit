@@ -107,14 +107,14 @@ export function storageState(space: StorageSpace): StorageState {
 }
 
 /** Why an upload is refused: the space, the file's size, or the space's room. */
-export type UploadRefusalReason = "feature" | "paused" | "too-large" | "full";
+export type UploadRefusalReason = "feature" | "too-large" | "full";
 
 export interface UploadRefusal {
   /** The HTTP status the routes answer with (always a 4xx). */
   status: 403 | 413;
   /** A sentence for the person, with the numbers. */
   error: string;
-  code: "SPACE_FEATURE" | "SPACE_PAUSED" | "FILE_TOO_LARGE" | "STORAGE_FULL";
+  code: "SPACE_FEATURE" | "FILE_TOO_LARGE" | "STORAGE_FULL";
   refused: UploadRefusalReason;
   sizeBytes: number;
   usedBytes: number;
@@ -137,7 +137,7 @@ export interface UploadCheckOptions {
 
 /**
  * Whether an upload of `sizeBytes` may start: the space includes the
- * feature and isn't paused (spaceRefusal, the same gate as actions), the
+ * feature (spaceRefusal, the same gate as actions), the
  * file is within the plan's largest file (and the route's cap), and it
  * fits: used + size ≤ the plan's storage. The trash counts until it is
  * emptied, so emptying it is one way to make room.
@@ -160,7 +160,7 @@ export function uploadRefusal(
       ...base,
       status: 403,
       error: refusal.error,
-      code: refusal.refused === "paused" ? "SPACE_PAUSED" : "SPACE_FEATURE",
+      code: "SPACE_FEATURE",
       refused: refusal.refused,
     };
   }
@@ -178,7 +178,13 @@ export function uploadRefusal(
     };
   }
   if (state.usedBytes + sizeBytes > state.limitBytes) {
-    return { ...base, status: 403, error: fullMessage(state, options), code: "STORAGE_FULL", refused: "full" };
+    return {
+      ...base,
+      status: 403,
+      error: fullMessage(state, options),
+      code: "STORAGE_FULL",
+      refused: "full",
+    };
   }
   return null;
 }
@@ -191,7 +197,11 @@ function fullMessage(state: StorageState, options: UploadCheckOptions): string {
 }
 
 /** The refusal for a space found over its limit after the file's row was written (a race lost). */
-export function fullRefusal(space: StorageSpace, sizeBytes: number, canManagePlan = true): UploadRefusal {
+export function fullRefusal(
+  space: StorageSpace,
+  sizeBytes: number,
+  canManagePlan = true,
+): UploadRefusal {
   const state = storageState(space);
   return {
     status: 403,

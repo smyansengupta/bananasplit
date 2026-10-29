@@ -85,7 +85,7 @@ export function PrivacyForm({
     >
       <SettingsCard
         title="Members, contacts and the public feed"
-        description="What members can see of each other and of your website's contacts, and what the club publishes."
+        description="What members can see of each other and of your website's contacts, and what the organization publishes."
         status={status && <SettingsStatus status={status} />}
         footer={
           canEdit && (
@@ -307,13 +307,13 @@ export function ConnectorsSwitchForm({
   return (
     <SettingsCard
       title="AI connectors"
-      description="Members can use this club from AI apps they connect, such as Claude or ChatGPT. An app only ever sees what that member can see here."
+      description="Members can use this organization from AI apps they connect, such as Claude or ChatGPT. An app only ever sees what that member can see here."
       status={status && <SettingsStatus status={status} />}
     >
       <Row
         id="connectors-enabled"
         label="Allow AI apps"
-        help="Turning this off stops every member's AI apps from using the club right away. Nothing is disconnected, so turning it back on restores them."
+        help="Turning this off stops every member's AI apps from using the organization right away. Nothing is disconnected, so turning it back on restores them."
       >
         <Switch
           id="connectors-enabled"

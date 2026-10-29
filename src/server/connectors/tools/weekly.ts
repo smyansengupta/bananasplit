@@ -52,7 +52,7 @@ const weeklyItem = z.object({
   blockedReason: z.string().nullable(),
   role: z.enum(["owner", "collaborator"]).describe("Whether they own it or work on it."),
   partOf: z.string().nullable().describe("The epic or story it's part of."),
-  private: z.boolean().describe("Left out when the update is posted to the club."),
+  private: z.boolean().describe("Left out when the update is posted to the organization."),
   url: urlField,
 });
 
@@ -60,8 +60,8 @@ const output = z.object({
   space: spaceRef,
   member: personRef,
   weekStart: z.string().describe("The week's first day (yyyy-mm-dd)."),
-  weekEnd: z.string().describe("The week's last day, the club's update day."),
-  updateDay: z.string().describe("The weekday the club's updates are due."),
+  weekEnd: z.string().describe("The week's last day, the organization's update day."),
+  updateDay: z.string().describe("The weekday the organization's updates are due."),
   done: z.array(weeklyItem).describe("Finished during the week."),
   next: z.array(weeklyItem).describe("In progress, or due within a week."),
   blocked: z.array(weeklyItem),
@@ -143,7 +143,7 @@ export const registerWeeklyTools: ToolRegistrar = (server, session) => {
     {
       title: "Get a weekly summary",
       description:
-        "Gets one member's week in a club, as its weekly update drafts it: what they finished, what is next (in progress or due within a week) and what is blocked. Weeks end on the club's update day.",
+        "Gets one member's week in an organization, as its weekly update drafts it: what they finished, what is next (in progress or due within a week) and what is blocked. Weeks end on the organization's update day.",
       inputSchema: input,
       outputSchema: output,
       annotations: READ_ONLY,

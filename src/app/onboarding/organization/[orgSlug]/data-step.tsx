@@ -30,8 +30,16 @@ export interface DataConnection {
 }
 
 const STATUS: Record<SetupStepStatus, { text: string; chip: string; dot: string }> = {
-  connected: { text: "✓ Connected", chip: "bg-tint-success text-tint-success-foreground", dot: "bg-success" },
-  untested: { text: "Testing", chip: "bg-tint-accent text-tint-accent-foreground", dot: "bg-brand-accent" },
+  connected: {
+    text: "✓ Connected",
+    chip: "bg-tint-success text-tint-success-foreground",
+    dot: "bg-success",
+  },
+  untested: {
+    text: "Testing",
+    chip: "bg-tint-accent text-tint-accent-foreground",
+    dot: "bg-brand-accent",
+  },
   error: { text: "Not working", chip: "bg-destructive/10 text-destructive", dot: "bg-destructive" },
   needs_reauth: {
     text: "Reconnect",
@@ -108,10 +116,14 @@ export function DataStep({
         </>
       }
     >
-      <StepIntro index={index} total={total} title="Connect the tools your club already uses.">
-        Optional. Your club&apos;s data is stored in Bananasplit from day one, walled off so only
-        your club can see it. Connect something only if you already keep data elsewhere; each one is
-        tested first and keys are stored encrypted.
+      <StepIntro
+        index={index}
+        total={total}
+        title="Connect the tools your organization already uses."
+      >
+        Optional. Your organization&apos;s data is stored in Bananasplit from day one, walled off so
+        only your organization can see it. Connect something only if you already keep data
+        elsewhere; each one is tested first and keys are stored encrypted.
       </StepIntro>
 
       <StepBody>
@@ -122,7 +134,7 @@ export function DataStep({
             return (
               <li
                 key={c.id}
-                className="bg-card border-foreground/10 flex min-h-10 items-center gap-3 rounded-field border px-4 py-2.5"
+                className="bg-card border-foreground/10 rounded-field flex min-h-10 items-center gap-3 border px-4 py-2.5"
               >
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-2">

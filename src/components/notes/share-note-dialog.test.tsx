@@ -91,12 +91,14 @@ describe("ShareNoteDialog", () => {
     );
   });
 
-  it("sets what the rest of the club gets", async () => {
+  it("sets what the rest of the organization gets", async () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: /^Share/ }));
-    openSelect(screen.getByRole("combobox", { name: "Everyone else in the club" }));
+    openSelect(screen.getByRole("combobox", { name: "Everyone else in the organization" }));
     await act(async () => {
-      fireEvent.click(screen.getByRole("option", { name: "Everyone in the club can edit" }));
+      fireEvent.click(
+        screen.getByRole("option", { name: "Everyone in the organization can edit" }),
+      );
     });
     expect(actions.updateNoteAccess).toHaveBeenCalledWith("org_1", "note_1", "CLUB_EDIT");
   });
@@ -113,7 +115,8 @@ describe("ShareNoteDialog", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByRole("combobox", { name: "Add people" })).toBeNull();
     expect(
-      (within(dialog).getByLabelText("Everyone else in the club") as HTMLSelectElement).disabled,
+      (within(dialog).getByLabelText("Everyone else in the organization") as HTMLSelectElement)
+        .disabled,
     ).toBe(true);
     expect(within(dialog).getByRole("button", { name: "Remove me" })).toBeTruthy();
   });

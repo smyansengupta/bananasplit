@@ -376,7 +376,7 @@ export function TaskTable({
                   <p className="text-muted-foreground mt-1 text-sm">
                     {ws.filterCount > 0
                       ? "Remove one of the filters above to widen the search."
-                      : "The table lists every task in the club, 50 to a page."}
+                      : "The table lists every task in the organization, 50 to a page."}
                   </p>
                   <Button
                     size="sm"

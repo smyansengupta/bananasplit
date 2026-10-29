@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { PLAN_FEATURES, type PlanFeature } from "./features";
 import {
-  canWriteSpace,
   effectivePlan,
   featureRefusal,
-  isPaused,
   spaceIncludes,
   spaceLimits,
   spaceRefusal,
@@ -26,6 +24,7 @@ const trial = (endsInDays: number): SpaceInfo => ({
   plan: "TRIAL",
   trialEndsAt: new Date(NOW.getTime() + endsInDays * DAY),
 });
+const teamFree: SpaceInfo = { kind: "CLUB", plan: "TEAM_FREE", trialEndsAt: null };
 const club: SpaceInfo = { kind: "CLUB", plan: "CLUB", trialEndsAt: null };
 const society: SpaceInfo = { kind: "CLUB", plan: "SOCIETY", trialEndsAt: null };
 
@@ -78,20 +77,33 @@ describe("spaceIncludes", () => {
 
   it("gives a running trial everything (Society)", () => {
     for (const f of ALL) expect(spaceIncludes(trial(10), f, NOW)).toBe(true);
-    expect(effectivePlan(trial(10))).toBe("SOCIETY");
+    expect(effectivePlan(trial(10), NOW)).toBe("SOCIETY");
   });
 
-  it("keeps an ended trial readable but stops what runs on its own", () => {
+  it("moves an ended trial to Team Free: the basics stay, the paid features lock", () => {
     const ended = trial(-1);
-    for (const f of ["finance", "people", "databases", "sponsorships", "auditLog"] as const) {
+    expect(effectivePlan(ended, NOW)).toBe("TEAM_FREE");
+    for (const f of ["tasks", "files", "databases", "overview", "people", "labels"] as const) {
       expect(spaceIncludes(ended, f, NOW)).toBe(true);
     }
-    expect(spaceIncludes(ended, "ai", NOW)).toBe(false);
-    expect(spaceIncludes(ended, "websiteSync", NOW)).toBe(false);
+    for (const f of ["finance", "orgChart", "reports", "ai", "sponsorships", "auditLog"] as const) {
+      expect(spaceIncludes(ended, f, NOW)).toBe(false);
+    }
   });
 
-  it("follows a paid club's plan", () => {
+  it("gives Team Free the organization basics and nothing paid", () => {
+    for (const f of ["overview", "teamwork", "labels", "people", "sidebar", "privacy"] as const) {
+      expect(spaceIncludes(teamFree, f, NOW)).toBe(true);
+      expect(spaceIncludes(personal, f, NOW)).toBe(false);
+    }
+    for (const f of ["finance", "orgChart", "reports", "integrations", "themes"] as const) {
+      expect(spaceIncludes(teamFree, f, NOW)).toBe(false);
+    }
+  });
+
+  it("follows a paid organization's plan", () => {
     expect(spaceIncludes(club, "finance", NOW)).toBe(true);
+    expect(spaceIncludes(club, "orgChart", NOW)).toBe(true);
     expect(spaceIncludes(club, "teamwork", NOW)).toBe(true);
     expect(spaceIncludes(club, "themes", NOW)).toBe(false);
     for (const f of ALL) expect(spaceIncludes(society, f, NOW)).toBe(true);
@@ -103,20 +115,17 @@ describe("trials", () => {
     expect(trialEndsAtFrom(NOW).getTime() - NOW.getTime()).toBe(30 * DAY);
   });
 
-  it("is paused from the moment the trial ends, and only then", () => {
+  it("is on Free from the moment the trial ends, never paused", () => {
     expect(spaceStatus(trial(1), NOW)).toBe("trial");
-    expect(spaceStatus(trial(0), NOW)).toBe("paused");
-    expect(spaceStatus(trial(-5), NOW)).toBe("paused");
-    expect(isPaused(trial(-5), NOW)).toBe(true);
-    expect(canWriteSpace(trial(-5), NOW)).toBe(false);
-    expect(canWriteSpace(trial(5), NOW)).toBe(true);
+    expect(spaceStatus(trial(0), NOW)).toBe("free");
+    expect(spaceStatus(trial(-5), NOW)).toBe("free");
+    expect(spaceStatus(teamFree, NOW)).toBe("free");
   });
 
-  it("never pauses Personal or a paid club", () => {
+  it("reports Personal and paid organizations as such", () => {
     expect(spaceStatus(personal, NOW)).toBe("personal");
     expect(spaceStatus(club, NOW)).toBe("paid");
-    expect(canWriteSpace(personal, NOW)).toBe(true);
-    expect(canWriteSpace(society, NOW)).toBe(true);
+    expect(spaceStatus(society, NOW)).toBe("paid");
   });
 
   it("counts the days left, rounding up, and none once it ends", () => {
@@ -129,33 +138,37 @@ describe("trials", () => {
 });
 
 describe("spaceLimits", () => {
-  it("follows the plan, and gives a trial (running or paused) Team Advanced's", () => {
+  it("follows the plan: a running trial has Team Advanced's, an ended one Team Free's", () => {
     expect(spaceLimits(personal).storageBytes).toBe(1024 ** 3);
     expect(spaceLimits(plus).maxFileBytes).toBe(250 * 1024 ** 2);
     expect(spaceLimits(club).noteHistoryDays).toBe(90);
-    expect(spaceLimits(trial(5))).toEqual(spaceLimits(society));
-    expect(spaceLimits(trial(-5))).toEqual(spaceLimits(society));
+    expect(spaceLimits(trial(5), NOW)).toEqual(spaceLimits(society));
+    expect(spaceLimits(trial(-5), NOW)).toEqual(spaceLimits(teamFree));
+    expect(spaceLimits(teamFree).storageBytes).toBe(5 * 1024 ** 3);
+    // Without the trial's end, a trial counts as running.
+    expect(spaceLimits({ kind: "CLUB", plan: "TRIAL" })).toEqual(spaceLimits(society));
   });
 });
 
 describe("spaceRefusal for notes and files", () => {
-  it("lets Personal Free and Plus and every club in, and refuses writes in a paused club", () => {
-    for (const space of [personal, plus, club, society, trial(3)]) {
+  it("lets every space in, an ended trial included, and refuses what the plan lacks", () => {
+    for (const space of [personal, plus, teamFree, club, society, trial(3), trial(-1)]) {
       expect(spaceRefusal(space, { feature: "files" }, NOW)).toBeNull();
     }
-    expect(spaceRefusal(trial(-1), { feature: "files" }, NOW)?.refused).toBe("paused");
-    expect(spaceRefusal(trial(-1), { feature: "files", whenPaused: "allow" }, NOW)).toBeNull();
+    expect(spaceRefusal(trial(-1), { feature: "finance" }, NOW)?.refused).toBe("feature");
   });
 });
 
 describe("featureRefusal", () => {
-  it("points Personal at clubs and names a club's plan otherwise, never a price", () => {
+  it("points Personal at organizations and names an organization's plan otherwise, never a price", () => {
     expect(featureRefusal(personal, "finance")).toBe(
-      "Finance is for clubs. Start a club or join one to use it.",
+      "Finance is for organizations. Start an organization or join one to use it.",
     );
-    expect(featureRefusal(club, "themes")).toBe("Custom themes isn't on this club's plan.");
+    expect(featureRefusal(club, "themes")).toBe("Custom themes isn't on this organization's plan.");
     expect(featureRefusal(personal, "themes")).toBe("Custom themes comes with Personal Plus.");
-    expect(featureRefusal(club, "files")).toBe("Notes and files aren't on this club's plan.");
+    expect(featureRefusal(club, "files")).toBe(
+      "Notes and files aren't on this organization's plan.",
+    );
     expect(featureRefusal(club, "themes")).not.toMatch(/\$/);
   });
 });

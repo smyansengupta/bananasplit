@@ -42,7 +42,7 @@ export function SignUpForm({
             <>
               We sent a verification link to{" "}
               <span className="font-semibold">{state.checkEmail}</span>. Open it to verify your
-              address, then log in. You need a verified email to join or start a club.
+              address, then log in. You need a verified email to join or start an organization.
             </>
           }
         />
@@ -57,8 +57,8 @@ export function SignUpForm({
   return (
     <>
       <AuthTitle
-        title="Create your account."
-        description="Free forever for your own tasks, calendar, polls and event pages. Join clubs free."
+        title="Start your workspace."
+        description="Set up your organization in minutes and bring your team in with one invite code. Free for teams of any size."
       />
       {google}
       <form action={formAction} className="flex flex-col gap-[18px]">

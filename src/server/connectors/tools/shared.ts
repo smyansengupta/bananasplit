@@ -103,13 +103,13 @@ export const dayArg = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Write dates as yy
 export const spaceRef = z
   .object({
     id: z.string().describe("The space's id (list_spaces)."),
-    name: z.string().describe('The club\'s name, or "Personal".'),
+    name: z.string().describe('The organization\'s name, or "Personal".'),
   })
   .describe("The space it's in.");
 
 export const personRef = z.object({
   id: z.string().describe("The member's id, for list_tasks' assignee and fetch."),
-  name: z.string().describe("Their name as the club shows it."),
+  name: z.string().describe("Their name as the organization shows it."),
 });
 
 export const nextCursor = z

@@ -69,7 +69,7 @@ beforeAll(async () => {
     rejectionReason: "No receipt",
     occurredAt: new Date("2026-09-20T00:00:00Z"),
   });
-  ids.clubCard = await expense(alice.id, `Paid with the club card ${tag}`, {
+  ids.clubCard = await expense(alice.id, `Paid with the organization card ${tag}`, {
     status: "NOT_APPLICABLE",
   });
   ids.deleted = await expense(alice.id, `Entered twice ${tag}`, {
@@ -136,7 +136,10 @@ describe("list_my_reimbursements", () => {
     await expect(listMyReimbursements(session, { space: personalId })).rejects.toBeInstanceOf(
       SpaceRefusedError,
     );
-    expect((await listMyReimbursements(session, { space: pausedId })).total).toBe(0);
+    // A trial that has ended is on Team Free, which has no Finance.
+    await expect(listMyReimbursements(session, { space: pausedId })).rejects.toBeInstanceOf(
+      SpaceRefusedError,
+    );
     await expect(listMyReimbursements(session, { space: other.id })).rejects.toBeInstanceOf(
       NotFoundError,
     );

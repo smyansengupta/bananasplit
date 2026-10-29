@@ -136,8 +136,8 @@ export async function listAiConnections(
     out.push({
       id: "claude",
       label: claudeModelLabel(claudeModelOf(claude)),
-      detail: "Your club's Claude key",
-      sentTo: "Anthropic (your club's account)",
+      detail: "Your organization's Claude key",
+      sentTo: "Anthropic (your organization's account)",
     });
   }
   if (usable(other)) {
@@ -147,8 +147,8 @@ export async function listAiConnections(
       out.push({
         id: "ai-model",
         label: `${vendor.label.replace(/ \(.*\)$/, "")} · ${picked.model}`,
-        detail: `Your club's ${vendor.label.replace(/ \(.*\)$/, "")} key`,
-        sentTo: `${vendor.label.replace(/ \(.*\)$/, "")} (your club's account)`,
+        detail: `Your organization's ${vendor.label.replace(/ \(.*\)$/, "")} key`,
+        sentTo: `${vendor.label.replace(/ \(.*\)$/, "")} (your organization's account)`,
       });
     }
   }

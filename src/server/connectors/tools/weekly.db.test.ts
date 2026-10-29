@@ -167,7 +167,7 @@ describe("get_weekly_summary", () => {
     });
   });
 
-  it("reads a paused club's week", async () => {
+  it("reads a paused organization's week", async () => {
     if (!fx) return;
     const week = await getWeeklySummaryTool(
       await fx.session(fx.alice),

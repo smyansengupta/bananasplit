@@ -22,7 +22,7 @@ export default async function ClaudeIntegrationPage({
         orgSlug={orgSlug}
         title="Claude API"
         dto={dto}
-        description="Optional. Your club's own Claude key powers the AI imports (a pasted list of action items into tasks, a calendar screenshot into events) and backs up the org chart importer for documents it can't read itself. Usage is billed to your Anthropic account."
+        description="Optional. Your organization's own Claude key powers the AI imports (a pasted list of action items into tasks, a calendar screenshot into events) and backs up the org chart importer for documents it can't read itself. Usage is billed to your Anthropic account."
       />
       <div className="space-y-4.5">
         <StatusPanel dto={dto} secretLabel="API key" />

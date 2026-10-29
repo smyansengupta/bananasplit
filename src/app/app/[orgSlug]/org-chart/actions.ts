@@ -111,13 +111,10 @@ export async function retryParseAction(organizationId: string, versionId: string
 }
 
 /** The side panel's open tasks for a member (any member may look). */
-const openTasksTx = peopleAction(
-  async (ctx, userId: string): Promise<OpenTasks> => {
-    requirePermission(ctx, "orgchart.view");
-    return getOpenTasks(ctx, id.parse(userId));
-  },
-  { whenPaused: "allow" },
-);
+const openTasksTx = peopleAction(async (ctx, userId: string): Promise<OpenTasks> => {
+  requirePermission(ctx, "orgchart.view");
+  return getOpenTasks(ctx, id.parse(userId));
+});
 export async function loadOpenTasksAction(organizationId: string, userId: string) {
   return openTasksTx(organizationId, userId);
 }

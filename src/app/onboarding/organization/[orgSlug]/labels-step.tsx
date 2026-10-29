@@ -158,10 +158,10 @@ export function LabelsStep({
         </>
       }
     >
-      <StepIntro index={index} total={total} title="How does your club sort its work?">
+      <StepIntro index={index} total={total} title="How does your organization sort its work?">
         {fresh
-          ? "Labels group your club's tasks. We suggested four to start. Keep, rename or add your own."
-          : "Labels group your club's tasks. Here are the ones you have. Keep, rename or add your own."}
+          ? "Labels group your organization's tasks. We suggested four to start. Keep, rename or add your own."
+          : "Labels group your organization's tasks. Here are the ones you have. Keep, rename or add your own."}
       </StepIntro>
 
       <StepBody>
@@ -169,7 +169,7 @@ export function LabelsStep({
           {rows.map((row) => (
             <li
               key={row.key}
-              className="bg-card border-foreground/10 focus-within-banana flex h-10 items-center gap-3 rounded-field border px-4"
+              className="bg-card border-foreground/10 focus-within-banana rounded-field flex h-10 items-center gap-3 border px-4"
             >
               <button
                 type="button"

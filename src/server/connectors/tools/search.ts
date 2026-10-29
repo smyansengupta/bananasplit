@@ -158,7 +158,7 @@ export const registerSearch: ToolRegistrar = (server, session) => {
     {
       title: "Search",
       description:
-        "Searches the member's Personal space and clubs for notes, tasks, events, polls, members and databases matching the words, best matches first. Each result has an id that fetch opens.",
+        "Searches the member's Personal space and organizations for notes, tasks, events, polls, members and databases matching the words, best matches first. Each result has an id that fetch opens.",
       inputSchema: input,
       outputSchema: output,
       annotations: READ_ONLY,

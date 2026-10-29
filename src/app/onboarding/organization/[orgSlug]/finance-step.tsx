@@ -142,7 +142,7 @@ export function FinanceStep({
       }
     >
       <StepIntro index={index} total={total} title="What should the treasurer see?">
-        Pick the reports on your finance board, and when your club&apos;s year starts.
+        Pick the reports on your finance board, and when your organization&apos;s year starts.
       </StepIntro>
 
       <StepBody className="gap-5">

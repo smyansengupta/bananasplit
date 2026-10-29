@@ -137,7 +137,7 @@ export function inSpace<T>(
     session.connector,
     session.grant,
     spaceId,
-    { feature: options.feature, whenPaused: "allow" },
+    { feature: options.feature },
     async (ctx) => {
       const space = await loadToolSpace(ctx);
       if (options.section) space.requireSection(options.section);

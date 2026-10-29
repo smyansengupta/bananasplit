@@ -15,7 +15,7 @@ import { AppError } from "@/server/db/errors";
  *
  *   NotFoundError         one sentence for "no such id" and "not a member"
  *   ForbiddenError        "Your role in <club> can't do that."
- *   AppError (below 500)  its own message: SpaceRefusedError (paused, not
+ *   AppError (below 500)  its own message: SpaceRefusedError (not
  *                         on the plan), ConnectorRefusedError (scope, the
  *                         club switch) and the mapped database errors
  *   ZodError              the first issue, with its field and an example
@@ -46,7 +46,7 @@ function zodMessage(error: ZodError, examples: Record<string, string> = {}): str
 export function toolErrorMessage(error: unknown, context: ToolErrorContext = {}): string {
   if (error instanceof NotFoundError) return NOT_FOUND_MESSAGE;
   if (error instanceof ForbiddenError) {
-    return `Your role in ${context.clubName ?? "this club"} can't do that.`;
+    return `Your role in ${context.clubName ?? "this organization"} can't do that.`;
   }
   if (error instanceof ZodError) return zodMessage(error, context.examples);
   if (error instanceof AppError && error.status < 500) return error.message;

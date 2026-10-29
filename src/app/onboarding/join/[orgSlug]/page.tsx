@@ -39,7 +39,7 @@ export default async function ClubRolePage({ params }: PageProps<"/onboarding/jo
         <div className="flex flex-col gap-5">
           <AuthHeadline>You&apos;re in.</AuthHeadline>
           <p className="m-0 text-[15px] leading-[1.45]">
-            One quick thing for {club.name}, then you&apos;re in the club.
+            One quick thing for {club.name}, then you&apos;re in.
           </p>
         </div>
       }
@@ -47,7 +47,7 @@ export default async function ClubRolePage({ params }: PageProps<"/onboarding/jo
       <AuthTitle
         eyebrow="Joined"
         title={`Your role in ${club.name}`}
-        description="What do you do here? It shows next to your name in this club. Admins can change it later."
+        description="What do you do here? It shows next to your name in this organization. Admins can change it later."
       />
       <ClubPreview name={club.name} logoUrl={orgLogoUrl(club.logo, 64)} detail="You're a member" />
       <RoleForm
@@ -82,7 +82,7 @@ function AvailabilityLine({
       ? `Members of ${clubName} see your ${blockedHours} busy hours a week, never why.`
       : `You haven't marked when you can't meet. Members of ${clubName} will see busy hours only, never why.`;
   return (
-    <div className="border-foreground/10 flex items-start gap-2.5 rounded-field border px-3.5 py-3 text-[14px]">
+    <div className="border-foreground/10 rounded-field flex items-start gap-2.5 border px-3.5 py-3 text-[14px]">
       <CalendarX className="text-muted-foreground mt-0.5 size-4 flex-none" aria-hidden="true" />
       <span className="text-muted-foreground flex flex-col gap-0.5">
         <span>{text}</span>

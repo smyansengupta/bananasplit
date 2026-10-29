@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 /**
  * One "Due soon" row: a checkbox that marks the task done in its own space
  * through the tasks action (the same checks as on the task's page, so a
- * paused club or a task you can't change says why), and the task's link.
+ * task you can't change says why), and the task's link.
  * The action refreshes the page, which drops the row; until then it shows
  * ticked and struck through.
  */

@@ -253,7 +253,7 @@ export function CommandPalette({
       open={open}
       onOpenChange={onOpenChange}
       title="Search"
-      description="Search everything in this club, or jump to a page"
+      description="Search everything in this organization, or jump to a page"
       className="top-[8vh] flex max-h-[84vh] flex-col sm:top-[12vh] sm:max-w-2xl"
     >
       <CommandPrimitive

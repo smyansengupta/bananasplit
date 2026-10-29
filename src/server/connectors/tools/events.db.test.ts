@@ -160,7 +160,7 @@ describe("list_events", () => {
     }
   });
 
-  it("reads a paused club's calendar, and refuses another org, the club switch, another scope and a hidden Calendar", async () => {
+  it("reads a paused organization's calendar, and refuses another org, the organization switch, another scope and a hidden Calendar", async () => {
     if (!fx) return;
     const { alice, bob, club, other, pausedId, personalId } = fx;
     const session = await fx.session(alice);

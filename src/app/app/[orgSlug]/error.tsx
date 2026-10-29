@@ -11,7 +11,7 @@ export default function OrgSegmentError({ error }: { error: Error & { digest?: s
         title={isForbidden ? "You don't have access to this" : "Something went wrong"}
         description={
           isForbidden
-            ? "Your role in this club doesn't allow this action."
+            ? "Your role in this organization doesn't allow this action."
             : "Try reloading the page. If it keeps happening, let your e-board know."
         }
       />

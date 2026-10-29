@@ -34,7 +34,7 @@ export function IssueCodeForm({ disabledReason }: { disabledReason?: string }) {
               id="code-note"
               name="note"
               maxLength={200}
-              placeholder="Robotics Club president"
+              placeholder="Riverside Robotics president"
             />
           </div>
           {state.error && (

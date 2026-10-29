@@ -37,14 +37,21 @@ const PER_CLUB_PER_HOUR = 120;
 const MAX_JSON_BYTES = 300_000;
 
 const jsonSchema = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("sheet"), sample: SheetSample, connection: z.string().max(20).optional() }),
+  z.object({
+    mode: z.literal("sheet"),
+    sample: SheetSample,
+    connection: z.string().max(20).optional(),
+  }),
   z.object({
     mode: z.literal("text"),
     text: z
       .string()
       .trim()
       .min(1, "Paste some records first.")
-      .max(MAX_IMPORT_TEXT, "That's too much text for one read. Split it into smaller parts, or upload the file."),
+      .max(
+        MAX_IMPORT_TEXT,
+        "That's too much text for one read. Split it into smaller parts, or upload the file.",
+      ),
     connection: z.string().max(20).optional(),
   }),
 ]);
@@ -54,7 +61,8 @@ function json(status: number, body: Record<string, unknown>): Response {
 }
 
 const NO_CONNECTION = {
-  error: "No AI model is connected yet. An owner or admin can connect one in Admin panel › Integrations.",
+  error:
+    "No AI model is connected yet. An owner or admin can connect one in Admin panel › Integrations.",
   code: "no-connection",
 };
 
@@ -72,17 +80,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     throw error;
   }
   if (!ctx.canManageFinance) {
-    return json(403, { error: "Only the club's owners and treasurers can import finance records." });
+    return json(403, {
+      error: "Only the organization's owners and treasurers can import finance records.",
+    });
   }
 
-  const multipart = (request.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/form-data");
+  const multipart = (request.headers.get("content-type") ?? "")
+    .toLowerCase()
+    .startsWith("multipart/form-data");
   let body: z.infer<typeof jsonSchema> | null = null;
   if (!multipart) {
     if (Number(request.headers.get("content-length") ?? 0) > MAX_JSON_BYTES) {
       return json(413, { error: "That's too much for one read. Split it into smaller parts." });
     }
     const parsed = jsonSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return json(400, { error: parsed.error.issues[0]?.message ?? "Nothing to read." });
+    if (!parsed.success)
+      return json(400, { error: parsed.error.issues[0]?.message ?? "Nothing to read." });
     body = parsed.data;
   }
 
@@ -91,7 +104,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     [rateLimitKey("ai-import-club", orgId), PER_CLUB_PER_HOUR],
   ] as const) {
     const hit = await checkRateLimit(key, limit, 60 * 60);
-    if (!hit.allowed) return json(429, { error: `Too many AI imports for now. Try again ${retryAfterText(hit)}.` });
+    if (!hit.allowed)
+      return json(429, { error: `Too many AI imports for now. Try again ${retryAfterText(hit)}.` });
   }
 
   try {
@@ -140,7 +154,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
     const type = sniffMimeType(upload.file.bytes);
     const isImage = type !== null && (SHOT_IMAGE_TYPES as readonly string[]).includes(type);
     if (type !== "application/pdf" && !isImage) {
-      return json(415, { error: "Upload a PDF or a picture (PNG, JPEG, WebP or GIF). Spreadsheets are read in your browser." });
+      return json(415, {
+        error:
+          "Upload a PDF or a picture (PNG, JPEG, WebP or GIF). Spreadsheets are read in your browser.",
+      });
     }
     const creds = await resolveAiCredentials(orgId, upload.fields.connection);
     if (!creds) return json(409, NO_CONNECTION);
@@ -149,7 +166,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
       creds,
       ...(isImage
         ? { image: { mediaType: type as ShotImageType, base64 } }
-        : { document: { mediaType: "application/pdf" as const, base64, fileName: upload.file.filename || "records.pdf" } }),
+        : {
+            document: {
+              mediaType: "application/pdf" as const,
+              base64,
+              fileName: upload.file.filename || "records.pdf",
+            },
+          }),
       today: ctx.today,
       timezone: ctx.timezone,
       categories: ctx.categories,

@@ -50,8 +50,8 @@ export function DeleteCard({
       title={personal ? "Delete your Personal space" : `Delete ${orgName}`}
       description={
         personal
-          ? "Your Personal space closes at once and is deleted for good after 30 days: your tasks, calendar, polls and event pages, with their RSVPs and answers. Your account and your clubs aren't affected. You can cancel during those 30 days from its page. Export your data first if you need it."
-          : "The club closes for everyone at once and is deleted for good after 30 days: members, tasks, notes, events, finance records, files, integrations and settings. An owner can cancel during those 30 days from the club's page. Its URL is never reused. Export your data first if you need it."
+          ? "Your Personal space closes at once and is deleted for good after 30 days: your tasks, calendar, polls and event pages, with their RSVPs and answers. Your account and your organizations aren't affected. You can cancel during those 30 days from its page. Export your data first if you need it."
+          : "The organization closes for everyone at once and is deleted for good after 30 days: members, tasks, notes, events, finance records, files, integrations and settings. An owner can cancel during those 30 days from the organization's page. Its URL is never reused. Export your data first if you need it."
       }
       footer={
         <Dialog
@@ -79,7 +79,7 @@ export function DeleteCard({
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-1.5">
-                <Label htmlFor="confirm-slug">{personal ? "Its URL" : "Club URL"}</Label>
+                <Label htmlFor="confirm-slug">{personal ? "Its URL" : "Organization URL"}</Label>
                 <Input
                   id="confirm-slug"
                   autoComplete="off"
