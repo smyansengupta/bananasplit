@@ -78,7 +78,7 @@ export const viewport: Viewport = { viewportFit: "cover" };
  * costs no extra read; the logo URL is the stored variant the shell already
  * shows, public and cached immutably. A club with no logo, and every case
  * where the slug does not resolve (the layout answers that properly a
- * moment later), keeps the banana from src/app/icon.svg.
+ * moment later), keeps the banana (SITE_ICONS).
  */
 export async function generateMetadata({
   params,
@@ -86,7 +86,8 @@ export async function generateMetadata({
   const { orgSlug } = await params;
   try {
     const ctx = await getOrgContextBySlug(orgSlug);
-    return { title: ctx.organization.name, icons: clubIcons(ctx.organization.logo) };
+    const icons = clubIcons(ctx.organization.logo);
+    return { title: ctx.organization.name, ...(icons ? { icons } : {}) };
   } catch {
     return {};
   }

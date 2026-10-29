@@ -16,22 +16,19 @@
     "alt": "Bananasplit: everything your team runs in one place — texting, AI, docs and files, meetings, finance."
   },
   "join": {
-    "targets": ["src/app/onboarding/join/opengraph-image.png"],
+    "targets": ["src/app/onboarding/join/opengraph-image.png", "public/og/join.png"],
     "alt": "Join your club on Bananasplit: an eight-box invite code."
   },
   "invite": {
-    "targets": ["src/app/invite/[token]/opengraph-image.png"],
+    "targets": ["public/og/invite.png"],
     "alt": "You're invited to join a club's workspace on Bananasplit."
   },
   "poll": {
-    "targets": [
-      "src/app/poll/[pollId]/opengraph-image.png",
-      "src/app/poll/[pollId]/twitter-image.png"
-    ],
+    "targets": ["public/og/poll.png"],
     "alt": "Bananasplit: find a time that works — a week of times with a few marked."
   },
   "event": {
-    "targets": ["src/app/e/[slug]/opengraph-image.png"],
+    "targets": ["public/og/event.png"],
     "alt": "Bananasplit: save your spot at this event, then RSVP."
   }
 }

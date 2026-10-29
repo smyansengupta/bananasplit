@@ -535,7 +535,7 @@ export default async function OrgOverviewPage({
                     <JoinCodeCard
                       orgId={org.id}
                       compact
-                      joinUrlBase={absoluteAppUrl("/onboarding/join")}
+                      joinUrlBase={absoluteAppUrl("/join")}
                       initial={{
                         code: data.joinCode.code,
                         enabled: data.joinCode.enabled,

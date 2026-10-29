@@ -1,7 +1,8 @@
 // Captures every link-preview card (/dev/og/<card>, drawn by
-// src/components/marketing/og/og-cards.tsx) into the opengraph-image.png
-// files listed in scripts/og-cards.json, and writes each image's
-// .alt.txt beside it. Needs `next dev` on :3000 and Playwright's Chromium
+// src/components/marketing/og/og-cards.tsx) into the files listed in
+// scripts/og-cards.json: a route's opengraph-image.png (with its .alt.txt
+// beside it), or public/og/<card>.png for a club page's fallback (whose alt
+// text is FALLBACK_CARDS in src/lib/metadata/share.ts). Needs `next dev` on :3000 and Playwright's Chromium
 // (npx playwright install chromium).
 //
 //   node scripts/capture-og.mjs            all cards
@@ -50,7 +51,9 @@ try {
     for (const target of targets) {
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, png);
-      await writeFile(target.replace(/\.png$/, ".alt.txt"), `${alt}\n`);
+      if (target.startsWith("src/app/")) {
+        await writeFile(target.replace(/\.png$/, ".alt.txt"), `${alt}\n`);
+      }
       console.log(`${card} -> ${target}`);
     }
   }

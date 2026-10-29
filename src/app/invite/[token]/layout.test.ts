@@ -33,7 +33,9 @@ describe("the invite link's preview", () => {
   it("names the club and shows its logo", async () => {
     mocks.getPublicOrgTheme.mockResolvedValue({ name: "Claude Builder Club", logo: LOGO });
     const meta = await generateMetadata(props());
-    expect(meta.openGraph?.title).toBe("You're invited to join Claude Builder Club on Bananasplit");
+    expect(meta.openGraph?.title).toBe(
+      "You've been invited to join Claude Builder Club on Bananasplit",
+    );
     expect(meta.openGraph).toMatchObject({ images: [{ url: LOGO.s512 }] });
     expect(meta.icons).toMatchObject({ icon: [{ url: LOGO.s64 }] });
     expect(meta.robots).toEqual({ index: false, follow: false });

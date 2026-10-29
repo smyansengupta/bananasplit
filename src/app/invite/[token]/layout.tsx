@@ -3,7 +3,7 @@ import { cache } from "react";
 
 import { hashInvitationToken } from "@/lib/invitations";
 import { PublicOrgFrame } from "@/components/theme/public-org-frame";
-import { clubShare } from "@/lib/metadata/share";
+import { clubShare, FALLBACK_CARDS } from "@/lib/metadata/share";
 import { getPublicOrgTheme, orgIdForInviteTokenHash } from "@/lib/theme/loader";
 
 /**
@@ -17,7 +17,7 @@ const invitingOrg = cache(async (token: string) =>
 );
 
 /**
- * What an emailed invite link previews as: "You're invited to join <club>
+ * What an emailed invite link previews as: "You've been invited to join <club>
  * on Bananasplit", with the club's own logo as the picture and as the tab's
  * icon. The club's name and logo are already public on this page (the frame
  * below themes it with them before anyone signs in), so the preview shows
@@ -38,8 +38,9 @@ export async function generateMetadata({
   }
   return clubShare({
     club,
-    title: `You're invited to join ${club.name} on Bananasplit`,
+    title: `You've been invited to join ${club.name} on Bananasplit`,
     description: `${club.name} runs on Bananasplit: tasks, docs, meetings and the budget in one place. Open the link to accept.`,
+    fallback: FALLBACK_CARDS.invite,
   });
 }
 

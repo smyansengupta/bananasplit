@@ -15,11 +15,10 @@ import { JoinForm } from "./join-form";
 export const dynamic = "force-dynamic";
 
 /*
- * The link an officer shares is /onboarding/join?code=XXXX-XXXX, so this is
- * what that message previews as, with the drawn card beside this file. It
- * cannot name the club: the page is behind sign-in, so whatever unfurls the
- * link is redirected away before it sees any of this, and the code alone is
- * not something a signed-out caller may trade for a club's name.
+ * Shared links now go to /join/<code>, which previews as the club and comes
+ * here on Continue; this preview is for older links and anyone pasting the
+ * bare page. It cannot name the club: the page is behind sign-in, so
+ * whatever unfurls it is redirected before reading any of this.
  */
 export const metadata = shareMetadata({
   title: "Join your club",

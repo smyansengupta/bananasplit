@@ -2129,6 +2129,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "ics_token_created_at",
         "invitation_by_token_hash",
         "issue_org_creation_code",
+        // The public invite-code page: which org a live code opens, nothing else.
+        "join_code_org_id",
         "list_org_creation_codes",
         "lock_org",
         "log_org_deletion",
@@ -2397,6 +2399,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       ics_token_created_at: "u",
       immutable_columns: "",
       invitation_by_token_hash: "s",
+      join_code_org_id: "s",
       is_finance: "us",
       is_org_admin: "us",
       is_org_owner: "us",

@@ -190,7 +190,7 @@ function Body({ screen }: { screen: string }) {
           <InviteStep
             {...base}
             code="RPKAYWSF"
-            joinUrl="http://localhost:3000/onboarding/join"
+            joinUrl="http://localhost:3000/join"
             invites={[]}
           />
         );

@@ -6,7 +6,7 @@ import "./globals.css";
 import { IconMotion } from "@/components/icons/icon-motion";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth/config";
-import { metadataBase, SITE_NAME } from "@/lib/metadata/share";
+import { metadataBase, SITE_ICONS, SITE_NAME } from "@/lib/metadata/share";
 
 /*
  * The type system (the Moonstone redesign; globals.css maps these to
@@ -56,6 +56,8 @@ export const metadata: Metadata = {
   // per route from that route's own title and description, so naming them
   // here would make every page preview as the home page.
   openGraph: { siteName: SITE_NAME, type: "website" },
+  // The banana; a club's pages replace it with the club's logo.
+  icons: SITE_ICONS,
   twitter: { card: "summary_large_image" },
 };
 

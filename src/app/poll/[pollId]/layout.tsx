@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cache } from "react";
 
 import { PublicOrgFrame } from "@/components/theme/public-org-frame";
-import { clubShare, shareMetadata } from "@/lib/metadata/share";
+import { clubShare, FALLBACK_CARDS, shareMetadata } from "@/lib/metadata/share";
 import { getPublicOrgTheme, orgIdForPoll } from "@/lib/theme/loader";
 
 /**
@@ -15,8 +15,7 @@ const pollOrg = cache(async (pollId: string) => getPublicOrgTheme(await orgIdFor
 /**
  * What a shared poll link previews as (iMessage, Slack, X): an ask to fill
  * the poll in, named after the club running it and wearing its logo. A club
- * without a logo falls back to the drawn card beside this file,
- * opengraph-image.png and twitter-image.png.
+ * without a logo falls back to the drawn poll card (public/og/poll.png).
  */
 export async function generateMetadata({
   params,
@@ -25,9 +24,19 @@ export async function generateMetadata({
   const club = await pollOrg(pollId);
   const description = "Mark the times you're free. No account needed, just your name.";
   if (!club) {
-    return shareMetadata({ title: "Fill out this availability poll", description, noIndex: true });
+    return shareMetadata({
+      title: "Fill out this availability poll",
+      description,
+      noIndex: true,
+      card: FALLBACK_CARDS.poll,
+    });
   }
-  return clubShare({ club, title: `${club.name} is finding a time`, description });
+  return clubShare({
+    club,
+    title: `${club.name} is finding a time`,
+    description,
+    fallback: FALLBACK_CARDS.poll,
+  });
 }
 
 /**
