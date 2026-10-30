@@ -1,8 +1,8 @@
 "use client";
 
-import { CalendarPlus, Check, Hourglass, Lock, Video } from "@/components/icons";
+import { Check, Hourglass, Lock, Video } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { cancelMyRegistration, registerForEvent } from "@/app/e/[slug]/actions";
 import { BrandField, BrandInput, FormMessage } from "@/components/brand/fields";
@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils";
  * Can't go, or their place on the waitlist. A Moonstone surface card in the
  * club's theme, with a display title and 40px fields.
  */
+
+/** Seconds a guest has to Undo "Cancel my spot". */
+const UNDO_SECONDS = 5;
 
 export interface RegistrationCardProps {
   slug: string;
@@ -314,13 +317,14 @@ function Signed({
   slug,
   viewer,
   joinUrl,
-  googleCalendarUrl,
-  icsUrl,
   signedExtras,
 }: RegistrationCardProps & { viewer: NonNullable<RegistrationCardProps["viewer"]> }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [confirming, setConfirming] = useState(false);
+  // Cancel my spot waits a few seconds with Undo before it lets the spot go
+  // (it may go straight to someone on the waitlist, so it can't be taken
+  // back after).
+  const [leaving, setLeaving] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const going = viewer.status === "GOING";
 
@@ -330,12 +334,22 @@ function Signed({
       const result = await cancelMyRegistration({ slug });
       if (!result.ok) {
         setError(result.error ?? "That didn't work. Try again.");
+        setLeaving(null);
         return;
       }
-      setConfirming(false);
+      setLeaving(null);
       router.refresh();
     });
   }
+  useEffect(() => {
+    if (leaving === null || pending) return;
+    const t = setTimeout(() => {
+      if (leaving <= 1) cancel();
+      else setLeaving(leaving - 1);
+    }, 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaving, pending]);
 
   return (
     <>
@@ -366,7 +380,7 @@ function Signed({
         </div>
       </div>
 
-      {going && (
+      {going && joinUrl && (
         <div className="mt-5 flex flex-wrap gap-2">
           {joinUrl && (
             <a
@@ -379,64 +393,34 @@ function Signed({
               Join the meeting
             </a>
           )}
-          <a
-            href={googleCalendarUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={pill({ tone: "outline", size: "sm" })}
-          >
-            <CalendarPlus className="size-4" aria-hidden="true" />
-            Google Calendar
-          </a>
-          <a href={icsUrl} className={pill({ tone: "outline", size: "sm" })}>
-            <CalendarPlus className="size-4" aria-hidden="true" />
-            Apple / Outlook
-          </a>
         </div>
       )}
 
       {signedExtras && <div className="mt-5 flex flex-col gap-4">{signedExtras}</div>}
 
       <div className="bg-muted/60 rounded-tile mt-5 flex min-h-14 flex-wrap items-center justify-between gap-3 py-2 pr-2 pl-4">
-        {confirming ? (
+        {leaving !== null ? (
           <>
-            <span className="text-[14px] font-semibold">
-              {going ? "Give up your spot?" : "Leave the waitlist?"}
-            </span>
-            <span className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                className={pill({ tone: "outline", size: "sm" })}
-              >
-                Keep it
-              </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={cancel}
-                className={cn(
-                  pill({ size: "sm" }),
-                  "bg-block-alert text-block-alert-foreground hover:bg-block-alert/90",
-                )}
-              >
-                {pending ? "Cancelling…" : going ? "Give up my spot" : "Leave the waitlist"}
-              </button>
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="text-muted-foreground text-[14px]">
-              {going ? "Can't make it anymore?" : "Changed your mind?"}
+            <span className="text-[14px] font-semibold" role="status" aria-live="polite">
+              {pending ? "Cancelling…" : `Cancelling in ${leaving}s`}
             </span>
             <button
               type="button"
-              onClick={() => setConfirming(true)}
+              disabled={pending}
+              onClick={() => setLeaving(null)}
               className={pill({ tone: "outline", size: "sm" })}
             >
-              {going ? "Can't go" : "Leave the waitlist"}
+              Undo
             </button>
           </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setLeaving(UNDO_SECONDS)}
+            className={cn(pill({ tone: "outline", size: "sm" }), "ms-auto")}
+          >
+            {going ? "Cancel my spot" : "Leave the waitlist"}
+          </button>
         )}
       </div>
       {error && (
