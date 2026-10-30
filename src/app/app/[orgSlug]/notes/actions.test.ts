@@ -266,7 +266,8 @@ describe("deleteNote / restoreNote", () => {
 });
 
 describe("createNote", () => {
-  it("creates a PRIVATE note authored by the caller", async () => {
+  it("creates a club note everyone in the club can see, authored by the caller", async () => {
+    db.organization.findUnique.mockResolvedValue({ kind: "CLUB" });
     db.note.create.mockResolvedValue({ id: "note_new" });
 
     const result = await createNote("org_1", { title: "  Board minutes " });
@@ -277,10 +278,23 @@ describe("createNote", () => {
         data: expect.objectContaining({
           organizationId: "org_1",
           title: "Board minutes",
-          visibility: NoteVisibility.PRIVATE,
+          visibility: NoteVisibility.ORGANIZATION,
           authorId: MEMBER_ID,
           updatedById: MEMBER_ID,
         }),
+      }),
+    );
+  });
+
+  it("keeps a new note private in a Personal space", async () => {
+    db.organization.findUnique.mockResolvedValue({ kind: "PERSONAL" });
+    db.note.create.mockResolvedValue({ id: "note_new" });
+
+    await createNote("org_1", { title: "Ideas" });
+
+    expect(db.note.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ visibility: NoteVisibility.PRIVATE }),
       }),
     );
   });

@@ -190,7 +190,16 @@ export async function folderPeeks(
   return out;
 }
 
-export type FolderResult = { ok: true; id?: string } | { ok: false; error: string };
+/** What a deleted folder held, so its toast's Undo can put it back. */
+export interface FolderRestore {
+  name: string;
+  color: string | null;
+  noteIds: string[];
+  fileIds: string[];
+}
+
+export type FolderResult =
+  { ok: true; id?: string; restore?: FolderRestore } | { ok: false; error: string };
 
 export async function createFolder(
   db: TxClient,
@@ -249,11 +258,29 @@ export async function deleteFolder(
   orgId: string,
   folderId: string,
 ): Promise<FolderResult> {
+  // What it held (as far as this member can see), read first so the
+  // delete's Undo can make the folder again and file them back.
+  const folder = await db.noteFolder.findFirst({
+    where: { id: folderId, organizationId: orgId },
+    select: { name: true, color: true },
+  });
+  const [notes, files] = await Promise.all([
+    db.note.findMany({ where: { organizationId: orgId, folderId }, select: { id: true } }),
+    db.orgFile.findMany({ where: { organizationId: orgId, folderId }, select: { id: true } }),
+  ]);
   const { count } = await db.noteFolder.deleteMany({
     where: { id: folderId, organizationId: orgId },
   });
-  return count > 0
-    ? { ok: true }
+  return count > 0 && folder
+    ? {
+        ok: true,
+        restore: {
+          name: folder.name,
+          color: folder.color,
+          noteIds: notes.map((n) => n.id).slice(0, 100),
+          fileIds: files.map((f) => f.id).slice(0, 100),
+        },
+      }
     : { ok: false, error: "Only whoever made this folder, or an admin, can delete it." };
 }
 

@@ -117,7 +117,6 @@ export function NotesTree({
         title: template.title,
         contentJson: JSON.stringify(json),
         contentText: generateText(json, extensions).slice(0, 200_000),
-        visibility: "PRIVATE",
       });
       if (result.error || !result.noteId) {
         toast({ title: result.error ?? "Couldn't start from the template", tone: "error" });

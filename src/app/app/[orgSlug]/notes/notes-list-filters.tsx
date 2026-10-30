@@ -17,33 +17,35 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { FilterChoices } from "@/components/ui/phone-toolbar";
+import { Segmented } from "@/components/ui/segmented";
 
 /** `tab` keeps its old name so existing links (`?tab=files`) still land on uploads. */
 const KINDS = [
-  ["all", "Everything"],
+  ["all", "All"],
   ["notes", "Notes"],
   ["files", "Uploads"],
+] as const;
+
+const SORTS = [
+  ["edited", "Edited"],
+  ["created", "Newest"],
+  ["title", "A–Z"],
 ] as const;
 
 const AUDIENCES = [
   ["all", "Anyone"],
   ["PRIVATE", "Private"],
   ["SHARED", "Shared with me"],
-  ["ORGANIZATION", "Everyone in the organization"],
+  ["ORGANIZATION", "Everyone"],
 ] as const;
 
 /**
- * Files › the library's filter and order: one Filter menu (what kind, who
- * can see it, who added it) and a sort. Both live in the URL, so a filtered
- * view can be linked and pinned. Personal has one person, so only the kind.
+ * Files › the library's toolbar, laid out like the Tasks toolbar: what to
+ * show (All, Notes, Uploads) and the order (Edited, Newest, A–Z) as switch
+ * bars you click once, and the rarer filters (who can see it, who added
+ * it) under one Filter button. All of it lives in the URL, so a filtered
+ * view can be linked and pinned. Personal has one person, so no Filter.
  */
 export function NotesListFilters({
   members,
@@ -59,7 +61,7 @@ export function NotesListFilters({
   const kind = searchParams.get("tab") ?? "all";
   const visibility = searchParams.get("visibility") ?? "all";
   const author = searchParams.get("author") ?? "all";
-  const active = [kind, visibility, author].filter((v) => v !== "all").length;
+  const active = [visibility, author].filter((v) => v !== "all").length;
   const authorMember = members.find((m) => m.userId === author);
 
   function setParams(patch: Record<string, string | null>) {
@@ -77,101 +79,81 @@ export function NotesListFilters({
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="outline" size="sm">
-            <ListFilter className="size-4" aria-hidden="true" />
-            Filter
+      <Segmented
+        label="Show"
+        options={KINDS.map(([value, label]) => ({ value, label }))}
+        value={kind}
+        onSelect={(v) => setParams({ tab: v })}
+      />
+      {!personal && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <ListFilter className="size-4" aria-hidden="true" />
+              Filter
+              {active > 0 && (
+                <span className="bg-muted text-muted-foreground rounded-md px-1.5 text-xs tabular-nums">
+                  {active}
+                  <span className="sr-only"> on</span>
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuLabel>Who can see it</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={visibility}
+              onValueChange={(v) => setParams({ visibility: v })}
+            >
+              {AUDIENCES.map(([value, label]) => (
+                <DropdownMenuRadioItem key={value} value={value} onSelect={keepOpen}>
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <UserRound className="size-4" aria-hidden="true" />
+                Added by
+                <span className="text-muted-foreground ms-auto max-w-28 text-xs break-words">
+                  {authorMember ? (authorMember.name ?? authorMember.email) : "Anyone"}
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                <DropdownMenuRadioGroup
+                  value={author}
+                  onValueChange={(v) => setParams({ author: v })}
+                >
+                  <DropdownMenuRadioItem value="all">Anyone</DropdownMenuRadioItem>
+                  {members.map((m) => (
+                    <DropdownMenuRadioItem key={m.userId} value={m.userId}>
+                      {m.name ?? m.email}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             {active > 0 && (
-              <span className="bg-muted text-muted-foreground rounded-md px-1.5 text-xs tabular-nums">
-                {active}
-                <span className="sr-only"> on</span>
-              </span>
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setParams({ visibility: null, author: null })}>
+                  Clear filters
+                </DropdownMenuItem>
+              </>
             )}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuLabel>Show</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={kind} onValueChange={(v) => setParams({ tab: v })}>
-            {KINDS.map(([value, label]) => (
-              <DropdownMenuRadioItem key={value} value={value} onSelect={keepOpen}>
-                {label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          {!personal && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Who can see it</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={visibility}
-                onValueChange={(v) => setParams({ visibility: v })}
-              >
-                {AUDIENCES.map(([value, label]) => (
-                  <DropdownMenuRadioItem key={value} value={value} onSelect={keepOpen}>
-                    {label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <UserRound className="size-4" aria-hidden="true" />
-                  Added by
-                  <span className="text-muted-foreground ms-auto max-w-28 truncate text-xs">
-                    {authorMember ? (authorMember.name ?? authorMember.email) : "Anyone"}
-                  </span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-                  <DropdownMenuRadioGroup
-                    value={author}
-                    onValueChange={(v) => setParams({ author: v })}
-                  >
-                    <DropdownMenuRadioItem value="all">Anyone</DropdownMenuRadioItem>
-                    {members.map((m) => (
-                      <DropdownMenuRadioItem key={m.userId} value={m.userId}>
-                        {m.name ?? m.email}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </>
-          )}
-          {active > 0 && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => setParams({ tab: null, visibility: null, author: null })}
-              >
-                Clear filters
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Select
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <Segmented
+        label="Sort"
+        options={SORTS.map(([value, label]) => ({ value, label }))}
         value={searchParams.get("sort") ?? "edited"}
-        onValueChange={(v) => setParams({ sort: v === "edited" ? null : v })}
-      >
-        <SelectTrigger size="sm" className="w-40" aria-label="Sort">
-          <SelectValue placeholder="Sort" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="edited">Recently edited</SelectItem>
-          <SelectItem value="created">Newest</SelectItem>
-          <SelectItem value="title">Title A–Z</SelectItem>
-        </SelectContent>
-      </Select>
+        onSelect={(v) => setParams({ sort: v === "edited" ? null : v })}
+      />
     </>
   );
 }
-
-const SORTS = [
-  ["edited", "Recently edited"],
-  ["created", "Newest"],
-  ["title", "Title A–Z"],
-] as const;
 
 /**
  * The same filters and order for the phone's filter sheet (the library adds

@@ -137,6 +137,21 @@ function revokeAfterCommit(ctx: OrgContext, noteId: string) {
 }
 
 /**
+ * A new note's general access when nothing else decides it. A club's notes
+ * start shared with the whole club (members can view; Jack's call: notes
+ * are made to be read), so nobody has to open Share to let the club see
+ * meeting notes. Personal is one person, so its notes stay private. A
+ * subpage still takes its parent's access, and an explicit choice wins.
+ */
+async function newNoteVisibility(ctx: OrgContext): Promise<NoteVisibility> {
+  const org = await ctx.db.organization.findUnique({
+    where: { id: ctx.organizationId },
+    select: { kind: true },
+  });
+  return org?.kind === "PERSONAL" ? NoteVisibility.PRIVATE : NoteVisibility.ORGANIZATION;
+}
+
+/**
  * The page a new note goes inside, or an error: one the caller can see.
  * A subpage starts with its parent's general access (a page inside a club
  * page is a club page); the people a private page is shared with are not
@@ -168,7 +183,7 @@ export const createNote = filesAction(
         title: prefill?.title?.trim() || "Untitled note",
         contentJson: EMPTY_DOC,
         contentText: "",
-        visibility: parent?.visibility ?? NoteVisibility.PRIVATE,
+        visibility: parent?.visibility ?? (await newNoteVisibility(ctx)),
         memberCanEdit: parent?.visibility === NoteVisibility.ORGANIZATION && parent.memberCanEdit,
         authorId: ctx.userId,
         updatedById: ctx.userId,
@@ -196,8 +211,9 @@ const importSchema = z.object({
  * A note made from an imported Word document or Google Doc: the browser
  * turned the document into the editor's JSON; it is checked against the
  * note schema here (the same check a live edit gets) before it is stored.
- * Imported notes (and ones started from a template) start PRIVATE unless
- * the member picked otherwise, optionally in a folder.
+ * Imported notes (and ones started from a template) start shared with the
+ * club (private in Personal) unless the member picked otherwise, optionally
+ * in a folder.
  */
 export const importNote = filesAction(async (ctx, input: unknown): Promise<ActionResult> => {
   const parsed = importSchema.safeParse(input);
@@ -229,7 +245,7 @@ export const importNote = filesAction(async (ctx, input: unknown): Promise<Actio
       title: parsed.data.title,
       contentJson,
       contentText: parsed.data.contentText,
-      visibility: parsed.data.visibility ?? NoteVisibility.PRIVATE,
+      visibility: parsed.data.visibility ?? parent?.visibility ?? (await newNoteVisibility(ctx)),
       folderId,
       parentId: parent?.id ?? null,
       authorId: ctx.userId,

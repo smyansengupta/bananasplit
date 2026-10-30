@@ -4,7 +4,6 @@ import { formatDistanceToNow } from "date-fns";
 import {
   ArchiveRestore,
   CalendarDays,
-  Check,
   Download,
   Folder,
   FolderInput,
@@ -15,15 +14,12 @@ import {
   Link2,
   List,
   Lock,
-  MoreHorizontal,
   NotebookText,
-  Pencil,
   Trash2,
-  Users,
 } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { deleteNote, restoreNote } from "@/app/app/[orgSlug]/notes/actions";
 import {
@@ -31,25 +27,20 @@ import {
   restoreNoteFileAction,
 } from "@/app/app/[orgSlug]/notes/files-actions";
 import {
+  createFolderAction,
   deleteFolderAction,
   moveToFolderAction,
   updateFolderAction,
 } from "@/app/app/[orgSlug]/notes/folder-actions";
+import { emptyTrashAction } from "@/app/app/[orgSlug]/settings/plan/storage/actions";
 import { EmptyState } from "@/components/empty-state";
 import { ItemMenu } from "@/components/item-menu";
-import { FILE_ICONS, FILE_LABELS } from "@/components/notes/file-card";
+import { FILE_ICONS } from "@/components/notes/file-card";
 import { NewFolderForm } from "@/components/notes/new-folder-form";
+import { isFileDrag, pickFiles, uploadFiles } from "@/components/notes/upload-queue";
 import { PinToggle } from "@/components/pins/pins-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
@@ -62,10 +53,10 @@ import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
 import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { Segmented } from "@/components/ui/segmented";
-import { toast } from "@/components/ui/toaster";
+import { toast, undoable } from "@/components/ui/toaster";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
-import { TAG_COLOR_NAMES, TAG_COLORS, tagColorOf } from "@/lib/tag-colors";
+import { TAG_COLORS } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 
 import { FolderCard, folderTone, type FolderCardPeek } from "./folder-card";
@@ -172,8 +163,10 @@ const LAYOUTS = [
 
 /**
  * The Files library: folders down the side (drag a note or file onto one to
- * file it), and notes and uploaded files together in one list you can
- * search, filter, sort and see as a grid or a list. Cards show a preview of
+ * file it, or drop files from the computer onto one to upload them there),
+ * and notes and uploaded files together in one list you can search (as you
+ * type), filter, sort and see as a grid or a list. Deleting anything is
+ * undone from its toast rather than asked about first. Cards show a preview of
  * what's inside and a pin. In Personal everything is its owner's alone, so
  * cards don't mark who can see them.
  *
@@ -193,6 +186,7 @@ export function NotesLibrary({
   filters,
   sheetFilters,
   personal = false,
+  canEmptyTrash = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -210,6 +204,8 @@ export function NotesLibrary({
   sheetFilters: React.ReactNode;
   /** A Personal space: no sharing, so no lock or "shared" marks. */
   personal?: boolean;
+  /** This member may empty the trash for good (owners and admins, or Personal's owner). */
+  canEmptyTrash?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -231,6 +227,15 @@ export function NotesLibrary({
   const view = params.get("layout") === "list" ? "list" : "grid";
   const base = `/app/${orgSlug}/notes`;
   const pinned = new Set(pinnedHrefs);
+
+  // Search as you type: the list follows the box a beat after typing stops.
+  useEffect(() => {
+    const next = q.trim();
+    if (next === (params.get("q") ?? "")) return;
+    const timer = setTimeout(() => go({ q: next || null }), 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   function go(patch: Record<string, string | null>) {
     const next = new URLSearchParams(params.toString());
@@ -261,17 +266,29 @@ export function NotesLibrary({
     );
   }
 
+  const isCardDrag = (e: React.DragEvent) => {
+    const types = Array.from(e.dataTransfer.types);
+    return types.includes(NOTE_MIME) || types.includes(FILE_MIME);
+  };
+
+  // A folder takes a card (filed there) or files from the computer (uploaded
+  // there). preventDefault on the drop tells the page's uploader it's handled.
   const dropProps = (id: string | null) => ({
     onDragOver: (e: React.DragEvent) => {
-      const types = Array.from(e.dataTransfer.types);
-      if (!types.includes(NOTE_MIME) && !types.includes(FILE_MIME)) return;
+      const card = isCardDrag(e);
+      if (!card && !isFileDrag(e)) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
+      e.dataTransfer.dropEffect = card ? "move" : "copy";
       setOverFolder(id ?? "none");
     },
     onDragLeave: () => setOverFolder((f) => (f === (id ?? "none") ? null : f)),
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
+      if (!isCardDrag(e) && e.dataTransfer.files.length > 0) {
+        setOverFolder(null);
+        uploadFiles(Array.from(e.dataTransfer.files), id);
+        return;
+      }
       dropOn(id, e.dataTransfer);
     },
   });
@@ -279,37 +296,75 @@ export function NotesLibrary({
   function copyLink(href: string) {
     void navigator.clipboard
       ?.writeText(`${window.location.origin}${href}`)
-      .then(() => toast({ title: "Link copied", tone: "success", duration: 3_000 }))
+      .then(() => toast({ title: "Copied", tone: "success", duration: 3_000 }))
       .catch(() => toast({ title: "Couldn't copy the link", tone: "error" }));
   }
 
-  /** Delete (to "Recently deleted"), with Undo. */
+  /** Delete (to "Recently deleted") at once, with Undo. Nothing asks first. */
   async function remove(item: Item) {
     const isNote = item.kind === "note";
-    const ok = await confirm({
-      title: `Delete “${item.name}”?`,
-      description: `It moves to Recently deleted for ${NOTE_TRASH_DAYS} days, so you can bring it back.`,
-      confirmLabel: isNote ? "Delete note" : "Delete file",
-      run: async () =>
-        (isNote ? await deleteNote(orgId, item.id) : await removeNoteFileAction(orgId, item.id))
-          .error,
-    });
-    if (!ok) return;
-    router.refresh();
-    toast({
-      title: isNote ? "Note deleted" : "File deleted",
-      description: item.name,
-      action: {
-        label: "Undo",
-        run: async () => {
-          const result = isNote
-            ? await restoreNote(orgId, item.id)
-            : await restoreNoteFileAction(orgId, item.id);
-          if (result.error) return result.error;
-          router.refresh();
-        },
+    await undoable({
+      title: "Deleted",
+      run: async () => {
+        const result = isNote
+          ? await deleteNote(orgId, item.id)
+          : await removeNoteFileAction(orgId, item.id);
+        if (result.error) return result.error;
+        router.refresh();
+      },
+      undo: async () => {
+        const result = isNote
+          ? await restoreNote(orgId, item.id)
+          : await restoreNoteFileAction(orgId, item.id);
+        if (result.error) return result.error;
+        router.refresh();
       },
     });
+  }
+
+  /** A folder goes at once; Undo makes it again and files its things back. */
+  async function removeFolder(f: LibraryFolder) {
+    let held:
+      { name: string; color: string | null; noteIds: string[]; fileIds: string[] } | undefined;
+    await undoable({
+      title: "Folder deleted",
+      run: async () => {
+        const result = await deleteFolderAction(orgId, f.id);
+        if (!result.ok) return result.error;
+        held = result.restore;
+        if (folder === f.id) go({ folder: null });
+        router.refresh();
+      },
+      undo: async () => {
+        if (!held) return "Couldn't bring it back.";
+        const made = await createFolderAction(orgId, held.name, held.color);
+        if (!made.ok) return made.error;
+        if (made.id && (held.noteIds.length > 0 || held.fileIds.length > 0)) {
+          const moved = await moveToFolderAction(
+            orgId,
+            { noteIds: held.noteIds, fileIds: held.fileIds },
+            made.id,
+          );
+          if (!moved.ok) return moved.error;
+        }
+        router.refresh();
+      },
+    });
+  }
+
+  /** Empties the trash for good: the one thing here that can't be undone, so it asks. */
+  async function emptyTrash() {
+    const count = totals.trash;
+    const ok = await confirm({
+      title: "Empty the trash?",
+      description: `${count} ${count === 1 ? "item is" : "items are"} deleted for good.`,
+      confirmLabel: "Empty trash",
+      tone: "destructive",
+      run: async () => (await emptyTrashAction(orgId)).error,
+    });
+    if (!ok) return;
+    toast({ title: "Trash emptied", tone: "success", duration: 3_000 });
+    router.refresh();
   }
 
   function restore(kind: "note" | "file", id: string, name: string) {
@@ -321,12 +376,12 @@ export function NotesLibrary({
         setError(result.error);
         return;
       }
-      toast({ title: `Restored “${name}”`, tone: "success" });
+      toast({ title: "Restored", description: name, tone: "success", duration: 3_000 });
       router.refresh();
     });
   }
 
-  /** Dropping a card on "Recently deleted" deletes it (after the usual question). */
+  /** Dropping a card on "Recently deleted" deletes it, with Undo. */
   const trashDropProps = {
     onDragOver: (e: React.DragEvent) => {
       const types = Array.from(e.dataTransfer.types);
@@ -362,6 +417,7 @@ export function NotesLibrary({
     count: number,
     droppable: boolean,
     extra?: React.ReactNode,
+    onRename?: () => void,
   ) => {
     const active = (folder ?? null) === key;
     return (
@@ -377,6 +433,8 @@ export function NotesLibrary({
         <button
           type="button"
           onClick={() => go({ folder: key })}
+          onDoubleClick={onRename}
+          title={onRename ? "Double-click to rename" : undefined}
           aria-current={active ? "true" : undefined}
           className={cn(
             "flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left text-sm",
@@ -384,7 +442,7 @@ export function NotesLibrary({
           )}
         >
           {icon}
-          <span className="truncate">{label}</span>
+          <span className="min-w-0 break-words">{label}</span>
           <span className="text-muted-foreground ms-auto text-xs tabular-nums">{count}</span>
         </button>
         {extra}
@@ -442,7 +500,6 @@ export function NotesLibrary({
                   <NotebookText className="size-[18px]" aria-hidden="true" />
                 )}
               </span>
-              <Badge variant="secondary">Note</Badge>
             </div>
           )}
           <div
@@ -455,21 +512,15 @@ export function NotesLibrary({
               <NotebookText className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
             )}
             <p className="flex min-w-0 items-center gap-1.5 pe-16 text-sm font-medium">
-              {personal ? null : n.visibility === "PRIVATE" ? (
-                n.sharedWithMe || n.shareCount > 0 ? (
-                  <Users
-                    className="text-muted-foreground size-3 shrink-0"
-                    aria-label={n.sharedWithMe ? "Shared with you" : "Shared with some people"}
-                  />
-                ) : (
-                  <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Only you" />
-                )
-              ) : null}
-              <span className="truncate">{name}</span>
+              {/* Private and shared with nobody: a lock. Shared says so in words below. */}
+              {!personal && n.visibility === "PRIVATE" && !n.sharedWithMe && n.shareCount === 0 && (
+                <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Private" />
+              )}
+              <span className="min-w-0 break-words">{name}</span>
             </p>
             {view === "grid" && (
               <p className="text-muted-foreground line-clamp-2 min-h-[2.5em] text-[13px] leading-snug">
-                {firstLine(n.snippet) || "Empty note"}
+                {firstLine(n.snippet)}
               </p>
             )}
             <p
@@ -478,12 +529,11 @@ export function NotesLibrary({
                 view === "list" && "ms-auto flex-nowrap",
               )}
             >
-              <span className="truncate">
-                {view === "list" ? "Note · " : ""}
+              <span>
                 {n.authorName}, {formatDistanceToNow(n.updatedAt, { addSuffix: true })}
               </span>
               {!personal && (n.sharedWithMe || n.shareCount > 0 || n.memberCanEdit) && (
-                <span className="truncate">
+                <span>
                   {n.sharedWithMe
                     ? "Shared with you"
                     : n.memberCanEdit
@@ -492,8 +542,8 @@ export function NotesLibrary({
                 </span>
               )}
               {n.eventTitle && (
-                <span className="inline-flex items-center gap-1 truncate">
-                  <CalendarDays className="size-3" aria-hidden="true" />
+                <span className="inline-flex min-w-0 items-center gap-1 break-words">
+                  <CalendarDays className="size-3 shrink-0" aria-hidden="true" />
                   {n.eventTitle}
                 </span>
               )}
@@ -555,9 +605,6 @@ export function NotesLibrary({
                   draggable={false}
                   className="size-full object-cover"
                 />
-                <Badge variant="secondary" className="absolute bottom-2 left-3">
-                  {FILE_LABELS[family]}
-                </Badge>
               </div>
             ) : (
               <div className="flex items-center gap-2 px-4 pt-4">
@@ -571,7 +618,6 @@ export function NotesLibrary({
                 >
                   <Icon className="size-[18px]" aria-hidden="true" />
                 </span>
-                <Badge variant="secondary">{FILE_LABELS[family]}</Badge>
               </div>
             ))}
           <div
@@ -585,9 +631,9 @@ export function NotesLibrary({
             )}
             <p className="flex min-w-0 items-center gap-1.5 pe-16 text-sm font-medium">
               {!personal && f.visibility === "PRIVATE" && (
-                <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Only you" />
+                <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Private" />
               )}
-              <span className="truncate">{f.name}</span>
+              <span className="min-w-0 break-words">{f.name}</span>
             </p>
             {view === "grid" && family !== "image" && (
               <p className="text-muted-foreground line-clamp-2 min-h-[2.5em] text-[13px] leading-snug">
@@ -600,22 +646,29 @@ export function NotesLibrary({
                 view === "list" && "ms-auto whitespace-nowrap",
               )}
             >
-              {FILE_LABELS[family]} · {formatBytes(f.sizeBytes)} · {f.uploaderName},{" "}
+              {formatBytes(f.sizeBytes)}, {f.uploaderName},{" "}
               {formatDistanceToNow(f.createdAt, { addSuffix: true })}
             </p>
           </div>
         </Link>
         <div className={cardActions}>
+          <button
+            type="button"
+            aria-label={`Download ${f.name}`}
+            title="Download"
+            onClick={() => downloadFrom(`${src}?download=1`)}
+            className={cn(
+              "text-muted-foreground hover:text-foreground hover:bg-muted focus-glow grid size-8 place-items-center rounded-full outline-none",
+              "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+            )}
+          >
+            <Download className="size-4" aria-hidden="true" />
+          </button>
           <PinToggle href={href} label={f.name} className={pinClass(href)} />
           <ItemMenu
             label={`Actions for ${f.name}`}
             className="rounded-lg"
             items={[
-              {
-                label: "Download",
-                icon: Download,
-                onSelect: () => downloadFrom(`${src}?download=1`),
-              },
               { label: "Copy link", icon: Link2, onSelect: () => copyLink(href) },
               f.canMove && {
                 label: "Move to folder…",
@@ -668,12 +721,23 @@ export function NotesLibrary({
     );
   }
 
-  /** What an empty list says; how folders and dragging work is told here, not under every list. */
+  const uploadButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => pickFiles(folder && folder !== "none" && folder !== "trash" ? folder : null)}
+    >
+      Upload
+    </Button>
+  );
+
+  /** What an empty list says: a title and, where it helps, the one thing to do. */
   function emptyCopy(): { title: string; description: string; action?: React.ReactNode } {
     if (params.get("q")) {
       return {
         title: "Nothing matches that search",
-        description: "Try fewer or different words.",
+        description: "",
         action: (
           <Button
             type="button"
@@ -692,7 +756,7 @@ export function NotesLibrary({
     if (params.get("visibility") || params.get("author")) {
       return {
         title: "Nothing matches these filters",
-        description: "Clear them to see everything.",
+        description: "",
         // The same reset as Filter › Clear filters.
         action: (
           <Button
@@ -707,32 +771,14 @@ export function NotesLibrary({
       };
     }
     if (kind === "files") {
-      return {
-        title: "No uploads here yet",
-        description:
-          "Upload PDFs, slides, spreadsheets and images with New › Upload a file. They open right here.",
-      };
+      return { title: "No uploads yet", description: "", action: uploadButton };
     }
     if (kind === "notes") {
-      return {
-        title: "No notes here yet",
-        description:
-          "Start one with New: blank, from a template, or from a Word document or Google Doc.",
-      };
+      return { title: "No notes yet", description: "" };
     }
-    if (folder === "none")
-      return { title: "Everything is in a folder", description: "Nothing is left unfiled." };
-    if (folder) {
-      return {
-        title: "This folder is empty",
-        description:
-          "Drag notes and files onto it, or use New while it's open: what you make lands here.",
-      };
-    }
-    return {
-      title: "Nothing here yet",
-      description: "Use New to write a note or upload a file.",
-    };
+    if (folder === "none") return { title: "Everything is in a folder", description: "" };
+    if (folder) return { title: "Empty. Drag files here.", description: "", action: uploadButton };
+    return { title: "Nothing here yet", description: "", action: uploadButton };
   }
 
   return (
@@ -755,17 +801,7 @@ export function NotesLibrary({
             true,
           )}
         </div>
-        <div className="space-y-0.5">
-          <p
-            className="eyebrow text-muted-foreground px-2.5 pb-1"
-            title={
-              personal
-                ? undefined
-                : "Folders are shared with the organization; private notes stay private inside them."
-            }
-          >
-            Folders
-          </p>
+        <div className="space-y-0.5 border-t pt-3">
           {folders.map((f) =>
             renaming?.id === f.id ? (
               <form
@@ -773,9 +809,9 @@ export function NotesLibrary({
                 className="px-1"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const name = renaming.name;
+                  const name = renaming.name.trim();
                   setRenaming(null);
-                  run(() => updateFolderAction(orgId, f.id, { name }));
+                  if (name && name !== f.name) run(() => updateFolderAction(orgId, f.id, { name }));
                 }}
               >
                 <Input
@@ -783,7 +819,10 @@ export function NotesLibrary({
                   value={renaming.name}
                   maxLength={80}
                   onChange={(e) => setRenaming({ id: f.id, name: e.target.value })}
-                  onBlur={() => setRenaming(null)}
+                  onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setRenaming(null);
+                  }}
                   aria-label="Folder name"
                 />
               </form>
@@ -812,85 +851,26 @@ export function NotesLibrary({
                     label={`folder ${f.name}`}
                     className="rounded-lg border-transparent bg-transparent opacity-0 shadow-none group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
                   />
-                  {f.canEdit ? (
-                    // Not an ItemMenu: the colour swatches sit inside the menu.
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`${f.name} options`}
-                          className="text-muted-foreground me-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
-                        >
-                          <MoreHorizontal className="size-4" aria-hidden="true" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => setRenaming({ id: f.id, name: f.name })}>
-                          <Pencil className="size-4" aria-hidden="true" />
-                          Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-                          Colour
-                        </DropdownMenuLabel>
-                        <div className="flex gap-1.5 px-2 pb-2">
-                          {[null, ...COLORS].map((c) => (
-                            <button
-                              key={c ?? "none"}
-                              type="button"
-                              aria-label={
-                                c ? TAG_COLOR_NAMES[c] : "Match the theme"
-                              }
-                              aria-pressed={tagColorOf(f.color) === c}
-                              onClick={() =>
-                                run(() => updateFolderAction(orgId, f.id, { color: c }))
-                              }
-                              className="grid size-5 place-items-center rounded-md border"
-                              style={{ background: folderTone(c) }}
-                            >
-                              {tagColorOf(f.color) === c && (
-                                <Check className="text-background size-3" aria-hidden="true" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={async () => {
-                            const ok = await confirm({
-                              title: `Delete the folder “${f.name}”?`,
-                              description: "Its notes and files stay, just out of the folder.",
-                              confirmLabel: "Delete folder",
-                              run: async () => {
-                                const result = await deleteFolderAction(orgId, f.id);
-                                return result.ok ? undefined : result.error;
-                              },
-                            });
-                            if (!ok) return;
-                            if (folder === f.id) go({ folder: null });
-                            router.refresh();
-                            toast({
-                              title: `Folder “${f.name}” deleted`,
-                              description: "Everything in it is under Not in a folder.",
-                            });
-                          }}
-                        >
-                          <Trash2 className="size-4" aria-hidden="true" />
-                          Delete folder
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : null}
+                  {f.canEdit && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete ${f.name}`}
+                      title="Delete"
+                      onClick={() => void removeFolder(f)}
+                      className="text-muted-foreground hover:text-tint-danger-foreground me-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </Button>
+                  )}
                 </>,
+                f.canEdit ? () => setRenaming({ id: f.id, name: f.name }) : undefined,
               )
             ),
           )}
           {folders.length === 0 && (
-            <p className="text-muted-foreground px-2.5 text-xs">
-              No folders yet. Make one with New › New folder, then drag cards onto it.
-            </p>
+            <p className="text-muted-foreground px-2.5 text-xs">No folders yet.</p>
           )}
         </div>
         <div
@@ -959,8 +939,8 @@ export function NotesLibrary({
         <FilterSheet
           open={filtersOpen}
           onOpenChange={setFiltersOpen}
-          title="Filter files"
-          description="The library shows only what matches."
+          title="Filters"
+          description=""
           canClear={Boolean(
             folder || ["tab", "visibility", "author", "sort"].some((k) => params.get(k)),
           )}
@@ -988,7 +968,7 @@ export function NotesLibrary({
         {/* On a phone, which folder you're in (Everything says nothing). */}
         {(folder || error) && (
           <div className="space-y-1 md:hidden">
-            {folder && <h2 className="heading truncate text-lg">{heading}</h2>}
+            {folder && <h2 className="heading text-lg break-words">{heading}</h2>}
             {error && <p className="text-destructive text-xs">{error}</p>}
           </div>
         )}
@@ -1001,7 +981,7 @@ export function NotesLibrary({
                 aria-hidden="true"
               />
             ) : null}
-            <span className="truncate">{heading}</span>
+            <span className="min-w-0 break-words">{heading}</span>
           </h2>
           {!inTrash && (
             <>
@@ -1056,6 +1036,12 @@ export function NotesLibrary({
                         ? (c) => run(() => updateFolderAction(orgId, f.id, { color: c }))
                         : undefined
                     }
+                    onRename={
+                      f.canEdit
+                        ? (name) => run(() => updateFolderAction(orgId, f.id, { name }))
+                        : undefined
+                    }
+                    onDelete={f.canEdit ? () => void removeFolder(f) : undefined}
                     dropping={overFolder === f.id}
                     onOpen={() => go({ folder: f.id })}
                     dropProps={dropProps(f.id)}
@@ -1072,7 +1058,12 @@ export function NotesLibrary({
         )}
 
         {inTrash ? (
-          <TrashView trash={trash} pending={pending} onRestore={restore} />
+          <TrashView
+            trash={trash}
+            pending={pending}
+            onRestore={restore}
+            onEmpty={canEmptyTrash && totals.trash > 0 ? () => void emptyTrash() : undefined}
+          />
         ) : entries.length === 0 ? (
           atRoot && folders.length > 0 ? null : (
             <EmptyState {...emptyCopy()} />
@@ -1108,7 +1099,7 @@ export function NotesLibrary({
           const name = folderId
             ? (newName ?? folders.find((f) => f.id === folderId)?.name ?? "the folder")
             : "Not in a folder";
-          toast({ title: `Moved to ${name}`, description: item.name, duration: 4_000 });
+          toast({ title: "Moved", description: name, duration: 3_000 });
         }}
       />
     </div>
@@ -1138,7 +1129,7 @@ function MoveDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Move to a folder</DialogTitle>
-          <DialogDescription className="truncate">{item?.name}</DialogDescription>
+          <DialogDescription className="break-words">{item?.name}</DialogDescription>
         </DialogHeader>
         <ul className="-mx-1 max-h-72 space-y-0.5 overflow-y-auto">
           {choices.map((c) => {
@@ -1160,7 +1151,7 @@ function MoveDialog({
                   ) : (
                     <Inbox className="size-4 shrink-0" aria-hidden="true" />
                   )}
-                  <span className="truncate">{c.name}</span>
+                  <span className="min-w-0 break-words">{c.name}</span>
                   {current && (
                     <span className="text-muted-foreground ms-auto text-xs">Here now</span>
                   )}
@@ -1170,11 +1161,7 @@ function MoveDialog({
           })}
         </ul>
         <div className="space-y-1.5 border-t pt-3">
-          <p className="text-muted-foreground text-xs font-medium">
-            {folders.length === 0
-              ? "No folders yet. Make one and move it there:"
-              : "Or into a new folder:"}
-          </p>
+          <p className="text-muted-foreground text-xs font-medium">New folder</p>
           <NewFolderForm
             orgId={orgId}
             submitLabel="Create and move"
@@ -1190,10 +1177,13 @@ function TrashView({
   trash,
   pending,
   onRestore,
+  onEmpty,
 }: {
   trash: { notes: TrashNote[]; files: TrashFile[] } | null;
   pending: boolean;
   onRestore: (kind: "note" | "file", id: string, name: string) => void;
+  /** Set for whoever may empty it for good. */
+  onEmpty?: () => void;
 }) {
   const rows = [
     ...(trash?.notes ?? []).map((n) => ({
@@ -1219,23 +1209,27 @@ function TrashView({
       {rows.length === 0 ? (
         <EmptyState
           title="Nothing here"
-          description={`When you delete a note or a file, it waits here for ${NOTE_TRASH_DAYS} days in case you change your mind.`}
+          description={`Deleted items stay ${NOTE_TRASH_DAYS} days.`}
         />
       ) : (
         <>
-          <p className="text-muted-foreground text-sm">
-            Notes and files deleted in the last {NOTE_TRASH_DAYS} days. Restore puts them back where
-            they were; after {NOTE_TRASH_DAYS} days deleted files are gone for good.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-muted-foreground text-sm">Kept {NOTE_TRASH_DAYS} days.</p>
+            {onEmpty && (
+              <Button type="button" variant="outline" size="sm" onClick={onEmpty}>
+                <Trash2 className="size-4" aria-hidden="true" />
+                Empty trash
+              </Button>
+            )}
+          </div>
           <ul className={cn("bg-card edge rounded-tile divide-y", pending && "opacity-70")}>
             {rows.map((r) => (
               <li key={`${r.kind}-${r.id}`} className="flex items-center gap-3 px-3 py-2.5">
                 <r.Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{r.name}</p>
-                  <p className="text-muted-foreground truncate text-xs">
-                    {r.kind === "note" ? "Note" : "File"} · {r.detail} · deleted{" "}
-                    {formatDistanceToNow(r.deletedAt, { addSuffix: true })}
+                  <p className="text-sm font-medium break-words">{r.name}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {r.detail}, deleted {formatDistanceToNow(r.deletedAt, { addSuffix: true })}
                   </p>
                 </div>
                 <Button
