@@ -186,6 +186,26 @@ export async function bulkAssign(
   return run(() => bulkAssignTx(orgId, { taskIds, userId, ...options }));
 }
 
+/**
+ * The table's bulk Epic, Due and Tag: one ordinary update per task (the
+ * same checks as editing each by hand), then one refresh. Stops at the first
+ * refusal and says which.
+ */
+export async function bulkUpdate(
+  orgId: string,
+  items: { taskId: string; input: Record<string, unknown> }[],
+): Promise<{ error?: string }> {
+  if (items.length > 200) return { error: "Pick 200 tasks or fewer." };
+  for (const item of items) {
+    const result = await run(() => updateTaskTx(orgId, item.taskId, item.input), {
+      refresh: false,
+    });
+    if (result.error) return { error: result.error };
+  }
+  refresh();
+  return {};
+}
+
 export async function bulkDelete(orgId: string, taskIds: string[]) {
   return run(() => bulkDeleteTx(orgId, taskIds));
 }
