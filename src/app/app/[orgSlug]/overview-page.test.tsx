@@ -50,6 +50,7 @@ const db = {
   poll: { findMany: vi.fn() },
   membership: { findMany: vi.fn(), count: vi.fn() },
   budgetPeriod: { count: vi.fn() },
+  orgChartVersion: { count: vi.fn(async () => 0) },
   note: { count: vi.fn() },
   databaseDefinition: { count: vi.fn() },
   // Cards the viewer hid from their own Up next; nobody has hidden any here.
@@ -58,6 +59,8 @@ const db = {
 
 vi.mock("@/app/app/[orgSlug]/getting-started-actions", () => ({
   setStartedStepSkipped: vi.fn(),
+  hideGettingStarted: vi.fn(),
+  restoreStartedSkipped: vi.fn(),
 }));
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.getOrgContextBySlug,
@@ -403,7 +406,8 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain("Set up your budgets");
     expect(html).toContain("Create a task or an epic");
     expect(html).not.toContain("sections");
-    expect(html).toContain("Checked off as not needed.");
+    expect(html).not.toContain("Name the organization");
+    expect(html).toContain("Hide");
 
     // Everything done or checked off: the card is gone.
     db.membership.count.mockResolvedValue(5);
@@ -414,7 +418,7 @@ describe("the Moonstone Overview", () => {
       user: viewer,
       organization: { ...org, logo: { key: "k" } },
       role: "OWNER",
-      settings: { startedSkipped: ["database"] },
+      settings: { startedSkipped: ["database", "teams"], eventTypes: [] },
     });
     expect(await render()).not.toContain("Get your organization started");
   });

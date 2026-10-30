@@ -5,18 +5,14 @@ import { ClubBasicsStep } from "@/app/onboarding/organization/club-basics-step";
 import { EmailsStep } from "@/app/onboarding/organization/[orgSlug]/emails-step";
 import { setupEmailSwitches } from "@/lib/onboarding/emails";
 import { EventsStep } from "@/app/onboarding/organization/[orgSlug]/events-step";
-import { IMessageStep } from "@/app/onboarding/organization/[orgSlug]/imessage-step";
 import { ImportStep } from "@/app/onboarding/organization/[orgSlug]/import-step";
 import { InviteStep } from "@/app/onboarding/organization/[orgSlug]/invite-step";
 import { LabelsStep } from "@/app/onboarding/organization/[orgSlug]/labels-step";
 import { PictureStep } from "@/app/onboarding/organization/[orgSlug]/picture-step";
 import { TeamsStep } from "@/app/onboarding/organization/[orgSlug]/teams-step";
-import { ToolsStep } from "@/app/onboarding/organization/[orgSlug]/tools-step";
 import { ProfileForm } from "@/app/onboarding/profile/profile-form";
 import { StartScreen } from "@/app/onboarding/start/start-screen";
 import { BrandRoot } from "@/components/brand/brand-root";
-import { BrandMark } from "@/components/marketing/brand-mark";
-import { BRANDS } from "@/components/marketing/brands";
 import { PreviewFlow } from "@/components/onboarding/preview-flow";
 import { exitClass, SetupShell } from "@/components/onboarding/setup-shell";
 
@@ -31,27 +27,18 @@ import { exitClass, SetupShell } from "@/components/onboarding/setup-shell";
 
 const FLOWS = {
   Start: ["start"],
-  "Create an organization": [
-    "basics",
+  "Create an organization": ["basics", "invite"],
+  "Set up from the Overview": [
     "import",
     "picture",
     "labels",
     "events",
     "teams",
     "emails",
-    "imessage",
-    "tools",
-    "invite",
     "profile",
   ],
   "Join an organization": ["join-profile"],
-  "Just me": [
-    "personal-import",
-    "personal-labels",
-    "personal-emails",
-    "personal-imessage",
-    "personal-profile",
-  ],
+  "Just me": ["personal-import", "personal-labels", "personal-emails", "personal-profile"],
 } as const;
 
 const SCREENS = Object.values(FLOWS).flat() as string[];
@@ -171,28 +158,9 @@ function Body({ screen }: { screen: string }) {
             recapByEmail={personal ? null : true}
           />
         );
-      case "imessage":
-        return <IMessageStep {...base} />;
-      case "tools":
-        return (
-          <ToolsStep
-            {...base}
-            tools={BRANDS.map((b) => ({
-              slug: b.slug,
-              name: b.name,
-              does: b.group,
-              logo: <BrandMark brand={b} size={34} />,
-            }))}
-          />
-        );
       case "invite":
         return (
-          <InviteStep
-            {...base}
-            code="RPKAYWSF"
-            joinUrl="http://localhost:3000/join"
-            invites={[]}
-          />
+          <InviteStep {...base} code="RPKAYWSF" joinUrl="http://localhost:3000/join" invites={[]} />
         );
       case "profile":
         return (

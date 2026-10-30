@@ -83,8 +83,9 @@ export const saveOrgEmailsStepAction = step(async (ctx, recapByEmail: unknown) =
 });
 
 /**
- * After a step saved (or was skipped): the next step, else where setup ends: the organization's home as its admin, or
- * the Personal space.
+ * After a step saved (or was skipped): the next step, else where setup ends:
+ * the organization's Overview (where "Get your organization started" lists
+ * what's left), or the Personal space.
  */
 export async function goToNextSetupStep(
   flow: SetupFlow,
@@ -94,7 +95,7 @@ export async function goToNextSetupStep(
   const next = nextSetupStep(flow, current);
   const slug = /^[a-z0-9-]{1,60}$/.test(orgSlug) ? orgSlug : "";
   if (next) redirect(setupStepHref(flow, slug, next));
-  redirect(!slug ? "/app" : flow === "org" ? `/app/${slug}?welcome=1` : `/app/${slug}`);
+  redirect(!slug ? "/app" : `/app/${slug}`);
 }
 
 /** goToNextSetupStep for an organization's setup. */

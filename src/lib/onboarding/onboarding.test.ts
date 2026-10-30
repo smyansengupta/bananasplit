@@ -31,6 +31,7 @@ import {
   joinMajor,
   nextSetupStep,
   onboardingHref,
+  ORG_FLOW,
   ORG_STEPS,
   PERSONAL_STEPS,
   previousSetupStep,
@@ -144,27 +145,30 @@ describe("onboarding steps", () => {
     expect(clubRoleHref("robotics")).toBe("/onboarding/join/robotics/profile");
   });
 
-  it("sets an organization up import first and the profile last, Finance and the pulse gone", () => {
-    expect(ORG_STEPS.slice(0, 2)).toEqual(["basics", "import"]);
+  it("sets an organization up in three screens: name, invite, bring", () => {
+    expect(ORG_FLOW).toEqual(["basics", "invite", "bring"]);
     // Back from the first step after creating edits the organization; no Back before it.
-    expect(previousSetupStep("org", "import")).toBe("basics");
+    expect(previousSetupStep("org", "invite")).toBe("basics");
     expect(previousSetupStep("org", "basics")).toBeNull();
-    expect(ORG_STEPS.at(-1)).toBe("profile");
-    expect(ORG_STEPS).not.toContain("finance" as never);
-    expect(ORG_STEPS).not.toContain("pulse" as never);
-    expect(nextSetupStep("org", "bring")).toBe("profile");
-    expect(nextSetupStep("org", "profile")).toBeNull();
+    expect(nextSetupStep("org", "invite")).toBe("bring");
+    // Bring is the last; then the Overview, where the rest waits.
+    expect(nextSetupStep("org", "bring")).toBeNull();
+    expect(ORG_STEPS).not.toContain("imessage" as never);
+    expect(ORG_STEPS).not.toContain("tools" as never);
     expect(setupStepHref("org", "acme", "teams")).toBe("/onboarding/organization/acme/teams");
   });
 
-  it("walks every step in order, whatever was picked to import (no importer skips any yet)", () => {
-    expect(nextSetupStep("org", "picture")).toBe("labels");
-    expect(previousSetupStep("org", "emails")).toBe("teams");
+  it("opens the other setup steps on their own, from the Overview", () => {
+    for (const step of ["import", "picture", "labels", "events", "teams", "emails", "profile"]) {
+      expect(ORG_STEPS).toContain(step as never);
+      expect(nextSetupStep("org", step as never)).toBeNull();
+      expect(previousSetupStep("org", step as never)).toBeNull();
+    }
     expect(nextSetupStep("personal", "import")).toBe("labels");
   });
 
-  it("sets the personal workspace up with iMessage, no event types, the profile last", () => {
-    expect(PERSONAL_STEPS).toEqual(["import", "labels", "emails", "imessage", "profile"]);
+  it("sets the personal workspace up without iMessage, the profile last", () => {
+    expect(PERSONAL_STEPS).toEqual(["import", "labels", "emails", "profile"]);
     expect(previousSetupStep("personal", "import")).toBeNull();
     expect(setupStepHref("personal", "me-x", "emails")).toBe("/onboarding/personal/emails");
   });
