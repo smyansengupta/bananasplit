@@ -1,8 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/back-link";
-import { Loader2, Plus, X } from "@/components/icons";
-import Link from "next/link";
+import { ChevronRight, Loader2, Plus, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import {
   useRef,
@@ -15,6 +14,10 @@ import {
 } from "react";
 
 import { createQuestionPoll } from "@/app/app/[orgSlug]/calendar/polls/question-actions";
+import { createFormAction, saveSettingsAction } from "@/app/app/[orgSlug]/forms/actions";
+import { Segmented } from "@/components/ui/segmented";
+import { toast } from "@/components/ui/toaster";
+import { newId } from "@/lib/forms/questions";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,9 +40,14 @@ import { cn } from "@/lib/utils";
 import { plain } from "./poll-format";
 
 /**
- * "Ask a question": the question, its options and how the vote works.
- * Blank option rows are ignored; Enter in an option moves on (or adds a
- * row), and pasting a list fills several rows at once.
+ * Quick poll: the question and its options on one screen, everything else
+ * folded under Options. Blank option rows are ignored; Enter in an option
+ * moves on (or adds a row), and pasting a list fills several rows at once.
+ *
+ * Members only, it's a question poll (live counts, anonymity the database
+ * enforces, members adding options). Anyone with the link (owners and
+ * admins), it's a one-question form, answered at /f/{slug} with no sign-in.
+ * Either way, Create copies the link.
  */
 
 const DAY = 86_400_000;
@@ -75,7 +83,16 @@ function whenLabel(date: Date): string {
   );
 }
 
-export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
+export function QuestionPollForm({
+  orgId,
+  orgSlug,
+  canMakeForms = false,
+}: {
+  orgId: string;
+  orgSlug: string;
+  /** Owners and admins can open a poll to anyone with the link. */
+  canMakeForms?: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +111,8 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
   const [anonymous, setAnonymous] = useState(false);
   const [allowMemberOptions, setAllowMemberOptions] = useState(false);
   const [hideResults, setHideResults] = useState(false);
+  const [who, setWho] = useState<"members" | "anyone">("members");
+  const [more, setMore] = useState(false);
 
   const [closing, setClosing] = useState<Closing>("none");
   const [presetAt, setPresetAt] = useState<Date | null>(null);
@@ -193,6 +212,36 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
     }
     setError(null);
     startTransition(async () => {
+      if (who === "anyone") {
+        const labels = options.map((o) => cleanText(o.text)).filter(Boolean);
+        const made = await createFormAction(orgId, {
+          kind: "QUICK_POLL",
+          title: cleanText(question),
+          questions: [
+            {
+              id: newId(),
+              type: multiple ? "checkboxes" : "choice",
+              title: cleanText(question),
+              help: description.trim() || undefined,
+              required: true,
+              allowOther: allowMemberOptions || undefined,
+              options: labels.map((label) => ({ id: newId(), label })),
+            },
+          ],
+        });
+        if (made.error || !made.data) {
+          setError(made.error ?? "Something went wrong. Try again.");
+          return;
+        }
+        await saveSettingsAction(orgId, made.data.id, {
+          anonymous,
+          hideResultsUntilClosed: hideResults,
+          closesAt: closesAt ? closesAt.toISOString() : null,
+        });
+        await copyLink(`${window.location.origin}/f/${made.data.slug}`);
+        router.push(`/app/${orgSlug}/forms/${made.data.id}?tab=share`);
+        return;
+      }
       const result = await createQuestionPoll(orgId, {
         question,
         description: description.trim() || null,
@@ -207,18 +256,28 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
         setError(result.error ?? "Something went wrong. Try again.");
         return;
       }
-      router.push(`/app/${orgSlug}/calendar/polls/${result.pollId}`);
+      const href = `/app/${orgSlug}/forms/polls/${result.pollId}`;
+      await copyLink(`${window.location.origin}${href}`);
+      router.push(href);
     });
   }
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-8" noValidate>
       <div className="space-y-3">
-        <BackLink href={`/app/${orgSlug}/calendar/polls`} label="Polls" />
-        <PageHeader
-          title="Ask a question"
-          description="Give the options and let the organization vote. Everyone in the organization can answer."
-        />
+        <BackLink href={`/app/${orgSlug}/forms`} label="Forms" />
+        <PageHeader title="Quick poll" />
+        {canMakeForms && (
+          <Segmented
+            label="Who can answer"
+            value={who}
+            onSelect={(v) => setWho(v === "anyone" ? "anyone" : "members")}
+            options={[
+              { value: "members", label: "Members" },
+              { value: "anyone", label: "Anyone with the link" },
+            ]}
+          />
+        )}
       </div>
 
       <Section title="Question">
@@ -229,7 +288,7 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             maxLength={QUESTION_MAX}
-            placeholder="e.g. Where should we go for the end-of-term social?"
+            placeholder="Where should we go for the end-of-term social?"
             autoFocus
             required
             onKeyDown={(e) => {
@@ -250,7 +309,7 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
             onChange={(e) => setDescription(e.target.value)}
             maxLength={DESCRIPTION_MAX}
             rows={2}
-            placeholder="Anything people should know before they vote"
+            placeholder="Anything to know before voting"
           />
         </div>
       </Section>
@@ -325,94 +384,108 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
             <Plus aria-hidden className="size-4" />
             Add option
           </Button>
-          <p className="text-muted-foreground text-xs">
-            {options.length >= MAX_OPTIONS
-              ? `That's the most a poll can have (${MAX_OPTIONS}).`
-              : "Tip: paste a list to add several at once."}
-          </p>
+          {options.length >= MAX_OPTIONS && (
+            <p className="text-muted-foreground text-xs">Up to {MAX_OPTIONS} options.</p>
+          )}
         </div>
       </Section>
 
-      <Section title="How voting works">
-        <div className="bg-card divide-y rounded-xl border px-4">
-          <Setting
-            id="qpoll-multiple"
-            label="Allow more than one choice"
-            description="People can pick several options instead of one."
-            checked={multiple}
-            onChange={setMultiple}
-          />
-          <Setting
-            id="qpoll-anonymous"
-            label="Anonymous voting"
-            description="Only the counts are shown. Nobody, not even admins or you, can see who voted for what. This can't be changed later."
-            checked={anonymous}
-            onChange={setAnonymous}
-          />
-          <Setting
-            id="qpoll-member-options"
-            label="Members can add options"
-            description="Anyone in the organization can add an option while the poll is open."
-            checked={allowMemberOptions}
-            onChange={setAllowMemberOptions}
-          />
-          <Setting
-            id="qpoll-hide-results"
-            label="Hide results until the poll closes"
-            description="Voters see only their own choice until then. You and admins can still see the counts."
-            checked={hideResults}
-            onChange={setHideResults}
-          />
-        </div>
-      </Section>
+      <button
+        type="button"
+        onClick={() => setMore((v) => !v)}
+        aria-expanded={more}
+        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-full py-1 text-sm font-medium transition-colors"
+      >
+        <ChevronRight
+          className={cn("size-4 transition-transform duration-150", more && "rotate-90")}
+          aria-hidden="true"
+        />
+        Options
+      </button>
 
-      <Section title="When it closes">
-        <div role="radiogroup" aria-label="When the poll closes" className="flex flex-wrap gap-1.5">
-          {CLOSING.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              role="radio"
-              aria-checked={closing === c.id}
-              onClick={() => pickClosing(c.id)}
-              className={cn(
-                "focus-visible:ring-ring/50 h-8 rounded-md border px-3 text-sm transition-colors outline-none focus-visible:ring-3",
-                closing === c.id
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "bg-background hover:bg-muted",
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        {closing === "custom" ? (
-          <div className="grid gap-1.5">
-            <Label htmlFor="qpoll-closes">Closes at</Label>
-            <Input
-              id="qpoll-closes"
-              type="datetime-local"
-              value={customAt}
-              min={customMin}
-              onChange={(e) => {
-                setCustomAt(e.target.value);
-                setError(null);
-              }}
-              aria-describedby="qpoll-closes-help"
-              className="sm:max-w-xs"
+      {more && (
+        <Section title="How voting works">
+          <div className="bg-card divide-y rounded-xl border px-4">
+            <Setting
+              id="qpoll-multiple"
+              label="Allow more than one choice"
+              checked={multiple}
+              onChange={setMultiple}
             />
-            <p id="qpoll-closes-help" className="text-muted-foreground text-xs">
-              In your time zone. You can also close it by hand at any time.
-            </p>
+            <Setting
+              id="qpoll-anonymous"
+              label="Anonymous voting"
+              description="Can't be changed later."
+              checked={anonymous}
+              onChange={setAnonymous}
+            />
+            <Setting
+              id="qpoll-member-options"
+              label={who === "anyone" ? "Let people add an option" : "Members can add options"}
+              checked={allowMemberOptions}
+              onChange={setAllowMemberOptions}
+            />
+            <Setting
+              id="qpoll-hide-results"
+              label="Hide results until the poll closes"
+              checked={hideResults}
+              onChange={setHideResults}
+            />
           </div>
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            {presetAt
-              ? `Closes ${whenLabel(presetAt)}, your time. You can close or reopen it by hand too.`
-              : "Stays open until you close it."}
-          </p>
-        )}
-      </Section>
+        </Section>
+      )}
+
+      {more && (
+        <Section title="When it closes">
+          <div
+            role="radiogroup"
+            aria-label="When the poll closes"
+            className="flex flex-wrap gap-1.5"
+          >
+            {CLOSING.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                role="radio"
+                aria-checked={closing === c.id}
+                onClick={() => pickClosing(c.id)}
+                className={cn(
+                  "focus-visible:ring-ring/50 h-8 rounded-md border px-3 text-sm transition-colors outline-none focus-visible:ring-3",
+                  closing === c.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-background hover:bg-muted",
+                )}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          {closing === "custom" ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="qpoll-closes">Closes at</Label>
+              <Input
+                id="qpoll-closes"
+                type="datetime-local"
+                value={customAt}
+                min={customMin}
+                onChange={(e) => {
+                  setCustomAt(e.target.value);
+                  setError(null);
+                }}
+                aria-describedby="qpoll-closes-help"
+                className="sm:max-w-xs"
+              />
+              <p id="qpoll-closes-help" className="text-muted-foreground text-xs">
+                Your time zone.
+              </p>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {presetAt ? `Closes ${whenLabel(presetAt)}` : "Open until you close it"}
+            </p>
+          )}
+        </Section>
+      )}
 
       <div className="space-y-3 border-t pt-4">
         {error ? (
@@ -426,12 +499,9 @@ export function QuestionPollForm({ orgId, orgSlug }: { orgId: string; orgSlug: s
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" asChild>
-            <Link href={`/app/${orgSlug}/calendar/polls`}>Cancel</Link>
-          </Button>
           <Button type="submit" disabled={isPending || Boolean(missing)}>
             {isPending && <Loader2 aria-hidden className="size-4 animate-spin" />}
-            Create poll
+            Create and copy link
           </Button>
         </div>
       </div>
@@ -457,7 +527,7 @@ function Setting({
 }: {
   id: string;
   label: string;
-  description: string;
+  description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
 }) {
@@ -467,17 +537,29 @@ function Setting({
         <Label htmlFor={id} className="leading-snug">
           {label}
         </Label>
-        <p id={`${id}-help`} className="text-muted-foreground text-xs">
-          {description}
-        </p>
+        {description && (
+          <p id={`${id}-help`} className="text-muted-foreground text-xs">
+            {description}
+          </p>
+        )}
       </div>
       <Switch
         id={id}
         checked={checked}
         onCheckedChange={onChange}
-        aria-describedby={`${id}-help`}
+        aria-describedby={description ? `${id}-help` : undefined}
         className="mt-0.5"
       />
     </div>
   );
+}
+
+/** Copies the poll's link, saying so; a browser that refuses still gets the poll. */
+async function copyLink(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast({ title: "Link copied" });
+  } catch {
+    toast({ title: "Poll created" });
+  }
 }

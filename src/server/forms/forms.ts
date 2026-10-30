@@ -176,7 +176,7 @@ function choicesFor(q: Question, existing: readonly Choice[]): Choice[] {
 export async function createForm(
   actor: Actor,
   input: { templateId?: string; title?: string; kind?: FormKind; questions?: Question[] },
-): Promise<{ id: string }> {
+): Promise<{ id: string; slug: string }> {
   requireManage(actor);
   const { db, organizationId, userId } = actor;
   const template = findTemplate(input.templateId);
@@ -234,7 +234,7 @@ export async function createForm(
       // A quick poll from Forms: anyone with the link, results after you answer.
       ...(input.kind === "QUICK_POLL" ? { notifyOwner: false } : {}),
     },
-    select: { id: true },
+    select: { id: true, slug: true },
   });
   await saveQuestions(actor, form.id, questions);
   return form;

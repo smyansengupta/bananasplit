@@ -453,7 +453,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       detail: "A quick vote",
       keywords: ["new poll", "create poll", "vote", "survey", "question"],
       icon: "MessageCircleQuestion",
-      command: { type: "href", href: `${base}/calendar/polls/ask` },
+      command: { type: "href", href: `${base}/forms/new?poll=1` },
     },
     "forms",
   );
