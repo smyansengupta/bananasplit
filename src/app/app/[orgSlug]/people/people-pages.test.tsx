@@ -17,7 +17,19 @@ const { getOrgContextBySlugMock, getPersonSheetMock, loadDirectoryMock } = vi.ho
   loadDirectoryMock: vi.fn(),
 }));
 
-vi.mock("@/server/db/context", () => ({ getOrgContextBySlug: getOrgContextBySlugMock }));
+vi.mock("@/server/db/context", () => ({
+  getOrgContextBySlug: getOrgContextBySlugMock,
+  // The roster extras (emails, invites, the join code) a member doesn't get.
+  withOrgTx: (_orgId: string, fn: (tx: { db: unknown }) => unknown) =>
+    fn({
+      db: {
+        membership: { findMany: async () => [] },
+        invitation: { findMany: async () => [] },
+      },
+    }),
+  withOrgAction: (fn: unknown) => fn,
+}));
+vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
 vi.mock("@/components/pins/pins-context", () => ({ PinToggle: () => null }));
 vi.mock("next/navigation", async () => {
   const actual = await vi.importActual<typeof import("next/navigation")>("next/navigation");
@@ -80,9 +92,20 @@ function sheet() {
     timezone: "America/New_York",
     team: { key: "p_ops", name: "Ops & Programs", slot: 2 },
     positions: [{ key: "vp-ops", title: "VP Ops & Programs", isAdvisor: false }],
-    reportsTo: [{ key: "president", title: "President", person: "Jackson Lamoureux", userId: "u_jackson" }],
-    alsoReportsTo: [{ key: "head-of-growth", title: "Head of Growth", person: "Kristine Min", userId: "u_kristine" }],
-    leads: [{ key: "head-of-tech", title: "Head of Tech", person: "Smyan Sengupta", userId: "u_smyan" }],
+    reportsTo: [
+      { key: "president", title: "President", person: "Jackson Lamoureux", userId: "u_jackson" },
+    ],
+    alsoReportsTo: [
+      {
+        key: "head-of-growth",
+        title: "Head of Growth",
+        person: "Kristine Min",
+        userId: "u_kristine",
+      },
+    ],
+    leads: [
+      { key: "head-of-tech", title: "Head of Tech", person: "Smyan Sengupta", userId: "u_smyan" },
+    ],
     tasks: [{ id: "t1", title: "Exec sync agenda", dueKey: "2026-10-20" }],
     taskCount: 1,
     todayKey: "2026-10-19",
@@ -91,7 +114,12 @@ function sheet() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getOrgContextBySlugMock.mockResolvedValue({ user: viewer, organization: org, role: "MEMBER", settings: null });
+  getOrgContextBySlugMock.mockResolvedValue({
+    user: viewer,
+    organization: org,
+    role: "MEMBER",
+    settings: null,
+  });
 });
 
 describe("people pages privacy", () => {
@@ -167,7 +195,7 @@ describe("people pages privacy", () => {
     );
   });
 
-  it("lists members with their title and team, with a live summary", async () => {
+  it("lists members with their title and team", async () => {
     loadDirectoryMock.mockResolvedValue({
       people: [
         {
@@ -190,7 +218,8 @@ describe("people pages privacy", () => {
     });
     const html = renderToStaticMarkup(await PeoplePage(peopleParams));
     expect(loadDirectoryMock).toHaveBeenCalledWith("org_cbc", "America/New_York");
-    expect(html).toContain("1 member · 1 team · 1 free now");
+    // The count lives in the list's own status line, not a header summary.
+    expect(html).toContain("1 member");
     expect(html).toContain("Lucas Salzgeber");
     // The dense list is the default now, and it shows the title and the team
     // as separate cells rather than one joined line.
@@ -198,6 +227,6 @@ describe("people pages privacy", () => {
     expect(html).toContain("Growth");
     expect(html).toContain('data-person-id="u_lucas"');
     // Members can't invite: no create button.
-    expect(html).not.toContain("Invite people");
+    expect(html).not.toContain(">Invite<");
   });
 });
