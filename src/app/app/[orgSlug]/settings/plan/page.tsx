@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+
+import { PageHeader } from "@/components/page-header";
 
 import { can } from "@/lib/auth/permissions";
 import {
@@ -30,14 +33,14 @@ import { formatStorage } from "@/lib/billing/storage";
 import { StorageMeter } from "@/components/billing/storage-meter";
 import { connectorsConfig } from "@/server/connectors/config";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { readStorageUsed } from "@/server/storage/quota";
-import { storageBreakdown } from "@/server/storage/usage";
+import { canManageStorage, readStorageUsed } from "@/server/storage/quota";
+import { largestFiles, storageBreakdown } from "@/server/storage/usage";
 
 import { SettingsNoAccess } from "../settings-no-access";
 import { PlanCards, type PlanCard } from "./plan-cards";
-import { PlanHeader } from "./plan-header";
+import { EmptyTrashButton } from "./storage/empty-trash-button";
 
-export const metadata: Metadata = { title: "Plan and storage" };
+export const metadata: Metadata = { title: "Plan" };
 
 function historyLabel(days: number): string {
   if (days % 365 === 0) return days === 365 ? "1 year" : `${days / 365} years`;
@@ -104,32 +107,28 @@ function card(plan: PricedPlan, previous: PricedPlan | null, price: PriceContext
   };
   switch (plan) {
     case "FREE":
-      return { ...base, price: "$0", per: "forever", who: "For one person: your own space." };
+      return { ...base, price: "$0", per: "forever" };
     case "PERSONAL_PLUS":
       return {
         ...base,
         price: dollars(PERSONAL_PLANS.plus.perMonth),
         per: `a month, or ${dollars(PERSONAL_PLANS.plus.perYear)} a year`,
-        who: "For one person who wants more room.",
       };
     case "TEAM_FREE":
       return {
         ...base,
         price: "$0",
         per: "forever, up to 10 members",
-        who: "For any team getting started.",
       };
     case "CLUB":
       return {
         ...base,
         ...teamPrice("CLUB", price),
-        who: "For growing teams that run their money and people here.",
       };
     case "SOCIETY":
       return {
         ...base,
         ...teamPrice("SOCIETY", price),
-        who: "For teams that want every feature, AI included.",
       };
   }
 }
@@ -153,14 +152,18 @@ export default async function PlanSettingsPage({
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   const personal = organization.kind === "PERSONAL";
   if (!can({ role }, "settings.view")) {
-    return <SettingsNoAccess title="Plan and storage" who="owners and admins" />;
+    return <SettingsNoAccess title="Plan" who="owners and admins" />;
   }
   const status = spaceStatus(organization);
   const days = trialDaysLeft(organization);
   const canSwitch = can({ role }, "org.plan.write");
-  const [usedBytes, storageParts, price] = await Promise.all([
+  const showFiles = canManageStorage(role);
+  const [usedBytes, storageParts, biggest, price] = await Promise.all([
     readStorageUsed(organization.id),
     storageBreakdown(organization.id),
+    showFiles
+      ? withOrgTx(organization.id, ({ db }) => largestFiles(db, organization.id))
+      : Promise.resolve([]),
     personal
       ? Promise.resolve({ ownerEmail: null, members: 1 })
       : withOrgTx(organization.id, async ({ db }): Promise<PriceContext> => {
@@ -183,69 +186,46 @@ export default async function PlanSettingsPage({
     (organization.plan === "TRIAL" ? effectivePlan(organization) : organization.plan);
   const effective = PLAN_NAMES[effectivePlan(organization)];
 
+  // The one line about where the space stands. It's in the page body, not
+  // the header's description, so phones see it too (that line is hidden
+  // there).
+  const left = days !== null ? `${days} ${days === 1 ? "day" : "days"} left` : "";
   const summary =
     personal && days !== null && days > 0 && organization.plan === "FREE" ? (
       <>
-        You&apos;re on your free trial, with everything in Personal Plus:{" "}
-        <strong className="text-foreground">
-          {days} {days === 1 ? "day" : "days"} left
-        </strong>
-        . When it ends you move to Personal Free, unless you choose Personal Plus. No card needed.
+        Free trial of Personal Plus: <strong className="text-foreground">{left}</strong>. Then
+        Personal Free, unless you choose Plus.
       </>
     ) : personal ? (
       <>
-        You&apos;re on <strong className="text-foreground">{PLAN_NAMES[organization.plan]}</strong>.
-        Switching never deletes anything: what a plan leaves out is locked, and comes back when you
-        switch again.
+        On <strong className="text-foreground">{PLAN_NAMES[organization.plan]}</strong>.
       </>
     ) : status === "trial" && days !== null ? (
       <>
-        {organization.name} is on its free trial, with everything in Team Advanced:{" "}
+        Free trial of Team Advanced: <strong className="text-foreground">{left}</strong>. Then{" "}
         <strong className="text-foreground">
-          {days} {days === 1 ? "day" : "days"} left
+          {pickedForAfter ? PLAN_NAMES[pickedForAfter] : "Free"}
         </strong>
-        .{" "}
-        {pickedForAfter ? (
-          <>
-            When it ends {organization.name} moves to{" "}
-            <strong className="text-foreground">{PLAN_NAMES[pickedForAfter]}</strong>, the plan{" "}
-            {canSwitch ? "you" : "the owner"} picked. Picking a plan never cuts the trial short.
-          </>
-        ) : (
-          <>
-            When it ends {organization.name} moves to Free, unless{" "}
-            {canSwitch ? "you choose" : "the owner chooses"} Team or Team Advanced. Picking one now
-            keeps the trial running to the end.
-          </>
-        )}
+        {pickedForAfter ? "." : ", unless a plan is picked."}
       </>
     ) : status === "free" && organization.plan === "TRIAL" ? (
       <>
-        The free trial has ended, so {organization.name} is on{" "}
-        <strong className="text-foreground">Free</strong>. Nothing was deleted: what Team and Team
-        Advanced add is locked, and comes back when {canSwitch ? "you choose" : "the owner chooses"}{" "}
-        one.
+        Trial ended: on <strong className="text-foreground">Free</strong>. Nothing was deleted.
       </>
     ) : (
       <>
-        {organization.name} is on the <strong className="text-foreground">{effective}</strong> plan.
-        Switching never deletes anything: what a plan leaves out is locked, and comes back when you
-        switch again.
+        On <strong className="text-foreground">{effective}</strong>.
       </>
     );
+  const base = `/app/${organization.slug}`;
 
   return (
     <div className="max-w-4xl space-y-7.5">
-      <PlanHeader orgSlug={organization.slug} title="Plan and storage" description={summary} />
-      <StorageMeter
-        usedBytes={usedBytes}
-        limitBytes={spaceLimits(organization).storageBytes}
-        maxFileBytes={spaceLimits(organization).maxFileBytes}
-        planName={effective}
-        parts={storageParts}
-        personal={personal}
-        href={`/app/${organization.slug}/settings/plan/storage`}
-      />
+      <PageHeader title="Plan" />
+      <p className="text-muted-foreground -mt-3 text-[15px]">
+        {summary}
+        {!canSwitch && " Only the owner can choose a plan."}
+      </p>
       <PlanCards
         orgId={organization.id}
         kind={organization.kind}
@@ -254,13 +234,70 @@ export default async function PlanSettingsPage({
         canSwitch={canSwitch}
         usedBytes={usedBytes}
       />
-      <div className="text-muted-foreground space-y-1 text-xs">
-        {!personal && <p>Members who join never pay.</p>}
-        <p>
-          Billing isn&apos;t connected yet, so a choice takes effect right away and nothing is
-          charged.
-        </p>
-      </div>
+      <section id="storage" aria-labelledby="storage-heading" className="scroll-mt-24 space-y-4.5">
+        <h2 id="storage-heading" className="heading text-[17px]">
+          Storage
+        </h2>
+        <StorageMeter
+          usedBytes={usedBytes}
+          limitBytes={spaceLimits(organization).storageBytes}
+          maxFileBytes={spaceLimits(organization).maxFileBytes}
+          planName={effective}
+          parts={storageParts}
+          personal={personal}
+        />
+        {showFiles && (
+          <div className="grid gap-4.5 md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]">
+            <section
+              aria-labelledby="largest-heading"
+              className="bg-card edge rounded-card space-y-3 p-6 max-sm:p-4.5"
+            >
+              <h3 id="largest-heading" className="heading text-[15px]">
+                Largest files
+              </h3>
+              {biggest.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No files yet.</p>
+              ) : (
+                <ul className="divide-border/60 divide-y">
+                  {biggest.map((f) => (
+                    <li key={f.id} className="flex items-start gap-3 py-2.5 text-sm">
+                      <Link
+                        href={`${base}/notes/files/${f.id}`}
+                        className="min-w-0 flex-1 font-medium break-words hover:underline"
+                      >
+                        {f.name}
+                      </Link>
+                      <span className="figure text-muted-foreground shrink-0">
+                        {formatStorage(f.sizeBytes)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section
+              aria-labelledby="trash-heading"
+              className="bg-card edge rounded-card flex flex-col items-start gap-3 p-6 max-sm:p-4.5"
+            >
+              <h3 id="trash-heading" className="heading text-[15px]">
+                Trash
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                {storageParts.trashItems} {storageParts.trashItems === 1 ? "item" : "items"},{" "}
+                {formatStorage(storageParts.trashBytes)}. Counts until emptied.
+              </p>
+              <EmptyTrashButton
+                orgId={organization.id}
+                items={storageParts.trashItems}
+                size={formatStorage(storageParts.trashBytes)}
+              />
+            </section>
+          </div>
+        )}
+      </section>
+      <p className="text-muted-foreground text-xs">
+        {!personal && "Members who join never pay. "}Billing isn&apos;t live: nothing is charged.
+      </p>
     </div>
   );
 }

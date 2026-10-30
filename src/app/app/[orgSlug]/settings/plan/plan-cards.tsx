@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useConfirm } from "@/components/ui/confirm-dialog";
-import { toast } from "@/components/ui/toaster";
+import { toast, undoable } from "@/components/ui/toaster";
 import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
 import type { PricedPlan } from "@/lib/billing/features";
 import { formatStorage, formatUsed } from "@/lib/billing/storage";
@@ -21,7 +20,6 @@ export interface PlanCard {
   per: string;
   /** Under the price: the yearly total, or that the student price applies. */
   note?: string;
-  who: string;
   /** "Includes", "Everything in Team, plus". */
   intro: string;
   features: string[];
@@ -44,10 +42,10 @@ const RANK: Record<OrgPlan, number> = {
  * The tiers a space can be on, side by side, the current one marked (none
  * during an organization's trial): Personal Free and Personal Plus for a
  * Personal space; Free, Team and Team Advanced for an organization. The
- * owner gets a
- * button on the other (with a confirm that says what changes, and that a
- * space left over its storage only stops taking uploads); everyone else
- * sees who can choose.
+ * owner gets a button on the others, and choosing switches at once with
+ * Undo (nothing is deleted by a switch, so nothing asks first); a toast
+ * says what a downgrade locks, or that uploads pause over the new storage.
+ * Everyone else sees the cards; the page says once that the owner chooses.
  */
 export function PlanCards({
   orgId,
@@ -65,7 +63,6 @@ export function PlanCards({
   usedBytes: number;
 }) {
   const router = useRouter();
-  const [confirmEl, confirm] = useConfirm();
   const verb = current === "TRIAL" ? "Choose" : "Switch to";
 
   async function choose(card: PlanCard) {
@@ -73,30 +70,33 @@ export function PlanCards({
     const lost = cards
       .filter((c) => RANK[c.plan] > RANK[card.plan] && RANK[c.plan] <= RANK[current])
       .flatMap((c) => c.features);
-    const over =
-      usedBytes > card.storageBytes
-        ? ` You're using ${formatUsed(usedBytes, card.storageBytes)} and ${card.name} has ${formatStorage(card.storageBytes)}: uploads pause until you're back under. Nothing is deleted.`
-        : "";
-    const ok = await confirm({
-      title: `${verb} ${card.name}?`,
-      description: down
-        ? `These will be locked until you switch back: ${lost.join(", ")}. Nothing is deleted.${over}`
-        : `It takes effect right away. Billing isn't connected yet, so nothing is charged.${over}`,
-      confirmLabel: `${verb} ${card.name}`,
-      tone: down ? "destructive" : "default",
-      run: async () => {
-        const result = await switchPlan(orgId, card.plan);
-        return result.error;
+    const over = usedBytes > card.storageBytes;
+    const title = kind === "PERSONAL" ? `You're on ${card.name}` : `Switched to ${card.name}`;
+    const note = over
+      ? `Over by ${formatUsed(usedBytes, card.storageBytes)} of ${formatStorage(card.storageBytes)}: uploads pause.`
+      : down && lost.length > 0
+        ? `Locked until you switch back: ${lost.join(", ")}.`
+        : undefined;
+    const run = async () => (await switchPlan(orgId, card.plan)).error;
+    // A trial with no plan picked yet has nothing to go back to.
+    if (current === "TRIAL") {
+      const error = await run();
+      if (error) toast({ title: error, tone: "error" });
+      else toast({ title: `${card.name} after the trial`, description: note });
+      router.refresh();
+      return;
+    }
+    const previous = current;
+    const ok = await undoable({
+      title,
+      run,
+      undo: async () => {
+        const error = (await switchPlan(orgId, previous)).error;
+        router.refresh();
+        return error;
       },
     });
-    if (!ok) return;
-    toast({
-      title:
-        kind === "PERSONAL"
-          ? `You're on ${card.name}`
-          : `Your organization is on the ${card.name} plan`,
-      tone: "success",
-    });
+    if (ok && note) toast({ title: note });
     router.refresh();
   }
 
@@ -118,7 +118,6 @@ export function PlanCards({
                   <h2 className="heading">{card.name}</h2>
                   {isCurrent && <Badge variant="accent">Current plan</Badge>}
                 </div>
-                <p className="text-muted-foreground text-sm">{card.who}</p>
               </div>
               <div className="space-y-1">
                 <p className="flex flex-wrap items-baseline gap-x-1.5">
@@ -128,7 +127,7 @@ export function PlanCards({
                 {card.note && <p className="text-muted-foreground text-xs">{card.note}</p>}
               </div>
               <div className="space-y-2">
-                <p className="eyebrow">{card.intro}</p>
+                <p className="text-sm font-medium">{card.intro}</p>
                 <ul className="space-y-1.5 text-sm">
                   {card.features.map((f) => (
                     <li key={f} className="flex gap-2">
@@ -147,7 +146,7 @@ export function PlanCards({
                 ))}
               </dl>
               <div className="mt-auto">
-                {isCurrent ? null : canSwitch ? (
+                {!isCurrent && canSwitch && (
                   <Button
                     variant={RANK[card.plan] > RANK[current] ? "default" : "outline"}
                     className="w-full"
@@ -155,15 +154,12 @@ export function PlanCards({
                   >
                     {verb} {card.name}
                   </Button>
-                ) : (
-                  <p className="text-muted-foreground text-xs">Only the owner can choose a plan.</p>
                 )}
               </div>
             </div>
           );
         })}
       </div>
-      {confirmEl}
     </>
   );
 }
