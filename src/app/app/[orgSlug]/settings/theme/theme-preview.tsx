@@ -155,7 +155,7 @@ export function ThemePreview({
                 />
                 <BlockCard
                   tone="quiet"
-                  kicker="Tomorrow · 7:00 PM"
+                  kicker="Tomorrow, 7:00 PM"
                   title="Officer meeting"
                   subtitle="Engineering Hall 112"
                   figure="8"
@@ -170,7 +170,7 @@ export function ThemePreview({
                   figureLabel="options"
                   className="min-h-0 p-4 [&_h3]:text-[19px]"
                 />
-                <BlockCard tone="goal" kicker="RSVPs · Sat, Oct 24" className="min-h-0 p-4">
+                <BlockCard tone="goal" kicker="RSVPs, Sat, Oct 24" className="min-h-0 p-4">
                   <div className="mt-2 flex items-center gap-3">
                     <Gauge value={53} size={84} className="[&_b]:text-[20px]" />
                     <div className="min-w-0">

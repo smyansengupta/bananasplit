@@ -331,10 +331,9 @@ describe("Admin panel navigation", () => {
   it("shows each role the sections it may use", () => {
     expect(labels("OWNER")).toEqual([
       "General",
-      "Plan and storage",
+      "Plan",
       "Sidebar",
       "Theme",
-      "Weekly pulse",
       "Members",
       "Privacy",
       "Integrations",
@@ -361,7 +360,7 @@ describe("Admin panel navigation", () => {
   it("gives Personal only its own settings, its plan and storage, and no team settings", () => {
     expect(settingsNavItems("me", "OWNER", PERSONAL).map((i) => i.label)).toEqual([
       "General",
-      "Plan and storage",
+      "Plan",
       "Danger zone",
     ]);
   });

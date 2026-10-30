@@ -47,11 +47,11 @@ export function DeleteCard({
 
   return (
     <SettingsCard
-      title={personal ? "Delete your Personal space" : `Delete ${orgName}`}
+      title={personal ? "Delete your Personal space" : "Delete organization"}
       description={
         personal
-          ? "Your Personal space closes at once and is deleted for good after 30 days: your tasks, calendar, polls and event pages, with their RSVPs and answers. Your account and your organizations aren't affected. You can cancel during those 30 days from its page. Export your data first if you need it."
-          : "The organization closes for everyone at once and is deleted for good after 30 days: members, tasks, notes, events, finance records, files, integrations and settings. An owner can cancel during those 30 days from the organization's page. Its URL is never reused. Export your data first if you need it."
+          ? "Closes now, deleted in 30 days. Your account and organizations aren't affected. Export first."
+          : "Closes for everyone now, deleted in 30 days. Owners can cancel until then. Export first."
       }
       footer={
         <Dialog
@@ -65,7 +65,7 @@ export function DeleteCard({
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="destructive">{label}</Button>
+            <Button variant="destructive">Delete</Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={submit} className="space-y-4">

@@ -24,15 +24,39 @@ import { SettingsNoAccess } from "../settings-no-access";
 const PAGE_SIZE = 50;
 
 /** Filter groups: the action prefix each one matches. */
-const GROUPS = [
-  { key: "", label: "All" },
-  { key: "org.", label: "Organization" },
-  { key: "member.", label: "Members" },
-  { key: "invitation.", label: "Invitations" },
-  { key: "integration.", label: "Integrations" },
-  { key: "privacy.", label: "Privacy" },
-  { key: "export.", label: "Exports" },
-] as const;
+/** The filter chips: each matches the actions starting with any of its prefixes. */
+const GROUPS: readonly { key: string; label: string; prefixes: readonly string[] }[] = [
+  { key: "", label: "All", prefixes: [] },
+  { key: "org", label: "Organization", prefixes: ["org.", "workspace.", "personal."] },
+  {
+    key: "members",
+    label: "Members",
+    prefixes: ["member.", "membership.", "invitation.", "join_code."],
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    prefixes: ["settings.", "theme.", "label.", "labels.", "teams.", "setup."],
+  },
+  { key: "privacy", label: "Privacy", prefixes: ["privacy."] },
+  { key: "integrations", label: "Integrations", prefixes: ["integration.", "ai."] },
+  {
+    key: "content",
+    label: "Content",
+    prefixes: [
+      "database.",
+      "event.",
+      "calendar.",
+      "orgchart.",
+      "attendance.",
+      "signup.",
+      "contact.",
+      "ballot_definition.",
+    ],
+  },
+  { key: "finance", label: "Finance", prefixes: ["finance."] },
+  { key: "exports", label: "Exports", prefixes: ["export."] },
+];
 
 const ACTION_COPY: Record<string, string> = {
   "org.created": "created the organization",
@@ -151,7 +175,7 @@ function summarize(diff: unknown): string {
       parts.push(key === "last4" ? `••••${String(v)}` : `${key}: ${String(v)}`);
     }
   }
-  return parts.join(" · ").slice(0, 160);
+  return parts.join(", ").slice(0, 160);
 }
 
 /**
@@ -178,14 +202,13 @@ export default async function AuditLogPage({
   const { rows, total } = await withOrgTx(organization.id, async ({ db }) => {
     const where = {
       organizationId: organization.id,
-      ...(group.key ? { action: { startsWith: group.key } } : {}),
+      ...(group.prefixes.length
+        ? { OR: group.prefixes.map((p) => ({ action: { startsWith: p } })) }
+        : {}),
     };
     const total = await db.orgAuditLog.count({ where });
     const entries = await db.orgAuditLog.findMany({
-      where: {
-        organizationId: organization.id,
-        ...(group.key ? { action: { startsWith: group.key } } : {}),
-      },
+      where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE + 1,
@@ -221,14 +244,15 @@ export default async function AuditLogPage({
   const first = (page - 1) * PAGE_SIZE + 1;
   const summary =
     total === 0
-      ? "No entries yet. Entries can't be edited or deleted."
-      : `${total} ${group.key ? `${group.label.toLowerCase()} ` : ""}entr${total === 1 ? "y" : "ies"}, newest first${
-          total > PAGE_SIZE ? ` · showing ${first}–${first + shown.length - 1}` : ""
-        }. Entries can't be edited or deleted.`;
+      ? null
+      : `${total} ${total === 1 ? "entry" : "entries"}${
+          total > PAGE_SIZE ? `, showing ${first}–${first + shown.length - 1}` : ""
+        }, read-only`;
 
   return (
     <div className="space-y-7.5">
-      <PageHeader title="Audit log" description={summary} />
+      <PageHeader title="Audit log" />
+      {summary && <p className="text-muted-foreground -mt-4 text-sm">{summary}</p>}
       <div className="space-y-4.5">
         <nav aria-label="Filter" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <ul className="flex min-w-max gap-2">
@@ -248,7 +272,6 @@ export default async function AuditLogPage({
               title={
                 group.key ? `No ${group.label.toLowerCase()} changes yet.` : "Nothing recorded yet."
               }
-              description="Settings, membership, integration and export changes show here as they happen."
             />
           </Card>
         ) : (
@@ -270,7 +293,7 @@ export default async function AuditLogPage({
                     <TableCell className="whitespace-normal">
                       <span className="font-semibold">{e.actor?.name ?? "System"}</span>{" "}
                       {ACTION_COPY[e.action] ?? (
-                        <span className="text-muted-foreground">· {actionWords(e.action)}</span>
+                        <span className="text-muted-foreground">, {actionWords(e.action)}</span>
                       )}
                       {e.targetName ? (
                         <span className="font-semibold"> ({e.targetName})</span>

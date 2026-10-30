@@ -50,11 +50,8 @@ export function PlanLocked({
       <div className="max-w-2xl space-y-6">
         <h1 className="page-title">{title ?? FEATURE_LABELS[feature]}</h1>
         <div className={card}>
-          <p className="eyebrow flex items-center gap-1.5">
-            <Lock className="size-3.5" aria-hidden="true" />
-            {PLAN_NAMES.PERSONAL_PLUS}
-          </p>
-          <p className="heading">
+          <p className="heading flex items-center gap-2">
+            <Lock className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
             {FEATURE_LABELS[feature]} {plural ? "come" : "comes"} with {PLAN_NAMES.PERSONAL_PLUS}.
           </p>
           <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
@@ -77,9 +74,6 @@ export function PlanLocked({
             {FEATURE_LABELS[feature]} {plural ? "are" : "is"} for organizations.
           </p>
           <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
-          <p className="text-muted-foreground max-w-prose text-sm">
-            Personal is just for you. Join your organization, or start one, to use this with others.
-          </p>
           <div className="flex flex-wrap items-center gap-2 pt-1.5">
             <Button asChild size="sm">
               <Link href="/onboarding/join">Join an organization</Link>
@@ -98,11 +92,8 @@ export function PlanLocked({
     <div className="max-w-2xl space-y-6">
       <h1 className="page-title">{title ?? FEATURE_LABELS[feature]}</h1>
       <div className={card}>
-        <p className="eyebrow flex items-center gap-1.5">
-          <Lock className="size-3.5" aria-hidden="true" />
-          {needs} plan
-        </p>
-        <p className="heading">
+        <p className="heading flex items-center gap-2">
+          <Lock className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
           {FEATURE_LABELS[feature]} {plural ? "come" : "comes"} with the {needs} plan.
         </p>
         <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>

@@ -2,14 +2,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Settings > General: the reminders a new meeting starts with
- * (OrgSettings.meetingReminderMinutes). Only this form is covered here; the
- * others are plain one-field saves.
+ * Admin panel › General: fields that save the moment they change, with no
+ * Save button. Covered: meeting reminders (a toggle saves), the weekly
+ * update day (a weekday button saves) and the name (saves on blur).
  */
 
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   updateMeetingReminderDefault: vi.fn(),
+  updateWeeklyUpdateDay: vi.fn(),
+  updateOrgName: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -18,103 +20,97 @@ vi.mock("next/navigation", () => ({
 vi.mock("./actions", () => ({
   renameOrgSlug: vi.fn(),
   updateMeetingReminderDefault: mocks.updateMeetingReminderDefault,
-  updateOrgName: vi.fn(),
+  updateOrgName: mocks.updateOrgName,
   updateOrgTimezone: vi.fn(),
-  updateWeeklyUpdateDay: vi.fn(),
+  updateWeeklyUpdateDay: mocks.updateWeeklyUpdateDay,
 }));
+vi.mock("../theme/actions", () => ({ updateLogoDisplay: vi.fn() }));
+vi.mock("../pulse/actions", () => ({ savePulseSettingsAction: vi.fn() }));
 
-const { MeetingRemindersForm } = await import("./general-forms");
-
-function form(overrides: Partial<Parameters<typeof MeetingRemindersForm>[0]> = {}) {
-  return render(<MeetingRemindersForm orgId="org_1" minutes={[1440, 60]} canEdit {...overrides} />);
-}
-
-const save = () => screen.getByRole("button", { name: "Save" });
-const toggle = (name: string) => screen.getByRole("button", { name });
+const { MeetingRemindersField, NameField, WeeklyUpdateDayField } = await import("./general-forms");
 
 beforeEach(() => {
-  mocks.refresh.mockReset();
-  mocks.updateMeetingReminderDefault.mockReset();
+  for (const m of Object.values(mocks)) m.mockReset();
 });
 afterEach(() => cleanup());
 
-describe("MeetingRemindersForm", () => {
-  it("says what it is for", () => {
-    form();
+describe("MeetingRemindersField", () => {
+  const toggle = (name: string) => screen.getByRole("button", { name });
 
-    expect(screen.getByText("Meeting reminders")).toBeTruthy();
-    expect(
-      screen.getByText(
-        "New meetings remind everyone going at these times. Each meeting can change its own.",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("starts from the organization's reminders", () => {
-    form();
-
+  it("starts from the organization's reminders, with no Save button", () => {
+    render(<MeetingRemindersField orgId="org_1" minutes={[1440, 60]} canEdit />);
     expect(toggle("1 day before").getAttribute("aria-pressed")).toBe("true");
-    expect(toggle("1 hour before").getAttribute("aria-pressed")).toBe("true");
     expect(toggle("1 week before").getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
 
-  it("has nothing to save until something changes", () => {
-    form();
-    expect(save().hasAttribute("disabled")).toBe(true);
-
-    fireEvent.click(toggle("1 week before"));
-    expect(save().hasAttribute("disabled")).toBe(false);
-
-    // Back to what it was.
-    fireEvent.click(toggle("1 week before"));
-    expect(save().hasAttribute("disabled")).toBe(true);
-  });
-
-  it("saves the chosen times, says so, and refreshes", async () => {
+  it("saves each toggle as it happens, then says so", async () => {
     mocks.updateMeetingReminderDefault.mockResolvedValue({});
-    form();
+    render(<MeetingRemindersField orgId="org_1" minutes={[1440, 60]} canEdit />);
 
     fireEvent.click(toggle("1 week before"));
-    fireEvent.click(toggle("1 hour before"));
-    fireEvent.click(save());
 
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
-    expect(mocks.updateMeetingReminderDefault).toHaveBeenCalledExactlyOnceWith(
-      "org_1",
-      [10080, 1440],
+    await waitFor(() =>
+      expect(mocks.updateMeetingReminderDefault).toHaveBeenCalledExactlyOnceWith(
+        "org_1",
+        [10080, 1440, 60],
+      ),
     );
-    expect((await screen.findByRole("status")).textContent).toBe("Meeting reminders saved.");
+    expect((await screen.findByRole("status")).textContent).toContain("Saved");
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 
-  it("can save no reminders at all", async () => {
-    mocks.updateMeetingReminderDefault.mockResolvedValue({});
-    form({ minutes: [60] });
-
-    fireEvent.click(toggle("1 hour before"));
-    expect(screen.getByText("No reminders")).toBeTruthy();
-    fireEvent.click(save());
-
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
-    expect(mocks.updateMeetingReminderDefault).toHaveBeenCalledExactlyOnceWith("org_1", []);
-  });
-
-  it("shows what went wrong and does not refresh", async () => {
+  it("shows what went wrong", async () => {
     mocks.updateMeetingReminderDefault.mockResolvedValue({ error: "Use at most 8 reminders." });
-    form();
+    render(<MeetingRemindersField orgId="org_1" minutes={[60]} canEdit />);
 
     fireEvent.click(toggle("1 week before"));
-    fireEvent.click(save());
 
-    expect((await screen.findByRole("status")).textContent).toBe("Use at most 8 reminders.");
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe("Use at most 8 reminders."),
+    );
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("is read-only for someone who cannot change settings", () => {
-    form({ canEdit: false });
-
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    render(<MeetingRemindersField orgId="org_1" minutes={[60]} canEdit={false} />);
     for (const button of screen.getAllByRole("button")) {
       expect(button.hasAttribute("disabled")).toBe(true);
     }
+  });
+});
+
+describe("WeeklyUpdateDayField", () => {
+  it("shows the week as buttons, Monday first, and saves a click", async () => {
+    mocks.updateWeeklyUpdateDay.mockResolvedValue({});
+    render(<WeeklyUpdateDayField orgId="org_1" day={0} canEdit />);
+
+    const days = screen.getAllByRole("button").map((b) => b.textContent);
+    expect(days).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Fri" }));
+    await waitFor(() =>
+      expect(mocks.updateWeeklyUpdateDay).toHaveBeenCalledExactlyOnceWith("org_1", 5),
+    );
+  });
+});
+
+describe("NameField", () => {
+  it("saves when the field loses focus, and not when nothing changed", async () => {
+    mocks.updateOrgName.mockResolvedValue({});
+    render(<NameField orgId="org_1" name="Riverside Robotics" canEdit />);
+    const input = screen.getByLabelText("Name");
+
+    fireEvent.blur(input);
+    expect(mocks.updateOrgName).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "Riverside Robotics Club" } });
+    fireEvent.blur(input);
+    await waitFor(() =>
+      expect(mocks.updateOrgName).toHaveBeenCalledExactlyOnceWith(
+        "org_1",
+        "Riverside Robotics Club",
+      ),
+    );
   });
 });

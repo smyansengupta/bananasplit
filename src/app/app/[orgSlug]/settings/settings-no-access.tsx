@@ -10,11 +10,7 @@ export function SettingsNoAccess({ title, who }: { title: string; who: string })
     <div className="space-y-7.5">
       <PageHeader title={title} />
       <Card>
-        <EmptyState
-          icon={Lock}
-          title={`Only ${who} can manage this.`}
-          description="Ask one of them if something here needs changing."
-        />
+        <EmptyState icon={Lock} title={`Only ${who} can manage this.`} />
       </Card>
     </div>
   );

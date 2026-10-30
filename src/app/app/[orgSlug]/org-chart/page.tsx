@@ -97,13 +97,13 @@ export default async function OrgChartPage({
       }`,
     ]
       .filter(Boolean)
-      .join(" · ");
+      .join(", ");
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={sectionLabel(settings?.sidebar, "people")}
-        description={published ?? "Roles and who reports to whom."}
+        description={published ?? undefined}
         actions={
           <ChartHeaderActions
             orgId={organization.id}
@@ -133,19 +133,14 @@ export default async function OrgChartPage({
         </Suspense>
       ) : (
         <EmptyState
-          title="No org chart yet"
-          description={
-            canEdit
-              ? "Import your org chart document (Word, Google Doc export, Markdown, text or PDF) and review it before publishing, start from the starter template, or build it by hand."
-              : `${organization.name}'s reporting lines, roles and responsibilities will appear here once the chart is published.`
-          }
+          title={canEdit ? "No org chart yet" : "Not published yet"}
           action={
             canEdit ? (
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="outline" size="sm">
                   <Link href={`${base}/import`}>
                     <FileUp className="size-4" aria-hidden="true" />
-                    Import a document
+                    Import
                   </Link>
                 </Button>
                 {draftHref ? (
@@ -160,13 +155,13 @@ export default async function OrgChartPage({
                       from="blank"
                       variant="create"
                     >
-                      Type the chart
+                      Type it
                     </StartDraftButton>
                     <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="members">
-                      Start from members
+                      From members
                     </StartDraftButton>
                     <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="starter">
-                      Start from the starter template
+                      Template
                     </StartDraftButton>
                   </>
                 )}

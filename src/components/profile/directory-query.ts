@@ -8,7 +8,7 @@
 export const DIRECTORY_SORTS = ["team", "name", "new"] as const;
 export type DirectorySort = (typeof DIRECTORY_SORTS)[number];
 /** The dense list is the default: the directory is mostly a list of names. */
-export const DIRECTORY_VIEWS = ["list", "grid"] as const;
+export const DIRECTORY_VIEWS = ["list", "grid", "table"] as const;
 export type DirectoryView = (typeof DIRECTORY_VIEWS)[number];
 export const DIRECTORY_ROLES = ["OWNER", "ADMIN", "TREASURER", "MEMBER"] as const;
 export type DirectoryRole = (typeof DIRECTORY_ROLES)[number];
@@ -60,11 +60,17 @@ export function parseDirectoryQuery(raw: Raw): DirectoryQuery {
   return {
     q,
     team: team && ID.test(team) ? team : null,
-    role: (DIRECTORY_ROLES as readonly string[]).includes(role ?? "") ? (role as DirectoryRole) : null,
+    role: (DIRECTORY_ROLES as readonly string[]).includes(role ?? "")
+      ? (role as DirectoryRole)
+      : null,
     year: Number.isFinite(year) && year >= 1900 && year <= 2200 ? year : null,
     free: get(raw, "free") === "1",
-    sort: (DIRECTORY_SORTS as readonly string[]).includes(sort ?? "") ? (sort as DirectorySort) : "team",
-    view: (DIRECTORY_VIEWS as readonly string[]).includes(view ?? "") ? (view as DirectoryView) : "list",
+    sort: (DIRECTORY_SORTS as readonly string[]).includes(sort ?? "")
+      ? (sort as DirectorySort)
+      : "team",
+    view: (DIRECTORY_VIEWS as readonly string[]).includes(view ?? "")
+      ? (view as DirectoryView)
+      : "list",
     person: person && ID.test(person) ? person : null,
   };
 }

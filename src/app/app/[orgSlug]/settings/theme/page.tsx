@@ -1,6 +1,5 @@
 import { PageHeader } from "@/components/page-header";
 import { can } from "@/lib/auth/permissions";
-import { orgLogoSource } from "@/lib/theme/logo";
 import { resolveTheme } from "@/lib/theme/resolve";
 import { parsePersonalTheme } from "@/lib/theme/personal";
 import { CUSTOM_PRESET_ID, findPreset } from "@/lib/theme/presets";
@@ -14,10 +13,11 @@ import { PersonalThemeNotice } from "./personal-theme-notice";
 import { ThemeSettings } from "./theme-settings";
 
 /**
- * Settings > Theme (Phase 8, OWNER/ADMIN): a preset or a custom palette for
- * light and dark, the default mode (optionally locked), how the logo shows,
- * a live preview and the WCAG AA contrast check. The action re-checks the
- * permission and RLS enforces it again.
+ * Admin panel › Theme (OWNER/ADMIN): a preset or a custom palette for light
+ * and dark, look and feel, the default mode (optionally locked), a preview
+ * and the WCAG AA contrast check. Every change applies for everyone as it's
+ * made, with Undo. How the logo shows is on General, beside the picture.
+ * The action re-checks the permission and RLS enforces it again.
  */
 export default async function ThemeSettingsPage({
   params,
@@ -31,7 +31,6 @@ export default async function ThemeSettingsPage({
   }
 
   const theme = resolveTheme(row);
-  const logo = orgLogoSource(organization.logo, 64);
   const personal = parsePersonalTheme((await getViewerPrefs(user.id)).themePreference);
   const personalName = personal
     ? personal.preset === CUSTOM_PRESET_ID
@@ -39,25 +38,9 @@ export default async function ThemeSettingsPage({
       : (findPreset(personal.preset)?.name ?? "Default")
     : null;
 
-  // The live line: what everyone sees now.
-  const themeName =
-    theme.preset === CUSTOM_PRESET_ID ? "Custom" : (findPreset(theme.preset)?.name ?? "Graphite");
-  const modeLine =
-    theme.mode === "LIGHT"
-      ? "opens in light"
-      : theme.mode === "DARK"
-        ? "opens in dark"
-        : "follows each device";
-  const summary = `${themeName} · ${modeLine}${theme.lockMode && theme.mode !== "SYSTEM" ? ", locked" : ""}`;
-
   return (
     <div className="space-y-6">
-      <PageHeader title="Theme" description={summary} />
-      <p className="text-muted-foreground -mt-2 max-w-prose text-sm">
-        Colours, look and feel, logo and light or dark mode for everyone in {organization.name},
-        including the organization&apos;s public poll and invite pages. Changes apply as soon as you
-        save.
-      </p>
+      <PageHeader title="Theme" />
       {personalName && (
         <PersonalThemeNotice
           themeName={personalName}
@@ -67,10 +50,7 @@ export default async function ThemeSettingsPage({
       )}
       <ThemeSettings
         orgId={organization.id}
-        orgSlug={organization.slug}
         orgName={organization.name}
-        logo={organization.logo}
-        hasLogo={logo !== null}
         initial={{
           preset: theme.preset,
           mode: theme.mode,

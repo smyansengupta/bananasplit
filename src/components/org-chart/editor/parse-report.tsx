@@ -46,7 +46,7 @@ export function ParseReportPanel({
       case "BUILTIN":
         return {
           icon: BookOpenText,
-          title: "Read by the portal's own parser",
+          title: "Read by Bananasplit's parser",
           detail: "No Claude API key was used and nothing was billed.",
         };
       case "CLAUDE":
@@ -54,7 +54,7 @@ export function ParseReportPanel({
           icon: Cpu,
           title: `Read by ${claudeModelLabel(model)}`,
           detail:
-            "The portal's own parser could not read this document, so your organization's Claude key was used." +
+            "Bananasplit's parser couldn't read this document, so your organization's Claude key was used." +
             (costUsd !== null ? ` This import cost about ${formatUsd(costUsd)}.` : ""),
         };
       case "TEMPLATE":

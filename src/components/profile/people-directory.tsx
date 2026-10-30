@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, ChevronDown, LayoutGrid, List, Search, X } from "@/components/icons";
+import { ArrowUpRight, ChevronDown, LayoutGrid, List, Search, Table2, X } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -50,6 +50,7 @@ import {
   type DirectoryRole,
 } from "./directory-query";
 import { PersonProfile, ROLE_LABELS } from "./person-profile";
+import { PeopleTable, type InvitedRow, type RosterAccess } from "./people-table";
 
 /**
  * The people directory (Moonstone 12.1 and 12.2): search as you type
@@ -77,6 +78,12 @@ export interface PeopleDirectoryProps {
   initialSheet: PersonSheet | null;
   search?: (orgId: string, q: string) => Promise<PeopleSearchResult>;
   loadSheet?: (orgId: string, userId: string) => Promise<PersonSheet | null>;
+  /** userId → email, only what the viewer may see (the Table layout's email column). */
+  emails?: Record<string, string>;
+  /** Invites not yet accepted (owners and admins), as "Invited" rows in the Table layout. */
+  invites?: InvitedRow[];
+  /** What the viewer may do in the Table layout; without it, the table is read-only. */
+  access?: RosterAccess;
 }
 
 type Row = { kind: "header"; group: PeopleGroup } | { kind: "person"; person: DirectoryPerson };
@@ -98,6 +105,9 @@ export function PeopleDirectory({
   initialSheet,
   search = searchPeopleAction,
   loadSheet = loadPersonSheetAction,
+  emails = {},
+  invites = [],
+  access,
 }: PeopleDirectoryProps) {
   const pathname = usePathname();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
@@ -333,7 +343,8 @@ export function PeopleDirectory({
       onSelect={(view) => update({ view: view as DirectoryQuery["view"] })}
       options={[
         { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
-        { value: "list", label: "List", icon: List, compact: true, title: "Dense list" },
+        { value: "list", label: "List", icon: List, compact: true, title: "List" },
+        { value: "table", label: "Table", icon: Table2, compact: true, title: "Table" },
       ]}
     />
   );
@@ -350,7 +361,7 @@ export function PeopleDirectory({
               onSelect={(v) => update({ sort: v as DirectoryQuery["sort"] })}
               options={[
                 ...(teams.length > 0 ? [{ value: "team", label: "Team" }] : []),
-                { value: "name", label: "A–Z" },
+                { value: "name", label: "Name" },
                 { value: "new", label: "Newest" },
               ]}
             />
@@ -364,7 +375,7 @@ export function PeopleDirectory({
               value={query.q}
               onValueChange={(q) => update({ q: q.slice(0, 80) })}
               onClear={() => update({ q: "" })}
-              placeholder="Name, title, team or major"
+              placeholder="Search"
               aria-label="Search people"
               maxLength={80}
               autoComplete="off"
@@ -377,8 +388,8 @@ export function PeopleDirectory({
         <FilterSheet
           open={filtersOpen}
           onOpenChange={setFiltersOpen}
-          title="Filter people"
-          description="The directory shows only the members who match."
+          title="Filters"
+          description="Narrow the list."
           canClear={activeFilters}
           onClear={() => update({ team: null, role: null, year: null, free: false })}
         >
@@ -442,7 +453,7 @@ export function PeopleDirectory({
             value={query.q}
             onValueChange={(q) => update({ q: q.slice(0, 80) })}
             onClear={() => update({ q: "" })}
-            placeholder="Search by name, title, team or major"
+            placeholder="Search"
             aria-label="Search people"
             className="min-w-[220px] flex-1 sm:w-auto"
             maxLength={80}
@@ -471,7 +482,6 @@ export function PeopleDirectory({
             aria-pressed={query.free}
             onClick={() => update({ free: !query.free })}
             className={chipClass(query.free)}
-            title="Free now, from the busy times members share"
           >
             <span
               aria-hidden="true"
@@ -504,16 +514,18 @@ export function PeopleDirectory({
               onChange={(team) => update({ team })}
             />
           )}
-          {roles.length > 1 && (
-            <FilterMenu
-              label="Role"
-              value={query.role}
-              display={query.role ? ROLE_LABELS[query.role] : null}
-              allLabel="All roles"
-              options={roles.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
-              onChange={(role) => update({ role: role as DirectoryRole | null })}
-            />
-          )}
+          {roles.length > 1 &&
+            roles.map((r) => (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={query.role === r}
+                onClick={() => update({ role: query.role === r ? null : r })}
+                className={chipClass(query.role === r)}
+              >
+                {ROLE_LABELS[r]}
+              </button>
+            ))}
           {years.length > 0 && (
             <FilterMenu
               label="Year"
@@ -532,7 +544,7 @@ export function PeopleDirectory({
               onClick={() => update({ team: null, role: null, year: null, free: false })}
             >
               <X aria-hidden="true" />
-              Clear filters
+              Clear
             </Button>
           )}
           <span
@@ -541,19 +553,18 @@ export function PeopleDirectory({
             aria-live="polite"
           >
             {countText}
-            {close && " · close matches"}
+            {close && ", close matches"}
           </span>
         </div>
 
         <div className="relative mt-2 flex gap-3">
           <div ref={listRef} data-person-list onKeyDown={onListKey} className="min-w-0 flex-1">
             {people.length === 0 ? (
-              <EmptyState title="No members yet" description="Invite people to see them here." />
+              <EmptyState title="No members yet" />
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={Search}
                 title="No one matches that"
-                description="Try a first name, a team or a year."
                 action={
                   <Button
                     type="button"
@@ -563,14 +574,31 @@ export function PeopleDirectory({
                       update({ q: "", team: null, role: null, year: null, free: false })
                     }
                   >
-                    Clear search and filters
+                    Clear all
                   </Button>
                 }
+              />
+            ) : !isPhone && query.view === "table" ? (
+              <PeopleTable
+                orgId={orgId}
+                viewerId={viewerId}
+                people={ordered.slice(0, limit)}
+                emails={emails}
+                invites={access?.canInvite ? invites : []}
+                access={
+                  access ?? {
+                    role: "MEMBER",
+                    canManage: false,
+                    canInvite: false,
+                    canTransfer: false,
+                  }
+                }
+                onSelect={select}
               />
             ) : (
               <PeopleRows
                 rows={visibleRows}
-                view={isPhone ? "grid" : query.view}
+                view={isPhone || query.view === "table" ? "grid" : query.view}
                 selectedId={selectedId}
                 viewerId={viewerId}
                 teamsByKey={teamsByKey}
@@ -586,8 +614,7 @@ export function PeopleDirectory({
                   size="sm"
                   onClick={() => setLimit((n) => n + RENDER_STEP)}
                 >
-                  Show more (
-                  {ordered.length - visibleRows.filter((r) => r.kind === "person").length} left)
+                  Show {ordered.length - visibleRows.filter((r) => r.kind === "person").length} more
                 </Button>
               </div>
             )}
@@ -781,12 +808,12 @@ function PersonCard({
     >
       <Presence person={person} size="lg" />
       <span className="min-w-0">
-        <span className="block truncate text-sm leading-tight font-semibold">
+        <span className="block text-sm leading-tight font-semibold break-words">
           {name}
           {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
         </span>
-        <span className="text-muted-foreground block truncate text-[13px]">
-          {[person.title, team].filter(Boolean).join(" · ")}
+        <span className="text-muted-foreground block text-[13px] break-words">
+          {[person.title, team].filter(Boolean).join(", ")}
         </span>
         <span className="sr-only">{person.freeNow ? ", free now" : ""}</span>
       </span>
@@ -820,7 +847,7 @@ function PersonRow({
       )}
     >
       <Presence person={person} size="md" />
-      <span className="min-w-0 truncate font-semibold">
+      <span className="min-w-0 font-semibold break-words">
         {name}
         {person.pronouns && (
           <span className="text-muted-foreground ml-1.5 text-xs font-normal">
@@ -829,7 +856,7 @@ function PersonRow({
         )}
         {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
       </span>
-      <span className="text-muted-foreground min-w-0 truncate">{person.title ?? "No title"}</span>
+      <span className="text-muted-foreground min-w-0 break-words">{person.title ?? ""}</span>
       <span className="hidden min-w-0 md:block">
         {team ? (
           <TagChip color={`var(--chart-${((team.slot - 1) % 5) + 1})`}>{team.name}</TagChip>
@@ -838,7 +865,7 @@ function PersonRow({
         )}
       </span>
       <span className="text-muted-foreground hidden md:block">{ROLE_LABELS[person.role]}</span>
-      <span className="text-muted-foreground figure hidden truncate md:block">
+      <span className="text-muted-foreground figure hidden md:block">
         {person.gradYear ? `Class of ${person.gradYear}` : ""}
       </span>
     </button>
