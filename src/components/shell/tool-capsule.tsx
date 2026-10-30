@@ -89,7 +89,7 @@ export function ToolCapsule({
           </CreateMenu>
         )}
         <PinButton className={cn(capsuleButtonClass, "max-md:hidden")} />
-        <NotificationBell />
+        <NotificationBell href={`/app/${orgSlug}/inbox`} />
         <UserMenu user={user} />
       </div>
     </div>

@@ -122,7 +122,7 @@ describe("paletteGroups", () => {
     });
     expect(groups.map((g) => g.heading)).toEqual(["Recent", "Actions", "Go to"]);
     expect(groups[1].items.map((i) => i.title)).toContain("New note");
-    expect(groups[2].items[0].title).toBe("Overview");
+    expect(groups[2].items[0].title).toBe("Home");
   });
 
   it("puts the group with the best match first and ends a group with its full-list link", () => {

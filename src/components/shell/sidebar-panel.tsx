@@ -44,8 +44,9 @@ function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => v
 }
 
 /**
- * The sidebar's insides, the same in every face: the club menu, the nav,
- * and the footer (logo, and the panel's collapse button when given).
+ * The sidebar's insides, the same in every face: the nav, then the foot:
+ * the club menu (switching spaces, the Admin panel) and under it the
+ * Bananasplit logo with the panel's collapse button when given.
  */
 export function SidebarBody({
   clubMenu,
@@ -65,15 +66,18 @@ export function SidebarBody({
   const tone = surfaceTone(chrome);
   return (
     <>
-      <div className="shrink-0 pb-3">{clubMenu}</div>
       {children}
+      {/* The foot: the club you're in (and the way to switch), then the
+          Bananasplit mark, always last. */}
       <div
         className={cn(
-          "mt-2.5 flex shrink-0 items-center border-t pt-3 transition-colors duration-300",
+          "mt-2.5 shrink-0 border-t pt-2.5 transition-colors duration-300",
           tone.border,
-          rail ? "gap-0" : "gap-2.5",
         )}
       >
+        {clubMenu}
+      </div>
+      <div className={cn("flex shrink-0 items-center pt-1.5", rail ? "gap-0" : "gap-2.5")}>
         <SidebarLogo rail={rail} onNavigate={onNavigate} />
         {toggle}
       </div>

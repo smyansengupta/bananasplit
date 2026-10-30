@@ -2,6 +2,7 @@
 
 import {
   CalendarClock,
+  ClipboardList,
   CalendarPlus,
   CheckSquare,
   Loader2,
@@ -29,6 +30,7 @@ import { toast } from "@/components/ui/toaster";
 const ICONS: Record<string, IconComponent> = {
   CalendarClock,
   CalendarPlus,
+  ClipboardList,
   CheckSquare,
   NotebookPen,
   Video,

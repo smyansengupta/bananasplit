@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useState, type ReactNode } from "react";
 
+import { Logo } from "@/components/brand/logo";
 import { capsuleButtonClass } from "@/components/shell/capsule";
 import {
   isExactPage,
@@ -62,7 +63,7 @@ export function NavMenu({
           )}
         >
           <DialogPrimitive.Title className="sr-only">Menu</DialogPrimitive.Title>
-          {/* The X where the menu button was, then the club. */}
+          {/* The X where the menu button was. */}
           <div className="flex items-center gap-2">
             <DialogPrimitive.Close asChild>
               {/* Its own circle, in the club track's grey. */}
@@ -74,25 +75,18 @@ export function NavMenu({
                 <X className="size-5" strokeWidth={ICON_STROKE} aria-hidden="true" />
               </button>
             </DialogPrimitive.Close>
-            {/* The club as the switch bar's track and thumb (People › Directory, Org chart). */}
-            <div className={cn(segmentedTrack, "h-auto min-w-0 flex-1")}>
-              <div className="bg-thumb min-w-0 flex-1 rounded-full px-1 shadow-[0_1px_2px_rgb(0_0_0/0.14),var(--edge-highlight)] [&>button]:h-10 [&>button]:rounded-full">
-                {clubMenu}
-              </div>
-            </div>
           </div>
 
-          <nav aria-label="Sections" className="mt-4 space-y-5">
-            {sections.map((section) => {
+          <nav aria-label="Sections" className="mt-4 min-h-0 flex-1 overflow-y-auto">
+            {sections.map((section, i) => {
               const links = section.items.filter((l) => !l.locked);
               if (links.length === 0) return null;
               return (
-                <div key={section.id}>
-                  {section.label && (
-                    <p className="text-muted-foreground px-3 pb-1.5 text-[13px] font-medium">
-                      {section.label}
-                    </p>
-                  )}
+                // Groups have no names: a thin line between them, as in the sidebar.
+                <div
+                  key={section.id}
+                  className={cn(i > 0 && "border-border/70 mt-3 border-t pt-3")}
+                >
                   <ul className="space-y-1">
                     {links.map((link) => (
                       <li key={link.id}>
@@ -110,6 +104,22 @@ export function NavMenu({
               );
             })}
           </nav>
+
+          {/* The foot, as in the sidebar: the club (and switching), then the Bananasplit mark. */}
+          <div className="mt-4 shrink-0 space-y-3">
+            <div className={cn(segmentedTrack, "flex h-auto min-w-0")}>
+              <div className="bg-thumb min-w-0 flex-1 rounded-full px-1 shadow-[0_1px_2px_rgb(0_0_0/0.14),var(--edge-highlight)] [&>button]:h-10 [&>button]:rounded-full">
+                {clubMenu}
+              </div>
+            </div>
+            <Link
+              href="/"
+              onClick={close}
+              className="focus-glow flex w-fit items-center rounded-full px-1.5 outline-none"
+            >
+              <Logo size={22} textSize={17} className="gap-2" />
+            </Link>
+          </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

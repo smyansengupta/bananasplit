@@ -444,7 +444,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       icon: "CalendarPlus",
       command: { type: "href", href: `${base}/calendar/find-a-time/new` },
     },
-    "find-a-time",
+    "meetings",
   );
   action(
     {
@@ -455,7 +455,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       icon: "MessageCircleQuestion",
       command: { type: "href", href: `${base}/calendar/polls/ask` },
     },
-    "polls",
+    "forms",
   );
   action(
     {

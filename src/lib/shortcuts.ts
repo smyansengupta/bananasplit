@@ -13,14 +13,15 @@ import type { SectionId } from "@/lib/nav/sidebar";
 /** `g` then one of these opens that section (when the club shows it). */
 export const GO_TO_KEYS: Record<SectionId, string> = {
   overview: "o",
+  inbox: "i",
   tasks: "t",
   calendar: "c",
-  "find-a-time": "a",
   meetings: "r",
   notes: "f",
   people: "p",
-  polls: "v",
+  forms: "v",
   databases: "d",
+  integrations: "n",
   finance: "m",
 };
 

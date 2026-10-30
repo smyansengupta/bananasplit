@@ -84,7 +84,7 @@ export function orderSpaces(orgs: OrgSummary[]): OrgSummary[] {
 }
 
 /**
- * The menu at the top of the sidebar. Its button is the space you're in:
+ * The menu at the foot of the sidebar (it opens upward). Its button is the space you're in:
  * a club's logo and name (as its theme says to show them), or your picture
  * and "Personal". It holds what belongs to the space rather than to a page
  * (the Admin panel and invites for a club's owners and admins, leaving for
@@ -171,7 +171,7 @@ export function OrgSwitcher({
           </span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuContent side="top" align="start" className="w-64">
         {personal ? (
           <DropdownMenuItem asChild>
             <Link href={`${base}/settings`}>

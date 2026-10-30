@@ -15,7 +15,6 @@ import { SectionGate } from "@/components/shell/section-gate";
 import { type SidebarState } from "@/components/shell/sidebar-mode-context";
 import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { SidebarPanel } from "@/components/shell/sidebar-panel";
-import { SpaceList } from "@/components/shell/space-list";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
 import { Toaster } from "@/components/ui/toaster";
@@ -142,13 +141,7 @@ export function AppShell({
     />
   );
   const nav = (onNavigate?: () => void) => (
-    <SidebarNav
-      sections={sections}
-      orgId={orgId}
-      pins={pins}
-      onNavigate={onNavigate}
-      spaces={<SpaceList orgs={orgs} activeSlug={orgSlug} user={user} onNavigate={onNavigate} />}
-    />
+    <SidebarNav sections={sections} orgId={orgId} pins={pins} onNavigate={onNavigate} />
   );
 
   useEffect(() => {

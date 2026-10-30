@@ -144,7 +144,7 @@ describe("list_open_polls", () => {
     const { alice, bob, club } = fx;
     const session = await fx.session(alice);
     // Find a time on its own (hiding Polls hides it too: it was split out of Polls).
-    await fx.hiding(club.id, ["find-a-time"], async () => {
+    await fx.hiding(club.id, ["meetings"], async () => {
       const res = await listOpenPollsTool(session, { space: club.id });
       expect(res.polls.map((p) => p.kind)).toEqual(["question", "question", "question"]);
       await expect(
@@ -154,7 +154,7 @@ describe("list_open_polls", () => {
         (await fetchItem(session, { id: itemId("poll", club.id, ids.night) })).metadata.pollKind,
       ).toBe("question");
     });
-    await fx.hiding(club.id, ["polls", "find-a-time"], async () => {
+    await fx.hiding(club.id, ["forms", "meetings"], async () => {
       await expect(listOpenPollsTool(session, { space: club.id })).rejects.toBeInstanceOf(
         SectionHiddenError,
       );

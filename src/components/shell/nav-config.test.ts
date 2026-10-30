@@ -12,32 +12,33 @@ const item = (label: string, all = links()) => all.find((i) => i.label === label
 const active = (label: string, path: string) => isLinkActive(item(label), path, links());
 
 describe("sidebar navigation", () => {
-  it("lists every section in order by default, grouped", () => {
+  it("lists every section in order by default, in unnamed groups", () => {
     expect(links().map((i) => i.label)).toEqual([
-      "Overview",
+      "Home",
+      "Inbox",
+      "People",
       "Tasks",
       "Calendar",
-      "People",
-      "Polls",
-      "Find a time",
       "Meetings",
-      "Files",
+      "Forms",
       "Databases",
+      "Files",
+      "Integrations",
       "Finance",
     ]);
-    expect(navSections("cbc", visibleSidebar(null)).map((s) => s.label)).toEqual([
-      null,
-      "Organization",
-      "Data",
-    ]);
+    const groups = navSections("cbc", visibleSidebar(null));
+    expect(groups.map((s) => s.id)).toEqual(["main", "plan", "collect", "money"]);
+    // Groups have no names: a thin line separates them.
+    expect(groups.every((s) => s.label === null)).toBe(true);
     expect(item("Files").href).toBe("/app/cbc/notes");
+    expect(item("Inbox").href).toBe("/app/cbc/inbox");
   });
 
   it("keeps People active on the org chart, which is part of it now", () => {
     expect(active("People", "/app/cbc/org-chart")).toBe(true);
     expect(active("People", "/app/cbc/org-chart/versions/v1")).toBe(true);
     expect(active("People", "/app/cbc/people/u1")).toBe(true);
-    expect(active("Polls", "/app/cbc/org-chart")).toBe(false);
+    expect(active("Forms", "/app/cbc/org-chart")).toBe(false);
   });
 
   it("reads saved sidebars that still list the retired Org Chart section", () => {
@@ -53,35 +54,36 @@ describe("sidebar navigation", () => {
     expect(labels).not.toContain("Org Chart");
   });
 
-  it("marks a section active on its sub-pages (prefix match), Overview only on itself", () => {
+  it("marks a section active on its sub-pages (prefix match), Home only on itself", () => {
     expect(active("Tasks", "/app/cbc/tasks/abc")).toBe(true);
-    expect(active("Overview", "/app/cbc")).toBe(true);
-    expect(active("Overview", "/app/cbc/tasks")).toBe(false);
+    expect(active("Home", "/app/cbc")).toBe(true);
+    expect(active("Home", "/app/cbc/tasks")).toBe(false);
     expect(active("Files", "/app/cbc/notesy")).toBe(false);
   });
 
   it("marks only the most specific section active when sections nest", () => {
-    expect(active("Polls", "/app/cbc/calendar/polls/abc")).toBe(true);
+    // Polls' old pages belong to Forms, Find a time's to Meetings.
+    expect(active("Forms", "/app/cbc/calendar/polls/abc")).toBe(true);
     expect(active("Calendar", "/app/cbc/calendar/polls/abc")).toBe(false);
     expect(active("Calendar", "/app/cbc/calendar/sync")).toBe(true);
-    expect(active("Polls", "/app/cbc/calendar")).toBe(false);
-    expect(active("Find a time", "/app/cbc/calendar/find-a-time/new")).toBe(true);
-    expect(active("Find a time", "/app/cbc/calendar/find-a-time/p1")).toBe(true);
+    expect(active("Forms", "/app/cbc/calendar")).toBe(false);
+    expect(active("Meetings", "/app/cbc/calendar/find-a-time/new")).toBe(true);
+    expect(active("Meetings", "/app/cbc/calendar/find-a-time/p1")).toBe(true);
     expect(active("Calendar", "/app/cbc/calendar/find-a-time")).toBe(false);
     expect(active("Meetings", "/app/cbc/meetings")).toBe(true);
     // The old RSVP path still belongs to Meetings, so a pasted link lights
     // the right section up.
     expect(active("Meetings", "/app/cbc/calendar/rsvp")).toBe(true);
     expect(active("Calendar", "/app/cbc/calendar/rsvp")).toBe(false);
-    // A meeting's sign-up screens are part of that meeting, so Meetings stays
-    // lit on them (the Calendar's old /calendar/{id}/rsvp only forwards).
     expect(active("Meetings", "/app/cbc/meetings/e1/rsvp")).toBe(true);
     expect(active("Meetings", "/app/cbc/meetings/e1/rsvp/door")).toBe(true);
     expect(active("Calendar", "/app/cbc/meetings/e1/rsvp")).toBe(false);
+    // Integrations' setup pages still live under the Admin panel and Setup.
+    expect(active("Integrations", "/app/cbc/settings/integrations/claude")).toBe(true);
+    expect(active("Integrations", "/app/cbc/setup")).toBe(true);
   });
 
-  it("puts sections added since an organization saved its sidebar after the one before them, hidden with what they came from", () => {
-    // A sidebar saved before Find a time and RSVPs: Calendar moved under Club, Polls hidden.
+  it("reads a sidebar saved before the new groups: choices kept, each section in its own group", () => {
     const saved = {
       groups: [
         { id: "main", label: null },
@@ -95,66 +97,68 @@ describe("sidebar navigation", () => {
         { id: "calendar", group: "club", hidden: false, label: "Events" },
         { id: "people", group: "club", hidden: false, label: null },
         { id: "polls", group: "club", hidden: true, label: null },
+        { id: "find-a-time", group: "club", hidden: false, label: null },
         { id: "databases", group: "data", hidden: false, label: null },
         { id: "finance", group: "data", hidden: false, label: null },
       ],
     };
-    const club = resolveSidebar(saved).find((g) => g.id === "club")!;
-    expect(club.items.map((i) => i.label)).toEqual([
-      "Events",
-      "People",
-      "Polls",
-      "Find a time",
-      "Meetings",
-    ]);
-    expect(club.items.find((i) => i.id === "find-a-time")!.hidden).toBe(true);
-    expect(club.items.find((i) => i.id === "meetings")!.hidden).toBe(false);
-    expect(links(saved).map((i) => i.label)).not.toContain("Find a time");
+    const labels = links(saved).map((i) => i.label);
+    // A club that hid Polls has Forms hidden; Find a time is part of Meetings.
+    expect(labels).not.toContain("Forms");
+    expect(labels).not.toContain("Polls");
+    expect(labels).not.toContain("Find a time");
+    expect(labels).toContain("Meetings");
+    expect(labels).toContain("Events");
+    const groups = resolveSidebar(saved);
+    expect(groups.map((g) => g.id)).toEqual(["main", "plan", "collect", "money"]);
+    expect(groups.find((g) => g.id === "plan")!.items.map((i) => i.id)).toContain("calendar");
+    expect(groups.every((g) => g.label === null)).toBe(true);
   });
 
   it("names a section's page the way the organization's sidebar does", () => {
     expect(sectionLabel(null, "notes")).toBe("Files");
     const groups = resolveSidebar(null);
-    groups.find((g) => g.id === "data")!.items.find((i) => i.id === "notes")!.label = "Docs";
-    groups.find((g) => g.id === "club")!.items.find((i) => i.id === "meetings")!.hidden = true;
+    groups.find((g) => g.id === "collect")!.items.find((i) => i.id === "notes")!.label = "Docs";
+    groups.find((g) => g.id === "plan")!.items.find((i) => i.id === "meetings")!.hidden = true;
     const config = toConfig(groups);
     expect(sectionLabel(config, "notes")).toBe("Docs");
     // A hidden section keeps its name: admins can still open it.
     expect(sectionLabel(config, "meetings")).toBe("Meetings");
     expect(sectionLabel({ junk: true }, "people")).toBe("People");
+    // Old pages ask by their old names.
+    expect(sectionLabel(null, "polls")).toBe("Forms");
+    expect(sectionLabel(null, "find-a-time")).toBe("Find a time");
   });
 
   it("follows the org's sidebar: hidden, renamed, moved and reordered sections", () => {
     const groups = resolveSidebar(null);
-    const club = groups.find((g) => g.id === "club")!;
-    const polls = club.items.find((i) => i.id === "polls")!;
-    polls.hidden = true;
-    const people = club.items.find((i) => i.id === "people")!;
-    people.label = "Members";
-    // Move Finance to the top group, first after Overview.
-    const data = groups.find((g) => g.id === "data")!;
-    const finance = data.items.splice(
-      data.items.findIndex((i) => i.id === "finance"),
-      1,
-    )[0];
-    groups[0].items.splice(1, 0, finance);
-    groups[2].label = "Records";
+    const collect = groups.find((g) => g.id === "collect")!;
+    collect.items.find((i) => i.id === "forms")!.hidden = true;
+    const main = groups.find((g) => g.id === "main")!;
+    main.items.find((i) => i.id === "people")!.label = "Members";
+    // Move Finance into the first group, right after Home.
+    const money = groups.find((g) => g.id === "money")!;
+    const finance = money.items.splice(0, 1)[0];
+    main.items.splice(1, 0, finance);
     const config = toConfig(groups);
     const labels = links(config).map((i) => i.label);
-    expect(labels).not.toContain("Polls");
-    expect(labels.slice(0, 3)).toEqual(["Overview", "Finance", "Tasks"]);
+    expect(labels).not.toContain("Forms");
+    expect(labels.slice(0, 3)).toEqual(["Home", "Finance", "Inbox"]);
     expect(labels).toContain("Members");
-    expect(navSections("cbc", visibleSidebar(config)).map((s) => s.label)).toEqual([
-      null,
-      "Organization",
-      "Records",
+    // An emptied group drops out.
+    expect(navSections("cbc", visibleSidebar(config)).map((s) => s.id)).toEqual([
+      "main",
+      "plan",
+      "collect",
     ]);
-    // Overview can't be hidden, whatever is saved.
+    // Home and Inbox can't be hidden, whatever is saved.
     const tampered = {
       ...config,
-      items: config.items.map((i) => (i.id === "overview" ? { ...i, hidden: true } : i)),
+      items: config.items.map((i) =>
+        i.id === "overview" || i.id === "inbox" ? { ...i, hidden: true } : i,
+      ),
     };
-    expect(links(tampered)[0].label).toBe("Overview");
+    expect(links(tampered).map((i) => i.label)).toEqual(expect.arrayContaining(["Home", "Inbox"]));
   });
 });
 
@@ -171,25 +175,25 @@ describe("the sidebar in each space", () => {
   const nav = (space: Space, showLocked = false) =>
     navSections("me", visibleSidebar(null), { space, showLocked }).flatMap((s) => s.items);
 
-  it("gives Personal its own seven: Home, Tasks, Calendar, Files, Databases, Find a time and RSVPs", () => {
+  it("gives Personal its own: Home, Inbox, Tasks, Calendar, Meetings, Databases and Files", () => {
     const items = nav(PERSONAL, true);
     expect(items.map((i) => i.label)).toEqual([
       "Home",
+      "Inbox",
       "Tasks",
       "Calendar",
-      "Files",
-      "Databases",
-      "Find a time",
       "Meetings",
+      "Databases",
+      "Files",
     ]);
     expect(items.map((i) => i.href)).toEqual([
       "/app/me",
+      "/app/me/inbox",
       "/app/me/tasks",
       "/app/me/calendar",
-      "/app/me/notes",
-      "/app/me/databases",
-      "/app/me/calendar/find-a-time",
       "/app/me/meetings",
+      "/app/me/databases",
+      "/app/me/notes",
     ]);
     expect(items.some((i) => i.locked)).toBe(false);
     const all = items;
@@ -202,7 +206,7 @@ describe("the sidebar in each space", () => {
       );
     expect(is("Meetings", "/app/me/calendar/rsvp/e1")).toBe(true);
     expect(is("Calendar", "/app/me/calendar/rsvp/e1")).toBe(false);
-    expect(is("Find a time", "/app/me/calendar/find-a-time/p1")).toBe(true);
+    expect(is("Meetings", "/app/me/calendar/find-a-time/p1")).toBe(true);
     expect(is("Home", "/app/me/tasks")).toBe(false);
   });
 
@@ -217,7 +221,7 @@ describe("the sidebar in each space", () => {
     expect(isExactPage("/app/me", "/app/me")).toBe(true);
   });
 
-  it("gives a running trial every section, and an ended one (Team Free) all but Finance", () => {
+  it("gives a running trial every section, and an ended one (Team Free) all but the paid ones", () => {
     expect(nav(club("TRIAL", new Date(Date.now() + 86_400_000))).map((i) => i.label)).toEqual(
       links().map((i) => i.label),
     );
@@ -225,7 +229,7 @@ describe("the sidebar in each space", () => {
     expect(nav(ended).map((i) => i.label)).toEqual(
       links()
         .map((i) => i.label)
-        .filter((l) => l !== "Finance"),
+        .filter((l) => l !== "Finance" && l !== "Integrations"),
     );
     expect(nav(ended, true).find((i) => i.label === "Finance")?.locked).toBe(true);
   });
@@ -242,14 +246,15 @@ describe("the create menu", () => {
   const sections = (space: Space, raw: unknown = null, showLocked = false) =>
     navSections("me", visibleSidebar(raw), { space, showLocked });
 
-  it("offers what the space has: task, event, meeting, note, poll and Find a time", () => {
+  it("offers what the space has: task, event, meeting, note, poll, form and Find a time", () => {
     const all = createActions(sections(club("SOCIETY")), { canCreateEvents: true });
     expect(all.map((a) => [a.id, a.href])).toEqual([
       ["task", "/app/me/tasks?new=1"],
       ["event", "/app/me/calendar?new=1"],
       ["meeting", "/app/me/meetings?new=1"],
       ["note", undefined],
-      ["poll", "/app/me/calendar/polls/ask"],
+      ["poll", "/app/me/forms/new?poll=1"],
+      ["form", "/app/me/forms/new"],
       ["find-a-time", "/app/me/calendar/find-a-time/new"],
     ]);
     // Members who can't create events don't get New event.
@@ -268,7 +273,7 @@ describe("the create menu", () => {
     ]);
     const groups = resolveSidebar(null);
     for (const g of groups) {
-      for (const i of g.items) if (i.id === "notes" || i.id === "polls") i.hidden = true;
+      for (const i of g.items) if (i.id === "notes" || i.id === "forms") i.hidden = true;
     }
     expect(
       createActions(sections(club("SOCIETY"), toConfig(groups)), { canCreateEvents: true }).map(

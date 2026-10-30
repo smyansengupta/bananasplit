@@ -7,13 +7,16 @@ import {
   CheckSquare,
   Database,
   FileText,
+  ClipboardList,
   FolderOpen,
   House,
+  Inbox,
   LayoutDashboard,
   Lock,
   Network,
   NotebookText,
   Pin,
+  Plug,
   Plus,
   Ticket,
   Users,
@@ -54,11 +57,14 @@ export const NAV_ICONS: Record<string, IconComponent> = {
   CalendarDays,
   CheckSquare,
   Database,
+  ClipboardList,
   FolderOpen,
   House,
+  Inbox,
   LayoutDashboard,
   Network,
   NotebookText,
+  Plug,
   Ticket,
   Users,
   Video,
@@ -166,6 +172,22 @@ export function GroupLabel({ label, children }: { label: string; children?: Reac
   );
 }
 
+/**
+ * Where one group of the sidebar ends and the next begins. Groups have no
+ * names: a thin line is the whole heading, the same docked and on the
+ * rail. `children` sits at the right of the line (the pins' +).
+ */
+export function GroupGap({ children }: { children?: React.ReactNode }) {
+  const { chrome } = useSidebarMode();
+  const tone = surfaceTone(chrome);
+  return (
+    <div className="relative flex h-5 shrink-0 items-center gap-2 pr-1 pl-3">
+      <span aria-hidden="true" className={cn("h-px flex-1", tone.line)} />
+      {children}
+    </div>
+  );
+}
+
 /** Content that folds away on the rail (or appears only there), and can't be focused while folded. */
 export function Fold({
   open,
@@ -224,7 +246,7 @@ function PinnedList({
         over && "bg-sidebar-accent/60 ring-sidebar-ring ring-1",
       )}
     >
-      <GroupLabel label="Pinned">
+      <GroupGap>
         {pinsCtx && (
           <button
             type="button"
@@ -234,7 +256,7 @@ function PinnedList({
             tabIndex={rail ? -1 : undefined}
             aria-hidden={rail || undefined}
             className={cn(
-              "focus-glow grid size-[26px] place-items-center rounded-full outline-none",
+              "focus-glow grid size-[22px] place-items-center rounded-full outline-none",
               "transition-opacity duration-200 motion-reduce:transition-none",
               tone.hover,
               rail && "pointer-events-none opacity-0",
@@ -243,19 +265,14 @@ function PinnedList({
             <Plus className="size-4" aria-hidden="true" />
           </button>
         )}
-      </GroupLabel>
+      </GroupGap>
       <Fold open={!rail}>
         {pins.length === 0 ? (
-          <p
-            title="Drag a page here, or press the pin at the top of any page."
-            className={cn(
-              "px-3 py-1 text-xs whitespace-nowrap",
-              tone.quiet,
-              over && "text-sidebar-foreground",
-            )}
-          >
-            {over ? "Drop to pin" : "Nothing pinned yet"}
-          </p>
+          over ? (
+            <p className={cn("text-sidebar-foreground px-3 py-1 text-xs whitespace-nowrap")}>
+              Drop to pin
+            </p>
+          ) : null
         ) : (
           <ul className="flex flex-col gap-0.5">
             {pins.map((pin) => {
@@ -279,7 +296,7 @@ function PinnedList({
                       strokeWidth={ICON_STROKE}
                       aria-hidden="true"
                     />
-                    <span className="truncate">{pin.label}</span>
+                    <span className="min-w-0 truncate">{pin.label}</span>
                   </Link>
                   <button
                     type="button"
@@ -344,7 +361,7 @@ export function SidebarNav({
   sections: NavSection[];
   orgId: string;
   pins?: SidebarPin[];
-  /** Personal and the clubs (SpaceList), at the foot; folded away on the rail. */
+  /** Kept for callers; the club switcher at the foot of the sidebar lists the spaces now. */
   spaces?: React.ReactNode;
   onNavigate?: () => void;
 }) {
@@ -361,9 +378,9 @@ export function SidebarNav({
           rail && "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         )}
       >
-        {sections.map((section) => (
+        {sections.map((section, i) => (
           <div key={section.id} className="flex flex-col gap-0.5">
-            {section.label && <GroupLabel label={section.label} />}
+            {section.label ? <GroupLabel label={section.label} /> : i > 0 && <GroupGap />}
             {section.items.map((link) => (
               <NavItemLink
                 key={link.id}
