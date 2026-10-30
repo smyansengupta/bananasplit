@@ -41,7 +41,7 @@ import {
   type IconComponent,
 } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Segmented } from "@/components/ui/segmented";
+import { toast } from "@/components/ui/toaster";
 import { IconChip } from "@/components/ui/stat";
 import {
   BOARD_COLUMNS,
@@ -183,7 +184,7 @@ export function WidgetBoard({
   const meta = new Map(types.map((t) => [t.type, t]));
   const groups = [...new Set(types.map((t) => t.group))];
 
-  function persist(next: BoardWidget[] | null) {
+  function persist(next: BoardWidget[] | null, { close = false } = {}) {
     setError(null);
     start(async () => {
       const result = await onSave(next);
@@ -192,8 +193,56 @@ export function WidgetBoard({
         return;
       }
       if (next === null) setLayout(initialLayout);
-      setEditing(false);
+      if (close) setEditing(false);
       router.refresh();
+    });
+  }
+
+  // Customizing saves as you go: every change is sent a moment after the
+  // last one, so there is no Save, no Cancel, and Done only closes the bar.
+  const saved = useRef(JSON.stringify(initialLayout));
+  useEffect(() => {
+    if (!editing) return;
+    const now = JSON.stringify(layout);
+    if (now === saved.current) return;
+    const timer = setTimeout(() => {
+      saved.current = now;
+      persist(layout);
+    }, 600);
+    return () => clearTimeout(timer);
+    // persist is stable enough here: it only reads onSave and the router.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout, editing]);
+
+  function remove(id: string) {
+    const at = layout.findIndex((x) => x.id === id);
+    const gone = layout[at];
+    if (!gone) return;
+    setLayout((l) => l.filter((x) => x.id !== id));
+    toast({
+      title: "Removed",
+      action: {
+        label: "Undo",
+        run: () =>
+          setLayout((l) =>
+            l.some((x) => x.id === id) ? l : [...l.slice(0, at), gone, ...l.slice(at)],
+          ),
+      },
+    });
+  }
+
+  function reset() {
+    const before = layout;
+    persist(null);
+    toast({
+      title: "Reset",
+      action: {
+        label: "Undo",
+        run: () => {
+          setLayout(before);
+          saved.current = "";
+        },
+      },
     });
   }
 
@@ -261,21 +310,13 @@ export function WidgetBoard({
 
       {editing && (
         <div className="bg-muted/60 rounded-tile flex flex-wrap items-center gap-2 py-2 pr-2 pl-4">
-          <p className="text-muted-foreground mr-auto text-sm">
-            Drag a widget by its handle to move it. Only you see these changes.
-          </p>
+          <p className="text-muted-foreground mr-auto text-sm">Only you see this.</p>
           <Button type="button" size="sm" variant="secondary" onClick={() => setAdding(true)}>
             <Plus className="size-4" aria-hidden="true" />
             Add widget
           </Button>
           {customized && (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => persist(null)}
-            >
+            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={reset}>
               <RotateCcw className="size-4" aria-hidden="true" />
               Reset
             </Button>
@@ -283,16 +324,14 @@ export function WidgetBoard({
           <Button
             type="button"
             size="sm"
-            variant="ghost"
-            disabled={pending}
             onClick={() => {
-              setLayout(initialLayout);
-              setEditing(false);
+              const now = JSON.stringify(layout);
+              if (now !== saved.current) {
+                saved.current = now;
+                persist(layout, { close: true });
+              } else setEditing(false);
             }}
           >
-            Cancel
-          </Button>
-          <Button type="button" size="sm" disabled={pending} onClick={() => persist(layout)}>
             {pending ? (
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             ) : (
@@ -429,9 +468,7 @@ export function WidgetBoard({
                       <GripVertical className="size-4" aria-hidden="true" />
                     </span>
                   )}
-                  <h2 title={m.title} className="heading min-w-0 truncate text-[17px]">
-                    {m.title}
-                  </h2>
+                  <h2 className="heading min-w-0 text-[17px] break-words">{m.title}</h2>
                   {actions && (
                     <div className="flex min-w-0 flex-1 items-center gap-1.5">{actions}</div>
                   )}
@@ -460,7 +497,7 @@ export function WidgetBoard({
                         variant="outline"
                         className="text-muted-foreground hover:text-destructive"
                         aria-label={`Remove ${m.title}`}
-                        onClick={() => setLayout((l) => l.filter((x) => x.id !== w.id))}
+                        onClick={() => remove(w.id)}
                       >
                         <X className="size-4" aria-hidden="true" />
                       </Button>
@@ -485,8 +522,8 @@ export function WidgetBoard({
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a widget</DialogTitle>
-            <DialogDescription>
-              Pick what you want on your board. It goes at the end; drag it where you want it.
+            <DialogDescription className="sr-only">
+              It goes at the end of your board.
             </DialogDescription>
           </DialogHeader>
           {layout.length >= MAX_WIDGETS ? (
@@ -497,7 +534,7 @@ export function WidgetBoard({
             <div className="space-y-5">
               {groups.map((group) => (
                 <section key={group} className="space-y-2">
-                  <h3 className="eyebrow text-muted-foreground">{group}</h3>
+                  <h3 className="text-muted-foreground text-[13px] font-semibold">{group}</h3>
                   <ul className="grid gap-2.5 sm:grid-cols-2">
                     {types
                       .filter((t) => t.group === group)

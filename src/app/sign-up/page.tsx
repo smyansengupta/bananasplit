@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { AlreadySignedIn } from "@/components/auth/already-signed-in";
 import { BrandGoogleButton } from "@/components/auth/google-sign-in-button";
@@ -24,12 +25,17 @@ export const metadata: Metadata = {
  * 14-day trial of Personal Plus. Next comes "What are you here for?"
  * (/onboarding), unless they came from somewhere specific (?callbackUrl=,
  * e.g. an invite link or "Get started"), which they go straight back to.
- * Already signed in: say so, with Continue and Sign out.
+ * Already signed in: straight in, or (with a destination) say so first.
  */
 export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">) {
-  const callbackUrl = safeCallbackUrl((await searchParams).callbackUrl);
+  const query = await searchParams;
+  const callbackUrl = safeCallbackUrl(query.callbackUrl);
+  // Arriving from Request a demo: say it went.
+  const demoSent = query.demo === "sent";
   const session = await auth();
   if (session?.user?.email) {
+    // A plain visit goes straight in; one carrying a destination asks first.
+    if (!callbackUrl) redirect("/app");
     return (
       <AlreadySignedIn
         email={session.user.email}
@@ -44,6 +50,11 @@ export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">
 
   return (
     <AuthCard tall formClassName="gap-[18px] lg:py-9">
+      {demoSent && (
+        <p role="status" className="bg-muted rounded-field m-0 px-4 py-3 text-[14px] font-medium">
+          Demo request sent. We&apos;ll email you.
+        </p>
+      )}
       <SignUpForm
         callbackUrl={callbackUrl}
         google={

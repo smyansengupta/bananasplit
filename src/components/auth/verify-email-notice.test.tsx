@@ -26,7 +26,7 @@ function show() {
 async function resend(result: ResendState) {
   resendMock.mockResolvedValueOnce(result);
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: "Resend verification email" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send it again" }));
   });
 }
 
@@ -39,22 +39,20 @@ afterEach(() => {
 });
 
 describe("VerifyEmailNotice", () => {
-  it("says the address isn't verified and names it", () => {
+  it("says to open the link, names the address, and remembers this page for after", () => {
     show();
+    expect(document.cookie).toContain("bs_after_verify=");
     const notice = screen.getByRole("status");
     expect(notice.textContent).toContain("Check your email");
-    expect(notice.textContent).toContain("Your email address isn't verified yet.");
-    expect(notice.textContent).toContain("verify-test@example.edu");
-    expect(notice.textContent).toContain(
-      "Verify your address to create an organization or accept an invite.",
-    );
+    expect(notice.textContent).toContain("Open the link we sent to verify-test@example.edu.");
+    expect(notice.textContent).toContain("I've confirmed it");
   });
 
   it("confirms a resend", async () => {
     show();
     await resend({ sent: true });
     expect(resendMock).toHaveBeenCalledOnce();
-    expect(screen.getByText(/A new link is on its way/)).toBeTruthy();
+    expect(screen.getByText(/Sent. It may take a minute./)).toBeTruthy();
   });
 
   it("shows the rate-limit message", async () => {
@@ -63,12 +61,12 @@ describe("VerifyEmailNotice", () => {
     expect(
       screen.getByText("Too many verification emails requested. Try again in 12 minutes."),
     ).toBeTruthy();
-    expect(screen.queryByText(/A new link is on its way/)).toBeNull();
+    expect(screen.queryByText(/Sent. It may take a minute./)).toBeNull();
   });
 
   it("says when the address was verified in the meantime", async () => {
     show();
     await resend({ verified: true });
-    expect(screen.getByText(/already verified/)).toBeTruthy();
+    expect(screen.getByText(/Already confirmed/)).toBeTruthy();
   });
 });

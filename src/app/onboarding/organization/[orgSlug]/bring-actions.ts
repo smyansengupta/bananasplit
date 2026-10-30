@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
 import { bringSections, type BringSection } from "@/lib/onboarding/bring";
-import { orgStepHref } from "@/lib/onboarding/steps";
 import { clearBring, isBringId, rememberBring } from "@/server/personal/bring-cookie";
 import { loadBringable, movedSummary, movePersonalItems } from "@/server/personal/move";
 
@@ -44,12 +43,12 @@ export async function bringIntoClubAction(
 }
 
 /** Skip or Finish: into the club (as its admin after setup). */
-export async function finishBringAction(orgSlug: string, welcome: boolean): Promise<void> {
+export async function finishBringAction(orgSlug: string, _welcome: boolean): Promise<void> {
   await requireUser();
   await clearBring();
   const slug = SLUG.test(orgSlug) ? orgSlug : "";
-  // From setup (welcome), your profile comes next; from Move, straight back in.
-  redirect(!slug ? "/app" : welcome ? orgStepHref(slug, "profile") : `/app/${slug}`);
+  // Setup ends here (the rest is on the Overview); Move goes straight back in.
+  redirect(!slug ? "/app" : `/app/${slug}`);
 }
 
 /**

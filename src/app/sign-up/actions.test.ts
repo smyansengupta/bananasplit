@@ -39,7 +39,6 @@ function form(email: string) {
   data.set("name", "New Person");
   data.set("email", email);
   data.set("password", "correct-horse-battery");
-  data.set("confirmPassword", "correct-horse-battery");
   return data;
 }
 
@@ -181,7 +180,7 @@ describe("signUpAction (0A Fix 4(a,b))", () => {
     expect(authDbMock.user.create).not.toHaveBeenCalled();
   });
 
-  it("refuses two passwords that don't match, before anything is written", async () => {
+  it("still refuses two passwords that don't match from an older two-field form", async () => {
     const data = form("new@example.com");
     data.set("confirmPassword", "something-else-entirely");
     expect(await signUpAction({}, data)).toEqual({ error: "The passwords don't match." });

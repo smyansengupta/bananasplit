@@ -71,7 +71,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
     `${titledOrgs.length} organization${titledOrgs.length === 1 ? "" : "s"}`,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-7.5">
@@ -84,15 +84,12 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           </div>
           <Button asChild variant="outline">
             <Link href={personHref(orgSlug, profile.id)}>
-              View as others see it
+              Preview
               <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
             </Link>
           </Button>
         </header>
-        <p className="text-muted-foreground max-w-prose text-sm">
-          Members of your organizations see your name, picture, pronouns, major, bio and links. Your
-          email is not shown on people pages.
-        </p>
+        <p className="text-muted-foreground max-w-prose text-sm">Your email stays private.</p>
 
         <nav aria-label="Profile sections" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           {/* Wrapping on a phone too, so every section is in view without scrolling. */}
@@ -119,10 +116,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
               timezone: profile.timezone,
             }}
           />
-          <SettingsCard
-            title="Your titles"
-            description="Each organization's admins set your title there, separately from your role."
-          >
+          <SettingsCard title="Your titles" description="Set by each organization's admins.">
             <ul className="divide-border/70 divide-y">
               {titledOrgs.map((m) => (
                 <li
@@ -144,11 +138,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           </SettingsCard>
         </section>
 
-        <SettingsCard
-          id="photo"
-          title="Profile picture"
-          description="Shown in the org chart, on tasks, in database rows and on your people page."
-        >
+        <SettingsCard id="photo" title="Picture">
           <AvatarEditor
             user={{
               name: profile.name,

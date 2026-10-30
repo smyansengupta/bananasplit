@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,17 @@ import { Label } from "@/components/ui/label";
 
 import { issueCodeAction } from "./actions";
 
+/** Issuing copies the new code straight away; it's shown once. */
 export function IssueCodeForm({ disabledReason }: { disabledReason?: string }) {
   const [state, formAction, isPending] = useActionState(issueCodeAction, {});
+  const [copied, setCopied] = useState<string | null>(null);
+  useEffect(() => {
+    if (!state.code) return;
+    navigator.clipboard
+      ?.writeText(state.code)
+      .then(() => setCopied(state.code ?? null))
+      .catch(() => setCopied(null));
+  }, [state.code]);
   return (
     <form action={formAction}>
       <Card>
@@ -51,7 +60,8 @@ export function IssueCodeForm({ disabledReason }: { disabledReason?: string }) {
               role="status"
             >
               <p className="text-sm">
-                Copy this code now: it is shown once. It works once, until{" "}
+                {copied === state.code ? "Copied. " : "Copy it now. "}
+                Shown once, works once, until{" "}
                 {new Date(state.expiresAt!).toLocaleDateString("en-US", { dateStyle: "medium" })}.
               </p>
               <p className="font-mono text-lg tracking-wider select-all">{state.code}</p>

@@ -1,27 +1,28 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { saveAvailabilityStep } from "@/app/onboarding/profile/actions";
 import { AvailabilityEditor } from "@/components/onboarding/availability-editor";
-import { Button } from "@/components/ui/button";
 import type { Availability } from "@/lib/availability";
 
 import { SettingsCard } from "../settings/settings-card";
 
-/** Profile > When you can't meet: the onboarding A5 editor, editable. */
+/** Profile > Availability: the onboarding A5 editor, editable. Saves itself as you change it. */
 export function AvailabilityForm({ initial }: { initial: Availability }) {
   const [value, setValue] = useState(initial);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
 
-  function save() {
+  const lastSaved = useRef(JSON.stringify(initial));
+
+  function save(snapshot: Availability) {
     setStatus(null);
     start(async () => {
-      const result = await saveAvailabilityStep(value);
+      const result = await saveAvailabilityStep(snapshot);
       setStatus(
         result.ok
-          ? { ok: true, text: "Saved." }
+          ? { ok: true, text: "Saved" }
           : {
               ok: false,
               text: Object.values(result.fieldErrors)[0] ?? "Couldn't save. Try again.",
@@ -30,22 +31,27 @@ export function AvailabilityForm({ initial }: { initial: Availability }) {
     });
   }
 
+  useEffect(() => {
+    const json = JSON.stringify(value);
+    if (json === lastSaved.current) return;
+    const timer = setTimeout(() => {
+      lastSaved.current = json;
+      save(value);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [value]);
+
   return (
     <SettingsCard
-      title="When you can't meet"
-      description="Click or drag to block hours in a typical week, or add rules. Teammates see “busy,” never the reason."
+      title="Availability"
+      description="Teammates see busy, never why."
       status={
         <span
           aria-live="polite"
           className={status?.ok === false ? "text-destructive" : "text-success"}
         >
-          {status?.text}
+          {pending ? "Saving" : status?.text}
         </span>
-      }
-      footer={
-        <Button type="button" onClick={save} disabled={pending}>
-          {pending ? "Saving…" : "Save"}
-        </Button>
       }
     >
       <div className="max-w-md">

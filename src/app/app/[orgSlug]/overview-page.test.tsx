@@ -50,6 +50,7 @@ const db = {
   poll: { findMany: vi.fn() },
   membership: { findMany: vi.fn(), count: vi.fn() },
   budgetPeriod: { count: vi.fn() },
+  orgChartVersion: { count: vi.fn(async () => 0) },
   note: { count: vi.fn() },
   databaseDefinition: { count: vi.fn() },
   // Cards the viewer hid from their own Up next; nobody has hidden any here.
@@ -58,6 +59,8 @@ const db = {
 
 vi.mock("@/app/app/[orgSlug]/getting-started-actions", () => ({
   setStartedStepSkipped: vi.fn(),
+  hideGettingStarted: vi.fn(),
+  restoreStartedSkipped: vi.fn(),
 }));
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.getOrgContextBySlug,
@@ -258,7 +261,7 @@ describe("org overview", () => {
     expect(html).toContain('href="/app/cbc/tasks/t_stuck"');
     expect(html).toContain("8 open");
     expect(html).toContain("1 overdue");
-    expect(html).toContain("Overdue · Thu, Oct 1");
+    expect(html).toContain("Overdue, Thu, Oct 1");
     expect(html).toContain("Blocked");
     expect(html).toContain("Part of Fall kickoff logistics");
     expect(html).toContain('aria-label="Private task"');
@@ -345,14 +348,14 @@ describe("org overview", () => {
     expect(widget.indexOf("Pizza or tacos?")).toBeLessThan(widget.indexOf("Exec sync time"));
     expect(html).toContain('href="/app/cbc/calendar/polls/qp_1"');
     expect(html).toContain('href="/app/cbc/calendar/find-a-time/ap_1"');
-    expect(html).toContain("Question · Open");
-    expect(html).toContain("Find a time · Open");
+    expect(html).toContain("Question, open");
+    expect(html).toContain("Find a time, open");
   });
 
   it("shows a next step when there is nothing pinned or coming up", async () => {
     const html = await render();
     expect(html).toContain("Nothing pinned yet");
-    expect(html).toContain("Nothing needs you this week");
+    expect(html).toContain("Nothing this week.");
     mocks.loadSavedBoard.mockResolvedValue([
       { id: "meetings", type: "meetings", w: 2, h: null },
       { id: "events", type: "events", w: 2, h: null },
@@ -383,7 +386,7 @@ describe("the Moonstone Overview", () => {
     const html = await render();
     expect(html).toContain("Due this week");
     expect(html).toContain("All clear");
-    expect(html).toContain("Coming up in 14 days");
+    expect(html).toContain("Next 14 days");
     expect(html).not.toContain("Open tasks");
     expect(html.indexOf("Due this week")).toBeLessThan(html.indexOf('id="up-next-heading"'));
     expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open polls"));
@@ -403,7 +406,8 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain("Set up your budgets");
     expect(html).toContain("Create a task or an epic");
     expect(html).not.toContain("sections");
-    expect(html).toContain("Checked off as not needed.");
+    expect(html).not.toContain("Name the organization");
+    expect(html).toContain("Hide");
 
     // Everything done or checked off: the card is gone.
     db.membership.count.mockResolvedValue(5);
@@ -414,7 +418,7 @@ describe("the Moonstone Overview", () => {
       user: viewer,
       organization: { ...org, logo: { key: "k" } },
       role: "OWNER",
-      settings: { startedSkipped: ["database"] },
+      settings: { startedSkipped: ["database", "teams"], eventTypes: [] },
     });
     expect(await render()).not.toContain("Get your organization started");
   });
@@ -429,7 +433,8 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain('id="up-next-heading"');
     expect(html).toContain('aria-label="Weekly pulse"');
     // The RSVP waiting on the viewer is an answer block.
-    expect(html).toContain("Your RSVP · Today · 7:00 PM");
+    expect(html).toContain("Today, 7:00 PM");
+    expect(html).toContain("Can&#x27;t go");
     expect(html.indexOf('id="up-next-heading"')).toBeLessThan(
       html.indexOf('aria-label="My tasks"'),
     );

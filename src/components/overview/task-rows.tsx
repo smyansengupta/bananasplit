@@ -101,7 +101,7 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
           {task.private && (
             <Lock className="text-muted-foreground size-3.5 shrink-0" aria-label="Private task" />
           )}
-          <span className="truncate">{task.title}</span>
+          <span className="break-words">{task.title}</span>
         </Link>
         <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]">
           {task.epic && (
@@ -124,7 +124,9 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
               {task.due.text}
             </span>
           )}
-          {task.context && <span className="text-muted-foreground truncate">{task.context}</span>}
+          {task.context && (
+            <span className="text-muted-foreground break-words">{task.context}</span>
+          )}
         </div>
         {error && (
           <p role="alert" className="text-destructive mt-1 text-xs">

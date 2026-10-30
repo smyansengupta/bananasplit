@@ -57,7 +57,7 @@ export function PlanLocked({
           <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
           <div className="flex flex-wrap items-center gap-2 pt-1.5">
             <Button asChild size="sm">
-              <Link href={`${base}/settings/plan`}>See plans</Link>
+              <Link href={`${base}/settings/plan`}>Get {PLAN_NAMES.PERSONAL_PLUS}</Link>
             </Button>
           </div>
         </div>
@@ -99,8 +99,8 @@ export function PlanLocked({
         <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
         <p className="text-muted-foreground max-w-prose text-sm">
           {canSeePlans
-            ? `Your organization is on the ${PLAN_NAMES[plan]} plan. Nothing you already made is lost when you switch.`
-            : "Your organization's plan doesn't include this. Ask an owner if you need it."}
+            ? `You're on ${PLAN_NAMES[plan]}. Switching keeps everything.`
+            : "Ask an owner if you need it."}
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1.5">
           {canSeePlans && (

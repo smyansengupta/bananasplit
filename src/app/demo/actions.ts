@@ -73,7 +73,9 @@ export async function requestDemoAction(_prev: DemoState, formData: FormData): P
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check the form");
   // A filled honeypot is a bot: it sees the same next page, and nothing is sent or saved.
   if (String(formData.get(DEMO_HONEYPOT) ?? "").trim() !== "") {
-    redirect(startHref(Boolean(await getSession())));
+    // Say it went: on this page when signed in, else on sign-up.
+    const signedIn = Boolean(await getSession());
+    redirect(signedIn ? "/demo?sent=1" : `${startHref(false)}&demo=sent`);
   }
 
   const limit = await checkRateLimit(
@@ -106,12 +108,13 @@ export async function requestDemoAction(_prev: DemoState, formData: FormData): P
     try {
       await getPlatformMailer().send({
         to: inbox,
+        // Reply goes straight to the person who asked.
+        replyTo: email,
         ...layout({
           subject: `Demo request: ${organization} (${size})`,
-          eyebrow: "New demo request",
           bodyHtml: rows.map(paragraph).join(""),
           bodyText: rows.join("\n"),
-          footer: `Reply to ${email} to set up the 15-minute call.`,
+          footer: "Reply to set up the 15-minute call.",
         }),
       });
       emailedAt = new Date();
@@ -137,5 +140,7 @@ export async function requestDemoAction(_prev: DemoState, formData: FormData): P
   if (!saved && !emailedAt) return fail("We couldn't send that just now. Try again in a minute.");
 
   await trackServer(FUNNEL_EVENTS.demoRequested, { size });
-  redirect(startHref(Boolean(await getSession())));
+  // Say it went: on this page when signed in, else on sign-up.
+  const signedIn = Boolean(await getSession());
+  redirect(signedIn ? "/demo?sent=1" : `${startHref(false)}&demo=sent`);
 }

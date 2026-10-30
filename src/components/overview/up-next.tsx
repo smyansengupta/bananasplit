@@ -1,26 +1,15 @@
 "use client";
 
-import {
-  ArrowUpRight,
-  CalendarCheck2,
-  EyeOff,
-  MoreHorizontal,
-  RotateCcw,
-} from "@/components/icons";
+import { ArrowUpRight, CalendarCheck2, Check, EyeOff, RotateCcw, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { ContextActions } from "@/components/context-actions";
 import { BlockCard } from "@/components/ui/block-card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/toaster";
 import type { UpNextSlot } from "@/lib/overview/up-next";
-import type { EventKind } from "@/generated/prisma/enums";
+import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/enums";
 import { KIND_META } from "@/components/calendar/kinds";
 import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
@@ -39,7 +28,15 @@ function accentOf(kind: EventKind | null | undefined): string | null {
  * Up next (redesign guide 9): a row of up to four block cards, what needs
  * you first. On a phone the row scrolls sideways, a card and a bit at a
  * time. A bare board widget: it draws its own heading.
+ *
+ * Each card does its one job right there: a task has Done, an invitation
+ * waiting on you has Going and Can't go. The x hides a card for you, with
+ * Undo in the toast. Clicking the card itself still opens the thing.
  */
+/** A card's action button, on the card's own colours. */
+const ACT =
+  "relative z-10 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold ring-1 ring-current/25 transition-[box-shadow,transform] hover:ring-current/60 active:scale-[0.97] disabled:opacity-60";
+
 export function UpNext({
   slots,
   calendarHref,
@@ -51,24 +48,138 @@ export function UpNext({
    * the Personal dashboard's Up next gathers cards from every space.
    */
   onHide,
+  onUnhide,
   onShowAll,
+  /** Done on a task card, bound to the space like onHide. */
+  onDone,
+  /** Going / Can't go on an invitation card, bound to the space like onHide. */
+  onRsvp,
   /** How many cards this member has hidden, so they can be put back. */
   hiddenCount = 0,
 }: {
   slots: readonly UpNextSlot<UpNextBlock>[];
   calendarHref: string;
   onHide?: (kind: string, refId: string) => Promise<unknown>;
+  onUnhide?: (kind: string, refId: string) => Promise<unknown>;
   onShowAll?: () => Promise<unknown>;
+  onDone?: (taskId: string, status: TaskStatus) => Promise<unknown>;
+  onRsvp?: (eventId: string, rsvp: RSVPStatus) => Promise<unknown>;
   hiddenCount?: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const errorOf = (result: unknown): string | null =>
+    result && typeof result === "object" && "error" in result
+      ? ((result as { error?: string }).error ?? null)
+      : null;
 
   const hide = (kind: string, id: string) =>
     start(async () => {
       await onHide?.(kind, id);
       router.refresh();
+      toast({
+        title: "Hidden",
+        action: onUnhide
+          ? {
+              label: "Undo",
+              run: async () => {
+                await onUnhide(kind, id);
+                router.refresh();
+              },
+            }
+          : undefined,
+      });
     });
+
+  const done = (item: UpNextBlock) =>
+    start(async () => {
+      if (!onDone) return;
+      setBusy(item.id);
+      const before = (item.taskStatus ?? "NOT_STARTED") as TaskStatus;
+      const failed = errorOf(await onDone(item.id, "COMPLETED"));
+      setBusy(null);
+      if (failed) {
+        toast({ title: failed, tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({
+        title: "Done",
+        tone: "success",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const undone = errorOf(await onDone(item.id, before));
+            if (undone) return undone;
+            router.refresh();
+          },
+        },
+      });
+    });
+
+  const answer = (item: UpNextBlock, rsvp: RSVPStatus) =>
+    start(async () => {
+      if (!onRsvp) return;
+      setBusy(item.id);
+      const failed = errorOf(await onRsvp(item.id, rsvp));
+      setBusy(null);
+      if (failed) {
+        toast({ title: failed, tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({
+        title: rsvp === "YES" ? "Going" : "Answered",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const undone = errorOf(await onRsvp(item.id, "PENDING"));
+            if (undone) return undone;
+            router.refresh();
+          },
+        },
+      });
+    });
+
+  /** The card's own job, right on it. */
+  const actionsOf = (item: UpNextBlock) => {
+    const working = pending && busy === item.id;
+    if (item.kind === "task" && onDone) {
+      return (
+        <div className="relative z-10 mt-3 flex">
+          <button type="button" disabled={working} onClick={() => done(item)} className={ACT}>
+            <Check className="size-3.5" aria-hidden="true" />
+            Done
+          </button>
+        </div>
+      );
+    }
+    if (item.kind === "rsvp" && onRsvp) {
+      return (
+        <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={working}
+            onClick={() => answer(item, "YES")}
+            className={cn(ACT, "bg-current/10")}
+          >
+            Going
+          </button>
+          <button
+            type="button"
+            disabled={working}
+            onClick={() => answer(item, "NO")}
+            className={ACT}
+          >
+            Can&apos;t go
+          </button>
+        </div>
+      );
+    }
+    return null;
+  };
   const showAll = () =>
     start(async () => {
       await onShowAll?.();
@@ -94,12 +205,12 @@ export function UpNext({
             Show {hiddenCount} hidden
           </button>
         )}
-        <OpenLink href={calendarHref} label="Open the calendar" />
+        <OpenLink href={calendarHref} label="Calendar" />
       </div>
       {slots.length === 0 ? (
         <div className="bg-muted/60 rounded-block text-muted-foreground flex items-center gap-3 p-5 text-sm">
           <CalendarCheck2 className="size-5 shrink-0" aria-hidden="true" />
-          Nothing needs you this week: no deadlines, votes or meetings.
+          Nothing this week.
         </div>
       ) : (
         <div className="-mx-1 flex snap-x snap-mandatory [scrollbar-width:none] gap-3.5 overflow-x-auto px-1 pb-1.5 max-sm:-mx-4 max-sm:scroll-px-4 max-sm:px-4 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
@@ -112,7 +223,7 @@ export function UpNext({
               items={[
                 { label: "Open", icon: ArrowUpRight, href: item.href },
                 onHide && {
-                  label: "Hide this",
+                  label: "Hide",
                   icon: EyeOff,
                   disabled: pending,
                   onSelect: () => hide(item.kind, item.id),
@@ -139,29 +250,16 @@ export function UpNext({
                       <ArrowUpRight className="size-4" aria-hidden="true" />
                     </Link>
                   ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        aria-label={`What to do with ${item.title}`}
-                        className="grid size-8 place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 focus-visible:outline-none active:scale-[0.94]"
-                      >
-                        <MoreHorizontal className="size-4" aria-hidden="true" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-52">
-                        <DropdownMenuItem asChild>
-                          <Link href={item.href}>
-                            <ArrowUpRight aria-hidden="true" />
-                            Open
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={pending}
-                          onSelect={() => hide(item.kind, item.id)}
-                        >
-                          <EyeOff aria-hidden="true" />
-                          Hide this
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => hide(item.kind, item.id)}
+                      aria-label={`Hide ${item.title}`}
+                      title="Hide"
+                      className="grid size-8 cursor-pointer place-items-center rounded-full ring-1 ring-current/25 transition-transform hover:ring-current/50 active:scale-[0.94] disabled:opacity-60"
+                    >
+                      <X className="size-4" aria-hidden="true" />
+                    </button>
                   )
                 }
                 className={cn(
@@ -169,7 +267,9 @@ export function UpNext({
                   "max-md:w-full",
                   index > 0 && "max-md:hidden",
                 )}
-              />
+              >
+                {actionsOf(item)}
+              </BlockCard>
             </ContextActions>
           ))}
         </div>

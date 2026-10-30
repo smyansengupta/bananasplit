@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 import { BrandMark } from "../brand-mark";
 import { BRANDS, brandBySlug, type BrandGroup } from "../brands";
-import { DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref } from "../links";
+import { DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref, startLabel } from "../links";
 import { CLAUDE_CHAT } from "../palette";
 import { SiteLink } from "../site-link";
 import { HeroStage } from "./hero-stage";
@@ -154,7 +154,7 @@ const HERO_THREAD: readonly Message[] = [
   {
     from: "bananasplit",
     text: "Done. 6 people notified.",
-    card: <ReplyCard icon="calendar" title="Standup" meta="Wed · 10:00 AM" />,
+    card: <ReplyCard icon="calendar" title="Standup" meta="Wed, 10:00 AM" />,
   },
   { from: "bananasplit", text: "Jay sent an $86 receipt for the venue. Approve?" },
   { from: "you", text: "Yes" },
@@ -189,7 +189,7 @@ function Hero({ signedIn }: { signedIn: boolean }) {
               data-cta="get_started"
               data-cta-location="hero"
             >
-              Get started free <ArrowRight />
+              {startLabel(signedIn)} <ArrowRight />
             </Link>
             <SiteLink
               href={DEMO_HREF}
@@ -288,7 +288,7 @@ const TEXTS: readonly Message[] = [
   {
     from: "bananasplit",
     text: "Done. Maya has it.",
-    card: <ReplyCard icon="task" title="Send the Acme proposal" meta="Maya · due Mon" />,
+    card: <ReplyCard icon="task" title="Send the Acme proposal" meta="Maya, due Mon" />,
   },
   { from: "you", text: "What's on today?" },
   { from: "bananasplit", text: "Design review at 2. Nothing else needs you." },
@@ -375,19 +375,17 @@ function ClaudePicture() {
       </span>
       <span className="flex flex-col gap-1.5">
         <span>Done. I added 3 tasks to Fall launch:</span>
-        {[
-          "Finalize the sponsor deck · Jay",
-          "Book the venue · Maya",
-          "Send the press kit · Sam",
-        ].map((t) => (
-          <span key={t} className="flex items-center gap-2">
-            <span
-              className="size-3.5 flex-none rounded-full"
-              style={{ backgroundColor: CLAUDE_CHAT.accent }}
-            />
-            {t}
-          </span>
-        ))}
+        {["Finalize the sponsor deck, Jay", "Book the venue, Maya", "Send the press kit, Sam"].map(
+          (t) => (
+            <span key={t} className="flex items-center gap-2">
+              <span
+                className="size-3.5 flex-none rounded-full"
+                style={{ backgroundColor: CLAUDE_CHAT.accent }}
+              />
+              {t}
+            </span>
+          ),
+        )}
       </span>
     </div>
   );
@@ -519,7 +517,7 @@ function DocPicture() {
             Send the press kit to Acme
           </span>
           <span className="bg-banana text-ink rounded-full px-2 py-0.5 text-[10px] font-bold">
-            Task · Sam · Fri
+            Task, Sam, Fri
           </span>
         </span>
         <span className="flex items-center gap-1">
@@ -660,8 +658,8 @@ function FinancePicture() {
             MC
           </span>
           <span className="flex min-w-0 flex-1 flex-col leading-tight">
-            <span className="truncate text-[12px] font-semibold">Receipt · $86</span>
-            <span className="text-muted-foreground truncate text-[11px]">Maya · to approve</span>
+            <span className="truncate text-[12px] font-semibold">Receipt, $86</span>
+            <span className="text-muted-foreground truncate text-[11px]">Maya, to approve</span>
           </span>
         </span>
       </div>
@@ -679,7 +677,7 @@ function MeetingsPicture() {
       <div className="bg-card flex flex-col gap-3 rounded-[12px] p-4 shadow-(--elevation-1)">
         <span className="flex items-center justify-between">
           <span className="text-[15px] font-semibold">Acme kickoff</span>
-          <span className="text-muted-foreground text-[12px]">Thu · 2:00 PM</span>
+          <span className="text-muted-foreground text-[12px]">Thu, 2:00 PM</span>
         </span>
         <span className="flex flex-wrap gap-1.5">
           {["zoom", "google-meet", "microsoft-teams"].map((slug, i) => (
@@ -875,7 +873,7 @@ function Bananas({ signedIn }: { signedIn: boolean }) {
               data-cta="get_started"
               data-cta-location="final"
             >
-              Get started free <ArrowRight />
+              {startLabel(signedIn)} <ArrowRight />
             </Link>
             <SiteLink
               href={DEMO_HREF}

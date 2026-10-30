@@ -34,13 +34,7 @@ export function RecentList({
   now: Date;
 }) {
   if (items.length === 0) {
-    return (
-      <EmptyState
-        size="compact"
-        title="Nothing here yet"
-        description="The pages you open show up here, so you can jump back in."
-      />
-    );
+    return <EmptyState size="compact" title="Nothing here yet" />;
   }
   return (
     <ul className={TILE_GRID}>
@@ -54,7 +48,7 @@ export function RecentList({
               </TileIcon>
               <TileText
                 title={item.label}
-                sub={`${PIN_KIND_LABELS[item.kind] ?? "Page"} · ${ago(item.visitedAt, now)}`}
+                sub={`${PIN_KIND_LABELS[item.kind] ?? "Page"}, ${ago(item.visitedAt, now)}`}
               />
             </Link>
           </li>
@@ -160,7 +154,6 @@ export function PollList({
       <EmptyState
         size="compact"
         title="No open polls"
-        description="Questions to vote on and times to find show here."
         action={
           <Link
             href={`/app/${orgSlug}/calendar/polls`}
@@ -179,7 +172,7 @@ export function PollList({
         <li key={p.id}>
           <Link href={pollHref(`/app/${orgSlug}`, p.kind, p.id)} className="group/poll block">
             <span className="flex items-baseline justify-between gap-2.5">
-              <span className="min-w-0 truncate text-[15px] font-semibold group-hover/poll:underline">
+              <span className="min-w-0 text-[15px] font-semibold break-words group-hover/poll:underline">
                 {p.title}
               </span>
               <span className="shrink-0 text-[13px] font-semibold tabular-nums">
@@ -195,11 +188,15 @@ export function PollList({
               className="mt-2"
             />
             <span className="text-muted-foreground mt-1.5 block text-[13px]">
-              {p.kind === "question" ? "Question" : "Find a time"} ·{" "}
-              {p.closesAt
-                ? `closes ${closesWord(dayWordOfKey(localDateKey(p.closesAt, timeZone), todayKey))}`
-                : "Open"}
-              {p.mine ? " · You answered" : ""}
+              {[
+                p.kind === "question" ? "Question" : "Find a time",
+                p.closesAt
+                  ? `closes ${closesWord(dayWordOfKey(localDateKey(p.closesAt, timeZone), todayKey))}`
+                  : "open",
+                p.mine ? "you answered" : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}
             </span>
           </Link>
         </li>
@@ -247,7 +244,7 @@ export function NoteList({
             </TileIcon>
             <TileText
               title={n.title || "Untitled note"}
-              sub={`${n.updatedBy?.name ?? "Someone"} · ${formatDistanceToNow(n.updatedAt, { addSuffix: true })}`}
+              sub={`${n.updatedBy?.name ?? "Someone"}, ${formatDistanceToNow(n.updatedAt, { addSuffix: true })}`}
             />
           </Link>
         </li>
@@ -264,13 +261,7 @@ export function FileList({
   files: { id: string; name: string; contentType: string; createdAt: Date }[];
 }) {
   if (files.length === 0) {
-    return (
-      <EmptyState
-        size="compact"
-        title="No files yet"
-        description="Upload PDFs, slides and images in Files."
-      />
-    );
+    return <EmptyState size="compact" title="No files yet" />;
   }
   return (
     <ul className={TILE_GRID}>

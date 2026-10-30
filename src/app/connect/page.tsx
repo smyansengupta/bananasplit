@@ -113,7 +113,7 @@ export default async function ConnectPage({ searchParams }: PageProps<"/connect"
     return (
       <Shell
         title="Log in to connect."
-        description="An AI app wants to connect to your Bananasplit account. Log in, and you'll come straight back here."
+        description="An AI app wants to connect. Log in to continue."
       >
         <Link href={signInPath(connectPath(externalAuthId))} className={cn(pill(), "w-full")}>
           Log in
@@ -125,7 +125,7 @@ export default async function ConnectPage({ searchParams }: PageProps<"/connect"
   return (
     <Shell
       title="Connect an AI app."
-      description="An AI app wants to use your Bananasplit account. Next, you'll choose which spaces it can use and whether it can make changes. It only ever sees what you can see here."
+      description="Next, pick its spaces and whether it can make changes."
     >
       <form action={continueConnectAction.bind(null, externalAuthId)}>
         <button type="submit" className={cn(pill(), "w-full")}>

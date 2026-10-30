@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "@/components/brand/arrows";
 import { cn } from "@/lib/utils";
 
-import { DEMO_HREF, startHref, TRIAL_PROMISE } from "./links";
+import { DEMO_HREF, startHref, startLabel, TRIAL_PROMISE } from "./links";
 import { CONTAINER } from "./section-title";
 import { SiteLink } from "./site-link";
 
@@ -33,7 +33,7 @@ export function FinalCta({ signedIn = false }: { signedIn?: boolean }) {
                 data-cta-location="final"
                 className="bg-ink text-cream hover:bg-ink-hover hover:text-cream shadow-cta-soft inline-flex h-12 items-center gap-2 rounded-full px-6 text-[15px] font-semibold whitespace-nowrap"
               >
-                Get started free <ArrowRight />
+                {startLabel(signedIn)} <ArrowRight />
               </Link>
               <SiteLink
                 href={DEMO_HREF}

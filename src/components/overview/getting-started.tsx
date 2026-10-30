@@ -1,13 +1,20 @@
 "use client";
 
-import { ArrowUpRight, Check, Loader2 } from "@/components/icons";
+import { ArrowUpRight, Check, Copy, Loader2 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 
-import { setStartedStepSkipped } from "@/app/app/[orgSlug]/getting-started-actions";
-import { Gauge } from "@/components/ui/meters";
 import {
+  hideGettingStarted,
+  restoreStartedSkipped,
+  setStartedStepSkipped,
+} from "@/app/app/[orgSlug]/getting-started-actions";
+import { Gauge } from "@/components/ui/meters";
+import { toast } from "@/components/ui/toaster";
+import {
+  STARTED_EXTRAS,
+  startedHref,
   startedProgress,
   type StartedState,
   type StartedStepKey,
@@ -18,19 +25,25 @@ import { cn } from "@/lib/utils";
  * "Get your club started" on the Overview (owners and admins): a Progress
  * block across the page under Up next, with a gauge and every step as a
  * tile. A step is done when the club has the thing; "Not needed" checks it
- * off (and Undo puts it back). The page leaves the card out once every step
- * is one or the other. It sits still: no tilt, only the tiles light up.
+ * off (and Undo puts it back), and Hide checks off the rest at once, with
+ * Undo in the toast. The page leaves the card out once every step is one or
+ * the other. Inviting copies the join link right on its tile. Setup that
+ * never "finishes" (importing, tags, emails, tools) is a row of links under
+ * the steps. It sits still: no tilt, only the tiles light up.
  */
 export function GettingStarted({
   orgId,
   orgSlug,
   state,
   skipped,
+  joinLink,
 }: {
   orgId: string;
   orgSlug: string;
   state: StartedState;
   skipped: string[];
+  /** The club's join link, when the viewer may share it: copied from the invite tile. */
+  joinLink?: string | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -42,7 +55,42 @@ export function GettingStarted({
       change.skip ? [...current, change.step] : current.filter((s) => s !== change.step),
   );
   const progress = startedProgress(state, shownSkipped);
-  const left = progress.total - progress.finished;
+  const [copied, setCopied] = useState(false);
+
+  function hideAll() {
+    setError(null);
+    start(async () => {
+      const result = await hideGettingStarted(orgId);
+      if (!result.ok) {
+        setError(result.error ?? "That didn't save. Try again.");
+        return;
+      }
+      const previous = result.previous ?? [];
+      toast({
+        title: "Hidden",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const undone = await restoreStartedSkipped(orgId, previous);
+            if (!undone.ok) return undone.error ?? "That didn't work. Try again.";
+            router.refresh();
+          },
+        },
+      });
+      router.refresh();
+    });
+  }
+
+  async function copyLink() {
+    if (!joinLink) return;
+    try {
+      await navigator.clipboard.writeText(joinLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError("Couldn't copy. Open Members to copy the link.");
+    }
+  }
 
   function toggle(step: StartedStepKey, skip: boolean) {
     setError(null);
@@ -77,22 +125,28 @@ export function GettingStarted({
           >
             Get your organization started
           </h2>
-          <p className="mt-2 text-[15px] leading-[1.5] text-(--block-goal-meta)">
-            {left === 1
-              ? "One step left before your organization is ready for members."
-              : `${left} steps left before your organization is ready for members. Check off anything you don't need.`}
-          </p>
         </div>
-        <Gauge
-          value={(progress.finished / progress.total) * 100}
-          caption={`${progress.finished} of ${progress.total}`}
-          size={112}
-        />
+        <div className="flex items-center gap-4">
+          <Gauge
+            value={(progress.finished / progress.total) * 100}
+            caption={`${progress.finished} of ${progress.total}`}
+            size={112}
+          />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={hideAll}
+            className="h-8 cursor-pointer rounded-full px-3.5 text-[13px] font-semibold ring-1 ring-current/25 transition-colors hover:ring-current/60 disabled:opacity-60"
+          >
+            Hide
+          </button>
+        </div>
       </div>
 
       <ul className="mt-6 grid list-none gap-2.5 p-0 sm:grid-cols-2 lg:grid-cols-3">
         {progress.steps.map((step) => {
-          const href = `/app/${orgSlug}${step.path}`;
+          const href = startedHref(orgSlug, step.path);
+          const copyHere = step.key === "members" && step.status === "todo" && joinLink;
           const working = pending && busy === step.key;
           return (
             <li
@@ -134,13 +188,25 @@ export function GettingStarted({
                         : " (to do)"}
                   </span>
                 </Link>
-                <span className="text-[13px] leading-[1.4] text-(--block-goal-meta)">
-                  {step.status === "skipped"
-                    ? "Checked off as not needed."
-                    : step.recommended && step.status === "todo"
-                      ? `Recommended. ${step.hint}`
-                      : step.hint}
-                </span>
+                {step.status === "todo" && (
+                  <span className="text-[13px] leading-[1.4] text-(--block-goal-meta)">
+                    {step.hint}
+                  </span>
+                )}
+                {copyHere && (
+                  <button
+                    type="button"
+                    onClick={copyLink}
+                    className="relative z-10 mt-1 inline-flex h-7 w-fit cursor-pointer items-center gap-1.5 rounded-full bg-current/10 px-2.5 text-[12px] font-semibold transition-colors hover:bg-current/20"
+                  >
+                    {copied ? (
+                      <Check className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <Copy className="size-3.5" aria-hidden="true" />
+                    )}
+                    {copied ? "Copied" : "Copy invite link"}
+                  </button>
+                )}
               </span>
               {step.status === "todo" ? (
                 <span className="relative z-10 flex flex-none items-center gap-1">
@@ -172,6 +238,18 @@ export function GettingStarted({
           );
         })}
       </ul>
+      <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px] font-semibold">
+        {STARTED_EXTRAS.map((extra) => (
+          <Link
+            key={extra.path}
+            href={startedHref(orgSlug, extra.path)}
+            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+          >
+            {extra.label}
+            <ArrowUpRight className="size-3.5 opacity-60" aria-hidden="true" />
+          </Link>
+        ))}
+      </p>
       {error && (
         <p role="alert" className="mt-3 text-[14px] font-semibold">
           {error}

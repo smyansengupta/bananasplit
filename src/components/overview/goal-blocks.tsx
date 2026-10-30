@@ -63,7 +63,7 @@ export function RsvpGoalBlock({
   return (
     <BlockCard
       tone="goal"
-      kicker={`RSVPs · ${when}`}
+      kicker={when}
       action={<OpenCircle href={href} label={`Open ${event.title}`} />}
       className="h-full min-h-0"
     >

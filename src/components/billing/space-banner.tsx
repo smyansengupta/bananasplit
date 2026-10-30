@@ -6,7 +6,6 @@ import {
   spaceStatus,
   TRIAL_NOTICE_DAYS,
   trialDaysLeft,
-  trialFallbackName,
   trialPlanName,
   type SpaceInfo,
 } from "@/lib/billing/space";
@@ -46,10 +45,7 @@ export function SpaceBanner({
         className="bg-muted/40 mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm"
       >
         <Sparkles className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-        <p className="min-w-0 flex-1">
-          Your free trial of Team Advanced has ended, so your organization is on Free. Nothing was
-          deleted: finance, reports, the org chart and AI come back with Team or Team Advanced.
-        </p>
+        <p className="min-w-0 flex-1">Trial ended: you&apos;re on Free. Nothing was deleted.</p>
         <Button asChild size="sm" variant="outline">
           <Link href={planHref}>See plans</Link>
         </Button>
@@ -67,13 +63,10 @@ export function SpaceBanner({
       >
         <Clock className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
         <p className="min-w-0 flex-1">
-          Your free trial is almost up: {personal ? "your" : "your organization's"}{" "}
-          {trialPlanName(space)} trial ends in {days} {days === 1 ? "day" : "days"}. After that{" "}
-          {personal ? "you move" : "it moves"} to {trialFallbackName(space)}, or keep everything
-          with {personal ? trialPlanName(space) : "Team or Team Advanced"}.
+          {trialPlanName(space)} trial ends in {days} {days === 1 ? "day" : "days"}.
         </p>
         <Button asChild size="sm" variant="outline">
-          <Link href={planHref}>See plans</Link>
+          <Link href={planHref}>Keep {personal ? trialPlanName(space) : "everything"}</Link>
         </Button>
       </div>
     );

@@ -42,9 +42,7 @@ export function SignUpForm({
           title="Check your email."
           description={
             <>
-              We sent a verification link to{" "}
-              <span className="font-semibold">{state.checkEmail}</span>. Open it to verify your
-              address, then log in. You need a verified email to join or start an organization.
+              Open the link we sent to <span className="font-semibold">{state.checkEmail}</span>.
             </>
           }
         />

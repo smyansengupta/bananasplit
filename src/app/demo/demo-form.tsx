@@ -15,11 +15,15 @@ import { requestDemoAction, type DemoState } from "./actions";
 import { TEAM_SIZES } from "./sizes";
 import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 
-/** The demo request: four fields and an optional note, then on to creating the organization. */
-export function DemoForm() {
+/**
+ * The demo request: four fields and an optional note, then on. Team size is
+ * five buttons rather than a dropdown; a signed-in visitor's name and email
+ * are already filled in.
+ */
+export function DemoForm({ initial }: { initial?: { name?: string; email?: string } } = {}) {
   const [state, formAction, isPending] = useActionState<DemoState, FormData>(requestDemoAction, {});
 
-  const v = state.values ?? {};
+  const v: Record<string, string | undefined> = state.values ?? initial ?? {};
 
   return (
     <form
@@ -36,14 +40,7 @@ export function DemoForm() {
         <input id="demo-website" name="website" type="text" tabIndex={-1} autoComplete="off" />
       </div>
       <BrandField id="name" label="Your name">
-        <BrandInput
-          id="name"
-          name="name"
-          defaultValue={v.name}
-          required
-          autoComplete="name"
-          placeholder="Your name"
-        />
+        <BrandInput id="name" name="name" defaultValue={v.name} required autoComplete="name" />
       </BrandField>
       <BrandField id="email" label="Work email">
         <BrandInput
@@ -53,7 +50,6 @@ export function DemoForm() {
           type="email"
           required
           autoComplete="email"
-          placeholder="Work email"
         />
       </BrandField>
       <BrandField id="organization" label="Organization">
@@ -63,27 +59,28 @@ export function DemoForm() {
           defaultValue={v.organization}
           required
           autoComplete="organization"
-          placeholder="Organization"
         />
       </BrandField>
-      <BrandField id="size" label="Team size">
-        <select
-          id="size"
-          name="size"
-          required
-          defaultValue={v.size ?? ""}
-          className={cn(brandInputClass, "cursor-pointer appearance-none")}
-        >
-          <option value="" disabled>
-            Team size
-          </option>
-          {TEAM_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size} people
-            </option>
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="mb-2 text-[14px] font-semibold">Team size</legend>
+        <div className="flex flex-wrap gap-2">
+          {TEAM_SIZES.map((size, i) => (
+            <label key={size} className="cursor-pointer">
+              <input
+                type="radio"
+                name="size"
+                value={size}
+                required={i === 0}
+                defaultChecked={v.size === size}
+                className="peer sr-only"
+              />
+              <span className="border-input text-foreground peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:outline-foreground hover:bg-muted inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium peer-checked:border-transparent peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2">
+                {size}
+              </span>
+            </label>
           ))}
-        </select>
-      </BrandField>
+        </div>
+      </fieldset>
       <BrandField id="message" label="What would you like to see?">
         <textarea
           id="message"
@@ -91,7 +88,7 @@ export function DemoForm() {
           rows={3}
           maxLength={2000}
           defaultValue={v.message}
-          placeholder="What would you like to see? (optional)"
+          placeholder="Optional"
           className={cn(brandInputClass, "h-auto min-h-24 py-2.5")}
         />
       </BrandField>

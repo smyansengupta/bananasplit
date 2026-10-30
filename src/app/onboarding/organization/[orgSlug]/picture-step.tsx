@@ -66,7 +66,7 @@ export function PictureStep(props: SetupStepProps & { name: string; logoUrl: str
 
   return (
     <SetupCard>
-      <StepIntro title="Add your logo.">Your team sees it everywhere they work.</StepIntro>
+      <StepIntro title="Add your logo." />
       <StepBody className="gap-5">
         <LogoForm orgId={orgId} logoUrl={logoUrl} orgName={name} canEdit bare />
 

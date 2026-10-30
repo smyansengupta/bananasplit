@@ -45,11 +45,9 @@ describe("ConnectedAppsCard", () => {
     renderCard();
     const [first, second] = screen.getAllByRole("listitem");
     expect(within(first!).getByText("Claude Code")).toBeTruthy();
-    expect(
-      within(first!).getByText("Read only · Personal and all your organizations"),
-    ).toBeTruthy();
+    expect(within(first!).getByText("Read only, Personal and all your organizations")).toBeTruthy();
     expect(within(second!).getByText("An AI app")).toBeTruthy();
-    expect(within(second!).getByText("Read and make changes · Robotics Club only")).toBeTruthy();
+    expect(within(second!).getByText("Read and make changes, Robotics Club only")).toBeTruthy();
   });
 
   it("disconnects one app after confirming", async () => {

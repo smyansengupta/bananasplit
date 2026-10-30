@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { PersonalHome } from "@/components/personal/personal-home";
-import { JoinCodeCard } from "@/components/onboarding/join-code-card";
 import { CardControls, OpenLink } from "@/components/overview/bits";
 import { GettingStarted } from "@/components/overview/getting-started";
 import { RsvpGoalBlock } from "@/components/overview/goal-blocks";
@@ -25,10 +24,8 @@ import {
   WeekStrip,
   type WeekDay,
 } from "@/components/overview/widget-bodies";
-import { SetupPrompt } from "@/components/setup/setup-prompt";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
 import { getRecentNotes } from "@/app/app/[orgSlug]/notes/queries";
 import { absoluteAppUrl } from "@/lib/app-url";
@@ -61,7 +58,9 @@ import {
   rsvpSeatsTaken,
 } from "@/server/overview/queries";
 import { buildUpNext } from "@/server/overview/up-next";
-import { hideUpNextCard, showHiddenUpNextCards } from "./up-next-actions";
+import { hideUpNextCard, showHiddenUpNextCards, unhideUpNextCard } from "./up-next-actions";
+import { rsvpToEvent } from "./calendar/actions";
+import { setTaskStatus } from "./tasks/actions";
 import { listPins, listRecent } from "@/server/pins";
 import { listOpenPolls } from "@/server/polls/open-polls";
 import {
@@ -72,11 +71,10 @@ import {
 } from "@/server/pulse/queries";
 import { upcomingPulseSend } from "@/server/pulse/schedule";
 import { loadPersonalHome } from "@/server/personal/home";
-import { loadSetupState } from "@/server/setup/progress";
 import { getMyOpenTasks, getTaskStats, taskFilterWhere } from "@/server/tasks/queries";
 
 const MY_TASKS_LIMIT = 8;
-/** "Coming up in 14 days" in the stat strip. */
+/** "Next 14 days" in the stat strip. */
 const UPCOMING_DAYS = 14;
 const EVENTS_LIMIT = 6;
 const RECENT_LIMIT = 8;
@@ -99,14 +97,8 @@ function greeting(now: Date, timeZone: string): string {
  * "Get your club started" until every step is done or checked off. Then
  * the member's widgets. Nothing about the club's money is on it.
  */
-export default async function OrgOverviewPage({
-  params,
-  searchParams,
-}: PageProps<"/app/[orgSlug]">) {
+export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
-  // ?welcome=1: the end of org setup. The admin's first look at their org
-  // shows the invite code and link to share (the flowchart's END).
-  const welcome = (await searchParams).welcome === "1";
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   // A Personal space's home is the Personal dashboard, not a club's board.
   if (org.kind === "PERSONAL") {
@@ -115,9 +107,8 @@ export default async function OrgOverviewPage({
   // A club whose plan has no Overview board lands on its events.
   if (!spaceIncludes(org, "overview")) {
     if (!can({ role }, "events.write")) redirect(`/app/${org.slug}/calendar`);
-    redirect(`/app/${org.slug}/${welcome ? "settings/members" : "meetings"}`);
+    redirect(`/app/${org.slug}/meetings`);
   }
-  const canSetUp = can({ role }, "integrations.write");
   const isAdmin = can({ role }, "settings.view");
   const canAddEvents = can({ role }, "events.write");
   const orgZone = safeTimeZone(org.timezone);
@@ -220,20 +211,14 @@ export default async function OrgOverviewPage({
       }),
       memberCount,
       saved: await loadSavedBoard(db, org.id, user.id, "overview"),
-      setup: canSetUp ? await loadSetupState(db, org.id) : null,
-      joinCode:
-        welcome && can({ role }, "members.invite")
-          ? await getOrCreateJoinCode(db, org.id, user.id)
-          : null,
       started: isAdmin
         ? {
-            // Every club is named when it's made; the step is there to
-            // check the name, and starts the list with one done.
-            name: org.name.trim().length > 0,
             picture: org.logo != null,
             members: memberCount > 1,
             event:
               (await db.event.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+            types: settings?.eventTypes != null,
+            teams: (await db.orgChartVersion.count({ where: { organizationId: org.id } })) > 0,
             // Epics and stories are tasks too.
             task: (await db.task.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
             budget: (await db.budgetPeriod.count({ where: { organizationId: org.id } })) > 0,
@@ -291,6 +276,7 @@ export default async function OrgOverviewPage({
       upcomingDays={UPCOMING_DAYS}
       taskBar={data.taskBar}
       tasksHref={`${base}/tasks`}
+      calendarHref={calendarHref}
     />
   );
 
@@ -299,11 +285,10 @@ export default async function OrgOverviewPage({
     .filter((i) => i.id !== "overview")
     .map((i) => ({ id: i.id, label: i.label, icon: i.icon, href: `${base}${i.path}` }));
 
-  const eventEmpty = (title: string, description: string, cta: string) => (
+  const eventEmpty = (title: string, cta: string) => (
     <EmptyState
       size="compact"
       title={title}
-      description={description}
       action={
         canAddEvents ? (
           <Button asChild size="sm" variant="outline">
@@ -355,11 +340,7 @@ export default async function OrgOverviewPage({
         rsvps={data.rsvps}
         zones={zones}
         now={now}
-        empty={eventEmpty(
-          "No meetings coming up",
-          "Team and board meetings on the calendar show here.",
-          "Schedule a meeting",
-        )}
+        empty={eventEmpty("No meetings coming up", "Schedule a meeting")}
       />
     ),
     events: (
@@ -370,11 +351,7 @@ export default async function OrgOverviewPage({
         rsvps={data.rsvps}
         zones={zones}
         now={now}
-        empty={eventEmpty(
-          "No events coming up",
-          "Socials, workshops and everything else show here.",
-          "Add an event",
-        )}
+        empty={eventEmpty("No events coming up", "Add an event")}
       />
     ),
     "rsvp-goal": (
@@ -415,13 +392,24 @@ export default async function OrgOverviewPage({
 
   // Shown until every step is done or checked off, then gone by itself.
   const startedSkipped = settings?.startedSkipped ?? [];
+  const showStarted =
+    data.started !== null && !startedProgress(data.started, startedSkipped).complete;
+  // The invite tile copies the join link right there, while members is still to do.
+  const joinCode =
+    showStarted &&
+    !data.started?.members &&
+    !startedSkipped.includes("members") &&
+    can({ role }, "members.invite")
+      ? await withOrgTx(org.id, ({ db }) => getOrCreateJoinCode(db, org.id, user.id))
+      : null;
   const started =
-    data.started && !startedProgress(data.started, startedSkipped).complete ? (
+    showStarted && data.started ? (
       <GettingStarted
         orgId={org.id}
         orgSlug={orgSlug}
         state={data.started}
         skipped={startedSkipped}
+        joinLink={joinCode?.enabled ? absoluteAppUrl(`/join/${joinCode.code}`) : null}
       />
     ) : null;
 
@@ -433,50 +421,50 @@ export default async function OrgOverviewPage({
         chips={overdue > 0 ? <Badge variant="destructive">{overdue} overdue</Badge> : null}
       >
         <OpenLink
-          href={`${base}/tasks?view=mine`}
+          href={`${base}/tasks?view=list&scope=mine`}
           label={total > data.myTasks.tasks.length ? `View all ${total}` : "View all"}
         />
       </CardControls>
     ),
     polls: (
       <CardControls count={data.polls.length || undefined}>
-        <OpenLink href={`${base}/calendar/polls`} label="Open polls" />
+        <OpenLink href={`${base}/calendar/polls`} label="Polls" />
       </CardControls>
     ),
     "weekly-pulse": (
       <CardControls count={sentLabel ?? undefined}>
-        <OpenLink href={pulseHref} label="Open the pulse archive" />
+        <OpenLink href={pulseHref} label="Pulse" />
       </CardControls>
     ),
     meetings: (
       <CardControls>
-        <OpenLink href={calendarHref} label="Open the calendar" />
+        <OpenLink href={calendarHref} label="Calendar" />
       </CardControls>
     ),
     events: (
       <CardControls>
-        <OpenLink href={calendarHref} label="Open the calendar" />
+        <OpenLink href={calendarHref} label="Calendar" />
       </CardControls>
     ),
     week: (
       <CardControls>
-        <OpenLink href={`${calendarHref}?view=week`} label="Open the week on the calendar" />
+        <OpenLink href={`${calendarHref}?view=week`} label="Calendar" />
       </CardControls>
     ),
     people: (
       <CardControls count={data.memberCount}>
-        <OpenLink href={`${base}/people`} label="Open People" />
+        <OpenLink href={`${base}/people`} label="People" />
       </CardControls>
     ),
     pinned: <CardControls count={data.pins.length || undefined} />,
     notes: (
       <CardControls>
-        <OpenLink href={`${base}/notes`} label="Open Files" />
+        <OpenLink href={`${base}/notes`} label="Files" />
       </CardControls>
     ),
     files: (
       <CardControls>
-        <OpenLink href={`${base}/notes`} label="Open Files" />
+        <OpenLink href={`${base}/notes`} label="Files" />
       </CardControls>
     ),
   };
@@ -506,54 +494,14 @@ export default async function OrgOverviewPage({
               slots={upNext}
               calendarHref={calendarHref}
               onHide={hideUpNextCard.bind(null, org.id)}
+              onUnhide={unhideUpNextCard.bind(null, org.id)}
               onShowAll={showHiddenUpNextCards.bind(null, org.id)}
+              onDone={setTaskStatus.bind(null, org.id)}
+              onRsvp={rsvpToEvent.bind(null, org.id)}
               hiddenCount={data.hiddenUpNext.length}
             />
             {started}
           </div>
-        }
-        notice={
-          data.joinCode || data.setup ? (
-            <>
-              {data.joinCode && (
-                <Card>
-                  <CardHeader className="space-y-3">
-                    <div>
-                      <CardTitle>{org.name} is ready</CardTitle>
-                      <CardDescription>
-                        Invite your members: share this code or link. They set up their profile,
-                        enter it, and see {org.name} before they join. Manage it any time in{" "}
-                        <Link
-                          href={`${base}/settings/members`}
-                          className="underline underline-offset-4"
-                        >
-                          Admin panel › Members
-                        </Link>
-                        .
-                      </CardDescription>
-                    </div>
-                    <JoinCodeCard
-                      orgId={org.id}
-                      compact
-                      joinUrlBase={absoluteAppUrl("/join")}
-                      initial={{
-                        code: data.joinCode.code,
-                        enabled: data.joinCode.enabled,
-                        allowedDomain: data.joinCode.allowedDomain,
-                        useCount: data.joinCode.useCount,
-                      }}
-                    />
-                  </CardHeader>
-                </Card>
-              )}
-              {/* Not on a phone: connecting tools is desk work. */}
-              {data.setup ? (
-                <div className="max-md:hidden">
-                  <SetupPrompt orgSlug={orgSlug} state={data.setup} />
-                </div>
-              ) : null}
-            </>
-          ) : null
         }
       />
     </div>

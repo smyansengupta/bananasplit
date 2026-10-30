@@ -44,7 +44,7 @@ export function ResetPasswordForm({
         {isPending ? "Saving…" : "Set new password"}
       </PrimaryButton>
       <p className="text-muted-foreground m-0 text-center text-[13px] leading-[1.5]">
-        You&apos;ll be signed out everywhere, then log in with the new password.
+        This signs you out on every device.
       </p>
     </form>
   );

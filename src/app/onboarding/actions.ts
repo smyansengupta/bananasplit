@@ -50,9 +50,9 @@ export async function createOrganizationAction(
     flow: field(formData, "flow") === "onboarding" ? "onboarding" : "app",
   });
   await setActiveOrgCookie(result.orgId);
-  // From onboarding, setting it up continues at Import (ORG_STEPS, the profile
-  // last); basics, before it, is only for going back.
-  if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, "import"));
+  // From onboarding, setting it up continues at Invite (ORG_FLOW); basics,
+  // before it, is only for going back.
+  if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, "invite"));
   redirect(`/app/${result.slug}`);
 }
 

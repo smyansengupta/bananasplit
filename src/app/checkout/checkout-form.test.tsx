@@ -45,7 +45,7 @@ describe("CheckoutForm", () => {
   it("prices Team (?plan=club) at $8 a member a month, with thousands separators", () => {
     render(<CheckoutForm {...props} plan="club" initialMembers={300} />);
     expect(screen.getByRole("heading", { name: "Subscribe to Team" })).toBeTruthy();
-    expect(screen.getByText("Team · Robotics Club")).toBeTruthy();
+    expect(screen.getByText("Team, Robotics Club")).toBeTruthy();
     expect(screen.getAllByText("$28,800.00")).toHaveLength(4);
   });
 

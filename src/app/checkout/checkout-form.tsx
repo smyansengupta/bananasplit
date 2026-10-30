@@ -299,7 +299,7 @@ function ClubOrder({
         <div className="flex justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-2.5">
             <span className="text-[15px] font-semibold">
-              {name} · {clubName}
+              {name}, {clubName}
             </span>
             <span className="text-muted-foreground flex items-center gap-2 text-[13px]">
               <span className="bg-muted inline-flex h-8 items-center rounded-full p-0.5">
@@ -392,7 +392,7 @@ function PlusOrder({ email }: CheckoutFormProps) {
         <div className="flex justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-1">
             <span className="text-[15px] font-semibold">{PLUS.name}</span>
-            <span className="text-muted-foreground truncate text-[13px]">For {email}</span>
+            <span className="text-muted-foreground text-[13px] break-all">For {email}</span>
           </div>
           <span className="text-[15px] font-semibold tabular-nums">{total}</span>
         </div>

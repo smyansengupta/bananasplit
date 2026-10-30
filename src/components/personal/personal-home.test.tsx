@@ -65,7 +65,7 @@ describe("PersonalHome", () => {
   it("greets by name and teaches every empty section", () => {
     const html = render(empty);
     expect(html).toContain("Good morning, Maya");
-    expect(html).toContain("Only you can see Personal");
+    expect(html).not.toContain("Only you can see Personal");
     // No clubs: why to join, a code field right here, and Start a club.
     expect(html).toContain("Joining is always free");
     expect(html).toMatch(/<form[^>]*action="\/onboarding\/join"[^>]*method="get"/);
@@ -144,7 +144,7 @@ describe("PersonalHome", () => {
       moreClubs: 1,
     });
     expect(html).toContain('href="/app/robotics"');
-    expect(html).toContain("Treasurer · Admin");
+    expect(html).toContain("Treasurer, Admin");
     expect(html).toContain("General meeting");
     expect(html).toContain("Tomorrow, 6:00 PM – 7:00 PM");
     expect(html).toContain("3 open tasks");
