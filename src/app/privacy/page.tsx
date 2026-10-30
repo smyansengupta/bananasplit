@@ -184,16 +184,6 @@ function Policy() {
 
       <H2 id="summary">Summary of key points</H2>
       <p className="m-0">
-        <strong>
-          <em>
-            This summary provides key points from our Privacy Notice, but you can find out more
-            details about any of these topics by clicking the link following each key point or by
-            using our <a href="#toc">table of contents</a> below to find the section you are looking
-            for.
-          </em>
-        </strong>
-      </p>
-      <p className="m-0">
         <strong>What personal information do we process?</strong> When you visit, use, or navigate
         our Services, we may process personal information depending on how you interact with us and
         the Services, the choices you make, and the products and features you use. Learn more about{" "}

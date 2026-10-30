@@ -21,7 +21,7 @@ const PRICING_FAQS: readonly FaqItem[] = [
   },
   {
     q: "What happens when the free trial ends?",
-    a: "We email you three days before it ends. After that you move to Free, which holds up to 10 members, or to the plan you picked during the trial. Picking a plan never cuts the trial short. Nothing is paused or deleted, and you can upgrade at any time.",
+    a: "We email 3 days before. Then you move to Free (10 members) unless you picked a plan. Nothing is deleted.",
   },
   {
     q: "Who counts as a member?",

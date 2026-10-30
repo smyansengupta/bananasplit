@@ -117,12 +117,12 @@ export function MeetingsArt({ size = "md" }: { size?: ArtSize }) {
           ))}
         </span>
         <span className="flex items-center gap-1.5 text-[11px] font-semibold text-(--tag-forest)">
-          <Check className="size-3.5" strokeWidth={3} /> Link created · 6 invites sent
+          <Check className="size-3.5" strokeWidth={3} /> Link created, 6 invites sent
         </span>
       </div>
       <Chip className="bottom-[12%] left-[22%]">
         <Ticket className="size-4" />
-        Spring showcase · 86 going
+        Spring showcase, 86 going
       </Chip>
     </Stage>
   );
@@ -165,7 +165,7 @@ export function FinanceArt({ size = "md" }: { size?: ArtSize }) {
       </div>
       <Chip className="right-[10%] bottom-[12%]">
         <Receipt className="size-4" />
-        Receipt · $86 · to approve
+        Receipt, $86, to approve
       </Chip>
     </Stage>
   );

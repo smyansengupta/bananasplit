@@ -164,7 +164,7 @@ const WEEK = [
     date: 27,
     today: true,
     events: [
-      { time: "10:00 AM", title: "Standup · moved" },
+      { time: "10:00 AM", title: "Standup, moved" },
       { time: "2:00 PM", title: "Design review" },
     ],
   },
@@ -188,7 +188,7 @@ export function DashboardReplica() {
                 Good morning, Maya
               </h1>
               <p className="text-muted-foreground mt-3 text-[17px]">
-                Tuesday, October 27 · Northwind Labs
+                Tuesday, October 27, Northwind Labs
               </p>
             </div>
             <span className="border-input flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold">
@@ -228,9 +228,9 @@ export function DashboardReplica() {
               <BlockCard
                 tone="quiet"
                 accent="var(--tag-navy)"
-                kicker="Today · 2:00 PM"
+                kicker="Today, 2:00 PM"
                 title="Design review"
-                subtitle="Zoom · link in the invite"
+                subtitle="Zoom, link in the invite"
                 aside={<Faces initials={["MC", "JP", "SO"]} />}
               />
               <BlockCard
@@ -251,7 +251,7 @@ export function DashboardReplica() {
               />
               <BlockCard
                 tone="goal"
-                kicker="Thu · 6:00 PM"
+                kicker="Thu, 6:00 PM"
                 title="Fall showcase"
                 subtitle="Main hall"
                 figure="42 of 50"
