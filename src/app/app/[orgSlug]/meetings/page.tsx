@@ -297,6 +297,7 @@ export default async function MeetingsPage({
   const card = (e: MeetingRow, featured = false, leads = false, ended = false) => (
     <MeetingCard
       key={e.id}
+      orgId={org.id}
       event={e}
       canManage={canManage}
       status={conferenceStatus(e, canManage)}

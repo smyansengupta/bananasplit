@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { MeetingRow } from "@/components/meetings/meeting-card";
 
 import { groupByMonth } from "./past-meeting-list";
+
+vi.mock("@/app/app/[orgSlug]/calendar/actions", () => ({ rsvpToEvent: vi.fn(async () => ({})) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 
 const row = (id: string, iso: string) => ({ id, startsAt: new Date(iso) }) as unknown as MeetingRow;
 

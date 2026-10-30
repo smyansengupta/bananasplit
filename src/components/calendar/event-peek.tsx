@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
+import { RsvpButtons } from "@/components/meetings/rsvp-buttons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -62,6 +63,7 @@ export function anchorFor(chip: HTMLElement, wrapper: HTMLElement, id: string): 
 }
 
 export function EventPeek({
+  orgId,
   item,
   anchor,
   orgSlug,
@@ -70,6 +72,8 @@ export function EventPeek({
   onClose,
   onEdit,
 }: {
+  /** For answering an invitation right here. */
+  orgId?: string;
   item: CalendarItem;
   anchor: PeekAnchor;
   orgSlug: string;
@@ -115,6 +119,8 @@ export function EventPeek({
   }, [onClose]);
 
   const dayKey = item.allDay ? item.start : localKey(new Date(item.start));
+  // An invitee answers here, until it's over; tasks have no invitation.
+  const canAnswer = Boolean(item.rsvp) && !item.task && new Date(item.end) > new Date();
 
   return (
     <div
@@ -127,17 +133,10 @@ export function EventPeek({
       role="group"
       aria-label={`${item.title}, detail`}
     >
-      <p className="cal-pop__kind">
-        <span aria-hidden className="cal-chip__dot" style={itemStyle(item)} />
-        {item.meetingType || kind.label}
-      </p>
-
-      <h3 className="heading mt-2 text-[17px] leading-snug break-words">{item.title}</h3>
+      <h3 className="heading text-[17px] leading-snug break-words">{item.title}</h3>
 
       <p className="mt-1 text-sm font-medium">
-        {shortDay(dayKey)}
-        {!item.allDay && ` · ${timeRange(item)}`}
-        {item.allDay && " · All day"}
+        {shortDay(dayKey)}, {item.allDay ? "All day" : timeRange(item)}
       </p>
 
       {item.location && (
@@ -148,14 +147,19 @@ export function EventPeek({
       )}
 
       <div className="mt-3 flex flex-wrap gap-1.5">
-        <Badge
-          variant={item.visibility === "PUBLIC" ? "secondary" : "outline"}
-          title={visibility.hint}
-        >
-          <VisIcon aria-hidden className="size-3" />
-          {visibility.label}
+        {/* Its type, beside the other facts (not a label above the title). */}
+        <Badge variant="outline">
+          <span aria-hidden className="cal-chip__dot" style={itemStyle(item)} />
+          {item.meetingType || kind.label}
         </Badge>
-        {item.rsvp && (
+        {/* Internal is the default; only Public is worth saying. */}
+        {item.visibility === "PUBLIC" && (
+          <Badge variant="secondary" title={visibility.hint}>
+            <VisIcon aria-hidden className="size-3" />
+            {visibility.label}
+          </Badge>
+        )}
+        {item.rsvp && !(orgId && canAnswer) && (
           <Badge
             variant={item.rsvp === "YES" ? "success" : item.rsvp === "NO" ? "outline" : "secondary"}
           >
@@ -177,12 +181,22 @@ export function EventPeek({
         )}
       </div>
 
+      {orgId && canAnswer && (
+        <RsvpButtons
+          orgId={orgId}
+          eventId={item.id}
+          title={item.title}
+          value={item.rsvp === "PENDING" ? null : (item.rsvp ?? null)}
+          className="mt-3"
+        />
+      )}
+
       <div className="mt-4 flex items-center gap-2">
         {/* One solid action (the event's page: details, RSVPs, notes) and,
             for whoever runs it, a plainly labelled edit beside it. */}
         <Button size="sm" className="flex-1" asChild>
           <Link href={`/app/${orgSlug}/calendar/${item.id}`}>
-            View event
+            Open
             <ArrowRight aria-hidden className="size-3.5" />
           </Link>
         </Button>
@@ -195,7 +209,7 @@ export function EventPeek({
             aria-label={`Edit ${item.title}`}
           >
             <Pencil aria-hidden className="size-3.5" />
-            Edit event
+            Edit
           </Button>
         )}
       </div>

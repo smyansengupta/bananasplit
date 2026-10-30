@@ -583,6 +583,7 @@ export function EventCalendar({
 
         {openItem && peek && (
           <EventPeek
+            orgId={orgId}
             item={openItem}
             anchor={peek}
             orgSlug={orgSlug}
