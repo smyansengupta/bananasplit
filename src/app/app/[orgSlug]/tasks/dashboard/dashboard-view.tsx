@@ -57,7 +57,8 @@ export function DashboardView({
   // The same workspace (scope, person, project...) with one more slice.
   const link = (q: Partial<WorkspaceQuery>, view: TaskLayout = "board") =>
     ws.hrefWith({ view, ...q });
-  const overdueQuery = { status: "open" as const, dueTo: span.yesterdayKey };
+  // The same filter as the Overdue stat, so both show the same tasks.
+  const overdueQuery = { overdue: true };
 
   // Everyone with work, then (for the whole club) everyone without: it's
   // worth seeing who has nothing on their plate too.
@@ -94,10 +95,6 @@ export function DashboardView({
 
   return (
     <div className="space-y-6">
-      <p className="text-muted-foreground text-sm">
-        The tasks in view, counted (stories and tasks, as on the board). Click a number to see them.
-      </p>
-
       <div className="grid gap-[18px] lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
         {/* Chart kit 8.5: how the work in view splits, to scale. */}
         <section
@@ -111,7 +108,7 @@ export function DashboardView({
             <b className="numeral text-[32px]">
               {totals.notStarted + totals.inProgress + totals.blocked + totals.done}
             </b>
-            <span className="text-muted-foreground text-sm">tasks in view</span>
+            <span className="text-muted-foreground text-sm">tasks</span>
           </div>
           <MixBar
             label={`${totals.notStarted} not started, ${totals.inProgress} in progress, ${totals.blocked} blocked, ${totals.done} done`}
@@ -157,7 +154,7 @@ export function DashboardView({
                 "table",
               )}
             />
-            <Line label="No owner" value={totals.unowned} detail="Open, unassigned" />
+            <Line label="No owner" value={totals.unowned} href={link({ unowned: true }, "table")} />
           </ul>
         </section>
       </div>
@@ -167,7 +164,7 @@ export function DashboardView({
           <section aria-labelledby="dash-epics" className="space-y-2">
             <SectionTitle id="dash-epics">Epics</SectionTitle>
             {data.epics.length === 0 ? (
-              <Empty>No tasks yet.</Empty>
+              <Empty>No epics yet</Empty>
             ) : (
               <div className={TASK_PANEL}>
                 <Table>
@@ -192,7 +189,7 @@ export function DashboardView({
                             {q ? (
                               <Link
                                 href={link(q)}
-                                className="block truncate underline-offset-4 hover:underline"
+                                className="block break-words underline-offset-4 hover:underline"
                               >
                                 {p.name}
                               </Link>
@@ -207,7 +204,7 @@ export function DashboardView({
                             )}
                           </TableCell>
                           <TableCell>
-                            <Progress pct={pct} label={`${p.done} of ${p.total} done`} />
+                            <Progress pct={pct} label={`${p.done} of ${p.total}`} />
                           </TableCell>
                           <Count
                             n={p.notStarted}
@@ -268,14 +265,18 @@ export function DashboardView({
                               className="flex min-w-0 items-center gap-2 font-medium underline-offset-4 hover:underline"
                             >
                               <UserAvatar user={m} size="xs" />
-                              <span className="truncate">{m.name ?? "Member"}</span>
+                              <span className="break-words">{m.name ?? "Member"}</span>
                             </Link>
                           </TableCell>
                           <Count n={p.notStarted} href={personLink({ status: "NOT_STARTED" })} />
                           <Count n={p.inProgress} href={personLink({ status: "IN_PROGRESS" })} />
                           <Count n={p.blocked} href={personLink({ status: "BLOCKED" })} tone />
                           <Count n={p.overdue} href={personLink(overdueQuery, "table")} tone />
-                          <Count n={p.doneRecently} className="pe-4" />
+                          <Count
+                            n={p.doneRecently}
+                            href={personLink({ status: "COMPLETED" }, "table")}
+                            className="pe-4"
+                          />
                         </TableRow>
                       );
                     })}
@@ -324,7 +325,7 @@ export function DashboardView({
                           className="size-2 shrink-0 rounded-full"
                           style={{ background: STATUS_TOKEN[t.status] }}
                         />
-                        <span className="truncate">
+                        <span className="break-words">
                           <TaskTitle>{t.title}</TaskTitle>
                         </span>
                       </span>
@@ -339,9 +340,7 @@ export function DashboardView({
                           <span>No owner</span>
                         )}
                         <DueLabel dueDate={t.dueDate} todayKey={span.todayKey} />
-                        {t.parentTask?.type === "EPIC" && (
-                          <span className="truncate">{t.parentTask.title}</span>
-                        )}
+                        {t.parentTask?.type === "EPIC" && <span>{t.parentTask.title}</span>}
                       </span>
                     </button>
                   </li>
@@ -516,7 +515,7 @@ function Count({
 
 function Progress({ pct, label }: { pct: number; label: string }) {
   return (
-    <div className="flex items-center gap-2" title={label}>
+    <div className="flex items-center gap-2">
       <div
         role="progressbar"
         aria-valuenow={pct}
@@ -530,7 +529,9 @@ function Progress({ pct, label }: { pct: number; label: string }) {
           style={{ width: `${pct}%`, background: STATUS_TOKEN.COMPLETED }}
         />
       </div>
-      <span className="text-muted-foreground text-xs tabular-nums">{pct}%</span>
+      <span className="text-muted-foreground text-xs tabular-nums">
+        {pct}%, {label}
+      </span>
     </div>
   );
 }

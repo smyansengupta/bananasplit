@@ -2,9 +2,8 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { Check, ChevronLeft, ChevronRight, ClipboardCopy, Lock, Send } from "@/components/icons";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 
 import { useTasks } from "@/components/tasks/tasks-context";
 import { Button } from "@/components/ui/button";
@@ -26,6 +25,7 @@ import {
   type WeeklyItem,
   type WeeklySummary,
 } from "@/lib/tasks/weekly-text";
+import { metaLine } from "@/components/ui/meta-list";
 import { cn } from "@/lib/utils";
 
 import { postWeeklyUpdate } from "../actions";
@@ -74,7 +74,20 @@ export function UpdatesView({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [note, setNote] = useState(posted?.note ?? "");
+  // The note is kept in this browser as you type, so leaving before you
+  // post doesn't lose it; posting clears the draft.
+  const draftKey = `bs-weekly-note:${personId}:${weekStart}`;
+  const storedDraft = useSyncExternalStore(
+    noSubscribe,
+    () => readDraft(draftKey),
+    () => null,
+  );
+  const [edited, setEdited] = useState<string | null>(null);
+  const note = edited ?? posted?.note ?? storedDraft ?? "";
+  const setNote = (value: string) => {
+    setEdited(value);
+    writeDraft(draftKey, value);
+  };
   const [copied, setCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
   const isMe = personId === viewer.userId;
@@ -108,7 +121,10 @@ export function UpdatesView({
     startTransition(async () => {
       const result = await postWeeklyUpdate(org.id, { weekStart, note: note.trim() || null });
       if (result.error) announce(result.error);
-      else announce("Update posted.");
+      else {
+        writeDraft(draftKey, null);
+        announce("Posted");
+      }
     });
   }
 
@@ -121,11 +137,7 @@ export function UpdatesView({
     <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="space-y-5">
         <div>
-          <h2 className="text-lg font-semibold">Weekly update</h2>
-          <p className="text-muted-foreground text-sm">
-            Due {formatDueKey(lastDay, org.todayKey)}. What you finished, what&apos;s next and
-            what&apos;s stuck, drafted from your tasks: check it, add a note, post.
-          </p>
+          <p className="text-muted-foreground text-sm">Due {formatDueKey(lastDay, org.todayKey)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Select
@@ -182,35 +194,31 @@ export function UpdatesView({
         {heldBack > 0 && (
           <p className="text-muted-foreground flex items-start gap-2 text-sm">
             <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            <span>
-              {heldBack === 1 ? "One private task is" : `${heldBack} private tasks are`} in this
-              week but will not be posted. A posted update is readable by the whole organization, so
-              private titles stay out of it — put them in the note yourself if you want to.
-            </span>
+            <span>{heldBack === 1 ? "1 private task" : `${heldBack} private tasks`} left out</span>
           </p>
         )}
 
         {isMe ? (
           <div className="space-y-3 rounded-lg border p-4">
             <div className="grid gap-1.5">
-              <Label htmlFor="weekly-note">Note (optional)</Label>
+              <Label htmlFor="weekly-note">Note</Label>
               <Textarea
                 id="weekly-note"
                 value={note}
                 rows={3}
                 maxLength={2000}
-                placeholder="Anything the exec sync should know: wins, asks, decisions you need."
+                placeholder="Wins, asks, decisions"
                 onChange={(e) => setNote(e.target.value)}
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={() => void copy()}>
                 {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
-                {copied ? "Copied" : "Copy as text"}
+                {copied ? "Copied" : "Copy"}
               </Button>
               <Button onClick={post} disabled={isPending || isFuture}>
                 <Send className="size-4" />
-                {posted?.postedAt ? "Update post" : "Post update"}
+                {posted?.postedAt ? "Repost" : "Post"}
               </Button>
               {posted?.postedAt && (
                 <span className="text-muted-foreground text-sm">
@@ -224,7 +232,7 @@ export function UpdatesView({
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={() => void copy()}>
                 {copied ? <Check className="size-4" /> : <ClipboardCopy className="size-4" />}
-                {copied ? "Copied" : "Copy as text"}
+                {copied ? "Copied" : "Copy"}
               </Button>
               <span className="text-muted-foreground text-sm">
                 {posted?.postedAt
@@ -255,7 +263,7 @@ export function UpdatesView({
         {canSeeWhoPosted && (
           <section className="rounded-lg border p-4" aria-labelledby="who-posted">
             <h2 id="who-posted" className="mb-3 text-sm font-semibold">
-              Who hasn&apos;t posted ({notPosted.length})
+              Posted {expected.length - notPosted.length} of {expected.length}
             </h2>
             {expected.length === 0 ? (
               <p className="text-muted-foreground text-sm">
@@ -271,7 +279,7 @@ export function UpdatesView({
                       {m && <UserAvatar user={m} size="xs" />}
                       <button
                         type="button"
-                        className="min-w-0 flex-1 truncate text-left hover:underline"
+                        className="min-w-0 flex-1 text-left break-words hover:underline"
                         onClick={() =>
                           navigate({ person: e.userId === viewer.userId ? null : e.userId })
                         }
@@ -294,9 +302,7 @@ export function UpdatesView({
           </section>
         )}
         <p className="text-muted-foreground text-xs">
-          Weeks run {WEEKDAY_NAMES[(dueDay + 1) % 7]} to {WEEKDAY_NAMES[dueDay]} in {org.timezone}.
-          Leads who haven&apos;t posted get a reminder {WEEKDAY_NAMES[dueDay]} at 6pm. An owner or
-          admin picks the day in Admin panel › General.
+          Due {WEEKDAY_NAMES[dueDay]}s, reminder at 6pm
         </p>
       </aside>
     </div>
@@ -312,7 +318,7 @@ function Column({
   items: WeeklyItem[];
   kind: "done" | "next" | "blocked";
 }) {
-  const { org } = useTasks();
+  const { org, openTask } = useTasks();
   return (
     <section className="rounded-lg border" aria-label={title}>
       <h2
@@ -324,12 +330,16 @@ function Column({
         {title} <span className="text-muted-foreground font-normal">({items.length})</span>
       </h2>
       {items.length === 0 ? (
-        <p className="text-muted-foreground px-3 py-3 text-sm">Nothing here.</p>
+        <p className="text-muted-foreground px-3 py-3 text-sm">None</p>
       ) : (
         <ul className="divide-y">
           {items.map((i) => (
             <li key={i.id} className="px-3 py-2 text-sm">
-              <Link href={`/app/${org.slug}/tasks/${i.id}`} className="hover:underline">
+              <button
+                type="button"
+                onClick={() => openTask(i.id)}
+                className="text-left hover:underline"
+              >
                 {i.isPrivate && (
                   <Lock
                     className="text-muted-foreground me-1 inline size-3 align-[-1px]"
@@ -338,13 +348,15 @@ function Column({
                 )}
                 {i.parentTitle && <span className="text-muted-foreground">{i.parentTitle} / </span>}
                 {i.title}
-              </Link>
+              </button>
               <div className="text-muted-foreground text-xs">
-                {kind === "blocked" && i.blockedReason}
-                {kind === "next" &&
-                  (i.dueKey ? `Due ${formatDueKey(i.dueKey, org.todayKey)}` : "In progress")}
-                {i.role === "collaborator" && " · involved"}
-                {i.isPrivate && " · private, not posted"}
+                {metaLine([
+                  kind === "blocked" && i.blockedReason,
+                  kind === "next" &&
+                    (i.dueKey ? `Due ${formatDueKey(i.dueKey, org.todayKey)}` : "In progress"),
+                  i.role === "collaborator" && "involved",
+                  i.isPrivate && "private, not posted",
+                ])}
               </div>
             </li>
           ))}
@@ -352,4 +364,23 @@ function Column({
       )}
     </section>
   );
+}
+
+const noSubscribe = () => () => {};
+
+function readDraft(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(key: string, value: string | null) {
+  try {
+    if (value) window.localStorage.setItem(key, value);
+    else window.localStorage.removeItem(key);
+  } catch {
+    // Private windows refuse storage; the draft just isn't kept.
+  }
 }

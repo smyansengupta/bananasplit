@@ -227,7 +227,9 @@ export default async function TasksPage({
           stats={stats}
           weekEndKey={addDaysToKey(weekStartKey, 6)}
         />
-        {ws.view === "list" && weekly && <WeeklyUpdateStrip status={weekly} />}
+        {(ws.view === "list" || ws.view === "board") && weekly && !weekly.posted && (
+          <WeeklyUpdateStrip status={weekly} />
+        )}
         {content}
       </WorkspaceProvider>
     </TasksProvider>
