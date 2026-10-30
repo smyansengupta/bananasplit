@@ -29,6 +29,8 @@ export interface PastMeetingFacts {
   signedUp: number;
   /** The meeting's notes, newest first. */
   notes: { id: string }[];
+  /** Who hosted it, by name. */
+  host?: string | null;
 }
 
 export function PastMeetingList({
@@ -87,12 +89,19 @@ function PastRow({
   type: MeetingType | null;
   facts: PastMeetingFacts;
 }) {
+  // Who came: check-ins against sign-ups ("34 of 40 came", with a small
+  // bar) when both are known, else whichever there is.
+  const ofSigned = facts.checkedIn > 0 && facts.signedUp > 0;
   const came =
     facts.checkedIn > 0
-      ? `${facts.checkedIn} came`
+      ? ofSigned
+        ? `${facts.checkedIn} of ${facts.signedUp} came`
+        : `${facts.checkedIn} came`
       : facts.signedUp > 0
         ? `${facts.signedUp} signed up`
         : null;
+  const share = ofSigned ? Math.min(1, facts.checkedIn / facts.signedUp) : null;
+  const typeName = type?.name ?? e.meetingType?.trim() ?? null;
   const notes = facts.notes;
   const integration =
     e.conferenceProvider === "MEET"
@@ -116,9 +125,12 @@ function PastRow({
         >
           {e.title}
         </Link>
+        {facts.host && (
+          <span className="text-muted-foreground block text-[13px]">Hosted by {facts.host}</span>
+        )}
         <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
           <span>{timeLine(e.startsAt, e.endsAt, timeZone, e.allDay)}</span>
-          {type && <TypePill name={type.name} />}
+          {typeName && <TypePill name={typeName} />}
           {e.conferenceUrl ? (
             <span className="inline-flex items-center gap-1.5">
               {integration && hasMeetingLogo(integration) ? (
@@ -141,6 +153,17 @@ function PastRow({
             <span className="inline-flex items-center gap-1.5 tabular-nums">
               <Users className="size-3.5" aria-hidden="true" />
               {came}
+              {share !== null && (
+                <span
+                  aria-hidden="true"
+                  className="bg-muted ms-1 inline-block h-1.5 w-14 overflow-hidden rounded-full"
+                >
+                  <span
+                    className="block h-full rounded-full bg-(--kind)"
+                    style={{ width: `${Math.round(share * 100)}%` }}
+                  />
+                </span>
+              )}
             </span>
           )}
         </span>

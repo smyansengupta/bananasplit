@@ -90,7 +90,7 @@ export default async function FindATimePage({
         }
       />
 
-      <MeetingsTabs orgSlug={orgSlug} current="find" showPast={isAdmin} />
+      <MeetingsTabs orgSlug={orgSlug} current="find" />
 
       {items.length === 0 ? (
         <EmptyState

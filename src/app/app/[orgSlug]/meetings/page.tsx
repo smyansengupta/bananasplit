@@ -85,7 +85,6 @@ export default async function MeetingsPage({
   const typeParam = first(sp.type) || null;
   const byType = first(sp.sort) === "type";
   // Coming up (the cards) or Past (the list); Find a time is its own page.
-  const showingPast = first(sp.view) === "past";
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org, user } = ctx;
   const personal = org.kind === "PERSONAL";
@@ -431,11 +430,7 @@ export default async function MeetingsPage({
         actions={newMeeting("create", true)}
       />
 
-      <MeetingsTabs
-        orgSlug={orgSlug}
-        current={showingPast && canManage ? "past" : "upcoming"}
-        showPast={canManage}
-      />
+      <MeetingsTabs orgSlug={orgSlug} current="upcoming" />
 
       {canManage && (
         <VideoConnections
@@ -487,32 +482,37 @@ export default async function MeetingsPage({
       ) : canManage ? (
         <>
           {filterBar}
-          {showingPast ? (
-            past.length > 0 ? (
-              <section aria-label="Past meetings">
-                <PastMeetingList
-                  meetings={past}
-                  timeZone={timeZone}
-                  orgSlug={orgSlug}
-                  typeOf={typeOf}
-                  facts={(e) => ({
-                    checkedIn: e.attendanceCount ?? 0,
-                    signedUp:
-                      countOf(e.id, "GOING") ||
-                      attendees.filter((a) => a.eventId === e.id && a.rsvp === "YES").length,
-                    notes: notes.filter((n) => n.eventId === e.id),
-                  })}
-                />
-              </section>
-            ) : (
-              <EmptyState icon={Video} title="No past meetings yet" />
-            )
-          ) : upcoming.length > 0 ? (
+          {upcoming.length > 0 ? (
             <section aria-label={personal ? "Your meetings" : "Coming up"}>
               {listOf(upcoming, true)}
             </section>
           ) : (
             <EmptyState icon={Video} title="Nothing coming up" action={newMeeting("secondary")} />
+          )}
+          {/* What already happened falls right under what's coming up, as a
+              list: a record now, not something to act on. */}
+          {past.length > 0 && (
+            <section aria-labelledby="past-heading" className="space-y-3">
+              <h2 id="past-heading" className="heading flex items-center gap-2 text-[17px]">
+                Past <Badge variant="secondary">{past.length}</Badge>
+              </h2>
+              <PastMeetingList
+                meetings={past}
+                timeZone={timeZone}
+                orgSlug={orgSlug}
+                typeOf={typeOf}
+                facts={(e) => ({
+                  checkedIn: e.attendanceCount ?? 0,
+                  signedUp:
+                    countOf(e.id, "GOING") ||
+                    attendees.filter((a) => a.eventId === e.id && a.rsvp === "YES").length,
+                  notes: notes.filter((n) => n.eventId === e.id),
+                  host: e.hostUserId
+                    ? (members.find((m) => m.id === e.hostUserId)?.name ?? null)
+                    : null,
+                })}
+              />
+            </section>
           )}
         </>
       ) : (
