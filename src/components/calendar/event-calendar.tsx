@@ -14,6 +14,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { loadEventForEdit, moveEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { updateTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { toast } from "@/components/ui/toaster";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -320,6 +321,31 @@ export function EventCalendar({
     });
   }
 
+  /** A task chip dropped on another day: its due date moves, with Undo. */
+  function moveTaskDue(task: CalendarItem, dayKey: string) {
+    const before = task.start;
+    setMoveError(null);
+    startTransition(async () => {
+      const result = await updateTask(orgId, task.id, { dueDate: dayKey });
+      if (result && "error" in result && result.error) {
+        setMoveError(result.error);
+        return;
+      }
+      router.refresh();
+      toast({
+        title: "Due date moved",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const back = await updateTask(orgId, task.id, { dueDate: before });
+            if (back && "error" in back && back.error) return back.error;
+            router.refresh();
+          },
+        },
+      });
+    });
+  }
+
   /** The week grid's drag or resize: new start and end, same day or another. */
   function moveTimed(item: CalendarItem, startsAt: Date, endsAt: Date) {
     if (item.task || item.allDay) return;
@@ -340,17 +366,16 @@ export function EventCalendar({
    */
   const dragProps = canManage
     ? (item: CalendarItem) =>
-        item.task
-          ? {}
-          : {
-              draggable: true,
-              onDragStart: (event: React.DragEvent) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", item.id);
-                setDrag({ id: item.id, over: null });
-              },
-              onDragEnd: () => setDrag(null),
-            }
+        // A task drags too: dropping it on a day moves its due date.
+        ({
+          draggable: true,
+          onDragStart: (event: React.DragEvent) => {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", item.id);
+            setDrag({ id: item.id, over: null });
+          },
+          onDragEnd: () => setDrag(null),
+        })
     : undefined;
 
   const dayDropProps = canManage
@@ -371,6 +396,11 @@ export function EventCalendar({
     : undefined;
 
   function moveToDay(id: string, dayKey: string) {
+    const task = items.find((i) => i.id === id && i.task);
+    if (task) {
+      if (task.start !== dayKey) moveTaskDue(task, dayKey);
+      return;
+    }
     const item = items.find((i) => i.id === id && !i.task);
     if (!item) return;
     const firstDay = item.allDay ? item.start : localDayKey(new Date(item.start));
