@@ -78,7 +78,7 @@ export function ConferencePicker({
 }) {
   const rows = connections ?? [];
   const pasting = provider === ConferenceProvider.OTHER;
-  const chosen = rows.find((c) => PROVIDER_OF[c.provider] === provider) ?? null;
+
 
   const pick = (next: ConferenceProvider) => {
     onProviderChange(next);

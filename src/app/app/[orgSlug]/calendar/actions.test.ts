@@ -7,26 +7,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * service's writes are mocked (its own tests cover it).
  */
 
-const { ctx, db, service, notifyUsers, scheduleEventReminders } = vi.hoisted(() => {
-  const db = {
-    organization: { findUnique: vi.fn() },
-    membership: { count: vi.fn() },
-    event: { findFirst: vi.fn() },
-    eventAttendee: {
-      createMany: vi.fn(),
-      deleteMany: vi.fn(),
-      findMany: vi.fn(),
-      updateMany: vi.fn(),
-    },
-  };
-  return {
-    db,
-    ctx: { role: "ADMIN" as string, userId: "u_admin" },
-    service: { createEvent: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn() },
-    notifyUsers: vi.fn(),
-    scheduleEventReminders: vi.fn(),
-  };
-});
+const { ctx, db, service, notifyUsers, scheduleEventReminders, notifyEventCancelled } = vi.hoisted(
+  () => {
+    const db = {
+      organization: { findUnique: vi.fn() },
+      membership: { count: vi.fn() },
+      event: { findFirst: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
+      eventAttendee: {
+        createMany: vi.fn(),
+        deleteMany: vi.fn(),
+        findMany: vi.fn(),
+        updateMany: vi.fn(),
+      },
+    };
+    return {
+      db,
+      ctx: { role: "ADMIN" as string, userId: "u_admin" },
+      service: { createEvent: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn() },
+      notifyUsers: vi.fn(),
+      scheduleEventReminders: vi.fn(),
+      notifyEventCancelled: vi.fn(),
+    };
+  },
+);
 
 vi.mock("@/server/db/context", () => ({
   withOrgAction:
@@ -42,9 +45,11 @@ vi.mock("@/server/notifications", () => ({ notifyUsers }));
 vi.mock("@/server/rsvp/service", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/rsvp/service")>()),
   scheduleEventReminders,
+  notifyEventCancelled,
 }));
 
-const { createEvent, updateEvent, deleteEvent, moveEvent, rsvpToEvent } = await import("./actions");
+const { createEvent, updateEvent, deleteEvent, moveEvent, rsvpToEvent, restoreEvents } =
+  await import("./actions");
 const { EventValidationError } = await import("@/server/events/service");
 
 const ORG = "org_1";
@@ -59,8 +64,9 @@ beforeEach(() => {
   ctx.role = "ADMIN";
   ctx.userId = "u_admin";
   db.organization.findUnique.mockResolvedValue({ slug: "cbc", timezone: "America/New_York" });
-  db.membership.count.mockImplementation(async ({ where }: { where: { userId: { in: string[] } } }) =>
-    where.userId.in.filter((id) => id.startsWith("u_")).length,
+  db.membership.count.mockImplementation(
+    async ({ where }: { where: { userId: { in: string[] } } }) =>
+      where.userId.in.filter((id) => id.startsWith("u_")).length,
   );
   db.event.findFirst.mockResolvedValue({
     title: "Board meeting",
@@ -85,9 +91,11 @@ beforeEach(() => {
     },
     tags: [],
   });
-  service.createEvent.mockImplementation(async (_c: unknown, input: Record<string, unknown>) => saved(input));
-  service.updateEvent.mockImplementation(async (_c: unknown, _id: string, patch: Record<string, unknown>) =>
-    saved(patch),
+  service.createEvent.mockImplementation(async (_c: unknown, input: Record<string, unknown>) =>
+    saved(input),
+  );
+  service.updateEvent.mockImplementation(
+    async (_c: unknown, _id: string, patch: Record<string, unknown>) => saved(patch),
   );
   service.deleteEvent.mockImplementation(async () => saved({}));
 });
@@ -97,7 +105,9 @@ describe("authorization: events are ADMIN+", () => {
     ctx.role = role;
     expect((await createEvent(ORG, timed)).error).toMatch(/permission/i);
     expect((await updateEvent(ORG, "evt_1", { title: "x" })).error).toMatch(/permission/i);
-    expect((await moveEvent(ORG, "evt_1", { allDay: false, ...timed })).error).toMatch(/permission/i);
+    expect((await moveEvent(ORG, "evt_1", { allDay: false, ...timed })).error).toMatch(
+      /permission/i,
+    );
     expect((await deleteEvent(ORG, "evt_1")).error).toMatch(/permission/i);
     expect(service.createEvent).not.toHaveBeenCalled();
     expect(service.updateEvent).not.toHaveBeenCalled();
@@ -106,7 +116,9 @@ describe("authorization: events are ADMIN+", () => {
 
   it("a MEMBER cannot create a PUBLIC event either", async () => {
     ctx.role = "MEMBER";
-    expect((await createEvent(ORG, { ...timed, visibility: "PUBLIC" })).error).toMatch(/permission/i);
+    expect((await createEvent(ORG, { ...timed, visibility: "PUBLIC" })).error).toMatch(
+      /permission/i,
+    );
   });
 
   it("an ADMIN creates a PUBLIC workshop through the service", async () => {
@@ -135,8 +147,12 @@ describe("authorization: events are ADMIN+", () => {
   });
 
   it("returns the service's validation message", async () => {
-    service.createEvent.mockRejectedValueOnce(new EventValidationError("Links must be http(s) URLs."));
-    expect(await createEvent(ORG, { ...timed, rsvpUrl: "ftp://x" })).toEqual({ error: "Links must be http(s) URLs." });
+    service.createEvent.mockRejectedValueOnce(
+      new EventValidationError("Links must be http(s) URLs."),
+    );
+    expect(await createEvent(ORG, { ...timed, rsvpUrl: "ftp://x" })).toEqual({
+      error: "Links must be http(s) URLs.",
+    });
   });
 });
 
@@ -230,7 +246,12 @@ describe("reminders", () => {
 
 describe("times", () => {
   it("stores all-day events as org-timezone midnights with an exclusive end", async () => {
-    await createEvent(ORG, { title: "Hackathon", allDay: true, startsAt: "2026-10-10", endsAt: "2026-10-11" });
+    await createEvent(ORG, {
+      title: "Hackathon",
+      allDay: true,
+      startsAt: "2026-10-10",
+      endsAt: "2026-10-11",
+    });
     expect(service.createEvent).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -242,10 +263,19 @@ describe("times", () => {
   });
 
   it("refuses an end before the start", async () => {
-    expect((await createEvent(ORG, { ...timed, endsAt: "2026-10-05T21:00:00.000Z" })).error).toMatch(/after/);
-    expect((await createEvent(ORG, { title: "x", allDay: true, startsAt: "2026-10-10", endsAt: "2026-10-09" })).error).toMatch(
-      /last day/,
-    );
+    expect(
+      (await createEvent(ORG, { ...timed, endsAt: "2026-10-05T21:00:00.000Z" })).error,
+    ).toMatch(/after/);
+    expect(
+      (
+        await createEvent(ORG, {
+          title: "x",
+          allDay: true,
+          startsAt: "2026-10-10",
+          endsAt: "2026-10-09",
+        })
+      ).error,
+    ).toMatch(/last day/);
   });
 
   it("moves an all-day event by its first and last day", async () => {
@@ -287,7 +317,11 @@ describe("conference links", () => {
     ["OTHER", "", /paste a meeting link/i],
     ["NONE", "https://meet.google.com/x", /remove the link/i],
   ])("%s with %s is refused", async (provider, url, message) => {
-    const result = await createEvent(ORG, { ...timed, conferenceProvider: provider as never, conferenceUrl: url });
+    const result = await createEvent(ORG, {
+      ...timed,
+      conferenceProvider: provider as never,
+      conferenceUrl: url,
+    });
     expect(result.error).toMatch(message);
     expect(service.createEvent).not.toHaveBeenCalled();
   });
@@ -299,7 +333,11 @@ describe("conference links", () => {
     // providers.ts allows both of Microsoft's hosts; the action must agree.
     ["TEAMS", "https://teams.live.com/meet/9876543210"],
   ])("accepts %s with a link on its own host (%s)", async (provider, url) => {
-    const result = await createEvent(ORG, { ...timed, conferenceProvider: provider as never, conferenceUrl: url });
+    const result = await createEvent(ORG, {
+      ...timed,
+      conferenceProvider: provider as never,
+      conferenceUrl: url,
+    });
     expect(result.error).toBeUndefined();
   });
 
@@ -320,19 +358,22 @@ describe("conference links", () => {
       }
     });
 
-    it.each(["ZOOM", "MEET", "TEAMS"])("adds a %s call to an existing meeting with no link", async (provider) => {
-      // The default row: in person, no call.
-      const result = await updateEvent(ORG, "evt_1", {
-        conferenceProvider: provider as never,
-        conferenceUrl: null,
-      });
-      expect(result).toEqual({ eventId: "evt_1" });
-      expect(service.updateEvent).toHaveBeenCalledWith(
-        expect.anything(),
-        "evt_1",
-        expect.objectContaining({ conferenceProvider: provider, conferenceUrl: null }),
-      );
-    });
+    it.each(["ZOOM", "MEET", "TEAMS"])(
+      "adds a %s call to an existing meeting with no link",
+      async (provider) => {
+        // The default row: in person, no call.
+        const result = await updateEvent(ORG, "evt_1", {
+          conferenceProvider: provider as never,
+          conferenceUrl: null,
+        });
+        expect(result).toEqual({ eventId: "evt_1" });
+        expect(service.updateEvent).toHaveBeenCalledWith(
+          expect.anything(),
+          "evt_1",
+          expect.objectContaining({ conferenceProvider: provider, conferenceUrl: null }),
+        );
+      },
+    );
 
     it("saves a title change on a meeting whose link is still being made", async () => {
       // PENDING (or FAILED): the job has not filled the link in yet. The edit
@@ -389,7 +430,9 @@ describe("conference links", () => {
 
 describe("attendees", () => {
   it("invites members only, with the org id, and notifies everyone but the actor", async () => {
-    expect((await createEvent(ORG, { ...timed, attendeeIds: ["u_a", "outsider"] })).error).toMatch(/aren't members/);
+    expect((await createEvent(ORG, { ...timed, attendeeIds: ["u_a", "outsider"] })).error).toMatch(
+      /aren't members/,
+    );
     await createEvent(ORG, { ...timed, attendeeIds: ["u_a", "u_admin"] });
     expect(db.eventAttendee.createMany).toHaveBeenCalledWith({
       data: [
@@ -449,10 +492,67 @@ describe("attendees", () => {
     expect(notifyUsers).not.toHaveBeenCalled();
   });
 
-  it("tells attendees about a cancellation", async () => {
-    await deleteEvent(ORG, "evt_1");
+  it("tells attendees about a cancellation only after the Undo window", async () => {
+    db.event.findFirst.mockResolvedValueOnce({ id: "evt_1", startsAt: new Date(), seriesId: null });
+    expect(await deleteEvent(ORG, "evt_1")).toEqual({ deletedIds: ["evt_1"] });
     expect(service.deleteEvent).toHaveBeenCalledWith(expect.anything(), "evt_1");
-    expect(notifyUsers).toHaveBeenCalledWith(db, ORG, ["u_a"], expect.objectContaining({ type: "EVENT_CANCELLED" }));
+    // Not at once: a delayed job tells them, and only if it's still deleted.
+    expect(notifyUsers).not.toHaveBeenCalled();
+    expect(notifyEventCancelled).toHaveBeenCalledWith(db, ORG, "evt_1", {
+      notifyMembers: true,
+      actorId: "u_admin",
+    });
+  });
+
+  it("deletes this and the later weeks of a series", async () => {
+    const start = new Date("2026-11-05T23:00:00.000Z");
+    db.event.findFirst.mockResolvedValueOnce({ id: "w2", startsAt: start, seriesId: "w1" });
+    db.event.findMany.mockResolvedValueOnce([{ id: "w2" }, { id: "w3" }]);
+    expect(await deleteEvent(ORG, "w2", { scope: "following" })).toEqual({
+      deletedIds: ["w2", "w3"],
+    });
+    expect(db.event.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ seriesId: "w1", startsAt: { gte: start } }),
+      }),
+    );
+    expect(service.deleteEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("puts deleted events back for Undo", async () => {
+    db.event.findFirst.mockResolvedValue({ id: "evt_1" });
+    expect(await restoreEvents(ORG, ["evt_1"])).toEqual({});
+    expect(db.event.updateMany).toHaveBeenCalledWith({
+      where: { organizationId: ORG, id: { in: ["evt_1"] }, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+    expect(service.updateEvent).toHaveBeenCalledWith(expect.anything(), "evt_1", {});
+  });
+});
+
+describe("repeating meetings", () => {
+  it("makes one real event per week through the last day, linked as a series", async () => {
+    const result = await createEvent(ORG, { ...timed, repeatWeeklyUntil: "2026-10-19" });
+    expect(result.error).toBeUndefined();
+    const starts = service.createEvent.mock.calls.map((c) =>
+      ((c[1] as { startsAt: Date }).startsAt as Date).toISOString(),
+    );
+    expect(starts).toEqual([
+      "2026-10-05T22:00:00.000Z",
+      "2026-10-12T22:00:00.000Z",
+      "2026-10-19T22:00:00.000Z",
+    ]);
+    expect(db.event.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { seriesId: "evt_1" } }),
+    );
+  });
+
+  it("saves the meeting type the form sends", async () => {
+    await createEvent(ORG, { ...timed, meetingType: "Build night" });
+    expect(service.createEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ meetingType: "Build night" }),
+    );
   });
 });
 
