@@ -34,7 +34,6 @@ export function FinanceBoard({
       types={FINANCE_WIDGETS}
       initialLayout={initialLayout}
       customized={customized}
-      intro={<h2 className="heading text-[17px]">Your board</h2>}
       renderBody={(type) => (
         <WidgetBody type={type as WidgetTypeId} data={data} orgSlug={orgSlug} setup={setup} />
       )}

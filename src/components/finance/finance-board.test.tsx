@@ -105,7 +105,7 @@ describe("finance board: the runway widget", () => {
     expect(html).toContain("$1,200");
     expect(html).toContain("Waiting for approval");
     expect(html).toContain("$45 to review");
-    expect(html).toContain('href="/app/cbc/finance/transactions?status=SUBMITTED"');
+    expect(html).toContain('href="/app/cbc/finance/transactions?view=review"');
   });
 
   it("offers a way back when the board is empty", () => {

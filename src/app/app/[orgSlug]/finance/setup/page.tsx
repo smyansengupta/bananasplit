@@ -37,12 +37,7 @@ export default async function FinanceSetupPage({
   const active = data.state.period;
   return (
     <div className="space-y-4.5">
-      <div className="space-y-1">
-        <h2 className="heading text-lg">Set up your organization&apos;s finances</h2>
-        <p className="text-muted-foreground text-sm">
-          About five minutes. Every step saves as you go, so you can stop and come back.
-        </p>
-      </div>
+      <h2 className="heading text-lg">Set up finance</h2>
       <FinanceSetup
         orgId={org.id}
         orgSlug={orgSlug}
