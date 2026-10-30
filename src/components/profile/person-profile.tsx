@@ -147,12 +147,10 @@ export function PersonProfile({
             {person.team && (
               <TagChip color={teamColor(person.team.slot)}>{person.team.name}</TagChip>
             )}
-            {person.freeNow && <Badge variant="success">Free now</Badge>}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {person.email && <CopyEmailButton email={person.email} name={first} />}
           {!isSelf && (
             <Button asChild variant="secondary" size="sm">
               <Link
@@ -214,7 +212,7 @@ export function PersonProfile({
               <dd className="flex min-w-0 flex-col items-start gap-0.5">
                 {person.reportsTo.length
                   ? person.reportsTo.map(refLink)
-                  : "No one, top of the chart"}
+                  : "Top of the chart"}
               </dd>
               {person.alsoReportsTo.length > 0 && (
                 <>
@@ -264,7 +262,7 @@ export function PersonProfile({
                     </Link>
                   </>
                 ) : (
-                  `Shaded when ${first} can't meet, in their time zone (${person.timezone.replace(/_/g, " ")}).`
+                  `Shaded when ${first} can't meet.`
                 )}
               </p>
             </>
@@ -288,7 +286,7 @@ export function PersonProfile({
                       aria-hidden="true"
                       className="border-muted-foreground/50 size-[18px] shrink-0 rounded-full border-[1.5px]"
                     />
-                    <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                    <span className="min-w-0 flex-1 break-words">{t.title}</span>
                     {due && (
                       <span
                         className={cn(
@@ -304,16 +302,6 @@ export function PersonProfile({
                   </li>
                 );
               })}
-              {person.taskCount > person.tasks.length && (
-                <li className="pt-1 text-sm">
-                  <Link
-                    href={personTasksHref(orgSlug, person.id)}
-                    className="underline underline-offset-4"
-                  >
-                    See all {person.taskCount}
-                  </Link>
-                </li>
-              )}
             </ul>
           )}
         </Section>
@@ -322,8 +310,10 @@ export function PersonProfile({
           <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 text-sm">
             <dt className="text-muted-foreground">Email</dt>
             <dd className="min-w-0 break-words">
-              {person.email ?? (
-                <span className="text-muted-foreground">Only admins see emails here</span>
+              {person.email ? (
+                <CopyEmailButton email={person.email} name={first} inline />
+              ) : (
+                <span className="text-muted-foreground">Hidden</span>
               )}
             </dd>
             {studies && (

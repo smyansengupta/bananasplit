@@ -155,8 +155,8 @@ describe("people pages privacy", () => {
     getPersonSheetMock.mockResolvedValue(sheet());
     const html = renderToStaticMarkup(await PersonPage(personParams("u_oliver")));
     expect(html).toContain("Oliver Ward");
-    expect(html).toContain("he/him · VP Ops &amp; Programs");
-    expect(html).toContain("Business Administration · Class of 2027");
+    expect(html).toContain("he/him, VP Ops &amp; Programs");
+    expect(html).toContain("Business Administration, Class of 2027");
     expect(html).toContain("Runs the exec sync.");
     expect(html).toContain("Jackson Lamoureux, President");
     expect(html).toContain("Also reports to");
@@ -167,14 +167,14 @@ describe("people pages privacy", () => {
     expect(html).toContain('href="/app/cbc/calendar/find-a-time/new?with=u_oliver"');
     expect(html).toContain('rel="noopener noreferrer nofollow"');
     expect(html).not.toContain("@example.edu");
-    expect(html).not.toContain("Copy email");
+    expect(html).not.toContain("s email,");
     expect(html).not.toContain("Edit your profile");
   });
 
-  it("offers Copy email only when the data carries the email", async () => {
+  it("makes the email copy on click only when the data carries the email", async () => {
     getPersonSheetMock.mockResolvedValue({ ...sheet(), email: "oliver@example.edu" });
     const html = renderToStaticMarkup(await PersonPage(personParams("u_oliver")));
-    expect(html).toContain("Copy email");
+    expect(html).toContain("Copy Oliver&#x27;s email, oliver@example.edu");
     expect(html).toContain("oliver@example.edu");
   });
 
