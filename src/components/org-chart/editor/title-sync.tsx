@@ -68,11 +68,28 @@ export function TitleSync({
           Titles to sync
         </h2>
         <Badge variant="secondary">{list.length}</Badge>
+        {canSetTitles && list.length > 1 && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            disabled={busy !== null}
+            onClick={async () => {
+              setBusy("all");
+              try {
+                for (const { position, member } of list)
+                  await onSetMemberTitle(member.id, position.title.trim());
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            Update all
+          </Button>
+        )}
       </div>
-      <p className="text-muted-foreground text-sm">
-        These positions and the members&apos; titles in Settings &gt; Members don&apos;t match. Keep
-        either one.
-      </p>
+      <p className="text-muted-foreground text-sm">These titles differ. Keep either one.</p>
       <ul className="divide-border/70 flex flex-col divide-y">
         {list.map(({ position, member }) => (
           <li
@@ -82,7 +99,7 @@ export function TitleSync({
             <UserAvatar user={member} size="md" />
             <span className="min-w-0 flex-1">
               <b className="font-semibold">{member.name}</b>
-              <span className="text-muted-foreground block truncate">
+              <span className="text-muted-foreground block break-words">
                 Chart: {position.title}, member title: {member.title?.trim() || "none"}
               </span>
             </span>
@@ -91,7 +108,7 @@ export function TitleSync({
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={busy === member.id}
+                disabled={busy === member.id || busy === "all"}
                 onClick={async () => {
                   setBusy(member.id);
                   try {

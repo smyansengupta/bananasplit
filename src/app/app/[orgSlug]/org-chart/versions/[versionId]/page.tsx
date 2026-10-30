@@ -5,14 +5,13 @@ import { notFound } from "next/navigation";
 import { ChartList } from "@/components/org-chart/chart-list";
 import { RollbackButton } from "@/components/org-chart/rollback-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { FieldSelect } from "@/components/ui/field-select";
 import { can } from "@/lib/auth/permissions";
 import { diffCharts, type DiffChange, type DiffPosition } from "@/lib/org-chart/diff";
 import { personLabel, type ChartNodeDTO } from "@/lib/org-chart/types";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { listVersions, loadVersion, type VersionDetail } from "@/server/org-chart/service";
 import { planGate } from "@/server/billing/plan-gate";
+import { ComparePicker } from "./compare-picker";
 
 export const metadata: Metadata = { title: "Org chart version" };
 
@@ -152,24 +151,15 @@ export default async function VersionPage({
       </div>
 
       <section className="space-y-3 rounded-xl border p-4">
-        <form className="flex flex-wrap items-center gap-2" method="get">
-          <label htmlFor="compare" className="text-sm font-medium">
-            Compare with
-          </label>
-          <FieldSelect id="compare" name="compare" defaultValue={other?.version.id ?? ""} size="sm">
-            {versions
-              .filter((v) => v.id !== version.id)
-              .map((v) => (
-                <option key={v.id} value={v.id}>
-                  v{v.number}
-                  {v.isActive ? " (published)" : ` (${v.status.toLowerCase()})`}
-                </option>
-              ))}
-          </FieldSelect>
-          <Button type="submit" size="sm" variant="outline">
-            Compare
-          </Button>
-        </form>
+        <ComparePicker
+          value={other?.version.id ?? ""}
+          options={versions
+            .filter((v) => v.id !== version.id)
+            .map((v) => ({
+              id: v.id,
+              label: `v${v.number} (${v.isActive ? "published" : v.status.toLowerCase()})`,
+            }))}
+        />
         {other ? (
           changes.length === 0 ? (
             <p className="text-muted-foreground text-sm">

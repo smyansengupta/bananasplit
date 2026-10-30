@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toaster";
 import {
   Select,
   SelectContent,
@@ -68,9 +69,23 @@ export function TeamsEditor({
     setName("");
   }
 
+  /** Deletes a team (its positions go back to no team), with Undo. */
   function remove(id: string) {
+    const before = teams;
+    const members = positions.filter((p) => p.teamId === id).map((p) => p.id);
+    const name = teams.find((t) => t.id === id)?.name ?? "Team";
     onTeams(teams.filter((t) => t.id !== id));
-    for (const p of positions) if (p.teamId === id) onAssign(p.id, null);
+    for (const pid of members) onAssign(pid, null);
+    toast({
+      title: `${name} deleted`,
+      action: {
+        label: "Undo",
+        run: () => {
+          onTeams(before);
+          for (const pid of members) onAssign(pid, id);
+        },
+      },
+    });
   }
 
   const count = (id: string) => positions.filter((p) => p.teamId === id).length;

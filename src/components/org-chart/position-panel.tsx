@@ -1,11 +1,12 @@
 "use client";
 
-import { ExternalLink, UserPlus } from "@/components/icons";
+import { ArrowRight, Pencil, UserPlus } from "@/components/icons";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { loadOpenTasksAction } from "@/app/app/[orgSlug]/org-chart/actions";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -155,7 +156,7 @@ function PanelBody({
           className="text-primary inline-flex w-fit items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
         >
           View {node.user.name ?? "their"} profile
-          <ExternalLink className="size-3.5" aria-hidden="true" />
+          <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
       ) : variant === "placeholder" ? (
         <p className="text-muted-foreground text-sm">
@@ -268,9 +269,10 @@ function PanelBody({
         <button
           type="button"
           onClick={onEdit}
-          className="text-muted-foreground hover:text-foreground w-fit text-sm underline underline-offset-4"
+          className={buttonVariants({ variant: "outline", size: "sm", className: "w-fit" })}
         >
-          Edit this position in a draft
+          <Pencil aria-hidden="true" />
+          Edit
         </button>
       )}
     </div>
