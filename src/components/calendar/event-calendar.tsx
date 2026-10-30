@@ -13,7 +13,8 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { moveEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { loadEventForEdit, moveEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { toast } from "@/components/ui/toaster";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -144,7 +145,13 @@ export function EventCalendar({
   const askedShape = shapeFromParam(askedNew) ?? undefined;
   const [peek, setPeek] = useState<PeekAnchor | null>(null);
   const [dialog, setDialog] = useState<
-    | { mode: "create"; start: Date | null; allDay: boolean; shape?: MeetingShape }
+    | {
+        mode: "create";
+        start: Date | null;
+        end?: Date | null;
+        allDay: boolean;
+        shape?: MeetingShape;
+      }
     | { mode: "edit"; event: EventFormEvent }
     | null
   >(() => (askedNew ? { mode: "create", start: null, allDay: false, shape: askedShape } : null));
@@ -243,9 +250,9 @@ export function EventCalendar({
     [orgSlug, router],
   );
 
-  function openCreate(start: Date | null, allDay = false) {
+  function openCreate(start: Date | null, allDay = false, end: Date | null = null) {
     setPeek(null);
-    setDialog({ mode: "create", start, allDay });
+    setDialog({ mode: "create", start, end, allDay });
   }
 
   // The page header's New event (new-event-button.tsx) asks for a dialog.
@@ -267,13 +274,61 @@ export function EventCalendar({
     openCreate(Number.isNaN(at.getTime()) ? null : at, false);
   }
 
+  /**
+   * Edit opens the form right here, over the calendar, instead of going to
+   * the event's page: the grid carries a summary, so the whole event is
+   * loaded first (a moment), then the same form the page uses opens.
+   */
   function openEdit(item: CalendarItem) {
     setPeek(null);
-    // The grid carries a summary, not the whole record; the form dialog is
-    // opened from the event's own page for a full edit. Here we hand it the
-    // id and let it load nothing else: the summary fields are what a quick
-    // edit from the grid touches.
-    router.push(`/app/${orgSlug}/meetings/${item.id}?edit=1`);
+    startTransition(async () => {
+      const result = await loadEventForEdit(orgId, item.id);
+      if ("event" in result && result.event) setDialog({ mode: "edit", event: result.event });
+      else
+        toast({ title: ("error" in result && result.error) || "Couldn't open it", tone: "error" });
+    });
+  }
+
+  /**
+   * Saves a move or a resize, and offers Undo: a drag is easy to make by
+   * accident, so taking it back is one click.
+   */
+  function applyMove(
+    id: string,
+    times: { allDay: boolean; startsAt: string; endsAt: string },
+    before: { allDay: boolean; startsAt: string; endsAt: string },
+  ) {
+    setMoveError(null);
+    startTransition(async () => {
+      const result = await moveEvent(orgId, id, times);
+      if (result?.error) {
+        setMoveError(result.error);
+        return;
+      }
+      router.refresh();
+      toast({
+        title: "Moved",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const back = await moveEvent(orgId, id, before);
+            if (back?.error) return back.error;
+            router.refresh();
+          },
+        },
+      });
+    });
+  }
+
+  /** The week grid's drag or resize: new start and end, same day or another. */
+  function moveTimed(item: CalendarItem, startsAt: Date, endsAt: Date) {
+    if (item.task || item.allDay) return;
+    if (startsAt.toISOString() === item.start && endsAt.toISOString() === item.end) return;
+    applyMove(
+      item.id,
+      { allDay: false, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() },
+      { allDay: false, startsAt: item.start, endsAt: item.end },
+    );
   }
 
   /* ---------------------------------------------------------- drag to move
@@ -323,7 +378,9 @@ export function EventCalendar({
     const delta = Math.round(
       (Date.parse(`${dayKey}T00:00:00Z`) - Date.parse(`${firstDay}T00:00:00Z`)) / 86_400_000,
     );
-    setMoveError(null);
+    const before = item.allDay
+      ? { allDay: true, startsAt: item.start, endsAt: addDaysToKey(item.end, -1) }
+      : { allDay: false, startsAt: item.start, endsAt: item.end };
     const times = item.allDay
       ? {
           allDay: true,
@@ -336,11 +393,7 @@ export function EventCalendar({
           startsAt: shiftDays(new Date(item.start), delta).toISOString(),
           endsAt: shiftDays(new Date(item.end), delta).toISOString(),
         };
-    startTransition(async () => {
-      const result = await moveEvent(orgId, id, times);
-      if (result?.error) setMoveError(result.error);
-      else router.refresh();
-    });
+    applyMove(id, times, before);
   }
 
   const openItem = peek ? (items.find((i) => i.id === peek.id && !i.task) ?? null) : null;
@@ -565,6 +618,8 @@ export function EventCalendar({
             openId={peek?.id ?? null}
             onOpen={openPeek}
             showSync={canManage}
+            onMove={canManage ? moveTimed : undefined}
+            onCreate={canManage ? (start, end) => openCreate(start, false, end) : undefined}
           />
         )}
 
@@ -642,12 +697,28 @@ export function EventCalendar({
           onOpenChange={(open) => !open && setDialog(null)}
           event={null}
           defaultStart={dialog.start}
+          defaultEnd={dialog.end ?? null}
           defaultAllDay={dialog.allDay}
           defaultShape={dialog.shape}
           defaultReminderMinutes={defaultReminderMinutes}
           meetingTypes={meetingTypes}
           members={members}
           onSaved={() => setDialog(null)}
+        />
+      )}
+
+      {canManage && dialog?.mode === "edit" && (
+        <EventFormDialog
+          orgId={orgId}
+          timeZone={timeZone}
+          open
+          onOpenChange={(open) => !open && setDialog(null)}
+          event={dialog.event}
+          defaultReminderMinutes={defaultReminderMinutes}
+          meetingTypes={meetingTypes}
+          members={members}
+          onSaved={() => setDialog(null)}
+          onDeleted={() => setDialog(null)}
         />
       )}
     </div>

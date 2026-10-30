@@ -19,6 +19,7 @@ import { notifyUsers } from "@/server/notifications";
 import { notifyEventCancelled, scheduleEventReminders } from "@/server/rsvp/service";
 
 import { actionError } from "./action-result";
+import { getEventById } from "./queries";
 
 /**
  * Calendar Server Actions. Every write goes through the event service
@@ -612,6 +613,49 @@ export async function rsvpToEvent(
 ): Promise<ActionResult> {
   try {
     return await rsvpTx(organizationId, eventId, rsvp);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+const eventForEditTx = withOrgAction(async (ctx, eventId: string) => {
+  requirePermission(ctx, "events.write");
+  const e = await getEventById(ctx.db, ctx.organizationId, eventId, ctx.userId);
+  if (!e) return { error: "That event no longer exists." };
+  return {
+    event: {
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      startsAt: e.startsAt,
+      endsAt: e.endsAt,
+      allDay: e.allDay,
+      location: e.location,
+      locationDetails: e.locationDetails,
+      conferenceProvider: e.conferenceProvider,
+      conferenceUrl: e.conferenceUrl,
+      conferenceManaged: e.conferenceManaged,
+      kind: e.kind,
+      visibility: e.visibility,
+      hostUserId: e.hostUserId,
+      hostName: e.hostName,
+      rsvpUrl: e.rsvpUrl,
+      capacityFull: e.capacityFull,
+      featured: e.featured,
+      publicNote: e.publicNote,
+      stampSlot: e.stampSlot,
+      attendeeIds: e.attendees.map((a) => a.userId),
+      reminderMinutes: e.reminderMinutes,
+      meetingType: e.meetingType,
+      seriesId: e.seriesId,
+    },
+  };
+});
+
+/** The whole event, for editing it in place over the calendar (ADMIN+). */
+export async function loadEventForEdit(organizationId: string, eventId: string) {
+  try {
+    return await eventForEditTx(organizationId, eventId);
   } catch (error) {
     return actionError(error);
   }

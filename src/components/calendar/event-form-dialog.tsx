@@ -121,6 +121,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   event: EventFormEvent | null;
   defaultStart?: Date | null;
+  /** Where a stretch dragged out on the week grid ends (else an hour on). */
+  defaultEnd?: Date | null;
   defaultAllDay?: boolean;
   /**
    * The shape a new event starts as; the Event shape turns a public sign-up
@@ -194,13 +196,14 @@ function initialTimes(
   defaultStart: Date | null | undefined,
   allDay: boolean,
   timeZone: string,
+  defaultEnd?: Date | null,
 ) {
   if (event?.allDay) {
     const span = allDaySpan(event.startsAt, event.endsAt, timeZone);
     return { start: span.start, end: span.lastDay };
   }
   const start = event?.startsAt ?? defaultStart ?? nextClubHour(new Date());
-  const end = event?.endsAt ?? new Date(start.getTime() + 60 * 60 * 1000);
+  const end = event?.endsAt ?? defaultEnd ?? new Date(start.getTime() + 60 * 60 * 1000);
   return allDay
     ? { start: toDateInputValue(start), end: toDateInputValue(start) }
     : { start: toDateTimeLocalValue(start), end: toDateTimeLocalValue(end) };
@@ -234,6 +237,7 @@ function EventForm({
   defaultStart,
   defaultAllDay,
   defaultShape,
+  defaultEnd,
   noun = "event",
   defaultReminderMinutes = [...DEFAULT_REMINDER_MINUTES],
   meetingTypes = [],
@@ -262,6 +266,7 @@ function EventForm({
     defaultStart,
     event?.allDay ?? defaultAllDay ?? false,
     timeZone,
+    defaultEnd,
   );
   const [startValue, setStartValue] = useState(initial.start);
   const [endValue, setEndValue] = useState(initial.end);
