@@ -58,10 +58,6 @@ export default async function MyReimbursementsPage({
         requests={transactions.length}
         waiting={pending}
       />
-      <p className="text-muted-foreground -mt-2 max-w-prose text-sm">
-        Your own expense submissions and where each one is: hatched while it waits for approval or
-        payment, green once you&apos;re paid back.
-      </p>
       <TransactionTable
         orgId={org.id}
         transactions={transactions}
@@ -69,7 +65,7 @@ export default async function MyReimbursementsPage({
         categories={categories}
         isFinance={isFinance}
         currentUserId={user.id}
-        emptyDescription="Nothing yet. Use “Request a reimbursement” to be paid back for something you bought for the organization."
+        emptyDescription="No requests yet"
       />
     </div>
   );

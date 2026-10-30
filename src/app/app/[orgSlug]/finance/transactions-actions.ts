@@ -68,6 +68,15 @@ const transactionInputSchema = z.object({
   paymentMethod: z.string().max(100).nullable().optional(),
   eventId: z.string().nullable().optional(),
   taskId: z.string().nullable().optional(),
+  /**
+   * An expense is either a REQUEST (someone paid and wants it back: it goes
+   * straight to the treasurer, SUBMITTED, unless `draft`) or a RECORD (the
+   * club paid: it counts at once, NOT_APPLICABLE). Members can only request;
+   * left out, a treasurer records and a member requests.
+   */
+  purpose: z.enum(["request", "record"]).optional(),
+  /** Keep a request to yourself for now instead of sending it. */
+  draft: z.boolean().optional(),
 });
 
 /**
@@ -152,10 +161,7 @@ export const createTransaction = financeAction(
           select: { id: true },
         });
         if (!active) {
-          return {
-            error:
-              "Your treasurer hasn't set up the budget yet, so requests can't be filed. Ask them to open Finance once.",
-          };
+          return { error: "Finance isn't set up yet. Ask your treasurer to open Finance once." };
         }
         periodId = active.id;
       }
@@ -172,6 +178,18 @@ export const createTransaction = financeAction(
     const linkError = await assertLinksBelongToOrg(ctx, data);
     if (linkError) return { error: linkError };
 
+    // A treasurer's own expense counts the moment it's logged (the club
+    // paid it); asking to be paid back is the request flow. Before this,
+    // every expense started as a draft that the totals left out.
+    const finance = can(ctx, "finance.manage");
+    const purpose = finance && data.purpose !== "request" ? "record" : "request";
+    const status =
+      data.kind !== TransactionKind.EXPENSE || purpose === "record"
+        ? "NOT_APPLICABLE"
+        : data.draft
+          ? "DRAFT"
+          : "SUBMITTED";
+
     const created = await ctx.db.transaction.create({
       data: {
         organizationId: ctx.organizationId,
@@ -187,7 +205,7 @@ export const createTransaction = financeAction(
         eventId: data.eventId ?? null,
         taskId: data.taskId ?? null,
         submittedById: ctx.userId,
-        status: data.kind === TransactionKind.EXPENSE ? "DRAFT" : "NOT_APPLICABLE",
+        status,
       },
     });
     await writeFinanceAuditLog(ctx.db, {
@@ -205,7 +223,9 @@ export const createTransaction = financeAction(
 // periods), so it is not accepted from the client at all: it used to be
 // read only for the category check and never written, which let a foreign
 // period vouch for a foreign category (0A Fix 2). Unknown keys are stripped.
-const updateInputSchema = transactionInputSchema.omit({ budgetPeriodId: true }).partial();
+const updateInputSchema = transactionInputSchema
+  .omit({ budgetPeriodId: true, purpose: true, draft: true })
+  .partial();
 
 export const updateTransaction = financeAction(
   async (ctx, transactionId: string, input: unknown): Promise<ActionResult> => {
@@ -376,6 +396,8 @@ export const restoreTransaction = financeAction(
 );
 
 const TRANSITION_ACTIONS: Record<string, string> = {
+  APPROVE_AND_PAY: "EXPENSE_REIMBURSE",
+  RESUBMIT: "EXPENSE_SUBMIT",
   SUBMIT: "EXPENSE_SUBMIT",
   WITHDRAW: "EXPENSE_WITHDRAW",
   APPROVE: "EXPENSE_APPROVE",
@@ -388,7 +410,17 @@ async function applyExpenseTransition(
   ctx: OrgContext,
   transactionId: string,
   transition: ExpenseTransition,
-  extra: { rejectionReason?: string; reimbursedMethod?: string } = {},
+  extra: {
+    rejectionReason?: string;
+    reimbursedMethod?: string;
+    /** RESUBMIT: the submitter's fixes, written with the status change. */
+    edits?: {
+      amountCents?: number;
+      description?: string;
+      categoryId?: string | null;
+      occurredAt?: Date;
+    };
+  } = {},
 ): Promise<ActionResult> {
   const existing = await ctx.db.transaction.findFirst({
     where: { id: transactionId, organizationId: ctx.organizationId, kind: TransactionKind.EXPENSE },
@@ -411,16 +443,21 @@ async function applyExpenseTransition(
   });
   if ("error" in result) return { error: result.error };
 
+  const approves = transition === "APPROVE" || transition === "APPROVE_AND_PAY";
+  const pays = transition === "REIMBURSE" || transition === "APPROVE_AND_PAY";
+  const resubmits = transition === "RESUBMIT";
+  const now = new Date();
   const row = await ctx.db.transaction.update({
     where: { id: transactionId },
     data: {
       status: result.status,
-      approvedById: transition === "APPROVE" ? ctx.userId : undefined,
-      approvedAt: transition === "APPROVE" ? new Date() : undefined,
-      rejectionReason: transition === "REJECT" ? extra.rejectionReason!.trim() : undefined,
-      reimbursedAt: transition === "REIMBURSE" ? new Date() : undefined,
-      reimbursementMethod:
-        transition === "REIMBURSE" ? (extra.reimbursedMethod?.trim() ?? null) : undefined,
+      approvedById: approves ? ctx.userId : resubmits ? null : undefined,
+      approvedAt: approves ? now : resubmits ? null : undefined,
+      rejectionReason:
+        transition === "REJECT" ? extra.rejectionReason!.trim() : resubmits ? null : undefined,
+      reimbursedAt: pays ? now : undefined,
+      reimbursementMethod: pays ? extra.reimbursedMethod?.trim() || null : undefined,
+      ...(extra.edits ?? {}),
     },
   });
   await writeFinanceAuditLog(ctx.db, {
@@ -469,8 +506,137 @@ export const reimburseExpense = financeAction(async (ctx, transactionId: string,
   applyExpenseTransition(ctx, transactionId, "REIMBURSE", { reimbursedMethod: method }),
 );
 
+/** Approve and mark paid at once, with how it was paid. */
+export const approveAndPayExpense = financeAction(
+  async (ctx, transactionId: string, method: string) =>
+    applyExpenseTransition(ctx, transactionId, "APPROVE_AND_PAY", { reimbursedMethod: method }),
+);
+
+const resubmitSchema = z.object({
+  amountCents: z.number().int().positive("Amount must be greater than zero.").optional(),
+  description: z.string().trim().min(1, "Description is required").max(500).optional(),
+  categoryId: z.string().nullable().optional(),
+  occurredAt: z.string().optional(),
+});
+
+/** The submitter fixes a rejected request and sends it to the treasurer again. */
+export const resubmitExpense = financeAction(
+  async (ctx, transactionId: string, input: unknown): Promise<ActionResult> => {
+    const parsed = resubmitSchema.safeParse(input ?? {});
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    const existing = await ctx.db.transaction.findFirst({
+      where: { id: transactionId, organizationId: ctx.organizationId },
+      select: { budgetPeriodId: true },
+    });
+    if (!existing) return { error: "Expense not found." };
+    if (parsed.data.categoryId) {
+      const categoryError = await assertCategoryBelongsToPeriod(
+        ctx,
+        parsed.data.categoryId,
+        existing.budgetPeriodId,
+      );
+      if (categoryError) return { error: categoryError };
+    }
+    return applyExpenseTransition(ctx, transactionId, "RESUBMIT", {
+      edits: {
+        amountCents: parsed.data.amountCents,
+        description: parsed.data.description,
+        categoryId: parsed.data.categoryId,
+        occurredAt: parsed.data.occurredAt ? new Date(parsed.data.occurredAt) : undefined,
+      },
+    });
+  },
+);
+
+/** What a bulk action did: how many went through, and the first reason one didn't. */
+export interface BulkResult {
+  done: number;
+  failed: number;
+  error?: string;
+}
+
+const MAX_BULK = 200;
+
+async function eachOf(
+  ids: readonly string[],
+  run: (id: string) => Promise<ActionResult>,
+): Promise<BulkResult> {
+  const unique = [...new Set(ids)].slice(0, MAX_BULK);
+  let done = 0;
+  let failed = 0;
+  let error: string | undefined;
+  for (const id of unique) {
+    const result = await run(id);
+    if (result.error) {
+      failed += 1;
+      error ??= result.error;
+    } else done += 1;
+  }
+  return { done, failed, error };
+}
+
+/**
+ * The treasurer's queue in one go. Each row runs the same checks as one at
+ * a time (your own requests are skipped, not approved); a row that can't
+ * move is counted, not fatal.
+ */
+export const approveExpenses = financeAction(
+  async (ctx, transactionIds: string[]): Promise<BulkResult> =>
+    eachOf(transactionIds, (id) => applyExpenseTransition(ctx, id, "APPROVE")),
+);
+
+/** Mark several paid. Submitted ones are approved and paid in the same step. */
+export const payExpenses = financeAction(
+  async (ctx, transactionIds: string[], method: string): Promise<BulkResult> =>
+    eachOf(transactionIds, async (id) => {
+      const row = await ctx.db.transaction.findFirst({
+        where: { id, organizationId: ctx.organizationId },
+        select: { status: true },
+      });
+      if (!row) return { error: "Expense not found." };
+      return applyExpenseTransition(
+        ctx,
+        id,
+        row.status === "SUBMITTED" ? "APPROVE_AND_PAY" : "REIMBURSE",
+        { reimbursedMethod: method },
+      );
+    }),
+);
+
+/** Reconcile several against one statement (the reference is optional). */
+export const reconcileTransactions = financeAction(
+  async (ctx, transactionIds: string[], statementRef?: string): Promise<BulkResult> => {
+    requirePermission(ctx, "finance.manage");
+    return eachOf(transactionIds, async (id) => {
+      const existing = await ctx.db.transaction.findFirst({
+        where: { id, organizationId: ctx.organizationId },
+        select: { reconciledAt: true, voidedAt: true },
+      });
+      if (!existing) return { error: "Transaction not found." };
+      if (existing.reconciledAt) return {};
+      if (existing.voidedAt) return { error: "Voided transactions can't be reconciled." };
+      const updated = await ctx.db.transaction.update({
+        where: { id },
+        data: {
+          reconciledAt: new Date(),
+          reconciledById: ctx.userId,
+          statementRef: statementRef?.trim() || null,
+        },
+      });
+      await writeFinanceAuditLog(ctx.db, {
+        organizationId: ctx.organizationId,
+        transactionId: id,
+        action: "RECONCILE",
+        before: { reconciledAt: null },
+        after: { reconciledAt: updated.reconciledAt, statementRef: updated.statementRef },
+      });
+      return { transactionId: id };
+    });
+  },
+);
+
 export const reconcileTransaction = financeAction(
-  async (ctx, transactionId: string, statementRef: string): Promise<ActionResult> => {
+  async (ctx, transactionId: string, statementRef?: string): Promise<ActionResult> => {
     requirePermission(ctx, "finance.manage");
 
     const existing = await ctx.db.transaction.findFirst({
@@ -500,12 +666,8 @@ export const reconcileTransaction = financeAction(
 );
 
 export const unlockTransaction = financeAction(
-  async (ctx, transactionId: string, reason: string): Promise<ActionResult> => {
+  async (ctx, transactionId: string, reason?: string): Promise<ActionResult> => {
     requirePermission(ctx, "finance.manage");
-
-    if (!reason?.trim()) {
-      return { error: "A reason is required to unlock a reconciled transaction." };
-    }
 
     const existing = await ctx.db.transaction.findFirst({
       where: { id: transactionId, organizationId: ctx.organizationId },
@@ -522,7 +684,7 @@ export const unlockTransaction = financeAction(
       transactionId,
       action: "UNLOCK",
       before: { reconciledAt: existing.reconciledAt, statementRef: existing.statementRef },
-      after: { reconciledAt: updated.reconciledAt, reason: reason.trim() },
+      after: { reconciledAt: updated.reconciledAt, reason: reason?.trim() || null },
     });
 
     return { transactionId };

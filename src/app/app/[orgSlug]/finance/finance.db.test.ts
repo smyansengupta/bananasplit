@@ -35,6 +35,10 @@ import {
   createTransaction,
   reimburseExpense,
   submitExpense,
+  approveAndPayExpense,
+  resubmitExpense,
+  rejectExpense,
+  payExpenses,
 } from "./transactions-actions";
 import { getCategoryOptions } from "./queries";
 
@@ -167,6 +171,8 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
       amountCents: 4250,
       description: "Pizza",
       occurredAt: "2026-09-01T00:00:00.000Z",
+      // Kept as a draft to walk the whole flow; a request is normally sent at once.
+      draft: true,
     });
     expect(error).toBeUndefined();
     expect(await submitExpense(orgId, transactionId!)).toEqual({ transactionId });
@@ -219,9 +225,13 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
       amountCents: 1000,
       description: "Own expense",
       occurredAt: "2026-09-02T00:00:00.000Z",
+      // A treasurer asking to be paid back, not recording club spending.
+      purpose: "request",
     });
-    await submitExpense(orgId, transactionId!);
     expect((await approveExpense(orgId, transactionId!)).error).toMatch(/your own expense/);
+    expect((await approveAndPayExpense(orgId, transactionId!, "Venmo")).error).toMatch(
+      /your own expense/,
+    );
 
     // Straight to the database as the submitter: transaction_guard refuses.
     await expect(
@@ -438,5 +448,113 @@ describe.skipIf(!cbc)("finance on the RLS path (throwaway org)", () => {
     await expect(
       createCategory(seed.id, seed.periodId, { name: "x", allocatedCents: 0 }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("requests go straight to the treasurer; approve and pay is one step; a rejection can be fixed and sent again", async () => {
+    as(people.member);
+    const sent = await createTransaction(orgId, {
+      budgetPeriodId: periodId,
+      direction: "OUT",
+      kind: "EXPENSE",
+      amountCents: 1299,
+      description: "Tape",
+      occurredAt: "2026-09-03T00:00:00.000Z",
+    });
+    expect(sent.error).toBeUndefined();
+    const fixMe = await createTransaction(orgId, {
+      budgetPeriodId: periodId,
+      direction: "OUT",
+      kind: "EXPENSE",
+      amountCents: 500,
+      description: "Snacks",
+      occurredAt: "2026-09-03T00:00:00.000Z",
+    });
+    const status = (id: string) =>
+      withSystemOrgTx(orgId, ({ db }) =>
+        db.transaction.findUniqueOrThrow({
+          where: { id },
+          select: { status: true, approvedById: true, rejectionReason: true, amountCents: true },
+        }),
+      );
+    expect((await status(sent.transactionId!)).status).toBe("SUBMITTED");
+
+    as(people.treasurer);
+    expect(await approveAndPayExpense(orgId, sent.transactionId!, "Venmo")).toEqual({
+      transactionId: sent.transactionId,
+    });
+    const paid = await status(sent.transactionId!);
+    expect(paid.status).toBe("REIMBURSED");
+    expect(paid.approvedById).toBe(people.treasurer.id);
+
+    expect(await rejectExpense(orgId, fixMe.transactionId!, "Need the receipt")).toEqual({
+      transactionId: fixMe.transactionId,
+    });
+    as(people.member2);
+    expect((await resubmitExpense(orgId, fixMe.transactionId!, {})).error).toBeDefined();
+    as(people.member);
+    expect(await resubmitExpense(orgId, fixMe.transactionId!, { amountCents: 650 })).toEqual({
+      transactionId: fixMe.transactionId,
+    });
+    const again = await status(fixMe.transactionId!);
+    expect(again).toMatchObject({ status: "SUBMITTED", rejectionReason: null, amountCents: 650 });
+
+    // Bulk pay: submitted ones are approved and paid together.
+    as(people.treasurer);
+    expect(await payExpenses(orgId, [fixMe.transactionId!], "Zelle")).toEqual({
+      done: 1,
+      failed: 0,
+    });
+    expect((await status(fixMe.transactionId!)).status).toBe("REIMBURSED");
+  });
+
+  it("a treasurer's own spending counts at once; a new period copies the budget and carries the balance", async () => {
+    as(people.treasurer);
+    const spent = await createTransaction(orgId, {
+      budgetPeriodId: periodId,
+      direction: "OUT",
+      kind: "EXPENSE",
+      amountCents: 2000,
+      description: "Printer paper",
+      occurredAt: "2026-09-04T00:00:00.000Z",
+    });
+    const row = await withSystemOrgTx(orgId, ({ db }) =>
+      db.transaction.findUniqueOrThrow({ where: { id: spent.transactionId! } }),
+    );
+    expect(row.status).toBe("NOT_APPLICABLE");
+
+    await createCategory(orgId, periodId, { name: "Banners", allocatedCents: 7_500 });
+    const closing = await withSystemOrgTx(orgId, async ({ db }) => {
+      const rows = await db.transaction.findMany({
+        where: {
+          organizationId: orgId,
+          budgetPeriodId: periodId,
+          voidedAt: null,
+          status: { notIn: ["DRAFT", "REJECTED"] },
+        },
+        select: { direction: true, amountCents: true },
+      });
+      return rows.reduce((n, t) => n + (t.direction === "IN" ? t.amountCents : -t.amountCents), 0);
+    });
+    const next = await createBudgetPeriod(orgId, {
+      label: "FY 2027-28",
+      startsOn: "2027-07-01",
+      endsOn: "2028-06-30",
+    });
+    expect(next.error).toBeUndefined();
+    const carried = await withSystemOrgTx(orgId, async ({ db }) => ({
+      banners: await db.budgetCategory.findFirst({
+        where: { budgetPeriodId: next.periodId!, name: "Banners" },
+      }),
+      starting: await db.transaction.findMany({
+        where: { budgetPeriodId: next.periodId!, kind: "ADJUSTMENT" },
+      }),
+    }));
+    expect(carried.banners?.allocatedCents).toBe(7_500);
+    if (closing === 0) expect(carried.starting).toHaveLength(0);
+    else {
+      expect(carried.starting).toHaveLength(1);
+      expect(carried.starting[0]!.amountCents).toBe(Math.abs(closing));
+      expect(carried.starting[0]!.direction).toBe(closing > 0 ? "IN" : "OUT");
+    }
   });
 });

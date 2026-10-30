@@ -10,11 +10,11 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { countAwaitingApproval, getCategoryOptions, getOrgPeriods } from "./queries";
 
 /**
- * Every finance page's header: the title and a live line (the budget year,
- * and how many requests wait for review); Add transaction (Request a
- * reimbursement for a member) with Import and the setup guide in its "…"
- * menu; and, for owners, admins and treasurers, the pages they use day to day as
- * tabs. A member only has My reimbursements, so they get no tabs.
+ * Every finance page's header: the title and, for the treasurer, one short
+ * line (the budget year and how many requests wait); Add transaction
+ * (Request a reimbursement for a member) with the other entry, Import and
+ * Setup in its chevron; and, for owners, admins and treasurers, the pages as
+ * tabs. A member only has their own requests, so they get no tabs.
  */
 export default async function FinanceLayout({
   params,
@@ -39,14 +39,12 @@ export default async function FinanceLayout({
   }).catch(handleAuthErrorInPage);
   const base = `/app/${orgSlug}/finance`;
   const active = periods.find((p) => p.isActive);
+  // One short line, only when it says something: the budget year, and the
+  // requests waiting (the sidebar carries the same count).
   const summary = isFinance
-    ? [
-        active?.label ?? "No budget year yet",
-        toReview > 0
-          ? `${toReview} ${toReview === 1 ? "request" : "requests"} to review`
-          : "nothing to review",
-      ].join(" · ")
-    : "Your expenses, and what the organization owes you";
+    ? [active?.label, toReview > 0 && `${toReview} to review`].filter(Boolean).join(", ") ||
+      undefined
+    : undefined;
 
   return (
     <div className="space-y-7.5">
@@ -81,7 +79,7 @@ export default async function FinanceLayout({
                 ...(spaceIncludes(org, "sponsorships")
                   ? [{ label: "Sponsorships", href: `${base}/sponsorships` }]
                   : []),
-                { label: "My reimbursements", href: `${base}/my-reimbursements` },
+                { label: "My requests", href: `${base}/my-reimbursements` },
               ]}
             />
           ) : undefined

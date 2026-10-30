@@ -91,7 +91,10 @@ export async function loadSetupState(
           cents: starting.direction === "IN" ? starting.amountCents : -starting.amountCents,
           asOf: toDateValue(starting.occurredAt),
         }
-      : null,
+      : period.carriedInCents !== 0
+        ? // Carried over from the last period: already the starting balance.
+          { cents: period.carriedInCents, asOf: toDateValue(period.startsOn) }
+        : null,
     transactionCount,
     categoryCount: categories.length,
     budgeted: categories.some((c) => c.allocatedCents > 0),

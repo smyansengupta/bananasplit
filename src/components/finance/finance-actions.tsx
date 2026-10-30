@@ -58,10 +58,6 @@ export function FinanceActions({
       >
         {isFinance && (
           <>
-            <DropdownMenuItem onSelect={() => setOpen(primary)}>
-              <PrimaryIcon className="size-4" aria-hidden="true" />
-              {CREATE[primary].label}
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setOpen(other)}>
               <OtherIcon className="size-4" aria-hidden="true" />
               {CREATE[other].label}
@@ -70,13 +66,13 @@ export function FinanceActions({
             <DropdownMenuItem asChild>
               <Link href={`${base}/import`}>
                 <FileSpreadsheet className="size-4" aria-hidden="true" />
-                Import a spreadsheet
+                Import
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href={`${base}/setup`}>
                 <ListChecks className="size-4" aria-hidden="true" />
-                Setup guide
+                Setup
               </Link>
             </DropdownMenuItem>
           </>
