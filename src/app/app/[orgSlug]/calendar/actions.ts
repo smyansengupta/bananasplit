@@ -114,7 +114,7 @@ async function checkAttendees(
 }
 
 function eventLink(slug: string, eventId: string): string {
-  return `/app/${slug}/calendar/${eventId}`;
+  return `/app/${slug}/meetings/${eventId}`;
 }
 
 async function notify(

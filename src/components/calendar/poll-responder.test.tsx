@@ -201,7 +201,7 @@ describe("PollResponder: everyone", () => {
       fireEvent.click(within(dialog).getByRole("button", { name: "Schedule" }));
     });
     expect(finalizeMock).toHaveBeenCalledWith("org_1", "poll_1", "d1a");
-    expect(pushMock).toHaveBeenCalledWith("/app/rc/calendar/evt_1");
+    expect(pushMock).toHaveBeenCalledWith("/app/rc/meetings/evt_1");
   });
 
   it("offers no painting once the poll has closed", () => {

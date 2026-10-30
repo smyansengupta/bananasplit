@@ -266,7 +266,7 @@ describe("the Meetings list: meetings that are over", () => {
 
     expect(found.map((c) => (c.event as { id: string }).id)).toEqual(["soon"]);
     expect(found[0]?.past).toBe(false);
-    const past = findPast(await render());
+    const past = findPast(await render({ view: "past" }));
     expect(past.map((e) => e.id)).toEqual(["old"]);
   });
 });
@@ -397,7 +397,7 @@ describe("the Meetings list: the next one and the wide one", () => {
     ]);
     mocks.notes.mockResolvedValueOnce([{ id: "n1", eventId: "newer" }] as never);
 
-    const props = findPastProps(await render());
+    const props = findPastProps(await render({ view: "past" }));
 
     expect(props.meetings.map((e) => e.id)).toEqual(["newer", "older"]);
     const facts = props.facts(props.meetings[0]!);

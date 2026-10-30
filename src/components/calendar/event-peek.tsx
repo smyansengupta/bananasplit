@@ -195,7 +195,7 @@ export function EventPeek({
         {/* One solid action (the event's page: details, RSVPs, notes) and,
             for whoever runs it, a plainly labelled edit beside it. */}
         <Button size="sm" className="flex-1" asChild>
-          <Link href={`/app/${orgSlug}/calendar/${item.id}`}>
+          <Link href={`/app/${orgSlug}/meetings/${item.id}`}>
             Open
             <ArrowRight aria-hidden className="size-3.5" />
           </Link>

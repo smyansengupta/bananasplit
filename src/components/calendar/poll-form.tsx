@@ -43,18 +43,21 @@ export function PollForm({
   orgId,
   orgSlug,
   defaultTimezone,
+  defaultTitle = "",
 }: {
   orgId: string;
   orgSlug: string;
   /** The org's timezone; the viewer's own is the fallback. */
   defaultTimezone?: string;
+  /** From the meeting form's "Don't know yet, find a time": its title carries over. */
+  defaultTitle?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const deviceZone = useViewerTimeZone(defaultTimezone ?? "UTC");
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState("");
   const [dates, setDates] = useState<Date[]>([]);
   const [dailyStart, setDailyStart] = useState("09:00");
@@ -162,13 +165,10 @@ export function PollForm({
       <div className="space-y-3">
         <BackLink href={`/app/${orgSlug}/calendar/find-a-time`} label="Find a time" />
         {/* Named as the sidebar section and the command palette name it. */}
-        <PageHeader
-          title="Find a time"
-          description="Offer some days and hours; people mark when they're free, and an admin schedules the best time."
-        />
+        <PageHeader title="Find a time" />
       </div>
 
-      <Section title="What it's for">
+      <Section title="About">
         <div className="grid gap-1.5">
           <Label htmlFor="poll-title">Title</Label>
           <Input

@@ -445,7 +445,7 @@ describe("attendees", () => {
       db,
       ORG,
       ["u_a"],
-      expect.objectContaining({ type: "EVENT_INVITE", linkUrl: "/app/cbc/calendar/evt_1" }),
+      expect.objectContaining({ type: "EVENT_INVITE", linkUrl: "/app/cbc/meetings/evt_1" }),
     );
   });
 

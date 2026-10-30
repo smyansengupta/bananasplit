@@ -196,7 +196,7 @@ export function SyncPanel({
                   <ul className="space-y-1">
                     {status.failures.map((f) => (
                       <li key={f.id}>
-                        <Link className="underline" href={`/app/${orgSlug}/calendar/${f.id}`}>
+                        <Link className="underline" href={`/app/${orgSlug}/meetings/${f.id}`}>
                           {f.title}
                         </Link>
                         {f.error && <span className="text-muted-foreground">: {f.error}</span>}

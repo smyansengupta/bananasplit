@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EventFormEvent } from "./event-form-dialog";
@@ -154,11 +154,13 @@ describe("EventFormDialog: the shape of a new meeting", () => {
     open();
 
     expect(screen.getByRole("radiogroup", { name: "Kind of meeting" })).toBeTruthy();
-    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(
+      within(screen.getByRole("radiogroup", { name: "Kind of meeting" })).getAllByRole("radio"),
+    ).toHaveLength(3);
     expect(chosen()).toEqual([false, true, false]);
-    expect(screen.getByText("A Google Meet, Zoom or Teams call")).toBeTruthy();
-    expect(screen.getByText("A room or an address")).toBeTruthy();
-    expect(screen.getByText("Either of those, with a public sign-up page")).toBeTruthy();
+    expect(screen.getByText("Video call")).toBeTruthy();
+    expect(screen.getByText("A place")).toBeTruthy();
+    expect(screen.getByText("Plus a sign-up page")).toBeTruthy();
   });
 
   it("is the first thing in the form, ahead of the title", () => {

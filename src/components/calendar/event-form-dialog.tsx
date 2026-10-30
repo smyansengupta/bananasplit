@@ -13,10 +13,16 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { useId, useRef, useState, useTransition } from "react";
 
-import { createEvent, deleteEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import {
+  createEvent,
+  deleteEvent,
+  restoreEvents,
+  updateEvent,
+} from "@/app/app/[orgSlug]/calendar/actions";
 import { turnOnRsvpPage } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
 import { Button } from "@/components/ui/button";
-import { useConfirm } from "@/components/ui/confirm-dialog";
+import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
+import { toast } from "@/components/ui/toaster";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -38,7 +44,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConferenceProvider, EventKind, EventVisibility } from "@/generated/prisma/enums";
-import { allDaySpan } from "@/lib/calendar/dates";
+import { addDaysToKey, allDaySpan } from "@/lib/calendar/dates";
 import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
 import { DEFAULT_REMINDER_MINUTES, sameReminderOffsets } from "@/lib/meetings/reminders";
 import { SHAPES, SHAPE_META, shapeFields, type MeetingShape } from "@/lib/meetings/shape";
@@ -111,6 +117,8 @@ export interface EventFormEvent {
   reminderMinutes: number[];
   /** One of the org's meeting types, by name (left out: none). */
   meetingType?: string | null;
+  /** A repeating meeting's series (Event.seriesId): edits and deletes ask which weeks. */
+  seriesId?: string | null;
 }
 
 interface Props {
@@ -244,7 +252,6 @@ function EventForm({
 }: Omit<Props, "open">) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [confirmEl, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const moreId = useId();
 
@@ -266,6 +273,18 @@ function EventForm({
   );
   const [startValue, setStartValue] = useState(initial.start);
   const [endValue, setEndValue] = useState(initial.end);
+  // A new meeting can skip the date: "Find a time" goes on to offer times,
+  // and the time people pick becomes the meeting.
+  const [whenMode, setWhenMode] = useState<"pick" | "find">("pick");
+  // A new one can repeat weekly, as a linked series, through a last day
+  // (eight weeks on, to start with).
+  const [repeats, setRepeats] = useState(false);
+  const [repeatUntil, setRepeatUntil] = useState(() =>
+    /^\d{4}-\d{2}-\d{2}/.test(initial.start) ? addDaysToKey(initial.start.slice(0, 10), 56) : "",
+  );
+  // An edit or a delete on a repeating meeting: this week, or the ones after too.
+  const [scope, setScope] = useState<"one" | "following">("one");
+  const inSeries = Boolean(event?.seriesId);
   const [shape, setShape] = useState<MeetingShape>(defaultShape ?? "in-person");
   const [location, setLocation] = useState(event?.location ?? "");
   const [locationDetails, setLocationDetails] = useState(event?.locationDetails ?? "");
@@ -391,6 +410,8 @@ function EventForm({
       attendeeIds,
       reminderMinutes,
       notifyAttendees,
+      ...(!event && repeats && repeatUntil ? { repeatWeeklyUntil: repeatUntil } : {}),
+      ...(inSeries ? { scope } : {}),
     };
   }
 
@@ -398,6 +419,14 @@ function EventForm({
     submitEvent.preventDefault();
     if (isPending || !title.trim()) return;
     setError(null);
+    // No date yet: offer times instead, with the title carried over.
+    if (!event && whenMode === "find" && params.orgSlug) {
+      onOpenChange(false);
+      router.push(
+        `/app/${params.orgSlug}/calendar/find-a-time/new?title=${encodeURIComponent(title.trim())}`,
+      );
+      return;
+    }
     if (
       !allDay &&
       (Number.isNaN(new Date(startValue).getTime()) || Number.isNaN(new Date(endValue).getTime()))
@@ -441,20 +470,38 @@ function EventForm({
     });
   }
 
-  async function handleDelete() {
+  /**
+   * Deletes at once and offers Undo, instead of asking first. Nobody is
+   * told it was cancelled until the Undo window has passed (the server
+   * holds the notices), so Undo really does take it back.
+   */
+  function handleDelete() {
     if (!event) return;
-    const ok = await confirm({
-      title: `Delete “${event.title}”?`,
-      description: notifyAttendees
-        ? "Invited members are told it was cancelled."
-        : "Invited members won't be notified.",
-      confirmLabel: "Delete event",
-      run: async () => (await deleteEvent(orgId, event.id, { notifyAttendees }))?.error,
+    startTransition(async () => {
+      const result = await deleteEvent(orgId, event.id, {
+        notifyAttendees,
+        scope: inSeries ? scope : "one",
+      });
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      const ids = result.deletedIds ?? [event.id];
+      onOpenChange(false);
+      onDeleted?.();
+      router.refresh();
+      toast({
+        title: ids.length > 1 ? `Deleted ${ids.length} meetings` : "Deleted",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const back = await restoreEvents(orgId, ids);
+            if (back.error) return back.error;
+            router.refresh();
+          },
+        },
+      });
     });
-    if (!ok) return;
-    onOpenChange(false);
-    onDeleted?.();
-    router.refresh();
   }
 
   /** Cmd/Ctrl+Enter saves from anywhere, including the description. */
@@ -576,48 +623,102 @@ function EventForm({
         <fieldset className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <legend className="text-sm font-medium">When</legend>
-            <div className="flex items-center gap-2">
-              <Switch id="event-all-day" checked={allDay} onCheckedChange={toggleAllDay} />
-              <Label htmlFor="event-all-day" className="text-sm font-normal">
-                All-day
-              </Label>
-            </div>
+            {whenMode === "pick" && (
+              <div className="flex items-center gap-2">
+                <Switch id="event-all-day" checked={allDay} onCheckedChange={toggleAllDay} />
+                <Label htmlFor="event-all-day" className="text-sm font-normal">
+                  All-day
+                </Label>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="event-start">{allDay ? "First day" : "Starts"}</Label>
-              <Input
-                id="event-start"
-                type={allDay ? "date" : "datetime-local"}
-                value={startValue}
-                onChange={(e) => changeStart(e.target.value)}
-                required
-              />
+          {!event && (
+            <div role="radiogroup" aria-label="When" className={segmentedTrack}>
+              {(
+                [
+                  ["pick", "Pick a time"],
+                  ["find", "Don't know yet, find a time"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={whenMode === value}
+                  onClick={() => setWhenMode(value)}
+                  className={segmentedItem(whenMode === value)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <div className="grid gap-1.5">
-              <div className="flex items-baseline justify-between gap-2">
-                <Label htmlFor="event-end">{allDay ? "Last day" : "Ends"}</Label>
-                {!allDay && (
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    {durationLabel(startValue, endValue)}
-                  </span>
-                )}
+          )}
+
+          {whenMode === "find" ? (
+            <p className="text-muted-foreground text-sm">
+              Next you offer days and hours. The time people pick becomes this meeting.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="event-start">{allDay ? "First day" : "Starts"}</Label>
+                  <Input
+                    id="event-start"
+                    type={allDay ? "date" : "datetime-local"}
+                    value={startValue}
+                    onChange={(e) => changeStart(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label htmlFor="event-end">{allDay ? "Last day" : "Ends"}</Label>
+                    {!allDay && (
+                      <span className="text-muted-foreground text-xs tabular-nums">
+                        {durationLabel(startValue, endValue)}
+                      </span>
+                    )}
+                  </div>
+                  <Input
+                    id="event-end"
+                    type={allDay ? "date" : "datetime-local"}
+                    value={endValue}
+                    onChange={(e) => setEndValue(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-              <Input
-                id="event-end"
-                type={allDay ? "date" : "datetime-local"}
-                value={endValue}
-                onChange={(e) => setEndValue(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            {allDay
-              ? `All-day events are whole days in ${timeZone}.`
-              : "Times are in your own timezone."}
-          </p>
+              {allDay && <p className="text-muted-foreground text-xs">Whole days in {timeZone}.</p>}
+
+              {!event && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="flex items-center gap-2">
+                    <Switch id="event-repeats" checked={repeats} onCheckedChange={setRepeats} />
+                    <Label htmlFor="event-repeats" className="text-sm font-normal">
+                      Repeats weekly
+                    </Label>
+                  </div>
+                  {repeats && (
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="event-repeat-until" className="text-sm font-normal">
+                        until
+                      </Label>
+                      <Input
+                        id="event-repeat-until"
+                        type="date"
+                        value={repeatUntil}
+                        min={startValue.slice(0, 10)}
+                        onChange={(e) => setRepeatUntil(e.target.value)}
+                        className="h-9 w-auto"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </fieldset>
 
         {fields.place && (
@@ -839,28 +940,49 @@ function EventForm({
         )}
       </div>
 
-      {confirmEl}
+      {inSeries && (
+        <div className="flex flex-wrap items-center gap-3 px-1">
+          <span className="text-sm font-medium" id="series-scope">
+            Repeats weekly. Change
+          </span>
+          <div role="radiogroup" aria-labelledby="series-scope" className={segmentedTrack}>
+            {(
+              [
+                ["one", "This meeting"],
+                ["following", "This and later ones"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={scope === value}
+                onClick={() => setScope(value)}
+                className={segmentedItem(scope === value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <DialogFooter className="flex items-center justify-between sm:justify-between">
         {event ? (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void handleDelete()}
-            disabled={isPending}
-          >
+          <Button type="button" variant="ghost" onClick={handleDelete} disabled={isPending}>
             Delete
           </Button>
         ) : (
           <span />
         )}
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isPending || !title.trim()}>
-            {isPending ? "Saving…" : event ? "Save" : `Create ${noun}`}
-          </Button>
-        </div>
+        <Button type="submit" disabled={isPending || !title.trim()}>
+          {isPending
+            ? "Saving…"
+            : event
+              ? "Save"
+              : whenMode === "find"
+                ? "Next: offer times"
+                : `Create ${noun}`}
+        </Button>
       </DialogFooter>
     </form>
   );

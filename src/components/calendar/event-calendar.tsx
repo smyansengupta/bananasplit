@@ -273,7 +273,7 @@ export function EventCalendar({
     // opened from the event's own page for a full edit. Here we hand it the
     // id and let it load nothing else: the summary fields are what a quick
     // edit from the grid touches.
-    router.push(`/app/${orgSlug}/calendar/${item.id}?edit=1`);
+    router.push(`/app/${orgSlug}/meetings/${item.id}?edit=1`);
   }
 
   /* ---------------------------------------------------------- drag to move

@@ -296,7 +296,7 @@ export function PollResponder({
         setScheduleError(result.error);
         return;
       }
-      if (orgSlug && result.eventId) router.push(`/app/${orgSlug}/calendar/${result.eventId}`);
+      if (orgSlug && result.eventId) router.push(`/app/${orgSlug}/meetings/${result.eventId}`);
       else router.refresh();
       setScheduleTarget(null);
     });
@@ -472,7 +472,7 @@ export function PollResponder({
               </span>
               {poll.finalizedEventId && orgSlug && (
                 <Button asChild size="sm" variant="outline">
-                  <Link href={`/app/${orgSlug}/calendar/${poll.finalizedEventId}`}>View event</Link>
+                  <Link href={`/app/${orgSlug}/meetings/${poll.finalizedEventId}`}>View event</Link>
                 </Button>
               )}
             </span>
