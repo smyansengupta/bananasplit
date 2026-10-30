@@ -30,7 +30,7 @@ export function MyTasksCard({
     return (
       <p className="text-muted-foreground flex items-center gap-2 py-2 text-sm">
         <CircleCheck className="size-4" aria-hidden="true" />
-        You&apos;re all caught up: nothing open is yours.
+        Nothing open.
       </p>
     );
   }

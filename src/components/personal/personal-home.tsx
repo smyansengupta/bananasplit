@@ -253,10 +253,7 @@ function FinishProfileCard({ href, gaps }: { href: string; gaps: ProfileGap[] })
           <UserRound className="text-primary size-4" aria-hidden="true" />
           Finish your profile
         </CardTitle>
-        <CardDescription>
-          Add your {list}. Organizations you join see your profile, and admins plan meetings around
-          when you&apos;re free. A minute or two; skip anything you like.
-        </CardDescription>
+        <CardDescription>Add your {list}.</CardDescription>
         <CardAction>
           <Button asChild size="sm">
             <Link href={href}>
@@ -391,7 +388,6 @@ function JoinOrStart({ prominent }: { prominent: boolean }) {
           </Button>
         </form>
         <span className="inline-flex items-center gap-2">
-          <span className="text-muted-foreground px-1 text-sm">or</span>
           <Button asChild size="sm" variant="ghost">
             <Link href="/onboarding/organization">
               <Plus aria-hidden="true" />
@@ -401,8 +397,7 @@ function JoinOrStart({ prominent }: { prominent: boolean }) {
         </span>
       </div>
       <p id="join-code-hint" className="text-muted-foreground text-xs">
-        You&apos;ll see the organization before you join, and joining is free. An organization you
-        start gets 14 days of Team Advanced free, no card.
+        Joining is free.
       </p>
     </div>
   );
@@ -423,11 +418,6 @@ function UpcomingSection({ data, now, base }: { data: PersonalHomeData; now: Dat
           size="compact"
           className="py-0"
           title={`Nothing in the next ${UPCOMING_DAYS} days`}
-          description={
-            data.clubs.length > 0
-              ? "Meetings and events from your organizations and your own calendar show here, soonest first."
-              : "Your own plans and, once you join an organization, its meetings and events show here."
-          }
           action={
             <Button asChild size="sm" variant="outline">
               <Link href={`${base}/calendar`}>Add something to your calendar</Link>
@@ -516,7 +506,6 @@ function DueSoonSection({ data, base }: { data: PersonalHomeData; base: string }
           size="compact"
           className="py-0"
           title="Nothing due this week"
-          description="Your own tasks and the ones you're on in your organizations show here when they're due within a week, or overdue."
           action={
             <Button asChild size="sm" variant="outline">
               <Link href={`${base}/tasks`}>
@@ -684,7 +673,6 @@ function RsvpsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
             size="compact"
             className="py-0"
             title="No RSVPs yet"
-            description="Events you sign up for show here with your ticket. Hosting something? Make an event page anyone can RSVP to, no account needed."
             action={
               <Button asChild size="sm" variant="outline">
                 <Link href={`${base}/meetings`}>Set up a meeting</Link>
@@ -807,12 +795,7 @@ function PollsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
     >
       <div className="space-y-4">
         {empty ? (
-          <EmptyState
-            size="compact"
-            className="py-0"
-            title="No polls waiting"
-            description="Polls in your organizations that need your answer show here. To find a time with anyone, send a find-a-time poll: they answer from a link, no account needed."
-          />
+          <EmptyState size="compact" className="py-0" title="No polls waiting" />
         ) : (
           <>
             {data.pollsWaiting.length > 0 && (

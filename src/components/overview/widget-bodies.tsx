@@ -34,13 +34,7 @@ export function RecentList({
   now: Date;
 }) {
   if (items.length === 0) {
-    return (
-      <EmptyState
-        size="compact"
-        title="Nothing here yet"
-        description="The pages you open show up here, so you can jump back in."
-      />
-    );
+    return <EmptyState size="compact" title="Nothing here yet" />;
   }
   return (
     <ul className={TILE_GRID}>
@@ -160,7 +154,6 @@ export function PollList({
       <EmptyState
         size="compact"
         title="No open polls"
-        description="Questions to vote on and times to find show here."
         action={
           <Link
             href={`/app/${orgSlug}/calendar/polls`}
@@ -268,13 +261,7 @@ export function FileList({
   files: { id: string; name: string; contentType: string; createdAt: Date }[];
 }) {
   if (files.length === 0) {
-    return (
-      <EmptyState
-        size="compact"
-        title="No files yet"
-        description="Upload PDFs, slides and images in Files."
-      />
-    );
+    return <EmptyState size="compact" title="No files yet" />;
   }
   return (
     <ul className={TILE_GRID}>
