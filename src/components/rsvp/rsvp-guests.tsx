@@ -1,12 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import {
-  Download,
-  Ticket,
-  Trash2,
-  UserPlus,
-} from "@/components/icons";
+import { Download, Ticket, Trash2, UserPlus } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
@@ -361,7 +356,7 @@ export function RsvpGuests({
                         <span className="block font-medium break-words">{g.name}</span>
                         <a
                           href={`mailto:${g.email}`}
-                          className="text-muted-foreground block truncate text-xs hover:underline"
+                          className="text-muted-foreground block text-xs break-all hover:underline"
                         >
                           {g.email}
                         </a>
@@ -370,7 +365,7 @@ export function RsvpGuests({
                             href={instagramUrl(g.instagram)}
                             target="_blank"
                             rel="noopener noreferrer nofollow"
-                            className="text-muted-foreground block truncate text-xs hover:underline"
+                            className="text-muted-foreground block text-xs break-all hover:underline"
                           >
                             @{g.instagram}
                           </a>

@@ -825,7 +825,7 @@ function GuestRow({ guest }: { guest: RsvpGuest }) {
   return (
     <li className="flex min-h-12 items-center gap-3 py-1.5">
       <Avatar name={guest.name} label={guest.initials} />
-      <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{guest.name}</span>
+      <span className="min-w-0 flex-1 text-[15px] font-medium break-words">{guest.name}</span>
       {guest.instagramUrl && <InstagramLink url={guest.instagramUrl} name={guest.name} />}
     </li>
   );

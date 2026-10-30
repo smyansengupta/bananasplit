@@ -455,7 +455,7 @@ export function RsvpSettings({
           description="The address comes from the event. Add how to find the room once people are in the building."
         >
           <div className="bg-muted rounded-field flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
-            <span className={cn("min-w-0 truncate", !location && "text-muted-foreground")}>
+            <span className={cn("min-w-0 break-words", !location && "text-muted-foreground")}>
               {location ?? "No location set"}
             </span>
             <Link

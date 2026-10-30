@@ -23,6 +23,9 @@ vi.mock("./poll-org", () => ({
 }));
 vi.mock("./actions", () => ({ submitPollResponse: vi.fn() }));
 vi.mock("@/app/app/[orgSlug]/calendar/polls/actions", () => ({ finalizePoll: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/meetings/actions", () => ({
+  meetingConnectionsAction: vi.fn(async () => []),
+}));
 vi.mock("@/server/db/context", () => ({
   withSystemOrgTx: async (_orgId: string, fn: (c: unknown) => unknown) => fn({ db }),
 }));

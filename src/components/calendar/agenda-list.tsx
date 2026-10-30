@@ -120,7 +120,7 @@ function AgendaRow({
           {item.location && (
             <span className="inline-flex min-w-0 items-center gap-1">
               <MapPin aria-hidden className="size-3 shrink-0" />
-              <span className="truncate">{item.location}</span>
+              <span className="break-words">{item.location}</span>
             </span>
           )}
           {!item.allDay && isMultiDay(item) && (

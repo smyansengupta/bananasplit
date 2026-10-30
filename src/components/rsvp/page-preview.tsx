@@ -48,7 +48,7 @@ export function PagePreview({
             {title.trim()[0]?.toUpperCase() ?? "B"}
           </span>
         )}
-        <span className="font-heading line-clamp-3 text-[15px] leading-tight">{title}</span>
+        <span className="font-heading text-[15px] leading-tight break-words">{title}</span>
       </div>
       <span className="bg-card mt-auto h-9 rounded-[12px] shadow-sm" />
     </div>
