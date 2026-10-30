@@ -444,6 +444,7 @@ export const rsvpEmailJob: JobHandler<RsvpEmailPayload> = async (
       loaded.status === "GOING",
     ),
     pageUrl: appUrl(`/e/${e.rsvpSlug}/manage?key=${encodeURIComponent(rsvpManageKey(loaded.id))}`),
+    calendarUrl: appUrl(`/e/${e.rsvpSlug}/calendar.ics`),
     ...guestLinks(loaded, e.rsvpSlug!, template),
   };
 

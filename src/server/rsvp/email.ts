@@ -35,6 +35,8 @@ export interface RsvpMessageInput {
   inviteUrl?: string | null;
   /** Split the cost: "$4 to the host: Venmo @maya, Cash App $maya". */
   chipIn?: string | null;
+  /** The event's .ics, so "Add to calendar" is one click from the email. */
+  calendarUrl?: string | null;
 }
 
 /**
@@ -85,8 +87,7 @@ const COPY: Record<
   },
   waitlisted: {
     subject: (t) => `You're on the waitlist: ${t}`,
-    lead: (i) =>
-      `${i.title} is full right now, so you're on the waitlist. If a spot opens up, it's yours and we'll email you straight away.`,
+    lead: (i) => `${i.title} is full, so you're on the waitlist. We'll email you if a spot opens.`,
     cta: "View your RSVP",
   },
   promoted: {
@@ -110,8 +111,7 @@ const COPY: Record<
   },
   "event-cancelled": {
     subject: (t) => `Cancelled: ${t}`,
-    lead: (i) =>
-      `${i.orgName} cancelled ${i.title}. You don't need to do anything; we're sorry for the change of plans.`,
+    lead: (i) => `${i.orgName} cancelled ${i.title}. You don't need to do anything.`,
     cta: "",
   },
 };
@@ -147,6 +147,24 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
     );
     text.push(`Online: ${input.joinUrl}`);
   }
+  if (input.calendarUrl && !cancelled) {
+    rows.push(
+      detailRow(
+        "Calendar",
+        `<a href="${safeHref(input.calendarUrl)}" style="color:${C.ink}">Add to calendar</a>`,
+      ),
+    );
+    text.push(`Add to calendar: ${input.calendarUrl}`);
+  }
+  if (!cancelled) {
+    rows.push(
+      detailRow(
+        "Plans changed",
+        `<a href="${safeHref(input.pageUrl)}" style="color:${C.ink}">Can't go</a>`,
+      ),
+    );
+    text.push(`Can't go: ${input.pageUrl}`);
+  }
   if (input.chipIn && !cancelled) {
     rows.push(detailRow("Chip in", escapeHtml(input.chipIn)));
     text.push(`Chip in: ${input.chipIn}`);
@@ -173,9 +191,12 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
   const details = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px;width:100%;background:${C.page};border:1px solid ${C.line};border-radius:12px"><tr><td style="padding:12px 16px"><table role="presentation" cellpadding="0" cellspacing="0">${rows.join("")}</table></td></tr></table>`;
   const greeting = `Hi ${input.guestName.trim().split(/\s+/)[0] || "there"},`;
 
+  // A reminder for an online meeting that's close leads with the call.
+  const joinFirst =
+    input.template === "reminder" && Boolean(input.joinUrl) && (input.offsetMinutes ?? 60) < 1440;
+
   return layout({
     subject: copy.subject(input.title, input),
-    eyebrow: input.orgName,
     bodyHtml: [
       `<h1 style="margin:0 0 12px;font-size:22px;line-height:1.25">${escapeHtml(input.title)}</h1>`,
       paragraph(greeting),
@@ -183,8 +204,12 @@ export function rsvpEmail(input: RsvpMessageInput): RenderedEmail {
       details,
     ].join(""),
     bodyText: [input.title, greeting, copy.lead(input), text.join("\n")].join("\n\n"),
-    cta: cancelled ? undefined : { label: copy.cta, url: input.pageUrl },
-    footer: `You're getting this because you signed up for ${input.title} with ${input.orgName}. To cancel, open the event page and choose "Can't go".`,
+    cta: cancelled
+      ? undefined
+      : joinFirst
+        ? { label: "Join the meeting", url: input.joinUrl! }
+        : { label: copy.cta, url: input.pageUrl },
+    footer: `You're getting this because you signed up for ${input.title} with ${input.orgName}.`,
   });
 }
 
