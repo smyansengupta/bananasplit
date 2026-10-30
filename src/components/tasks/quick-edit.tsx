@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarPlus, UserPlus } from "@/components/icons";
-import { useCallback, useOptimistic, useTransition } from "react";
+import { useCallback, useEffect, useOptimistic, useState, useTransition } from "react";
 
 import { updateTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { UserAvatar } from "@/components/user-avatar";
@@ -22,6 +22,32 @@ import { useTasks } from "./tasks-context";
  * Both sit inside things that click, drag and open on Enter (a board card,
  * a list row), so they keep their own pointer and key events.
  */
+
+/**
+ * The keyboard's a (owner) and s (due date) on the task under focus: the
+ * workspace sends this, and that task's picker opens.
+ */
+export const TASK_ACTION_EVENT = "bananasplit:task-action";
+export type TaskAction = "owner" | "due";
+
+export function sendTaskAction(taskId: string, action: TaskAction) {
+  window.dispatchEvent(new CustomEvent(TASK_ACTION_EVENT, { detail: { taskId, action } }));
+}
+
+/** Open state for a picker, opened by its own click or by the keyboard. */
+function useActionOpen(taskId: string, action: TaskAction, enabled: boolean) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!enabled) return;
+    function onAction(event: Event) {
+      const detail = (event as CustomEvent<{ taskId: string; action: TaskAction }>).detail;
+      if (detail?.taskId === taskId && detail.action === action) setOpen(true);
+    }
+    window.addEventListener(TASK_ACTION_EVENT, onAction);
+    return () => window.removeEventListener(TASK_ACTION_EVENT, onAction);
+  }, [taskId, action, enabled]);
+  return [open, setOpen] as const;
+}
 
 const keep = {
   onClick: (e: React.SyntheticEvent) => e.stopPropagation(),
@@ -72,6 +98,7 @@ export function QuickDue({
   const key = task.dueDate ? dueDateKey(task.dueDate) : "";
   const [value, setOptimistic] = useOptimistic(key);
   const [, startTransition] = useTransition();
+  const [ownOpen, setOwnOpen] = useActionOpen(task.id, "due", !disabled && open === undefined);
 
   if (disabled) return <DueLabel dueDate={task.dueDate} todayKey={org.todayKey} done={done} />;
   return (
@@ -79,8 +106,11 @@ export function QuickDue({
       {confirmEl}
       <DueField
         value={value}
-        open={open}
-        onOpenChange={onOpenChange}
+        open={open ?? ownOpen}
+        onOpenChange={(next) => {
+          setOwnOpen(next);
+          onOpenChange?.(next);
+        }}
         onChange={(next) =>
           startTransition(async () => {
             setOptimistic(next);
@@ -137,6 +167,7 @@ export function QuickOwner({
   const [confirmEl, patch] = useTaskPatch();
   const [ownerId, setOptimistic] = useOptimistic(task.ownerId);
   const [, startTransition] = useTransition();
+  const [ownOpen, setOwnOpen] = useActionOpen(task.id, "owner", !disabled && open === undefined);
   const owner = ownerId ? (memberById.get(ownerId) ?? task.owner) : null;
 
   if (disabled) {
@@ -147,8 +178,11 @@ export function QuickOwner({
       {confirmEl}
       <OwnerField
         value={ownerId}
-        open={open}
-        onOpenChange={onOpenChange}
+        open={open ?? ownOpen}
+        onOpenChange={(next) => {
+          setOwnOpen(next);
+          onOpenChange?.(next);
+        }}
         onChange={(next) =>
           startTransition(async () => {
             setOptimistic(next);

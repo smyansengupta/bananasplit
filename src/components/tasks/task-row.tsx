@@ -94,6 +94,9 @@ export function TaskRow({
         <button
           type="button"
           onClick={() => showTask(task)}
+          data-task-key={task.id}
+          data-task-title={task.title}
+          data-task-status={task.status}
           className="focus-visible:outline-foreground flex min-w-0 items-center gap-1.5 rounded-md text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {priv && <PrivateMark />}

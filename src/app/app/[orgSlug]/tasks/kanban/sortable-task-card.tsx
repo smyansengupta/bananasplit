@@ -54,6 +54,9 @@ export function SortableTaskCard({
       }}
       {...attributes}
       {...listeners}
+      data-task-key={task.id}
+      data-task-title={task.title}
+      data-task-status={status}
       // Read as the task's title, not every word on the card.
       aria-label={task.title}
     >

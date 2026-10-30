@@ -13,6 +13,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ActionItemsImport } from "@/components/ai/action-items-import";
+import { useCompleteTask } from "@/components/tasks/quick-controls";
+import { sendTaskAction } from "@/components/tasks/quick-edit";
 import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import { PHONE_SMALL_CREATE } from "@/components/page-header";
 import { OpenTasksBar, taskStatsSegments } from "@/components/tasks/open-tasks-bar";
@@ -30,8 +32,10 @@ import {
   NEW_TASK_PARAM,
   overlayOpen,
   SCOPE_KEYS,
+  TASK_ITEM_KEYS,
   TASK_KEYS,
 } from "@/lib/shortcuts";
+import { TaskStatus } from "@/generated/prisma/enums";
 
 import {
   DEFAULT_TASK_LAYOUT,
@@ -82,6 +86,7 @@ export function WorkspaceHeader({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [importing, setImporting] = useState(false);
+  const complete = useCompleteTask();
   const inDestination = isDestination(ws.query.view);
   // Filtered to one epic: new work goes into it.
   const epicId = ws.query.epicId ?? null;
@@ -160,6 +165,42 @@ export function WorkspaceHeader({
         return run(() => ws.setView(TASK_LAYOUTS[index - 1]!.value as TaskLayout));
       }
       if (key === TASK_KEYS.newTask) return run(() => newTask(inEpic));
+      // The task under the keyboard: j / k move, d finishes it, a and s
+      // open its owner and date pickers. Enter opens it (its own handler).
+      const items = [...document.querySelectorAll<HTMLElement>("[data-task-key]")].filter(
+        (el) => el.offsetParent !== null,
+      );
+      const current = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
+        "[data-task-key]",
+      );
+      if (key === TASK_ITEM_KEYS.next || key === TASK_ITEM_KEYS.previous) {
+        if (items.length === 0) return;
+        const at = current ? items.indexOf(current) : -1;
+        const step = key === TASK_ITEM_KEYS.next ? 1 : -1;
+        const next = items[at < 0 ? (step > 0 ? 0 : items.length - 1) : at + step];
+        if (!next) return;
+        return run(() => {
+          next.focus();
+          next.scrollIntoView({ block: "nearest" });
+        });
+      }
+      if (current && key === TASK_ITEM_KEYS.done) {
+        const id = current.dataset.taskKey!;
+        const status = current.dataset.taskStatus as TaskStatus;
+        return run(
+          () =>
+            void complete(
+              { id, title: current.dataset.taskTitle ?? "", status },
+              status === TaskStatus.COMPLETED ? TaskStatus.NOT_STARTED : TaskStatus.COMPLETED,
+            ),
+        );
+      }
+      if (current && key === TASK_ITEM_KEYS.assign) {
+        return run(() => sendTaskAction(current.dataset.taskKey!, "owner"));
+      }
+      if (current && key === TASK_ITEM_KEYS.due) {
+        return run(() => sendTaskAction(current.dataset.taskKey!, "due"));
+      }
       if (teamwork && key === TASK_KEYS.updates) return run(() => ws.setView("updates"));
       // The rest narrow a layout; a destination has nothing to narrow.
       if (inDestination) return;
@@ -171,7 +212,7 @@ export function WorkspaceHeader({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ws, newTask, inEpic, teamwork, inDestination, router, org.slug]);
+  }, [ws, newTask, inEpic, teamwork, inDestination, router, org.slug, complete]);
 
   // `c` pressed elsewhere in the app lands here with ?new=1: start the task,
   // then drop the param so a reload or Back doesn't start another.
