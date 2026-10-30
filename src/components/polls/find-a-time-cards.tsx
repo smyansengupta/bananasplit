@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 
 export interface FindATimeCard {
   item: PollListItem;
+  /** An owner or admin: the card offers "Book best time" once there is one. */
+  canBook?: boolean;
   summary: PollSummary;
   timeZone: string;
   durationMinutes: number;
@@ -148,6 +150,17 @@ function Card({ card, featured }: { card: FindATimeCard; featured: boolean }) {
           </span>
         </span>
       </Link>
+      {open && card.canBook && top && (
+        <Link
+          href={`${item.href}?book=1`}
+          className={cn(
+            "bg-primary text-primary-foreground hover:bg-primary/90 absolute inline-flex h-8 items-center rounded-full px-3 text-[12.5px] font-semibold",
+            featured ? "right-14 bottom-5" : "right-12 bottom-3.5",
+          )}
+        >
+          Book best time
+        </Link>
+      )}
       {open && (
         <CopyPollLinkButton
           pollId={item.id}

@@ -99,6 +99,7 @@ export function PollResponder({
   actions,
   notices,
   aside,
+  bookBest = false,
 }: {
   /** The stripped DTO (src/lib/polls/poll-view.ts): no ids, emails or keys. */
   poll: PollView;
@@ -113,6 +114,8 @@ export function PollResponder({
   notices?: ReactNode;
   /** Extra panels at the top of the side column. */
   aside?: ReactNode;
+  /** Arrived from a card's "Book best time": open the schedule step on the best one. */
+  bookBest?: boolean;
 }) {
   const router = useRouter();
   const isGuest = respondAs === "guest";
@@ -286,6 +289,13 @@ export function PollResponder({
   function openSchedule(window: RankedSlot) {
     setScheduleError(null);
     setScheduleTarget(window);
+  }
+  // "Book best time" on a card lands here and opens the schedule step on
+  // the best time, once.
+  const [booked, setBooked] = useState(false);
+  if (bookBest && !booked && canSchedule && bestWindows[0]) {
+    setBooked(true);
+    openSchedule(bestWindows[0]);
   }
 
   function confirmSchedule() {

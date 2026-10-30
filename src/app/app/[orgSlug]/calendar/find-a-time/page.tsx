@@ -55,6 +55,7 @@ export default async function FindATimePage({
     const rows = results.get(p.id) ?? { slots: [], responses: [] };
     const card: FindATimeCard = {
       item: availabilityItem(p, base, now, p.createdById === user.id || isAdmin),
+      canBook: isAdmin,
       summary: summarizePoll(rows.slots, responsesLite(rows.responses), p.durationMinutes, zone),
       timeZone: zone,
       durationMinutes: p.durationMinutes,
