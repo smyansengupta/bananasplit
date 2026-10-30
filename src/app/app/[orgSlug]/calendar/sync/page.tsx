@@ -48,7 +48,7 @@ export default async function CalendarSyncPage({
               ? "Google Calendar needs attention"
               : "Google Calendar isn't connected",
           status.publicEventsEnabled ? "website feed on" : "website feed off",
-        ].join(" · ")}
+        ].join(", ")}
       />
       <p className="text-muted-foreground -mt-3 text-sm">
         The suite is the source of truth for events. Public events are mirrored to Google Calendar

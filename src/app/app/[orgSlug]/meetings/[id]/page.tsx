@@ -115,6 +115,7 @@ export default async function MeetingPage({
         attendeeIds: event.attendees.map((a) => a.userId),
         reminderMinutes: event.reminderMinutes,
         meetingType: event.meetingType,
+        seriesId: event.seriesId,
         notes: event.notes,
       }}
       members={members.map((m) => ({

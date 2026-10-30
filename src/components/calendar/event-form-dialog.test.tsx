@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EventFormEvent } from "./event-form-dialog";
@@ -154,11 +154,13 @@ describe("EventFormDialog: the shape of a new meeting", () => {
     open();
 
     expect(screen.getByRole("radiogroup", { name: "Kind of meeting" })).toBeTruthy();
-    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(
+      within(screen.getByRole("radiogroup", { name: "Kind of meeting" })).getAllByRole("radio"),
+    ).toHaveLength(3);
     expect(chosen()).toEqual([false, true, false]);
-    expect(screen.getByText("A Google Meet, Zoom or Teams call")).toBeTruthy();
-    expect(screen.getByText("A room or an address")).toBeTruthy();
-    expect(screen.getByText("Either of those, with a public sign-up page")).toBeTruthy();
+    expect(screen.getByText("Video call")).toBeTruthy();
+    expect(screen.getByText("A place")).toBeTruthy();
+    expect(screen.getByText("Plus a sign-up page")).toBeTruthy();
   });
 
   it("is the first thing in the form, ahead of the title", () => {
@@ -594,8 +596,8 @@ describe("EventFormDialog: the shape of a new meeting", () => {
         }),
       });
 
-      expect(screen.queryByRole("radiogroup")).toBeNull();
-      expect(screen.queryAllByRole("radio")).toHaveLength(0);
+      expect(screen.queryByRole("radiogroup", { name: "Kind of meeting" })).toBeNull();
+      expect(screen.queryByRole("radio", { name: "Online" })).toBeNull();
       expect((screen.getByLabelText(/^Location/) as HTMLInputElement).value).toBe("Curry 344");
       expect((screen.getByLabelText("How to find it") as HTMLTextAreaElement).value).toBe(
         "Second floor.",
@@ -901,5 +903,35 @@ describe("EventFormDialog: reminders", () => {
     await waitFor(() => expect(mocks.updateEvent).toHaveBeenCalled());
     expect(mocks.updateEvent.mock.calls[0]!.slice(0, 2)).toEqual(["org_1", "evt_1"]);
     expect(mocks.updateEvent.mock.calls[0]![2]).toMatchObject({ reminderMinutes: [] });
+  });
+});
+
+describe("EventFormDialog: a meeting type's defaults", () => {
+  it("starts a new meeting where the last one of that type was", async () => {
+    // Radix Select scrolls the chosen option into view; jsdom has no layout.
+    Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.hasPointerCapture = vi.fn(() => false);
+    open({
+      meetingTypes: [
+        {
+          name: "Build night",
+          color: "#1f3f87",
+          last: {
+            online: false,
+            location: "Curry 340",
+            conferenceProvider: "NONE",
+            minutes: 120,
+            attendeeIds: [],
+          },
+        },
+      ],
+    } as never);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Meeting type" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Build night" }));
+
+    expect((screen.getByLabelText(/^Location|^Room|^Where/) as HTMLInputElement).value).toBe(
+      "Curry 340",
+    );
   });
 });

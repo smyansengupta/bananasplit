@@ -115,13 +115,38 @@ export function memberReminder(
   return { title, body: lines.join("\n") };
 }
 
-/** "cancelled": tells everyone still signed up that the deleted event is off. */
-async function fanOutCancellation(db: Db, orgId: string, eventId: string): Promise<number> {
+/**
+ * "cancelled": tells everyone still signed up that the deleted event is
+ * off, and (notifyMembers) the members invited, in-app. Runs after the Undo
+ * window; an event that was put back is not deleted any more, and nobody
+ * hears anything.
+ */
+async function fanOutCancellation(
+  db: Db,
+  orgId: string,
+  eventId: string,
+  members?: { actorId?: string },
+): Promise<number> {
   const event = await db.event.findFirst({
     where: { id: eventId, organizationId: orgId },
-    select: { deletedAt: true },
+    select: { deletedAt: true, title: true, organization: { select: { slug: true } } },
   });
   if (!event?.deletedAt) return 0;
+  if (members) {
+    const invited = await db.eventAttendee.findMany({
+      where: { organizationId: orgId, eventId, rsvp: { not: "NO" } },
+      select: { userId: true },
+    });
+    const to = invited.map((a) => a.userId).filter((u) => u !== members.actorId);
+    if (to.length > 0) {
+      await notifyUsers(db, orgId, to, {
+        type: NotificationType.EVENT_CANCELLED,
+        title: `"${event.title}" was cancelled`,
+        linkUrl: `/app/${event.organization.slug}/calendar`,
+        actorId: members.actorId ?? null,
+      });
+    }
+  }
   const signedUp = await db.eventRegistration.findMany({
     where: { organizationId: orgId, eventId, status: { in: ["GOING", "WAITLIST"] } },
     select: { id: true },
@@ -270,12 +295,17 @@ export const rsvpFanoutJob: JobHandler<{
   stage: "day" | "hour" | "reminder" | "cancelled";
   offsetMinutes?: number;
   startsAt?: string;
+  notifyMembers?: boolean;
+  actorId?: string;
 }> = async (run) => {
   const orgId = requireOrg(run.organizationId);
   const { eventId, stage, startsAt } = run.payload;
   let reached: number;
   if (stage === "cancelled") {
-    reached = await withSystemOrgTx(orgId, ({ db }) => fanOutCancellation(db, orgId, eventId));
+    const members = run.payload.notifyMembers ? { actorId: run.payload.actorId } : undefined;
+    reached = await withSystemOrgTx(orgId, ({ db }) =>
+      fanOutCancellation(db, orgId, eventId, members),
+    );
   } else {
     const offset = stage === "reminder" ? run.payload.offsetMinutes : LEGACY_OFFSET[stage];
     if (!offset) throw new PermanentJobError("a reminder fanout names its offset");
@@ -414,6 +444,7 @@ export const rsvpEmailJob: JobHandler<RsvpEmailPayload> = async (
       loaded.status === "GOING",
     ),
     pageUrl: appUrl(`/e/${e.rsvpSlug}/manage?key=${encodeURIComponent(rsvpManageKey(loaded.id))}`),
+    calendarUrl: appUrl(`/e/${e.rsvpSlug}/calendar.ics`),
     ...guestLinks(loaded, e.rsvpSlug!, template),
   };
 
@@ -435,7 +466,7 @@ export const rsvpEmailJob: JobHandler<RsvpEmailPayload> = async (
   // The text is best effort: the email already went, and retrying the job
   // for a refused or flaky text would send that email again.
   const text = rsvpText(message);
-  if (text && smsDelivery() !== "off") {
+  if (text && loaded.phone && smsDelivery() !== "off") {
     await sendSms(loaded.phone, text, { signal: run.signal }).catch((error: unknown) => {
       const reason = error instanceof SmsSendError ? error.message : "send failed";
       console.warn(`[rsvp] reminder text not sent: ${reason}`);

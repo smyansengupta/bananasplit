@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarSync, Video } from "@/components/icons";
+import { CalendarClock, CalendarPlus, CalendarSync } from "@/components/icons";
 import Link from "next/link";
 
 import { EventCalendar, type CalendarItem } from "@/components/calendar/event-calendar";
@@ -7,14 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
-import {
-  addDaysToKey,
-  allDaySpan,
-  safeTimeZone,
-  zonedDateKey,
-  zonedMidnight,
-} from "@/lib/calendar/dates";
-import { weekWindowFor } from "@/lib/calendar/grid";
+import { addDaysToKey, allDaySpan, safeTimeZone, zonedDateKey } from "@/lib/calendar/dates";
 import { parseCalendarRange } from "@/lib/calendar/range";
 import { meetingTypeColor, parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
@@ -25,7 +18,7 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
 import { getCalendarTasks } from "@/server/tasks/queries";
 
-import { getEventsInRange, getViewerRsvps, rangeWhere } from "./queries";
+import { getEventsInRange, getMeetingTypeDefaults, getViewerRsvps } from "./queries";
 
 /**
  * The org calendar. The server reads only the visible window (the view puts
@@ -55,9 +48,8 @@ export default async function CalendarPage({
   // zone), whatever window the grid is showing.
   const zone = safeTimeZone(org.timezone);
   const todayKey = zonedDateKey(new Date(), zone);
-  const week = weekWindowFor(todayKey);
 
-  const { events, rsvps, tasks, thisWeek } = await withOrgTx(org.id, async ({ db }) => {
+  const { events, rsvps, tasks } = await withOrgTx(org.id, async ({ db }) => {
     const found = await getEventsInRange(db, org.id, {
       from: range.from,
       to: range.to,
@@ -80,17 +72,16 @@ export default async function CalendarPage({
               dueTo: fromDateKey(addDaysToKey(range.toKey, -1)),
             })
           : [],
-      thisWeek: await db.event.count({
-        where: rangeWhere(org.id, {
-          from: zonedMidnight(week.fromKey, zone),
-          to: zonedMidnight(week.toKey, zone),
-        }),
-      }),
     };
   });
   const members = canManage ? await getOrgMembersForPicker(org.id) : [];
 
-  const meetingTypes = parseMeetingTypes(settings?.eventTypes);
+  // A new meeting of a type starts where the last one was.
+  const typeList = parseMeetingTypes(settings?.eventTypes);
+  const meetingTypes =
+    canManage && typeList.length > 0
+      ? await withOrgTx(org.id, ({ db }) => getMeetingTypeDefaults(db, org.id, typeList))
+      : typeList;
   const items: CalendarItem[] = events.map((e) => {
     const shared = {
       id: e.id,
@@ -138,11 +129,6 @@ export default async function CalendarPage({
     <div className="space-y-7">
       <PageHeader
         title={sectionLabel(settings?.sidebar, "calendar")}
-        description={
-          thisWeek === 0
-            ? "Nothing scheduled this week"
-            : `${thisWeek} ${thisWeek === 1 ? "event" : "events"} this week`
-        }
         actions={
           <>
             {/* Planning a meeting starts here as often as from the sidebar. */}
@@ -155,20 +141,19 @@ export default async function CalendarPage({
                 </Link>
               </Button>
             )}
-            {can({ role }, "events.write") && (
-              <Button variant="outline" className="max-md:hidden" asChild>
-                <Link href={`/app/${orgSlug}/meetings`}>
-                  <Video aria-hidden="true" />
-                  Meetings
-                </Link>
-              </Button>
-            )}
+            {/* Everyone can put the club's calendar in their own (Profile, Calendar feed). */}
+            <Button variant="outline" className="max-md:hidden" asChild>
+              <Link href={`/app/${orgSlug}/profile#calendar`}>
+                <CalendarPlus aria-hidden="true" />
+                Subscribe
+              </Link>
+            </Button>
             {can({ role }, "integrations.view") && spaceIncludes(org, "integrations") && (
               <Button variant="outline" size="icon" className="max-md:hidden" asChild>
                 <Link
                   href={`/app/${orgSlug}/calendar/sync`}
-                  aria-label="Google Calendar sync and website feed"
-                  title="Google Calendar sync and website feed"
+                  aria-label="Sync and feed"
+                  title="Sync and feed"
                 >
                   <CalendarSync className="size-[18px]" aria-hidden="true" />
                 </Link>

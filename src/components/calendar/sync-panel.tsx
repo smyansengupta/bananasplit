@@ -183,10 +183,10 @@ export function SyncPanel({
                   </dd>
                   <dt className="text-muted-foreground">Events</dt>
                   <dd>
-                    {status.counts.SYNCED} on Google · {status.counts.PENDING} syncing ·{" "}
+                    {status.counts.SYNCED} on Google, {status.counts.PENDING} syncing,{" "}
                     {status.counts.FAILED} failed
                   </dd>
-                  <dt className="text-muted-foreground">Last Sync now</dt>
+                  <dt className="text-muted-foreground">Last sync</dt>
                   <dd>{when(google.lastSyncRequestAt)}</dd>
                 </dl>
                 {google.lastError && (
@@ -196,7 +196,7 @@ export function SyncPanel({
                   <ul className="space-y-1">
                     {status.failures.map((f) => (
                       <li key={f.id}>
-                        <Link className="underline" href={`/app/${orgSlug}/calendar/${f.id}`}>
+                        <Link className="underline" href={`/app/${orgSlug}/meetings/${f.id}`}>
                           {f.title}
                         </Link>
                         {f.error && <span className="text-muted-foreground">: {f.error}</span>}
@@ -211,7 +211,7 @@ export function SyncPanel({
                     onClick={() =>
                       run(
                         () => syncGoogleNow(orgId),
-                        (n) => `Queued ${n ?? 0} event(s) for Google.`,
+                        (n) => `Queued ${n ?? 0} events for Google.`,
                       )
                     }
                   >

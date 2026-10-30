@@ -1068,6 +1068,8 @@ model Event {
   kind               EventKind          @default(OTHER)
   /// One of the org's meeting types (OrgSettings.eventTypes), by name; the calendar draws it in that type's colour.
   meetingType        String?
+  /// A repeating meeting's series: every week is its own Event sharing this id (src/lib/meetings/series.ts).
+  seriesId           String?
   visibility         EventVisibility    @default(INTERNAL)
   hostUserId         String?
   /// Free-text host when the host is not a member (guest speaker).
@@ -1202,6 +1204,7 @@ model Event {
   @@index([organizationId, deletedAt, kind, startsAt])
   @@index([organizationId, visibility, deletedAt, startsAt])
   @@index([organizationId, term, startsAt])
+  @@index([organizationId, seriesId, startsAt])
   @@index([googleSyncState])
   @@index([conferenceSyncState])
 }

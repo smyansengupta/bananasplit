@@ -11,6 +11,8 @@ import {
   type MeetingRow,
 } from "@/components/meetings/meeting-card";
 import { NewMeetingButton } from "@/components/meetings/new-meeting-button";
+import { MeetingsTabs } from "@/components/meetings/meetings-tabs";
+import { PastMeetingList } from "@/components/meetings/past-meeting-list";
 import { VideoConnections } from "@/components/meetings/video-connections";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +35,7 @@ import {
   type ConferenceCallbackError,
 } from "@/server/conference/connect";
 
+import { getMeetingTypeDefaults } from "../calendar/queries";
 import { MeetingsTypeFilter } from "./meetings-type-filter";
 
 /** Outcomes the connect routes add that are not callback errors. */
@@ -81,6 +84,8 @@ export default async function MeetingsPage({
   // view can be shared.
   const typeParam = first(sp.type) || null;
   const byType = first(sp.sort) === "type";
+  // Coming up (the cards) or Past (the list); Find a time is its own page.
+  const showingPast = first(sp.view) === "past";
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org, user } = ctx;
   const personal = org.kind === "PERSONAL";
@@ -88,7 +93,7 @@ export default async function MeetingsPage({
   // ?new= opens New meeting on arrival (and only for someone who can make one).
   const askedNew = canManage ? newMeetingAsk(first(sp[NEW_EVENT_PARAM])) : null;
   // A new meeting starts with the organization's reminders (Settings > General).
-  const meetingTypes = parseMeetingTypes(ctx.settings?.eventTypes);
+  const typeList = parseMeetingTypes(ctx.settings?.eventTypes);
   const defaultReminderMinutes = ctx.settings?.meetingReminderMinutes ?? [
     ...DEFAULT_REMINDER_MINUTES,
   ];
@@ -101,79 +106,101 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts, attendees }, registrations, connections, members] = await Promise.all([
-    withOrgTx(org.id, async ({ db }) => {
-      const rows: MeetingRow[] = await db.event.findMany({
-        where: {
-          organizationId: org.id,
-          deletedAt: null,
-          mergedIntoId: null,
-          // Hosts work from the whole list. Everyone else sees what they can
-          // act on: something to join, or a page open for sign-ups, still to
-          // come. Row policies have already limited this to what they may see.
-          ...(canManage
-            ? {}
-            : {
-                endsAt: { gt: now },
-                OR: [{ rsvpEnabled: true }, { conferenceUrl: { not: null } }],
-              }),
-        },
-        orderBy: { startsAt: "asc" },
-        select: {
-          id: true,
-          title: true,
-          startsAt: true,
-          endsAt: true,
-          allDay: true,
-          rsvpEnabled: true,
-          rsvpSlug: true,
-          rsvpCapacity: true,
-          rsvpCover: true,
-          kind: true,
-          format: true,
-          location: true,
-          meetingType: true,
-          hostUserId: true,
-          featured: true,
-          conferenceProvider: true,
-          conferenceManaged: true,
-          conferenceUrl: true,
-          conferenceSyncState: true,
-          conferenceSyncError: true,
-          // Not conferenceHostUrl: it starts the meeting as host, and nothing
-          // on this list needs it. The meeting's page hands it to editors.
-        },
-      });
-      // The stored error can name an account or a setting that is not for
-      // everyone, so only people who can edit a meeting get it on the card.
-      const events: MeetingRow[] = canManage
-        ? rows
-        : rows.map((e) => ({ ...e, conferenceSyncError: null }));
-      // Head counts are the hosts' view.
-      const counts = canManage
-        ? await db.eventRegistration.groupBy({
-            by: ["eventId", "status"],
-            where: {
-              organizationId: org.id,
-              eventId: { in: events.map((e) => e.id) },
-              status: { in: ["GOING", "WAITLIST"] },
-            },
-            _count: { _all: true },
-          })
-        : [];
-      // Who was invited from the organization and what they said, so a card can
-      // show the people rather than a blank picture.
-      const attendees = await db.eventAttendee.findMany({
-        where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
-        select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
-      });
-      return { events, counts, attendees };
-    }),
-    myRsvpRegistrations(user.id, MY_TICKETS),
-    canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
-    // The create form's host and invite pickers, for whoever can make a meeting.
-    canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
-  ]);
+  const [{ events, counts, attendees, notes, meetingTypes }, registrations, connections, members] =
+    await Promise.all([
+      withOrgTx(org.id, async ({ db }) => {
+        const rows: MeetingRow[] = await db.event.findMany({
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            mergedIntoId: null,
+            // Hosts work from the whole list. Everyone else sees what they can
+            // act on: something to join, or a page open for sign-ups, still to
+            // come. Row policies have already limited this to what they may see.
+            ...(canManage
+              ? {}
+              : {
+                  endsAt: { gt: now },
+                  // Something to join, a page taking sign-ups, or a meeting
+                  // they were invited to (an in-person one has neither).
+                  OR: [
+                    { rsvpEnabled: true },
+                    { conferenceUrl: { not: null } },
+                    { attendees: { some: { userId: user.id } } },
+                  ],
+                }),
+          },
+          orderBy: { startsAt: "asc" },
+          select: {
+            id: true,
+            title: true,
+            startsAt: true,
+            endsAt: true,
+            allDay: true,
+            rsvpEnabled: true,
+            rsvpSlug: true,
+            rsvpCapacity: true,
+            rsvpCover: true,
+            kind: true,
+            format: true,
+            location: true,
+            meetingType: true,
+            hostUserId: true,
+            featured: true,
+            conferenceProvider: true,
+            conferenceManaged: true,
+            conferenceUrl: true,
+            conferenceSyncState: true,
+            conferenceSyncError: true,
+            attendanceCount: true,
+            // Not conferenceHostUrl: it starts the meeting as host, and nothing
+            // on this list needs it. The meeting's page hands it to editors.
+          },
+        });
+        // The stored error can name an account or a setting that is not for
+        // everyone, so only people who can edit a meeting get it on the card.
+        const events: MeetingRow[] = canManage
+          ? rows
+          : rows.map((e) => ({ ...e, conferenceSyncError: null }));
+        // Head counts are the hosts' view.
+        const counts = canManage
+          ? await db.eventRegistration.groupBy({
+              by: ["eventId", "status"],
+              where: {
+                organizationId: org.id,
+                eventId: { in: events.map((e) => e.id) },
+                status: { in: ["GOING", "WAITLIST"] },
+              },
+              _count: { _all: true },
+            })
+          : [];
+        // Who was invited from the organization and what they said, so a card can
+        // show the people rather than a blank picture.
+        const attendees = await db.eventAttendee.findMany({
+          where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
+          select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
+        });
+        // The past list's notes link: each finished meeting's notes, newest first.
+        const pastIds = events.filter((e) => e.endsAt <= now).map((e) => e.id);
+        const notes =
+          pastIds.length > 0
+            ? await db.note.findMany({
+                where: { organizationId: org.id, eventId: { in: pastIds }, deletedAt: null },
+                orderBy: { updatedAt: "desc" },
+                select: { id: true, eventId: true },
+              })
+            : [];
+        // A new meeting of a type starts where the last one was.
+        const meetingTypes = canManage
+          ? await getMeetingTypeDefaults(db, org.id, typeList)
+          : typeList;
+        return { events, counts, attendees, notes, meetingTypes };
+      }),
+      myRsvpRegistrations(user.id, MY_TICKETS),
+      canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
+      // The create form's host and invite pickers, for whoever can make a meeting.
+      canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
+    ]);
 
   const countOf = (eventId: string, status: string) =>
     counts.find((c) => c.eventId === eventId && c.status === status)?._count._all ?? 0;
@@ -278,6 +305,7 @@ export default async function MeetingsPage({
   const card = (e: MeetingRow, featured = false, leads = false, ended = false) => (
     <MeetingCard
       key={e.id}
+      orgId={org.id}
       event={e}
       canManage={canManage}
       status={conferenceStatus(e, canManage)}
@@ -398,16 +426,15 @@ export default async function MeetingsPage({
     <div className="space-y-7.5">
       <PageHeader
         title={sectionLabel(ctx.settings?.sidebar, "meetings")}
-        description={
-          // The live line once there is something to count; until then, what this is.
-          summary ||
-          (personal
-            ? "Calls, meet-ups and event pages anyone can RSVP to, plus everything you've signed up for."
-            : canManage
-              ? "Set up a call, an in-person meeting, or an event with a sign-up page."
-              : "What's coming up that you can join or sign up for.")
-        }
+        // The live line once there is something to count; nothing until then.
+        description={summary || undefined}
         actions={newMeeting("create", true)}
+      />
+
+      <MeetingsTabs
+        orgSlug={orgSlug}
+        current={showingPast && canManage ? "past" : "upcoming"}
+        showPast={canManage}
       />
 
       {canManage && (
@@ -443,24 +470,9 @@ export default async function MeetingsPage({
 
       {events.length === 0 ? (
         canManage ? (
-          <EmptyState
-            icon={Video}
-            title="No meetings yet"
-            description={
-              <>
-                Set one up and pick its shape: an online call, somewhere to be in person, or an
-                event with a sign-up page. Connect Google Meet, Zoom or Teams and the join link is
-                made for you.
-              </>
-            }
-            action={newMeeting("secondary")}
-          />
+          <EmptyState icon={Video} title="No meetings yet" action={newMeeting("secondary")} />
         ) : (
-          <EmptyState
-            icon={Ticket}
-            title="Nothing coming up"
-            description="Meetings you can join, and events taking sign-ups, show here."
-          />
+          <EmptyState icon={Ticket} title="Nothing coming up" />
         )
       ) : upcoming.length === 0 && past.length === 0 && activeType !== null ? (
         <>
@@ -470,49 +482,43 @@ export default async function MeetingsPage({
             title={
               activeType === NO_TYPE ? "No meetings without a type" : `No ${activeType} meetings`
             }
-            description="Nothing of this type is coming up or has happened yet."
-            action={
-              <Button variant="secondary" asChild>
-                <Link href={hrefWith({ type: null })} scroll={false}>
-                  Show all meetings
-                </Link>
-              </Button>
-            }
           />
         </>
       ) : canManage ? (
         <>
           {filterBar}
-          {upcoming.length > 0 && (
-            <section className="space-y-3" aria-labelledby="upcoming-heading">
-              <h2 id="upcoming-heading" className="heading flex items-center gap-2 text-[17px]">
-                {personal ? "Your meetings" : "Coming up"}
-                <Badge variant="secondary">{upcoming.length}</Badge>
-              </h2>
+          {showingPast ? (
+            past.length > 0 ? (
+              <section aria-label="Past meetings">
+                <PastMeetingList
+                  meetings={past}
+                  timeZone={timeZone}
+                  orgSlug={orgSlug}
+                  typeOf={typeOf}
+                  facts={(e) => ({
+                    checkedIn: e.attendanceCount ?? 0,
+                    signedUp:
+                      countOf(e.id, "GOING") ||
+                      attendees.filter((a) => a.eventId === e.id && a.rsvp === "YES").length,
+                    notes: notes.filter((n) => n.eventId === e.id),
+                  })}
+                />
+              </section>
+            ) : (
+              <EmptyState icon={Video} title="No past meetings yet" />
+            )
+          ) : upcoming.length > 0 ? (
+            <section aria-label={personal ? "Your meetings" : "Coming up"}>
               {listOf(upcoming, true)}
             </section>
-          )}
-          {past.length > 0 && (
-            <section className="space-y-3" aria-labelledby="past-heading">
-              <h2
-                id="past-heading"
-                className="heading text-muted-foreground flex items-center gap-2 text-[17px]"
-              >
-                Past <Badge variant="secondary">{past.length}</Badge>
-              </h2>
-              {listOf(past, false, true)}
-            </section>
+          ) : (
+            <EmptyState icon={Video} title="Nothing coming up" action={newMeeting("secondary")} />
           )}
         </>
       ) : (
         <>
           {filterBar}
-          <section className="space-y-3" aria-labelledby="open-heading">
-            <h2 id="open-heading" className="heading flex items-center gap-2 text-[17px]">
-              Taking RSVPs <Badge variant="secondary">{upcoming.length}</Badge>
-            </h2>
-            {listOf(upcoming, true)}
-          </section>
+          <section aria-label="Coming up">{listOf(upcoming, true)}</section>
         </>
       )}
     </div>

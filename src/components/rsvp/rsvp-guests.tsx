@@ -1,16 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import {
-  ArrowDownToLine,
-  ArrowUpToLine,
-  Banknote,
-  Download,
-  Ticket,
-  Trash2,
-  UserPlus,
-  UserX,
-} from "@/components/icons";
+import { Download, Ticket, Trash2, UserPlus } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
@@ -22,7 +13,6 @@ import {
   setGuestStatus,
 } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
 import { EmptyState } from "@/components/empty-state";
-import { ItemMenu } from "@/components/item-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -38,7 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchField } from "@/components/ui/search-field";
-import { chipClass } from "@/components/ui/segmented";
+import { chipClass, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import {
   Table,
   TableBody,
@@ -144,17 +134,42 @@ export function RsvpGuests({
     start(async () => {
       const result = await run();
       setBusy(null);
-      if (result.error) toast({ title: "That didn't work", description: result.error });
+      if (result.error) toast({ title: result.error, tone: "error" });
       else if (done) toast({ title: done });
       router.refresh();
+    });
+  }
+
+  /** Cancels a spot at once, with Undo back to where they were. */
+  function cancelSpot(g: RsvpGuest) {
+    const before = g.status === "WAITLIST" ? "WAITLIST" : "GOING";
+    setBusy(g.id);
+    start(async () => {
+      const result = await setGuestStatus(orgId, eventId, g.id, "CANCELLED");
+      setBusy(null);
+      if (result.error) {
+        toast({ title: result.error, tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({
+        title: "Spot cancelled",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const back = await setGuestStatus(orgId, eventId, g.id, before);
+            if (back.error) return back.error;
+            router.refresh();
+          },
+        },
+      });
     });
   }
 
   async function remove(g: RsvpGuest) {
     const ok = await confirm({
       title: `Delete ${g.name}'s sign-up?`,
-      description:
-        "It's removed for good, with no email to them. To free their spot and keep a record, use Cancel spot instead.",
+      description: "It's removed for good, with no email to them.",
       confirmLabel: "Delete",
       run: async () => (await deleteGuest(orgId, eventId, g.id)).error,
     });
@@ -338,10 +353,10 @@ export function RsvpGuests({
                         {initials(g.name)}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate font-medium">{g.name}</span>
+                        <span className="block font-medium break-words">{g.name}</span>
                         <a
                           href={`mailto:${g.email}`}
-                          className="text-muted-foreground block truncate text-xs hover:underline"
+                          className="text-muted-foreground block text-xs break-all hover:underline"
                         >
                           {g.email}
                         </a>
@@ -350,19 +365,19 @@ export function RsvpGuests({
                             href={instagramUrl(g.instagram)}
                             target="_blank"
                             rel="noopener noreferrer nofollow"
-                            className="text-muted-foreground block truncate text-xs hover:underline"
+                            className="text-muted-foreground block text-xs break-all hover:underline"
                           >
-                            @{g.instagram} on Instagram
+                            @{g.instagram}
                           </a>
                         )}
                         {(g.invitedBy || g.bringing.length > 0) && (
-                          <span className="text-muted-foreground block truncate text-xs">
+                          <span className="text-muted-foreground block text-xs break-words">
                             {[
                               g.invitedBy && `Invited by ${g.invitedBy}`,
                               g.bringing.length > 0 && `Bringing ${g.bringing.join(", ")}`,
                             ]
                               .filter(Boolean)
-                              .join(" · ")}
+                              .join(", ")}
                           </span>
                         )}
                       </span>
@@ -374,9 +389,46 @@ export function RsvpGuests({
                     </a>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_BADGE[g.status].variant}>
-                      {STATUS_BADGE[g.status].label}
-                    </Badge>
+                    {g.status === "CANCELLED" ? (
+                      <span className="flex items-center gap-2">
+                        <Badge variant={STATUS_BADGE.CANCELLED.variant}>
+                          {STATUS_BADGE.CANCELLED.label}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy === g.id}
+                          onClick={() =>
+                            act(g.id, () => setGuestStatus(orgId, eventId, g.id, "GOING"))
+                          }
+                        >
+                          Restore
+                        </Button>
+                      </span>
+                    ) : (
+                      <span
+                        role="radiogroup"
+                        aria-label={`${g.name}: status`}
+                        className={cn(segmentedTrack, "h-8")}
+                      >
+                        {(["GOING", "WAITLIST"] as const).map((st) => (
+                          <button
+                            key={st}
+                            type="button"
+                            role="radio"
+                            aria-checked={g.status === st}
+                            disabled={busy === g.id}
+                            onClick={() =>
+                              g.status !== st &&
+                              act(g.id, () => setGuestStatus(orgId, eventId, g.id, st))
+                            }
+                            className={cn(segmentedItem(g.status === st), "h-6 px-2.5 text-xs")}
+                          >
+                            {STATUS_BADGE[st].label}
+                          </button>
+                        ))}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
                     {formatDistanceToNow(new Date(g.createdAt), { addSuffix: true })}
@@ -386,7 +438,15 @@ export function RsvpGuests({
                       {g.status !== "GOING" ? (
                         <span className="text-muted-foreground text-xs">—</span>
                       ) : g.paid.confirmed ? (
-                        <Badge variant="success">Paid {formatCents(g.paid.cents ?? owes)}</Badge>
+                        <button
+                          type="button"
+                          disabled={busy === g.id}
+                          onClick={() => act(g.id, () => setGuestPaid(orgId, eventId, g.id, false))}
+                          aria-label={`${g.name} paid. Mark not paid`}
+                          title="Mark not paid"
+                        >
+                          <Badge variant="success">Paid {formatCents(g.paid.cents ?? owes)}</Badge>
+                        </button>
                       ) : (
                         <Button
                           variant={g.paid.claimed ? "default" : "outline"}
@@ -399,11 +459,7 @@ export function RsvpGuests({
                               `${g.name} is marked paid`,
                             )
                           }
-                          title={
-                            g.paid.claimed
-                              ? "They said they paid. Confirm once you see it."
-                              : "Mark paid (cash at the door, or a payment you got)"
-                          }
+                          title="Mark paid"
                         >
                           {g.paid.claimed
                             ? `Confirm ${formatCents(g.paid.cents ?? owes)}`
@@ -423,56 +479,22 @@ export function RsvpGuests({
                     />
                   </TableCell>
                   <TableCell>
-                    <ItemMenu
-                      label={`Actions for ${g.name}`}
-                      items={[
-                        g.status !== "GOING" && {
-                          label: "Move to going",
-                          icon: ArrowUpToLine,
-                          onSelect: () =>
-                            act(
-                              g.id,
-                              () => setGuestStatus(orgId, eventId, g.id, "GOING"),
-                              `${g.name} is going`,
-                            ),
-                        },
-                        g.status !== "WAITLIST" && {
-                          label: "Move to waitlist",
-                          icon: ArrowDownToLine,
-                          onSelect: () =>
-                            act(
-                              g.id,
-                              () => setGuestStatus(orgId, eventId, g.id, "WAITLIST"),
-                              `${g.name} is on the waitlist`,
-                            ),
-                        },
-                        owes !== null &&
-                          g.status === "GOING" &&
-                          (g.paid.confirmed || g.paid.claimed) && {
-                            label: "Mark not paid",
-                            icon: Banknote,
-                            onSelect: () =>
-                              act(g.id, () => setGuestPaid(orgId, eventId, g.id, false)),
-                          },
-                        g.status !== "CANCELLED" && {
-                          label: "Cancel spot",
-                          icon: UserX,
-                          onSelect: () =>
-                            act(
-                              g.id,
-                              () => setGuestStatus(orgId, eventId, g.id, "CANCELLED"),
-                              `${g.name}'s spot was cancelled`,
-                            ),
-                        },
-                        {
-                          label: "Delete",
-                          icon: Trash2,
-                          destructive: true,
-                          separated: true,
-                          onSelect: () => void remove(g),
-                        },
-                      ]}
-                    />
+                    {/* Cancel a spot with Undo; a cancelled one can be deleted for good. */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={busy === g.id}
+                      onClick={() => (g.status === "CANCELLED" ? void remove(g) : cancelSpot(g))}
+                      aria-label={
+                        g.status === "CANCELLED"
+                          ? `Delete ${g.name}'s sign-up for good`
+                          : `Cancel ${g.name}'s spot`
+                      }
+                      title={g.status === "CANCELLED" ? "Delete for good" : "Cancel spot"}
+                      className="text-muted-foreground hover:text-tint-danger-foreground"
+                    >
+                      <Trash2 className="size-4" aria-hidden="true" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

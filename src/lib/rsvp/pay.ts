@@ -118,6 +118,6 @@ export function costLine(mode: CostMode, cents: number, going: number): string {
   if (mode === "EACH") return `${formatCents(cents)} each`;
   const each = shareCents(mode, cents, going) ?? cents;
   return going > 1
-    ? `${formatCents(cents)} split ${going} ways · ${formatCents(each)} each right now`
+    ? `${formatCents(cents)} split ${going} ways, ${formatCents(each)} each right now`
     : `${formatCents(cents)} split between everyone going`;
 }

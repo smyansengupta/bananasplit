@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   registrations: vi.fn(),
   connections: vi.fn(),
   members: vi.fn(),
+  notes: vi.fn(async () => []),
+  Past: vi.fn((_props: unknown) => null),
   Card: () => null,
   NewButton: () => null,
 }));
@@ -27,9 +29,10 @@ vi.mock("@/server/db/context", () => ({
   withOrgTx: async (_orgId: string, fn: (ctx: unknown) => unknown) =>
     fn({
       db: {
-        event: { findMany: mocks.findMany },
+        event: { findMany: mocks.findMany, findFirst: async () => null },
         eventRegistration: { groupBy: mocks.groupBy },
         eventAttendee: { findMany: mocks.attendees },
+        note: { findMany: mocks.notes },
       },
     }),
 }));
@@ -43,6 +46,7 @@ vi.mock("@/components/meetings/meeting-card", () => ({
   Cover: () => null,
   listWhen: () => "",
 }));
+vi.mock("@/components/meetings/past-meeting-list", () => ({ PastMeetingList: mocks.Past }));
 vi.mock("@/components/meetings/video-connections", () => ({ VideoConnections: () => null }));
 vi.mock("@/components/meetings/new-meeting-button", () => ({ NewMeetingButton: mocks.NewButton }));
 vi.mock("@/server/members", () => ({
@@ -120,6 +124,18 @@ async function cards(search: Record<string, string | string[]> = {}) {
   return propsOf(await render(search), mocks.Card);
 }
 
+type PastProps = {
+  meetings: { id: string }[];
+  facts: (e: { id: string }) => Record<string, unknown>;
+};
+/** The Past list's props (there is at most one). */
+function findPastProps(node: ReactNode): PastProps {
+  return propsOf(node, mocks.Past)[0] as unknown as PastProps;
+}
+function findPast(node: ReactNode) {
+  return findPastProps(node)?.meetings ?? [];
+}
+
 /** Every New meeting button's props, header first. */
 async function newButtons(search: Record<string, string | string[]> = {}) {
   return propsOf(await render(search), mocks.NewButton);
@@ -137,6 +153,14 @@ beforeEach(() => {
 });
 
 describe("the Meetings list: what it loads", () => {
+  it("shows a member the meetings they were invited to, in person ones too", async () => {
+    signIn("MEMBER");
+    await cards();
+
+    const { where } = mocks.findMany.mock.calls[0]![0] as { where: { OR: unknown[] } };
+    expect(where.OR).toContainEqual({ attendees: { some: { userId: "user_1" } } });
+  });
+
   it("never loads the host's start link", async () => {
     await cards();
 
@@ -227,7 +251,7 @@ describe("the Meetings list: what each card says about its call", () => {
 });
 
 describe("the Meetings list: meetings that are over", () => {
-  it("marks the Past list's cards, and only those, as past", async () => {
+  it("puts finished meetings in the Past list, not on cards", async () => {
     const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     mocks.findMany.mockResolvedValue([
       stored({
@@ -240,9 +264,10 @@ describe("the Meetings list: meetings that are over", () => {
 
     const found = await cards();
 
-    const pastOf = (id: string) => found.find((c) => (c.event as { id: string }).id === id)?.past;
-    expect(pastOf("old")).toBe(true);
-    expect(pastOf("soon")).toBe(false);
+    expect(found.map((c) => (c.event as { id: string }).id)).toEqual(["soon"]);
+    expect(found[0]?.past).toBe(false);
+    const past = findPast(await render({ view: "past" }));
+    expect(past.map((e) => e.id)).toEqual(["old"]);
   });
 });
 
@@ -358,21 +383,25 @@ describe("the Meetings list: the next one and the wide one", () => {
     expect(a).toMatchObject({ featured: false, first: true });
   });
 
-  it("widens and lights nothing on the Past list", async () => {
-    const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  it("lists past meetings newest first, with their notes and check-ins", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const at = (n: number) => new Date(Date.now() - n * day);
     mocks.findMany.mockResolvedValue([
+      stored({ id: "older", startsAt: at(14), endsAt: new Date(at(14).getTime() + 3_600_000) }),
       stored({
-        id: "old",
-        rsvpCover: COVER,
-        featured: true,
-        startsAt: lastWeek,
-        endsAt: new Date(lastWeek.getTime() + 60 * 60 * 1000),
+        id: "newer",
+        attendanceCount: 12,
+        startsAt: at(7),
+        endsAt: new Date(at(7).getTime() + 3_600_000),
       }),
     ]);
+    mocks.notes.mockResolvedValueOnce([{ id: "n1", eventId: "newer" }] as never);
 
-    const [old] = await cards();
+    const props = findPastProps(await render({ view: "past" }));
 
-    expect(old).toMatchObject({ featured: false, first: false, past: true });
+    expect(props.meetings.map((e) => e.id)).toEqual(["newer", "older"]);
+    const facts = props.facts(props.meetings[0]!);
+    expect(facts).toMatchObject({ checkedIn: 12, notes: [{ id: "n1", eventId: "newer" }] });
   });
 });
 

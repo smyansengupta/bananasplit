@@ -329,6 +329,10 @@ export const JOB_KINDS = {
         /** "reminder": how many minutes before the start it is for. */
         offsetMinutes: reminderOffset.optional(),
         startsAt: isoInstant.optional(),
+        /** "cancelled": also tell the members invited (in-app), not only the sign-ups. */
+        notifyMembers: z.boolean().optional(),
+        /** "cancelled": who deleted it, left out of the members told. */
+        actorId: id.optional(),
       })
       .strict()
       .refine(

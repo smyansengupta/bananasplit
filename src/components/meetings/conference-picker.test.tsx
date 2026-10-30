@@ -8,34 +8,12 @@ import type { MeetingConnection } from "@/server/conference/connections";
  * above all what it does to the link when the provider changes: the old
  * provider's link must never ride along into a save for the new one.
  *
- * The menu is drawn as plain buttons here; what is under test is the picker's
- * own handling of a choice, not Radix.
+ * Each choice is a button in a radio group.
  */
 
 vi.mock("@/app/app/[orgSlug]/meetings/actions", () => ({
   meetingConnectionsAction: vi.fn(async () => []),
 }));
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuItem: ({
-    children,
-    onSelect,
-    disabled,
-  }: {
-    children: React.ReactNode;
-    onSelect?: () => void;
-    disabled?: boolean;
-  }) => (
-    <button type="button" role="menuitem" disabled={disabled} onClick={() => onSelect?.()}>
-      {children}
-    </button>
-  ),
-  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuSeparator: () => <hr />,
-}));
-
 const { ConferencePicker } = await import("./conference-picker");
 
 function connection(provider: string, label: string, connected = true): MeetingConnection {
@@ -76,7 +54,7 @@ function picker(props: Partial<Parameters<typeof ConferencePicker>[0]> = {}) {
   return { onProviderChange, onUrlChange };
 }
 
-const item = (name: RegExp) => screen.getByRole("menuitem", { name });
+const item = (name: RegExp) => screen.getByRole("radio", { name });
 
 afterEach(() => cleanup());
 
@@ -93,7 +71,7 @@ describe("ConferencePicker: the link when the provider changes", () => {
   it("drops it when a meeting we made becomes a link to paste, so only the pasted one is saved", () => {
     const { onProviderChange, onUrlChange } = picker({ managed: true });
 
-    fireEvent.click(item(/A link I'll paste/));
+    fireEvent.click(item(/Paste link/));
 
     expect(onProviderChange).toHaveBeenCalledWith("OTHER");
     expect(onUrlChange).toHaveBeenCalledWith("");
@@ -102,7 +80,7 @@ describe("ConferencePicker: the link when the provider changes", () => {
   it("drops it when the call is taken off", () => {
     const { onUrlChange } = picker({ managed: true });
 
-    fireEvent.click(item(/No video call/));
+    fireEvent.click(item(/None/));
 
     expect(onUrlChange).toHaveBeenCalledWith("");
   });

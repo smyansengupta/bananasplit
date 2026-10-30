@@ -175,7 +175,7 @@ describe("NewMeetingButton", () => {
     render(button({ startOpen: true, initialShape: "online" }));
     await dialogOpen();
     expect(chosen()).toEqual([true, false, false]);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     fireEvent.click(screen.getByRole("button", { name: "New meeting" }));

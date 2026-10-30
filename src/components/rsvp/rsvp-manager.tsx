@@ -4,7 +4,6 @@ import {
   Banknote,
   Check,
   Copy,
-  ExternalLink,
   Hourglass,
   Printer,
   PowerOff,
@@ -14,18 +13,16 @@ import {
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import {
   turnOffRsvpPage,
   turnOnRsvpPage,
 } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
 import { BackLink } from "@/components/back-link";
-import { ItemMenu } from "@/components/item-menu";
 import { PageHeader } from "@/components/page-header";
 import { BlockCard } from "@/components/ui/block-card";
 import { Button } from "@/components/ui/button";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Gauge } from "@/components/ui/meters";
 import { Segmented } from "@/components/ui/segmented";
 import { IconChip, Stat, StatStrip } from "@/components/ui/stat";
@@ -70,15 +67,31 @@ export interface RsvpManagerProps {
   messaging: { email: "org" | "platform"; texts: boolean };
   links: RsvpManagerLinks;
   initialTab?: "guests" | "page";
+  /** Just made (?new=1): open on the page's settings with its link copied. */
+  justCreated?: boolean;
 }
 
 export function RsvpManager(props: RsvpManagerProps) {
   const { orgId, event, page, guests, links } = props;
   const router = useRouter();
-  const [tab, setTab] = useState<"guests" | "page">(props.initialTab ?? "guests");
+  const [tab, setTab] = useState<"guests" | "page">(
+    props.initialTab ?? (props.justCreated ? "page" : "guests"),
+  );
   const [pending, start] = useTransition();
-  const [confirmEl, confirm] = useConfirm();
   const [copied, setCopied] = useState(false);
+  // A page made a moment ago opens on its settings, and its link is already
+  // on the clipboard, ready to paste into the group chat.
+  useEffect(() => {
+    if (!props.justCreated || !page.url) return;
+    navigator.clipboard?.writeText(page.url).then(
+      () => toast({ title: "Link copied" }),
+      () => undefined,
+    );
+    // Drop ?new=1, so a reload doesn't copy it again.
+    router.replace(window.location.pathname, { scroll: false });
+    // Once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const going = guests.filter((g) => g.status === "GOING");
   const waiting = guests.filter((g) => g.status === "WAITLIST").length;
@@ -96,23 +109,32 @@ export function RsvpManager(props: RsvpManagerProps) {
         toast({ title: "Couldn't turn on the page", description: result.error });
         return;
       }
-      toast({
-        title: "Your RSVP page is live",
-        description: "Share the link to start taking sign-ups.",
-      });
+      toast({ title: "Page is live" });
       router.refresh();
     });
   }
 
-  async function turnOff() {
-    const ok = await confirm({
-      title: "Turn off the RSVP page?",
-      description:
-        "The link stops working and nobody new can sign up. Everyone already signed up stays on the list, and turning it back on brings the same link back.",
-      confirmLabel: "Turn off",
-      run: async () => (await turnOffRsvpPage(orgId, event.id)).error,
+  /** Turns the page off at once, with Undo (the same link comes back on). */
+  function turnOff() {
+    start(async () => {
+      const result = await turnOffRsvpPage(orgId, event.id);
+      if (result.error) {
+        toast({ title: result.error, tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({
+        title: "Page off",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const back = await turnOnRsvpPage(orgId, event.id);
+            if (back.error) return back.error;
+            router.refresh();
+          },
+        },
+      });
     });
-    if (ok) router.refresh();
   }
 
   async function copyLink() {
@@ -128,40 +150,27 @@ export function RsvpManager(props: RsvpManagerProps) {
 
   const header = (
     <PageHeader
-      title="RSVP page"
-      description={`${event.title} · ${event.when}`}
+      title="Sign-ups"
+      description={event.when}
       actions={
         page.enabled && page.url ? (
           <>
             <Button variant="outline" asChild>
               <Link href={links.door}>
                 <ScanLine aria-hidden="true" />
-                Check in guests
+                Door mode
               </Link>
             </Button>
             <Button variant="outline" asChild>
-              <a href={page.url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink aria-hidden="true" />
-                Open page
+              <a href={links.flyer} target="_blank" rel="noopener noreferrer">
+                <Printer aria-hidden="true" />
+                Flyer
               </a>
             </Button>
-            <ItemMenu
-              label="More RSVP page actions"
-              items={[
-                {
-                  label: "Print a flyer",
-                  icon: Printer,
-                  onSelect: () => window.open(links.flyer, "_blank", "noopener"),
-                },
-                {
-                  label: "Turn off the page",
-                  icon: PowerOff,
-                  onSelect: () => void turnOff(),
-                  destructive: true,
-                  separated: true,
-                },
-              ]}
-            />
+            <Button variant="ghost" onClick={turnOff} disabled={pending}>
+              <PowerOff aria-hidden="true" />
+              Turn off
+            </Button>
           </>
         ) : null
       }
@@ -170,7 +179,6 @@ export function RsvpManager(props: RsvpManagerProps) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-7">
-      {confirmEl}
       <BackLink href={links.back.href} label={links.back.label} />
       {header}
 
@@ -184,16 +192,12 @@ export function RsvpManager(props: RsvpManagerProps) {
               </h2>
               <p className="text-muted-foreground max-w-prose text-sm leading-relaxed">
                 {page.url
-                  ? "Turn it back on and the same link works again. Everyone who signed up is still on the list below."
-                  : "A public page for this event: the time and place with a map, who's hosting and who's going, and a sign-up form. Split the cost, hand out a bring list, give every guest an invite link and a QR ticket, and check them in at the door."}
+                  ? "Turn it back on and the same link works."
+                  : "A public sign-up page with a map, waitlist, tickets and check-in."}
               </p>
               <Button onClick={turnOn} disabled={pending}>
                 <Ticket aria-hidden="true" />
-                {pending
-                  ? "Turning on…"
-                  : page.url
-                    ? "Turn the page back on"
-                    : "Turn on the RSVP page"}
+                {pending ? "Turning on…" : "Turn on"}
               </Button>
             </div>
             <PagePreview
@@ -207,12 +211,11 @@ export function RsvpManager(props: RsvpManagerProps) {
 
       {page.enabled && page.url && (
         <div className="bg-card text-card-foreground ring-foreground/6 edge flex flex-wrap items-center gap-3 rounded-full py-1.5 ps-5 pe-1.5 ring-1">
-          <span className="text-muted-foreground text-[13px] font-medium">Link</span>
           <a
             href={page.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="min-w-0 flex-1 truncate text-[15px] font-medium underline-offset-4 hover:underline"
+            className="min-w-0 flex-1 text-[15px] font-medium break-all underline-offset-4 hover:underline"
           >
             {page.url.replace(/^https?:\/\//, "")}
           </a>
@@ -234,49 +237,36 @@ export function RsvpManager(props: RsvpManagerProps) {
             {capacity ? (
               <BlockCard
                 tone="goal"
-                kicker={
+                title={going.length >= capacity ? "Full" : "Spots taken"}
+                figure={`${going.length} of ${capacity}`}
+                figureLabel={
                   page.settings.closed
                     ? "Sign-ups closed"
                     : event.ended
                       ? "Event ended"
-                      : "Taking sign-ups"
-                }
-                title={going.length >= capacity ? "Full" : "Spots taken"}
-                figure={`${going.length} of ${capacity}`}
-                figureLabel={
-                  going.length >= capacity
-                    ? page.settings.waitlist
-                      ? "New sign-ups join the waitlist"
-                      : "Registration is closed"
-                    : `${capacity - going.length} ${capacity - going.length === 1 ? "spot" : "spots"} left`
+                      : going.length >= capacity
+                        ? page.settings.waitlist
+                          ? "Waitlist open"
+                          : "Registration closed"
+                        : `${capacity - going.length} ${capacity - going.length === 1 ? "spot" : "spots"} left`
                 }
                 aside={<Gauge value={(going.length / capacity) * 100} size={132} />}
                 className="min-h-0"
               />
             ) : null}
             <StatStrip className={cn(capacity && "md:pl-4")}>
-              <Stat
-                icon={Users}
-                value={going.length}
-                label={capacity ? "Going" : "Going · no limit"}
-              />
-              <Stat
-                icon={Hourglass}
-                value={waiting}
-                label={page.settings.waitlist ? "On the waitlist" : "Waitlist off"}
-              />
+              {!capacity && <Stat icon={Users} value={going.length} label="Going" />}
+              {page.settings.waitlist && (
+                <Stat icon={Hourglass} value={waiting} label="Waitlisted" />
+              )}
               {props.owes !== null && (
                 <Stat
                   icon={Banknote}
                   value={formatCents(collected)}
-                  label={`${paidCount} of ${going.length} paid · ${formatCents(props.owes)} each`}
+                  label={`${paidCount} of ${going.length} paid, ${formatCents(props.owes)} each`}
                 />
               )}
-              <Stat
-                icon={ScanLine}
-                value={checkedIn}
-                label={going.length ? `Checked in of ${going.length}` : "Checked in"}
-              />
+              <Stat icon={ScanLine} value={checkedIn} label="Checked in" />
             </StatStrip>
           </div>
 
@@ -289,7 +279,7 @@ export function RsvpManager(props: RsvpManagerProps) {
                 value: "guests",
                 label: `Guests (${guests.filter((g) => g.status !== "CANCELLED").length})`,
               },
-              { value: "page", label: "Page settings" },
+              { value: "page", label: "Page" },
             ]}
           />
 

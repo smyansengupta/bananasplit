@@ -38,6 +38,9 @@ import { cn } from "@/lib/utils";
 import { useViewerTimeZone } from "./hooks";
 import { intervalLabel, momentLabel, momentDayLabel, timeZoneDisplayName } from "./poll-format";
 import { PollGridFrame } from "./poll-grid";
+import { ConferencePicker, useMeetingConnections } from "@/components/meetings/conference-picker";
+import { ConferenceProvider } from "@/generated/prisma/enums";
+import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
 import {
   buildPollGrid,
   distinctRespondents,
@@ -99,6 +102,7 @@ export function PollResponder({
   actions,
   notices,
   aside,
+  bookBest = false,
 }: {
   /** The stripped DTO (src/lib/polls/poll-view.ts): no ids, emails or keys. */
   poll: PollView;
@@ -113,6 +117,8 @@ export function PollResponder({
   notices?: ReactNode;
   /** Extra panels at the top of the side column. */
   aside?: ReactNode;
+  /** Arrived from a card's "Book best time": open the schedule step on the best one. */
+  bookBest?: boolean;
 }) {
   const router = useRouter();
   const isGuest = respondAs === "guest";
@@ -283,20 +289,40 @@ export function PollResponder({
     if (dirty || (hasAnswered && name !== savedName)) void save(myResponses, name);
   }
 
+  // Booking asks how the meeting happens: online with a call, or in person
+  // at a place, with the same provider buttons as the meeting form.
+  const connections = useMeetingConnections(orgId ?? "");
+  const [bookOnline, setBookOnline] = useState(false);
+  const [bookProvider, setBookProvider] = useState<ConferenceProvider>(ConferenceProvider.NONE);
+  const [bookUrl, setBookUrl] = useState("");
+  const [bookPlace, setBookPlace] = useState("");
+
   function openSchedule(window: RankedSlot) {
     setScheduleError(null);
     setScheduleTarget(window);
+  }
+  // "Book best time" on a card lands here and opens the schedule step on
+  // the best time, once.
+  const [booked, setBooked] = useState(false);
+  if (bookBest && !booked && canSchedule && bestWindows[0]) {
+    setBooked(true);
+    openSchedule(bestWindows[0]);
   }
 
   function confirmSchedule() {
     if (!scheduleTarget || !orgId) return;
     startScheduling(async () => {
-      const result = await finalizePoll(orgId, poll.id, scheduleTarget.slot.id);
+      const result = await finalizePoll(orgId, poll.id, scheduleTarget.slot.id, {
+        conferenceProvider: bookOnline ? bookProvider : ConferenceProvider.NONE,
+        conferenceUrl:
+          bookOnline && bookProvider === ConferenceProvider.OTHER ? bookUrl || null : null,
+        location: bookOnline ? null : bookPlace.trim() || null,
+      });
       if (result.error) {
         setScheduleError(result.error);
         return;
       }
-      if (orgSlug && result.eventId) router.push(`/app/${orgSlug}/calendar/${result.eventId}`);
+      if (orgSlug && result.eventId) router.push(`/app/${orgSlug}/meetings/${result.eventId}`);
       else router.refresh();
       setScheduleTarget(null);
     });
@@ -472,7 +498,7 @@ export function PollResponder({
               </span>
               {poll.finalizedEventId && orgSlug && (
                 <Button asChild size="sm" variant="outline">
-                  <Link href={`/app/${orgSlug}/calendar/${poll.finalizedEventId}`}>View event</Link>
+                  <Link href={`/app/${orgSlug}/meetings/${poll.finalizedEventId}`}>View event</Link>
                 </Button>
               )}
             </span>
@@ -696,7 +722,7 @@ export function PollResponder({
           </DialogHeader>
           {scheduleTarget && scheduleInvitees && (
             <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
-              <li>Creates an internal event, &ldquo;{poll.title}&rdquo;, and closes the poll.</li>
+              <li>Creates an internal event and closes the poll.</li>
               <li>
                 {scheduleInvitees.members === 0
                   ? "No members are invited: none marked the start time as available."
@@ -711,6 +737,49 @@ export function PollResponder({
               )}
             </ul>
           )}
+          <div className="space-y-3">
+            <div role="radiogroup" aria-label="How it happens" className={segmentedTrack}>
+              {(
+                [
+                  [false, "In person"],
+                  [true, "Online"],
+                ] as const
+              ).map(([online, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="radio"
+                  aria-checked={bookOnline === online}
+                  onClick={() => {
+                    setBookOnline(online);
+                    if (online && bookProvider === ConferenceProvider.NONE) {
+                      const first = firstConnectedProvider(connections);
+                      if (first) setBookProvider(first);
+                    }
+                  }}
+                  className={segmentedItem(bookOnline === online)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {bookOnline ? (
+              <ConferencePicker
+                connections={connections}
+                provider={bookProvider}
+                onProviderChange={setBookProvider}
+                conferenceUrl={bookUrl}
+                onUrlChange={setBookUrl}
+              />
+            ) : (
+              <Input
+                aria-label="Where"
+                placeholder="Room or address"
+                value={bookPlace}
+                onChange={(e) => setBookPlace(e.target.value)}
+              />
+            )}
+          </div>
           {scheduleError && (
             <p className="text-destructive text-sm" role="alert">
               {scheduleError}

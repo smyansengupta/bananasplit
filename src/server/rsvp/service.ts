@@ -383,20 +383,36 @@ export async function scheduleEventReminders(
 }
 
 /**
- * Tells everyone still signed up that the event is off (it was deleted). A
- * job does the fan-out on the service path, so it works whoever deleted it
- * (RLS shows sign-ups only to owners and admins).
+ * How long a deleted event waits before anyone is told it's off: the Undo
+ * window. Deleting is undone from the toast (restoreEvents), and the job
+ * below checks the event is still deleted before telling anyone, so an
+ * undone delete tells nobody.
+ */
+export const CANCEL_GRACE_MS = 20_000;
+
+/**
+ * Tells everyone still signed up that the event is off (it was deleted),
+ * and, when asked, the members who were invited. A job does the fan-out on
+ * the service path, so it works whoever deleted it (RLS shows sign-ups only
+ * to owners and admins). It runs after the Undo window, never at once.
  */
 export async function notifyEventCancelled(
   db: Db,
   organizationId: string,
   eventId: string,
+  opts: { notifyMembers?: boolean; actorId?: string } = {},
 ): Promise<void> {
   await enqueueJob(db, {
     orgId: organizationId,
     kind: "rsvp-fanout",
     key: `${eventId}:cancelled`,
-    payload: { eventId, stage: "cancelled" },
+    payload: {
+      eventId,
+      stage: "cancelled",
+      ...(opts.notifyMembers ? { notifyMembers: true } : {}),
+      ...(opts.actorId ? { actorId: opts.actorId } : {}),
+    },
+    runAt: new Date(Date.now() + CANCEL_GRACE_MS),
   });
 }
 

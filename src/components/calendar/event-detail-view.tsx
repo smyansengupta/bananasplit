@@ -12,14 +12,14 @@ import {
   Pencil,
   Settings2,
   Ticket,
-  Trash2,
+  Repeat,
   Video,
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
-import { deleteEvent, rsvpToEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { extendSeries, rsvpToEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
@@ -33,7 +33,6 @@ import { StatusDot } from "@/components/ui/chip";
 import { Fact } from "@/components/ui/fact";
 import { Gauge } from "@/components/ui/meters";
 import { IconChip } from "@/components/ui/stat";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import type { CalendarSyncState, RSVPStatus } from "@/generated/prisma/enums";
@@ -45,7 +44,7 @@ import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
 import { EventFormDialog, type EventFormEvent } from "./event-form-dialog";
 import { useViewerTimeZone } from "./hooks";
 import { RSVP_META } from "./kinds";
-import type { CalendarMember } from "./member-picker";
+import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 
 /**
  * One event, in full.
@@ -137,7 +136,6 @@ export function EventDetailView({
   const sectionHref = `/app/${orgSlug}/${section}`;
   const [editOpen, setEditOpen] = useState(canEdit && startInEdit);
   const [isPending, startTransition] = useTransition();
-  const [confirmEl, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
 
   const myAttendance = event.attendees.find((a) => a.userId === currentUserId);
@@ -151,17 +149,17 @@ export function EventDetailView({
     });
   }
 
-  async function handleDelete() {
-    const ok = await confirm({
-      title: `Delete “${event.title}”?`,
-      description:
-        "Invited members are told it was cancelled. It's removed from synced calendars and the public site too.",
-      confirmLabel: "Delete event",
-      run: async () => (await deleteEvent(orgId, event.id)).error,
+  /** Adds four weeks after the last one (or makes a one-off repeat weekly). */
+  function handleRepeat() {
+    startTransition(async () => {
+      const result = await extendSeries(orgId, event.id, 4);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      toast({ title: result.added === 1 ? "Added 1 week" : `Added ${result.added ?? 0} weeks` });
+      router.refresh();
     });
-    if (!ok) return;
-    toast({ title: "Event deleted", description: event.title });
-    router.push(sectionHref);
   }
 
   function handleCreateMeetingNotes() {
@@ -183,7 +181,6 @@ export function EventDetailView({
 
   return (
     <div className="mx-auto max-w-5xl space-y-7">
-      {confirmEl}
       <BackLink href={sectionHref} label={section === "meetings" ? "Meetings" : "Calendar"} />
 
       <PageHeader
@@ -196,17 +193,14 @@ export function EventDetailView({
         actions={
           canEdit ? (
             <>
+              {/* Delete is in the form, with Undo; one place, not two. */}
+              <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
+                <Repeat aria-hidden className="size-4" />
+                {event.seriesId ? "Add 4 weeks" : "Repeat weekly"}
+              </Button>
               <Button variant="outline" onClick={() => setEditOpen(true)}>
                 <Pencil aria-hidden className="size-4" />
-                Edit event
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => void handleDelete()}
-                disabled={isPending}
-              >
-                <Trash2 aria-hidden className="size-4" />
-                Delete event
+                Edit
               </Button>
             </>
           ) : null
@@ -398,7 +392,6 @@ export function EventDetailView({
           {myAttendance && (
             <BlockCard
               tone="answer"
-              kicker={myAttendance.rsvp === "PENDING" ? "Waiting on your answer" : "Your answer"}
               title={
                 myAttendance.rsvp === "PENDING"
                   ? "Are you going?"
@@ -436,18 +429,17 @@ export function EventDetailView({
             (rsvp.enabled && canEdit && rsvp.capacity ? (
               <BlockCard
                 tone="goal"
-                kicker="RSVP page · Live"
                 title="Sign-ups"
                 href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}
                 figure={rsvp.going}
-                figureLabel={`of ${rsvp.capacity} spots${rsvp.waitlist > 0 ? ` · ${rsvp.waitlist} waitlisted` : ""}`}
+                figureLabel={`of ${rsvp.capacity} spots${rsvp.waitlist > 0 ? `, ${rsvp.waitlist} waitlisted` : ""}`}
                 aside={<Gauge value={capacityPct} size={132} />}
                 className="min-h-0"
               />
             ) : (
               <Card>
                 <CardHeader className="flex items-center gap-2">
-                  <CardTitle>RSVP page</CardTitle>
+                  <CardTitle>Sign-ups</CardTitle>
                   <span className="flex-1" />
                   {rsvp.enabled ? (
                     <StatusDot color="var(--success)">Live</StatusDot>
@@ -464,8 +456,7 @@ export function EventDetailView({
                           <span className="text-muted-foreground">going</span>
                           {rsvp.waitlist > 0 && (
                             <span className="text-muted-foreground">
-                              {" "}
-                              · {rsvp.waitlist} waitlisted
+                              , {rsvp.waitlist} waitlisted
                             </span>
                           )}
                         </p>
@@ -475,16 +466,15 @@ export function EventDetailView({
                           href={rsvp.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground block truncate text-sm underline-offset-4 hover:underline"
+                          className="text-muted-foreground hover:text-foreground block text-sm break-all underline-offset-4 hover:underline"
                         >
                           {rsvp.url.replace(/^https?:\/\//, "")}
                         </a>
                       )}
                     </>
                   ) : (
-                    <p className="text-muted-foreground text-sm leading-relaxed">
-                      A public page where anyone with the link signs up, with a waitlist, a map and
-                      reminders.
+                    <p className="text-muted-foreground text-sm">
+                      Anyone with the link can sign up.
                     </p>
                   )}
                   {canEdit && (
@@ -495,11 +485,7 @@ export function EventDetailView({
                     >
                       <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}>
                         {rsvp.enabled ? <Settings2 aria-hidden /> : <Ticket aria-hidden />}
-                        {rsvp.enabled
-                          ? "Manage guests and page"
-                          : section === "meetings"
-                            ? "Add a sign-up page"
-                            : "Set up an RSVP page"}
+                        {rsvp.enabled ? "Guests and page" : "Add a sign-up page"}
                       </Link>
                     </Button>
                   )}
@@ -513,13 +499,27 @@ export function EventDetailView({
               <Badge variant="secondary">{event.attendees.length}</Badge>
               <span className="flex-1" />
               {going.length > 0 && <FaceStack people={going.map((a) => a.user)} />}
+              {canEdit && (
+                <InviteButton
+                  orgId={orgId}
+                  eventId={event.id}
+                  members={members}
+                  invited={event.attendees.map((a) => a.userId)}
+                />
+              )}
             </CardHeader>
             <CardContent>
               {event.attendees.length > 0 ? (
                 <>
                   <p className="text-muted-foreground mb-3 text-[13px] tabular-nums">
-                    {count("YES")} going · {count("MAYBE")} maybe · {count("NO")} not going ·{" "}
-                    {count("PENDING")} no answer
+                    {[
+                      count("YES") > 0 && `${count("YES")} going`,
+                      count("MAYBE") > 0 && `${count("MAYBE")} maybe`,
+                      count("NO") > 0 && `${count("NO")} not going`,
+                      count("PENDING") > 0 && `${count("PENDING")} no answer`,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
                   </p>
                   <ul className="space-y-2">
                     {event.attendees.map((a) => (
@@ -529,7 +529,7 @@ export function EventDetailView({
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <UserAvatar user={a.user} size="md" />
-                          <span className="truncate font-medium">{a.user.name ?? "Member"}</span>
+                          <span className="font-medium break-words">{a.user.name ?? "Member"}</span>
                         </span>
                         <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>
                           {RSVP_META[a.rsvp].short}
@@ -539,13 +539,7 @@ export function EventDetailView({
                   </ul>
                 </>
               ) : (
-                <EmptyState
-                  size="compact"
-                  title="Nobody is invited yet"
-                  description={
-                    canEdit ? "Add members under More details when you edit." : undefined
-                  }
-                />
+                <EmptyState size="compact" title="Nobody is invited yet" />
               )}
             </CardContent>
           </Card>
@@ -593,74 +587,91 @@ function RemindersCard({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<number[]>(minutes);
+  const [value, setValue] = useState<number[]>(minutes);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function startEditing() {
-    setDraft(minutes);
-    setError(null);
-    setEditing(true);
-  }
-
-  function save() {
+  // A chip saves as it's tapped; there is no Edit, Save or Cancel.
+  function change(next: number[]) {
+    const before = value;
+    setValue(next);
     setError(null);
     startTransition(async () => {
-      const result = await updateEvent(orgId, eventId, { reminderMinutes: draft });
+      const result = await updateEvent(orgId, eventId, { reminderMinutes: next });
       if (result?.error) {
+        setValue(before);
         setError(result.error);
         return;
       }
-      setEditing(false);
       router.refresh();
     });
   }
 
-  const labels = [...minutes].sort((a, b) => b - a).map(reminderLabel);
+  const labels = [...value].sort((a, b) => b - a).map(reminderLabel);
 
   return (
     <Card>
       <CardHeader className="flex items-center gap-2">
         <CardTitle>Reminders</CardTitle>
-        <span className="flex-1" />
-        {canEdit && !editing && (
-          <Button variant="outline" size="sm" aria-label="Edit reminders" onClick={startEditing}>
-            <Pencil aria-hidden className="size-4" />
-            Edit
-          </Button>
-        )}
       </CardHeader>
       <CardContent className="space-y-3">
-        {editing ? (
+        {canEdit ? (
           <>
-            <ReminderPicker value={draft} onChange={setDraft} disabled={isPending} />
+            <ReminderPicker value={value} onChange={change} />
             {error && (
               <p className="text-destructive text-sm" role="alert">
                 {error}
               </p>
             )}
-            <div className="flex gap-2">
-              <Button size="sm" onClick={save} disabled={isPending}>
-                {isPending ? "Saving…" : "Save"}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setEditing(false)}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-            </div>
           </>
         ) : labels.length > 0 ? (
-          <p className="text-sm">{labels.join(" · ")}</p>
+          <p className="text-sm">{labels.join(", ")}</p>
         ) : (
           <p className="text-muted-foreground text-sm">No reminders</p>
         )}
+        {isPending && <span className="sr-only">Saving</span>}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Invite members straight from the Invited card: the picker saves as you
+ * pick (only the invite list is sent), instead of opening the whole form.
+ */
+function InviteButton({
+  orgId,
+  eventId,
+  members,
+  invited,
+}: {
+  orgId: string;
+  eventId: string;
+  members: CalendarMember[];
+  invited: string[];
+}) {
+  const router = useRouter();
+  const [ids, setIds] = useState<string[]>(invited);
+  const [, startTransition] = useTransition();
+  return (
+    <MemberMultiPicker
+      members={members}
+      selectedIds={ids}
+      placeholder="Invite"
+      onChange={(next) => {
+        const before = ids;
+        setIds(next);
+        startTransition(async () => {
+          const result = await updateEvent(orgId, eventId, { attendeeIds: next });
+          if (result?.error) {
+            setIds(before);
+            toast({ title: result.error, tone: "error" });
+            return;
+          }
+          router.refresh();
+        });
+      }}
+    />
   );
 }
 

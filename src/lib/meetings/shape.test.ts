@@ -18,9 +18,9 @@ describe("SHAPES", () => {
 describe("SHAPE_META", () => {
   it("names each shape and says what it is for", () => {
     expect(SHAPE_META).toEqual({
-      online: { label: "Online", hint: "A Google Meet, Zoom or Teams call" },
-      "in-person": { label: "In person", hint: "A room or an address" },
-      event: { label: "Event", hint: "Either of those, with a public sign-up page" },
+      online: { label: "Online", hint: "Video call" },
+      "in-person": { label: "In person", hint: "A place" },
+      event: { label: "Event", hint: "Plus a sign-up page" },
     });
   });
 
