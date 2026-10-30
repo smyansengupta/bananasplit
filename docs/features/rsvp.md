@@ -183,7 +183,7 @@ backstop cron, they arrive late.
 The sidebar's Meetings (it was RSVPs) lists meetings as cards in a grid, like
 Files: the event's cover (or its first letter on its kind's tint) with a
 calendar-leaf date, the kind and time, and the head count (hosts) or your
-status. The next upcoming one is a wide **Next up** card. Your tickets are
+status. The next upcoming one (or a Featured one) is a wide card. Your tickets are
 cards too, the event's picture on the left like a stub, with **Show ticket**.
 `docs/features/meetings.md` has the rest of what a card shows.
 

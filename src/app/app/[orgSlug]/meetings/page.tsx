@@ -1,5 +1,5 @@
 import { Ticket, Video } from "@/components/icons";
-import { parseMeetingTypes } from "@/lib/meetings/meeting-types";
+import { meetingTypeColor, parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -24,7 +24,6 @@ import { conferenceStatus } from "@/lib/meetings/conference-status";
 import { DEFAULT_REMINDER_MINUTES } from "@/lib/meetings/reminders";
 import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
-import { rsvpCover } from "@/lib/rsvp/cover";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker, userPublicSelect } from "@/server/members";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
@@ -34,6 +33,8 @@ import {
   type ConferenceCallbackError,
 } from "@/server/conference/connect";
 
+import { MeetingsTypeFilter } from "./meetings-type-filter";
+
 /** Outcomes the connect routes add that are not callback errors. */
 const CONNECT_NOTICES: Record<string, string> = {
   not_configured: "That provider isn't set up on this platform yet.",
@@ -42,6 +43,11 @@ const CONNECT_NOTICES: Record<string, string> = {
 
 /** Your sign-ups read for this page (the lookup's own ceiling). */
 const MY_TICKETS = 50;
+
+/** The ?type= that picks the meetings with no type. */
+const NO_TYPE = "-";
+/** What a meeting with no type is called in the filter row and its group. */
+const NO_TYPE_LABEL = "No type";
 
 /** A query parameter given twice is read as its first. */
 function first(value: string | string[] | undefined): string | undefined {
@@ -70,6 +76,11 @@ export default async function MeetingsPage({
   // How a connect attempt went, as the callback left it on the URL.
   const sp = await searchParams;
   const connectCode = typeof sp.conference === "string" ? sp.conference : null;
+  // Which type to show (a type's name, or NO_TYPE), and whether to group by
+  // type rather than run in date order. Both live on the URL so a filtered
+  // view can be shared.
+  const typeParam = first(sp.type) || null;
+  const byType = first(sp.sort) === "type";
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org, user } = ctx;
   const personal = org.kind === "PERSONAL";
@@ -121,6 +132,9 @@ export default async function MeetingsPage({
           kind: true,
           format: true,
           location: true,
+          meetingType: true,
+          hostUserId: true,
+          featured: true,
           conferenceProvider: true,
           conferenceManaged: true,
           conferenceUrl: true,
@@ -185,8 +199,47 @@ export default async function MeetingsPage({
   const here = new Set(events.map((e) => e.id));
   const tickets = personal ? registrations : registrations.filter((r) => here.has(r.eventId));
   const ticketFor = new Map(tickets.map((r) => [r.eventId, r]));
-  const upcoming = events.filter((e) => e.endsAt > now);
-  const past = events.filter((e) => e.endsAt <= now).reverse();
+  // The types on this page, with how many of each, for the filter row: the
+  // organization's own in its order, then any no longer on its list.
+  const kinds = new Map<string, { name: string; color: string | null; count: number }>();
+  let untyped = 0;
+  for (const e of events) {
+    const name = e.meetingType?.trim();
+    if (!name) {
+      untyped += 1;
+      continue;
+    }
+    const k = kinds.get(name);
+    if (k) k.count += 1;
+    else kinds.set(name, { name, color: meetingTypeColor(meetingTypes, name), count: 1 });
+  }
+  const order = (name: string) => {
+    const i = meetingTypes.findIndex((t) => t.name.toLowerCase() === name.toLowerCase());
+    return i === -1 ? meetingTypes.length : i;
+  };
+  const kindList = [...kinds.values()].sort(
+    (a, b) => order(a.name) - order(b.name) || a.name.localeCompare(b.name),
+  );
+  const typeName = (e: MeetingRow) => e.meetingType?.trim() || null;
+  // A type with no meeting here any more (an old link) shows everything.
+  const activeType =
+    typeParam === NO_TYPE
+      ? untyped > 0
+        ? NO_TYPE
+        : null
+      : typeParam && kinds.has(typeParam)
+        ? typeParam
+        : null;
+  const shown = (e: MeetingRow) =>
+    activeType === null ? true : activeType === NO_TYPE ? !typeName(e) : typeName(e) === activeType;
+  const typeOf = (e: MeetingRow) => {
+    const name = typeName(e);
+    const k = name ? kinds.get(name) : undefined;
+    return k?.color ? { name: k.name, color: k.color } : null;
+  };
+
+  const upcoming = events.filter((e) => e.endsAt > now && shown(e));
+  const past = events.filter((e) => e.endsAt <= now && shown(e)).reverse();
   // Whoever can make events: New meeting, which opens the create form here.
   // The header's is the screen's one create button; the empty state repeats
   // it quietly. Only the header's opens on arrival (?new=), so there is one
@@ -216,7 +269,7 @@ export default async function MeetingsPage({
       `${tickets.length} ${tickets.length === 1 ? "ticket" : "tickets"} of yours`,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   // Every card opens the meeting's own page: hosts manage sign-ups from there,
   // and everyone else finds the join details and the sign-up link there.
@@ -230,6 +283,8 @@ export default async function MeetingsPage({
       status={conferenceStatus(e, canManage)}
       href={hrefOf(e)}
       timeZone={timeZone}
+      type={typeOf(e)}
+      hosting={e.hostUserId === user.id}
       featured={featured}
       first={leads}
       past={ended}
@@ -243,23 +298,100 @@ export default async function MeetingsPage({
   );
 
   /**
-   * A grid of event cards, like Files; the first upcoming one says "Next up".
-   * It is given the wide card ONLY when it has a picture to fill it: without
-   * one, a double-width card is a double-width gap, so it sits in the grid
-   * with the rest. `ended` is the Past list: its cards have nothing left to join.
+   * A grid of meeting cards. A meeting marked Featured (the same flag the
+   * club website reads) takes two columns; when none is, the next one up
+   * does, so the top of the page always has something leading it. Only the
+   * coming-up list widens anything (`feature`). `ended` is the Past list:
+   * its cards have nothing left to join.
+   *
+   * The grid is NOT grid-flow-dense: dense packing would fill the hole a
+   * wide card leaves with a later meeting, painting it above an earlier one.
    */
-  const pageList = (items: MeetingRow[], feature = false, ended = false) => (
-    <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
-      {items.map((e, i) =>
-        card(
-          e,
-          feature && i === 0 && items.length > 1 && Boolean(rsvpCover(e.rsvpCover)),
-          feature && i === 0,
-          ended,
-        ),
-      )}
-    </ul>
-  );
+  const pageList = (items: MeetingRow[], feature = false, ended = false) => {
+    const anyFeatured = feature && items.some((e) => e.featured);
+    return (
+      <ul className="grid grid-cols-1 gap-4.5 lg:grid-cols-2 2xl:grid-cols-3">
+        {items.map((e, i) => {
+          const lead = feature && i === 0;
+          const wide = feature && (e.featured || (lead && !anyFeatured && items.length > 1));
+          return card(e, wide, lead, ended);
+        })}
+      </ul>
+    );
+  };
+
+  /**
+   * By type: a grid per type, in the filter row's order, each under its own
+   * name and colour, and the untyped last. Nothing is widened here.
+   */
+  const groupedList = (items: MeetingRow[], ended = false) => {
+    const groups = [
+      ...kindList.map((k) => ({
+        key: k.name,
+        name: k.name,
+        color: k.color,
+        items: items.filter((e) => typeName(e) === k.name),
+      })),
+      { key: NO_TYPE, name: NO_TYPE_LABEL, color: null, items: items.filter((e) => !typeName(e)) },
+    ].filter((g) => g.items.length > 0);
+    return (
+      <div className="space-y-7">
+        {groups.map((g) => (
+          <div key={g.key} className="space-y-3">
+            <h3 className="flex items-center gap-2 text-[15px] font-semibold">
+              <span
+                aria-hidden="true"
+                className="bg-muted-foreground size-2.5 rounded-full"
+                style={g.color ? { background: g.color } : undefined}
+              />
+              {g.name}
+              <span className="text-muted-foreground font-normal tabular-nums">
+                {g.items.length}
+              </span>
+            </h3>
+            {pageList(g.items, false, ended)}
+          </div>
+        ))}
+      </div>
+    );
+  };
+  const listOf = (items: MeetingRow[], feature = false, ended = false) =>
+    byType ? groupedList(items, ended) : pageList(items, feature, ended);
+
+  const hrefWith = (next: { type?: string | null; sort?: "type" | null }) => {
+    const q = new URLSearchParams();
+    const type = "type" in next ? next.type : activeType;
+    const sort = "sort" in next ? next.sort : byType ? "type" : null;
+    if (type) q.set("type", type);
+    if (sort) q.set("sort", sort);
+    const qs = q.toString();
+    return qs ? `/app/${orgSlug}/meetings?${qs}` : `/app/${orgSlug}/meetings`;
+  };
+
+  // The filter row (meetings-type-filter.tsx): All, each type, then the
+  // untyped, each with its count. Only once there is a type to tell apart.
+  const chips = [
+    ...kindList,
+    ...(untyped > 0 ? [{ name: NO_TYPE, color: null, count: untyped }] : []),
+  ];
+  const filterBar =
+    kindList.length > 0 ? (
+      <MeetingsTypeFilter
+        all={{ count: events.length, href: hrefWith({ type: null }), on: activeType === null }}
+        chips={chips.map((k) => ({
+          key: k.name,
+          label: k.name === NO_TYPE ? NO_TYPE_LABEL : k.name,
+          color: k.color,
+          count: k.count,
+          // Choosing the chosen one again goes back to everything.
+          href: hrefWith({ type: activeType === k.name ? null : k.name }),
+          on: activeType === k.name,
+        }))}
+        byType={byType}
+        dateHref={hrefWith({ sort: null })}
+        typeHref={hrefWith({ sort: "type" })}
+      />
+    ) : null;
   const coverOf = new Map(events.map((e) => [e.id, e.rsvpCover]));
 
   return (
@@ -330,15 +462,34 @@ export default async function MeetingsPage({
             description="Meetings you can join, and events taking sign-ups, show here."
           />
         )
+      ) : upcoming.length === 0 && past.length === 0 && activeType !== null ? (
+        <>
+          {filterBar}
+          <EmptyState
+            icon={Video}
+            title={
+              activeType === NO_TYPE ? "No meetings without a type" : `No ${activeType} meetings`
+            }
+            description="Nothing of this type is coming up or has happened yet."
+            action={
+              <Button variant="secondary" asChild>
+                <Link href={hrefWith({ type: null })} scroll={false}>
+                  Show all meetings
+                </Link>
+              </Button>
+            }
+          />
+        </>
       ) : canManage ? (
         <>
+          {filterBar}
           {upcoming.length > 0 && (
             <section className="space-y-3" aria-labelledby="upcoming-heading">
               <h2 id="upcoming-heading" className="heading flex items-center gap-2 text-[17px]">
                 {personal ? "Your meetings" : "Coming up"}
                 <Badge variant="secondary">{upcoming.length}</Badge>
               </h2>
-              {pageList(upcoming, true)}
+              {listOf(upcoming, true)}
             </section>
           )}
           {past.length > 0 && (
@@ -349,23 +500,26 @@ export default async function MeetingsPage({
               >
                 Past <Badge variant="secondary">{past.length}</Badge>
               </h2>
-              {pageList(past, false, true)}
+              {listOf(past, false, true)}
             </section>
           )}
         </>
       ) : (
-        <section className="space-y-3" aria-labelledby="open-heading">
-          <h2 id="open-heading" className="heading flex items-center gap-2 text-[17px]">
-            Taking RSVPs <Badge variant="secondary">{upcoming.length}</Badge>
-          </h2>
-          {pageList(upcoming, true)}
-        </section>
+        <>
+          {filterBar}
+          <section className="space-y-3" aria-labelledby="open-heading">
+            <h2 id="open-heading" className="heading flex items-center gap-2 text-[17px]">
+              Taking RSVPs <Badge variant="secondary">{upcoming.length}</Badge>
+            </h2>
+            {listOf(upcoming, true)}
+          </section>
+        </>
       )}
     </div>
   );
 }
 
-/** Your tickets: a card each, the event's picture beside it like a stub. */
+/** Your tickets: a card each, the event's picture (or its first letter) beside it. */
 function TicketList({
   tickets,
   showHost,
@@ -376,7 +530,7 @@ function TicketList({
   covers: Map<string, unknown>;
 }) {
   return (
-    <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
+    <ul className="grid grid-cols-1 gap-4.5 lg:grid-cols-2 2xl:grid-cols-3">
       {tickets.map((r) => {
         const zone = safeTimeZone(r.spaceTimezone);
         return (
@@ -391,17 +545,17 @@ function TicketList({
               timeZone={zone}
               className="w-28 flex-none"
             />
-            <span className="border-border flex min-w-0 flex-1 flex-col gap-3 border-l border-dashed p-4">
+            <span className="flex min-w-0 flex-1 flex-col gap-3 p-4">
               <span className="min-w-0">
                 <Link
                   href={`/e/${r.rsvpSlug}`}
-                  className="line-clamp-2 text-[15px] font-semibold underline-offset-4 hover:underline"
+                  className="text-[15px] font-semibold break-words underline-offset-4 hover:underline"
                 >
                   {r.title}
                 </Link>
                 <span className="text-muted-foreground mt-0.5 block text-[13px]">
                   {listWhen(r.startsAt, r.endsAt, zone, r.allDay)}
-                  {showHost && r.spaceKind === "CLUB" ? ` · ${r.spaceName}` : ""}
+                  {showHost && r.spaceKind === "CLUB" ? `, ${r.spaceName}` : ""}
                 </span>
               </span>
               <span className="mt-auto">
