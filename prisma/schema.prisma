@@ -1580,6 +1580,10 @@ model BudgetPeriod {
   startsOn       DateTime @db.Date
   endsOn         DateTime @db.Date
   isActive       Boolean  @default(false)
+  /// The balance it opened with, carried over from the period it replaced
+  /// (signed cents). Counted in the balance like a starting-balance row, but
+  /// kept on the period so a period made by mistake can still be deleted.
+  carriedInCents Int      @default(0)
   createdAt      DateTime @default(now())
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)

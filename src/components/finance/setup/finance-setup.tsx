@@ -88,17 +88,6 @@ const STEP_ICON: Record<SetupStepId, IconComponent> = {
   board: LayoutGrid,
 };
 
-const STEP_INTRO: Record<SetupStepId, string> = {
-  period:
-    "Budget by school year, semester or calendar year. Money is tracked one period at a time.",
-  balance: "How much the organization has right now, so the balance is right from day one.",
-  budget:
-    "How much each kind of spending may use this period. Rough numbers are fine; change them any time.",
-  people: "Owners, admins and treasurers manage the money. Treasurers can't manage members.",
-  records: "Bring in last year's spreadsheet, a bank or Venmo export, receipts or an old budget.",
-  board: "Pick what your finance dashboard shows. You can add, move and resize widgets later.",
-};
-
 const dollars = (cents: number) =>
   `${cents < 0 ? "-" : ""}${Math.floor(Math.abs(cents) / 100)}.${String(Math.abs(cents) % 100).padStart(2, "0")}`;
 
@@ -150,7 +139,7 @@ export function FinanceSetup(props: FinanceSetupProps) {
     <div className="grid gap-4.5 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-7.5">
       <nav aria-label="Setup steps" className="min-w-0 space-y-4">
         <div className="space-y-2">
-          <p className="text-muted-foreground eyebrow tabular-nums">
+          <p className="text-muted-foreground text-[13px] font-medium tabular-nums">
             {doneCount} of {SETUP_STEPS.length} done
           </p>
           {/* Goal progress: one tick per step. */}
@@ -218,11 +207,12 @@ export function FinanceSetup(props: FinanceSetupProps) {
                     )}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate lg:font-semibold">{s.title}</span>
-                    <span className="text-muted-foreground hidden text-[13px] font-normal lg:block">
-                      {i + 1}. {s.short}
-                      {s.core ? "" : " · optional"}
-                    </span>
+                    <span className="block break-words lg:font-semibold">{s.title}</span>
+                    {!s.core && (
+                      <span className="text-muted-foreground hidden text-[13px] font-normal lg:block">
+                        Optional
+                      </span>
+                    )}
                   </span>
                   <span className="sr-only">{done ? "(done)" : ""}</span>
                 </button>
@@ -236,14 +226,10 @@ export function FinanceSetup(props: FinanceSetupProps) {
         <header className="flex items-start gap-3.5">
           <IconChip icon={MetaIcon} size="md" />
           <div className="min-w-0 space-y-1">
-            <p className="text-muted-foreground eyebrow">
-              Step {index + 1} of {SETUP_STEPS.length}
-              {meta.core ? "" : " · optional"}
-            </p>
             <h2 id="setup-step-title" className="heading text-lg leading-tight">
               {meta.title}
             </h2>
-            <p className="text-muted-foreground text-sm">{STEP_INTRO[step]}</p>
+            {!meta.core && <p className="text-muted-foreground text-sm">Optional</p>}
           </div>
         </header>
 
@@ -340,9 +326,9 @@ function ErrorLine({ error }: { error: string | null }) {
   );
 }
 
-/** A field's label: the muted 13px eyebrow above it. */
+/** A field's label: muted 13px text above it. */
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className="eyebrow text-muted-foreground block">{children}</span>;
+  return <span className="text-muted-foreground block text-[13px] font-medium">{children}</span>;
 }
 
 /** A choice tile's radio mark: a ring, filled with the text colour when chosen. */
@@ -414,7 +400,7 @@ function PeriodStep({ orgId, today, state, onSaved }: StepProps) {
       .filter((p) => !current || p.draft.label !== current.label)
       .map((p) => ({
         id: p.id,
-        title: `${current ? "Start " : ""}${p.name} · ${p.draft.label}`,
+        title: `${current ? "Start " : ""}${p.name}, ${p.draft.label}`,
         detail: formatPeriodRange(p.draft.startsOn, p.draft.endsOn),
       })),
     {
@@ -523,11 +509,6 @@ function BalanceStep({ orgId, today, state, onSaved }: StepProps) {
         run(async () => (await setStartingBalance(orgId, { cents, asOf })).error, onSaved);
       }}
     >
-      {!state.period && (
-        <p className="text-muted-foreground text-sm">
-          This also starts this school year&apos;s budget if you haven&apos;t picked a period.
-        </p>
-      )}
       <div className="grid gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,12rem)]">
         <label className="space-y-1.5">
           <FieldLabel>The organization has</FieldLabel>
@@ -551,10 +532,7 @@ function BalanceStep({ orgId, today, state, onSaved }: StepProps) {
           <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </label>
       </div>
-      <p className="text-muted-foreground text-[13px]">
-        Add up the bank account, Venmo, cash box and anything the school holds for you. Put a minus
-        in front if the organization owes money. Enter 0 to remove it.
-      </p>
+      <p className="text-muted-foreground text-[13px]">Bank, Venmo, cash. Use − if you owe.</p>
       {amount.trim() !== "" && cents === null && (
         <p className="text-tint-danger-foreground text-sm">That isn&apos;t an amount.</p>
       )}
@@ -711,11 +689,7 @@ function BudgetStep({ orgId, state, lines, onSaved }: StepProps) {
           </span>
         )}
       </div>
-      {invalid && (
-        <p className="text-muted-foreground text-[13px]">
-          Every line needs a name and an amount (or leave the amount empty for $0).
-        </p>
-      )}
+      {invalid && <p className="text-muted-foreground text-[13px]">Every line needs a name.</p>}
       <ErrorLine error={error} />
       <SaveButton pending={pending}>Save the budget</SaveButton>
     </form>
@@ -735,19 +709,15 @@ function PeopleStep({ orgId, members, canAppoint, currentUserId }: FinanceSetupP
     <div className="space-y-4">
       <dl className="grid gap-2.5 sm:grid-cols-2">
         <div className="bg-muted/60 rounded-tile space-y-1 p-4">
-          <dt className="eyebrow text-muted-foreground">Owners</dt>
+          <dt className="text-muted-foreground text-[13px] font-medium">Owners</dt>
           <dd className="text-sm font-semibold">{names(owners)}</dd>
-          <dd className="text-muted-foreground text-[13px]">Everything, money included.</dd>
         </div>
         <div className="bg-muted/60 rounded-tile space-y-1 p-4">
-          <dt className="eyebrow text-muted-foreground">Treasurers</dt>
+          <dt className="text-muted-foreground text-[13px] font-medium">Treasurers</dt>
           <dd
             className={cn("text-sm font-semibold", !treasurers.length && "text-muted-foreground")}
           >
             {names(treasurers)}
-          </dd>
-          <dd className="text-muted-foreground text-[13px]">
-            The money: transactions, budget, approvals, sponsors.
           </dd>
         </div>
       </dl>
@@ -788,18 +758,14 @@ function PeopleStep({ orgId, members, canAppoint, currentUserId }: FinanceSetupP
           </form>
         ) : (
           <p className="text-muted-foreground text-sm">
-            Everyone else already has a role above member. Change roles in Admin panel › Members.
+            Everyone else already has a role. Change roles in Admin panel, Members.
           </p>
         )
       ) : (
         <p className="text-muted-foreground text-sm">
-          Owners and admins choose treasurers in Admin panel › Members.
+          Owners and admins choose treasurers in Admin panel, Members.
         </p>
       )}
-      <p className="text-muted-foreground text-[13px]">
-        Members can always ask to be paid back for what they bought; an owner, admin or treasurer
-        approves it, and nobody approves their own.
-      </p>
       <ErrorLine error={error} />
     </div>
   );
@@ -843,7 +809,7 @@ function BoardStep({ orgId, board, onSaved }: StepProps) {
     >
       {groups.map((g) => (
         <fieldset key={g} className="space-y-2.5">
-          <legend className="eyebrow text-muted-foreground mb-2.5">{g}</legend>
+          <legend className="text-muted-foreground mb-2.5 text-[13px] font-medium">{g}</legend>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {FINANCE_WIDGETS.filter((w) => w.group === g).map((w) => {
               const WIcon = BOARD_ICONS[w.icon] ?? LayoutGrid;
@@ -887,7 +853,7 @@ function BoardStep({ orgId, board, onSaved }: StepProps) {
         </fieldset>
       ))}
       <div className="space-y-2">
-        <p className="eyebrow text-muted-foreground">
+        <p className="text-muted-foreground text-[13px] font-medium">
           Your dashboard ({preview.length} widget{preview.length === 1 ? "" : "s"})
         </p>
         <div className="bg-muted/60 rounded-tile grid grid-cols-4 gap-1.5 p-2" aria-hidden="true">
@@ -896,7 +862,7 @@ function BoardStep({ orgId, board, onSaved }: StepProps) {
             return (
               <div
                 key={w.id}
-                className="bg-card text-muted-foreground ring-foreground/6 truncate rounded-[10px] px-2 py-2.5 text-[11px] font-medium ring-1"
+                className="bg-card text-muted-foreground ring-foreground/6 rounded-[10px] px-2 py-2.5 text-[11px] font-medium break-words ring-1"
                 style={{ gridColumn: `span ${Math.min(4, w.w)} / span ${Math.min(4, w.w)}` }}
               >
                 {m?.title}

@@ -5,7 +5,6 @@ import {
   TransactionStatus,
 } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
-import { DELETED_TRANSACTION_REASON } from "@/lib/finance/deleted";
 import { computeRunway, countsTowardBalance, type Runway } from "@/lib/finance/stats";
 import type { TxClient } from "@/server/db/context";
 
@@ -115,14 +114,57 @@ export interface TransactionFilters {
   dateFrom?: string;
   dateTo?: string;
   reconciled?: "yes" | "no";
-  /** Deleted transactions (voided as "Deleted") are hidden unless "show". */
+  /** Voided transactions are hidden unless "show". */
   deleted?: "show";
+  /** Words in the description, who was paid, or the category. */
+  q?: string;
 }
 
-/** Everything but deleted transactions (a NULL voidReason must count as kept). */
-const NOT_DELETED: Prisma.TransactionWhereInput = {
-  OR: [{ voidReason: null }, { voidReason: { not: DELETED_TRANSACTION_REASON } }],
-};
+/** The ways the transactions list opens (its view buttons). */
+export const TRANSACTION_VIEWS = ["all", "review", "pay", "unreconciled"] as const;
+export type TransactionView = (typeof TRANSACTION_VIEWS)[number];
+
+/**
+ * The transactions list's filters from its URL (the page and the CSV export
+ * read the same ones). `view` is a shortcut over the others: To review is
+ * submitted requests, To pay approved ones, Unreconciled not yet matched to
+ * a statement.
+ */
+export function filtersFromQuery(get: (key: string) => string | null | undefined): {
+  view: TransactionView;
+  filters: TransactionFilters;
+} {
+  const raw = get("view");
+  const view = (TRANSACTION_VIEWS as readonly string[]).includes(raw ?? "")
+    ? (raw as TransactionView)
+    : "all";
+  const reconciled = get("reconciled");
+  const filters: TransactionFilters = {
+    budgetPeriodId: get("period") || undefined,
+    categoryId: get("category") || undefined,
+    kind: (get("kind") as TransactionFilters["kind"]) || undefined,
+    status: (get("status") as TransactionFilters["status"]) || undefined,
+    submittedById: get("submitter") || undefined,
+    dateFrom: get("dateFrom") || undefined,
+    dateTo: get("dateTo") || undefined,
+    reconciled: reconciled === "yes" || reconciled === "no" ? reconciled : undefined,
+    deleted: get("deleted") === "show" ? "show" : undefined,
+    q: get("q")?.trim() || undefined,
+  };
+  if (view === "review") {
+    filters.kind = TransactionKind.EXPENSE;
+    filters.status = TransactionStatus.SUBMITTED;
+  } else if (view === "pay") {
+    filters.kind = TransactionKind.EXPENSE;
+    filters.status = TransactionStatus.APPROVED;
+  } else if (view === "unreconciled") {
+    filters.reconciled = "no";
+  }
+  return { view, filters };
+}
+
+/** Everything but voided transactions. */
+const NOT_DELETED: Prisma.TransactionWhereInput = { voidedAt: null };
 
 /**
  * The end of a date filter. A date-only end ("2026-09-21", the filter's date
@@ -152,6 +194,19 @@ export function buildTransactionWhere(
     ...(filters.submittedById ? { submittedById: filters.submittedById } : {}),
     ...(filters.reconciled === "yes" ? { reconciledAt: { not: null } } : {}),
     ...(filters.reconciled === "no" ? { reconciledAt: null } : {}),
+    ...(filters.q
+      ? {
+          AND: [
+            {
+              OR: [
+                { description: { contains: filters.q, mode: "insensitive" as const } },
+                { counterparty: { contains: filters.q, mode: "insensitive" as const } },
+                { category: { name: { contains: filters.q, mode: "insensitive" as const } } },
+              ],
+            },
+          ],
+        }
+      : {}),
     ...(filters.dateFrom || filters.dateTo
       ? {
           occurredAt: {
@@ -397,7 +452,8 @@ export async function getDashboardData(
     (t) => !t.reconciledAt && t.occurredAt < sixtyDaysAgo,
   ).length;
 
-  const balanceCents = inTotal - outTotal;
+  // The balance it opened with (carried over from the last period) counts too.
+  const balanceCents = period.carriedInCents + inTotal - outTotal;
 
   const categoryName = new Map(categories.map((c) => [c.id, c.name]));
   const toRow = (t: (typeof ledger)[number]): DashboardTransaction => ({
@@ -411,7 +467,7 @@ export async function getDashboardData(
   });
   const byDate = [...ledger].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   const trend = new Map<string, number>();
-  let running = 0;
+  let running = period.carriedInCents;
   for (const t of byDate) {
     running += t.direction === TransactionDirection.IN ? t.amountCents : -t.amountCents;
     trend.set(t.occurredAt.toISOString().slice(0, 10), running);

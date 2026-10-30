@@ -94,7 +94,7 @@ function Figure({
 }) {
   return (
     <div className="bg-muted/60 rounded-tile min-w-28 px-4 py-3">
-      <dt className="eyebrow text-muted-foreground">{label}</dt>
+      <dt className="text-muted-foreground text-[13px] font-medium">{label}</dt>
       <dd className={cn("numeral mt-1.5 text-[22px]", className)}>{children}</dd>
     </div>
   );
@@ -326,10 +326,6 @@ export function ImportReview({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-xl min-w-0 space-y-1">
             <h2 className="heading text-[17px]">Check the rows</h2>
-            <p className="text-muted-foreground text-sm">
-              Nothing is saved until you import. Untick anything that shouldn&apos;t go in, and fix
-              what looks wrong.
-            </p>
           </div>
           <dl className="flex flex-wrap gap-2">
             <Figure label="Importing">{chosen.length.toLocaleString()}</Figure>
@@ -459,7 +455,7 @@ export function ImportReview({
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <span className="text-muted-foreground text-xs">
                         {r.source}
-                        {r.counterparty ? ` · ${r.counterparty}` : ""}
+                        {r.counterparty ? `, ${r.counterparty}` : ""}
                       </span>
                       {dup && (
                         <Badge variant="info">

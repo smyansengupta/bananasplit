@@ -59,13 +59,13 @@ export function FinanceSetupBanner({
         <div className="min-w-0 space-y-3">
           <div className="space-y-1">
             <h2 id="finance-setup-banner-title" className="heading text-[17px]">
-              {fresh ? "Set up your organization's finances" : "Finish setting up finance"}
+              {fresh ? "Set up finance" : "Finish setting up finance"}
             </h2>
-            <p className="text-muted-foreground text-sm">
-              {fresh
-                ? "Pick your budget year, enter what the organization has, set a budget, and bring in last year's spreadsheet. About five minutes."
-                : `${done} of ${total} steps done.${nextStep ? ` Next: ${nextStep.title.toLowerCase()}.` : ""}`}
-            </p>
+            {!fresh && (
+              <p className="text-muted-foreground text-sm">
+                {`${done} of ${total} done${nextStep ? `. Next: ${nextStep.short.toLowerCase()}` : ""}`}
+              </p>
+            )}
           </div>
           <ol className="flex flex-wrap gap-x-4 gap-y-2 text-[13px]" aria-label="Setup steps">
             {SETUP_STEPS.map((s) => {
@@ -101,7 +101,7 @@ export function FinanceSetupBanner({
       <div className={cn("flex items-center gap-2", !fresh && "sm:pr-8")}>
         <Button asChild>
           <Link href={`/app/${orgSlug}/finance/setup`}>
-            {fresh ? "Start setup" : "Continue setup"}
+            {fresh ? "Set up" : "Continue"}
             <ArrowRight aria-hidden="true" />
           </Link>
         </Button>

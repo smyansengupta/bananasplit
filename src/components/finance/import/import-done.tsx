@@ -126,7 +126,7 @@ export function ImportDone({
                 <h2 className="heading text-[17px]">Budget saved for {summary.periodLabel}</h2>
                 <p className="text-muted-foreground figure text-sm">
                   {summary.created} new categor{summary.created === 1 ? "y" : "ies"},{" "}
-                  {summary.updated} updated · {formatCents(summary.totalCents)} budgeted.
+                  {summary.updated} updated, {formatCents(summary.totalCents)} budgeted.
                 </p>
               </>
             )}

@@ -55,6 +55,11 @@ export const setStartingBalance = financeAction(
     const period = await ensureActivePeriod(ctx.db, organizationId);
     const existing = await findStartingBalance(ctx.db, organizationId, period.id);
     const now = new Date();
+    // Typing a starting balance replaces the one carried over from the last period.
+    await ctx.db.budgetPeriod.updateMany({
+      where: { id: period.id, carriedInCents: { not: 0 } },
+      data: { carriedInCents: 0 },
+    });
 
     if (cents === 0) {
       if (!existing) return { transactionId: null };
