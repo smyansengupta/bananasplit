@@ -3,8 +3,10 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Plus } from "@/components/icons";
+import { useState } from "react";
 
 import { ClearCompletedButton } from "@/components/tasks/clear-completed";
+import { QuickAddField } from "@/components/tasks/quick-add-field";
 import { STATUS_TOKEN } from "@/components/tasks/layout-ui";
 import type { TaskItem } from "@/components/tasks/types";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +20,11 @@ import { SortableTaskCard } from "./sortable-task-card";
  * status dot and name, a count chip and +. Filled rather than outlined:
  * dashed means "private" on the cards inside it. A column being dragged
  * over lifts its fill a little.
+ *
+ * + opens a one-line quick add at the top of the column (a whole task from
+ * "Order bolts @priya fri"), in this column's status and the epic in view;
+ * it stays open for the next line until Esc. Blocked asks why, so its +
+ * opens the form instead.
  */
 export function KanbanColumn({
   id,
@@ -27,6 +34,7 @@ export function KanbanColumn({
   todayKey,
   onOpenTask,
   onAddTask,
+  parentTaskId = null,
   footer,
   showEpic = true,
   compact = false,
@@ -39,6 +47,8 @@ export function KanbanColumn({
   todayKey: string;
   onOpenTask: (taskId: string) => void;
   onAddTask: () => void;
+  /** The epic new tasks from this column go into (a lane's, or the filter's). */
+  parentTaskId?: string | null;
   footer?: React.ReactNode;
   showEpic?: boolean;
   /** In a swimlane: no header (the lane's column heads say it). */
@@ -46,6 +56,8 @@ export function KanbanColumn({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const blocked = status === "BLOCKED";
+  const [adding, setAdding] = useState(false);
+  const add = () => (blocked ? onAddTask() : setAdding(true));
 
   return (
     <section
@@ -73,7 +85,8 @@ export function KanbanColumn({
           {status !== "COMPLETED" && (
             <button
               type="button"
-              onClick={onAddTask}
+              onClick={add}
+              aria-expanded={blocked ? undefined : adding}
               className="text-muted-foreground hover:text-foreground hover:bg-card focus-visible:outline-foreground grid size-8 place-items-center rounded-full transition-[background-color,transform] focus-visible:outline-2 active:scale-[0.94]"
               aria-label={`Add a task to ${title}`}
             >
@@ -84,6 +97,15 @@ export function KanbanColumn({
       )}
 
       <div data-testid={`kanban-column-${id}`} className="flex min-h-24 flex-1 flex-col gap-2.5">
+        {adding && (
+          <QuickAddField
+            compact
+            autoFocus
+            defaults={{ status: status as TaskItem["status"], parentTaskId }}
+            placeholder="Title, @owner, date"
+            onEscape={() => setAdding(false)}
+          />
+        )}
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <SortableTaskCard
@@ -95,16 +117,16 @@ export function KanbanColumn({
             />
           ))}
         </SortableContext>
-        {tasks.length === 0 && (
+        {tasks.length === 0 && !adding && (
           <button
             type="button"
-            onClick={onAddTask}
+            onClick={add}
             className={cn(
               "text-muted-foreground hover:text-foreground rounded-tile flex h-[70px] w-full items-center justify-center border-[1.5px] border-dashed text-[13px] font-medium transition-colors duration-150",
               isOver && "bg-muted hatch",
             )}
           >
-            {isOver ? "Drop here" : blocked ? "Nothing is blocked" : "Drop a task here, or add one"}
+            {isOver ? "Drop here" : blocked ? "None" : "Add task"}
           </button>
         )}
       </div>

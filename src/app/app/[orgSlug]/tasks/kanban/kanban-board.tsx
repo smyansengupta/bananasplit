@@ -21,7 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useBlockedReason } from "@/components/tasks/prompts";
 import { TaskCard } from "@/components/tasks/task-card";
 import { ProgressBar, TaskTypeChip } from "@/components/tasks/task-type";
-import { useTasks } from "@/components/tasks/tasks-context";
+import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
 import { TaskStatus } from "@/generated/prisma/enums";
 import { STATUS_ORDER, statusTransitionData } from "@/lib/tasks/status";
@@ -90,7 +90,8 @@ export function KanbanBoard({
   todayKey: string;
   lanes?: boolean;
 }) {
-  const { org, announce, showTask, openTask, newTask } = useTasks();
+  const { org, announce, showTask, openTask, newTask, epics } = useTasks();
+  const ws = useWorkspace();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -123,9 +124,15 @@ export function KanbanBoard({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // The lanes: every epic with a card on the board, then "No epic".
+  // The lanes: every open epic (an empty one too, so work can be dragged
+  // into an epic nobody has started yet), then "No epic".
   const laneList = useMemo(() => {
     const seen = new Map<string, { id: string; title: string; tasks: TaskItem[] }>();
+    for (const e of epics) {
+      if (e.status === TaskStatus.COMPLETED) continue;
+      if (ws.query.epicId && e.id !== ws.query.epicId) continue;
+      seen.set(e.id, { id: e.id, title: e.title, tasks: [] });
+    }
     for (const t of tasks) {
       const key = laneOf(t);
       if (key === NO_EPIC) continue;
@@ -137,7 +144,7 @@ export function KanbanBoard({
       ...[...seen.values()].sort((a, b) => a.title.localeCompare(b.title)),
       { id: NO_EPIC, title: "No epic", tasks: tasks.filter((t) => laneOf(t) === NO_EPIC) },
     ];
-  }, [tasks]);
+  }, [tasks, epics, ws.query.epicId]);
   const hasEpics = laneList.length > 1;
   const showLanes = lanes && hasEpics;
 
@@ -304,7 +311,7 @@ export function KanbanBoard({
                         <button
                           type="button"
                           onClick={() => openTask(lane.id)}
-                          className="heading truncate underline-offset-4 hover:underline"
+                          className="heading text-left break-words underline-offset-4 hover:underline"
                         >
                           {lane.title}
                         </button>
@@ -330,6 +337,7 @@ export function KanbanBoard({
                         todayKey={todayKey}
                         showEpic={false}
                         onOpenTask={open}
+                        parentTaskId={epicTask ? lane.id : null}
                         onAddTask={() =>
                           newTask({
                             status: col.status,
@@ -356,7 +364,15 @@ export function KanbanBoard({
                 tasks={columnTasks(col.status, null)}
                 todayKey={todayKey}
                 onOpenTask={open}
-                onAddTask={() => newTask({ status: col.status })}
+                parentTaskId={ws.query.epicId ?? null}
+                onAddTask={() =>
+                  newTask({
+                    status: col.status,
+                    ...(ws.query.epicId
+                      ? { parentTaskId: ws.query.epicId, parentType: "EPIC" as const }
+                      : {}),
+                  })
+                }
                 footer={col.status === TaskStatus.COMPLETED ? olderFooter : null}
               />
             ))}

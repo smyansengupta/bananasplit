@@ -2,19 +2,17 @@
 
 import { ChevronRight, CircleCheck, Plus } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
-import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { EmptyState } from "@/components/empty-state";
 import { ClearCompletedButton } from "@/components/tasks/clear-completed";
 import { TASK_PANEL } from "@/components/tasks/layout-ui";
-import { HashTagHint } from "@/components/tasks/tag-menu";
 import { EpicDot } from "@/components/tasks/epic-menu";
+import { QuickAddField } from "@/components/tasks/quick-add-field";
 import { TaskRow } from "@/components/tasks/task-row";
 import { ProgressBar, TaskTypeChip } from "@/components/tasks/task-type";
 import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import type { TaskItem } from "@/components/tasks/types";
-import { useHashTags } from "@/components/tasks/use-hash-tags";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { rollUp } from "@/lib/tasks/hierarchy";
@@ -87,9 +85,8 @@ function groupByEpic(tasks: TaskItem[]): EpicGroup[] {
  * The List: the club's open work grouped by epic (epic > stories > tasks,
  * with roll-up progress), then what sits outside an epic, and what was done
  * this week folded away underneath. A club that never makes epics gets one
- * plain list, soonest due first, as before. The quick add at the top takes
- * `#tags` (not on a phone, where the List is the only layout and New task at
- * the top right adds).
+ * plain list, soonest due first, as before. The quick add at the top makes a
+ * whole task from one line ("Order bolts @priya fri #venue"), on a phone too.
  */
 export function ListView({
   open,
@@ -102,8 +99,13 @@ export function ListView({
   hasMore: boolean;
   moreLimit: number;
 }) {
-  const { newTask } = useTasks();
   const ws = useWorkspace();
+  const quickAdd = (
+    <QuickAddField
+      defaults={{ parentTaskId: ws.query.epicId ?? null }}
+      placeholder="Add a task: Order bolts @priya fri #venue"
+    />
+  );
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -121,25 +123,16 @@ export function ListView({
   if (open.length === 0 && completed.length === 0) {
     return (
       <div className="space-y-4">
-        <QuickAdd />
+        {quickAdd}
         <EmptyState
           icon={CircleCheck}
-          title={ws.filterCount > 0 ? "Nothing matches that" : "No tasks yet"}
-          description={
-            ws.filterCount > 0
-              ? "Clear the search or filters to see every task."
-              : "Write down what needs doing and who is on it."
-          }
+          title={ws.filterCount > 0 ? "Nothing matches" : "No tasks yet"}
           action={
             ws.filterCount > 0 ? (
               <Button variant="outline" onClick={ws.clearFilters}>
                 Clear filters
               </Button>
-            ) : (
-              <Button variant="create" onClick={() => newTask()}>
-                New task
-              </Button>
-            )
+            ) : undefined
           }
         />
       </div>
@@ -148,10 +141,8 @@ export function ListView({
 
   return (
     <div className="space-y-[30px] max-md:space-y-5">
-      <QuickAdd />
-      {open.length === 0 && (
-        <p className="text-muted-foreground text-sm">Everything here is done.</p>
-      )}
+      {quickAdd}
+      {open.length === 0 && <p className="text-muted-foreground text-sm">All done</p>}
       {!anyEpic && open.length > 0 && (
         <ul className={TASK_PANEL} aria-label="Open tasks">
           {open.map((task) => (
@@ -164,7 +155,7 @@ export function ListView({
 
       {hasMore && (
         <Button variant="outline" onClick={showMore}>
-          Show more open tasks
+          Show more
         </Button>
       )}
 
@@ -181,7 +172,7 @@ export function ListView({
                 className={cn("size-4 transition-transform duration-150", showDone && "rotate-90")}
                 aria-hidden="true"
               />
-              Done in the last 7 days
+              Done this week
               <Badge variant="secondary">{completed.length}</Badge>
             </button>
             <span className="flex-1" />
@@ -210,7 +201,7 @@ function EpicSection({ group, showOwner }: { group: EpicGroup; showOwner: boolea
     group.tasks.length + [...group.stories.values()].reduce((n, s) => n + 1 + s.tasks.length, 0);
 
   return (
-    <section className="space-y-2.5" aria-label={epic ? `Epic: ${epic.title}` : "Not in an epic"}>
+    <section className="space-y-2.5" aria-label={epic ? `Epic: ${epic.title}` : "No epic"}>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 px-1">
         {epic ? (
           <>
@@ -218,7 +209,7 @@ function EpicSection({ group, showOwner }: { group: EpicGroup; showOwner: boolea
             <button
               type="button"
               onClick={() => (item ? showTask(item) : openTask(epic.id))}
-              className="heading min-w-0 truncate text-left underline-offset-4 hover:underline"
+              className="heading min-w-0 text-left break-words underline-offset-4 hover:underline"
             >
               {epic.title}
             </button>
@@ -243,12 +234,12 @@ function EpicSection({ group, showOwner }: { group: EpicGroup; showOwner: boolea
               }
             >
               <Plus className="size-4" aria-hidden="true" />
-              Add to epic
+              Add
             </Button>
           </>
         ) : (
           <>
-            <h2 className="heading">Not in an epic</h2>
+            <h2 className="heading">No epic</h2>
             <Badge variant="secondary">{count}</Badge>
           </>
         )}
@@ -293,7 +284,7 @@ function StoryRows({
           <button
             type="button"
             onClick={() => openTask(group.story.id)}
-            className="text-muted-foreground truncate text-left text-sm font-medium hover:underline"
+            className="text-muted-foreground text-left text-sm font-medium break-words hover:underline"
           >
             {group.story.title}
           </button>
@@ -310,64 +301,5 @@ function StoryRows({
         />
       ))}
     </>
-  );
-}
-
-/** "Add a task… #tag": a title (with #tags), into the epic in view. */
-function QuickAdd() {
-  const { org, viewer, announce } = useTasks();
-  const ws = useWorkspace();
-  const hashTags = useHashTags();
-  const [title, setTitle] = useState("");
-  const [isPending, startTransition] = useTransition();
-
-  function submit() {
-    const text = title.trim();
-    if (!text || isPending) return;
-    startTransition(async () => {
-      const resolved = await hashTags.resolve(text);
-      if (resolved.error) announce(resolved.error);
-      const result = await createTask(org.id, {
-        title: resolved.title,
-        labelIds: resolved.labelIds,
-        parentTaskId: ws.query.epicId ?? null,
-        ownerId: viewer.userId,
-      });
-      if (result.error) {
-        announce(result.error);
-        return;
-      }
-      setTitle("");
-    });
-  }
-
-  // Not on a phone: there, adding is the header's New task, at the top right.
-  return (
-    <div className="space-y-1.5 max-md:hidden">
-      <div className="bg-card edge focus-within:outline-foreground flex h-12 items-center gap-3 rounded-full ps-4 pe-1.5 focus-within:outline-2 focus-within:outline-offset-2">
-        <Plus className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
-        <label htmlFor="quick-add" className="sr-only">
-          Add a task
-        </label>
-        <input
-          id="quick-add"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          maxLength={240}
-          placeholder="Add a task… (#tag to tag it)"
-          className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-[15px] outline-none"
-        />
-        <Button size="sm" onClick={submit} disabled={isPending || !title.trim()}>
-          {isPending ? "Adding…" : "Add"}
-        </Button>
-      </div>
-      <HashTagHint title={title} className="ps-4" />
-    </div>
   );
 }
