@@ -38,6 +38,8 @@ export interface RegistrationCardProps {
   cost?: { mode: "EACH" | "SPLIT"; shareIfJoining: number; payWith: string[] } | null;
   /** Under "You're going": chip in, the ticket, bring friends. */
   signedExtras?: React.ReactNode;
+  /** Signed in to Bananasplit: register in one click with their own name and email. */
+  me?: { name: string; email: string } | null;
 }
 
 const CLOSED_COPY: Record<ClosedReason, { title: string; body: string }> = {
@@ -114,14 +116,22 @@ function SpotsBadge({
   );
 }
 
-function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCardProps) {
+function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost, me }: RegistrationCardProps) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [exists, setExists] = useState(false);
   // Controlled, so what the guest typed survives an error: React resets a
   // form's uncontrolled fields after every action.
-  const [values, setValues] = useState({ name: "", email: "", phone: "", instagram: "" });
+  const [values, setValues] = useState({
+    name: me?.name ?? "",
+    email: me?.email ?? "",
+    phone: "",
+    instagram: "",
+  });
+  // Signed in: one button with their name on it; the fields stay folded
+  // away unless they want to change something.
+  const [details, setDetails] = useState(!me);
   const bind = (field: keyof typeof values) => ({
     value: values[field],
     onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -171,11 +181,11 @@ function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCa
         title={waitlistOnly ? "Join the waitlist" : "Save your spot"}
         badge={<SpotsBadge spotsLeft={spotsLeft} waitlistOnly={waitlistOnly} />}
       />
-      <p className="text-muted-foreground mb-6 text-[15px] leading-[1.5]">
-        {waitlistOnly
-          ? "This event is full. Join the waitlist and we'll email you the moment a spot opens up."
-          : "It takes a few seconds. You'll get a confirmation by email."}
-      </p>
+      {waitlistOnly && (
+        <p className="text-muted-foreground mb-6 text-[15px] leading-[1.5]">
+          It&apos;s full. We&apos;ll email you when a spot opens.
+        </p>
+      )}
       {cost && !waitlistOnly && (
         <p className="bg-muted/60 text-foreground rounded-tile -mt-2 mb-6 px-4 py-3 text-[14px] leading-[1.5]">
           <span className="font-semibold">
@@ -184,7 +194,7 @@ function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCa
           </span>
           <span className="text-muted-foreground">
             {" "}
-            {cost.mode === "SPLIT" ? "(your share, and it shrinks as more people join)" : "each"}
+            {cost.mode === "SPLIT" ? "(drops as more join)" : "each"}
             {cost.payWith.length > 0
               ? `. You'll pay the host with ${cost.payWith.join(" or ")} after you sign up.`
               : ". You'll settle up with the host."}
@@ -196,63 +206,77 @@ function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCa
         className="[&_input]:bg-background grid gap-4 sm:grid-cols-2"
         noValidate
       >
-        <BrandField id="rsvp-name" label="Name">
-          <BrandInput
-            id="rsvp-name"
-            name="name"
-            autoComplete="name"
-            placeholder="Name"
-            required
-            maxLength={100}
-            {...bind("name")}
-            {...invalid("name")}
-          />
-        </BrandField>
-        <BrandField id="rsvp-email" label="Email">
-          <BrandInput
-            id="rsvp-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            inputMode="email"
-            placeholder="Email"
-            required
-            maxLength={254}
-            {...bind("email")}
-            {...invalid("email")}
-          />
-        </BrandField>
-        <BrandField id="rsvp-phone" label="Phone">
-          <BrandInput
-            id="rsvp-phone"
-            name="phone"
-            type="tel"
-            autoComplete="tel"
-            inputMode="tel"
-            placeholder="Phone"
-            required
-            maxLength={32}
-            {...bind("phone")}
-            {...invalid("phone")}
-          />
-        </BrandField>
-        <BrandField id="rsvp-instagram" label="Instagram (optional)">
-          <BrandInput
-            id="rsvp-instagram"
-            name="instagram"
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="Instagram (optional)"
-            maxLength={200}
-            aria-describedby="rsvp-instagram-hint"
-            {...bind("instagram")}
-            {...invalid("instagram")}
-          />
-          <span id="rsvp-instagram-hint" className="text-muted-foreground text-[13px]">
-            Shown next to your name on the guest list, so people can find you.
-          </span>
-        </BrandField>
+        {details ? (
+          <>
+            <BrandField id="rsvp-name" label="Name">
+              <BrandInput
+                id="rsvp-name"
+                name="name"
+                autoComplete="name"
+                placeholder="Name"
+                required
+                maxLength={100}
+                {...bind("name")}
+                {...invalid("name")}
+              />
+            </BrandField>
+            <BrandField id="rsvp-email" label="Email">
+              <BrandInput
+                id="rsvp-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="Email"
+                required
+                maxLength={254}
+                {...bind("email")}
+                {...invalid("email")}
+              />
+            </BrandField>
+            <BrandField id="rsvp-phone" label="Phone (optional)">
+              <BrandInput
+                id="rsvp-phone"
+                name="phone"
+                type="tel"
+                autoComplete="tel"
+                inputMode="tel"
+                placeholder="Phone (optional)"
+                maxLength={32}
+                {...bind("phone")}
+                {...invalid("phone")}
+              />
+            </BrandField>
+            <BrandField id="rsvp-instagram" label="Instagram (optional)">
+              <BrandInput
+                id="rsvp-instagram"
+                name="instagram"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="Instagram (optional)"
+                maxLength={200}
+                aria-describedby="rsvp-instagram-hint"
+                {...bind("instagram")}
+                {...invalid("instagram")}
+              />
+              <span id="rsvp-instagram-hint" className="text-muted-foreground text-[13px]">
+                Shown on the guest list.
+              </span>
+            </BrandField>
+          </>
+        ) : (
+          <p className="text-muted-foreground text-[14px] sm:col-span-2">
+            {me!.name}, {me!.email}.{" "}
+            <button
+              type="button"
+              onClick={() => setDetails(true)}
+              className="text-foreground font-medium underline underline-offset-4"
+            >
+              Change
+            </button>
+          </p>
+        )}
         {/* People never see this; bots fill it in. */}
         <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
           <label htmlFor="rsvp-website">Website</label>
@@ -268,10 +292,16 @@ function SignUpForm({ slug, waitlistOnly, spotsLeft, via, cost }: RegistrationCa
           disabled={pending}
           className={cn(pill({ size: "md" }), "h-12 w-full text-[16px] sm:col-span-2")}
         >
-          {pending ? "Saving your spot…" : waitlistOnly ? "Join the waitlist" : "Register"}
+          {pending
+            ? "Saving your spot…"
+            : waitlistOnly
+              ? "Join the waitlist"
+              : me && !details
+                ? `Register as ${me.name.split(" ")[0]}`
+                : "Register"}
         </button>
         <p className="text-muted-foreground m-0 text-[12px] leading-[1.5] sm:col-span-2">
-          We&apos;ll email your confirmation and text you a reminder before it starts. Message and
+          We&apos;ll email your confirmation, and text a reminder if you add a number. Message and
           data rates may apply; reply STOP to opt out of texts. Only the hosts see your email and
           number.
         </p>

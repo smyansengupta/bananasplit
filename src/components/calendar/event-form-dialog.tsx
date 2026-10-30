@@ -399,7 +399,8 @@ function EventForm({
       ...(meetingTypes.length > 0
         ? { meetingType: meetingType === NO_TYPE ? null : meetingType }
         : {}),
-      visibility,
+      // An event with a sign-up page is an events page, and public by nature.
+      visibility: !event && fields.signUp ? EventVisibility.PUBLIC : visibility,
       hostUserId: host !== NO_HOST && host !== GUEST_HOST ? host : null,
       hostName: host === GUEST_HOST ? hostName || null : null,
       rsvpUrl: rsvpUrl || null,

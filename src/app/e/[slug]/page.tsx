@@ -52,6 +52,7 @@ import {
   type RsvpPageData,
 } from "@/server/rsvp/page";
 import { readRsvpManageKey, rsvpCookieName } from "@/server/rsvp/token";
+import { getSession } from "@/lib/auth/session";
 
 /**
  * A public RSVP page (docs/features/rsvp.md): anyone with the link sees the
@@ -148,6 +149,12 @@ export default async function RsvpPage({ params, searchParams }: PageProps<"/e/[
   const modeLocked = club ? Boolean(themeProviderMode(club.theme).forcedTheme) : false;
 
   const viewer = page.viewer;
+  // Signed in: they register in one click as themselves.
+  const session = viewer ? null : await getSession();
+  const me =
+    session?.user.name && session.user.email
+      ? { name: session.user.name, email: session.user.email }
+      : null;
   const going = viewer?.status === "GOING";
   const open = !page.closed && !viewer;
   const pageUrl = appUrl(`/e/${page.slug}`);
@@ -235,6 +242,7 @@ export default async function RsvpPage({ params, searchParams }: PageProps<"/e/[
                 <RegistrationCard
                   slug={page.slug}
                   viewer={page.viewer}
+                  me={me}
                   closed={page.closed}
                   waitlistOnly={page.waitlistOnly}
                   spotsLeft={page.spotsLeft}

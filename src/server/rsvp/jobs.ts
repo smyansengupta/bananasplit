@@ -465,7 +465,7 @@ export const rsvpEmailJob: JobHandler<RsvpEmailPayload> = async (
   // The text is best effort: the email already went, and retrying the job
   // for a refused or flaky text would send that email again.
   const text = rsvpText(message);
-  if (text && smsDelivery() !== "off") {
+  if (text && loaded.phone && smsDelivery() !== "off") {
     await sendSms(loaded.phone, text, { signal: run.signal }).catch((error: unknown) => {
       const reason = error instanceof SmsSendError ? error.message : "send failed";
       console.warn(`[rsvp] reminder text not sent: ${reason}`);
