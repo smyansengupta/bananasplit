@@ -165,10 +165,10 @@ export function TeamsEditor({
           {positions.map((p) => (
             <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2">
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">
+                <span className="block text-sm font-medium break-words">
                   {p.title || "Untitled position"}
                 </span>
-                <span className="text-muted-foreground block truncate text-[12px]">
+                <span className="text-muted-foreground block text-[12px] break-words">
                   {p.isOpen
                     ? "Open role"
                     : ((p.userId ? nameOf.get(p.userId) : null) ?? p.personName ?? "Nobody yet")}

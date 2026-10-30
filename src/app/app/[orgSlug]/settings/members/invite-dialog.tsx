@@ -59,6 +59,7 @@ export function InviteDialog({
   trigger,
   open: controlledOpen,
   onOpenChange,
+  defaultOpen = false,
 }: {
   orgId: string;
   orgSlug: string;
@@ -67,9 +68,11 @@ export function InviteDialog({
   trigger?: ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Open on arrival (?invite=1, from the org chart's Invite link). */
+  defaultOpen?: boolean;
 }) {
   const router = useRouter();
-  const [ownOpen, setOwnOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(defaultOpen);
   const open = controlledOpen ?? ownOpen;
   const setOpen = (next: boolean) => {
     setOwnOpen(next);

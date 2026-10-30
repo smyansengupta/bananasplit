@@ -38,7 +38,8 @@ export default async function PeoplePage({
   const { orgSlug } = await params;
   const planLock = await planGate(orgSlug, "people");
   if (planLock) return planLock;
-  const query = parseDirectoryQuery(await searchParams);
+  const raw = await searchParams;
+  const query = parseDirectoryQuery(raw);
   const { organization, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const orgId = organization.id;
   const canInvite = can({ role }, "members.invite");
@@ -106,6 +107,7 @@ export default async function PeoplePage({
               orgId={orgId}
               orgSlug={orgSlug}
               link={link}
+              defaultOpen={raw.invite === "1"}
               trigger={
                 <Button variant="create">
                   <UserPlus aria-hidden="true" />

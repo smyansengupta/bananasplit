@@ -411,9 +411,9 @@ export function OutlineEditor({
                     )}
                   >
                     <UserAvatar user={m} size="sm" />
-                    <span className="min-w-0 flex-1 truncate font-medium">{m.name}</span>
+                    <span className="min-w-0 flex-1 font-medium break-words">{m.name}</span>
                     {m.title && (
-                      <span className="text-muted-foreground truncate text-xs">{m.title}</span>
+                      <span className="text-muted-foreground text-xs break-words">{m.title}</span>
                     )}
                   </button>
                 ))
@@ -488,7 +488,7 @@ export function OutlineEditor({
                     )}
                     {canInvite && (
                       <Button asChild variant="ghost" size="sm" className="h-7">
-                        <Link href={`/app/${orgSlug}/settings/members`}>
+                        <Link href={`/app/${orgSlug}/people?view=table&invite=1`}>
                           <UserPlus aria-hidden="true" />
                           Invite
                         </Link>

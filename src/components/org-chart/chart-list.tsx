@@ -94,8 +94,8 @@ function Row({
         </span>
       )}
       <span className="min-w-0">
-        <span className="block truncate text-sm font-medium">{personLabel(node)}</span>
-        <span className="text-muted-foreground block truncate text-xs">
+        <span className="block text-sm font-medium break-words">{personLabel(node)}</span>
+        <span className="text-muted-foreground block text-xs break-words">
           {node.title}
           {node.isAdvisor && ", advisor"}
           {variant === "placeholder" && ", not a member yet"}

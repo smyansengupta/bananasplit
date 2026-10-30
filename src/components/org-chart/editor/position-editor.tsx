@@ -174,7 +174,7 @@ export function PositionEditor({
               <div className="bg-muted/50 flex items-center gap-3 rounded-lg border p-3">
                 <UserAvatar user={linked} size="md" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{linked.name}</p>
+                  <p className="text-sm font-medium break-words">{linked.name}</p>
                   <p className="text-muted-foreground text-xs">
                     Linked member, with their picture and profile
                   </p>
@@ -201,7 +201,7 @@ export function PositionEditor({
                       {suggestions.map((m, i) => (
                         <li key={m.id} className="flex items-center gap-2">
                           <UserAvatar user={m} size="sm" />
-                          <span className="min-w-0 flex-1 truncate text-sm">
+                          <span className="min-w-0 flex-1 text-sm break-words">
                             {m.name}
                             {i === 0 && position.matchScore === 1 && (
                               <Badge variant="secondary" className="ml-2">
@@ -286,7 +286,7 @@ export function PositionEditor({
                     key={id}
                     className="bg-muted/50 flex items-center gap-2 rounded-md border py-1 pr-1 pl-3"
                   >
-                    <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+                    <span className="min-w-0 flex-1 text-sm break-words">{name}</span>
                     <Button
                       type="button"
                       variant="ghost"
