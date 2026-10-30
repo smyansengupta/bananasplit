@@ -320,7 +320,7 @@ model PasswordResetToken {
 /// when mail fails; it is also emailed (DEMO_REQUEST_INBOX). Platform data:
 /// written by app_auth (insert only), read by the owner role (Supabase).
 model DemoRequest {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   name         String
   email        String
   organization String
@@ -328,7 +328,7 @@ model DemoRequest {
   message      String?
   /// When the email to the inbox went out; null if it didn't.
   emailedAt    DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([createdAt])
 }
@@ -399,6 +399,8 @@ model Organization {
   events            Event[]
   availabilityPolls AvailabilityPoll[]
   polls             Poll[]
+  forms             Form[]
+  formResponses     FormResponse[]
   budgetPeriods     BudgetPeriod[]
   budgetCategories  BudgetCategory[]
   transactions      Transaction[]
@@ -479,6 +481,8 @@ enum NotificationType {
   WEEKLY_PULSE
   // A meeting's reminder to a member going (src/server/rsvp/jobs.ts)
   EVENT_REMINDER
+  // A new answer to a form you made (src/server/forms/public.ts)
+  FORM_RESPONSE
 }
 
 model Notification {
@@ -1569,6 +1573,106 @@ model PollVote {
   @@index([organizationId, pollId])
 }
 
+/// What a form is: a full form (questions, a database behind it) or a quick
+/// poll made from Forms (one choice question anyone with the link answers).
+/// Members-only question polls with live counts stay on Poll.
+enum FormKind {
+  FORM
+  QUICK_POLL
+}
+
+/// Who may answer a form.
+enum FormAccess {
+  /// Anyone with the link, no sign-in.
+  ANYONE
+  /// Members of the organization, signed in.
+  MEMBERS
+  /// Anyone signed in to Bananasplit, one answer each.
+  SIGNED_IN
+}
+
+/// Where a response stands in review (applications).
+enum FormResponseStatus {
+  NEW
+  ACCEPTED
+  WAITLISTED
+  DECLINED
+}
+
+/// A form: its questions (JSON, src/lib/forms/questions.ts) and settings.
+/// Every form writes into its own club database (databaseId): each question
+/// with an answer is a DatabaseField, each response a DatabaseRecord. People
+/// answer at /f/{slug}, signed in or not (access). Owners and admins make
+/// and change forms; the public submit runs on the service path after the
+/// app checks the form is open and the person may answer.
+model Form {
+  id                     String     @id @default(cuid())
+  organizationId         String
+  databaseId             String
+  kind                   FormKind   @default(FORM)
+  title                  String
+  description            String?
+  /// The public link: /f/{slug}.
+  slug                   String     @unique
+  questions              Json       @default("[]")
+  access                 FormAccess @default(ANYONE)
+  /// Signed-in people answer once (always true for SIGNED_IN).
+  onePerPerson           Boolean    @default(false)
+  /// Don't record who answered.
+  anonymous              Boolean    @default(false)
+  /// Quick polls: respondents see the results after answering, unless this.
+  hideResultsUntilClosed Boolean    @default(false)
+  /// Stops taking answers after this many.
+  responseCap            Int?
+  closesAt               DateTime?
+  /// Closed by hand; cleared on reopen.
+  closedAt               DateTime?
+  /// Tell the creator about each response.
+  notifyOwner            Boolean    @default(true)
+  /// Responses get a review status, a rating and notes (applications).
+  review                 Boolean    @default(false)
+  /// The Files folder uploads go into.
+  folderId               String?
+  createdById            String
+  deletedAt              DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  database     DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
+  responses    FormResponse[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deletedAt, createdAt])
+}
+
+/// One response's review: the record holds the answers; this holds who
+/// answered (unless the form is anonymous) and the officers' status, rating
+/// and private notes. Owners and admins only.
+model FormResponse {
+  id             String             @id @default(cuid())
+  organizationId String
+  formId         String
+  recordId       String
+  userId         String?
+  email          String?
+  status         FormResponseStatus @default(NEW)
+  rating         Int?
+  notes          String?
+  reviewedById   String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  form         Form           @relation(fields: [organizationId, formId], references: [organizationId, id], onDelete: Cascade)
+  record       DatabaseRecord @relation(fields: [organizationId, recordId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, recordId])
+  @@index([organizationId, formId, status, createdAt])
+  @@index([formId, userId])
+}
+
 // --- Finance ---
 // Amounts are always integer cents. There is no stored balance column anywhere;
 // balance is always derived from Transaction (spec section 5.7).
@@ -2346,9 +2450,10 @@ model DatabaseRecord {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  database  DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
-  createdBy User?              @relation("DatabaseRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?              @relation("DatabaseRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  database     DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
+  createdBy    User?              @relation("DatabaseRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?              @relation("DatabaseRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  formResponse FormResponse?
 
   @@unique([organizationId, id])
   @@index([organizationId, databaseId, deletedAt, createdAt])
@@ -2407,6 +2512,7 @@ model DatabaseDefinition {
   createdBy    User?            @relation("DatabaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   fields       DatabaseField[]
   records      DatabaseRecord[]
+  forms        Form[]
 
   @@unique([organizationId, key])
   @@unique([organizationId, id])
