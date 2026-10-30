@@ -2,12 +2,11 @@
 
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import {
-  CalendarClock,
   CalendarDays,
-  CalendarX2,
   ChevronLeft,
   ChevronRight,
   Globe,
+  Lock,
 } from "@/components/icons";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -19,13 +18,6 @@ import { toast } from "@/components/ui/toaster";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { addDaysToKey } from "@/lib/calendar/dates";
 import {
@@ -46,7 +38,7 @@ import { useTodayKey } from "./hooks";
 import { anchorFor, EventPeek, type PeekAnchor } from "./event-peek";
 import type { EventFormEvent } from "./event-form-dialog";
 import type { CalendarItem } from "./item";
-import { KIND_META, KIND_ORDER, kindStyle } from "./kinds";
+import { KIND_META, KIND_ORDER, kindStyle, VISIBILITY_META } from "./kinds";
 import { CALENDAR_CREATE_EVENT, type CalendarCreateDetail } from "./new-event-button";
 import { longDate, MonthGrid, monthLabel } from "./month-grid";
 import type { CalendarMember } from "./member-picker";
@@ -563,25 +555,26 @@ export function EventCalendar({
               </button>
             );
           })}
-          <Select
-            value={range.visibility ?? "ALL"}
-            onValueChange={(v) =>
-              navigate({ ...range, visibility: v === "ALL" ? null : (v as EventVisibility) })
-            }
-          >
-            <SelectTrigger
-              size="sm"
-              className="w-auto min-w-38 shrink-0"
-              aria-label="Filter by visibility"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Public and internal</SelectItem>
-              <SelectItem value="PUBLIC">Public only</SelectItem>
-              <SelectItem value="INTERNAL">Internal only</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Two chips, not a menu: either narrows to it; again (or neither) is both. */}
+          {(["PUBLIC", "INTERNAL"] as const).map((v) => {
+            const active = range.visibility === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                className="cal-filter"
+                aria-pressed={active}
+                onClick={() => navigate({ ...range, visibility: active ? null : v })}
+              >
+                {v === "PUBLIC" ? (
+                  <Globe aria-hidden className="size-3.5" />
+                ) : (
+                  <Lock aria-hidden className="size-3.5" />
+                )}
+                {VISIBILITY_META[v].label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -682,32 +675,16 @@ export function EventCalendar({
 
       {count === 0 && range.view !== "listMonth" && <div className="cal-agenda">{emptyState}</div>}
 
+      {/* One line: what the marks mean, and whose clock the times are on. */}
       <div className="cal-legend">
         <span className="cal-legend__item">
-          <Globe aria-hidden className="size-3.5" /> Public: on the website
-        </span>
-        <span className="cal-legend__item">
-          <span aria-hidden className="cal-legend__pill" data-internal="true" />
-          Internal: board and members only
+          <Globe aria-hidden className="size-3.5" /> Public
         </span>
         <span className="cal-legend__item">
           <span aria-hidden className="cal-legend__pill" data-rsvp="yes" />
-          Solid: you&apos;re going
+          Solid = going
         </span>
-        {canManage && (
-          <>
-            <span className="cal-legend__item">
-              <CalendarClock aria-hidden className="size-3.5" /> Syncing to Google
-            </span>
-            <span className="cal-legend__item">
-              <CalendarX2 aria-hidden className="size-3.5" /> Google sync failed
-            </span>
-          </>
-        )}
-        <span>Times are in your timezone; all-day events are whole days in {timeZone}.</span>
-        {canManage && (
-          <span className="hidden md:inline">Drag an event in the month grid to move it.</span>
-        )}
+        <span>Times in your zone</span>
       </div>
 
       {canManage && shotOpen && (
