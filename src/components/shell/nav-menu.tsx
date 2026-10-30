@@ -63,7 +63,7 @@ export function NavMenu({
           )}
         >
           <DialogPrimitive.Title className="sr-only">Menu</DialogPrimitive.Title>
-          {/* The X where the menu button was. */}
+          {/* The X where the menu button was, then the club. */}
           <div className="flex items-center gap-2">
             <DialogPrimitive.Close asChild>
               {/* Its own circle, in the club track's grey. */}
@@ -75,6 +75,12 @@ export function NavMenu({
                 <X className="size-5" strokeWidth={ICON_STROKE} aria-hidden="true" />
               </button>
             </DialogPrimitive.Close>
+            {/* The club as the switch bar's track and thumb (People › Directory, Org chart). */}
+            <div className={cn(segmentedTrack, "h-auto min-w-0 flex-1")}>
+              <div className="bg-thumb min-w-0 flex-1 rounded-full px-1 shadow-[0_1px_2px_rgb(0_0_0/0.14),var(--edge-highlight)] [&>button]:min-h-10 [&>button]:rounded-full">
+                {clubMenu}
+              </div>
+            </div>
           </div>
 
           <nav aria-label="Sections" className="mt-4 min-h-0 flex-1 overflow-y-auto">
@@ -105,13 +111,8 @@ export function NavMenu({
             })}
           </nav>
 
-          {/* The foot, as in the sidebar: the club (and switching), then the Bananasplit mark. */}
-          <div className="mt-4 shrink-0 space-y-3">
-            <div className={cn(segmentedTrack, "flex h-auto min-w-0")}>
-              <div className="bg-thumb min-w-0 flex-1 rounded-full px-1 shadow-[0_1px_2px_rgb(0_0_0/0.14),var(--edge-highlight)] [&>button]:h-10 [&>button]:rounded-full">
-                {clubMenu}
-              </div>
-            </div>
+          {/* The foot, as in the sidebar: the Bananasplit mark. */}
+          <div className="mt-4 shrink-0">
             <Link
               href="/"
               onClick={close}
