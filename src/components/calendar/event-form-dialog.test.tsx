@@ -596,8 +596,8 @@ describe("EventFormDialog: the shape of a new meeting", () => {
         }),
       });
 
-      expect(screen.queryByRole("radiogroup")).toBeNull();
-      expect(screen.queryAllByRole("radio")).toHaveLength(0);
+      expect(screen.queryByRole("radiogroup", { name: "Kind of meeting" })).toBeNull();
+      expect(screen.queryByRole("radio", { name: "Online" })).toBeNull();
       expect((screen.getByLabelText(/^Location/) as HTMLInputElement).value).toBe("Curry 344");
       expect((screen.getByLabelText("How to find it") as HTMLTextAreaElement).value).toBe(
         "Second floor.",

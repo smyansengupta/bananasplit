@@ -6,7 +6,6 @@ import {
   Globe,
   MapPin,
   Ticket,
-  TriangleAlert,
   Video,
   type IconComponent,
 } from "@/components/icons";
@@ -569,55 +568,58 @@ function EventForm({
         )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+          {/* One "type" question: a club with its own meeting types answers
+              that one above; the older kind is only asked without them. */}
+          {meetingTypes.length === 0 && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="event-kind">Type</Label>
+              <Select value={kind} onValueChange={(v) => setKind(v as EventKind)}>
+                <SelectTrigger id="event-kind" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {KIND_ORDER.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      <span
+                        aria-hidden
+                        className="size-2 shrink-0 rounded-full"
+                        style={{ ...kindStyle(k), background: "var(--kind)" }}
+                      />
+                      {KIND_META[k].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="grid gap-1.5">
-            <Label htmlFor="event-kind">Type</Label>
-            <Select value={kind} onValueChange={(v) => setKind(v as EventKind)}>
-              <SelectTrigger id="event-kind" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {KIND_ORDER.map((k) => (
-                  <SelectItem key={k} value={k}>
-                    <span
-                      aria-hidden
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ ...kindStyle(k), background: "var(--kind)" }}
-                    />
-                    {KIND_META[k].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="event-visibility">Visibility</Label>
-            <Select value={visibility} onValueChange={(v) => setVisibility(v as EventVisibility)}>
-              <SelectTrigger id="event-visibility" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(["INTERNAL", "PUBLIC"] as const).map((v) => (
-                  <SelectItem key={v} value={v}>
-                    {VISIBILITY_META[v].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-xs">{VISIBILITY_META[visibility].hint}</p>
+            <span id="event-visibility-label" className="text-sm leading-none font-medium">
+              Visibility
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="event-visibility-label"
+              className={cn(segmentedTrack, "self-start")}
+            >
+              {(["INTERNAL", "PUBLIC"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={visibility === v}
+                  onClick={() => setVisibility(v)}
+                  className={segmentedItem(visibility === v)}
+                >
+                  {VISIBILITY_META[v].label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {isPublic && (
-          <p
-            role="note"
-            className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3 text-xs leading-relaxed"
-          >
-            <TriangleAlert className="text-warning mt-0.5 size-4 shrink-0" aria-hidden />
-            <span>
-              Public events are world-readable: the title, description, location and RSVP link
-              appear on your website, the public events feed and the public Google Calendar.
-              Attendees and meeting links never do.
-            </span>
+          <p className="text-muted-foreground text-xs">
+            Shown on your website and public calendar. Attendees and call links stay private.
           </p>
         )}
 
