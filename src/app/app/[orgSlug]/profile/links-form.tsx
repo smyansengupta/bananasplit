@@ -75,16 +75,6 @@ export function LinksForm({ initial }: { initial: ProfileLink[] }) {
   // Saves itself a moment after the last change, once every row is a valid
   // link (an empty new row waits quietly until it's filled in or removed).
   const lastSaved = useRef(JSON.stringify(initial.map((l) => ({ kind: l.kind, url: l.url }))));
-  useEffect(() => {
-    const links = rows.map((r) => ({ kind: r.kind, url: r.url }));
-    const json = JSON.stringify(links);
-    if (json === lastSaved.current) return;
-    if (rows.some((r) => localError(r))) return;
-    const timer = setTimeout(() => save(false), 900);
-    return () => clearTimeout(timer);
-    // save and localError read only the current rows.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,6 +101,17 @@ export function LinksForm({ initial }: { initial: ProfileLink[] }) {
       }
     });
   }
+
+  useEffect(() => {
+    const links = rows.map((r) => ({ kind: r.kind, url: r.url }));
+    const json = JSON.stringify(links);
+    if (json === lastSaved.current) return;
+    if (rows.some((r) => localError(r))) return;
+    const timer = setTimeout(() => save(false), 900);
+    return () => clearTimeout(timer);
+    // Runs on the rows alone: save reads the same rows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   const statusLine =
     errors.links || errors.form ? (

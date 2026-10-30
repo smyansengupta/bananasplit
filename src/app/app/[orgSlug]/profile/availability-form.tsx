@@ -15,17 +15,6 @@ export function AvailabilityForm({ initial }: { initial: Availability }) {
   const [pending, start] = useTransition();
 
   const lastSaved = useRef(JSON.stringify(initial));
-  useEffect(() => {
-    const json = JSON.stringify(value);
-    if (json === lastSaved.current) return;
-    const timer = setTimeout(() => {
-      lastSaved.current = json;
-      save(value);
-    }, 700);
-    return () => clearTimeout(timer);
-    // save reads only setters besides its argument.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
 
   function save(snapshot: Availability) {
     setStatus(null);
@@ -41,6 +30,16 @@ export function AvailabilityForm({ initial }: { initial: Availability }) {
       );
     });
   }
+
+  useEffect(() => {
+    const json = JSON.stringify(value);
+    if (json === lastSaved.current) return;
+    const timer = setTimeout(() => {
+      lastSaved.current = json;
+      save(value);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [value]);
 
   return (
     <SettingsCard

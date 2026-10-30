@@ -89,8 +89,6 @@ export function DetailsForm({
   useEffect(() => {
     const timer = setTimeout(() => save(values), 900);
     return () => clearTimeout(timer);
-    // save reads only refs and setters besides its argument.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values]);
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
