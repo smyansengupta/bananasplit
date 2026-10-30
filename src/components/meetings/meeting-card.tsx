@@ -51,6 +51,8 @@ export interface MeetingRow {
   conferenceUrl: string | null;
   conferenceSyncState: CalendarSyncState;
   conferenceSyncError: string | null;
+  /** Check-ins (maintained by the rollups); the past list's "came". */
+  attendanceCount?: number;
 }
 
 /**
@@ -466,8 +468,8 @@ function DatePanel({
   );
 }
 
-/** The meeting's type: its name on a wash of its colour, with a dot. */
-function TypePill({ name }: { name: string }) {
+/** The meeting's type: its name on a wash of its colour, with a dot. Needs `--kind` set by a parent. */
+export function TypePill({ name }: { name: string }) {
   return (
     <span
       style={{ background: KIND_WASH }}

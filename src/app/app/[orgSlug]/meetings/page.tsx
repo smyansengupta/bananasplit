@@ -11,6 +11,7 @@ import {
   type MeetingRow,
 } from "@/components/meetings/meeting-card";
 import { NewMeetingButton } from "@/components/meetings/new-meeting-button";
+import { PastMeetingList } from "@/components/meetings/past-meeting-list";
 import { VideoConnections } from "@/components/meetings/video-connections";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -101,79 +102,97 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts, attendees }, registrations, connections, members] = await Promise.all([
-    withOrgTx(org.id, async ({ db }) => {
-      const rows: MeetingRow[] = await db.event.findMany({
-        where: {
-          organizationId: org.id,
-          deletedAt: null,
-          mergedIntoId: null,
-          // Hosts work from the whole list. Everyone else sees what they can
-          // act on: something to join, or a page open for sign-ups, still to
-          // come. Row policies have already limited this to what they may see.
-          ...(canManage
-            ? {}
-            : {
-                endsAt: { gt: now },
-                OR: [{ rsvpEnabled: true }, { conferenceUrl: { not: null } }],
-              }),
-        },
-        orderBy: { startsAt: "asc" },
-        select: {
-          id: true,
-          title: true,
-          startsAt: true,
-          endsAt: true,
-          allDay: true,
-          rsvpEnabled: true,
-          rsvpSlug: true,
-          rsvpCapacity: true,
-          rsvpCover: true,
-          kind: true,
-          format: true,
-          location: true,
-          meetingType: true,
-          hostUserId: true,
-          featured: true,
-          conferenceProvider: true,
-          conferenceManaged: true,
-          conferenceUrl: true,
-          conferenceSyncState: true,
-          conferenceSyncError: true,
-          // Not conferenceHostUrl: it starts the meeting as host, and nothing
-          // on this list needs it. The meeting's page hands it to editors.
-        },
-      });
-      // The stored error can name an account or a setting that is not for
-      // everyone, so only people who can edit a meeting get it on the card.
-      const events: MeetingRow[] = canManage
-        ? rows
-        : rows.map((e) => ({ ...e, conferenceSyncError: null }));
-      // Head counts are the hosts' view.
-      const counts = canManage
-        ? await db.eventRegistration.groupBy({
-            by: ["eventId", "status"],
-            where: {
-              organizationId: org.id,
-              eventId: { in: events.map((e) => e.id) },
-              status: { in: ["GOING", "WAITLIST"] },
-            },
-            _count: { _all: true },
-          })
-        : [];
-      // Who was invited from the organization and what they said, so a card can
-      // show the people rather than a blank picture.
-      const attendees = await db.eventAttendee.findMany({
-        where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
-        select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
-      });
-      return { events, counts, attendees };
-    }),
-    myRsvpRegistrations(user.id, MY_TICKETS),
-    canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
-    // The create form's host and invite pickers, for whoever can make a meeting.
-    canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
-  ]);
+  const [{ events, counts, attendees, notes }, registrations, connections, members] =
+    await Promise.all([
+      withOrgTx(org.id, async ({ db }) => {
+        const rows: MeetingRow[] = await db.event.findMany({
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            mergedIntoId: null,
+            // Hosts work from the whole list. Everyone else sees what they can
+            // act on: something to join, or a page open for sign-ups, still to
+            // come. Row policies have already limited this to what they may see.
+            ...(canManage
+              ? {}
+              : {
+                  endsAt: { gt: now },
+                  // Something to join, a page taking sign-ups, or a meeting
+                  // they were invited to (an in-person one has neither).
+                  OR: [
+                    { rsvpEnabled: true },
+                    { conferenceUrl: { not: null } },
+                    { attendees: { some: { userId: user.id } } },
+                  ],
+                }),
+          },
+          orderBy: { startsAt: "asc" },
+          select: {
+            id: true,
+            title: true,
+            startsAt: true,
+            endsAt: true,
+            allDay: true,
+            rsvpEnabled: true,
+            rsvpSlug: true,
+            rsvpCapacity: true,
+            rsvpCover: true,
+            kind: true,
+            format: true,
+            location: true,
+            meetingType: true,
+            hostUserId: true,
+            featured: true,
+            conferenceProvider: true,
+            conferenceManaged: true,
+            conferenceUrl: true,
+            conferenceSyncState: true,
+            conferenceSyncError: true,
+            attendanceCount: true,
+            // Not conferenceHostUrl: it starts the meeting as host, and nothing
+            // on this list needs it. The meeting's page hands it to editors.
+          },
+        });
+        // The stored error can name an account or a setting that is not for
+        // everyone, so only people who can edit a meeting get it on the card.
+        const events: MeetingRow[] = canManage
+          ? rows
+          : rows.map((e) => ({ ...e, conferenceSyncError: null }));
+        // Head counts are the hosts' view.
+        const counts = canManage
+          ? await db.eventRegistration.groupBy({
+              by: ["eventId", "status"],
+              where: {
+                organizationId: org.id,
+                eventId: { in: events.map((e) => e.id) },
+                status: { in: ["GOING", "WAITLIST"] },
+              },
+              _count: { _all: true },
+            })
+          : [];
+        // Who was invited from the organization and what they said, so a card can
+        // show the people rather than a blank picture.
+        const attendees = await db.eventAttendee.findMany({
+          where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
+          select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
+        });
+        // The past list's notes link: each finished meeting's notes, newest first.
+        const pastIds = events.filter((e) => e.endsAt <= now).map((e) => e.id);
+        const notes =
+          pastIds.length > 0
+            ? await db.note.findMany({
+                where: { organizationId: org.id, eventId: { in: pastIds }, deletedAt: null },
+                orderBy: { updatedAt: "desc" },
+                select: { id: true, eventId: true },
+              })
+            : [];
+        return { events, counts, attendees, notes };
+      }),
+      myRsvpRegistrations(user.id, MY_TICKETS),
+      canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
+      // The create form's host and invite pickers, for whoever can make a meeting.
+      canManage ? getOrgMembersForPicker(org.id) : Promise.resolve([]),
+    ]);
 
   const countOf = (eventId: string, status: string) =>
     counts.find((c) => c.eventId === eventId && c.status === status)?._count._all ?? 0;
@@ -500,7 +519,19 @@ export default async function MeetingsPage({
               >
                 Past <Badge variant="secondary">{past.length}</Badge>
               </h2>
-              {listOf(past, false, true)}
+              <PastMeetingList
+                meetings={past}
+                timeZone={timeZone}
+                orgSlug={orgSlug}
+                typeOf={typeOf}
+                facts={(e) => ({
+                  checkedIn: e.attendanceCount ?? 0,
+                  signedUp:
+                    countOf(e.id, "GOING") ||
+                    attendees.filter((a) => a.eventId === e.id && a.rsvp === "YES").length,
+                  notes: notes.filter((n) => n.eventId === e.id),
+                })}
+              />
             </section>
           )}
         </>
