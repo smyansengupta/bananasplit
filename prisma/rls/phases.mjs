@@ -3398,6 +3398,23 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     { value: { verified: 1, unverified: 0 } },
   );
   await tcase(
+    "P-ONB-02c",
+    "app.join_code_org_id: the org a live code opens, for the signed-out /join page",
+    "owner",
+    null,
+    async (q) => {
+      await q(`INSERT INTO "OrgJoinCode" ("organizationId","code") VALUES ('org_B','WXYZ-2345')`);
+      const org = async (code) =>
+        (await q(`SELECT app.join_code_org_id('${code}') AS id`)).rows[0].id;
+      const live = await org(" wxyz-2345 ");
+      const unknown = await org("AAAA-AAAA");
+      await q(`UPDATE "OrgJoinCode" SET "enabled" = false WHERE "organizationId" = 'org_B'`);
+      const off = await org("WXYZ-2345");
+      return { live, unknown, off };
+    },
+    { value: { live: "org_B", unknown: null, off: null } },
+  );
+  await tcase(
     "P-ONB-03",
     "a joiner on the service path counts a use; app_service cannot create or delete codes",
     "app_service",

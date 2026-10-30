@@ -11,11 +11,19 @@ import {
 } from "@/lib/billing/semester";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
+import { mainShare } from "@/lib/metadata/share";
 
 import { checkoutAvailable } from "./availability";
 import { CheckoutForm, type CheckoutPlan } from "./checkout-form";
 
-export const metadata: Metadata = { title: "Subscribe · Bananasplit" };
+// The main card. Behind sign-in, so a texted link previews from /sign-in anyway.
+export const metadata: Metadata = {
+  ...mainShare({
+    title: "Subscribe",
+    description:
+      "Pick a plan for your team and pay yearly. Everything you set up in the trial stays.",
+  }),
+};
 
 /** The seat count shown when the user has no organization yet (the design's sample). */
 const DEFAULT_MEMBERS = 40;

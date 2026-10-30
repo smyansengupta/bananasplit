@@ -1,13 +1,22 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { requireUser } from "@/lib/auth/session";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
 import { personalHomeHref } from "@/server/personal/space";
+import { mainShare } from "@/lib/metadata/share";
 
 import { ReadyAccount } from "./ready-account";
 
-export const metadata = { title: "Welcome · Bananasplit" };
+// The main card. Behind sign-in, so a texted link previews from /sign-in anyway.
+export const metadata: Metadata = {
+  ...mainShare({
+    title: "Welcome",
+    description: "A few quick questions, then your workspace is ready.",
+    noIndex: true,
+  }),
+};
 
 /**
  * /onboarding: where sign-up and sign-in land (docs/features/onboarding-flows.md).

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SignedInAs } from "@/components/auth/signed-in-as";
@@ -7,6 +8,7 @@ import { signInPath } from "@/lib/auth/callback-url";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { connectorsConfig } from "@/server/connectors/config";
+import { mainShare } from "@/lib/metadata/share";
 
 import { continueConnectAction } from "./actions";
 import { connectPath } from "./paths";
@@ -20,9 +22,15 @@ import { connectPath } from "./paths";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Connect an AI app · Bananasplit",
-  referrer: "no-referrer" as const,
+// The main card, src/app/opengraph-image.png.
+export const metadata: Metadata = {
+  ...mainShare({
+    title: "Connect an AI app",
+    description:
+      "Let Claude or ChatGPT work in your Bananasplit workspace, with only what you allow.",
+    noIndex: true,
+  }),
+  referrer: "no-referrer",
 };
 
 const RESULTS = {

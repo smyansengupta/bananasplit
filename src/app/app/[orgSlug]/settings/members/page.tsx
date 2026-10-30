@@ -209,7 +209,7 @@ export default async function MembersPage({
         >
           <JoinCodeCard
             orgId={orgId}
-            joinUrlBase={absoluteAppUrl("/onboarding/join")}
+            joinUrlBase={absoluteAppUrl("/join")}
             initial={{
               code: joinCode.code,
               enabled: joinCode.enabled,

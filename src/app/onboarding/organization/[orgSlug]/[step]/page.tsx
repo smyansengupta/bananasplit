@@ -183,7 +183,7 @@ export default async function OrgSetupStepPage({
         <InviteStep
           {...base}
           code={code?.enabled ? code.code : null}
-          joinUrl={absoluteAppUrl("/onboarding/join")}
+          joinUrl={absoluteAppUrl("/join")}
           invites={invites}
         />,
       );

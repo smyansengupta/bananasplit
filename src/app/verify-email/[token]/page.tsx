@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SignedInAs } from "@/components/auth/signed-in-as";
@@ -7,6 +8,7 @@ import { signInPath } from "@/lib/auth/callback-url";
 import { getSession } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 import { peekVerificationToken } from "@/server/email/verification";
+import { mainShare } from "@/lib/metadata/share";
 
 import { confirmEmailAction, resendVerificationAction } from "./actions";
 
@@ -18,9 +20,14 @@ import { confirmEmailAction, resendVerificationAction } from "./actions";
 export const dynamic = "force-dynamic";
 
 /** The token is in the URL: never pass it on to another site as a referrer. */
-export const metadata = {
-  title: "Confirm your email · Bananasplit",
-  referrer: "no-referrer" as const,
+// The main card, src/app/opengraph-image.png. The token is in the path, never the preview.
+export const metadata: Metadata = {
+  ...mainShare({
+    title: "Confirm your email",
+    description: "One tap and your Bananasplit account is ready.",
+    noIndex: true,
+  }),
+  referrer: "no-referrer",
 };
 
 const RESULTS = {

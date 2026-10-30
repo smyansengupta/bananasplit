@@ -6,6 +6,7 @@ import "./globals.css";
 import { IconMotion } from "@/components/icons/icon-motion";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth/config";
+import { metadataBase, SITE_ICONS, SITE_NAME } from "@/lib/metadata/share";
 
 /*
  * The type system (the Moonstone redesign; globals.css maps these to
@@ -37,10 +38,27 @@ const mono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+/*
+ * What every Bananasplit link looks like where it is pasted. The pages
+ * worth sharing set their own title, line and card over the top of this
+ * (src/lib/metadata/share.ts); this is the floor, and it has to stay true
+ * of pages nobody thought about.
+ */
 export const metadata: Metadata = {
-  title: "Bananasplit",
+  // Relative metadata URLs (every opengraph-image.png) resolve against
+  // this; without it Next falls back to the deployment's own host, so a
+  // shared link previews with a picture on a vercel.app URL.
+  metadataBase: metadataBase(),
+  title: "Bananasplit: the workspace that runs itself",
   description:
-    "One workspace for your organization: projects, docs, databases, events, scheduling and the budget.",
+    "Your team's tasks, docs, meetings and money in one place. Bananasplit listens where you already work, handles the busywork, and texts you only when something needs you.",
+  // Only what is true of every page: Next fills og:title and og:description
+  // per route from that route's own title and description, so naming them
+  // here would make every page preview as the home page.
+  openGraph: { siteName: SITE_NAME, type: "website" },
+  // The banana; a club's pages replace it with the club's logo.
+  icons: SITE_ICONS,
+  twitter: { card: "summary_large_image" },
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

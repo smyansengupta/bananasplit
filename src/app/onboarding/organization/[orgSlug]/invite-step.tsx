@@ -51,6 +51,7 @@ export function InviteStep({
   backHref: string | null;
   /** The club's code, when it's turned on. */
   code: string | null;
+  /** The absolute /join URL; the link copied is /join/<code>. */
   joinUrl: string;
   invites: { email: string; role: string }[];
 }) {
@@ -95,7 +96,7 @@ export function InviteStep({
   async function copy(what: "code" | "link") {
     if (!code) return;
     try {
-      await navigator.clipboard.writeText(what === "code" ? code : `${joinUrl}?code=${code}`);
+      await navigator.clipboard.writeText(what === "code" ? code : `${joinUrl}/${code}`);
       setCopied(what);
       setTimeout(() => setCopied(null), 1600);
     } catch {

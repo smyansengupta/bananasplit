@@ -28,7 +28,7 @@ export function JoinCodeCard({
 }: {
   orgId: string;
   initial: CodeState;
-  /** The absolute /onboarding/join URL; ?code= is appended. */
+  /** The absolute /join URL; the link shared is /join/<code>, which previews as the club. */
   joinUrlBase: string;
   compact?: boolean;
 }) {
@@ -38,7 +38,7 @@ export function JoinCodeCard({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const link = `${joinUrlBase}?code=${code.code}`;
+  const link = `${joinUrlBase}/${code.code}`;
 
   function apply(run: () => Promise<JoinCodeResult>, message: string) {
     setError(null);

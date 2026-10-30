@@ -41,6 +41,7 @@ export const NONCE_ROUTE_PREFIXES = [
   "/poll",
   "/e",
   "/invite",
+  "/join",
   "/sign-in",
   "/sign-up",
   "/verify-email",
@@ -201,4 +202,4 @@ export const NOT_FRAMABLE_SOURCE = `/((?!${FRAMABLE}).*)`;
  * next.config.ts `source` for the static CSP: every path EXCEPT the nonce
  * routes (so a matched route never carries two policies).
  */
-export const STATIC_CSP_SOURCE = `/((?!app/|app$|poll/|poll$|e/|e$|invite/|invite$|sign-in|sign-up|verify-email|onboarding|checkout|forgot-password|reset-password|connect$|${FRAMABLE}).*)`;
+export const STATIC_CSP_SOURCE = `/((?!app/|app$|poll/|poll$|e/|e$|invite/|invite$|join/|join$|sign-in|sign-up|verify-email|onboarding|checkout|forgot-password|reset-password|connect$|${FRAMABLE}).*)`;

@@ -1,4 +1,4 @@
-import type { Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -19,6 +19,7 @@ import {
 } from "@/lib/billing/space";
 import { getSession, requireUser } from "@/lib/auth/session";
 import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
+import { clubIcons } from "@/lib/metadata/share";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { sidebarCookieName } from "@/lib/sidebar-mode";
 import { getSidebarMode } from "@/lib/sidebar-mode-cookie";
@@ -69,6 +70,28 @@ async function deepRedirectTarget(error: unknown, orgSlug: string): Promise<stri
  * can float clear of the indicator (env(safe-area-inset-*) in the shell).
  */
 export const viewport: Viewport = { viewportFit: "cover" };
+
+/**
+ * The tab wears the club's own picture while you are inside it, so a window
+ * of a dozen Bananasplit tabs is still readable. getOrgContextBySlug is
+ * React-cached and the layout below calls it in the same request, so this
+ * costs no extra read; the logo URL is the stored variant the shell already
+ * shows, public and cached immutably. A club with no logo, and every case
+ * where the slug does not resolve (the layout answers that properly a
+ * moment later), keeps the banana (SITE_ICONS).
+ */
+export async function generateMetadata({
+  params,
+}: LayoutProps<"/app/[orgSlug]">): Promise<Metadata> {
+  const { orgSlug } = await params;
+  try {
+    const ctx = await getOrgContextBySlug(orgSlug);
+    const icons = clubIcons(ctx.organization.logo);
+    return { title: ctx.organization.name, ...(icons ? { icons } : {}) };
+  } catch {
+    return {};
+  }
+}
 
 function isNotFound(error: unknown): boolean {
   const digest = (error as { digest?: unknown } | null)?.digest;

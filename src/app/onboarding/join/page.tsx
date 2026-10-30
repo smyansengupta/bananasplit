@@ -5,6 +5,7 @@ import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
 import { ArrowRight } from "@/components/brand/arrows";
 import { AuthCard, AuthTitle } from "@/components/brand/auth-card";
 import { requireUser } from "@/lib/auth/session";
+import { shareMetadata } from "@/lib/metadata/share";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
 import { findPendingInvitationsForMe } from "@/server/settings/invitations";
 
@@ -13,7 +14,17 @@ import { JoinForm } from "./join-form";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Enter your invite code · Bananasplit" };
+/*
+ * Shared links now go to /join/<code>, which previews as the club and comes
+ * here on Continue; this preview is for older links and anyone pasting the
+ * bare page. It cannot name the club: the page is behind sign-in, so
+ * whatever unfurls it is redirected before reading any of this.
+ */
+export const metadata = shareMetadata({
+  title: "Join your club",
+  description: "Enter the invite code whoever invited you sent, and join their workspace.",
+  noIndex: true,
+});
 
 const WHERE = [
   "Check the invite email from your organization.",

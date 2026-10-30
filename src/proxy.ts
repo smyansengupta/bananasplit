@@ -86,6 +86,13 @@ export const config = {
       ],
     },
     {
+      source: "/join/:path*",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
+    {
       source: "/sign-in",
       missing: [
         { type: "header", key: "next-router-prefetch" },

@@ -5,6 +5,7 @@ import { AuthCard, AuthTitle } from "@/components/brand/auth-card";
 import { pill } from "@/components/brand/pill";
 import { cn } from "@/lib/utils";
 import { peekPasswordResetToken } from "@/server/email/password-reset";
+import { mainShare } from "@/lib/metadata/share";
 
 import { resetPasswordAction } from "./actions";
 import { ResetPasswordForm } from "./reset-password-form";
@@ -12,8 +13,13 @@ import { ResetPasswordForm } from "./reset-password-form";
 export const dynamic = "force-dynamic";
 
 /** The token is in the URL: never pass it on to another site as a referrer. */
+// The main card, src/app/opengraph-image.png. The token is in the path, never the preview.
 export const metadata: Metadata = {
-  title: "Set a new password · Bananasplit",
+  ...mainShare({
+    title: "Set a new password",
+    description: "Choose a new password, then you're straight back in your workspace.",
+    noIndex: true,
+  }),
   referrer: "no-referrer",
 };
 

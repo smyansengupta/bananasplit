@@ -3,10 +3,14 @@ import type { Metadata } from "next";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { getSession } from "@/lib/auth/session";
 import { CONTACT_EMAIL } from "@/lib/brand/links";
+import { mainShare } from "@/lib/metadata/share";
 
+// The main card, src/app/opengraph-image.png.
 export const metadata: Metadata = {
-  title: "Privacy Policy · Bananasplit",
-  description: "How Bananasplit collects, uses and protects your personal information.",
+  ...mainShare({
+    title: "Privacy Policy",
+    description: "How Bananasplit collects, uses and protects your personal information.",
+  }),
 };
 
 const DSAR_HREF = "https://app.termly.io/dsar/0136cdcc-60d7-4db4-a80e-9169782eb5fc";
