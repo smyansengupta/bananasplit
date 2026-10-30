@@ -74,7 +74,7 @@ import { loadPersonalHome } from "@/server/personal/home";
 import { getMyOpenTasks, getTaskStats, taskFilterWhere } from "@/server/tasks/queries";
 
 const MY_TASKS_LIMIT = 8;
-/** "Coming up in 14 days" in the stat strip. */
+/** "Next 14 days" in the stat strip. */
 const UPCOMING_DAYS = 14;
 const EVENTS_LIMIT = 6;
 const RECENT_LIMIT = 8;
@@ -276,6 +276,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       upcomingDays={UPCOMING_DAYS}
       taskBar={data.taskBar}
       tasksHref={`${base}/tasks`}
+      calendarHref={calendarHref}
     />
   );
 
@@ -284,11 +285,10 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     .filter((i) => i.id !== "overview")
     .map((i) => ({ id: i.id, label: i.label, icon: i.icon, href: `${base}${i.path}` }));
 
-  const eventEmpty = (title: string, description: string, cta: string) => (
+  const eventEmpty = (title: string, cta: string) => (
     <EmptyState
       size="compact"
       title={title}
-      description={description}
       action={
         canAddEvents ? (
           <Button asChild size="sm" variant="outline">
@@ -340,11 +340,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         rsvps={data.rsvps}
         zones={zones}
         now={now}
-        empty={eventEmpty(
-          "No meetings coming up",
-          "Team and board meetings on the calendar show here.",
-          "Schedule a meeting",
-        )}
+        empty={eventEmpty("No meetings coming up", "Schedule a meeting")}
       />
     ),
     events: (
@@ -355,11 +351,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         rsvps={data.rsvps}
         zones={zones}
         now={now}
-        empty={eventEmpty(
-          "No events coming up",
-          "Socials, workshops and everything else show here.",
-          "Add an event",
-        )}
+        empty={eventEmpty("No events coming up", "Add an event")}
       />
     ),
     "rsvp-goal": (
@@ -429,50 +421,50 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         chips={overdue > 0 ? <Badge variant="destructive">{overdue} overdue</Badge> : null}
       >
         <OpenLink
-          href={`${base}/tasks?view=mine`}
+          href={`${base}/tasks?view=list&scope=mine`}
           label={total > data.myTasks.tasks.length ? `View all ${total}` : "View all"}
         />
       </CardControls>
     ),
     polls: (
       <CardControls count={data.polls.length || undefined}>
-        <OpenLink href={`${base}/calendar/polls`} label="Open polls" />
+        <OpenLink href={`${base}/calendar/polls`} label="Polls" />
       </CardControls>
     ),
     "weekly-pulse": (
       <CardControls count={sentLabel ?? undefined}>
-        <OpenLink href={pulseHref} label="Open the pulse archive" />
+        <OpenLink href={pulseHref} label="Pulse" />
       </CardControls>
     ),
     meetings: (
       <CardControls>
-        <OpenLink href={calendarHref} label="Open the calendar" />
+        <OpenLink href={calendarHref} label="Calendar" />
       </CardControls>
     ),
     events: (
       <CardControls>
-        <OpenLink href={calendarHref} label="Open the calendar" />
+        <OpenLink href={calendarHref} label="Calendar" />
       </CardControls>
     ),
     week: (
       <CardControls>
-        <OpenLink href={`${calendarHref}?view=week`} label="Open the week on the calendar" />
+        <OpenLink href={`${calendarHref}?view=week`} label="Calendar" />
       </CardControls>
     ),
     people: (
       <CardControls count={data.memberCount}>
-        <OpenLink href={`${base}/people`} label="Open People" />
+        <OpenLink href={`${base}/people`} label="People" />
       </CardControls>
     ),
     pinned: <CardControls count={data.pins.length || undefined} />,
     notes: (
       <CardControls>
-        <OpenLink href={`${base}/notes`} label="Open Files" />
+        <OpenLink href={`${base}/notes`} label="Files" />
       </CardControls>
     ),
     files: (
       <CardControls>
-        <OpenLink href={`${base}/notes`} label="Open Files" />
+        <OpenLink href={`${base}/notes`} label="Files" />
       </CardControls>
     ),
   };

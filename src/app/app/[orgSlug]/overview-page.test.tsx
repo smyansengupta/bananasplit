@@ -386,7 +386,7 @@ describe("the Moonstone Overview", () => {
     const html = await render();
     expect(html).toContain("Due this week");
     expect(html).toContain("All clear");
-    expect(html).toContain("Coming up in 14 days");
+    expect(html).toContain("Next 14 days");
     expect(html).not.toContain("Open tasks");
     expect(html.indexOf("Due this week")).toBeLessThan(html.indexOf('id="up-next-heading"'));
     expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open polls"));

@@ -106,6 +106,8 @@ export function PersonalHome({
           upcoming={data.upcoming.length}
           upcomingDays={UPCOMING_DAYS}
           rsvps={data.rsvps.length}
+          tasksHref={`${base}/tasks`}
+          calendarHref={`${base}/calendar`}
         />
       </div>
 
