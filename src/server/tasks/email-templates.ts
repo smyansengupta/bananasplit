@@ -1,4 +1,4 @@
-import { escapeHtml, subjectLine } from "@/server/email/escape";
+import { escapeHtml, safeHref, subjectLine } from "@/server/email/escape";
 import { EMAIL_COLORS as C, layout, paragraph, type RenderedEmail } from "@/server/email/templates";
 
 /**
@@ -20,8 +20,9 @@ export interface TaskFacts {
   blockedReason?: string | null;
 }
 
+/** The facts under the lead. Not the title: the subject already says it. */
 function factRows(facts: TaskFacts): [string, string][] {
-  const rows: [string, string][] = [["Task", facts.title]];
+  const rows: [string, string][] = [];
   if (facts.parentTitle) rows.push(["Part of", facts.parentTitle]);
   rows.push(["Due", facts.dueLabel ?? "No due date"]);
   if (facts.priority) rows.push(["Priority", facts.priority]);
@@ -51,7 +52,7 @@ function note(text: string): string {
 }
 
 export const FLAGGED_NOTE =
-  "Flagged: this was assigned from below your level in the org chart. That's allowed; accept it, or talk it over. You or an admin can acknowledge the flag on the task.";
+  "Assigned from below you in the org chart. You or an admin can acknowledge it on the task.";
 
 /** Assignment (owner or collaborator), with the flag note for an above-level assignment. */
 export function taskAssignedEmail(input: {
@@ -175,11 +176,21 @@ export function taskReminderEmail(input: {
       ? `Overdue: ${input.task.title}`
       : `Due ${input.when}: ${input.task.title}`,
     eyebrow: input.orgName,
-    bodyHtml: paragraph(lead) + factsHtml(input.task),
-    bodyText: [lead, factsText(input.task)].join("\n\n"),
+    bodyHtml:
+      paragraph(lead) +
+      factsHtml(input.task) +
+      // The page asks once more (a link in an email must not change anything
+      // by itself: mail scanners open links), then it's one click.
+      `<p style="margin:0 0 8px;font-size:14px"><a href="${safeHref(markDoneUrl(input.url))}" style="color:${C.ink}">Mark done</a></p>`,
+    bodyText: [lead, factsText(input.task), `Mark done: ${markDoneUrl(input.url)}`].join("\n\n"),
     cta: { label: "Open task", url: input.url },
     footer: FOOTER,
   });
+}
+
+/** The task page with its Mark done button showing. */
+function markDoneUrl(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}done=1`;
 }
 
 export interface DigestItem {
@@ -228,13 +239,10 @@ export function taskDigestEmail(input: {
     html.push(
       `<ul style="margin:0 0 8px;padding-left:20px">${items
         .map((i) => {
-          const due = i.dueLabel
-            ? ` <span style="color:${C.muted}">&middot; ${escapeHtml(i.dueLabel)}</span>`
-            : "";
-          const extra = i.note
-            ? ` <span style="color:${C.muted}">&middot; ${escapeHtml(i.note)}</span>`
-            : "";
-          return `<li style="margin:0 0 4px">${escapeHtml(i.title)}${due}${extra}</li>`;
+          const meta = [i.dueLabel, i.note].filter(Boolean).join(", ");
+          const after = meta ? ` <span style="color:${C.muted}">${escapeHtml(meta)}</span>` : "";
+          // Each task is its own link, straight to it.
+          return `<li style="margin:0 0 4px"><a href="${safeHref(i.url)}" style="color:${C.ink}">${escapeHtml(i.title)}</a>${after}</li>`;
         })
         .join("")}</ul>`,
     );
@@ -242,7 +250,7 @@ export function taskDigestEmail(input: {
       `${title}\n${items
         .map(
           (i) =>
-            `- ${i.title}${i.dueLabel ? ` (${i.dueLabel})` : ""}${i.note ? ` - ${i.note}` : ""}`,
+            `- ${i.title}${i.dueLabel ? ` (${i.dueLabel})` : ""}${i.note ? `, ${i.note}` : ""}: ${i.url}`,
         )
         .join("\n")}`,
     );
@@ -266,7 +274,7 @@ export function weeklyUpdateReminderEmail(input: {
   url: string;
 }): RenderedEmail {
   const lead = `Your weekly update for the week of ${input.weekLabel} isn't posted yet. The helper has it drafted: ${input.counts.done} done, ${input.counts.next} next, ${input.counts.blocked} blocked.`;
-  const ask = `Review it, add a note, and post it before ${input.dueDayName} night.`;
+  const ask = `Post it before ${input.dueDayName} night.`;
   return layout({
     subject: `Post your weekly update (${input.orgName})`,
     eyebrow: input.orgName,

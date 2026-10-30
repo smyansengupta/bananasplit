@@ -1,3 +1,4 @@
+import { TASK_LAYOUTS } from "@/app/app/[orgSlug]/tasks/views";
 import type { SectionId } from "@/lib/nav/sidebar";
 
 /**
@@ -43,6 +44,18 @@ export const TASK_KEYS = {
   person: "p",
   clearFilters: "x",
   updates: "u",
+} as const;
+
+/**
+ * Keys for the task under the keyboard (Board, List, Table): move with j and
+ * k, open with Enter, and act on it without opening it.
+ */
+export const TASK_ITEM_KEYS = {
+  next: "j",
+  previous: "k",
+  done: "d",
+  assign: "a",
+  due: "s",
 } as const;
 
 /** Whose work: the scope chips' keys. */
@@ -152,9 +165,11 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
   if (has("tasks")) {
     const tasks: ShortcutRow[] = [];
     if (input.taskViews) {
+      // Built from the switcher itself, so the sheet can't name a layout
+      // that isn't there or put them in the wrong order.
       tasks.push({
-        keys: [["1"], ["2"], ["3"], ["4"], ["5"], ["6"]],
-        label: "Board, Week, List, Table, Roadmap or Dashboard",
+        keys: TASK_LAYOUTS.map((_, i) => [String(i + 1)]),
+        label: listOf(TASK_LAYOUTS.map((l) => l.label)),
       });
     }
     tasks.push(
@@ -168,16 +183,31 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
     if (input.taskViews && input.teamwork) {
       tasks.push({ keys: [[upper(TASK_KEYS.updates)]], label: "Weekly update" });
     }
+    tasks.push(
+      {
+        keys: [[upper(TASK_ITEM_KEYS.next)], [upper(TASK_ITEM_KEYS.previous)]],
+        label: "Next or previous task",
+      },
+      { keys: [["Enter"]], label: "Open the task" },
+      { keys: [[upper(TASK_ITEM_KEYS.done)]], label: "Mark it done (again to reopen)" },
+      { keys: [[upper(TASK_ITEM_KEYS.assign)]], label: "Change its owner" },
+      { keys: [[upper(TASK_ITEM_KEYS.due)]], label: "Change its due date" },
+    );
     groups.push(
       { title: "Tasks page", rows: tasks },
       {
         title: "In a task",
         rows: [
-          { keys: [[mod, "Enter"]], label: "Save" },
+          { keys: [[mod, "Enter"]], label: "Create (a new task)" },
           { keys: [["Esc"]], label: "Close" },
           {
             keys: [["T"], ["M"], ["F"], ["W"]],
             label: "Due: today, tomorrow, Friday, next week (in the date menu)",
+          },
+          {
+            keys: [["@"], ["#"]],
+            label:
+              "In a new task's title: @name sets the owner, #tag adds a tag, fri sets the date",
           },
         ],
       },
@@ -196,4 +226,11 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
     );
   }
   return groups;
+}
+
+/** "A, B or C". */
+function listOf(items: readonly string[]): string {
+  return items.length <= 1
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
 }

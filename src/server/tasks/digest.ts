@@ -156,7 +156,7 @@ export async function loadDigest(
         t,
         [t.blockedReason, t.owner?.name && reports.length > 0 ? `owner: ${t.owner.name}` : null]
           .filter(Boolean)
-          .join(" · "),
+          .join(", "),
       ),
     ),
   };

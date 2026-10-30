@@ -110,7 +110,8 @@ export function FilterSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description: string;
+  /** Optional: most sheets need no more than their title. */
+  description?: string;
   canClear: boolean;
   onClear: () => void;
   children: ReactNode;
@@ -123,7 +124,9 @@ export function FilterSheet({
       >
         <SheetHeader className="pb-2">
           <SheetTitle>{title}</SheetTitle>
-          <SheetDescription>{description}</SheetDescription>
+          <SheetDescription className={description ? undefined : "sr-only"}>
+            {description ?? title}
+          </SheetDescription>
         </SheetHeader>
         <div className="space-y-5 px-4 py-2">{children}</div>
         <SheetFooter className="flex-row">

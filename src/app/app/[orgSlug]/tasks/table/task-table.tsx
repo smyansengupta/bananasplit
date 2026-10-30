@@ -3,11 +3,15 @@
 import { ChevronDown, ChevronRight, Columns3 } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
 
 import { useBlockedReason, useConfirmFlagged } from "@/components/tasks/prompts";
 import { QuickPriority, QuickStatus } from "@/components/tasks/quick-controls";
-import { STATUS_LABELS } from "@/components/tasks/status-select";
+import { QuickDue, QuickOwner } from "@/components/tasks/quick-edit";
+import { DueField, OwnerField, PartOfField } from "@/components/tasks/task-fields";
+import { TagMenu } from "@/components/tasks/tag-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { STATUS_LABEL as STATUS_LABELS } from "@/components/tasks/layout-ui";
 import {
   DueLabel,
   FlagBadge,
@@ -22,21 +26,13 @@ import { TaskTypeChip } from "@/components/tasks/task-type";
 import { TagChip } from "@/components/ui/chip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useConfirm } from "@/components/ui/confirm-dialog";
-import { toast } from "@/components/ui/toaster";
+import { undoable } from "@/components/ui/toaster";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -52,13 +48,15 @@ import { relationFor } from "@/lib/tasks/assignment";
 import { epicOf } from "@/lib/tasks/epic";
 import { cn } from "@/lib/utils";
 
-import { bulkAssign, bulkDelete, bulkUpdateStatus, restoreTask } from "../actions";
+import { bulkAssign, bulkDelete, bulkUpdate, bulkUpdateStatus, restoreTask } from "../actions";
 import { TASK_PANEL } from "@/components/tasks/layout-ui";
 
 /**
  * The task table: server-paginated (50 a page), sortable within the page,
- * hideable columns including Owner and Creator, and bulk status, assign
- * and delete through the same checked path as single edits.
+ * hideable columns including Owner and Creator (remembered in this browser),
+ * and bulk status, owner, epic, due date, tag and delete through the same
+ * checked path as single edits. A row's owner and due date change in place;
+ * its epic links to that epic's work.
  */
 
 type SortKey = "title" | "dueDate" | "priority" | "status";
@@ -99,7 +97,7 @@ const COLUMN_KEYS = [
 type ColumnKey = (typeof COLUMN_KEYS)[number];
 const COLUMN_LABELS: Record<ColumnKey, string> = {
   owner: "Owner",
-  involved: "Also involved",
+  involved: "Involved",
   creator: "Creator",
   epic: "Epic",
   labels: "Tags",
@@ -118,27 +116,29 @@ export function TaskTable({
   page: number;
   pageSize: number;
 }) {
-  const { org, viewer, actor, members, memberById, announce, showTask, newTask } = useTasks();
+  const { org, viewer, actor, memberById, announce, showTask, newTask } = useTasks();
   const ws = useWorkspace();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [blockedPrompt, askReason] = useBlockedReason();
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
-  const [deleteConfirmEl, confirmDelete] = useConfirm();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [visible, setVisible] = useState<Record<ColumnKey, boolean>>({
-    owner: true,
-    involved: false,
-    creator: false,
-    epic: true,
-    labels: true,
-    priority: true,
-    dueDate: true,
-  });
+  // The columns you picked, remembered in this browser (read once it's here).
+  const storedColumns = useSyncExternalStore(noSubscribe, readColumnsRaw, () => null);
+  const [picked, setPicked] = useState<Record<ColumnKey, boolean> | null>(null);
+  const visible = useMemo(
+    () => picked ?? parseColumns(storedColumns) ?? DEFAULT_COLUMNS,
+    [picked, storedColumns],
+  );
+  const showColumn = (key: ColumnKey, on: boolean) => {
+    const next = { ...visible, [key]: on };
+    writeColumns(next);
+    setPicked(next);
+  };
 
   const sorted = useMemo(() => {
     if (!sortKey) return tasks;
@@ -171,29 +171,31 @@ export function TaskTable({
     });
   }
 
-  async function deleteSelected() {
+  function deleteSelected() {
     const ids = [...selected];
     const n = ids.length;
-    const ok = await confirmDelete({
-      title: `Delete ${n} task${n === 1 ? "" : "s"}?`,
-      description: "Their subtasks go with them. You can undo this right after.",
-      confirmLabel: n === 1 ? "Delete task" : `Delete ${n} tasks`,
-      run: async () => (await bulkDelete(org.id, ids)).error,
-    });
-    if (!ok) return;
-    setSelected(new Set());
-    toast({
-      title: `${n} task${n === 1 ? "" : "s"} deleted`,
-      action: {
-        label: "Undo",
-        run: async () => {
-          for (const id of ids) {
-            const result = await restoreTask(org.id, id);
-            if (result.error) return result.error;
-          }
-        },
+    void undoable({
+      title: `Deleted ${n}`,
+      run: async () => {
+        const error = (await bulkDelete(org.id, ids)).error;
+        if (!error) setSelected(new Set());
+        return error;
+      },
+      undo: async () => {
+        for (const id of ids) {
+          const result = await restoreTask(org.id, id);
+          if (result.error) return result.error;
+        }
       },
     });
+  }
+
+  /** Epic, due date or a tag for every selected task, one update each. */
+  function bulkPatch(input: (task: TaskItem) => Record<string, unknown>) {
+    const items = tasks
+      .filter((t) => selected.has(t.id))
+      .map((t) => ({ taskId: t.id, input: input(t) }));
+    runBulk(() => bulkUpdate(org.id, items));
   }
 
   function runBulk(action: () => Promise<{ error?: string; confirm?: unknown }>) {
@@ -240,7 +242,6 @@ export function TaskTable({
     <div className="space-y-3">
       {blockedPrompt}
       {confirmElement}
-      {deleteConfirmEl}
       {selected.size > 0 && (
         <div
           role="toolbar"
@@ -248,48 +249,59 @@ export function TaskTable({
           className="bg-popover ring-border fixed inset-x-4 bottom-4 z-40 flex flex-wrap items-center gap-2 rounded-xl p-2 shadow-lg ring-1 sm:inset-x-auto sm:left-1/2 sm:w-auto sm:-translate-x-1/2"
         >
           <span className="ps-1.5 text-sm font-medium">{selected.size} selected</span>
-          <Select onValueChange={(s) => void bulkStatus(s as TaskStatus)} disabled={isPending}>
-            <SelectTrigger className="h-8 w-40">
-              <SelectValue placeholder="Change status" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.values(TaskStatus).map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STATUS_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select onValueChange={(u) => void bulkOwner(u)} disabled={isPending}>
-            <SelectTrigger className="h-8 w-44">
-              <SelectValue placeholder="Set owner" />
-            </SelectTrigger>
-            <SelectContent>
-              {members.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name ?? "Member"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            variant="destructive"
+          {/* Status: one click each. */}
+          <span className="flex flex-wrap gap-1" role="group" aria-label="Set status">
+            {Object.values(TaskStatus).map((s) => (
+              <Button
+                key={s}
+                size="sm"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => void bulkStatus(s)}
+              >
+                {STATUS_LABELS[s]}
+              </Button>
+            ))}
+          </span>
+          <OwnerField
+            value={null}
+            allowNone={false}
+            align="start"
+            onChange={(id) => id && void bulkOwner(id)}
+            trigger={
+              <Button size="sm" variant="outline" disabled={isPending}>
+                Owner
+              </Button>
+            }
+          />
+          <BulkEpic disabled={isPending} onPick={(id) => bulkPatch(() => ({ parentTaskId: id }))} />
+          <DueField
+            value=""
+            onChange={(key) => bulkPatch(() => ({ dueDate: key || null }))}
+            trigger={
+              <Button size="sm" variant="outline" disabled={isPending}>
+                Due
+              </Button>
+            }
+          />
+          <BulkTag
             disabled={isPending}
-            onClick={() => void deleteSelected()}
-          >
+            onPick={(labelId) =>
+              bulkPatch((t) => ({
+                labelIds: [...new Set([...t.labels.map((l) => l.label.id), labelId])],
+              }))
+            }
+          />
+          <Button size="sm" variant="destructive" disabled={isPending} onClick={deleteSelected}>
             Delete
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-            Cancel
+            Clear
           </Button>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-muted-foreground text-sm">
-          {total === 0 ? "No tasks" : `${total} task${total === 1 ? "" : "s"}`}
-        </span>
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
@@ -302,7 +314,7 @@ export function TaskTable({
               <DropdownMenuCheckboxItem
                 key={key}
                 checked={visible[key]}
-                onCheckedChange={(checked) => setVisible((prev) => ({ ...prev, [key]: checked }))}
+                onCheckedChange={(checked) => showColumn(key, checked)}
               >
                 {COLUMN_LABELS[key]}
               </DropdownMenuCheckboxItem>
@@ -342,7 +354,7 @@ export function TaskTable({
                 onClick={toggleSort}
               />
               {visible.owner && <TableHead>Owner</TableHead>}
-              {visible.involved && <TableHead>Also involved</TableHead>}
+              {visible.involved && <TableHead>Involved</TableHead>}
               {visible.priority && (
                 <SortableHead
                   label="Priority"
@@ -371,12 +383,7 @@ export function TaskTable({
               <TableRow>
                 <TableCell colSpan={colSpan} className="py-12 text-center">
                   <p className="text-sm font-medium">
-                    {ws.filterCount > 0 ? "No tasks match these filters" : "No tasks here yet"}
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    {ws.filterCount > 0
-                      ? "Remove one of the filters above to widen the search."
-                      : "The table lists every task in the organization, 50 to a page."}
+                    {ws.filterCount > 0 ? "Nothing matches" : "No tasks yet"}
                   </p>
                   <Button
                     size="sm"
@@ -398,8 +405,15 @@ export function TaskTable({
               return (
                 <FragmentRows key={task.id}>
                   <TableRow
-                    className="hover:bg-muted/50 group cursor-pointer"
+                    className="hover:bg-muted/50 focus-visible:bg-muted/50 group cursor-pointer outline-none"
                     onClick={() => showTask(task)}
+                    tabIndex={0}
+                    data-task-key={task.id}
+                    data-task-title={task.title}
+                    data-task-status={task.status}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.target === e.currentTarget) showTask(task);
+                    }}
                   >
                     <TableCell
                       className={cn(PINNED_CELL, PINNED_CHECKBOX)}
@@ -439,7 +453,7 @@ export function TaskTable({
                         )}
                         {isTaskPrivate(task) && <PrivateMark />}
                         {task.type !== "TASK" && <TaskTypeChip type={task.type} iconOnly />}
-                        <span className="truncate">
+                        <span className="break-words">
                           <TaskTitle>{task.title}</TaskTitle>
                         </span>
                         {task.subtasks.length > 0 && (
@@ -454,15 +468,13 @@ export function TaskTable({
                       <QuickStatus task={task} disabled={!editable} />
                     </TableCell>
                     {visible.owner && (
-                      <TableCell>
-                        {task.owner ? (
-                          <span className="flex items-center gap-1.5">
-                            <UserAvatar user={task.owner} size="xs" />
-                            <span className="truncate">{task.owner.name}</span>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <span className="flex items-center gap-1.5">
+                          <QuickOwner task={task} size="xs" disabled={!editable} />
+                          <span className={cn(!task.owner && "text-muted-foreground")}>
+                            {task.owner?.name ?? "No owner"}
                           </span>
-                        ) : (
-                          <span className="text-muted-foreground">No owner</span>
-                        )}
+                        </span>
                       </TableCell>
                     )}
                     {visible.involved && (
@@ -483,16 +495,13 @@ export function TaskTable({
                       </TableCell>
                     )}
                     {visible.dueDate && (
-                      <TableCell>
-                        {task.dueDate ? (
-                          <DueLabel
-                            dueDate={task.dueDate}
-                            todayKey={org.todayKey}
-                            done={task.status === "COMPLETED"}
-                          />
-                        ) : (
-                          <span className="text-muted-foreground">–</span>
-                        )}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <QuickDue
+                          task={task}
+                          done={task.status === "COMPLETED"}
+                          disabled={!editable}
+                          className="opacity-100"
+                        />
                       </TableCell>
                     )}
                     {visible.labels && (
@@ -506,12 +515,25 @@ export function TaskTable({
                         </div>
                       </TableCell>
                     )}
-                    {visible.epic && <TableCell>{epicOf(task)?.title ?? "–"}</TableCell>}
+                    {visible.epic && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {epicOf(task) ? (
+                          <Link
+                            href={ws.hrefWith({ epicId: epicOf(task)!.id })}
+                            className="underline-offset-4 hover:underline"
+                          >
+                            {epicOf(task)!.title}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">–</span>
+                        )}
+                      </TableCell>
+                    )}
                     {visible.creator && (
                       <TableCell>
                         <span className="flex items-center gap-1.5">
                           <UserAvatar user={task.createdBy} size="xs" />
-                          <span className="truncate">{task.createdBy.name ?? "Former member"}</span>
+                          <span>{task.createdBy.name ?? "Former member"}</span>
                         </span>
                       </TableCell>
                     )}
@@ -527,7 +549,7 @@ export function TaskTable({
                           <div className="flex min-w-0 items-center gap-1 pl-6 text-sm">
                             <span
                               className={cn(
-                                "truncate",
+                                "break-words",
                                 s.status === TaskStatus.COMPLETED &&
                                   "text-muted-foreground line-through",
                               )}
@@ -628,5 +650,90 @@ function SortableHead({
         )}
       </button>
     </TableHead>
+  );
+}
+
+const DEFAULT_COLUMNS: Record<ColumnKey, boolean> = {
+  owner: true,
+  involved: false,
+  creator: false,
+  epic: true,
+  labels: true,
+  priority: true,
+  dueDate: true,
+};
+const COLUMNS_KEY = "bs-task-table-columns";
+
+const noSubscribe = () => () => {};
+
+function readColumnsRaw(): string | null {
+  try {
+    return window.localStorage.getItem(COLUMNS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function parseColumns(raw: string | null): Record<ColumnKey, boolean> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<Record<ColumnKey, unknown>>;
+    return Object.fromEntries(
+      COLUMN_KEYS.map((k) => [k, typeof parsed[k] === "boolean" ? parsed[k] : DEFAULT_COLUMNS[k]]),
+    ) as Record<ColumnKey, boolean>;
+  } catch {
+    return null;
+  }
+}
+
+function writeColumns(value: Record<ColumnKey, boolean>) {
+  try {
+    window.localStorage.setItem(COLUMNS_KEY, JSON.stringify(value));
+  } catch {
+    // Private windows refuse storage; the choice just isn't remembered.
+  }
+}
+
+/** The bulk bar's Epic: the same picker as the form's Part of. */
+function BulkEpic({
+  disabled,
+  onPick,
+}: {
+  disabled?: boolean;
+  onPick: (id: string | null) => void;
+}) {
+  return (
+    <span className="[&>button]:h-8 [&>button]:w-auto [&>button]:rounded-full [&>button]:px-3 [&>button]:text-[13px]">
+      <PartOfField
+        value={null}
+        types={["EPIC"]}
+        disabled={disabled}
+        onChange={(id) => onPick(id)}
+      />
+    </span>
+  );
+}
+
+/** The bulk bar's Tag: adds one tag to every selected task. */
+function BulkTag({ disabled, onPick }: { disabled?: boolean; onPick: (labelId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" disabled={disabled}>
+          Tag
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1.5">
+        <TagMenu
+          value={[]}
+          onChange={(ids) => {
+            const id = ids[0];
+            if (id) onPick(id);
+            setOpen(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
 }

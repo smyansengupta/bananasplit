@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CalendarDays,
   Check,
   GanttChart,
   ListTree,
@@ -11,7 +10,6 @@ import {
   Gauge,
   ListFilter,
   Lock,
-  SlidersHorizontal,
   Table2,
   Tag,
   UserRound,
@@ -20,24 +18,12 @@ import {
   Rows3,
   X,
 } from "@/components/icons";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { PHONE_HIDDEN_LAYOUTS, type TaskLayout } from "@/app/app/[orgSlug]/tasks/views";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "@/components/user-avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { SearchField } from "@/components/ui/search-field";
 import { chipClass, Segmented } from "@/components/ui/segmented";
@@ -45,7 +31,7 @@ import { TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
 import { hasModifier, isTypingTarget, overlayOpen, SCOPE_KEYS, TASK_KEYS } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
-import { STATUS_LABELS } from "./status-select";
+import { STATUS_LABEL as STATUS_LABELS } from "./layout-ui";
 import { EpicDot, ParentMenu } from "./epic-menu";
 import { menuItemClass, useMemberSearch } from "./task-fields";
 import { useTasks, useWorkspace } from "./tasks-context";
@@ -58,18 +44,17 @@ import { useTasks, useWorkspace } from "./tasks-context";
  * means a filtered view is a link you can paste into Slack, and going back
  * really goes back.
  *
- * Layout icons carry labels on desktop; the filters collapse behind one
- * button with a count so the bar never wraps into a wall of selects. Every
- * control is the same height (h-7).
+ * The bar reads left to right the same on every page that copies it:
+ * layout, whose work, then the filters as chips you click once (Person,
+ * Epic, Tag, Status), then search at the end. Every control is 40px tall.
  *
- * A phone gets its own one-row bar (MobileToolbar): whose work, the layout
- * picker, Filters (a sheet with every filter, each with its name) and
- * search, since six layout icons in a row meant nothing there.
+ * A phone gets its own one-row bar (MobileToolbar): whose work, the layouts
+ * a phone has, Filters (a sheet with every filter, each under its name) and
+ * search.
  */
 
 const LAYOUT_ICONS = {
   board: Columns3,
-  week: CalendarDays,
   list: ListTree,
   roadmap: GanttChart,
   table: Table2,
@@ -149,36 +134,36 @@ export function WorkspaceToolbar() {
           )}
 
           {/*
-          Scope: whose work, as icons that open up to say what they are on
-          hover or focus. The team option only exists if you have reports.
-        */}
-          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Whose tasks">
-            {ws.scopes.map((scope) => (
-              <ExpandChip
-                key={scope.value}
-                icon={SCOPE_ICONS[scope.value]}
-                label={scope.label}
-                active={ws.query.scope === scope.value && !pinnedMember}
-                onClick={() => ws.setScope(scope.value)}
-                title={SCOPE_KEYS[scope.value] && `${scope.label} (${SCOPE_KEYS[scope.value]})`}
-              />
-            ))}
-          </div>
-
-          {/* Filters: one chip that opens Person, Epic, Tag and Status. */}
-          <FiltersMenu
-            count={ws.filterCount + (ws.query.epicId ? 1 : 0)}
-            items={[
-              ...(members.length > 1 ? [{ name: "Person", node: <PersonFilter /> }] : []),
-              { name: "Epic", node: <EpicFilter /> },
-              ...(labels.length > 0 ? [{ name: "Tag", node: <TagFilter /> }] : []),
-              { name: "Status", node: <StatusFilter /> },
-            ]}
+            Scope: whose work, named (Mine, My team, Everyone). The team
+            option only exists if you have reports. The names give way to
+            icons only when the bar itself is tight.
+          */}
+          <Segmented
+            label="Whose tasks"
+            value={pinnedMember ? "" : ws.query.scope}
+            onSelect={(v) => ws.setScope(v as (typeof ws.scopes)[number]["value"])}
+            options={ws.scopes.map((scope) => ({
+              value: scope.value,
+              label: scope.label,
+              icon: SCOPE_ICONS[scope.value],
+              compact: true,
+              title: SCOPE_KEYS[scope.value]
+                ? `${scope.label} (${SCOPE_KEYS[scope.value]})`
+                : scope.label,
+            }))}
+            labelsFrom="sr-only @[52rem]/toolbar:not-sr-only"
+            className="shrink-0"
           />
 
+          {/* The filters, each one click away. */}
+          {members.length > 1 && <PersonFilter />}
+          <EpicFilter />
+          {labels.length > 0 && <TagFilter />}
+          <StatusFilter />
+
           <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
-            {/* How the board is grouped, beside the search: its own menu, not a toggle on the board. */}
-            {ws.query.view === "board" && <GroupMenu />}
+            {/* The board's lanes: one per epic, or none. */}
+            {ws.query.view === "board" && <EpicLanesToggle />}
             <TaskSearch
               key={ws.query.q ?? ""}
               inputRef={searchRef}
@@ -215,11 +200,7 @@ export function WorkspaceToolbar() {
                   <Lock className="size-3" aria-hidden="true" />
                 ) : undefined
               }
-              label={
-                ws.query.visibility === TaskVisibility.PRIVATE
-                  ? "Private only"
-                  : "Open to the organization"
-              }
+              label={ws.query.visibility === TaskVisibility.PRIVATE ? "Private" : "Everyone"}
               onClear={() => ws.setFilters({ visibility: undefined })}
             />
           )}
@@ -238,7 +219,7 @@ export function WorkspaceToolbar() {
           )}
           {pinnedMember && (
             <FilterPill
-              label={`${ws.query.ownerId ? "Owned by" : "Involving"} ${pinnedMember.name ?? "someone"}`}
+              label={`${pinnedMember.name ?? "Someone"}${ws.query.ownerId ? " (owns)" : ""}`}
               onClear={() => ws.setFilters({ ownerId: undefined, assigneeId: undefined })}
             />
           )}
@@ -251,12 +232,21 @@ export function WorkspaceToolbar() {
           {ws.query.flagged && (
             <FilterPill label="Flagged" onClear={() => ws.setFilters({ flagged: false })} />
           )}
+          {ws.query.unowned && (
+            <FilterPill label="No owner" onClear={() => ws.setFilters({ unowned: false })} />
+          )}
           {ws.query.q && (
             <FilterPill label={`“${ws.query.q}”`} onClear={() => ws.setFilters({ q: undefined })} />
           )}
           {(ws.query.dueFrom || ws.query.dueTo) && (
             <FilterPill
-              label={`Due ${ws.query.dueFrom ?? "…"} – ${ws.query.dueTo ?? "…"}`}
+              label={
+                ws.query.dueFrom && ws.query.dueTo
+                  ? `Due ${ws.query.dueFrom} to ${ws.query.dueTo}`
+                  : ws.query.dueTo
+                    ? `Due by ${ws.query.dueTo}`
+                    : `Due from ${ws.query.dueFrom}`
+              }
               onClear={() => ws.setFilters({ dueFrom: undefined, dueTo: undefined })}
             />
           )}
@@ -296,7 +286,7 @@ function MobileToolbar({
   onCommitSearch: (value: string) => void;
   clearAll: () => void;
 }) {
-  const { members, labels, org } = useTasks();
+  const { members, labels } = useTasks();
   const ws = useWorkspace();
   const router = useRouter();
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -317,48 +307,24 @@ function MobileToolbar({
   const layouts = ws.layouts
     .filter((l) => !PHONE_HIDDEN_LAYOUTS.includes(l.value))
     .sort((a, b) => Number(b.value === "list") - Number(a.value === "list"));
-  const current = layouts.find((l) => l.value === ws.query.view);
 
   return (
     <>
       <PhoneToolbar
         middle={
           layouts.length > 1 && (
-            // The layouts a phone has, named, filling the room up to Filters.
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="h-10 w-full min-w-0 justify-between gap-1 rounded-full px-3"
-                  aria-label={`Layout: ${current?.label ?? "List"}`}
-                >
-                  <span className="truncate">{current?.label ?? "List"}</span>
-                  <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-60">
-                <DropdownMenuLabel>Show tasks as</DropdownMenuLabel>
-                {layouts.map((l) => {
-                  const Icon = LAYOUT_ICONS[l.value];
-                  return (
-                    <DropdownMenuItem
-                      key={l.value}
-                      onSelect={() => ws.setView(l.value as TaskLayout)}
-                      className="min-h-12 gap-3"
-                    >
-                      <Icon className="size-4" aria-hidden="true" />
-                      <span className="flex flex-col">
-                        <span className="font-medium">{l.label}</span>
-                        <span className="text-muted-foreground text-xs">{l.hint}</span>
-                      </span>
-                      {l.value === ws.query.view && (
-                        <Check className="ms-auto size-4" aria-hidden="true" />
-                      )}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            // The layouts a phone has, side by side: one tap each.
+            <Segmented
+              label="Layout"
+              value={ws.query.view}
+              onSelect={(v) => ws.setView(v as TaskLayout)}
+              options={layouts.map((l) => ({
+                value: l.value,
+                label: l.label,
+                title: l.label,
+              }))}
+              className="w-full min-w-0 [&>button]:flex-1 [&>button]:justify-center"
+            />
           )
         }
         leading={
@@ -398,8 +364,7 @@ function MobileToolbar({
       <FilterSheet
         open={filtersOpen}
         onOpenChange={setFiltersOpen}
-        title="Filter tasks"
-        description="The list shows only the tasks that match."
+        title="Filters"
         canClear={count > 0}
         onClear={clearAll}
       >
@@ -408,14 +373,6 @@ function MobileToolbar({
           <EpicFilter />
           {labels.length > 0 && <TagFilter />}
         </div>
-        {/* The header's Epics button, which a phone's header has no room for. */}
-        <Link
-          href={`/app/${org.slug}/tasks?view=roadmap`}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm font-medium underline-offset-4 hover:underline"
-        >
-          <Layers className="size-4" aria-hidden="true" />
-          See all epics
-        </Link>
         <FilterChoices
           title="Status"
           value={ws.query.status ?? ""}
@@ -429,13 +386,38 @@ function MobileToolbar({
           ]}
         />
         <FilterChoices
+          title="Needs a look"
+          value={
+            ws.query.overdue
+              ? "overdue"
+              : ws.query.flagged
+                ? "flagged"
+                : ws.query.unowned
+                  ? "unowned"
+                  : ""
+          }
+          onPick={(v) =>
+            ws.setFilters({
+              overdue: v === "overdue",
+              flagged: v === "flagged",
+              unowned: v === "unowned",
+            })
+          }
+          options={[
+            { value: "", label: "Any" },
+            { value: "overdue", label: "Overdue" },
+            { value: "flagged", label: "Flagged" },
+            { value: "unowned", label: "No owner" },
+          ]}
+        />
+        <FilterChoices
           title="Visibility"
           value={ws.query.visibility ?? ""}
           onPick={(v) => ws.setFilters({ visibility: (v || undefined) as TaskVisibility })}
           options={[
-            { value: "", label: "Everything I can see" },
-            { value: TaskVisibility.PRIVATE, label: "Private only" },
-            { value: TaskVisibility.ORG, label: "Open to the organization" },
+            { value: "", label: "Any" },
+            { value: TaskVisibility.ORG, label: "Everyone" },
+            { value: TaskVisibility.PRIVATE, label: "Private" },
           ]}
         />
       </FilterSheet>
@@ -461,7 +443,7 @@ function EpicFilter() {
           className={chipClass(Boolean(epic))}
         >
           {epic ? <EpicDot epic={epic} /> : <Layers className="size-3.5" aria-hidden="true" />}
-          <span className="max-w-36 truncate">{epic?.title ?? "Epic"}</span>
+          <span className="max-w-48 text-start break-words">{epic?.title ?? "Epic"}</span>
           <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
         </button>
       </PopoverTrigger>
@@ -502,7 +484,7 @@ function TagFilter() {
           ) : (
             <Tag className="size-3.5" aria-hidden="true" />
           )}
-          <span className="max-w-36 truncate">{tag?.name ?? "Tag"}</span>
+          <span className="max-w-48 text-start break-words">{tag?.name ?? "Tag"}</span>
           <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
         </button>
       </PopoverTrigger>
@@ -536,7 +518,7 @@ function TagFilter() {
                 className="size-2 shrink-0 rounded-full"
                 style={{ background: l.color }}
               />
-              <span className="truncate">{l.name}</span>
+              <span className="break-words">{l.name}</span>
               {l.id === tag?.id && <Check className="ms-auto size-3.5" aria-hidden="true" />}
             </button>
           ))}
@@ -598,7 +580,7 @@ function PersonFilter() {
           {person ? (
             <>
               <UserAvatar user={person} size="xs" />
-              <span className="max-w-32 truncate">{person.name ?? "Member"}</span>
+              <span className="max-w-40 text-start break-words">{person.name ?? "Member"}</span>
             </>
           ) : (
             <>
@@ -619,6 +601,20 @@ function PersonFilter() {
           search.focus();
         }}
       >
+        <Segmented
+          label="Which of their tasks"
+          value={ownedOnly ? "owns" : "involved"}
+          onSelect={(v) => {
+            const next = v === "owns";
+            setOwnedOnly(next);
+            if (person) choose(person.id, next);
+          }}
+          options={[
+            { value: "involved", label: "Involved" },
+            { value: "owns", label: "Owns" },
+          ]}
+          className="mb-1 h-9 w-full [&>button]:h-7 [&>button]:flex-1 [&>button]:justify-center"
+        />
         {search.input}
         <div
           id={search.listId}
@@ -642,7 +638,7 @@ function PersonFilter() {
             </button>
           )}
           {search.filtered.length === 0 && (
-            <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
+            <p className="text-muted-foreground px-2 py-2 text-[13px]">No match</p>
           )}
           {search.filtered.map((m, i) => (
             <button
@@ -656,24 +652,13 @@ function PersonFilter() {
               onClick={() => search.pick(m)}
             >
               <UserAvatar user={m} size="xs" />
-              <span className="truncate">{m.name ?? "Member"}</span>
+              <span className="break-words">{m.name ?? "Member"}</span>
               {m.id === personId && (
                 <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
               )}
             </button>
           ))}
         </div>
-        <label className="text-muted-foreground mt-1 flex items-center gap-2 border-t px-2 pt-2 pb-1 text-xs">
-          <Checkbox
-            checked={ownedOnly}
-            onCheckedChange={(checked) => {
-              const next = checked === true;
-              setOwnedOnly(next);
-              if (person) choose(person.id, next);
-            }}
-          />
-          Only tasks they own
-        </label>
       </PopoverContent>
     </Popover>
   );
@@ -752,63 +737,99 @@ function FilterPill({
   );
 }
 
-/** Status and who can see it, as the last of the Filters pills. */
+/**
+ * Status, who can see it, and the tasks that need a look (overdue, flagged,
+ * no owner): one chip, a panel of buttons, each choice one click.
+ */
 function StatusFilter() {
   const ws = useWorkspace();
-  const active = Boolean(ws.query.status || ws.query.visibility);
-  const label = ws.query.status
-    ? ws.query.status === "open"
+  const [open, setOpen] = useState(false);
+  const q = ws.query;
+  const active = Boolean(q.status || q.visibility || q.flagged || q.unowned || q.overdue);
+  const label = q.status
+    ? q.status === "open"
       ? "Open"
-      : STATUS_LABELS[ws.query.status]
-    : ws.query.visibility === TaskVisibility.PRIVATE
-      ? "Private only"
-      : "Status";
+      : STATUS_LABELS[q.status]
+    : q.overdue
+      ? "Overdue"
+      : q.flagged
+        ? "Flagged"
+        : q.unowned
+          ? "No owner"
+          : q.visibility === TaskVisibility.PRIVATE
+            ? "Private"
+            : "Status";
+  const row = "w-full [&>button]:h-7 [&>button]:flex-auto [&>button]:justify-center";
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Filter by status or visibility"
-          className={chipClass(active)}
-        >
-          <ListFilter className="size-3.5" aria-hidden="true" />
-          <span className="max-w-36 truncate">{label}</span>
-          <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuLabel>Status</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => ws.setFilters({ status: undefined })}>
-          Any status
-          {!ws.query.status && <Check className="ms-auto size-4" />}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => ws.setFilters({ status: "open" })}>
-          Open (not completed)
-          {ws.query.status === "open" && <Check className="ms-auto size-4" />}
-        </DropdownMenuItem>
-        {Object.values(TaskStatus).map((s) => (
-          <DropdownMenuItem key={s} onSelect={() => ws.setFilters({ status: s })}>
-            {STATUS_LABELS[s]}
-            {ws.query.status === s && <Check className="ms-auto size-4" />}
-          </DropdownMenuItem>
-        ))}
-
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>Visibility</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => ws.setFilters({ visibility: undefined })}>
-          Everything I can see
-          {!ws.query.visibility && <Check className="ms-auto size-4" />}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => ws.setFilters({ visibility: TaskVisibility.PRIVATE })}>
-          <Lock className="size-4" aria-hidden="true" /> Private only
-          {ws.query.visibility === TaskVisibility.PRIVATE && <Check className="ms-auto size-4" />}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => ws.setFilters({ visibility: TaskVisibility.ORG })}>
-          Open to the organization
-          {ws.query.visibility === TaskVisibility.ORG && <Check className="ms-auto size-4" />}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger aria-label="Filter by status" className={chipClass(active)}>
+        <ListFilter className="size-3.5" aria-hidden="true" />
+        <span>{label}</span>
+        <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="grid w-[22rem] gap-3 p-3">
+        <div className="grid gap-1.5">
+          <span className="text-muted-foreground text-[13px] font-medium">Status</span>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { value: "", label: "Any" },
+              { value: "open", label: "Open" },
+              ...Object.values(TaskStatus).map((s) => ({ value: s, label: STATUS_LABELS[s] })),
+            ].map((o) => (
+              <button
+                key={o.value || "any"}
+                type="button"
+                aria-pressed={(q.status ?? "") === o.value}
+                onClick={() =>
+                  ws.setFilters({
+                    status: (o.value || undefined) as TaskStatus | "open" | undefined,
+                  })
+                }
+                className={cn(chipClass((q.status ?? "") === o.value), "h-8 px-3 text-[13px]")}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <span className="text-muted-foreground text-[13px] font-medium">Needs a look</span>
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                ["overdue", "Overdue"],
+                ["flagged", "Flagged"],
+                ["unowned", "No owner"],
+              ] as const
+            ).map(([key, text]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={q[key]}
+                onClick={() => ws.setFilters({ [key]: !q[key] })}
+                className={cn(chipClass(q[key]), "h-8 px-3 text-[13px]")}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <span className="text-muted-foreground text-[13px] font-medium">Who can see it</span>
+          <Segmented
+            label="Who can see it"
+            value={q.visibility ?? ""}
+            onSelect={(v) => ws.setFilters({ visibility: (v || undefined) as TaskVisibility })}
+            options={[
+              { value: "", label: "Any" },
+              { value: TaskVisibility.ORG, label: "Everyone" },
+              { value: TaskVisibility.PRIVATE, label: "Private" },
+            ]}
+            className={row}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -818,132 +839,22 @@ const SCOPE_ICONS: Record<string, typeof UserRound> = {
   all: Globe,
 };
 
-/**
- * A chip that is just its icon until you hover or focus it, then opens up
- * to say what it is (Mine, My team, Everyone). Filled when it's on.
- */
-function ExpandChip({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-  title,
-}: {
-  icon: typeof UserRound;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      aria-label={label}
-      title={title ?? label}
-      onClick={onClick}
-      className={cn(chipClass(active), "group/expand gap-0 px-3")}
-    >
-      <Icon className="size-4 flex-none" aria-hidden="true" />
-      <span
-        aria-hidden="true"
-        className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,opacity,margin] duration-300 ease-(--ease-ink) group-hover/expand:ms-1.5 group-hover/expand:max-w-32 group-hover/expand:opacity-100 group-focus-visible/expand:ms-1.5 group-focus-visible/expand:max-w-32 group-focus-visible/expand:opacity-100 motion-reduce:transition-none"
-      >
-        {label}
-      </span>
-    </button>
-  );
-}
-
-/** Group the board: none, or a lane per epic (?lanes=epic). */
-function GroupMenu() {
+/** The board's lanes: one per epic (?lanes=epic), or none. One click either way. */
+function EpicLanesToggle() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const lanes = searchParams.get("lanes") === "epic";
-  const set = (value: "epic" | null) => {
+  const toggle = () => {
     const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set("lanes", value);
-    else params.delete("lanes");
+    if (lanes) params.delete("lanes");
+    else params.set("lanes", "epic");
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className={chipClass(lanes)} aria-label="Group the board">
-          <Rows3 className="size-3.5" aria-hidden="true" />
-          {lanes ? "Grouped by epic" : "Group"}
-          <ChevronDown className="size-3.5 opacity-70" aria-hidden="true" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel>Group the board</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => set(null)}>
-          No groups
-          {!lanes && <Check className="ms-auto size-4" />}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => set("epic")}>
-          <Layers className="size-4" aria-hidden="true" /> By epic
-          {lanes && <Check className="ms-auto size-4" />}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/**
- * The Filters chip. Hover it (or focus it, or tap it) and the filter pills
- * slide out beside it; it stays open while one of their menus is open, and
- * folds away again once the pointer leaves.
- */
-/**
- * Filters: one chip, one panel, at every size.
- *
- * It used to have two behaviours. On a container wider than 64rem the
- * filter pills slid out into the bar beside the chip; narrower than that
- * they were packed into a popover. The trouble was everything in between —
- * a MacBook, a docked sidebar, a half-width window — where the pills had
- * just enough room to appear and not enough to sit side by side, so Tag and
- * Status rode over the search box and the row turned to mush. Hover opened
- * it, too, which a touch screen cannot do at all.
- *
- * So: the chip opens a panel, each filter under its own name, the way the
- * phone's sheet already reads. Nothing is ever injected into the row, so
- * nothing in the row can be run over, and the bar is the same shape whether
- * it has 400px or 2000px. Click or Enter opens it; Escape closes it.
- */
-function FiltersMenu({
-  count,
-  items,
-}: {
-  count: number;
-  items: readonly { name: string; node: React.ReactNode }[];
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
-        className={chipClass(open || count > 0)}
-      >
-        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
-        Filters
-        {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
-      </PopoverTrigger>
-      <PopoverContent align="start" className="grid w-72 gap-3 p-3">
-        {items.map((item) => (
-          <div key={item.name} className="grid min-w-0 gap-1.5">
-            <span className="text-muted-foreground text-[13px] font-medium">{item.name}</span>
-            {/*
-              Each pill fills its row here, so the panel reads as a form:
-              the icon, then the value filling the width, then the chevron.
-            */}
-            <div className="[&>*]:w-full [&>*]:justify-between [&>*>span]:max-w-none [&>*>span]:flex-1 [&>*>span]:text-start">
-              {item.node}
-            </div>
-          </div>
-        ))}
-      </PopoverContent>
-    </Popover>
+    <button type="button" aria-pressed={lanes} onClick={toggle} className={chipClass(lanes)}>
+      <Rows3 className="size-3.5" aria-hidden="true" />
+      By epic
+    </button>
   );
 }

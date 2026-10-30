@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { MarkDoneBanner } from "@/components/tasks/mark-done-banner";
 import { TaskPageEditor } from "@/components/tasks/task-page-editor";
 import { TasksProvider } from "@/components/tasks/tasks-context";
 import { can } from "@/lib/auth/permissions";
@@ -15,10 +16,16 @@ import { getComments, getOrgLabels, getOrgParents, getTaskDetail } from "@/serve
  * A task's own page: the target of every email link
  * (/app/{slug}/tasks/{taskId}). Signed-out visitors go through sign-in with
  * a callbackUrl back here. The editor carries the task's own title (no page
- * heading repeating it); a subtask links its parent inside the form.
+ * heading repeating it); a subtask links its parent inside the form. A
+ * reminder's Mark done link adds ?done=1, which shows a one-click Done.
  */
-export default async function TaskPage({ params }: PageProps<"/app/[orgSlug]/tasks/[taskId]">) {
+export default async function TaskPage({
+  params,
+  searchParams,
+}: PageProps<"/app/[orgSlug]/tasks/[taskId]">) {
   const { orgSlug, taskId } = await params;
+  // A reminder email's Mark done link (?done=1): the page offers the button.
+  const offerDone = (await searchParams).done === "1";
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(taskId)) notFound();
 
@@ -62,6 +69,7 @@ export default async function TaskPage({ params }: PageProps<"/app/[orgSlug]/tas
     >
       <div className="mx-auto max-w-2xl space-y-4">
         <BackLink href={`/app/${orgSlug}/tasks`} label="Tasks" />
+        {offerDone && <MarkDoneBanner task={task} />}
         <TaskPageEditor task={task} initialComments={data.comments} />
       </div>
     </TasksProvider>

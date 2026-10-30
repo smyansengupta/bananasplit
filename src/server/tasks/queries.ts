@@ -257,6 +257,8 @@ export interface TaskFilters {
    * `blockers`, which also takes in blocked work, so the list never matched.)
    */
   overdue?: boolean;
+  /** Open with nobody owning it: what the dashboard's No owner line counts. */
+  unowned?: boolean;
   /** C4: narrow to private tasks, or to the open ones. */
   visibility?: TaskVisibility;
 }
@@ -320,6 +322,7 @@ export function taskFilterWhere(
   if (f.overdue && today) {
     and.push({ status: { in: [...OPEN_STATUSES] }, dueDate: { lt: today } });
   }
+  if (f.unowned) and.push({ ownerId: null, status: { in: [...OPEN_STATUSES] } });
   if (f.blockers && today) {
     // The exec-sync agenda: blocked, or open and overdue.
     and.push({
@@ -361,6 +364,7 @@ export function hasActiveFilters(f: TaskFilters): boolean {
     f.dueTo ||
     f.flagged ||
     f.overdue ||
+    f.unowned ||
     f.blockers ||
     f.visibility,
   );
@@ -508,55 +512,6 @@ export function getOrgParents(db: TxClient, organizationId: string) {
 export type ParentOption = Awaited<ReturnType<typeof getOrgParents>>[number];
 
 /**
- * The Epics page: every live epic with its owner, its stories and tasks
- * counted open and done (what the viewer can see; RLS hides private work
- * they aren't on), the next due date among them, and how many are overdue.
- */
-export async function getEpicsOverview(db: TxClient, organizationId: string, today: Date) {
-  const epics = await db.task.findMany({
-    where: { ...live(organizationId), type: TaskType.EPIC },
-    select: {
-      ...epicOptionSelect,
-      description: true,
-      createdAt: true,
-      completedAt: true,
-      owner: { select: userPublicSelect },
-      subtasks: {
-        where: { deletedAt: null },
-        select: {
-          type: true,
-          status: true,
-          dueDate: true,
-          subtasks: { where: { deletedAt: null }, select: { status: true, dueDate: true } },
-        },
-      },
-    },
-    orderBy: [
-      { completedAt: { sort: "asc", nulls: "first" } },
-      { dueDate: { sort: "asc", nulls: "last" } },
-      { title: "asc" },
-    ],
-    take: 500,
-  });
-  return epics.map(({ subtasks, ...e }) => {
-    const work = subtasks.flatMap((s) => [s, ...s.subtasks]);
-    const done = work.filter((w) => w.status === TaskStatus.COMPLETED).length;
-    const overdue = work.filter(
-      (w) => w.status !== TaskStatus.COMPLETED && w.dueDate !== null && w.dueDate < today,
-    ).length;
-    return {
-      ...e,
-      stories: subtasks.filter((x) => x.type === TaskType.STORY).length,
-      open: work.length - done,
-      done,
-      overdue,
-    };
-  });
-}
-
-export type EpicOverviewItem = Awaited<ReturnType<typeof getEpicsOverview>>[number];
-
-/**
  * The Roadmap: the club's epics (filtered like every layout) with what the
  * timeline needs. A bar starts at the epic's start date; without one, when
  * the epic was made or at its earliest dated piece of work, whichever is
@@ -605,11 +560,19 @@ export async function getRoadmapEpics(
     const end = due ?? (keys.length > 0 ? keys.sort()[keys.length - 1]! : null);
     let done = 0;
     let total = 0;
+    let overdue = 0;
+    const todayKey = today ? today.toISOString().slice(0, 10) : null;
+    const late = (w: { status: TaskStatus; dueDate: Date | null }) =>
+      todayKey !== null &&
+      w.status !== TaskStatus.COMPLETED &&
+      w.dueDate !== null &&
+      w.dueDate.toISOString().slice(0, 10) < todayKey;
     for (const s of e.subtasks) {
       total += 1 + s.subtasks.length;
       done +=
         (s.status === TaskStatus.COMPLETED ? 1 : 0) +
         s.subtasks.filter((g) => g.status === TaskStatus.COMPLETED).length;
+      overdue += (late(s) ? 1 : 0) + s.subtasks.filter(late).length;
     }
     return {
       id: e.id,
@@ -621,6 +584,7 @@ export async function getRoadmapEpics(
       end,
       done,
       total,
+      overdue,
     };
   });
 }

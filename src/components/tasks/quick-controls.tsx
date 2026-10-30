@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 import { useBlockedReason } from "./prompts";
 import { TaskCheck } from "./task-check";
-import { STATUS_LABELS } from "./status-select";
+import { STATUS_LABEL as STATUS_LABELS } from "./layout-ui";
 import { PRIORITY_LABELS, PriorityDot } from "./task-badges";
 import { useTasks } from "./tasks-context";
 

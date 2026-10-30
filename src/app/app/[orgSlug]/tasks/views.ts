@@ -79,10 +79,33 @@ export const TASK_SCOPES = [
 export type TaskScope = (typeof TASK_SCOPES)[number]["value"];
 
 /**
- * Tasks always opens on the board (the club's work, moving along), whatever
- * layout was last picked: only an explicit ?view= opens another.
+ * Tasks opens on the board the first time. After that it opens where you
+ * left it: the last layout and the last "whose work" are remembered per
+ * person (REMEMBER_COOKIE), so someone who always works from Mine on the
+ * List lands there without clicking. An explicit ?view= or ?scope= wins.
  */
 export const DEFAULT_TASK_LAYOUT: TaskLayout = "board";
+
+/** The cookie that remembers the last layout and scope: "list.mine". */
+export const REMEMBER_COOKIE = "bs_tasks_view";
+
+/** Reads the remembered layout and scope (either may be missing or stale). */
+export function parseRemembered(value: string | undefined): {
+  view?: TaskLayout;
+  scope?: TaskScope;
+} {
+  if (!value) return {};
+  const [view, scope] = value.split(".");
+  return {
+    view: isLayout(view) ? view : undefined,
+    scope: parseScope(scope) ?? undefined,
+  };
+}
+
+/** The cookie's value for a layout and scope. */
+export function rememberValue(view: TaskLayout, scope: TaskScope): string {
+  return `${view}.${scope}`;
+}
 
 export function isLayout(value: unknown): value is TaskLayout {
   return TASK_LAYOUTS.some((l) => l.value === value);
@@ -126,6 +149,8 @@ export interface WorkspaceQuery {
   flagged: boolean;
   /** Open and due before today (?overdue=1), from the Overdue stat. */
   overdue: boolean;
+  /** Nobody owns it yet (?unowned=1), from the dashboard's No owner line. */
+  unowned: boolean;
   blockers: boolean;
   visibility?: TaskVisibility;
 }
@@ -138,8 +163,9 @@ type Query = Record<string, string | string[] | undefined>;
 
 export function parseWorkspaceQuery(
   query: Query,
+  remembered: { view?: TaskLayout; scope?: TaskScope } = {},
 ): WorkspaceQuery {
-  const raw = str(query.view);
+  const raw = str(query.view) ?? remembered.view;
   const view = parseTaskView(raw) ?? DEFAULT_TASK_LAYOUT;
   const ownerId = str(query.owner);
   const assigneeId = str(query.assignee);
@@ -155,12 +181,16 @@ export function parseWorkspaceQuery(
     ? (visibilityParam as TaskVisibility)
     : undefined;
 
-  // The week is personal by default; every other layout opens on the whole
-  // club. An explicit ?owner= or ?assignee= (the deep links other sections
-  // publish) also means "this person", so the scope steps out of the way.
   // The old week links were personal by default, so they stay personal.
+  // Otherwise the remembered scope, else the whole club. An explicit
+  // ?owner= or ?assignee= (the deep links other sections publish) means
+  // "this person", so the scope steps out of the way.
   const personal = raw === "mine" || raw === "week";
-  const defaultScope: TaskScope = personal ? "mine" : ownerId || assigneeId ? "all" : "all";
+  const defaultScope: TaskScope = personal
+    ? "mine"
+    : ownerId || assigneeId
+      ? "all"
+      : (remembered.scope ?? "all");
   const scope = personal ? "mine" : (parseScope(str(query.scope)) ?? defaultScope);
 
   return {
@@ -176,6 +206,7 @@ export function parseWorkspaceQuery(
     dueTo: str(query.dueTo),
     flagged: str(query.flagged) === "1",
     overdue: str(query.overdue) === "1",
+    unowned: str(query.unowned) === "1",
     blockers: str(query.blockers) === "1",
     visibility,
   };
@@ -193,6 +224,7 @@ export function activeFilterCount(q: WorkspaceQuery): number {
     q.dueTo,
     q.flagged || undefined,
     q.overdue || undefined,
+    q.unowned || undefined,
     q.blockers || undefined,
     q.visibility,
   ].filter(Boolean).length;
@@ -216,6 +248,7 @@ export function workspaceHref(
   if (q.dueTo) p.set("dueTo", q.dueTo);
   if (q.flagged) p.set("flagged", "1");
   if (q.overdue) p.set("overdue", "1");
+  if (q.unowned) p.set("unowned", "1");
   if (q.blockers) p.set("blockers", "1");
   if (q.visibility) p.set("visibility", q.visibility);
   for (const [k, v] of Object.entries(extra ?? {})) {
