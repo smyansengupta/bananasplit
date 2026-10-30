@@ -195,19 +195,18 @@ export function FilesDropZone({
         </p>
       )}
 
-      {/* The whole page, while files from the computer are over it. */}
+      {/* The whole page, while files from the computer are over it: a frame
+          and a hint, light enough that the folder cards stay visible to drop on. */}
       {pageDrag && !full && (
-        <div
-          aria-hidden="true"
-          className="bg-background/70 pointer-events-none fixed inset-0 z-40 grid place-items-center backdrop-blur-[2px]"
-        >
-          <span className="bg-card edge shadow-e2 rounded-block animate-in fade-in-0 zoom-in-95 flex flex-col items-center gap-3 px-10 py-8 duration-200 motion-reduce:animate-none">
-            <span className="bg-muted grid size-14 place-items-center rounded-full">
-              <CloudUpload className="size-6" strokeWidth={1.75} aria-hidden="true" />
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40">
+          <span className="border-foreground/30 rounded-shell absolute inset-3 border-2 border-dashed" />
+          <span className="bg-card edge shadow-e2 animate-in fade-in-0 slide-in-from-bottom-2 absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full py-2 pr-4 pl-2 text-[14px] font-medium duration-200 motion-reduce:animate-none">
+            <span className="bg-muted grid size-8 place-items-center rounded-full">
+              <CloudUpload className="size-4" aria-hidden="true" />
             </span>
-            <span className="display-title text-[22px]">Drop to upload</span>
-            <span className="text-muted-foreground text-[14px]">
-              Up to {formatStorage(storage.maxFileBytes)} each. Drop on a folder to file it there.
+            Drop to upload, or onto a folder
+            <span className="text-muted-foreground font-normal">
+              up to {formatStorage(storage.maxFileBytes)} each
             </span>
           </span>
         </div>

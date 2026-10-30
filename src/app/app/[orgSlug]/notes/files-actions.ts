@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import { withOrgAction } from "@/server/db/context";
-import { removeNoteFile, restoreNoteFile } from "@/server/notes/files";
+import { removeNoteFile, restoreNoteFile, updateNoteFile } from "@/server/notes/files";
 import { getBlob } from "@/server/storage";
 
 /** Every action here belongs to files (withOrgAction's space check). */
@@ -55,3 +55,27 @@ export async function restoreNoteFileAction(
   if (!blob) return { error: "This file's contents are already gone, so it can't be restored." };
   return restoreRow(orgId, id);
 }
+
+const filePatch = z
+  .object({
+    name: z.string().trim().min(1, "Give it a name.").max(200).optional(),
+    visibility: z.enum(["PRIVATE", "ORGANIZATION"]).optional(),
+  })
+  .strict();
+
+/** Renames a file or changes who can see it (its page saves each change as it's made). */
+export const updateNoteFileAction = filesAction(
+  async (ctx, fileId: string, patch: unknown): Promise<{ error?: string }> => {
+    const parsed = filePatch.safeParse(patch);
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check that." };
+    const ok = await updateNoteFile(
+      ctx.db,
+      ctx.organizationId,
+      z.string().max(64).parse(fileId),
+      parsed.data,
+    );
+    return ok
+      ? {}
+      : { error: "Only the person who uploaded it, or an admin, can change this file." };
+  },
+);

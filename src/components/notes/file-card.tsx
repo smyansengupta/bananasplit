@@ -59,15 +59,14 @@ export function FileCard({ file, orgSlug }: { file: FileCardData; orgSlug: strin
       />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 font-medium">
-          <span className="truncate">{file.name}</span>
+          <span className="min-w-0 break-words">{file.name}</span>
           {file.visibility === "PRIVATE" && (
             <Lock className="text-muted-foreground size-3 shrink-0" aria-label="Only you" />
           )}
         </span>
-        <span className="text-muted-foreground block truncate text-xs">
-          {FILE_LABELS[family]} · {formatBytes(file.sizeBytes)} ·{" "}
-          {file.uploadedBy.name ?? "A member"},{" "}
-          {formatDistanceToNow(file.createdAt, { addSuffix: true })}
+        <span className="text-muted-foreground block text-xs">
+          {FILE_LABELS[family]}, {formatBytes(file.sizeBytes)}, {file.uploadedBy.name ?? "A member"}
+          , {formatDistanceToNow(file.createdAt, { addSuffix: true })}
         </span>
       </span>
     </Link>

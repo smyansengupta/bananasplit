@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { chosen, openSelect, stubPointerEvents } from "@/test/select";
+import { stubPointerEvents } from "@/test/select";
 
 /**
  * The note's Share button and dialog: the author adds members as editors or
@@ -21,9 +21,6 @@ vi.mock("@/app/app/[orgSlug]/notes/actions", () => actions);
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 const { ShareNoteDialog } = await import("./share-note-dialog");
-
-/** A themed drop-down says what is picked on its trigger. */
-const value = chosen;
 
 const me = { id: "me", name: "Maya Patel", image: null };
 const jay = { id: "jay", name: "Jay Chen", image: null };
@@ -72,7 +69,12 @@ describe("ShareNoteDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Share/ }));
     const dialog = screen.getByRole("dialog");
-    expect(value(within(dialog).getByRole("combobox", { name: "Their access" }))).toBe("Editor");
+    // Editor or Viewer is a switch, Editor first.
+    expect(
+      within(within(dialog).getByRole("group", { name: "Their access" }))
+        .getByRole("button", { name: "Editor" })
+        .getAttribute("data-active"),
+    ).toBe("true");
 
     fireEvent.click(within(dialog).getByRole("combobox", { name: "Add people" }));
     // The picker lists everyone but the author.
@@ -86,7 +88,8 @@ describe("ShareNoteDialog", () => {
       userIds: ["jay"],
       role: "EDITOR",
     });
-    expect(value(within(dialog).getByRole("combobox", { name: "Jay Chen's access" }))).toBe(
+    // One click on the row's role flips it.
+    expect(within(dialog).getByRole("button", { name: /Jay Chen is editor/ }).textContent).toBe(
       "Editor",
     );
   });
@@ -94,11 +97,8 @@ describe("ShareNoteDialog", () => {
   it("sets what the rest of the organization gets", async () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: /^Share/ }));
-    openSelect(screen.getByRole("combobox", { name: "Everyone else in the organization" }));
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole("option", { name: "Everyone in the organization can edit" }),
-      );
+      fireEvent.click(screen.getByRole("radio", { name: "Org can edit" }));
     });
     expect(actions.updateNoteAccess).toHaveBeenCalledWith("org_1", "note_1", "CLUB_EDIT");
   });
@@ -114,10 +114,11 @@ describe("ShareNoteDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /Shared with 1/ }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByRole("combobox", { name: "Add people" })).toBeNull();
-    expect(
-      (within(dialog).getByLabelText("Everyone else in the organization") as HTMLSelectElement)
-        .disabled,
-    ).toBe(true);
+    for (const option of within(
+      within(dialog).getByRole("radiogroup", { name: "Everyone else in the organization" }),
+    ).getAllByRole("radio")) {
+      expect((option as HTMLButtonElement).disabled).toBe(true);
+    }
     expect(within(dialog).getByRole("button", { name: "Remove me" })).toBeTruthy();
   });
 });
