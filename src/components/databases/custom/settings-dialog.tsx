@@ -171,10 +171,6 @@ export function DatabaseSettingsDialog({
                   <Label htmlFor="db-member-edit" className="text-sm font-medium">
                     Members can add and edit rows
                   </Label>
-                  <p className="text-muted-foreground text-xs">
-                    Off: members only read it. Owners and admins always edit, and only they change
-                    fields or delete rows for good.
-                  </p>
                 </div>
                 <Switch
                   id="db-member-edit"

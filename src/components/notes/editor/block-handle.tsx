@@ -174,7 +174,7 @@ export function BlockHandle({ editor }: { editor: Editor }) {
           aria-label="Drag to move, or click for block actions"
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          title="Drag to move · click for more"
+          title="Drag or click"
           onClick={() => {
             setMenuOpen(true);
             lock(editor, true);

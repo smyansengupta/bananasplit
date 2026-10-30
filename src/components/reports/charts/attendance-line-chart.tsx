@@ -43,7 +43,7 @@ export function AttendanceLineChart({
         key: p.id,
         tick: shortDate(p.localDate),
         heading: p.title,
-        sub: `${longDate(p.localDate, true)} · ${kindLabel(p.kind)}`,
+        sub: `${longDate(p.localDate, true)}, ${kindLabel(p.kind)}`,
         value: p.checkIns,
       }))}
     />

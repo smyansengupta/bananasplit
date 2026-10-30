@@ -48,9 +48,11 @@ export function MergeSessionPicker({
   const [pending, start] = useTransition();
 
   if (!open) {
+    // One likely match: say which, so it's one click to start.
+    const only = candidates?.length === 1 ? candidates[0] : null;
     return (
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        Merge into another session…
+        {only ? `Merge into ${only.label}` : "Merge into another session"}
       </Button>
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, CircleAlert, CloudUpload, Loader2 } from "@/components/icons";
+import { CheckCircle2, CircleAlert, CloudUpload, Loader2, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,14 +9,19 @@ import { formatStorage, storageLevel } from "@/lib/billing/storage";
 import { uploadNoteFile } from "@/lib/files/upload";
 import { cn } from "@/lib/utils";
 
+import { isFileDrag, registerUploader } from "./upload-queue";
+
 /**
- * The Files page's drop zone (redesign guide 11.2, "Drop files to
- * upload"): a big target at the top of the library, and the whole page
- * while files are dragged over it. Any number of files at once, one after
- * another, each with its own line. The space's storage sits in the page
- * header beside New note (StorageChip); here, only the largest file the
- * plan takes, and a full space turns the zone off. Uploads are shared with
- * the club, or in Personal private to its owner.
+ * The Files page's uploader. There is no drop box taking up the top of the
+ * page any more: the whole page is the target. Drag files anywhere and it
+ * says "Drop to upload"; drop them on a folder card or a folder in the
+ * sidebar and they go into that folder (upload-queue.ts). New › Upload
+ * opens the picker for several files at once. Each file gets a line with
+ * its progress, and you never leave the page.
+ *
+ * Uploads are shared with the club, or in Personal private to its owner;
+ * who can see one is changed on its page afterwards. A full space says so
+ * here and takes nothing.
  */
 
 export interface DropZoneStorage {
@@ -34,9 +39,6 @@ interface Upload {
   error?: string;
 }
 
-const hasFiles = (e: DragEvent | React.DragEvent) =>
-  Array.from(e.dataTransfer?.types ?? []).includes("Files");
-
 export function FilesDropZone({
   orgId,
   folderId,
@@ -44,7 +46,7 @@ export function FilesDropZone({
   personal = false,
 }: {
   orgId: string;
-  /** Uploads land in the folder being viewed. */
+  /** Uploads land in the folder being viewed unless dropped on another. */
   folderId: string | null;
   storage: DropZoneStorage;
   /** A Personal space: uploads are private, like everything there. */
@@ -52,22 +54,27 @@ export function FilesDropZone({
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
-  const [over, setOver] = useState(false);
+  // The folder the open picker uploads into (the one asked for, or the view's).
+  const pickFolder = useRef<string | null>(folderId);
   const [pageDrag, setPageDrag] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const busy = uploads.some((u) => u.state === "waiting" || u.state === "uploading");
   // A drag that began on this page (a card being filed in a folder) is never
   // an upload, even when the browser attaches a file to it.
   const fromPage = useRef(false);
-  const isUpload = (e: DragEvent | React.DragEvent) => !fromPage.current && hasFiles(e);
+  const isUpload = (e: DragEvent) => !fromPage.current && isFileDrag(e);
 
-  const level = storageLevel(storage.usedBytes, storage.limitBytes);
-  const full = level === "full";
+  const full = storageLevel(storage.usedBytes, storage.limitBytes) === "full";
 
   const patch = (key: string, change: Partial<Upload>) =>
     setUploads((list) => list.map((u) => (u.key === key ? { ...u, ...change } : u)));
 
-  async function uploadAll(files: File[]) {
+  // The latest props, for the uploader registered once below.
+  const latest = useRef({ orgId, folderId, personal, full });
+  useEffect(() => {
+    latest.current = { orgId, folderId, personal, full };
+  });
+
+  async function uploadAll(files: File[], into: string | null) {
     if (files.length === 0) return;
     const batch = files.map((file, i) => ({
       file,
@@ -82,9 +89,9 @@ export function FilesDropZone({
     let any = false;
     for (const { file, item } of batch) {
       patch(item.key, { state: "uploading" });
-      const result = await uploadNoteFile(orgId, file, {
-        folderId,
-        visibility: personal ? "PRIVATE" : undefined,
+      const result = await uploadNoteFile(latest.current.orgId, file, {
+        folderId: into,
+        visibility: latest.current.personal ? "PRIVATE" : undefined,
         onProgress: (p) => patch(item.key, { percent: p }),
       });
       if (result.ok) {
@@ -95,7 +102,28 @@ export function FilesDropZone({
       }
     }
     if (any) router.refresh();
+    // Finished lines clear themselves; a failed one stays until dismissed.
+    setTimeout(() => setUploads((list) => list.filter((u) => u.state !== "done")), 4_000);
   }
+
+  // Everyone else (New › Upload, folder cards, sidebar folders) uploads through here.
+  useEffect(
+    () =>
+      registerUploader({
+        upload: (files, into) => {
+          if (latest.current.full) return;
+          void uploadAll(files, into === undefined ? latest.current.folderId : into);
+        },
+        pick: (into) => {
+          if (latest.current.full) return;
+          pickFolder.current = into === undefined ? latest.current.folderId : into;
+          input.current?.click();
+        },
+      }),
+    // uploadAll reads the latest props through `latest`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   // Files dragged anywhere over the page: the whole page becomes the target.
   useEffect(() => {
@@ -120,12 +148,13 @@ export function FilesDropZone({
       if (isUpload(e)) e.preventDefault();
     };
     const drop = (e: DragEvent) => {
-      if (!isUpload(e)) return;
-      e.preventDefault();
       depth = 0;
       setPageDrag(false);
-      setOver(false);
-      void uploadAll(Array.from(e.dataTransfer?.files ?? []));
+      // A folder card or sidebar folder took it already (and said where).
+      if (e.defaultPrevented || !isUpload(e)) return;
+      e.preventDefault();
+      if (latest.current.full) return;
+      void uploadAll(Array.from(e.dataTransfer?.files ?? []), latest.current.folderId);
     };
     window.addEventListener("dragstart", start);
     window.addEventListener("dragend", end);
@@ -141,61 +170,11 @@ export function FilesDropZone({
       window.removeEventListener("dragover", overPage);
       window.removeEventListener("drop", drop);
     };
-    // uploadAll reads the latest props through its closure on each drop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, folderId]);
+  }, []);
 
   return (
-    <section aria-label="Upload files" className="space-y-3">
-      <button
-        type="button"
-        onClick={() => input.current?.click()}
-        onDragEnter={(e) => {
-          if (isUpload(e)) setOver(true);
-        }}
-        onDragLeave={() => setOver(false)}
-        disabled={full}
-        className={cn(
-          "group rounded-block focus-glow flex min-h-44 w-full cursor-pointer flex-col items-center justify-center gap-3 border-2 border-dashed px-6 py-8 text-center transition-[background-color,border-color,transform] duration-200 ease-(--ease-ink) disabled:cursor-not-allowed disabled:opacity-60",
-          over || pageDrag
-            ? "border-foreground/40 bg-muted scale-[1.01]"
-            : "border-border hover:border-foreground/25 hover:bg-muted/50",
-        )}
-      >
-        <span
-          className={cn(
-            "bg-muted grid size-14 place-items-center rounded-full transition-transform duration-300 ease-(--ease-spring)",
-            (over || pageDrag) && "-translate-y-1 scale-110",
-          )}
-        >
-          {busy ? (
-            <Loader2 className="size-6 animate-spin" aria-hidden="true" />
-          ) : (
-            <CloudUpload className="size-6" strokeWidth={1.75} aria-hidden="true" />
-          )}
-        </span>
-        <span className="display-title text-[22px]">
-          {full
-            ? "Storage is full"
-            : over || pageDrag
-              ? "Drop to upload"
-              : "Drop files here to upload"}
-        </span>
-        <span className="text-muted-foreground text-[14px]">
-          {full ? (
-            "Uploads have stopped. Empty the trash or change plan for more room."
-          ) : (
-            <>
-              Or{" "}
-              <span className="text-foreground font-semibold underline underline-offset-4">
-                browse
-              </span>{" "}
-              for files. PDFs, slides, documents, spreadsheets and images, up to{" "}
-              {formatStorage(storage.maxFileBytes)} each.
-            </>
-          )}
-        </span>
-      </button>
+    <>
       <input
         ref={input}
         type="file"
@@ -203,14 +182,42 @@ export function FilesDropZone({
         accept={NOTE_FILE_ACCEPT}
         className="sr-only"
         tabIndex={-1}
+        aria-hidden="true"
         onChange={(e) => {
-          void uploadAll(Array.from(e.target.files ?? []));
+          void uploadAll(Array.from(e.target.files ?? []), pickFolder.current);
           e.target.value = "";
         }}
       />
 
+      {full && (
+        <p className="bg-tint-accent text-tint-accent-foreground rounded-tile px-4 py-2.5 text-[14px]">
+          Storage is full. Empty the trash or change plan to upload more.
+        </p>
+      )}
+
+      {/* The whole page, while files from the computer are over it: a frame
+          and a hint, light enough that the folder cards stay visible to drop on. */}
+      {pageDrag && !full && (
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40">
+          <span className="border-foreground/30 rounded-shell absolute inset-3 border-2 border-dashed" />
+          <span className="bg-card edge shadow-e2 animate-in fade-in-0 slide-in-from-bottom-2 absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full py-2 pr-4 pl-2 text-[14px] font-medium duration-200 motion-reduce:animate-none">
+            <span className="bg-muted grid size-8 place-items-center rounded-full">
+              <CloudUpload className="size-4" aria-hidden="true" />
+            </span>
+            Drop to upload, or onto a folder
+            <span className="text-muted-foreground font-normal">
+              up to {formatStorage(storage.maxFileBytes)} each
+            </span>
+          </span>
+        </div>
+      )}
+
       {uploads.length > 0 && (
-        <ul aria-live="polite" className="m-0 flex list-none flex-col gap-1.5 p-0">
+        <ul
+          aria-live="polite"
+          aria-label="Uploads"
+          className="m-0 flex list-none flex-col gap-1.5 p-0"
+        >
           {uploads.map((u) => (
             <li
               key={u.key}
@@ -223,8 +230,13 @@ export function FilesDropZone({
               ) : (
                 <Loader2 className="size-4 flex-none animate-spin" aria-hidden="true" />
               )}
-              <span className="min-w-0 flex-1 truncate font-medium">{u.name}</span>
-              <span className="text-muted-foreground flex-none text-[13px]">
+              <span className="min-w-0 flex-1 font-medium break-words">{u.name}</span>
+              <span
+                className={cn(
+                  "flex-none text-[13px]",
+                  u.state === "failed" ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
                 {u.state === "failed"
                   ? u.error
                   : u.state === "done"
@@ -235,10 +247,20 @@ export function FilesDropZone({
                         ? `${u.percent}%`
                         : "Uploading"}
               </span>
+              {u.state === "failed" && (
+                <button
+                  type="button"
+                  aria-label={`Dismiss ${u.name}`}
+                  onClick={() => setUploads((list) => list.filter((x) => x.key !== u.key))}
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted grid size-7 flex-none place-items-center rounded-full"
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </>
   );
 }

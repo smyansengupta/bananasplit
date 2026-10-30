@@ -12,22 +12,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Segmented } from "@/components/ui/segmented";
 import { MAX_BAND_TEXT } from "@/lib/notes/paper";
 
 /**
- * Document mode's header and footer text (Note.headerText / footerText).
- * Left empty, a band shows its default: the title and club on top, the
- * title at the bottom (beside the page number either way).
+ * Document mode's Page setup: the paper (Letter or A4, saved the moment
+ * it's picked) and the header and footer text (Note.headerText /
+ * footerText). Left empty, a band shows its default: the title and club
+ * on top, the title at the bottom (beside the page number either way).
  */
 export function HeaderFooterDialog({
   headerText,
   footerText,
   defaults,
+  paperSize,
+  onPaperSize,
   onSave,
   onClose,
 }: {
   headerText: string | null;
   footerText: string | null;
+  paperSize?: "LETTER" | "A4";
+  onPaperSize?: (next: "LETTER" | "A4") => void;
   defaults: { header: string; footer: string };
   onSave: (next: { headerText: string | null; footerText: string | null }) => void;
   onClose: () => void;
@@ -47,11 +53,23 @@ export function HeaderFooterDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Header and footer</DialogTitle>
-            <DialogDescription>
-              Shown on every page and in the PDF. Leave one empty for the default.
-            </DialogDescription>
+            <DialogTitle>Page setup</DialogTitle>
+            <DialogDescription>Leave a band empty for the default.</DialogDescription>
           </DialogHeader>
+          {paperSize && onPaperSize && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[13px] font-semibold">Paper</span>
+              <Segmented
+                label="Paper"
+                options={[
+                  { value: "LETTER", label: "Letter" },
+                  { value: "A4", label: "A4" },
+                ]}
+                value={paperSize}
+                onSelect={(v) => onPaperSize(v as "LETTER" | "A4")}
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <label htmlFor="note-header-text" className="text-[13px] font-semibold">
               Header
@@ -79,9 +97,6 @@ export function HeaderFooterDialog({
             <p className="text-muted-foreground text-xs">The page number stays on the right.</p>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
             <Button type="submit">Save</Button>
           </DialogFooter>
         </form>

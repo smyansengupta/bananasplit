@@ -320,7 +320,7 @@ export function TableTools({ editor }: { editor: Editor }) {
       className="flex w-full flex-wrap items-center gap-0.5 border-t pt-1"
     >
       <span className="text-muted-foreground px-1.5 text-xs font-medium">
-        Table{state.size ? ` · ${state.size.rows} × ${state.size.cols}` : ""}
+        {state.size ? `${state.size.rows} × ${state.size.cols} table` : "Table"}
       </span>
       {TABLE_GROUPS.map((group, g) => (
         <div key={g} className="flex items-center gap-0.5">

@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SearchField } from "@/components/ui/search-field";
+import { Segmented } from "@/components/ui/segmented";
 import { chipClass } from "@/components/ui/segmented";
 import {
   Select,
@@ -47,7 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { CellView } from "./cell";
-import type { ColumnView, RowView } from "./column-config";
+import type { Cell, ColumnView, RowView } from "./column-config";
 import { TableFrame } from "./table-frame";
 import { addToList, removeFromList, useViewParams, withoutFilter } from "./view-params";
 
@@ -151,7 +152,6 @@ function FilterChip({
           <span>{valueLabel(column, filter.op, filter.value)}</span>
         </>
       )}
-      {filter.isDefault && <span className="text-muted-foreground">(default)</span>}
       <button
         type="button"
         onClick={onRemove}
@@ -208,12 +208,9 @@ function FilterBuilder({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 space-y-3.5 p-4">
-        <div className="space-y-1.5">
-          <label className="text-[13px] font-medium" htmlFor="db-filter-col">
-            Column
-          </label>
+        <div>
           <Select value={col} onValueChange={pickColumn}>
-            <SelectTrigger id="db-filter-col" className="w-full">
+            <SelectTrigger id="db-filter-col" className="w-full" aria-label="Column">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -225,12 +222,17 @@ function FilterBuilder({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1.5">
-          <label className="text-[13px] font-medium" htmlFor="db-filter-op">
-            Condition
-          </label>
+        {(column?.ops.length ?? 0) <= 4 ? (
+          <Segmented
+            label="Condition"
+            className="flex w-full [&>button]:flex-1 [&>button]:justify-center"
+            options={(column?.ops ?? []).map((o) => ({ value: o, label: OP_LABELS[o] ?? o }))}
+            value={op}
+            onSelect={setOp}
+          />
+        ) : (
           <Select value={op} onValueChange={setOp}>
-            <SelectTrigger id="db-filter-op" className="w-full">
+            <SelectTrigger id="db-filter-op" className="w-full" aria-label="Condition">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -241,25 +243,23 @@ function FilterBuilder({
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-[13px] font-medium" htmlFor="db-filter-value">
-            Value
-          </label>
+        )}
+        <div>
           {isBool ? (
-            <Select value={value || "true"} onValueChange={setValue}>
-              <SelectTrigger id="db-filter-value" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="true">Yes</SelectItem>
-                <SelectItem value="false">No</SelectItem>
-              </SelectContent>
-            </Select>
+            <Segmented
+              label="Value"
+              className="flex w-full [&>button]:flex-1 [&>button]:justify-center"
+              options={[
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" },
+              ]}
+              value={value || "true"}
+              onSelect={setValue}
+            />
           ) : hasOptions && op !== "in" ? (
             <Select value={value} onValueChange={setValue}>
-              <SelectTrigger id="db-filter-value" className="w-full">
-                <SelectValue placeholder="Choose…" />
+              <SelectTrigger id="db-filter-value" className="w-full" aria-label="Value">
+                <SelectValue placeholder="Choose" />
               </SelectTrigger>
               <SelectContent>
                 {column?.options?.map((o) => (
@@ -295,6 +295,7 @@ function FilterBuilder({
           ) : (
             <Input
               id="db-filter-value"
+              aria-label="Value"
               type={isDate ? "date" : type === "number" ? "number" : "text"}
               value={value}
               placeholder={op === "in" ? "a,b,c" : ""}
@@ -311,6 +312,26 @@ function FilterBuilder({
       </PopoverContent>
     </Popover>
   );
+}
+
+/**
+ * The filter a cell stands for, for its one-click "Filter to this": yes or
+ * no, a choice by its value, a number exactly, or text it contains. Null
+ * when the column can't be filtered that way.
+ */
+function filterFor(column: ColumnView, cell: Cell | null | undefined): string | null {
+  if (!cell || !column.filterable) return null;
+  const has = (op: string) => column.ops.includes(op);
+  if (cell.t === "bool" && cell.v !== null && has("eq")) return `${column.key}:eq:${cell.v}`;
+  if (cell.t === "number" && cell.v !== null && has("eq")) return `${column.key}:eq:${cell.v}`;
+  if (cell.t === "badge" || cell.t === "text") {
+    const text = cell.v.trim();
+    if (!text) return null;
+    const option = column.options?.find((o) => o.label === text || o.value === text);
+    if (option && has("eq")) return `${column.key}:eq:${option.value}`;
+    if (has("contains")) return `${column.key}:contains:${text}`;
+  }
+  return null;
 }
 
 function SortIcon({ dir }: { dir: "asc" | "desc" | null }) {
@@ -395,6 +416,12 @@ export function DataTable(props: DataTableProps) {
     });
   const openRow = (id: string) =>
     view.update((p) => p.set("row", id), { keepPage: true, push: true });
+  const addFilter = (raw: string) =>
+    view.update((p) => {
+      const col = raw.slice(0, raw.indexOf(":"));
+      removeFromList(p, "nd", col);
+      if (!p.getAll("f").includes(raw)) p.append("f", raw);
+    });
 
   return (
     <div className="space-y-4">
@@ -405,16 +432,7 @@ export function DataTable(props: DataTableProps) {
           placeholder="Search…"
           aria-label="Search this database"
         />
-        <FilterBuilder
-          columns={columns}
-          onAdd={(raw) =>
-            view.update((p) => {
-              const col = raw.slice(0, raw.indexOf(":"));
-              removeFromList(p, "nd", col);
-              if (!p.getAll("f").includes(raw)) p.append("f", raw);
-            })
-          }
-        />
+        <FilterBuilder columns={columns} onAdd={addFilter} />
         {props.dateLabel && (
           <div
             role="group"
@@ -541,19 +559,7 @@ export function DataTable(props: DataTableProps) {
                 <TableCell colSpan={visible.length} className="whitespace-normal">
                   <EmptyState
                     icon={Database}
-                    title={props.emptyTitle ?? "No rows match this view"}
-                    description={
-                      filtered
-                        ? "Try another search or date range, or clear the filters."
-                        : "Rows show up here as they're added."
-                    }
-                    action={
-                      filtered ? (
-                        <Button variant="outline" onClick={clearAll}>
-                          Clear all
-                        </Button>
-                      ) : undefined
-                    }
+                    title={props.emptyTitle ?? (filtered ? "No rows match" : "No rows yet")}
                   />
                 </TableCell>
               </TableRow>
@@ -572,23 +578,42 @@ export function DataTable(props: DataTableProps) {
                     if (e.key === "Enter") openRow(r.id);
                   }}
                 >
-                  {visible.map((c) => (
-                    <TableCell
-                      key={c.key}
-                      className={cn(
-                        "max-w-72 whitespace-normal",
-                        c.align === "right" && "text-right tabular-nums",
-                        (c.type === "datetime" || c.type === "date") &&
-                          "whitespace-nowrap tabular-nums",
-                        (c.type === "text" || c.type === "person" || c.type === "relation") &&
-                          "min-w-36",
-                        // Room for a few chips side by side, so rows stay one line tall.
-                        c.type === "multiselect" && "min-w-60",
-                      )}
-                    >
-                      <CellView cell={r.cells[c.key] ?? null} />
-                    </TableCell>
-                  ))}
+                  {visible.map((c) => {
+                    const cell = r.cells[c.key] ?? null;
+                    const only = filterFor(c, cell);
+                    return (
+                      <TableCell
+                        key={c.key}
+                        className={cn(
+                          "group/cell relative max-w-72 whitespace-normal",
+                          c.align === "right" && "text-right tabular-nums",
+                          (c.type === "datetime" || c.type === "date") &&
+                            "whitespace-nowrap tabular-nums",
+                          (c.type === "text" || c.type === "person" || c.type === "relation") &&
+                            "min-w-36",
+                          // Room for a few chips side by side, so rows stay one line tall.
+                          c.type === "multiselect" && "min-w-60",
+                        )}
+                      >
+                        <CellView cell={cell} />
+                        {only && (
+                          <button
+                            type="button"
+                            aria-label={`Filter ${c.label} to this`}
+                            title="Filter to this"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addFilter(only);
+                            }}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            className="bg-card text-muted-foreground hover:text-foreground focus-glow absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded-full opacity-0 shadow-sm outline-none group-hover/cell:opacity-100 focus-visible:opacity-100"
+                          >
+                            <Filter className="size-3" aria-hidden="true" />
+                          </button>
+                        )}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))
             )}
@@ -603,23 +628,12 @@ export function DataTable(props: DataTableProps) {
             : `${first.toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}`}
         </span>
         <div className="flex items-center gap-2">
-          <Select
+          <Segmented
+            label="Rows per page"
+            options={[25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
             value={String(size)}
-            onValueChange={(v) =>
-              view.update((p) => (v === "50" ? p.delete("size") : p.set("size", v)))
-            }
-          >
-            <SelectTrigger size="sm" className="w-28 rounded-full" aria-label="Rows per page">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[25, 50, 100].map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n} / page
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onSelect={(v) => view.update((p) => (v === "50" ? p.delete("size") : p.set("size", v)))}
+          />
           <Button
             variant="outline"
             size="icon-sm"
@@ -634,9 +648,6 @@ export function DataTable(props: DataTableProps) {
           >
             <ChevronLeft />
           </Button>
-          <span className="min-w-12 text-center tabular-nums">
-            {page} / {pages}
-          </span>
           <Button
             variant="outline"
             size="icon-sm"

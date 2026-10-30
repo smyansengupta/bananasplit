@@ -45,30 +45,48 @@ export default async function ImportPage({
     throw error;
   }
   const help = HELP[database.kind];
+  // Attendance: the recent sessions, so a sheet from one meeting needs no session column.
+  const sessions =
+    database.kind === "ATTENDANCE"
+      ? await withOrgTx(organization.id, ({ db }) =>
+          db.event.findMany({
+            where: {
+              organizationId: organization.id,
+              deletedAt: null,
+              mergedIntoId: null,
+              startsAt: { lte: new Date() },
+            },
+            orderBy: { startsAt: "desc" },
+            take: 40,
+            select: { id: true, title: true, startsAt: true },
+          }),
+        )
+      : [];
   const back = `/app/${orgSlug}/databases/${dbKey}`;
   return (
     <div className="max-w-3xl space-y-7.5">
       <div className="space-y-3">
         <BackLink href={back} label={database.name} />
         <PageHeader
-          title={`Import ${database.name.toLowerCase()} from CSV`}
-          description="Up to 5,000 rows and 4 MB. Nothing is saved until you import."
+          title={`Import ${database.name.toLowerCase()}`}
+          description="Up to 5,000 rows, 4 MB."
         />
       </div>
       <CsvImportForm
         uploadUrl={`${back}/import/upload`}
         backHref={back}
         backLabel={database.name}
+        sessions={sessions.map((x) => ({
+          id: x.id,
+          label: `${x.title}, ${x.startsAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: organization.timezone })}`,
+        }))}
       />
       <Card>
         <CardHeader>
           <CardTitle>
             <h2>What the file needs</h2>
           </CardTitle>
-          <CardDescription>
-            People are matched by email; someone already checked in to a session, or already signed
-            up that term, is skipped. Imported rows can be edited and deleted later.
-          </CardDescription>
+          <CardDescription>People are matched by email; duplicates are skipped.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm">Columns: {help.columns}</p>

@@ -63,7 +63,7 @@ export default async function DuplicatesPage({
   const pairs = findDuplicatePairs(data.events, tz);
   const flagged = data.events.filter((e) => e.needsReview);
   const describe = (e: (typeof data.events)[number]) =>
-    `${e.title} · ${fmtDateTime(e.startsAt, tz)} · ${e.attendanceCount} check-ins${e.sourceSessionId ? " · website" : ""}${e.googleEventId ? " · Google" : ""}`;
+    `${e.title}, ${fmtDateTime(e.startsAt, tz)}, ${e.attendanceCount} check-ins${e.sourceSessionId ? ", website" : ""}${e.googleEventId ? ", Google" : ""}`;
 
   const Row = ({ e, keep }: { e: (typeof data.events)[number]; keep?: boolean }) => (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
@@ -93,7 +93,7 @@ export default async function DuplicatesPage({
           pairs.length > 0 && `${pairs.length} likely ${pairs.length === 1 ? "pair" : "pairs"}`,
         ]
           .filter(Boolean)
-          .join(" · ");
+          .join(", ");
 
   return (
     <div className="max-w-3xl space-y-7.5">
@@ -171,7 +171,7 @@ export default async function DuplicatesPage({
             />
           ) : (
             <ul className="divide-border/70 divide-y">
-              {pairs.map(({ a, b, score }) => {
+              {pairs.map(({ a, b }) => {
                 const ea = byId.get(a);
                 const eb = byId.get(b);
                 if (!ea || !eb) return null;
@@ -183,9 +183,6 @@ export default async function DuplicatesPage({
                 const drop = keepA ? eb : ea;
                 return (
                   <li key={`${a}-${b}`} className="space-y-3 py-4 first:pt-0 last:pb-0">
-                    <p className="text-muted-foreground text-[13px] tabular-nums">
-                      Title similarity {Math.round(score * 100)}%
-                    </p>
                     <Row e={keep} keep />
                     <Row e={drop} />
                     <MergeSessionPicker

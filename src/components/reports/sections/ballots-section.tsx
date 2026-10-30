@@ -20,7 +20,7 @@ function Question({ q, k }: { q: BallotQuestionResult; k: number }) {
         <h4 className="heading text-sm">{q.label}</h4>
         <span className="text-muted-foreground text-xs">
           {formatCount(q.ballots)} {q.ballots === 1 ? "answer" : "answers"}
-          {ranked ? " · ranked by Borda points" : ""}
+          {ranked ? ", ranked by Borda points" : ""}
         </span>
       </div>
       <BarList
@@ -42,7 +42,7 @@ function Question({ q, k }: { q: BallotQuestionResult; k: number }) {
             ),
             detail:
               ranked && !o.suppressed
-                ? `${formatCount(o.firstChoice ?? 0)} first choice · ${formatCount(o.votes ?? 0)} ranked it`
+                ? `${formatCount(o.firstChoice ?? 0)} first choice, ${formatCount(o.votes ?? 0)} ranked it`
                 : !ranked && !o.suppressed && q.ballots > 0 && o.votes !== null
                   ? formatPct((o.votes / q.ballots) * 100)
                   : undefined,
@@ -61,8 +61,8 @@ function Ballot({ ballot, ctx, k }: { ballot: BallotResult; ctx: ReportViewConte
           <h3 className="heading text-[15px]">{ballot.title}</h3>
           <p className="text-muted-foreground mt-0.5 text-xs">
             {formatCount(ballot.ballots)} {ballot.ballots === 1 ? "ballot" : "ballots"}
-            {ballot.opensOn ? ` · opened ${shortDate(ballot.opensOn)}` : ""}
-            {" · turnout "}
+            {ballot.opensOn ? `, opened ${shortDate(ballot.opensOn)}` : ""}
+            {", turnout "}
             {ballot.turnoutPct === null ? (
               <span title="No linked session with check-ins to compare with">n/a</span>
             ) : (
@@ -111,7 +111,6 @@ export async function BallotsSection({ ctx }: { ctx: ReportViewContext }) {
     <ReportCard
       id="ballots"
       title="Ballots"
-      description="Results per ballot, with turnout against the linked session."
       viewHref={reportLinks.ballots(ctx.slug)}
       viewLabel="View ballots"
       computedAt={result.computedAt}

@@ -180,8 +180,8 @@ export default async function NotesPage({
         }
       />
       <SpaceStorageBanner orgSlug={orgSlug} />
-      {/* Notes-only view and the trash take no uploads. */}
-      {kind !== "notes" && !inTrash && (
+      {/* The page's uploader: the whole page takes dropped files (not the trash). */}
+      {!inTrash && (
         <FilesDropZone
           orgId={org.id}
           folderId={uploadFolder}
@@ -247,6 +247,7 @@ export default async function NotesPage({
         filters={<NotesListFilters members={members} personal={personal} />}
         sheetFilters={<NotesFilterChoices members={members} personal={personal} />}
         personal={personal}
+        canEmptyTrash={storage.canManage}
       />
     </div>
   );

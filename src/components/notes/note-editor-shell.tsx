@@ -1,7 +1,7 @@
 "use client";
 
 import type { Editor } from "@tiptap/core";
-import { generateText, type JSONContent } from "@tiptap/react";
+import { generateText, useEditorState, type JSONContent } from "@tiptap/react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Check,
@@ -17,7 +17,6 @@ import {
   PanelLeft,
   PanelRightClose,
   PanelTop,
-  PencilLine,
   RotateCcw,
   Trash2,
 } from "@/components/icons";
@@ -46,7 +45,7 @@ import {
   setHighlightThreads,
 } from "@/components/notes/editor/comment-highlights";
 import { NoteEditor, type NoteEditorPlace } from "@/components/notes/editor/note-editor";
-import { setSuggesting } from "@/components/notes/editor/suggesting";
+import { editorSuggestions, setSuggesting } from "@/components/notes/editor/suggesting";
 import { EventLinkPicker, type EventOption } from "@/components/notes/event-link-picker";
 import {
   clearNoteBackup,
@@ -69,14 +68,12 @@ import { SuggestionsPanel } from "@/components/notes/workspace/suggestions-panel
 import { VersionPreview } from "@/components/notes/workspace/version-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { toast } from "@/components/ui/toaster";
+import { toast, undoable } from "@/components/ui/toaster";
 import { bandFooter, bandHeader } from "@/lib/notes/paper";
 import { noteSchemaExtensions } from "@/lib/notes/schema-extensions";
-import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
 import { cn } from "@/lib/utils";
 import type { NoteCollabSession } from "@/server/collab/session";
 import type { NoteCommentDto } from "@/server/notes/comments";
@@ -211,7 +208,6 @@ export function NoteEditorShell({
   const [backupHandled, setBackupHandled] = useState(false);
   // Once this visit writes its own backup, the one found on arrival is stale.
   const [wroteBackup, setWroteBackup] = useState(false);
-  const [confirmEl, confirm] = useConfirm();
   // "Make tasks from this note": the note's text at the moment it's opened.
   const [importText, setImportText] = useState<string | null>(null);
 
@@ -420,34 +416,22 @@ export function NoteEditorShell({
     }
     if (result.versions) setVersions(result.versions);
     setPreview(null);
-    toast({
-      title: `Restored ${version.name ? `“${version.name}”` : "the autosave"}`,
-      description: "What it replaced is in the history too.",
-      tone: "success",
-    });
+    toast({ title: "Restored", tone: "success", duration: 3_000 });
   }
 
-  async function remove() {
-    const name = title.trim() || "Untitled note";
-    const ok = await confirm({
-      title: `Delete “${name}”?`,
-      description: `It moves to Recently deleted in Files for ${NOTE_TRASH_DAYS} days, so you can bring it back.`,
-      confirmLabel: "Delete note",
-      run: async () => (await deleteNote(orgId, note.id)).error,
-    });
-    if (!ok) return;
-    clearNoteBackup(note.id);
-    router.push(`/app/${orgSlug}/notes`);
-    toast({
-      title: "Note deleted",
-      description: name,
-      action: {
-        label: "Undo",
-        run: async () => {
-          const result = await restoreNote(orgId, note.id);
-          if (result.error) return result.error;
-          router.push(`/app/${orgSlug}/notes/${note.id}`);
-        },
+  function remove() {
+    void undoable({
+      title: "Deleted",
+      run: async () => {
+        const result = await deleteNote(orgId, note.id);
+        if (result.error) return result.error;
+        clearNoteBackup(note.id);
+        router.push(`/app/${orgSlug}/notes`);
+      },
+      undo: async () => {
+        const result = await restoreNote(orgId, note.id);
+        if (result.error) return result.error;
+        router.push(`/app/${orgSlug}/notes/${note.id}`);
       },
     });
   }
@@ -455,7 +439,7 @@ export function NoteEditorShell({
   function copyLink() {
     void navigator.clipboard
       ?.writeText(`${window.location.origin}/app/${orgSlug}/notes/${note.id}`)
-      .then(() => toast({ title: "Link copied", tone: "success", duration: 3_000 }))
+      .then(() => toast({ title: "Copied", tone: "success", duration: 3_000 }))
       .catch(() => toast({ title: "Couldn't copy the link", tone: "error" }));
   }
 
@@ -484,7 +468,7 @@ export function NoteEditorShell({
       return null;
     }
     toast({
-      title: "Page created inside this one",
+      title: "Page created",
       tone: "success",
       action: {
         label: "Open",
@@ -547,6 +531,8 @@ export function NoteEditorShell({
     ],
   );
 
+  const suggestionCount = useSuggestionCount(editor);
+
   if (session.mode === "revoked") {
     return (
       <div className="mx-auto max-w-3xl">
@@ -567,6 +553,9 @@ export function NoteEditorShell({
 
   const effective = live ? detailsStatus : status;
   const isDocument = layout === "DOCUMENT";
+  // Nothing written yet and the default name: a note that was just made.
+  const freshNote =
+    note.contentText.trim() === "" && (note.title === "" || note.title === "Untitled note");
   const openCount = comments.filter((c) => !c.threadId && !c.resolvedAt).length;
   const showTree = wide && !isDocument && workspace.pages.length > 0;
   const showRail = wide && railOpen;
@@ -593,7 +582,14 @@ export function NoteEditorShell({
           options={[
             { value: "comments", label: `Comments${openCount ? ` ${openCount}` : ""}` },
             { value: "history", label: "History" },
-            ...(canEdit ? [{ value: "suggestions", label: "Suggestions" }] : []),
+            ...(canEdit
+              ? [
+                  {
+                    value: "suggestions",
+                    label: `Suggestions${suggestionCount ? ` ${suggestionCount}` : ""}`,
+                  },
+                ]
+              : []),
           ]}
           value={railTab}
           onSelect={(v) => setRailTab(v as RailTab)}
@@ -647,7 +643,12 @@ export function NoteEditorShell({
       )}
       {railTab === "suggestions" &&
         (editor ? (
-          <SuggestionsPanel editor={editor} canDecide={canType} />
+          <SuggestionsPanel
+            editor={editor}
+            canDecide={canType}
+            suggesting={suggesting}
+            onSuggesting={(on) => setSuggestingMode(on)}
+          />
         ) : (
           <p className="text-muted-foreground text-xs">Loading…</p>
         ))}
@@ -672,7 +673,7 @@ export function NoteEditorShell({
         )}
         <nav
           aria-label="Breadcrumbs"
-          className="text-muted-foreground flex min-w-0 flex-1 items-center gap-1 text-[13px]"
+          className="text-muted-foreground flex min-w-0 flex-1 flex-wrap items-center gap-1 text-[13px]"
         >
           <Link href={`/app/${orgSlug}/notes`} className="hover:text-foreground shrink-0">
             Files
@@ -682,7 +683,7 @@ export function NoteEditorShell({
               <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
               <Link
                 href={`/app/${orgSlug}/notes/${a.id}`}
-                className="hover:text-foreground truncate"
+                className="hover:text-foreground break-words"
               >
                 {a.icon ? `${a.icon} ` : ""}
                 {a.title || "Untitled"}
@@ -690,7 +691,7 @@ export function NoteEditorShell({
             </span>
           ))}
           <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
-          <span className="text-foreground truncate font-medium" aria-current="page">
+          <span className="text-foreground font-medium break-words" aria-current="page">
             {icon ? `${icon} ` : ""}
             {title.trim() || "Untitled note"}
           </span>
@@ -729,67 +730,30 @@ export function NoteEditorShell({
               sharing={sharing}
             />
           )}
+          {/* One toggle for the side panel: comments, history and suggestions are its tabs. */}
           <Button
             type="button"
             variant="outline"
             size="icon-sm"
-            aria-label={`Comments${openCount ? ` (${openCount} open)` : ""}`}
-            title="Comments"
-            aria-pressed={showRail && railTab === "comments"}
-            onClick={() =>
-              showRail && railTab === "comments" ? setRailOpen(false) : openRail("comments")
-            }
+            aria-label={`Comments, history and suggestions${openCount ? ` (${openCount} open comments)` : ""}`}
+            title="Comments and history"
+            aria-pressed={showRail}
+            onClick={() => (showRail ? setRailOpen(false) : openRail(railTab))}
             className="relative"
           >
             <MessageSquare className="size-4" aria-hidden="true" />
-            {openCount > 0 && (
+            {openCount + suggestionCount > 0 && (
               <span className="bg-brand-accent text-brand-accent-foreground absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full px-1 text-[10px] font-semibold">
-                {openCount}
+                {openCount + suggestionCount}
               </span>
             )}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Version history"
-            title="Version history"
-            // A phone: in the "…" menu, so the note's tools fit one row.
-            className="max-md:hidden"
-            aria-pressed={showRail && railTab === "history"}
-            onClick={() =>
-              showRail && railTab === "history" ? setRailOpen(false) : openRail("history")
-            }
-          >
-            <History className="size-4" aria-hidden="true" />
           </Button>
           <ItemMenu
             label="More note actions"
             items={[
-              canEdit && {
-                label: suggesting ? "Stop suggesting (edit directly)" : "Suggest edits",
-                icon: PencilLine,
-                onSelect: () => {
-                  setSuggestingMode((s) => !s);
-                  if (!suggesting) openRail("suggestions");
-                },
-              },
               canEdit &&
                 isDocument && {
-                  label:
-                    paperSize === "A4"
-                      ? "Paper: A4 (switch to Letter)"
-                      : "Paper: Letter (switch to A4)",
-                  icon: FileText,
-                  onSelect: () => {
-                    const next = paperSize === "A4" ? "LETTER" : "A4";
-                    setPaperSize(next);
-                    saveSettings({ paperSize: next });
-                  },
-                },
-              canEdit &&
-                isDocument && {
-                  label: "Header and footer…",
+                  label: "Page setup…",
                   icon: PanelTop,
                   onSelect: () => setBandsOpen(true),
                 },
@@ -800,7 +764,7 @@ export function NoteEditorShell({
                 separated: true,
               },
               {
-                label: "Download Word (.docx)",
+                label: "Download Word",
                 icon: Download,
                 onSelect: () => void download("docx"),
               },
@@ -824,10 +788,10 @@ export function NoteEditorShell({
                   ),
               },
               sharing.canShare && {
-                label: "Delete note",
+                label: "Delete",
                 icon: Trash2,
                 destructive: true,
-                onSelect: () => void remove(),
+                onSelect: remove,
               },
             ]}
           />
@@ -867,7 +831,7 @@ export function NoteEditorShell({
                 </Button>
               }
             >
-              This note was updated by someone else — reload to see the latest version.
+              Updated elsewhere.
             </Banner>
           )}
           {session.mode === "interrupted" && (
@@ -884,7 +848,7 @@ export function NoteEditorShell({
                 </Button>
               }
             >
-              Live editing was interrupted — reload to keep editing.
+              Disconnected.
             </Banner>
           )}
           {suggesting && canType && (
@@ -901,20 +865,19 @@ export function NoteEditorShell({
                 </Button>
               }
             >
-              Suggesting: what you type and delete shows as suggestions to accept or reject.
+              Suggesting.
             </Banner>
           )}
           {showBackup && backup && (
             <div className="bg-tint-accent rounded-tile flex flex-wrap items-center gap-3 p-3 text-sm">
               <History className="text-warning size-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1">
-                Changes you made {formatDistanceToNow(backup.savedAt, { addSuffix: true })} never
-                reached the server. They&apos;re still in this browser.
-                {backup.baseVersion < note.version &&
-                  " The note has changed since, so restoring them replaces the newer version."}
+                Unsaved changes from {formatDistanceToNow(backup.savedAt, { addSuffix: true })} are
+                in this browser.
+                {backup.baseVersion < note.version && " Restoring replaces newer edits."}
               </span>
               <Button type="button" size="sm" onClick={restoreBackup}>
-                Restore them
+                Restore
               </Button>
               <Button
                 type="button"
@@ -971,8 +934,15 @@ export function NoteEditorShell({
                         setTitle(next);
                         queueSave({ title: next });
                       }}
+                      autoFocus={freshNote && canType}
+                      onFocus={(e) => {
+                        if (freshNote) e.currentTarget.select();
+                      }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") e.preventDefault();
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          editor?.commands.focus("start");
+                        }
                       }}
                       placeholder="Untitled note"
                       aria-label="Title"
@@ -982,6 +952,17 @@ export function NoteEditorShell({
                     <Input
                       value={title}
                       disabled={!canType}
+                      // A brand-new note starts in its title, ready to type over.
+                      autoFocus={freshNote && canType}
+                      onFocus={(e) => {
+                        if (freshNote) e.currentTarget.select();
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          editor?.commands.focus("start");
+                        }
+                      }}
                       onChange={(e) => {
                         setTitle(e.target.value);
                         queueSave({ title: e.target.value });
@@ -1100,11 +1081,15 @@ export function NoteEditorShell({
           {rail}
         </SheetContent>
       </Sheet>
-      {confirmEl}
       {bandsOpen && (
         <HeaderFooterDialog
           headerText={bands.headerText}
           footerText={bands.footerText}
+          paperSize={paperSize}
+          onPaperSize={(next) => {
+            setPaperSize(next);
+            saveSettings({ paperSize: next });
+          }}
           defaults={{
             header: bandHeader({ title, orgName: workspace.orgName }),
             footer: bandFooter({ title }),
@@ -1183,7 +1168,7 @@ function PageList({
               ) : (
                 <FileText className="text-muted-foreground size-4" aria-hidden="true" />
               )}
-              <span className="truncate">{p.title || "Untitled"}</span>
+              <span className="min-w-0 break-words">{p.title || "Untitled"}</span>
             </Link>
           </li>
         ))}
@@ -1280,4 +1265,14 @@ function isPhone() {
 
 function isWide() {
   return typeof window.matchMedia !== "function" || window.matchMedia(WIDE).matches;
+}
+
+/** How many suggestions are waiting in the note, for the panel's tab and toggle. */
+function useSuggestionCount(editor: Parameters<typeof editorSuggestions>[0] | null): number {
+  return (
+    useEditorState({
+      editor,
+      selector: ({ editor: e }) => (e ? editorSuggestions(e).length : 0),
+    }) ?? 0
+  );
 }

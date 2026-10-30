@@ -72,17 +72,17 @@ export function VersionPreview({
           <ArrowLeft className="size-4" aria-hidden="true" />
         </Button>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{version.name ?? "Autosave"}</p>
-          <p className="text-muted-foreground truncate text-xs">
+          <p className="text-sm font-semibold break-words">{version.name ?? "Autosave"}</p>
+          <p className="text-muted-foreground text-xs">
             {format(new Date(version.createdAt), "EEE, MMM d, h:mm a")}
-            {version.author ? ` · ${version.author}` : ""}
+            {version.author ? `, ${version.author}` : ""}
           </p>
         </div>
         <Segmented
           label="Show"
           options={[
-            { value: "version", label: "This version" },
-            { value: "compare", label: "Compare with now" },
+            { value: "version", label: "Version" },
+            { value: "compare", label: "Changes" },
           ]}
           value={view}
           onSelect={(v) => setView(v as "version" | "compare")}
@@ -101,7 +101,7 @@ export function VersionPreview({
             ) : (
               <RotateCcw className="size-4" aria-hidden="true" />
             )}
-            Restore this version
+            Restore
           </Button>
         )}
       </div>
