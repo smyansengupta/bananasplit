@@ -128,9 +128,7 @@ export function SessionFormDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{initial ? "Edit session" : "New session"}</DialogTitle>
-          <DialogDescription>
-            Sessions are calendar events: this shows on the calendar too. Times are in {timezone}.
-          </DialogDescription>
+          <DialogDescription>Also on the calendar. Times in {timezone}.</DialogDescription>
         </DialogHeader>
         <form action={submit} className="grid gap-4">
           <div className="grid gap-1.5">

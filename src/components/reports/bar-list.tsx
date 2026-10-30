@@ -43,9 +43,9 @@ export function BarList({
         const row = (
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-1.5">
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{item.label}</div>
+              <div className="text-sm font-medium break-words">{item.label}</div>
               {item.detail ? (
-                <div className="text-muted-foreground truncate text-xs">{item.detail}</div>
+                <div className="text-muted-foreground text-xs">{item.detail}</div>
               ) : null}
             </div>
             <div className="text-sm font-semibold tabular-nums">{item.display}</div>

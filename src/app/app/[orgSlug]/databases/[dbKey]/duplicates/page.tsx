@@ -171,7 +171,7 @@ export default async function DuplicatesPage({
             />
           ) : (
             <ul className="divide-border/70 divide-y">
-              {pairs.map(({ a, b, score }) => {
+              {pairs.map(({ a, b }) => {
                 const ea = byId.get(a);
                 const eb = byId.get(b);
                 if (!ea || !eb) return null;
@@ -183,9 +183,6 @@ export default async function DuplicatesPage({
                 const drop = keepA ? eb : ea;
                 return (
                   <li key={`${a}-${b}`} className="space-y-3 py-4 first:pt-0 last:pb-0">
-                    <p className="text-muted-foreground text-[13px] tabular-nums">
-                      Title similarity {Math.round(score * 100)}%
-                    </p>
                     <Row e={keep} keep />
                     <Row e={drop} />
                     <MergeSessionPicker

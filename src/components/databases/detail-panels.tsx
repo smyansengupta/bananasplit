@@ -565,9 +565,7 @@ export function BallotPanel({ detail, ctx }: { detail: BallotDetail; ctx: PanelC
       </p>
       <dl className="divide-border/70 divide-y">
         <Field label="Poll">{b.ballotDefinition?.title ?? b.pollSlug}</Field>
-        <Field label="Cast at">
-          {fmtDateTime(b.castAt, ctx.timezone)} (rounded to the hour at the source)
-        </Field>
+        <Field label="Cast at">{fmtDateTime(b.castAt, ctx.timezone)}</Field>
         <Field label="Voter">{voter}</Field>
         <Field label="Source">{SOURCE_LABELS[b.source] ?? b.source}</Field>
         {b.excludedReason && <Field label="Not counted">{exclusionLabel(b.excludedReason)}</Field>}
