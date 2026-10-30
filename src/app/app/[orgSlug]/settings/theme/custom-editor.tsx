@@ -70,10 +70,7 @@ export default function CustomThemeEditor({
           />
           <div className="space-y-0.5">
             <Label htmlFor="derive-dark">Derive dark from light</Label>
-            <p className="text-muted-foreground text-xs">
-              Dark mode uses a near-black page and lightens your primary and accent until they read
-              on it. Turn this off to pick every dark colour yourself.
-            </p>
+            <p className="text-muted-foreground text-xs">Off: pick every dark colour yourself.</p>
           </div>
         </div>
         {ROLE_KEYS.map((role) => (
