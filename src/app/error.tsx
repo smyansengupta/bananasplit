@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 
-import { BrandRoot } from "@/components/brand/brand-root";
 import { Logo } from "@/components/brand/logo";
 import { pill } from "@/components/brand/pill";
 import { cn } from "@/lib/utils";
@@ -21,7 +20,9 @@ export default function RootError({
   retry: () => void;
 }) {
   return (
-    <BrandRoot>
+    // Not <BrandRoot>: it reads the request (the CSP nonce) and is a server
+    // component, and an error page is a client one. Its frame is enough.
+    <div data-look="graphite" className="brand flex min-h-svh flex-1 flex-col">
       <header className="flex h-[72px] items-center px-4 sm:px-6 lg:px-10">
         <Link href="/" className="logo-lockup" data-plain>
           <Logo />
@@ -45,6 +46,6 @@ export default function RootError({
           </Link>
         </div>
       </main>
-    </BrandRoot>
+    </div>
   );
 }
