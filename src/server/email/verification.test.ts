@@ -43,9 +43,7 @@ const authDb = vi.hoisted(() => {
   };
   const user = {
     async findUnique({ where }: { where: { id?: string; email?: string } }) {
-      return (
-        store.users.find((u) => (where.id ? u.id === where.id : u.email === where.email)) ?? null
-      );
+      return store.users.find((u) => (where.id ? u.id === where.id : u.email === where.email)) ?? null;
     },
     async updateMany({
       where,
@@ -132,38 +130,21 @@ describe("email verification", () => {
     expect(await peekVerificationToken(token)).toBe("valid");
     expect(await peekVerificationToken(token)).toBe("valid");
 
-    expect(await consumeVerificationToken(token, "u1")).toEqual({
-      ok: true,
-      email: "new@example.edu",
-    });
+    expect(await consumeVerificationToken(token, "u1")).toEqual({ ok: true, email: "new@example.edu" });
     expect(store.users[0].emailVerified).toBeInstanceOf(Date);
     expect(await peekVerificationToken(token)).toBe("invalid");
     expect(await consumeVerificationToken(token, "u1")).toEqual({ ok: false, reason: "invalid" });
   });
 
   it("only the account the link was sent for can use it, and a refusal doesn't spend it", async () => {
-    store.users.push({
-      id: "u2",
-      email: "someone-else@example.edu",
-      name: null,
-      emailVerified: null,
-    });
+    store.users.push({ id: "u2", email: "someone-else@example.edu", name: null, emailVerified: null });
     await run("u1");
     const token = tokenFromLastMail();
-    expect(await consumeVerificationToken(token, "u2")).toEqual({
-      ok: false,
-      reason: "wrong-account",
-    });
-    expect(await consumeVerificationToken(token, "nobody")).toEqual({
-      ok: false,
-      reason: "wrong-account",
-    });
+    expect(await consumeVerificationToken(token, "u2")).toEqual({ ok: false, reason: "wrong-account" });
+    expect(await consumeVerificationToken(token, "nobody")).toEqual({ ok: false, reason: "wrong-account" });
     expect(store.users[0].emailVerified).toBeNull();
     expect(await peekVerificationToken(token)).toBe("valid");
-    expect(await consumeVerificationToken(token, "u1")).toEqual({
-      ok: true,
-      email: "new@example.edu",
-    });
+    expect(await consumeVerificationToken(token, "u1")).toEqual({ ok: true, email: "new@example.edu" });
   });
 
   it("a new link replaces the old one, and an expired link is refused", async () => {
