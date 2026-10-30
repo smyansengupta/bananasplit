@@ -257,6 +257,8 @@ export interface TaskFilters {
    * `blockers`, which also takes in blocked work, so the list never matched.)
    */
   overdue?: boolean;
+  /** Open with nobody owning it: what the dashboard's No owner line counts. */
+  unowned?: boolean;
   /** C4: narrow to private tasks, or to the open ones. */
   visibility?: TaskVisibility;
 }
@@ -320,6 +322,7 @@ export function taskFilterWhere(
   if (f.overdue && today) {
     and.push({ status: { in: [...OPEN_STATUSES] }, dueDate: { lt: today } });
   }
+  if (f.unowned) and.push({ ownerId: null, status: { in: [...OPEN_STATUSES] } });
   if (f.blockers && today) {
     // The exec-sync agenda: blocked, or open and overdue.
     and.push({
@@ -361,6 +364,7 @@ export function hasActiveFilters(f: TaskFilters): boolean {
     f.dueTo ||
     f.flagged ||
     f.overdue ||
+    f.unowned ||
     f.blockers ||
     f.visibility,
   );

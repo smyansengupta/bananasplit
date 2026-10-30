@@ -10,7 +10,7 @@ import { formatDueKey } from "@/lib/tasks/dates";
 import { typeLabel } from "@/lib/tasks/hierarchy";
 import type { TaskActivityItem } from "@/server/tasks/queries";
 
-import { STATUS_LABELS } from "./status-select";
+import { STATUS_LABEL as STATUS_LABELS } from "./layout-ui";
 import { useTasks } from "./tasks-context";
 
 /** The task's history (TaskActivity, append-only), loaded on demand. */

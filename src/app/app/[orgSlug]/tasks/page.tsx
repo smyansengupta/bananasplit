@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { QueryProvider } from "@/components/providers/query-provider";
@@ -58,8 +58,10 @@ import { EpicsView } from "./epics/epics-view";
 import {
   DEFAULT_TASK_LAYOUT,
   isDestination,
+  parseRemembered,
   parseScope,
   parseWorkspaceQuery,
+  REMEMBER_COOKIE,
   PHONE_HIDDEN_LAYOUTS,
   TASK_LIST_VIEW,
   type WorkspaceQuery,
@@ -98,7 +100,9 @@ export default async function TasksPage({
     redirect(`/app/${orgSlug}/calendar`);
   }
 
-  const parsed = parseWorkspaceQuery(query);
+  // Where this person left off (the last layout and scope), unless the URL says.
+  const remembered = parseRemembered((await cookies()).get(REMEMBER_COOKIE)?.value);
+  const parsed = parseWorkspaceQuery(query, remembered);
   // The Free plan has the List only: any other ?view= opens the List too,
   // so a typed URL doesn't reach the others.
   const simple = !spaceIncludes(org, "taskViews");
@@ -170,6 +174,7 @@ export default async function TasksPage({
     dueTo: dateParam(ws.dueTo),
     flagged: ws.flagged,
     overdue: ws.overdue,
+    unowned: ws.unowned,
     blockers: ws.blockers,
     visibility: ws.visibility,
   };
@@ -224,6 +229,7 @@ export default async function TasksPage({
           title={sectionLabel(settings?.sidebar, "tasks")}
           teamwork={teamwork && !simple}
           stats={stats}
+          weekEndKey={addDaysToKey(weekStartKey, 6)}
         />
         {ws.view === "list" && weekly && <WeeklyUpdateStrip status={weekly} />}
         {content}

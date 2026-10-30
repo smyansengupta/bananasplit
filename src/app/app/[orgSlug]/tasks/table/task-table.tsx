@@ -7,7 +7,7 @@ import { useMemo, useState, useTransition } from "react";
 
 import { useBlockedReason, useConfirmFlagged } from "@/components/tasks/prompts";
 import { QuickPriority, QuickStatus } from "@/components/tasks/quick-controls";
-import { STATUS_LABELS } from "@/components/tasks/status-select";
+import { STATUS_LABEL as STATUS_LABELS } from "@/components/tasks/layout-ui";
 import {
   DueLabel,
   FlagBadge,

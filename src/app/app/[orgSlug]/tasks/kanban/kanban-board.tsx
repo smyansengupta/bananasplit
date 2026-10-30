@@ -34,7 +34,7 @@ const COLUMNS: { status: TaskStatus; title: string }[] = [
   { status: TaskStatus.NOT_STARTED, title: "Not started" },
   { status: TaskStatus.IN_PROGRESS, title: "In progress" },
   { status: TaskStatus.BLOCKED, title: "Blocked" },
-  { status: TaskStatus.COMPLETED, title: "Completed" },
+  { status: TaskStatus.COMPLETED, title: "Done" },
 ];
 const STATUSES = new Set<string>(STATUS_ORDER);
 const NO_EPIC = "none";
@@ -268,7 +268,7 @@ export function KanbanBoard({
         onClick={() => setParam("done", "all")}
         className="text-muted-foreground hover:text-foreground block w-full rounded-full px-2 py-1 text-left text-xs underline-offset-4 hover:underline"
       >
-        Show {olderCompleted} older completed
+        Show {olderCompleted} older
       </button>
     ) : null;
 

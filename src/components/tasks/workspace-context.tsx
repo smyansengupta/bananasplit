@@ -4,9 +4,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createContext, useCallback, useContext, useMemo } from "react";
 
 import {
+  REMEMBER_COOKIE,
   TASK_LAYOUTS,
   TASK_SCOPES,
   activeFilterCount,
+  isLayout,
+  rememberValue,
   type TaskLayout,
   type TaskScope,
   type TaskView,
@@ -19,8 +22,8 @@ import {
  * It lives in the URL rather than in React state, which is what makes the
  * whole thing one product instead of five: every layout reads the same
  * query, a filtered view is a shareable link, and the browser's Back button
- * does the obvious thing. The last layout is also remembered in a cookie so
- * each person lands where they left off.
+ * does the obvious thing. The last layout and scope are also remembered in
+ * a cookie (REMEMBER_COOKIE) so each person lands where they left off.
  */
 
 interface WorkspaceValue {
@@ -55,6 +58,7 @@ const PARAM: Partial<Record<keyof WorkspaceQuery, string>> = {
   dueTo: "dueTo",
   flagged: "flagged",
   overdue: "overdue",
+  unowned: "unowned",
   blockers: "blockers",
   visibility: "visibility",
 };
@@ -78,6 +82,15 @@ export function WorkspaceProvider({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // Remember where this person left off (a year; this browser only).
+  const remember = useCallback(
+    (view: TaskView, scope: TaskScope) => {
+      if (simple || !isLayout(view)) return;
+      document.cookie = `${REMEMBER_COOKIE}=${rememberValue(view, scope)}; path=/; max-age=31536000; samesite=lax`;
+    },
+    [simple],
+  );
 
   const write = useCallback(
     (next: Partial<WorkspaceQuery>, opts: { resetLayoutLocal?: boolean } = {}) => {
@@ -107,9 +120,11 @@ export function WorkspaceProvider({
       filterCount: activeFilterCount(query),
       hrefWith: (next) => write(next),
       setView: (view) => {
+        remember(view, query.scope);
         router.push(write({ view }));
       },
       setScope: (scope) => {
+        remember(query.view, scope);
         // Picking a scope replaces any person pinned by a deep link.
         router.push(write({ scope, ownerId: undefined, assigneeId: undefined }));
       },
@@ -126,12 +141,13 @@ export function WorkspaceProvider({
             dueTo: undefined,
             flagged: false,
             overdue: false,
+            unowned: false,
             blockers: false,
             visibility: undefined,
           }),
         ),
     };
-  }, [query, hasReports, simple, router, write]);
+  }, [query, hasReports, simple, router, write, remember]);
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

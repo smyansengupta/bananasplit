@@ -8,9 +8,6 @@ import {
   CircleDot,
   ClipboardPaste,
   Layers,
-  ListFilter,
-  Plus,
-  X,
 } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -20,9 +17,9 @@ import { useTasks, useWorkspace } from "@/components/tasks/tasks-context";
 import { PHONE_SMALL_CREATE } from "@/components/page-header";
 import { OpenTasksBar, taskStatsSegments } from "@/components/tasks/open-tasks-bar";
 import { WorkspaceToolbar } from "@/components/tasks/workspace-toolbar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreateSplitButton } from "@/components/ui/create-split-button";
+import { chipClass } from "@/components/ui/segmented";
 import { Stat, StatStrip } from "@/components/ui/stat";
 import { cn } from "@/lib/utils";
 import type { TaskStats } from "@/server/tasks/queries";
@@ -36,7 +33,20 @@ import {
   TASK_KEYS,
 } from "@/lib/shortcuts";
 
-import { isDestination, TASK_LAYOUTS, type TaskLayout } from "./views";
+import {
+  DEFAULT_TASK_LAYOUT,
+  isDestination,
+  parseRemembered,
+  REMEMBER_COOKIE,
+  TASK_LAYOUTS,
+  type TaskLayout,
+} from "./views";
+
+/** The layout this person last used, read from the cookie views.ts sets. */
+function lastLayout(): TaskLayout {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${REMEMBER_COOKIE}=([^;]*)`));
+  return parseRemembered(match?.[1]).view ?? DEFAULT_TASK_LAYOUT;
+}
 
 /**
  * The workspace header: the title and New task. Nothing else competes for
@@ -55,6 +65,7 @@ export function WorkspaceHeader({
   title = "Tasks",
   teamwork = true,
   stats = null,
+  weekEndKey,
 }: {
   /** The section's name in the club's sidebar. */
   title?: string;
@@ -62,6 +73,8 @@ export function WorkspaceHeader({
   teamwork?: boolean;
   /** The stat strip (none on the Free plan). */
   stats?: TaskStats | null;
+  /** The last day of this week (Sunday), for the Due this week filter. */
+  weekEndKey?: string;
 }) {
   const { newTask, org } = useTasks();
   const ws = useWorkspace();
@@ -77,7 +90,59 @@ export function WorkspaceHeader({
     [epicId],
   );
 
-  // The single keys (src/lib/shortcuts.ts, listed on the ⌘/ sheet): 1-6
+  // Each number in the strip is a filter that narrows to what it counted.
+  const q = ws.query;
+  const dueWeekOn =
+    q.status === "open" && Boolean(weekEndKey) && q.dueTo === weekEndKey && !q.dueFrom;
+  const statFilters = stats
+    ? [
+        {
+          key: "open",
+          icon: CircleDot,
+          value: stats.open,
+          label: "Open",
+          on: q.status === "open" && !dueWeekOn,
+          toggle: () =>
+            ws.setFilters(
+              q.status === "open" && !dueWeekOn
+                ? { status: undefined }
+                : { status: "open", dueTo: undefined, dueFrom: undefined },
+            ),
+        },
+        {
+          key: "week",
+          icon: CalendarRange,
+          value: stats.dueThisWeek,
+          label: "Due this week",
+          on: dueWeekOn,
+          toggle: () =>
+            ws.setFilters(
+              dueWeekOn
+                ? { status: undefined, dueTo: undefined }
+                : { status: "open", dueTo: weekEndKey, dueFrom: undefined },
+            ),
+        },
+        {
+          key: "overdue",
+          icon: AlarmClock,
+          value: stats.overdue,
+          label: "Overdue",
+          on: q.overdue,
+          toggle: () => ws.setFilters({ overdue: !q.overdue }),
+        },
+        {
+          key: "done",
+          icon: CircleCheck,
+          value: stats.doneThisWeek,
+          label: "Done this week",
+          on: q.status === "COMPLETED",
+          toggle: () =>
+            ws.setFilters({ status: q.status === "COMPLETED" ? undefined : "COMPLETED" }),
+        },
+      ]
+    : [];
+
+  // The single keys (src/lib/shortcuts.ts, listed on the ⌘/ sheet): 1-5
   // switch layout (1 is the dashboard, 2 the board), c starts a task, m / t / e pick
   // whose work, x clears the filters, u opens the weekly update. Typing in a
   // field never triggers them, nor does a key an open menu uses.
@@ -127,9 +192,9 @@ export function WorkspaceHeader({
 
         <div className={cn("flex flex-wrap items-center gap-2", PHONE_SMALL_CREATE)}>
           {inDestination ? (
-            <Button variant="ghost" onClick={() => ws.setView("board")}>
+            <Button variant="ghost" onClick={() => ws.setView(lastLayout())}>
               <ArrowLeft className="size-4" aria-hidden="true" />
-              Back to tasks
+              Tasks
             </Button>
           ) : null}
 
@@ -138,26 +203,17 @@ export function WorkspaceHeader({
             label="New task"
             title="New task (c)"
             onClick={() => newTask(inEpic)}
-            menuLabel="More ways to add tasks"
+            menuLabel="More"
           >
             {!ws.simple && (
               <>
-                <DropdownMenuItem onSelect={() => newTask(inEpic)}>
-                  <Plus className="size-4" aria-hidden="true" />
-                  New task
-                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => newTask({ type: "EPIC" })}>
                   <Layers className="size-4" aria-hidden="true" />
                   New epic
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setImporting(true)}>
                   <ClipboardPaste className="size-4" aria-hidden="true" />
-                  <span className="flex flex-col">
-                    Paste a list
-                    <span className="text-muted-foreground text-xs">
-                      A to-do list or meeting notes, turned into tasks
-                    </span>
-                  </span>
+                  Paste a list
                 </DropdownMenuItem>
               </>
             )}
@@ -165,52 +221,46 @@ export function WorkspaceHeader({
         </div>
       </div>
 
-      {/* A phone: the numbers as one bar, the same as the Overview's. */}
+      {/*
+        The numbers, each one a filter: press one and the view narrows to
+        exactly what it counted; press it again to let go. A phone gets the
+        bar and the same four as small chips under it.
+      */}
       {!inDestination && stats && (
-        <OpenTasksBar open={stats.open} className="md:hidden" segments={taskStatsSegments(stats)} />
+        <div className="space-y-2.5 md:hidden">
+          <OpenTasksBar open={stats.open} segments={taskStatsSegments(stats)} />
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Task counts">
+            {statFilters.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={f.on}
+                onClick={f.toggle}
+                className={cn(chipClass(f.on), "h-8 gap-1 px-3 text-[13px]")}
+              >
+                <b className="tabular-nums">{f.value}</b> {f.label.toLowerCase()}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       {!inDestination && stats && (
         <StatStrip className="max-md:hidden">
-          <Stat icon={CircleDot} value={stats.open} label="Open" />
-          <Stat icon={CalendarRange} value={stats.dueThisWeek} label="Due this week" />
-          <Stat
-            icon={AlarmClock}
-            value={stats.overdue}
-            label="Overdue"
-            chip={
-              stats.overdue > 0 || ws.query.overdue ? (
-                // One control that says what it does, and undoes itself: the
-                // list narrows to exactly the tasks this stat counted, and the
-                // same chip takes the filter off again.
-                <button
-                  type="button"
-                  aria-pressed={ws.query.overdue}
-                  onClick={() => ws.setFilters({ overdue: !ws.query.overdue })}
-                  className="focus-glow rounded-full"
-                  title={
-                    ws.query.overdue
-                      ? "Show every task again"
-                      : "Show only the tasks that are overdue"
-                  }
-                >
-                  <Badge variant={ws.query.overdue ? "secondary" : "destructive"} className="gap-1">
-                    {ws.query.overdue ? (
-                      <>
-                        <X className="size-3" aria-hidden="true" />
-                        Clear
-                      </>
-                    ) : (
-                      <>
-                        <ListFilter className="size-3" aria-hidden="true" />
-                        Filter
-                      </>
-                    )}
-                  </Badge>
-                </button>
-              ) : undefined
-            }
-          />
-          <Stat icon={CircleCheck} value={stats.doneThisWeek} label="Done this week" />
+          {statFilters.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={f.on}
+              onClick={f.toggle}
+              title={f.on ? "Show every task" : `Show only these (${f.label.toLowerCase()})`}
+              className={cn(
+                "focus-glow -m-1.5 rounded-[20px] p-1.5 text-start transition-colors outline-none",
+                f.on ? "bg-muted" : "hover:bg-muted/60",
+              )}
+            >
+              <Stat icon={f.icon} value={f.value} label={f.label} />
+            </button>
+          ))}
         </StatStrip>
       )}
 
