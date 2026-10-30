@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { BackLink } from "@/components/back-link";
+import { LinkedSection } from "@/components/links/linked-section";
 import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
@@ -186,6 +187,7 @@ export default async function NoteFilePage({
           <EmptyState size="compact" title="No preview. Download to open." />
         )}
       </div>
+      <LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "file", id: row.id }} />
     </div>
   );
 }

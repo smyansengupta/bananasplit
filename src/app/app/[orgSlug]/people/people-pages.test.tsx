@@ -31,6 +31,7 @@ vi.mock("@/server/db/context", () => ({
 }));
 vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
 vi.mock("@/components/pins/pins-context", () => ({ PinToggle: () => null }));
+vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
 vi.mock("next/navigation", async () => {
   const actual = await vi.importActual<typeof import("next/navigation")>("next/navigation");
   return { ...actual, usePathname: () => "/app/cbc/people" };

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { LinkedSection } from "@/components/links/linked-section";
 import { MarkDoneBanner } from "@/components/tasks/mark-done-banner";
 import { TaskPageEditor } from "@/components/tasks/task-page-editor";
 import { TasksProvider } from "@/components/tasks/tasks-context";
@@ -71,6 +72,7 @@ export default async function TaskPage({
         <BackLink href={`/app/${orgSlug}/tasks`} label="Tasks" />
         {offerDone && <MarkDoneBanner task={task} />}
         <TaskPageEditor task={task} initialComments={data.comments} />
+        <LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "task", id: task.id }} />
       </div>
     </TasksProvider>
   );

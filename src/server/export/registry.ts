@@ -123,6 +123,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "Ballot", key: ID, ballotRows: true },
   { model: "BallotChoice", key: ID, ballotRows: true },
   { model: "DataSourceSyncState", key: ID },
+  // Links between things (the Linked panel): org data, both ends are ids.
+  { model: "ItemLink", key: ID },
 ];
 
 /** Org tables that are deliberately not exported, and why. */

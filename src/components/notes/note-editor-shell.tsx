@@ -117,6 +117,8 @@ export interface NoteWorkspace {
 export interface NoteEditorShellProps {
   orgId: string;
   orgSlug: string;
+  /** The Linked panel (components/links), under the note. */
+  linked?: React.ReactNode;
   note: {
     id: string;
     title: string;
@@ -189,6 +191,7 @@ export function NoteEditorShell({
   workspace = EMPTY_WORKSPACE,
   personal = false,
   canMakeTasks = true,
+  linked = null,
 }: NoteEditorShellProps) {
   const router = useRouter();
   const [title, setTitle] = useState(note.title);
@@ -1047,6 +1050,9 @@ export function NoteEditorShell({
                     <PageList title="Linked from" orgSlug={orgSlug} pages={workspace.backlinks} />
                   )}
                 </footer>
+              )}
+              {linked && (
+                <div className={cn("pt-4", isDocument && "mx-auto max-w-[816px]")}>{linked}</div>
               )}
             </>
           )}

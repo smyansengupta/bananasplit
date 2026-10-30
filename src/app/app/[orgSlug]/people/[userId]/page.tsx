@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { LinkedSection } from "@/components/links/linked-section";
 import { PersonProfile } from "@/components/profile/person-profile";
 import { peopleHref } from "@/lib/profile/href";
 import { getOrgContextBySlug } from "@/server/db/context";
@@ -42,6 +43,11 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
           headingLevel="h1"
         />
       </article>
+      <LinkedSection
+        orgId={organization.id}
+        orgSlug={orgSlug}
+        at={{ kind: "person", id: userId }}
+      />
     </div>
   );
 }

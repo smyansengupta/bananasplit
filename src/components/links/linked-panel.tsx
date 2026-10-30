@@ -186,8 +186,8 @@ function LinkPicker({
   useEffect(() => {
     if (!open) return;
     const n = ++asked.current;
-    setLoading(true);
     const timer = setTimeout(async () => {
+      setLoading(true);
       try {
         const result = await searchWorkspaceAction(orgId, { query, scope: "all" });
         if (n !== asked.current) return;
