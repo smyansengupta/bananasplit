@@ -11,14 +11,9 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { pollSlots } from "@/lib/calendar/poll-slots";
 
@@ -305,51 +300,74 @@ export function PollForm({
 
       <Section title="Options">
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="poll-duration">Meeting length (minutes)</Label>
-            <Input
-              id="poll-duration"
-              type="number"
-              inputMode="numeric"
-              min={15}
-              max={1440}
-              step={15}
-              value={Number.isFinite(duration) ? duration : ""}
-              aria-invalid={durationError ? true : undefined}
-              aria-describedby="poll-duration-help"
-              onChange={(e) => setDuration(e.target.valueAsNumber)}
-            />
-            <p
-              id="poll-duration-help"
-              className={
-                durationError ? "text-destructive text-xs" : "text-muted-foreground text-xs"
-              }
-            >
-              {durationError ?? "The best times are windows this long."}
-            </p>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="poll-granularity">Time step</Label>
-            <Select
-              value={String(granularity)}
-              onValueChange={(v) => setGranularity(Number(v) as 15 | 30 | 60)}
-            >
-              <SelectTrigger
-                id="poll-granularity"
-                className="w-full"
-                aria-describedby="poll-granularity-help"
+          <div className="grid gap-1.5 sm:col-span-2">
+            <span id="poll-duration-label" className="text-sm leading-none font-medium">
+              Meeting length
+            </span>
+            {/* The usual lengths as one click each; anything else goes in the box. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                role="radiogroup"
+                aria-labelledby="poll-duration-label"
+                className={segmentedTrack}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="15">Every 15 minutes</SelectItem>
-                <SelectItem value="30">Every 30 minutes</SelectItem>
-                <SelectItem value="60">Every hour</SelectItem>
-              </SelectContent>
-            </Select>
-            <p id="poll-granularity-help" className="text-muted-foreground text-xs">
-              How finely people mark their time.
-            </p>
+                {[30, 45, 60, 90].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={duration === m}
+                    onClick={() => setDuration(m)}
+                    className={segmentedItem(duration === m)}
+                  >
+                    {m < 60 ? `${m} min` : m === 60 ? "1 hr" : "1.5 hr"}
+                  </button>
+                ))}
+              </div>
+              <Input
+                id="poll-duration"
+                type="number"
+                inputMode="numeric"
+                min={15}
+                max={1440}
+                step={15}
+                value={Number.isFinite(duration) ? duration : ""}
+                aria-label="Meeting length in minutes"
+                aria-invalid={durationError ? true : undefined}
+                aria-describedby={durationError ? "poll-duration-help" : undefined}
+                onChange={(e) => setDuration(e.target.valueAsNumber)}
+                className="h-9 w-24"
+              />
+              <span className="text-muted-foreground text-sm">min</span>
+            </div>
+            {durationError && (
+              <p id="poll-duration-help" className="text-destructive text-xs">
+                {durationError}
+              </p>
+            )}
+          </div>
+          <div className="grid gap-1.5 sm:col-span-2">
+            <span id="poll-granularity-label" className="text-sm leading-none font-medium">
+              Time step
+            </span>
+            <div
+              role="radiogroup"
+              aria-labelledby="poll-granularity-label"
+              className={cn(segmentedTrack, "self-start")}
+            >
+              {([15, 30, 60] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  role="radio"
+                  aria-checked={granularity === g}
+                  onClick={() => setGranularity(g)}
+                  className={segmentedItem(granularity === g)}
+                >
+                  {g === 60 ? "1 hr" : `${g} min`}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="grid gap-1.5 sm:col-span-2">
             <Label htmlFor="poll-closes">
@@ -365,7 +383,7 @@ export function PollForm({
               className="sm:max-w-xs"
             />
             <p id="poll-closes-help" className="text-muted-foreground text-xs">
-              In your time zone. Leave empty to keep it open until someone schedules a time.
+              Your time zone.
             </p>
           </div>
         </div>
