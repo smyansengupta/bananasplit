@@ -15,6 +15,7 @@ import { brandPageAccentStyle } from "@/lib/theme/accent";
 import { getPublicOrgTheme } from "@/lib/theme/loader";
 import { effectivePalettes } from "@/lib/theme/resolve";
 import { loadRsvpPage, rsvpPageTarget } from "@/server/rsvp/page";
+import { mainShare } from "@/lib/metadata/share";
 
 /**
  * A printable flyer for an RSVP page (/e/{slug}/flyer): the event in big
@@ -24,9 +25,13 @@ import { loadRsvpPage, rsvpPageTarget } from "@/server/rsvp/page";
  */
 export const dynamic = "force-dynamic";
 
+// The main card, src/app/opengraph-image.png.
 export const metadata: Metadata = {
-  title: "Flyer · Bananasplit",
-  robots: { index: false, follow: false },
+  ...mainShare({
+    title: "Flyer",
+    description: "The event's flyer, ready to print.",
+    noIndex: true,
+  }),
 };
 
 const TABS = 7;

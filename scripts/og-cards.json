@@ -1,34 +1,93 @@
 {
   "home": {
+    "group": "The site",
+    "link": "/",
+    "title": "Bananasplit: the workspace that runs itself",
     "targets": ["src/app/opengraph-image.png", "src/app/twitter-image.png"],
     "alt": "Bananasplit: the workspace that runs itself, beside a text thread where it moves a standup and approves a receipt."
   },
   "pricing": {
+    "group": "The site",
+    "link": "/pricing",
+    "title": "Pricing",
     "targets": ["src/app/pricing/opengraph-image.png"],
     "alt": "Bananasplit pricing: fourteen days of everything, free, then Free, Team and Team Advanced."
   },
   "demo": {
+    "group": "The site",
+    "link": "/demo",
+    "title": "Request a demo",
     "targets": ["src/app/demo/opengraph-image.png"],
-    "alt": "Bananasplit: a fifteen-minute demo, set up for your team."
+    "alt": "Bananasplit: a fifteen-minute demo, with times to pick."
   },
-  "product": {
-    "targets": ["src/app/product/[slug]/opengraph-image.png"],
-    "alt": "Bananasplit: everything your team runs in one place — texting, AI, docs and files, meetings, finance."
+  "product-texting": {
+    "group": "The site",
+    "link": "/product/texting",
+    "title": "Text your workspace",
+    "targets": ["public/og/product-texting.png"],
+    "alt": "Bananasplit: your workspace, one text away, beside a text thread."
   },
-  "join": {
-    "targets": ["src/app/onboarding/join/opengraph-image.png", "public/og/join.png"],
-    "alt": "Join your club on Bananasplit: an eight-box invite code."
+  "product-ai": {
+    "group": "The site",
+    "link": "/product/ai",
+    "title": "Native AI integration",
+    "targets": ["public/og/product-ai.png"],
+    "alt": "Bananasplit: AI that does the busywork, proposing tasks to approve."
+  },
+  "product-docs": {
+    "group": "The site",
+    "link": "/product/docs",
+    "title": "Docs and files",
+    "targets": ["public/og/product-docs.png"],
+    "alt": "Bananasplit: docs that turn into work, with a line turned into a task."
+  },
+  "product-meetings": {
+    "group": "The site",
+    "link": "/product/meetings",
+    "title": "Meetings and events",
+    "targets": ["public/og/product-meetings.png"],
+    "alt": "Bananasplit: meetings without the busywork — the call link, agenda and action items."
+  },
+  "product-finance": {
+    "group": "The site",
+    "link": "/product/finance",
+    "title": "Finance",
+    "targets": ["public/og/product-finance.png"],
+    "alt": "Bananasplit: finance, handled — a budget by category and a filed receipt."
+  },
+  "sign-in": {
+    "group": "Signing in",
+    "link": "/sign-in",
+    "title": "Log in",
+    "targets": ["public/og/sign-in.png"],
+    "alt": "Bananasplit: welcome back, log in to your workspace."
+  },
+  "sign-up": {
+    "group": "Signing in",
+    "link": "/sign-up",
+    "title": "Create your account",
+    "targets": ["src/app/sign-up/opengraph-image.png"],
+    "alt": "Bananasplit: start your workspace, fourteen days free."
   },
   "invite": {
+    "group": "A club's links",
+    "link": "/invite/…",
+    "title": "You've been invited to join Robotics Club on Bananasplit",
     "targets": ["public/og/invite.png"],
     "alt": "You're invited to join a club's workspace on Bananasplit."
   },
+  "join": {
+    "group": "A club's links",
+    "link": "/join/RPKA-YWSF",
+    "title": "You've been invited to join Robotics Club on Bananasplit",
+    "targets": ["src/app/onboarding/join/opengraph-image.png", "public/og/join.png"],
+    "alt": "Join your club on Bananasplit: an eight-box invite code."
+  },
   "poll": {
+    "group": "A club's links",
+    "link": "/poll/…",
+    "title": "Robotics Club is finding a time",
     "targets": ["public/og/poll.png"],
     "alt": "Bananasplit: find a time that works — a week of times with a few marked."
-  },
-  "event": {
-    "targets": ["public/og/event.png"],
-    "alt": "Bananasplit: save your spot at this event, then RSVP."
   }
 }

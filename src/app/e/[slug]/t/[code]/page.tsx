@@ -12,6 +12,7 @@ import { displayName } from "@/lib/rsvp/format";
 import { formatCents } from "@/lib/rsvp/pay";
 import { dateLine, startTime, timeLine } from "@/lib/rsvp/when";
 import { isEventHost, loadTicket } from "@/server/rsvp/ticket";
+import { mainShare } from "@/lib/metadata/share";
 
 /**
  * A guest's ticket: /e/{slug}/t/{code}, the QR on their RSVP card and in
@@ -22,9 +23,13 @@ import { isEventHost, loadTicket } from "@/server/rsvp/ticket";
  */
 export const dynamic = "force-dynamic";
 
+// The main card, src/app/opengraph-image.png. The code is in the path, never the preview.
 export const metadata: Metadata = {
-  title: "Ticket · Bananasplit",
-  robots: { index: false, follow: false },
+  ...mainShare({
+    title: "Ticket",
+    description: "Your ticket. Show it at the door.",
+    noIndex: true,
+  }),
   referrer: "no-referrer",
 };
 

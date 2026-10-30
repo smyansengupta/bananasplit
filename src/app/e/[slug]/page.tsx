@@ -32,7 +32,7 @@ import { PublicThemeRoot } from "@/components/theme/public-theme-root";
 import { Gauge } from "@/components/ui/meters";
 import { avatarTint } from "@/components/user-avatar";
 import { appUrl } from "@/lib/app-url";
-import { clubIcons, FALLBACK_CARDS } from "@/lib/metadata/share";
+import { clubIcons } from "@/lib/metadata/share";
 import { orgLogoVariants } from "@/lib/org-logo";
 import {
   googleCalendarUrl,
@@ -102,32 +102,37 @@ export async function generateMetadata({
   const when = `${dateLine(page.startsAt, page.timeZone)}, ${timeLine(page.startsAt, page.endsAt, page.timeZone, page.allDay)}`;
   const description = `${when}. Hosted by ${page.org.name}.`;
   // The cover first; failing that the host club's logo, so an event with no
-  // picture still previews as that club's; failing both, the drawn event
-  // card (public/og/event.png, not a file beside this page: one there would
-  // outrank the cover).
+  // picture still previews as that club's; failing both, the main card
+  // (src/app/opengraph-image.png), inherited by setting no openGraph at all:
+  // any openGraph here would drop it, and a file beside this page would
+  // outrank the cover.
   const club = await clubTheme(slug);
   const logo = orgLogoVariants(club?.logo);
   const picture = page.cover
     ? { url: page.cover.s960, width: 960, height: 960 }
     : logo
       ? { url: logo.s512, width: 512, height: 512 }
-      : { url: FALLBACK_CARDS.event.url, width: 1200, height: 630 };
-  return {
+      : null;
+  const base: Metadata = {
     title: `${page.title}, hosted by ${page.org.name}`,
     description,
     robots: { index: false, follow: false },
     // The tab wears the host club's picture, like the club's own pages.
     ...(logo ? { icons: clubIcons(club?.logo) } : {}),
+  };
+  if (!picture) return base;
+  return {
+    ...base,
     openGraph: {
       title: page.title,
       description,
       url: appUrl(`/e/${slug}`),
       images: [picture],
     },
-    // Without this, X shows the site-wide card instead. A logo is square, so
-    // it takes the small card; a cover or the drawn card, the big one.
+    // Without this, X shows the site-wide card instead of the cover or logo.
+    // A logo is square, so it takes the small card.
     twitter: {
-      card: !page.cover && logo ? "summary" : "summary_large_image",
+      card: page.cover ? "summary_large_image" : "summary",
       images: [picture.url],
     },
   };

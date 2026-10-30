@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { AlreadySignedIn } from "@/components/auth/already-signed-in";
 import { BrandGoogleButton } from "@/components/auth/google-sign-in-button";
 import { AuthCard } from "@/components/brand/auth-card";
@@ -6,10 +7,17 @@ import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { auth } from "@/lib/auth/config";
 import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 import { onboardingHref } from "@/lib/onboarding/steps";
+import { shareMetadata } from "@/lib/metadata/share";
 
 import { SignUpForm } from "./sign-up-form";
 
-export const metadata = { title: "Create your account · Bananasplit" };
+// The drawn card beside this file, sign-up/opengraph-image.png.
+export const metadata: Metadata = {
+  ...shareMetadata({
+    title: "Create your account",
+    description: "Start your workspace: fourteen days of everything, free, no card.",
+  }),
+};
 
 /**
  * Sign up: a personal account, one for everyone, its Personal space on a

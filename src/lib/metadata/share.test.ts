@@ -4,6 +4,8 @@ import {
   clubIcons,
   clubShare,
   FALLBACK_CARDS,
+  mainShare,
+  signInPreviewFor,
   shareMetadata,
   SITE_ICONS,
   SITE_NAME,
@@ -104,5 +106,42 @@ describe("clubShare", () => {
     const meta = share({ club: null, fallback: FALLBACK_CARDS.poll });
     expect(meta).not.toHaveProperty("icons");
     expect(meta.openGraph).toMatchObject({ images: [{ url: "/og/poll.png" }] });
+  });
+});
+
+describe("signInPreviewFor", () => {
+  it("says Welcome back only for a plain link to the log-in page", () => {
+    expect(signInPreviewFor(null)).toBe("sign-in");
+    expect(signInPreviewFor("")).toBe("sign-in");
+  });
+
+  it("shows the join card for an old ?code= join link", () => {
+    expect(signInPreviewFor("/onboarding/join?code=RPKA-YWSF")).toBe("join");
+  });
+
+  it("shows the main card for every other link behind sign-in", () => {
+    expect(signInPreviewFor("/app/robotics-club/tasks/t_1")).toBe("main");
+    expect(signInPreviewFor("/checkout")).toBe("main");
+    expect(signInPreviewFor("/onboarding/start")).toBe("main");
+    expect(signInPreviewFor("/onboarding/joinery")).toBe("main");
+  });
+});
+
+describe("mainShare", () => {
+  it("sets no openGraph or twitter, so the root's main card is inherited intact", () => {
+    const meta = mainShare({ title: "Privacy Policy", description: "How we handle data." });
+    expect(meta).toEqual({
+      title: "Privacy Policy · Bananasplit",
+      description: "How we handle data.",
+    });
+    expect(meta).not.toHaveProperty("openGraph");
+    expect(meta).not.toHaveProperty("twitter");
+  });
+
+  it("keeps a page out of search when asked", () => {
+    expect(mainShare({ title: "a", description: "b", noIndex: true }).robots).toEqual({
+      index: false,
+      follow: false,
+    });
   });
 });

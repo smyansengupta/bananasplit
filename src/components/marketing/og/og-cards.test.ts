@@ -3,7 +3,12 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { FALLBACK_CARDS } from "@/lib/metadata/share";
+import {
+  FALLBACK_CARDS,
+  PRODUCT_CARDS,
+  SIGN_IN_CARD,
+  type FallbackCard,
+} from "@/lib/metadata/share";
 
 import { OG_CARDS } from "./og-cards";
 
@@ -14,7 +19,7 @@ import { OG_CARDS } from "./og-cards";
  */
 const manifest = JSON.parse(
   readFileSync(path.join(process.cwd(), "scripts/og-cards.json"), "utf8"),
-) as Record<string, { targets: string[]; alt: string }>;
+) as Record<string, { targets: string[]; alt: string; title: string; group: string }>;
 
 describe("link-preview cards", () => {
   it("draws exactly the cards the manifest captures", () => {
@@ -26,7 +31,7 @@ describe("link-preview cards", () => {
       expect(targets.length, card).toBeGreaterThan(0);
       for (const target of targets) {
         expect(target, card).toMatch(
-          /^src\/app\/(.*\/)?(opengraph|twitter)-image\.png$|^public\/og\/[a-z]+\.png$/,
+          /^src\/app\/(.*\/)?(opengraph|twitter)-image\.png$|^public\/og\/[a-z-]+\.png$/,
         );
       }
       // The alt text is read aloud by a screen reader in place of the card.
@@ -34,16 +39,45 @@ describe("link-preview cards", () => {
     }
   });
 
-  it("captures each club page's fallback card where share.ts points, with the same alt", () => {
-    for (const [card, { url, alt }] of Object.entries(FALLBACK_CARDS)) {
+  it("captures every card share.ts names where it points, with the same alt", () => {
+    const named: [string, FallbackCard][] = [
+      ...Object.entries(FALLBACK_CARDS),
+      ...Object.entries(PRODUCT_CARDS).map(([slug, card]): [string, FallbackCard] => [
+        `product-${slug}`,
+        card,
+      ]),
+      ["sign-in", SIGN_IN_CARD],
+    ];
+    for (const [card, { url, alt }] of named) {
       expect(manifest[card]?.targets, card).toContain(`public${url}`);
       expect(manifest[card]?.alt, card).toBe(alt);
     }
   });
 
-  it("puts no drawn card beside a club page, where it would hide the club's logo", () => {
+  it("gives every card in public/og a name in share.ts, so none is drawn and never shown", () => {
+    const urls = new Set([
+      ...Object.values(FALLBACK_CARDS).map((c) => c.url),
+      ...Object.values(PRODUCT_CARDS).map((c) => c.url),
+      SIGN_IN_CARD.url,
+    ]);
+    for (const [card, { targets }] of Object.entries(manifest)) {
+      for (const target of targets.filter((t) => t.startsWith("public/og/"))) {
+        expect(urls.has(target.slice("public".length)), `${card}: ${target}`).toBe(true);
+      }
+    }
+  });
+
+  it("puts no drawn card beside a page that picks its picture in metadata", () => {
     // A file-based opengraph-image outranks generateMetadata's images.
-    for (const route of ["invite/[token]", "join/[code]", "poll/[pollId]", "e/[slug]"]) {
+    const chosenInMetadata = [
+      "invite/[token]",
+      "join/[code]",
+      "poll/[pollId]",
+      "e/[slug]",
+      "product/[slug]",
+      "sign-in",
+    ];
+    for (const route of chosenInMetadata) {
       for (const file of ["opengraph-image.png", "twitter-image.png"]) {
         const where = path.join(process.cwd(), "src/app", route, file);
         expect(existsSync(where), `${route}/${file}`).toBe(false);

@@ -11,7 +11,7 @@ import { PRODUCT_PAGES, productPage } from "@/components/marketing/product-pages
 import { CONTAINER, SectionTitle } from "@/components/marketing/section-title";
 import { SiteLink } from "@/components/marketing/site-link";
 import { getSession } from "@/lib/auth/session";
-import { shareMetadata } from "@/lib/metadata/share";
+import { PRODUCT_CARDS, shareMetadata } from "@/lib/metadata/share";
 import { cn } from "@/lib/utils";
 
 export async function generateMetadata({
@@ -19,10 +19,13 @@ export async function generateMetadata({
 }: PageProps<"/product/[slug]">): Promise<Metadata> {
   const page = productPage((await params).slug);
   if (!page) return {};
-  // One card for every product page (product/[slug]/opengraph-image.png):
-  // a dynamic segment holds only the one file, and what tells these pages
-  // apart in a preview is the title and the line, not the drawing.
-  return shareMetadata({ title: page.label, description: page.subtitle });
+  // Each product page's own card (public/og/product-<slug>.png): a dynamic
+  // segment can hold only one opengraph-image file, so they're named here.
+  return shareMetadata({
+    title: page.label,
+    description: page.subtitle,
+    card: PRODUCT_CARDS[page.slug],
+  });
 }
 
 /**

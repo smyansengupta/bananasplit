@@ -5,43 +5,51 @@ X, WhatsApp or Discord: a title, a line, and a picture. Everything here is
 built so that an unfurl costs nothing to serve — no image is rendered per
 request.
 
-## The two halves
+## Three kinds of page
 
-**Pages whose words never change** get a drawn card committed beside them
-as `opengraph-image.png`. The drawings live in
+**Thirteen pages have a drawn card of their own**: the home page, pricing,
+the demo, the five product pages, log in ("Welcome back"), sign up, and the
+fallbacks for an invite, an invite code and a poll. The drawings live in
 `src/components/marketing/og/og-cards.tsx`, are rendered at `/dev/og/<card>`
-and are captured into place by `scripts/capture-og.mjs`, which reads the
-card → file list in `scripts/og-cards.json` and writes each image's
-`.alt.txt` beside it. They are static files on the CDN.
+(`/dev/og` shows them all as Messages draws a link) and are captured by
+`scripts/capture-og.mjs` into the files `scripts/og-cards.json` lists. Static
+files on the CDN: nothing runs per unfurl.
 
-**Pages about one club** — an invite link, a texted invite code, a poll,
-an event — say the club's name in the title and use the logo the club
-already uploaded as the picture (`clubShare` in `src/lib/metadata/share.ts`).
-Every one of those callers is a layout that has already loaded the club to
-theme the page, and the logo's variants are public and cached immutably, so
-the preview adds no read and no render. A club that has not uploaded a logo
-gets a drawn card from `public/og` (`FALLBACK_CARDS`).
+**Pages about one club** (an invite link, a texted invite code, a poll, an
+event) say the club's name in the title and use the logo the club already
+uploaded as the picture (`clubShare` in `src/lib/metadata/share.ts`). Each
+caller is a layout that has already loaded the club to theme the page, and
+the logo's variants are public and cached immutably, so this adds no read
+and no render. A club with no logo gets its drawn fallback card from
+`public/og`; an event with neither a cover nor a logo gets the main card.
 
-Those club pages must not have an `opengraph-image.png` beside them: a file
-there outranks whatever `generateMetadata` says, so the club's logo would
-never show. `og-cards.test.ts` fails if one appears.
+**Everything else shows the main card** (`src/app/opengraph-image.png`):
+privacy, the password and email pages, connect, checkout, onboarding,
+tickets, flyers, and every link into the app (signed out, those reach the
+log-in page, which then previews as the main card rather than "Welcome
+back"; `signInPreviewFor`). Those pages use `mainShare`, which sets a title
+and line but deliberately no `openGraph`: metadata merges shallowly, so a
+page with an `openGraph` of its own replaces the root's and loses the main
+card's picture.
 
-| Route                                  | Title                                               | Picture                                 |
-| -------------------------------------- | --------------------------------------------------- | --------------------------------------- |
-| `/`                                    | The workspace that runs itself                      | the home card                           |
-| `/pricing`, `/demo`, `/product/[slug]` | the page's own                                      | that page's card                        |
-| `/join/[code]` (texted invite code)    | You've been invited to join **club** on Bananasplit | the club's logo                         |
-| `/onboarding/join`                     | Join your club                                      | the join card                           |
-| `/invite/[token]`                      | You've been invited to join **club** on Bananasplit | the club's logo                         |
-| `/poll/[pollId]`                       | **club** is finding a time                          | the club's logo                         |
-| `/e/[slug]`                            | the event, hosted by **club**                       | the event's cover, else the club's logo |
+| Link                                   | Title                                               | Picture                                    |
+| -------------------------------------- | --------------------------------------------------- | ------------------------------------------ |
+| `/`                                    | Bananasplit: the workspace that runs itself         | the main card                              |
+| `/pricing`, `/demo`                    | the page's own                                      | that page's card                           |
+| `/product/<slug>`                      | the product's name                                  | that product's card (`public/og`)          |
+| `/sign-in`, `/sign-up`                 | Log in, Create your account                         | Welcome back, Start your workspace         |
+| `/invite/[token]`, `/join/[code]`      | You've been invited to join **club** on Bananasplit | the club's logo, else the invite/join card |
+| `/poll/[pollId]`                       | **club** is finding a time                          | the club's logo, else the poll card        |
+| `/e/[slug]`                            | the event, hosted by **club**                       | the cover, else the club's logo, else main |
+| anything else, and every `/app/…` link | the page's own, or the site's                       | the main card                              |
 
-`src/app/layout.tsx` holds the floor under all of it: `metadataBase` (so
-relative image URLs resolve to the site's own domain rather than the
-deployment host) and the site name. It deliberately does **not** name a
-title or line inside `openGraph`: metadata is merged shallowly, and Next
-fills `og:title` and `og:description` per route from that route's own
-title, so naming them there would make every page preview as the home page.
+Pages that pick their picture in metadata (club pages, product pages,
+log in) must not have an `opengraph-image.png` beside them: a file there
+outranks `generateMetadata`. `og-cards.test.ts` fails if one appears.
+
+`src/app/layout.tsx` holds the floor: `metadataBase` (so image URLs resolve
+to the site's own domain rather than the deployment host), the site name,
+and the banana icons.
 
 ## Favicons
 
@@ -60,8 +68,9 @@ pnpm dev                       # or any port, with CAPTURE_BASE_URL
 node scripts/capture-og.mjs    # all cards, or name the ones you changed
 ```
 
-`og-cards.test.ts` fails if a drawing has no row in the manifest or a row
-points at a drawing that is gone.
+`og-cards.test.ts` fails if a drawing has no row in the manifest, a row
+points at a drawing that is gone, or a card in `public/og` isn't named in
+`share.ts`.
 
 ## The texted invite code
 

@@ -9,10 +9,11 @@ import { orgLogoVariants } from "@/lib/org-logo";
  *
  * Two kinds of page, and neither renders an image per request:
  *
- * - A page whose words never change (the marketing site, the join form)
- *   gets a drawn card committed beside it as opengraph-image.png
- *   (src/components/marketing/og/og-cards.tsx). Static file, served from
- *   the CDN, nothing to run.
+ * - A handful of pages worth their own picture (the home page, pricing, the
+ *   demo, the product pages, signing in and up, the join form) get a drawn
+ *   card (src/components/marketing/og/og-cards.tsx), committed as a static
+ *   file and served from the CDN, nothing to run. Every other page, and
+ *   every link into the app, shows the main card, src/app/opengraph-image.png.
  * - A page about one club (an invite, a texted invite code, a poll, an
  *   event) says the club's name in its title and uses the logo the club
  *   already uploaded as the picture: clubShare() below. The logo's variants
@@ -65,11 +66,52 @@ export const FALLBACK_CARDS = {
     url: "/og/poll.png",
     alt: "Bananasplit: find a time that works — a week of times with a few marked.",
   },
-  event: {
-    url: "/og/event.png",
-    alt: "Bananasplit: save your spot at this event, then RSVP.",
+} satisfies Record<string, FallbackCard>;
+
+/** The five product pages' cards: one dynamic segment, so they are named here, not filed beside it. */
+export const PRODUCT_CARDS = {
+  texting: {
+    url: "/og/product-texting.png",
+    alt: "Bananasplit: your workspace, one text away, beside a text thread.",
+  },
+  ai: {
+    url: "/og/product-ai.png",
+    alt: "Bananasplit: AI that does the busywork, proposing tasks to approve.",
+  },
+  docs: {
+    url: "/og/product-docs.png",
+    alt: "Bananasplit: docs that turn into work, with a line turned into a task.",
+  },
+  meetings: {
+    url: "/og/product-meetings.png",
+    alt: "Bananasplit: meetings without the busywork — the call link, agenda and action items.",
+  },
+  finance: {
+    url: "/og/product-finance.png",
+    alt: "Bananasplit: finance, handled — a budget by category and a filed receipt.",
   },
 } satisfies Record<string, FallbackCard>;
+
+/** The log-in page's own card ("Welcome back"), for a plain link to it. */
+export const SIGN_IN_CARD: FallbackCard = {
+  url: "/og/sign-in.png",
+  alt: "Bananasplit: welcome back, log in to your workspace.",
+};
+
+/**
+ * What the log-in page previews as. A link to anything behind sign-in,
+ * opened signed out (as whatever unfurls a texted link is), lands there
+ * with its path in ?callbackUrl=. An old ?code= join link previews as the
+ * join card; anything else as the main card, as though it were the site
+ * itself; only a plain link to the log-in page says "Welcome back". From
+ * the path alone: no lookup, nothing about the club.
+ */
+export function signInPreviewFor(
+  callbackUrl: string | null | undefined,
+): "sign-in" | "join" | "main" {
+  if (!callbackUrl) return "sign-in";
+  return callbackUrl.split(/[?#]/)[0] === "/onboarding/join" ? "join" : "main";
+}
 
 /** A drawn card as an og image: always 1200x630. */
 function cardImage(card: FallbackCard) {
@@ -126,6 +168,29 @@ export function shareMetadata({
       description,
       ...(card ? { images: [card.url] } : {}),
     },
+  };
+}
+
+/**
+ * A page that shows the main card. Deliberately no openGraph or twitter:
+ * the root layout's carry the main card (src/app/opengraph-image.png, with
+ * Next's versioned URL), and a page that sets either of its own replaces
+ * them wholesale and loses the picture. Next fills og:title and
+ * og:description from this title and description.
+ */
+export function mainShare({
+  title,
+  description,
+  noIndex = false,
+}: {
+  title: string;
+  description: string;
+  noIndex?: boolean;
+}): Metadata {
+  return {
+    title: `${title} · ${SITE_NAME}`,
+    description,
+    ...(noIndex ? { robots: { index: false, follow: false } } : {}),
   };
 }
 

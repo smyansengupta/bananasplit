@@ -1,1 +1,1 @@
-Bananasplit: a fifteen-minute demo, set up for your team.
+Bananasplit: a fifteen-minute demo, with times to pick.
