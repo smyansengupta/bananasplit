@@ -1,9 +1,9 @@
 # AI connectors (MCP): implementation plan
 
-Status: Phase 1 (foundations) built 2026-10-25 and Phase 2 (read tools)
-2026-10-26, behind `CONNECTORS_ENABLED` (see "Phase 1: as built" and
-"Phase 2: as built"). Phase 0's WorkOS checks have not run yet, so nothing
-has been tried against WorkOS itself. Decided 2026-10-21: Bananasplit
+Status: Phase 1 (foundations) built 2026-10-25, and Phase 2 (read tools)
+and Phase 3 (write tools) 2026-10-26, behind `CONNECTORS_ENABLED` (see
+each phase's "as built"). Phase 0's WorkOS checks have not run yet, so
+nothing has been tried against WorkOS itself. Decided 2026-10-21: Bananasplit
 serves a remote MCP server, so members can use their Personal space and clubs
 from Claude, ChatGPT, Cursor, VS Code and other MCP clients. WorkOS AuthKit
 Standalone Connect issues the OAuth tokens. Auth.js stays the only way to
@@ -680,6 +680,190 @@ Rules for every write tool:
 
 Editing existing notes waits, because live collaboration owns their Yjs
 state.
+
+### Phase 3: as built (2026-10-26)
+
+Built as the table above says, with these decisions on the way:
+
+- **One way in for writes.** `writeInSpace` (`tools/write.ts`) checks, in
+  order:
+  1. A READ grant is refused (`ReadOnlyGrantError`).
+  2. `connector.write` allows 120 writes an hour per grant, across every
+     space. It is counted before the space opens, so a refused write
+     counts too, as with every limit, and it fails open like them
+     (`WriteLimitError`).
+  3. `withConnectorOrgTx` covers the grant's scope, membership, the club
+     switch and the tool's plan feature. It first ran with `whenPaused:
+     "refuse"`, but the homepage redesign (#72) removed pausing: a trial
+     now ends on Team Free. So no space is refused as paused any more.
+  4. A section the club hid is refused to members, as for reads
+     (`SectionHiddenError`). Owners and admins still write there.
+  5. The write runs, and then the `connector.<tool>` audit row, in the same
+     transaction. The diff is `{ client, clientId }`, where `client` is the
+     grant's app name and stays null until the WorkOS lookup has filled it
+     in.
+
+  The services' own refusals come back in their own words and roll the
+  write back (`WriteRefusedError`). They arrive as `{ error }`,
+  `TaskError` or `DatabaseInputError`: a closed poll, a task rule, a value
+  its column won't take.
+- **Write tools stay off a READ grant's `tools/list`.** The choice:
+  - A model can't try what it can't see, and both directories review the
+    tool list.
+  - The cost is that a model on a READ grant can't tell the member why it
+    can't make a change. So a READ grant's `instructions` add one factual
+    sentence: the connection reads only, and making changes needs the app
+    connected again with Read and make changes. `list_spaces` already
+    returns `access`.
+  - The wrapper still refuses a READ grant, as a second check.
+- **Annotations.** All four hints are explicit on every tool.
+  - Adds (`destructiveHint: false`, `idempotentHint: false`):
+    `create_task`, `add_task_comment`, `add_database_record` and
+    `create_note`.
+  - Overwrites (`destructiveHint: true`, `idempotentHint: true`):
+    `update_task`, `update_database_record`, `rsvp_to_event` and
+    `vote_in_poll`.
+  - `post_weekly_update` is `destructiveHint: false` as planned, with
+    `idempotentHint: true`. Posting a week again replaces that week's post,
+    as the app's Post button does. It is only ever the member's own post,
+    but a reviewer may count that as overwriting.
+- **Inputs.**
+  - Item ids are Phase 2's opaque ids (task, event, database, poll and
+    person), decoded with `refOf`. Space ids are the ones `list_spaces`
+    returns.
+  - An owner, or a member column's value, is "me" or a person id from the
+    same space (`memberOf`).
+  - Two ids stay plain, as Phase 2's folder ids do: a club-made database's
+    row ids (`query_database` returns them plain) and note folder ids
+    (`list_notes`).
+- **create_task and update_task.**
+  - They run `createTask` and `updateTask` with `loadTaskEnv(ctx)`.
+    `setTaskStatus` is `updateTask({ status, blockedReason })`, so a status
+    change goes through `updateTask` with the other fields, as one change.
+  - The fields are the title, the description (Markdown), owner, due day,
+    priority, status and `blockedReason`.
+  - There is no `expectedVersion`, so the last write wins, as with the
+    board's quick toggles.
+  - Assigning someone above the member in the published org chart is
+    refused. The message names them and asks for `confirmAboveLevel: true`
+    once the member confirms. With it, the task is saved flagged and they
+    get `TASK_FLAGGED`, as in the app.
+  - `update_task` looks the task up first, so a private task the member
+    isn't on is not found rather than a service error.
+  - Not exposed: collaborators, tags, subtasks and parents, visibility,
+    type, start dates and deleting.
+- **add_task_comment** runs `addComment`: the owner and collaborators are
+  notified. The tools hand out no raw user ids, so a comment can't
+  @-mention anyone.
+- **rsvp_to_event** runs `setOwnRsvp`.
+  - An event that is deleted, or in another club, is not found.
+  - An event the member isn't invited to is refused, and nobody's answer
+    changes.
+  - The answers are going, maybe and not going. There is no way back to
+    "no answer", as in the app.
+- **add_database_record and update_database_record** take club-made
+  databases only. A built-in one is refused with a pointer to its page.
+  - Cells are keyed by `query_database`'s column keys: field names, with
+    the second of a name as "Name (2)".
+  - Values go through the grid's `parseCell`, so choices are their labels,
+    and null clears a cell.
+  - `update_database_record` saves one `updateCell` per cell, all in one
+    transaction, so one refused cell rolls back every cell.
+  - Rows read back as the grid shows them.
+- **post_weekly_update** runs `postWeeklyUpdate`.
+  - Any day in a week names the club's week (`updateWeekStartOfKey`).
+  - A week that hasn't begun is refused.
+  - Personal is refused, since it has no teamwork.
+  - Private tasks stay out, as `summaryLines` leaves them.
+- **vote_in_poll** is for question polls only.
+  - Choices are labels, matched as the app compares options (`optionKey`).
+    An empty list takes the vote back.
+  - A find-a-time poll gets a pointer to its page.
+  - The result is the poll as its page shows this member
+    (`buildQuestionPollView`): counts stay hidden until it closes when the
+    poll says so.
+- **create_note.** Markdown goes through `markdownToNote`, then
+  `checkNoteContent`, then `createNote`.
+  - The note is always PRIVATE: it has no parent to inherit from, and who
+    sees a note isn't something a connected app changes.
+  - A folder is optional.
+  - A leading `# Title` is the title when none is given, and is dropped when
+    it repeats the title.
+  - With live collaboration on, the body is stored as Yjs state too, as
+    `importNote` stores it.
+  - The Markdown is capped at 100,000 characters.
+- **The Markdown converter** (`src/lib/notes/import/markdown.ts`).
+  - It uses `mdast-util-from-markdown` with the GFM extensions. They are
+    new direct dependencies, at the versions already in the lockfile
+    through `react-markdown` and `remark-gfm`.
+  - It reads paragraphs, headings, quotes, rules, code blocks, tables
+    (with the first row as the header), bullets, numbers and checklists,
+    bold, italic, strikethrough, `<u>`, inline code, links and line breaks.
+  - A blank line doesn't end a Markdown list, so a list's checklist items
+    become a checklist of their own. That is how the export's bullets
+    followed by a checklist round-trip.
+  - Links keep only http(s), mailto, tel and app paths (`//host` is
+    refused). An image becomes a link to it, never a picture fetched from
+    elsewhere. Raw HTML stays as text.
+  - The round-trip test checks both directions:
+    `noteToMarkdown` then `markdownToNote` gives back the same document,
+    and writing that again gives the same Markdown.
+  - What doesn't round-trip: callouts, toggles, columns, mentions, dates,
+    page links, task chips and file cards. The export's stand-ins for them
+    come back as plain blocks. A mark that covers spaces at its edges also
+    changes, since the export moves those spaces outside the marker.
+- **Refactors.**
+  - `setOwnRsvp` lives in `src/server/events/rsvp.ts`, and the calendar
+    action calls it.
+  - `createNote`, `parentFor` and `assertEventBelongsToOrg` live in
+    `src/server/notes/create.ts`, and New note is a thin shell over them.
+    `createNote` also takes a folder and a checked body.
+  - Phase 2's files export `findTaskSummary`, `findEventSummary`,
+    `memberNames` and their section constants.
+- **The audit log** (Admin panel › Audit log) names each connector write in
+  words and filters them under AI apps, with the app's name once it's
+  known. The club switch's `privacy.connectors_changed` gets a sentence
+  too.
+
+**Done when**, as checked on 2026-10-26:
+- The nine tools are registered for WRITE grants only, and both refactors
+  are in.
+- Every write tool has DB tests, in `src/server/connectors/tools/`:
+  - `write.db.test.ts` runs all nine through each refusal: a READ grant, a
+    club the member isn't in, a grant scoped elsewhere, the club switch
+    and a hidden section. (Its paused-club case went with pausing, in
+    #72.) It then checks that nothing was left
+    behind and that no audit row was written.
+  - It also covers an owner writing in a hidden section, the audit row's
+    shape, and the real limiter refusing write 121 while another grant
+    still writes.
+  - Each `*-writes.db.test.ts` covers what its tools write, notify and
+    refuse, and runs them through the MCP server for their output schemas.
+  - They ran for real against a fresh, migrated database
+    (`bananasplit_connectors_p3`): 47 tests in seven files, with real
+    query timings.
+- The Markdown round trip is unit-tested
+  (`src/lib/notes/import/markdown.test.ts`).
+- The route test lists the 15 read tools for a READ grant and the nine
+  write tools after them for a WRITE grant, with their hints. It also shows
+  that a READ grant can't call a write tool, that a READ grant's
+  instructions say it reads only, and that the write limit comes back as an
+  `isError` result.
+- Typecheck, ESLint on the changed files, `pnpm test` (344 files, 3431
+  tests) and `pnpm test:rls` (134 + 17 + 141, with the usual environmental
+  skip T27b2) pass. Six DB files outside the connectors (integrations,
+  conference, the calendar actions, platform) fail without
+  `SECRETS_KEK_V1`, `SECRETS_KEK_CURRENT` and `SECRETS_FINGERPRINT_KEY`.
+  They pass with throwaway values passed on the command line.
+- *Not yet:* any client against WorkOS staging, so no real client has
+  called a write tool. That waits on Phase 0.
+
+**Left for later.**
+- Notifications name the member ("Alice assigned you …"), not the app that
+  made the change. A "from Claude" could follow once `clientName` is
+  reliable.
+- More write tools: subtasks, tags, collaborators, adding poll options,
+  find-a-time answers, editing notes and built-in databases.
 
 ## Not exposed, and why
 

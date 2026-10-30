@@ -42,8 +42,8 @@ minutes per IP and 10 per 15 minutes per email; sign-up 5 per hour per IP and
 3 per hour per email; invitations 20 per hour per org; poll responses 30 per
 minute per IP; receipt uploads 20 per hour per user; the ICS feed 60 per hour
 per link; org creation 3 per day per user; new confirmation links 3 per hour
-per user; AI connector requests 600 per hour per connected app, and
-connecting an app (`/connect`'s Continue) 20 per hour per user
+per user; AI connector requests 600 per hour per connected app, of which
+changes (the write tools) 120 per hour, and connecting an app (`/connect`'s Continue) 20 per hour per user
 (docs/features/ai-connectors.md). A daily maintenance job prunes old rate-limit buckets and finished
 jobs, and deletes password sign-ups never verified within 72 hours (no
 Google account, no membership).

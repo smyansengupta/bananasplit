@@ -21,6 +21,12 @@ import {
 import { revokeNoteSessions } from "@/server/collab/revoke";
 import { mintNoteCollabSession, type NoteCollabSession } from "@/server/collab/session";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
+import {
+  assertEventBelongsToOrg,
+  createNote as createNoteIn,
+  EMPTY_NOTE_DOC,
+  parentFor,
+} from "@/server/notes/create";
 import { listNoteShares, type NoteShareRow } from "@/server/notes/sharing";
 import { loadNote } from "@/server/notes/load";
 import { snapshotBeforeSave } from "@/server/notes/versions";
@@ -51,8 +57,6 @@ const NOTE_VISIBILITY_VALUES = Object.values(NoteVisibility) as [
   NoteVisibility,
   ...NoteVisibility[],
 ];
-
-const EMPTY_DOC = { type: "doc", content: [{ type: "paragraph" }] };
 
 const titleSchema = z.string().trim().min(1, "Title is required").max(300);
 
@@ -118,15 +122,6 @@ const NOT_FOUND = "Note not found.";
 const NO_SHARING =
   "Only the note's author (or an admin, on an organization note) can change who has access.";
 
-async function assertEventBelongsToOrg(ctx: OrgContext, eventId: string | null) {
-  if (!eventId) return null;
-  const event = await ctx.db.event.findFirst({
-    where: { id: eventId, organizationId: ctx.organizationId, deletedAt: null },
-    select: { id: true },
-  });
-  return event ? null : "That event doesn't exist in this organization.";
-}
-
 /**
  * A note whose access changed (turned PRIVATE, deleted, shared differently):
  * close its live sessions after commit, so everyone reconnects with a fresh
@@ -136,50 +131,17 @@ function revokeAfterCommit(ctx: OrgContext, noteId: string) {
   ctx.afterCommit(() => revokeNoteSessions(ctx.organizationId, noteId));
 }
 
-/**
- * The page a new note goes inside, or an error: one the caller can see.
- * A subpage starts with its parent's general access (a page inside a club
- * page is a club page); the people a private page is shared with are not
- * copied.
- */
-async function parentFor(ctx: OrgContext, parentId: string | null | undefined) {
-  if (!parentId) return { parent: null };
-  if (!noteIdSchema.safeParse(parentId).success) return { error: NOT_FOUND };
-  const parent = await loadNote(ctx, parentId);
-  if (!parent) return { error: "That page no longer exists." };
-  return { parent };
-}
-
+/** A new empty note (src/server/notes/create.ts says where it starts and who sees it). */
 export const createNote = filesAction(
   async (
     ctx,
     prefill?: { title?: string; eventId?: string; parentId?: string | null },
-  ): Promise<ActionResult> => {
-    if (prefill?.eventId) {
-      const eventError = await assertEventBelongsToOrg(ctx, prefill.eventId);
-      if (eventError) return { error: eventError };
-    }
-    const { parent, error } = await parentFor(ctx, prefill?.parentId);
-    if (error) return { error };
-
-    const note = await ctx.db.note.create({
-      data: {
-        organizationId: ctx.organizationId,
-        title: prefill?.title?.trim() || "Untitled note",
-        contentJson: EMPTY_DOC,
-        contentText: "",
-        visibility: parent?.visibility ?? NoteVisibility.PRIVATE,
-        memberCanEdit: parent?.visibility === NoteVisibility.ORGANIZATION && parent.memberCanEdit,
-        authorId: ctx.userId,
-        updatedById: ctx.userId,
-        eventId: prefill?.eventId ?? null,
-        parentId: parent?.id ?? null,
-        layout: parent?.layout ?? NoteLayout.PAGE,
-      },
-      select: { id: true },
-    });
-    return { noteId: note.id };
-  },
+  ): Promise<ActionResult> =>
+    createNoteIn(ctx, {
+      title: prefill?.title,
+      eventId: prefill?.eventId,
+      parentId: prefill?.parentId,
+    }),
 );
 
 const importSchema = z.object({
@@ -206,7 +168,7 @@ export const importNote = filesAction(async (ctx, input: unknown): Promise<Actio
   let state: Uint8Array;
   try {
     contentJson = JSON.parse(parsed.data.contentJson);
-    state = applyContentToState(seedNoteState(EMPTY_DOC), contentJson);
+    state = applyContentToState(seedNoteState(EMPTY_NOTE_DOC), contentJson);
   } catch (error) {
     if (error instanceof SyntaxError || error instanceof InvalidNoteContentError) {
       return { error: "That document couldn't be turned into a note." };

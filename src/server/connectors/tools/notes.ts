@@ -36,7 +36,7 @@ import { sliceText, TEXT_LIMIT, zonedIso } from "./text";
  * TEXT_LIMIT characters at a time.
  */
 
-const NOTES = { feature: "files", section: "notes" } as const;
+export const NOTES = { feature: "files", section: "notes" } as const;
 
 const folderRef = z.object({ id: z.string(), name: z.string() }).nullable();
 
