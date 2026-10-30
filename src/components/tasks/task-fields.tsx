@@ -336,15 +336,30 @@ export function OwnerField({
   onChange,
   disabled,
   allowNone = true,
+  trigger,
+  align = "end",
+  open: openProp,
+  onOpenChange,
 }: {
   id?: string;
   value: string | null;
   onChange: (id: string | null) => void;
   disabled?: boolean;
   allowNone?: boolean;
+  /** Something else to open the menu with (a card's avatar) instead of the well. */
+  trigger?: ReactNode;
+  align?: "start" | "end";
+  /** Controlled, for a keyboard shortcut that opens it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const { members, memberById } = useTasks();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = (next: boolean) => {
+    setOwnOpen(next);
+    onOpenChange?.(next);
+  };
   const owner = value ? memberById.get(value) : undefined;
   const search = useMemberSearch(members, {
     always: true,
@@ -358,24 +373,26 @@ export function OwnerField({
   return (
     <Popover open={open} onOpenChange={(o) => (setOpen(o), o || search.reset())}>
       <PopoverTrigger asChild>
-        <button
-          id={id}
-          type="button"
-          disabled={disabled}
-          aria-label="Owner"
-          className={wellClass(open, !owner)}
-        >
-          {owner && (
-            <span className="flex shrink-0 pe-1">
-              <UserAvatar user={owner} size="xs" className="ring-card -me-1.5 ring-2" />
-            </span>
-          )}
-          <span className="truncate">{owner ? firstName(owner) : "No owner"}</span>
-          <UpDown />
-        </button>
+        {trigger ?? (
+          <button
+            id={id}
+            type="button"
+            disabled={disabled}
+            aria-label="Owner"
+            className={wellClass(open, !owner)}
+          >
+            {owner && (
+              <span className="flex shrink-0 pe-1">
+                <UserAvatar user={owner} size="xs" className="ring-card -me-1.5 ring-2" />
+              </span>
+            )}
+            <span className="truncate">{owner ? firstName(owner) : "No owner"}</span>
+            <UpDown />
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent
-        align="end"
+        align={align}
         className={MENU}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
@@ -413,7 +430,7 @@ export function OwnerField({
           className="flex max-h-72 flex-col gap-px overflow-y-auto"
         >
           {search.filtered.length === 0 && (
-            <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
+            <p className="text-muted-foreground px-2 py-2 text-[13px]">No match</p>
           )}
           {search.filtered.map((m, i) => {
             const on = m.id === value;
@@ -440,7 +457,7 @@ export function OwnerField({
           })}
         </div>
         <p className="text-muted-foreground mt-1 border-t px-2 pt-1.5 text-[11px]">
-          Enter picks · Backspace clears · Esc closes
+          Enter picks, Backspace clears, Esc closes
         </p>
       </PopoverContent>
     </Popover>
@@ -572,7 +589,7 @@ export function PeopleField({
           })}
         </div>
         <p className="text-muted-foreground mt-1 border-t px-2 pt-1.5 text-[11px]">
-          Enter adds · Backspace removes · Esc closes
+          Enter adds, Backspace removes, Esc closes
         </p>
       </PopoverContent>
     </Popover>
@@ -768,6 +785,9 @@ export function DueField({
   disabled,
   label = "Due date",
   emptyLabel = "No due date",
+  trigger,
+  open: openProp,
+  onOpenChange,
 }: {
   id?: string;
   value: string;
@@ -776,22 +796,34 @@ export function DueField({
   /** The same picker for another date (the start date). */
   label?: string;
   emptyLabel?: string;
+  /** Something else to open the menu with (a card's date) instead of the well. */
+  trigger?: ReactNode;
+  /** Controlled, for a keyboard shortcut that opens it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = (next: boolean) => {
+    setOwnOpen(next);
+    onOpenChange?.(next);
+  };
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          id={id}
-          type="button"
-          disabled={disabled}
-          aria-label={label}
-          className={wellClass(open, !value)}
-        >
-          <Calendar className="text-muted-foreground size-[15px] shrink-0" aria-hidden="true" />
-          <span className="truncate">{value ? shortDue(value) : emptyLabel}</span>
-          <UpDown />
-        </button>
+        {trigger ?? (
+          <button
+            id={id}
+            type="button"
+            disabled={disabled}
+            aria-label={label}
+            className={wellClass(open, !value)}
+          >
+            <Calendar className="text-muted-foreground size-[15px] shrink-0" aria-hidden="true" />
+            <span className="truncate">{value ? shortDue(value) : emptyLabel}</span>
+            <UpDown />
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start" className={MENU}>
         <DueMenu

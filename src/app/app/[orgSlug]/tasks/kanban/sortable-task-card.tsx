@@ -5,6 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useOptimistic, useTransition } from "react";
 
 import { useCompleteTask } from "@/components/tasks/quick-controls";
+import { QuickDue, QuickOwner } from "@/components/tasks/quick-edit";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskCheck } from "@/components/tasks/task-check";
 import { TaskItemMenu } from "@/components/tasks/task-item-menu";
@@ -15,8 +16,10 @@ import { canEditTask } from "@/lib/tasks/access";
 
 /**
  * A card on the board. While it is being dragged its place in the column
- * shows as a hatched slot (the lifted copy rides in the DragOverlay). Done
- * cards carry the filled circle, which reopens them.
+ * shows as a hatched slot (the lifted copy rides in the DragOverlay). Every
+ * card carries the circle: one click finishes it (with Undo), and on a done
+ * card it reopens it. Its date and its owner's face change in place.
+ * An epic has no circle: it's done when its stories are.
  */
 export function SortableTaskCard({
   task,
@@ -68,20 +71,23 @@ export function SortableTaskCard({
             todayKey={todayKey}
             showEpic={showEpic}
             check={
-              done ? (
+              task.type === "EPIC" ? undefined : (
                 <TaskCheck
-                  done
+                  done={done}
                   disabled={!editable}
-                  label={`Reopen ${task.title}`}
+                  label={done ? `Reopen ${task.title}` : `Complete ${task.title}`}
                   onToggle={() =>
                     startTransition(async () => {
-                      setOptimistic(TaskStatus.NOT_STARTED);
-                      await complete(task, TaskStatus.NOT_STARTED);
+                      const next = done ? TaskStatus.NOT_STARTED : TaskStatus.COMPLETED;
+                      setOptimistic(next);
+                      await complete(task, next);
                     })
                   }
                 />
-              ) : undefined
+              )
             }
+            dueSlot={<QuickDue task={task} done={done} disabled={!editable} />}
+            ownerSlot={<QuickOwner task={task} disabled={!editable} />}
           />
           {/* The menu keeps its own clicks and drags (ItemMenu stops them). */}
           <TaskItemMenu
