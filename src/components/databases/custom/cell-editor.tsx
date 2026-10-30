@@ -35,6 +35,8 @@ export interface CellProps {
   onAddChoice?: (label: string) => Promise<Choice | null>;
   /** Labels the input for screen readers: "Shirt size for Maya Patel". */
   label: string;
+  /** Enter was pressed in a text cell (the grid moves down a row). */
+  onEnter?: () => void;
 }
 
 const SAVE_AFTER_MS = 600;
@@ -120,7 +122,7 @@ export function CellEditor(props: CellProps) {
 }
 
 /** Text, numbers, money, email, phone and links: type, and it saves when you pause. */
-function TextCell({ field, value, members, canEdit, onSave, label }: CellProps) {
+function TextCell({ field, value, members, canEdit, onSave, label, onEnter }: CellProps) {
   const shown = formatValue(field, value, members);
   const raw = value === null || value === undefined ? "" : String(value);
   const [draft, setDraft] = useState(raw);
@@ -193,6 +195,8 @@ function TextCell({ field, value, members, canEdit, onSave, label }: CellProps) 
           if (e.key === "Enter") {
             e.preventDefault();
             (e.target as HTMLInputElement).blur();
+            // In the grid: down a row, or a new row from the last (a spreadsheet's Enter).
+            onEnter?.();
           } else if (e.key === "Escape") {
             setDraft(lastSent.current);
             setInvalid(null);
