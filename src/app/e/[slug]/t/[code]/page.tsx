@@ -41,7 +41,7 @@ export default async function TicketPage({ params }: PageProps<"/e/[slug]/t/[cod
   const session = await getSession();
   const host = session ? await isEventHost(session.user.id, ticket.organizationId) : false;
   const e = ticket.event;
-  const when = `${dateLine(e.startsAt, e.timeZone)} · ${timeLine(e.startsAt, e.endsAt, e.timeZone, e.allDay)}`;
+  const when = `${dateLine(e.startsAt, e.timeZone)}, ${timeLine(e.startsAt, e.endsAt, e.timeZone, e.allDay)}`;
 
   return (
     <BrandRoot className="bg-background">

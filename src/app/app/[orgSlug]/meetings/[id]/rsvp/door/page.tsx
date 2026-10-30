@@ -5,7 +5,7 @@ import { can } from "@/lib/auth/permissions";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { loadDoorList } from "@/server/rsvp/manage";
 
-export const metadata = { title: "Door mode · Bananasplit" };
+export const metadata = { title: "Door mode, Bananasplit" };
 
 /** Door mode for a meeting: check guests in by name or by scanning tickets. */
 export default async function DoorPage({

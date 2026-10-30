@@ -355,7 +355,7 @@ export function EventCalendar({
           taskCount > 0 && (taskCount === 1 ? "1 task due" : `${taskCount} tasks due`),
         ]
           .filter(Boolean)
-          .join(" · ");
+          .join(", ");
 
   const filtered = range.kinds.length > 0 || Boolean(range.visibility);
   const emptyState = (

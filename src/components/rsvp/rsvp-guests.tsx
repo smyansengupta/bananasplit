@@ -362,7 +362,7 @@ export function RsvpGuests({
                               g.bringing.length > 0 && `Bringing ${g.bringing.join(", ")}`,
                             ]
                               .filter(Boolean)
-                              .join(" · ")}
+                              .join(", ")}
                           </span>
                         )}
                       </span>

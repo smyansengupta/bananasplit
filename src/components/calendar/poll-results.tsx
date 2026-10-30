@@ -380,7 +380,7 @@ export function RespondentList({
             <li key={r.key}>
               <Badge variant="outline" className="h-6 max-w-48 gap-1 font-normal">
                 <span className="truncate">{r.name}</span>
-                {r.isGuest && <span className="text-muted-foreground">· guest</span>}
+                {r.isGuest && <span className="text-muted-foreground">, guest</span>}
               </Badge>
             </li>
           ))}
