@@ -905,3 +905,33 @@ describe("EventFormDialog: reminders", () => {
     expect(mocks.updateEvent.mock.calls[0]![2]).toMatchObject({ reminderMinutes: [] });
   });
 });
+
+describe("EventFormDialog: a meeting type's defaults", () => {
+  it("starts a new meeting where the last one of that type was", async () => {
+    // Radix Select scrolls the chosen option into view; jsdom has no layout.
+    Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.hasPointerCapture = vi.fn(() => false);
+    open({
+      meetingTypes: [
+        {
+          name: "Build night",
+          color: "#1f3f87",
+          last: {
+            online: false,
+            location: "Curry 340",
+            conferenceProvider: "NONE",
+            minutes: 120,
+            attendeeIds: [],
+          },
+        },
+      ],
+    } as never);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Meeting type" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Build night" }));
+
+    expect((screen.getByLabelText(/^Location|^Room|^Where/) as HTMLInputElement).value).toBe(
+      "Curry 340",
+    );
+  });
+});

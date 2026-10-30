@@ -29,7 +29,7 @@ vi.mock("@/server/db/context", () => ({
   withOrgTx: async (_orgId: string, fn: (ctx: unknown) => unknown) =>
     fn({
       db: {
-        event: { findMany: mocks.findMany },
+        event: { findMany: mocks.findMany, findFirst: async () => null },
         eventRegistration: { groupBy: mocks.groupBy },
         eventAttendee: { findMany: mocks.attendees },
         note: { findMany: mocks.notes },

@@ -35,6 +35,7 @@ import {
   type ConferenceCallbackError,
 } from "@/server/conference/connect";
 
+import { getMeetingTypeDefaults } from "../calendar/queries";
 import { MeetingsTypeFilter } from "./meetings-type-filter";
 
 /** Outcomes the connect routes add that are not callback errors. */
@@ -92,7 +93,7 @@ export default async function MeetingsPage({
   // ?new= opens New meeting on arrival (and only for someone who can make one).
   const askedNew = canManage ? newMeetingAsk(first(sp[NEW_EVENT_PARAM])) : null;
   // A new meeting starts with the organization's reminders (Settings > General).
-  const meetingTypes = parseMeetingTypes(ctx.settings?.eventTypes);
+  const typeList = parseMeetingTypes(ctx.settings?.eventTypes);
   const defaultReminderMinutes = ctx.settings?.meetingReminderMinutes ?? [
     ...DEFAULT_REMINDER_MINUTES,
   ];
@@ -105,7 +106,7 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts, attendees, notes }, registrations, connections, members] =
+  const [{ events, counts, attendees, notes, meetingTypes }, registrations, connections, members] =
     await Promise.all([
       withOrgTx(org.id, async ({ db }) => {
         const rows: MeetingRow[] = await db.event.findMany({
@@ -189,7 +190,11 @@ export default async function MeetingsPage({
                 select: { id: true, eventId: true },
               })
             : [];
-        return { events, counts, attendees, notes };
+        // A new meeting of a type starts where the last one was.
+        const meetingTypes = canManage
+          ? await getMeetingTypeDefaults(db, org.id, typeList)
+          : typeList;
+        return { events, counts, attendees, notes, meetingTypes };
       }),
       myRsvpRegistrations(user.id, MY_TICKETS),
       canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),

@@ -6,6 +6,7 @@ import type {
   RSVPStatus,
 } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
+import type { MeetingTypeLast } from "@/lib/meetings/meeting-types";
 import type { TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
 import { noteVisibleWhere } from "@/server/notes/visibility";
@@ -350,4 +351,43 @@ export interface PollResultRows {
     guestKeyHash: string | null;
     availability: "YES" | "NO" | "IF_NEEDED";
   }[];
+}
+
+/**
+ * Each meeting type with its last meeting attached (MeetingType.last), so
+ * a new meeting of that type starts where the last one was: its place, its
+ * call, its length and its invitees. One read per type; clubs have a few.
+ */
+export async function getMeetingTypeDefaults(
+  db: TxClient,
+  organizationId: string,
+  types: readonly { name: string; color: string }[],
+): Promise<{ name: string; color: string; last?: MeetingTypeLast }[]> {
+  return Promise.all(
+    types.map(async (t) => {
+      const e = await db.event.findFirst({
+        where: { organizationId, meetingType: t.name, deletedAt: null, allDay: false },
+        orderBy: { startsAt: "desc" },
+        select: {
+          format: true,
+          location: true,
+          conferenceProvider: true,
+          startsAt: true,
+          endsAt: true,
+          attendees: { select: { userId: true } },
+        },
+      });
+      if (!e) return { ...t };
+      return {
+        ...t,
+        last: {
+          online: e.format === "ONLINE",
+          location: e.location,
+          conferenceProvider: e.conferenceProvider,
+          minutes: Math.max(15, Math.round((e.endsAt.getTime() - e.startsAt.getTime()) / 60_000)),
+          attendeeIds: e.attendees.map((a) => a.userId),
+        },
+      };
+    }),
+  );
 }

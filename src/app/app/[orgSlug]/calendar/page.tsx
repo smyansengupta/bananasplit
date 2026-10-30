@@ -18,7 +18,7 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
 import { getCalendarTasks } from "@/server/tasks/queries";
 
-import { getEventsInRange, getViewerRsvps } from "./queries";
+import { getEventsInRange, getMeetingTypeDefaults, getViewerRsvps } from "./queries";
 
 /**
  * The org calendar. The server reads only the visible window (the view puts
@@ -76,7 +76,12 @@ export default async function CalendarPage({
   });
   const members = canManage ? await getOrgMembersForPicker(org.id) : [];
 
-  const meetingTypes = parseMeetingTypes(settings?.eventTypes);
+  // A new meeting of a type starts where the last one was.
+  const typeList = parseMeetingTypes(settings?.eventTypes);
+  const meetingTypes =
+    canManage && typeList.length > 0
+      ? await withOrgTx(org.id, ({ db }) => getMeetingTypeDefaults(db, org.id, typeList))
+      : typeList;
   const items: CalendarItem[] = events.map((e) => {
     const shared = {
       id: e.id,

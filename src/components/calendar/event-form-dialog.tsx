@@ -1,14 +1,7 @@
 "use client";
 
 import type { MeetingType } from "@/lib/meetings/meeting-types";
-import {
-  ChevronDown,
-  Globe,
-  MapPin,
-  Ticket,
-  Video,
-  type IconComponent,
-} from "@/components/icons";
+import { ChevronDown, Globe, MapPin, Ticket, Video, type IconComponent } from "@/components/icons";
 import { useParams, useRouter } from "next/navigation";
 import { useId, useRef, useState, useTransition } from "react";
 
@@ -336,6 +329,30 @@ function EventForm({
     setError((current) => (current === NO_CALL_ERROR ? null : current));
   }
 
+  /**
+   * Picking a type for a new meeting starts it where the last one of that
+   * type was: online or in person, the place, the call, the length and the
+   * invitees. Everything stays editable; an edit never changes fields.
+   */
+  function chooseMeetingType(next: string) {
+    setMeetingType(next);
+    const last = event ? undefined : meetingTypes.find((t) => t.name === next)?.last;
+    if (!last) return;
+    const nextShape: MeetingShape = last.online ? "online" : "in-person";
+    if (shape !== "event") setShape(nextShape);
+    if (last.location) setLocation(last.location);
+    const known = Object.values(ConferenceProvider) as string[];
+    if (known.includes(last.conferenceProvider) && last.conferenceProvider !== "OTHER") {
+      setProvider(last.conferenceProvider as ConferenceProvider);
+    }
+    if (!allDay) {
+      const start = new Date(startValue).getTime();
+      if (!Number.isNaN(start))
+        setEndValue(toDateTimeLocalValue(new Date(start + last.minutes * 60_000)));
+    }
+    if (last.attendeeIds.length > 0 && attendeeIds.length === 0) setAttendeeIds(last.attendeeIds);
+  }
+
   function chooseShape(next: MeetingShape) {
     setShape(next);
     dropNoCallError();
@@ -542,7 +559,7 @@ function EventForm({
         {meetingTypes.length > 0 && (
           <div className="grid gap-1.5">
             <Label htmlFor="event-meeting-type">Meeting type</Label>
-            <Select value={meetingType} onValueChange={setMeetingType}>
+            <Select value={meetingType} onValueChange={chooseMeetingType}>
               <SelectTrigger id="event-meeting-type" className="w-full">
                 <SelectValue />
               </SelectTrigger>

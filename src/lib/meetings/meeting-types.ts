@@ -9,6 +9,20 @@ export interface MeetingType {
   name: string;
   /** "#rrggbb". */
   color: string;
+  /**
+   * The last meeting of this type, for a new one's defaults: picking the
+   * type fills in where it was, its call, how long it ran and who was
+   * invited (getMeetingTypeDefaults). Left out when there isn't one.
+   */
+  last?: MeetingTypeLast;
+}
+
+export interface MeetingTypeLast {
+  online: boolean;
+  location: string | null;
+  conferenceProvider: string;
+  minutes: number;
+  attendeeIds: string[];
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
