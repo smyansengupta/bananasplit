@@ -79,13 +79,13 @@ describe("/invite/[token], signed out", () => {
     expect(html).not.toContain("New here?");
   });
 
-  it("offers a Sign in button and account creation without the Google client", async () => {
+  it("offers a Log in button and account creation without the Google client", async () => {
     vi.stubEnv("AUTH_GOOGLE_ID", "");
     vi.stubEnv("AUTH_GOOGLE_SECRET", "");
     const html = await render();
     expect(html).not.toContain("Continue with Google");
     expect(html).toContain(`href="${SIGN_IN_HREF}"`);
-    expect(html).toContain(">Sign in</a>");
+    expect(html).toContain(">Log in</a>");
     expect(html).toContain("New here?");
     expect(html).toContain(`href="${SIGN_UP_HREF}"`);
   });

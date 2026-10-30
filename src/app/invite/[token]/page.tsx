@@ -98,7 +98,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
     return (
       <InviteCard
         title={`Join ${invitation.orgName}`}
-        description={`Sign in as ${invitation.email} to accept this invite.`}
+        description={`Log in as ${invitation.email} to accept.`}
       >
         {googleSignInEnabled() ? (
           <>
@@ -109,7 +109,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
                 href={signInPath(here)}
                 className="text-foreground font-medium underline underline-offset-4"
               >
-                sign in
+                log in
               </Link>{" "}
               or{" "}
               <Link
@@ -125,7 +125,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
           <>
             {/* Without a Google client configured, email and password only. */}
             <Button asChild className="w-full">
-              <Link href={signInPath(here)}>Sign in</Link>
+              <Link href={signInPath(here)}>Log in</Link>
             </Button>
             <p className="text-muted-foreground mt-3 text-center text-sm leading-[1.5]">
               New here?{" "}

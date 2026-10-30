@@ -91,7 +91,7 @@ export default async function JoinCodePage({ params }: PageProps<"/join/[code]">
                 href={signInPath(next)}
                 className="text-foreground font-medium underline underline-offset-4"
               >
-                sign in
+                log in
               </Link>{" "}
               or{" "}
               <Link
@@ -114,7 +114,7 @@ export default async function JoinCodePage({ params }: PageProps<"/join/[code]">
                 href={signInPath(next)}
                 className="text-foreground font-medium underline underline-offset-4"
               >
-                Sign in
+                Log in
               </Link>
             </p>
           </div>

@@ -53,7 +53,7 @@ export default async function OrgCodesPage() {
       <div className="space-y-3">
         <PageHeader
           title="Organization codes"
-          description={`${open} open · ${used} used · creation ${orgCreationEnabled() ? "enabled" : "disabled"}`}
+          description={`${open} open, ${used} used${orgCreationEnabled() ? "" : ", creation off"}`}
         />
         <p className="text-muted-foreground max-w-prose text-sm">
           Mode: <span className="font-mono">{orgCreationMode()}</span>{" "}
