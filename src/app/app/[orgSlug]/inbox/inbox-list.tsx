@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CheckSquare, Wallet } from "@/components/icons";
+import { CalendarDays, CheckSquare, ClipboardList, Wallet } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -122,6 +122,8 @@ export function InboxNeeds({ orgId, rows }: { orgId: string; rows: NeedRow[] }) 
             <span className="bg-muted text-muted-foreground grid size-[22px] shrink-0 place-items-center rounded-full">
               {row.kind === "invite" ? (
                 <CalendarDays className="size-3.5" aria-hidden="true" />
+              ) : row.id.startsWith("form-") ? (
+                <ClipboardList className="size-3.5" aria-hidden="true" />
               ) : (
                 <Wallet className="size-3.5" aria-hidden="true" />
               )}

@@ -339,7 +339,7 @@ describe("elsewhere in the app", () => {
     if (!reachable) return;
     const question = `Pin me ${tag}?`;
     const pollId = await ask(ann, { question });
-    const address = `/app/${org.slug}/calendar/polls/${pollId}`;
+    const address = `/app/${org.slug}/forms/polls/${pollId}`;
     const pins = await as(bo, () =>
       withOrgTx(org.id, async ({ db }) => {
         expect(await pinPage(db, org.id, org.slug, bo.id, address)).toEqual({

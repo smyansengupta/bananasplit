@@ -51,6 +51,7 @@ const SECTIONS: Record<string, string> = {
   notes: "Files",
   calendar: "Calendar",
   meetings: "Meetings",
+  forms: "Forms",
   databases: "Databases",
   finance: "Finance",
   "org-chart": "Org chart",
@@ -64,10 +65,11 @@ const SECTIONS: Record<string, string> = {
 const SUBPAGES: Record<string, string> = {
   "calendar/find-a-time": "Find a time",
   "calendar/find-a-time/new": "New find-a-time poll",
-  "calendar/polls": "Polls",
-  "calendar/polls/ask": "Ask a question",
+  "calendar/polls": "Forms",
+  "calendar/polls/ask": "Quick poll",
+  "forms/new": "New form",
   "calendar/polls/new": "New find-a-time poll",
-  "meetings": "Meetings",
+  meetings: "Meetings",
   "calendar/sync": "Calendar sync",
   "databases/reports": "Reports",
   "finance/budget": "Budget",
@@ -189,6 +191,10 @@ export function describePath(orgSlug: string, address: string): PageInfo | null 
     parts.length === 3 &&
     ID.test(third)
   ) {
+    return { href, kind: "event", label: "Poll", lookup: { type: "poll", id: third } };
+  }
+  // A members' quick poll under Forms is a question poll, looked up the same way.
+  if (section === "forms" && second === "polls" && third && parts.length === 3 && ID.test(third)) {
     return { href, kind: "event", label: "Poll", lookup: { type: "poll", id: third } };
   }
   if (section === "calendar" && parts.length === 2 && ID.test(second)) {

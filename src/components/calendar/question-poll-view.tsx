@@ -113,7 +113,7 @@ export function QuestionPoll({
 }) {
   const router = useRouter();
   const zone = useViewerTimeZone(timeZone);
-  const href = `/app/${orgSlug}/calendar/polls/${poll.id}`;
+  const href = `/app/${orgSlug}/forms/polls/${poll.id}`;
   const headingId = useId();
   const [confirmElement, confirm] = useConfirm();
 
@@ -196,7 +196,7 @@ export function QuestionPoll({
     });
     if (!deleted) return;
     toast({ title: "Poll deleted", description: poll.question });
-    router.push(`/app/${orgSlug}/calendar/polls`);
+    router.push(`/app/${orgSlug}/forms`);
   }
 
   async function removeOption(option: QuestionPollOptionView) {

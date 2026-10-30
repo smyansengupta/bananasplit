@@ -594,7 +594,7 @@ async function searchPolls(ctx: Ctx): Promise<SearchGroup> {
         createdAt: p.createdAt,
         hit: hit("poll", p.id, {
           title: p.question,
-          href: `${ctx.base}/calendar/polls/${p.id}`,
+          href: `${ctx.base}/forms/polls/${p.id}`,
           detail:
             excerptAround(p.description, q.folded) ??
             excerptAround(options, q.folded) ??

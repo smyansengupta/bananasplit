@@ -237,6 +237,7 @@ describe("mode and headers", () => {
       "/app",
       "/poll",
       "/e",
+      "/f",
       "/invite",
       "/join",
       "/sign-in",
