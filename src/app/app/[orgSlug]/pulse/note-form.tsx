@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { SavedMark, useSaveOnChange } from "@/components/ui/autosave";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/toaster";
 
 import { savePulseNoteAction } from "./actions";
 
-/** An admin's note on this week's pulse, before it goes out. */
+/**
+ * The admin's note on this week's draft pulse: a line or two at the top of
+ * what goes out. Saves itself when you click away; clearing it removes it.
+ */
 export function PulseNoteForm({
   orgId,
   issueId,
@@ -22,46 +24,35 @@ export function PulseNoteForm({
   sendsAt: string;
 }) {
   const [note, setNote] = useState(initial ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { status, error, save } = useSaveOnChange(
+    async (value: string) => {
+      const result = await savePulseNoteAction(orgId, { issueId, note: value });
+      if (!result.ok) return result.error ?? "That note couldn't be saved.";
+    },
+    { initial: (initial ?? "").trim() },
+  );
+
   return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setError(null);
-        start(async () => {
-          const result = await savePulseNoteAction(orgId, { issueId, note });
-          if (!result.ok) setError(result.error ?? "That note couldn't be saved.");
-          else toast({ title: note.trim() ? "Note saved" : "Note removed", tone: "success" });
-        });
-      }}
-    >
-      <label htmlFor="pulse-note" className="heading block text-[15px]">
-        A note from the officers
-      </label>
-      <p className="text-muted-foreground text-sm">
-        Shown at the top of the pulse. It goes out {sendsAt}.
-      </p>
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <label htmlFor="pulse-note" className="heading block text-[15px]">
+          Note
+        </label>
+        <SavedMark status={status} error={error} />
+      </div>
+      <p className="text-muted-foreground text-sm">Goes out {sendsAt}.</p>
       <Textarea
         id="pulse-note"
         value={note}
         maxLength={1000}
         rows={3}
         onChange={(e) => setNote(e.target.value)}
+        onBlur={() => save(note.trim())}
         placeholder="Venue tour done: the ballroom it is. Photographer quotes are due Friday."
       />
-      {error && (
-        <p role="alert" className="text-destructive text-sm">
-          {error}
-        </p>
-      )}
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save note"}
-        </Button>
-        <span className="text-muted-foreground text-[13px] tabular-nums">{note.length}/1000</span>
-      </div>
-    </form>
+      <span className="text-muted-foreground block text-[13px] tabular-nums">
+        {note.length}/1000
+      </span>
+    </div>
   );
 }

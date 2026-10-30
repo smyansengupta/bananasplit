@@ -52,3 +52,18 @@ export async function savePulseNoteAction(
     throw error;
   }
 }
+
+/** "Turn on" from the archive's empty state: the weekly pulse, with its usual schedule. */
+export const turnPulseOnAction = withOrgAction(
+  async (ctx): Promise<{ ok: boolean; error?: string }> => {
+    requirePermission(ctx, "settings.general.write");
+    await ctx.db.orgSettings.update({
+      where: { organizationId: ctx.organizationId },
+      data: { pulseEnabled: true, updatedById: ctx.userId },
+      select: { organizationId: true },
+    });
+    refresh();
+    return { ok: true };
+  },
+  { onRefused: "return", feature: "overview" },
+);
