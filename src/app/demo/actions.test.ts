@@ -54,7 +54,7 @@ describe("requestDemoAction", () => {
 
   it("emails and saves the request, then sends them to create their organization", async () => {
     await expect(requestDemoAction({}, form(VALID))).rejects.toMatchObject({
-      url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization",
+      url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization&demo=sent",
     });
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -82,11 +82,11 @@ describe("requestDemoAction", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("emails the default inbox when none is set, and goes straight to setup when signed in", async () => {
+  it("emails the default inbox when none is set, and says it was sent, right there, when signed in", async () => {
     vi.stubEnv("DEMO_REQUEST_INBOX", "");
     session.mockResolvedValue({ user: { id: "u1" } });
     await expect(requestDemoAction({}, form(VALID))).rejects.toMatchObject({
-      url: "/onboarding/organization",
+      url: "/demo?sent=1",
     });
     expect(send.mock.calls[0]![0].to).toBe("jack.lam251@gmail.com");
   });
@@ -108,7 +108,7 @@ describe("requestDemoAction", () => {
   it("lets a bot that fills the hidden field through, sending and saving nothing", async () => {
     await expect(
       requestDemoAction({}, form({ ...VALID, website: "https://spam.example" })),
-    ).rejects.toMatchObject({ url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization" });
+    ).rejects.toMatchObject({ url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization&demo=sent" });
     expect(send).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
   });
@@ -118,7 +118,7 @@ describe("requestDemoAction", () => {
       vi.clearAllMocks();
       rateLimit.mockImplementation(async (key: string) => ({ allowed: !key.startsWith(capped) }));
       await expect(requestDemoAction({}, form(VALID))).rejects.toMatchObject({
-        url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization",
+        url: "/sign-up?callbackUrl=%2Fonboarding%2Forganization&demo=sent",
       });
       expect(send).not.toHaveBeenCalled();
       expect(save).toHaveBeenCalledWith(expect.objectContaining({ emailedAt: null }));

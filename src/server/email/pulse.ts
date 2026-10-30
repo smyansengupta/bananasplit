@@ -23,7 +23,9 @@ const C = EMAIL_COLORS;
 
 function row(title: string, detail: string | null): string {
   return `<tr><td style="padding:12px 0;border-top:1px solid ${C.line}"><p style="margin:0;font-size:15px;font-weight:600;line-height:1.4;color:${C.ink}">${escapeHtml(title)}</p>${
-    detail ? `<p style="margin:3px 0 0;font-size:14px;line-height:1.5;color:${C.muted}">${escapeHtml(detail)}</p>` : ""
+    detail
+      ? `<p style="margin:3px 0 0;font-size:14px;line-height:1.5;color:${C.muted}">${escapeHtml(detail)}</p>`
+      : ""
   }</td></tr>`;
 }
 
@@ -52,15 +54,18 @@ export function pulseEmail(input: {
   const rows = pulseRows(data);
   const money = input.finance ? moneyMovedLine(input.finance) : null;
 
-  const lead = [input.data.summary, input.note ? `A note from your officers: ${input.note}` : null].filter(
-    (s): s is string => Boolean(s),
+  const lead = [input.data.summary, input.note ? input.note : null].filter((s): s is string =>
+    Boolean(s),
   );
 
   const bodyHtml =
     `<p style="margin:0 0 4px;font-size:22px;font-weight:700;line-height:1.25;color:${C.ink}">${escapeHtml(title)}</p>` +
     `<p style="margin:0 0 18px;font-size:14px;color:${C.muted}">${escapeHtml(headline)}</p>` +
     lead
-      .map((text) => `<p style="margin:0 0 14px;font-size:15px;line-height:1.55">${escapeHtml(text)}</p>`)
+      .map(
+        (text) =>
+          `<p style="margin:0 0 14px;font-size:15px;line-height:1.55">${escapeHtml(text)}</p>`,
+      )
       .join("") +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows
       .map((r) => row(r.title, r.detail))
@@ -76,7 +81,7 @@ export function pulseEmail(input: {
 
   return layout({
     subject: `${input.orgName}'s weekly pulse: ${headline}`,
-    eyebrow: `Weekly pulse · ${input.orgName}`,
+    eyebrow: input.orgName,
     bodyHtml,
     bodyText,
     cta: { label: "Open the pulse", url: input.issueUrl },

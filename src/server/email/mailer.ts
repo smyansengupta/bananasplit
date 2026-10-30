@@ -40,7 +40,11 @@ export interface Mailer {
   replyTo?: string;
   /** Human description for the settings page / test email. */
   label: string;
-  send(message: RenderedEmail & { to: string }, options?: SendOptions): Promise<SendResult>;
+  /** `replyTo` on the message wins over the mailer's (e.g. a demo request: Reply reaches the requester). */
+  send(
+    message: RenderedEmail & { to: string; replyTo?: string },
+    options?: SendOptions,
+  ): Promise<SendResult>;
 }
 
 const PLATFORM_NAME = "Bananasplit";
@@ -75,7 +79,7 @@ function makeMailer(
         {
           from,
           to: message.to,
-          replyTo,
+          replyTo: message.replyTo ?? replyTo,
           subject: message.subject,
           html: message.html,
           text: message.text,

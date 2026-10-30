@@ -28,7 +28,10 @@ export const metadata: Metadata = {
  * Already signed in: straight in, or (with a destination) say so first.
  */
 export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">) {
-  const callbackUrl = safeCallbackUrl((await searchParams).callbackUrl);
+  const query = await searchParams;
+  const callbackUrl = safeCallbackUrl(query.callbackUrl);
+  // Arriving from Request a demo: say it went.
+  const demoSent = query.demo === "sent";
   const session = await auth();
   if (session?.user?.email) {
     // A plain visit goes straight in; one carrying a destination asks first.
@@ -47,6 +50,11 @@ export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">
 
   return (
     <AuthCard tall formClassName="gap-[18px] lg:py-9">
+      {demoSent && (
+        <p role="status" className="bg-muted rounded-field m-0 px-4 py-3 text-[14px] font-medium">
+          Demo request sent. We&apos;ll email you.
+        </p>
+      )}
       <SignUpForm
         callbackUrl={callbackUrl}
         google={

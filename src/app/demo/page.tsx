@@ -28,8 +28,10 @@ const WHAT_YOU_GET = [
  * the time on the left, a short form on the right (DemoForm), stacked on
  * phones.
  */
-export default async function DemoPage() {
-  const signedIn = Boolean(await getSession());
+export default async function DemoPage({ searchParams }: PageProps<"/demo">) {
+  const sent = (await searchParams).sent === "1";
+  const session = await getSession();
+  const signedIn = Boolean(session);
   return (
     <MarketingShell signedIn={signedIn}>
       <section
@@ -56,7 +58,22 @@ export default async function DemoPage() {
           </ul>
         </div>
         <div className="bg-card edge rounded-card p-6 sm:p-8">
-          <DemoForm />
+          {sent ? (
+            <div role="status" className="flex flex-col gap-2">
+              <p className="display-title m-0 text-[26px]">Request sent.</p>
+              <p className="text-muted-foreground m-0 text-[15px]">
+                We&apos;ll email you to set up the call.
+              </p>
+            </div>
+          ) : (
+            <DemoForm
+              initial={
+                session?.user
+                  ? { name: session.user.name ?? undefined, email: session.user.email ?? undefined }
+                  : undefined
+              }
+            />
+          )}
         </div>
       </section>
     </MarketingShell>

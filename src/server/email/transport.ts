@@ -84,7 +84,9 @@ export function resendTransport(apiKey: string): EmailTransport {
         options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined,
       );
       if (error) {
-        throw new EmailSendError(`Resend refused the message: ${error.name ?? "error"}: ${error.message}`);
+        throw new EmailSendError(
+          `Resend refused the message: ${error.name ?? "error"}: ${error.message}`,
+        );
       }
       return { id: data?.id ?? null, transport: "live" };
     },
