@@ -38,6 +38,9 @@ import { cn } from "@/lib/utils";
 import { useViewerTimeZone } from "./hooks";
 import { intervalLabel, momentLabel, momentDayLabel, timeZoneDisplayName } from "./poll-format";
 import { PollGridFrame } from "./poll-grid";
+import { ConferencePicker, useMeetingConnections } from "@/components/meetings/conference-picker";
+import { ConferenceProvider } from "@/generated/prisma/enums";
+import { firstConnectedProvider } from "@/lib/meetings/connected-provider";
 import {
   buildPollGrid,
   distinctRespondents,
@@ -286,6 +289,14 @@ export function PollResponder({
     if (dirty || (hasAnswered && name !== savedName)) void save(myResponses, name);
   }
 
+  // Booking asks how the meeting happens: online with a call, or in person
+  // at a place, with the same provider buttons as the meeting form.
+  const connections = useMeetingConnections(orgId ?? "");
+  const [bookOnline, setBookOnline] = useState(false);
+  const [bookProvider, setBookProvider] = useState<ConferenceProvider>(ConferenceProvider.NONE);
+  const [bookUrl, setBookUrl] = useState("");
+  const [bookPlace, setBookPlace] = useState("");
+
   function openSchedule(window: RankedSlot) {
     setScheduleError(null);
     setScheduleTarget(window);
@@ -301,7 +312,12 @@ export function PollResponder({
   function confirmSchedule() {
     if (!scheduleTarget || !orgId) return;
     startScheduling(async () => {
-      const result = await finalizePoll(orgId, poll.id, scheduleTarget.slot.id);
+      const result = await finalizePoll(orgId, poll.id, scheduleTarget.slot.id, {
+        conferenceProvider: bookOnline ? bookProvider : ConferenceProvider.NONE,
+        conferenceUrl:
+          bookOnline && bookProvider === ConferenceProvider.OTHER ? bookUrl || null : null,
+        location: bookOnline ? null : bookPlace.trim() || null,
+      });
       if (result.error) {
         setScheduleError(result.error);
         return;
@@ -706,7 +722,7 @@ export function PollResponder({
           </DialogHeader>
           {scheduleTarget && scheduleInvitees && (
             <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
-              <li>Creates an internal event, &ldquo;{poll.title}&rdquo;, and closes the poll.</li>
+              <li>Creates an internal event and closes the poll.</li>
               <li>
                 {scheduleInvitees.members === 0
                   ? "No members are invited: none marked the start time as available."
@@ -721,6 +737,49 @@ export function PollResponder({
               )}
             </ul>
           )}
+          <div className="space-y-3">
+            <div role="radiogroup" aria-label="How it happens" className={segmentedTrack}>
+              {(
+                [
+                  [false, "In person"],
+                  [true, "Online"],
+                ] as const
+              ).map(([online, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="radio"
+                  aria-checked={bookOnline === online}
+                  onClick={() => {
+                    setBookOnline(online);
+                    if (online && bookProvider === ConferenceProvider.NONE) {
+                      const first = firstConnectedProvider(connections);
+                      if (first) setBookProvider(first);
+                    }
+                  }}
+                  className={segmentedItem(bookOnline === online)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {bookOnline ? (
+              <ConferencePicker
+                connections={connections}
+                provider={bookProvider}
+                onProviderChange={setBookProvider}
+                conferenceUrl={bookUrl}
+                onUrlChange={setBookUrl}
+              />
+            ) : (
+              <Input
+                aria-label="Where"
+                placeholder="Room or address"
+                value={bookPlace}
+                onChange={(e) => setBookPlace(e.target.value)}
+              />
+            )}
+          </div>
           {scheduleError && (
             <p className="text-destructive text-sm" role="alert">
               {scheduleError}

@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 
+import { ConferenceProvider } from "@/generated/prisma/enums";
+
 import { EventVisibility, PollAvailability } from "@/generated/prisma/client";
 import { can, requirePermission } from "@/lib/auth/permissions";
 import { isValidTimeZone } from "@/lib/calendar/dates";
@@ -52,8 +54,10 @@ const createPollTx = withOrgAction(async (ctx, input: unknown): Promise<ActionRe
     return { error: "The daily window's end must be after its start." };
   }
   const slots = pollSlots(data);
-  if (slots.length === 0) return { error: "That daily window doesn't fit any slots at this granularity." };
-  if (slots.length > 2000) return { error: "That is too many slots. Pick fewer dates or a coarser grid." };
+  if (slots.length === 0)
+    return { error: "That daily window doesn't fit any slots at this granularity." };
+  if (slots.length > 2000)
+    return { error: "That is too many slots. Pick fewer dates or a coarser grid." };
   const closesAt = data.closesAt ? new Date(data.closesAt) : null;
   if (closesAt && Number.isNaN(closesAt.getTime())) return { error: "Enter a valid closing time." };
 
@@ -109,9 +113,20 @@ interface FinalizeResult extends ActionResult {
   excludedGuestCount?: number;
 }
 
+const finalizeOptsSchema = z
+  .object({
+    conferenceProvider: z.enum(ConferenceProvider).optional(),
+    conferenceUrl: z.string().max(2000).nullish(),
+    location: z.string().max(300).nullish(),
+  })
+  .strict();
+
 const finalizePollTx = withOrgAction(
-  async (ctx, pollId: string, slotId: string): Promise<FinalizeResult> => {
+  async (ctx, pollId: string, slotId: string, rawOpts: unknown = {}): Promise<FinalizeResult> => {
     requirePermission(ctx, "events.write");
+    const parsedOpts = finalizeOptsSchema.safeParse(rawOpts ?? {});
+    if (!parsedOpts.success) return { error: "Check the meeting's call and place." };
+    const opts = parsedOpts.data;
     const poll = await ctx.db.availabilityPoll.findFirst({
       where: { id: pollId, organizationId: ctx.organizationId },
       select: {
@@ -122,7 +137,9 @@ const finalizePollTx = withOrgAction(
         closesAt: true,
         finalizedEventId: true,
         slots: { select: { id: true, startsAt: true } },
-        responses: { select: { id: true, slotId: true, userId: true, guestKeyHash: true, availability: true } },
+        responses: {
+          select: { id: true, slotId: true, userId: true, guestKeyHash: true, availability: true },
+        },
       },
     });
     if (!poll) return { error: "Poll not found." };
@@ -136,7 +153,9 @@ const finalizePollTx = withOrgAction(
         (r.availability === PollAvailability.YES || r.availability === PollAvailability.IF_NEEDED),
     );
     // Only CURRENT members of this org become attendees (0A Fix 6).
-    const respondentUserIds = [...new Set(respondents.flatMap((r) => (r.userId ? [r.userId] : [])))];
+    const respondentUserIds = [
+      ...new Set(respondents.flatMap((r) => (r.userId ? [r.userId] : []))),
+    ];
     const members = respondentUserIds.length
       ? await ctx.db.membership.findMany({
           where: { organizationId: ctx.organizationId, userId: { in: respondentUserIds } },
@@ -154,10 +173,18 @@ const finalizePollTx = withOrgAction(
       startsAt: slot.startsAt,
       endsAt: new Date(slot.startsAt.getTime() + poll.durationMinutes * 60_000),
       visibility: EventVisibility.INTERNAL,
+      // Online with its call, or in person at a place: asked when booking.
+      ...(opts.conferenceProvider ? { conferenceProvider: opts.conferenceProvider } : {}),
+      ...(opts.conferenceUrl ? { conferenceUrl: opts.conferenceUrl } : {}),
+      ...(opts.location ? { location: opts.location } : {}),
     });
     if (attendeeIds.length > 0) {
       await ctx.db.eventAttendee.createMany({
-        data: attendeeIds.map((userId) => ({ organizationId: ctx.organizationId, eventId: event.id, userId })),
+        data: attendeeIds.map((userId) => ({
+          organizationId: ctx.organizationId,
+          eventId: event.id,
+          userId,
+        })),
         skipDuplicates: true,
       });
     }
@@ -170,9 +197,18 @@ const finalizePollTx = withOrgAction(
 );
 
 /** Turns the chosen slot into an INTERNAL event with the members who can make it (ADMIN+). */
-export async function finalizePoll(organizationId: string, pollId: string, slotId: string): Promise<FinalizeResult> {
+export async function finalizePoll(
+  organizationId: string,
+  pollId: string,
+  slotId: string,
+  opts: {
+    conferenceProvider?: ConferenceProvider;
+    conferenceUrl?: string | null;
+    location?: string | null;
+  } = {},
+): Promise<FinalizeResult> {
   try {
-    return await finalizePollTx(organizationId, pollId, slotId);
+    return await finalizePollTx(organizationId, pollId, slotId, opts);
   } catch (error) {
     return actionError(error);
   }
