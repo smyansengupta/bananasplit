@@ -54,7 +54,7 @@ export function TokenMenu({
                 {option.kind === "member" && option.member ? (
                   <>
                     <UserAvatar user={option.member} size="xs" />
-                    <span className="truncate">{option.label}</span>
+                    <span className="break-words">{option.label}</span>
                     {option.member.title && (
                       <span className="text-muted-foreground ml-auto truncate text-xs">
                         {option.member.title}
@@ -68,7 +68,7 @@ export function TokenMenu({
                     ) : (
                       <Paperclip className="size-4 shrink-0 opacity-70" aria-hidden="true" />
                     )}
-                    <span className="truncate">{option.label}</span>
+                    <span className="break-words">{option.label}</span>
                   </>
                 )}
               </CommandItem>

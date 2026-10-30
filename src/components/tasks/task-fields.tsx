@@ -443,7 +443,7 @@ export function OwnerField({
                 onClick={() => search.pick(m)}
               >
                 <UserAvatar user={m} size="xs" />
-                <span className="truncate">{m.name ?? "Member"}</span>
+                <span className="break-words">{m.name ?? "Member"}</span>
                 {on ? (
                   <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
                 ) : (
@@ -510,7 +510,7 @@ export function PeopleField({
               ))}
             </span>
           )}
-          <span className="truncate">
+          <span className="break-words">
             {picked.length === 0 ? "Nobody else" : picked.map((m) => firstName(m)).join(", ")}
           </span>
           <UpDown />
@@ -575,7 +575,7 @@ export function PeopleField({
                 onClick={() => search.pick(m)}
               >
                 <UserAvatar user={m} size="xs" />
-                <span className="truncate">{m.name ?? "Member"}</span>
+                <span className="break-words">{m.name ?? "Member"}</span>
                 {on ? (
                   <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
                 ) : (
@@ -892,7 +892,7 @@ export function PartOfField({
           ) : (
             <EpicDot epic={picked ?? null} />
           )}
-          <span className="truncate">
+          <span className="text-start break-words">
             {picked ? (
               <>
                 {epic && <span className="text-muted-foreground font-normal">{epic.title} / </span>}

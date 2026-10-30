@@ -528,7 +528,7 @@ function assignmentBody(
   const due = task.dueDate ? `Due ${formatDueKey(dueDateKey(task.dueDate), today)}` : "No due date";
   const parts = [due, `${task.priority.charAt(0)}${task.priority.slice(1).toLowerCase()} priority`];
   if (flagged) parts.push("Flagged: assigned from below your level");
-  return parts.join(" · ");
+  return parts.join(", ");
 }
 
 /** Assignment emails (outbox) for new owners and collaborators; never for self-assignment. */

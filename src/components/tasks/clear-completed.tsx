@@ -60,14 +60,14 @@ export function ClearCompletedButton({
     <Button
       type="button"
       variant="ghost"
-      size="icon-sm"
+      size="sm"
       aria-label={label}
-      title={label}
       disabled={isPending}
       onClick={clear}
       className={cn("text-muted-foreground hover:text-foreground", className)}
     >
       <BrushCleaning className="size-4" aria-hidden="true" />
+      Clear
     </Button>
   );
 }

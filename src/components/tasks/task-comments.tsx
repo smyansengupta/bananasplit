@@ -10,7 +10,7 @@ import {
   loadTaskComments,
 } from "@/app/app/[orgSlug]/tasks/actions";
 import { Button } from "@/components/ui/button";
-import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import type { TaskCommentItem } from "@/server/tasks/queries";
 
@@ -29,6 +29,9 @@ interface PendingComment {
   id: string;
   body: string;
 }
+
+/** How long a deleted comment can be brought back. */
+const UNDO_MS = 8_000;
 
 export function TaskComments({
   taskId,
@@ -118,22 +121,46 @@ export function TaskComments({
     });
   }
 
-  async function remove(id: string) {
-    const ok = await confirm({
-      title: "Delete this comment?",
-      description: "It's removed for everyone on the task.",
-      confirmLabel: "Delete comment",
-      run: async () => (await deleteTaskComment(org.id, id)).error,
+  /**
+   * Deleting doesn't ask: the comment leaves the list at once with Undo, and
+   * is only deleted for real once the Undo has gone.
+   */
+  function remove(id: string) {
+    const at = comments.findIndex((c) => c.id === id);
+    const removed = comments[at];
+    if (!removed) return;
+    setComments((current) => current.filter((c) => c.id !== id));
+    let undone = false;
+    toast({
+      title: "Deleted",
+      duration: UNDO_MS,
+      action: {
+        label: "Undo",
+        run: () => {
+          undone = true;
+          setComments((current) => {
+            const next = [...current];
+            next.splice(Math.min(at, next.length), 0, removed);
+            return next;
+          });
+        },
+      },
     });
-    if (ok) setComments((current) => current.filter((c) => c.id !== id));
+    setTimeout(() => {
+      if (undone) return;
+      void deleteTaskComment(org.id, id).then((result) => {
+        if (result.error) {
+          announce(result.error);
+          setComments((current) => [...current, removed]);
+        }
+      });
+    }, UNDO_MS);
   }
 
   const me = memberById.get(viewer.userId);
-  const [confirmEl, confirm] = useConfirm();
 
   return (
     <section className="space-y-3" aria-label="Comments">
-      {confirmEl}
       {hasMore && (
         <Button
           variant="link"
@@ -206,7 +233,7 @@ export function TaskComments({
                         onClick={saveEdit}
                         disabled={!editing.body.trim() || isPending}
                       >
-                        Save comment
+                        Save
                       </Button>
                     </div>
                   </div>
@@ -234,15 +261,14 @@ export function TaskComments({
       <div className="space-y-2">
         <MentionTextarea
           aria-label="Add a comment"
-          placeholder="Add a comment. Type @ to mention someone."
+          placeholder="Comment, @ to mention"
           value={body}
           rows={2}
           onChange={setBody}
           onSubmitShortcut={submit}
           audience={audience}
         />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground text-xs">Markdown works. Ctrl+Enter to send.</span>
+        <div className="flex items-center justify-end gap-2">
           <Button size="sm" onClick={submit} disabled={!body.trim()}>
             Comment
           </Button>

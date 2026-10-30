@@ -79,7 +79,7 @@ function MemberOptionsList({
                 className={cn("size-4 shrink-0", isSelected(m.id) ? "opacity-100" : "opacity-0")}
               />
               <UserAvatar user={m} size="xs" />
-              <span className="min-w-0 truncate">
+              <span className="min-w-0 break-words">
                 {m.name ?? "Member"}
                 {m.title && <span className="text-muted-foreground ml-1 text-xs">{m.title}</span>}
               </span>
@@ -130,7 +130,7 @@ export function OwnerPicker({
             {selected ? (
               <>
                 <UserAvatar user={selected} size="xs" />
-                {!compact && <span className="truncate">{selected.name ?? "Member"}</span>}
+                {!compact && <span className="break-words">{selected.name ?? "Member"}</span>}
               </>
             ) : (
               <span className="text-muted-foreground">{compact ? "Owner" : "No owner"}</span>

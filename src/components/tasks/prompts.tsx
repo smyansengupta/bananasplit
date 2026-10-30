@@ -50,10 +50,7 @@ export function useBlockedReason(): [
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>What&apos;s it blocked on?</DialogTitle>
-          <DialogDescription>
-            {state?.title ? `"${state.title}" moves to Blocked. ` : ""}
-            Say what it&apos;s waiting on so the exec sync can clear it.
-          </DialogDescription>
+          <DialogDescription>Say what it&apos;s waiting on.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-1.5">
           <Label htmlFor="blocked-reason-input">Blocked on</Label>
@@ -113,9 +110,8 @@ export function useConfirmFlagged(): [React.ReactNode, (names: string[]) => Prom
             Assign above your level?
           </DialogTitle>
           <DialogDescription>
-            {list} {names && names.length > 1 ? "are" : "is"} above you in the org chart.
-            That&apos;s allowed, but the assignment is flagged on the task and they&apos;re
-            notified. They or an admin can acknowledge it.
+            {list} {names && names.length > 1 ? "are" : "is"} above you. It&apos;s flagged and
+            they&apos;re told.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

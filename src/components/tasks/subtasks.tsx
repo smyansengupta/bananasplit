@@ -55,7 +55,8 @@ export function Subtasks({
   );
   const [isPending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
-  const [ownerId, setOwnerId] = useState<string | null>(null);
+  // Yours unless you pick someone, the same as a new task.
+  const [ownerId, setOwnerId] = useState<string | null>(viewer.userId);
   const [dueDate, setDueDate] = useState("");
   const [childType, setChildType] = useState<"TASK" | "STORY">("TASK");
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +154,7 @@ export function Subtasks({
                 <button
                   type="button"
                   className={cn(
-                    "min-w-0 flex-1 truncate text-left font-medium hover:underline",
+                    "min-w-0 flex-1 text-left font-medium break-words hover:underline",
                     isDone && "text-muted-foreground line-through",
                   )}
                   onClick={() => onOpen?.(s.id)}
