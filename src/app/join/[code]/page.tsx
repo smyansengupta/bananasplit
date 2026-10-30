@@ -7,8 +7,10 @@ import { signInPath } from "@/lib/auth/callback-url";
 import { googleSignInEnabled } from "@/lib/auth/google-sign-in";
 import { getSession } from "@/lib/auth/session";
 import { orgLogoUrl } from "@/lib/org-logo";
+import { getOnboardingProfile } from "@/server/onboarding/profile";
 
 import { clubForCode } from "./club";
+import { JoinNow } from "./join-now";
 
 /** The card, as the emailed invite draws it: a display title, a line, then the actions. */
 function JoinCard({
@@ -36,10 +38,11 @@ function JoinCard({
 /**
  * /join/<code>: the link an officer texts (Settings > Members, the club's
  * dashboard, onboarding's invite step). Anyone with the link sees which club
- * it opens, its name and logo, before signing in; then Continue takes them
- * into the real join, /onboarding/join?code=, which checks everything again
- * for a verified account (the allowed domain, the member cap) and asks for
- * an account first when there isn't one. Joining is always free.
+ * it opens, its name and logo, before signing in. Someone signed in and
+ * ready (verified, onboarded) joins right here in one click; anyone else
+ * goes on to the real join, /onboarding/join?code=, which readies the
+ * account (or asks for one) and checks everything again. Joining is always
+ * free.
  */
 export default async function JoinCodePage({ params }: PageProps<"/join/[code]">) {
   const { code: raw } = await params;
@@ -59,21 +62,23 @@ export default async function JoinCodePage({ params }: PageProps<"/join/[code]">
   }
 
   const next = `/onboarding/join?code=${encodeURIComponent(club.code)}`;
-  const signedIn = Boolean(await getSession());
+  const session = await getSession();
+  const signedIn = Boolean(session);
+  const profile = session?.user?.id ? await getOnboardingProfile(session.user.id) : null;
+  const ready = Boolean(profile?.onboardedAt && profile.emailVerified);
   const signUpHref = `/sign-up?callbackUrl=${encodeURIComponent(next)}`;
 
   return (
-    <JoinCard
-      title={`Join ${club.name}`}
-      description={`You've been invited to join ${club.name} on Bananasplit.`}
-    >
+    <JoinCard title={`Join ${club.name}`} description="Joining is free.">
       <div className="flex flex-col gap-4">
         <ClubPreview
           name={club.name}
           logoUrl={orgLogoUrl(club.logo, 64)}
           detail={`Invite code ${club.code}`}
         />
-        {signedIn ? (
+        {ready ? (
+          <JoinNow code={club.code} club={club.name} />
+        ) : signedIn ? (
           <Button asChild className="w-full">
             <Link href={next}>Continue</Link>
           </Button>
@@ -95,7 +100,7 @@ export default async function JoinCodePage({ params }: PageProps<"/join/[code]">
               >
                 create an account
               </Link>
-              . You&apos;ll come straight back to join.
+              .
             </p>
           </div>
         ) : (
@@ -111,7 +116,6 @@ export default async function JoinCodePage({ params }: PageProps<"/join/[code]">
               >
                 Sign in
               </Link>
-              . You&apos;ll come straight back to join.
             </p>
           </div>
         )}

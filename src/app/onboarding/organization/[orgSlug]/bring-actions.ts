@@ -43,7 +43,7 @@ export async function bringIntoClubAction(
 }
 
 /** Skip or Finish: into the club (as its admin after setup). */
-export async function finishBringAction(orgSlug: string, welcome: boolean): Promise<void> {
+export async function finishBringAction(orgSlug: string, _welcome: boolean): Promise<void> {
   await requireUser();
   await clearBring();
   const slug = SLUG.test(orgSlug) ? orgSlug : "";

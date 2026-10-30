@@ -5,7 +5,13 @@ import { notFound } from "next/navigation";
 import { ArrowRight } from "@/components/brand/arrows";
 import { ProductArt } from "@/components/marketing/feature-art";
 import { FinalCta } from "@/components/marketing/final-cta";
-import { DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref } from "@/components/marketing/links";
+import {
+  DEMO_HREF,
+  PRIMARY_CTA,
+  SECONDARY_CTA,
+  startHref,
+  startLabel,
+} from "@/components/marketing/links";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { PRODUCT_PAGES, productPage } from "@/components/marketing/product-pages";
 import { CONTAINER, SectionTitle } from "@/components/marketing/section-title";
@@ -67,7 +73,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
               data-cta="get_started"
               data-cta-location={`product_${page.slug}`}
             >
-              Get started free <ArrowRight />
+              {startLabel(signedIn)} <ArrowRight />
             </Link>
             <SiteLink
               href={DEMO_HREF}

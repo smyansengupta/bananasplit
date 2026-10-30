@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 import { BrandMark } from "../brand-mark";
 import { BRANDS, brandBySlug, type BrandGroup } from "../brands";
-import { DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref } from "../links";
+import { DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref, startLabel } from "../links";
 import { CLAUDE_CHAT } from "../palette";
 import { SiteLink } from "../site-link";
 import { HeroStage } from "./hero-stage";
@@ -189,7 +189,7 @@ function Hero({ signedIn }: { signedIn: boolean }) {
               data-cta="get_started"
               data-cta-location="hero"
             >
-              Get started free <ArrowRight />
+              {startLabel(signedIn)} <ArrowRight />
             </Link>
             <SiteLink
               href={DEMO_HREF}
@@ -875,7 +875,7 @@ function Bananas({ signedIn }: { signedIn: boolean }) {
               data-cta="get_started"
               data-cta-location="final"
             >
-              Get started free <ArrowRight />
+              {startLabel(signedIn)} <ArrowRight />
             </Link>
             <SiteLink
               href={DEMO_HREF}

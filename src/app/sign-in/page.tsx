@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { SignedInAs } from "@/components/auth/signed-in-as";
 import { AlreadySignedIn } from "@/components/auth/already-signed-in";
@@ -73,6 +74,10 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
   // (unless Auth.js sent them back with an error to explain, e.g.
   // OAuthAccountNotLinked).
   if (session?.user?.email && !errorCode) {
+    // A plain visit (a bookmarked Log in) goes straight in; one carrying a
+    // destination (an invite, a join link) asks first, since that's when
+    // being in the wrong account matters.
+    if (!callbackUrl) redirect("/app");
     return (
       <AlreadySignedIn
         email={session.user.email}
