@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/permissions";
 import { CBC_PEOPLE } from "@/server/bootstrap/cbc-template";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { EXPORT_EXPIRY_DAYS } from "@/server/export/service";
+import { exportDownloadPath, signExportDownload } from "@/server/export/signing";
 import { suggestCbcMapping } from "@/server/settings/bootstrap";
 
 import { SettingsNoAccess } from "../settings-no-access";
@@ -13,8 +14,9 @@ import { DeleteCard } from "./delete-card";
 import { ExportCard, type ExportRow } from "./export-card";
 
 /**
- * Settings > Danger zone: export all data, delete. OWNER only. Platform
- * admins also see the CBC template (the platform's own club).
+ * Admin panel › Danger zone: export all data (ready exports download from
+ * the list itself), delete. OWNER only. Platform admins also see the CBC
+ * template (the platform's own club).
  */
 export default async function DangerZonePage({
   params,
@@ -55,6 +57,12 @@ export default async function DangerZonePage({
     expiresAt: e.expiresAt?.toISOString() ?? null,
     downloadCount: e.downloadCount,
     requestedByName: e.requestedBy?.name ?? null,
+    // Ready ones download from right here: the signed link the export's own
+    // page would mint (24 hours, this owner only; the route re-checks).
+    downloadHref:
+      e.status === "READY" && can({ role }, "org.export.download")
+        ? exportDownloadPath(orgId, e.id, signExportDownload(e.id, user.id))
+        : null,
   }));
   const memberOptions = members
     .map((m) => ({ userId: m.userId, name: m.user.name ?? "Unnamed member" }))
@@ -63,25 +71,12 @@ export default async function DangerZonePage({
     members.map((m) => ({ userId: m.userId, name: m.user.name })),
   ) as Record<string, string>;
 
-  const latest = exports[0];
-  const latestWord: Record<string, string> = {
-    PENDING: "queued",
-    RUNNING: "preparing",
-    READY: "ready to download",
-    FAILED: "failed",
-    EXPIRED: "expired",
-  };
-  const summary = latest
-    ? `Last export ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(latest.createdAt)}, ${latestWord[latest.status] ?? latest.status.toLowerCase()}`
-    : "No exports yet";
-
   return (
     <div className="max-w-3xl space-y-7.5">
-      <PageHeader title="Danger zone" description={summary} />
+      <PageHeader title="Danger zone" />
       <div className="space-y-4.5">
         <ExportCard
           orgId={orgId}
-          orgSlug={organization.slug}
           exports={exportRows}
           expiryDays={EXPORT_EXPIRY_DAYS}
           personal={personal}

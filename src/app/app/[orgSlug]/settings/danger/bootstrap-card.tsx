@@ -70,7 +70,7 @@ export function BootstrapCard({
         {people.map((p) => (
           <label key={p.key} className="grid gap-1.5 text-sm">
             <span className="font-medium">
-              {p.name} <span className="text-muted-foreground font-normal">· {p.title}</span>
+              {p.name} <span className="text-muted-foreground font-normal">, {p.title}</span>
             </span>
             <FieldSelect
               className="w-full"

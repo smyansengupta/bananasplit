@@ -80,7 +80,7 @@ export function PersonProfile({
   const first = name.split(" ")[0];
   const isSelf = person.id === viewerId;
   const Heading = headingLevel;
-  const subtitle = [person.pronouns, person.title].filter(Boolean).join(" · ");
+  const subtitle = [person.pronouns, person.title].filter(Boolean).join(", ");
   const studies = majorAndYear(person.major, person.gradYear);
 
   const refLink = (ref: SheetPositionRef) => {
@@ -219,7 +219,9 @@ export function PersonProfile({
               {person.alsoReportsTo.length > 0 && (
                 <>
                   <dt className="text-muted-foreground">Also reports to</dt>
-                  <dd className="flex min-w-0 flex-col items-start gap-0.5">{person.alsoReportsTo.map(refLink)}</dd>
+                  <dd className="flex min-w-0 flex-col items-start gap-0.5">
+                    {person.alsoReportsTo.map(refLink)}
+                  </dd>
                 </>
               )}
               <dt className="text-muted-foreground">Leads</dt>

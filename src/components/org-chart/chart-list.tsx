@@ -37,7 +37,10 @@ export function ChartList({
           alsoReportsTo={index.alsoManagersOf(node.id).map((m) => m.title)}
         />
         {advisors.length > 0 && (
-          <ul aria-label={`Advisors to ${node.title}`} className="border-muted ml-5 space-y-1 border-l border-dashed pl-4">
+          <ul
+            aria-label={`Advisors to ${node.title}`}
+            className="border-muted ml-5 space-y-1 border-l border-dashed pl-4"
+          >
             {advisors.map((a) => (
               <li key={a.id}>
                 <Row node={a} hrefFor={hrefFor} selected={a.key === selectedKey} />
@@ -94,9 +97,9 @@ function Row({
         <span className="block truncate text-sm font-medium">{personLabel(node)}</span>
         <span className="text-muted-foreground block truncate text-xs">
           {node.title}
-          {node.isAdvisor && " · Advisor"}
-          {variant === "placeholder" && " · Not on the portal"}
-          {alsoReportsTo.length > 0 && ` · Also reports to ${alsoReportsTo.join(", ")}`}
+          {node.isAdvisor && ", advisor"}
+          {variant === "placeholder" && ", not a member yet"}
+          {alsoReportsTo.length > 0 && `, also reports to ${alsoReportsTo.join(", ")}`}
         </span>
       </span>
     </>
@@ -107,7 +110,12 @@ function Row({
     hrefFor && "hover:bg-muted focus-visible:ring-ring outline-none focus-visible:ring-2",
   );
   return hrefFor ? (
-    <Link href={hrefFor(node.key)} scroll={false} className={cls} aria-current={selected ? "true" : undefined}>
+    <Link
+      href={hrefFor(node.key)}
+      scroll={false}
+      className={cls}
+      aria-current={selected ? "true" : undefined}
+    >
       {body}
     </Link>
   ) : (

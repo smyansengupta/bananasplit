@@ -326,7 +326,7 @@ export function OutlineEditor({
     unknown.length > 0 && `${unknown.length} to invite`,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -446,7 +446,7 @@ export function OutlineEditor({
                   <b className="font-semibold">{u.name}</b>
                   <span className="text-muted-foreground">
                     {" "}
-                    · for {u.title}. Use a title or a full name from the chart.
+                    , for {u.title}. Use a title or a full name from the chart.
                   </span>
                 </li>
               ))}
@@ -473,7 +473,7 @@ export function OutlineEditor({
                   <li key={p.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="min-w-0">
                       <b className="font-semibold">{p.personName}</b>
-                      <span className="text-muted-foreground"> · {p.title}</span>
+                      <span className="text-muted-foreground">, {p.title}</span>
                     </span>
                     {suggestion && (
                       <Button

@@ -151,7 +151,7 @@ function summarize(diff: unknown): string {
       parts.push(key === "last4" ? `••••${String(v)}` : `${key}: ${String(v)}`);
     }
   }
-  return parts.join(" · ").slice(0, 160);
+  return parts.join(", ").slice(0, 160);
 }
 
 /**
@@ -223,7 +223,7 @@ export default async function AuditLogPage({
     total === 0
       ? "No entries yet. Entries can't be edited or deleted."
       : `${total} ${group.key ? `${group.label.toLowerCase()} ` : ""}entr${total === 1 ? "y" : "ies"}, newest first${
-          total > PAGE_SIZE ? ` · showing ${first}–${first + shown.length - 1}` : ""
+          total > PAGE_SIZE ? `, showing ${first}–${first + shown.length - 1}` : ""
         }. Entries can't be edited or deleted.`;
 
   return (
@@ -270,7 +270,7 @@ export default async function AuditLogPage({
                     <TableCell className="whitespace-normal">
                       <span className="font-semibold">{e.actor?.name ?? "System"}</span>{" "}
                       {ACTION_COPY[e.action] ?? (
-                        <span className="text-muted-foreground">· {actionWords(e.action)}</span>
+                        <span className="text-muted-foreground">, {actionWords(e.action)}</span>
                       )}
                       {e.targetName ? (
                         <span className="font-semibold"> ({e.targetName})</span>
