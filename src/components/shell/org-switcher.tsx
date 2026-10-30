@@ -131,7 +131,7 @@ export function OrgSwitcher({
         <button
           type="button"
           className={cn(
-            "focus-glow relative flex h-12 w-full min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden text-left outline-none",
+            "focus-glow relative flex min-h-12 w-full min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden py-1 text-left outline-none",
             "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
             rail ? "rounded-full p-0" : "rounded-field px-1.5",
             !rail &&
@@ -146,7 +146,9 @@ export function OrgSwitcher({
             {(!personal && brand) || (
               <>
                 {mark(active, "size-8")}
-                <span className="heading truncate text-[0.95rem]">{nameOf(active)}</span>
+                <span className="heading min-w-0 text-[0.95rem] leading-tight break-words">
+                  {nameOf(active)}
+                </span>
               </>
             )}
           </span>
@@ -231,7 +233,7 @@ export function OrgSwitcher({
             onSelect={() => startTransition(() => switchActiveOrg(org.slug))}
           >
             <OrgMark org={org} className="size-5" />
-            <span className="flex-1 truncate">{org.name}</span>
+            <span className="min-w-0 flex-1 break-words">{org.name}</span>
             {org.slug === active.slug && <Check className="size-4" aria-hidden="true" />}
           </DropdownMenuItem>
         ))}

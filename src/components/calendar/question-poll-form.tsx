@@ -280,7 +280,7 @@ export function QuestionPollForm({
         )}
       </div>
 
-      <Section title="Question">
+      <Section>
         <div className="grid gap-1.5">
           <Label htmlFor="qpoll-question">Question</Label>
           <Input
@@ -300,9 +300,7 @@ export function QuestionPollForm({
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="qpoll-description">
-            Description <span className="text-muted-foreground font-normal">(optional)</span>
-          </Label>
+          <Label htmlFor="qpoll-description">Description</Label>
           <Textarea
             id="qpoll-description"
             value={description}
@@ -509,10 +507,10 @@ export function QuestionPollForm({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <fieldset className="min-w-0 space-y-4">
-      <legend className="mb-3 text-base font-medium">{title}</legend>
+      {title && <legend className="mb-3 text-base font-medium">{title}</legend>}
       {children}
     </fieldset>
   );

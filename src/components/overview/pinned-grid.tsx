@@ -38,7 +38,10 @@ export function PinnedGrid({
   return (
     <div
       {...zone}
-      className={cn("-m-1 rounded-tile p-1 transition-colors", over && "ring-foreground/30 bg-muted/40 ring-2")}
+      className={cn(
+        "rounded-tile -m-1 p-1 transition-colors",
+        over && "ring-foreground/30 bg-muted/40 ring-2",
+      )}
     >
       {pins.length === 0 ? (
         <div
@@ -47,11 +50,10 @@ export function PinnedGrid({
             over && "border-primary text-foreground",
           )}
         >
-          <p className="text-foreground font-medium">{over ? "Drop to pin it" : "Nothing pinned yet"}</p>
-          <p className="max-w-sm text-balance">
-            Drag any page from the sidebar here, press the pin at the top right of a page, or pick
-            anything: notes, files, folders, tasks, events, people.
+          <p className="text-foreground font-medium">
+            {over ? "Drop to pin it" : "Nothing pinned yet"}
           </p>
+          <p className="max-w-sm text-balance">Drag a page here, or pin anything.</p>
           {pinsCtx && (
             <Button type="button" size="sm" variant="outline" onClick={() => pinsCtx.openPicker()}>
               <Plus className="size-4" aria-hidden="true" />
@@ -60,7 +62,7 @@ export function PinnedGrid({
           )}
         </div>
       ) : (
-        <ul className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr))]">
+        <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr))] gap-2.5">
           {pins.map((pin) => {
             const Icon = PIN_ICONS[pin.kind] ?? FileText;
             return (

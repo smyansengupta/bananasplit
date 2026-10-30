@@ -100,7 +100,10 @@ export function EventDetailView({
   showMapLink = false,
   defaultReminderMinutes,
   meetingTypes,
+  linked = null,
 }: {
+  /** The Linked panel (components/links), last in the side column. */
+  linked?: React.ReactNode;
   orgId: string;
   orgSlug: string;
   timeZone: string;
@@ -543,6 +546,7 @@ export function EventDetailView({
               )}
             </CardContent>
           </Card>
+          {linked}
         </aside>
       </div>
 

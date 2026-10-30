@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CheckSquare, ClipboardList, Wallet } from "@/components/icons";
+import { CalendarDays, ClipboardList, Wallet } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -175,12 +175,6 @@ export function InboxNeeds({ orgId, rows }: { orgId: string; rows: NeedRow[] }) 
             <Button variant="outline" size="sm" asChild>
               <Link href={row.href}>Review</Link>
             </Button>
-          )}
-          {row.kind === "task" && (
-            <CheckSquare
-              className="text-muted-foreground size-4 shrink-0 max-sm:hidden"
-              aria-hidden="true"
-            />
           )}
         </li>
       ))}

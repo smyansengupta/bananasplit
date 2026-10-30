@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { EventDetailView } from "@/components/calendar/event-detail-view";
+import { LinkedSection } from "@/components/links/linked-section";
 import { MeetingJoinCard } from "@/components/meetings/meeting-join-card";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
@@ -79,6 +80,9 @@ export default async function MeetingPage({
       orgId={org.id}
       orgSlug={orgSlug}
       timeZone={org.timezone}
+      linked={
+        <LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "event", id: event.id }} />
+      }
       section="meetings"
       joinCard={joinCard}
       locationDetails={event.locationDetails}
