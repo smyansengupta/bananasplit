@@ -30,14 +30,14 @@ export function ClubPreview({
     >
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- a stored 64px WebP variant
-        <img src={logoUrl} alt="" className="size-11 flex-none rounded-field object-cover" />
+        <img src={logoUrl} alt="" className="rounded-field size-11 flex-none object-cover" />
       ) : (
-        <span className="bg-primary text-primary-foreground font-heading grid size-11 flex-none place-items-center rounded-field text-[20px]">
+        <span className="bg-primary text-primary-foreground font-heading rounded-field grid size-11 flex-none place-items-center text-[20px]">
           {name.trim()[0]?.toUpperCase()}
         </span>
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[16px] font-bold">{name}</span>
+        <span className="text-[16px] font-bold break-words">{name}</span>
         {detail && <span className="text-muted-foreground text-[13px]">{detail}</span>}
       </span>
       {badge}

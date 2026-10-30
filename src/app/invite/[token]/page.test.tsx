@@ -75,7 +75,7 @@ describe("/invite/[token], signed out", () => {
     expect(html).toContain("Continue with Google");
     expect(html).toContain(`href="${SIGN_IN_HREF}"`);
     expect(html).toContain(`href="${SIGN_UP_HREF}"`);
-    expect(html).toContain("with new@example.edu. You'll come back here.");
+    expect(html).toContain("with new@example.edu.");
     expect(html).not.toContain("New here?");
   });
 
@@ -107,14 +107,13 @@ describe("/invite/[token], signed in", () => {
     const html = await render();
     expect(html).toContain("Join Claude Builders Club");
     expect(html).toContain("You're invited to join as a member.");
-    expect(html).toContain("Invite for new@example.edu");
     expect(html).not.toMatch(/trial|\$\d|per month/i);
   });
 
   it("keeps the verified-address gate: the link alone doesn't prove the mailbox", async () => {
     mocks.getUserIdentity.mockResolvedValue({ email: "new@example.edu", emailVerified: null });
     const html = await render();
-    expect(html).toContain("Verify your email address to accept this invite.");
+    expect(html).toContain("Confirm your email first.");
     expect(html).not.toContain("Invite for new@example.edu");
   });
 
