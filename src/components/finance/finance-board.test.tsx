@@ -77,7 +77,7 @@ describe("finance board: the runway widget", () => {
     expect(html).toContain("$450");
     expect(html).toContain("$900.00 over 2 meetings held");
     expect(html).toContain("About $450.00 at the current average");
-    expect(html).toContain("calendar events other than board meetings");
+    expect(html).toContain("Drafts, rejected and voided never");
   });
 
   it("shows what committed sponsorships would change", () => {

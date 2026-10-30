@@ -192,9 +192,8 @@ export function ImportColumns({
           <div className="min-w-0 space-y-1">
             <h2 className="heading text-[17px]">Which column is which?</h2>
             <p className="text-muted-foreground text-sm">
-              {fileName} · {dataRows.toLocaleString()} row{dataRows === 1 ? "" : "s"}
-              {sheet.truncated ? " (only the first 20,000 are read)" : ""}. Check the guess, or let
-              AI read it.
+              {fileName}, {dataRows.toLocaleString()} row{dataRows === 1 ? "" : "s"}
+              {sheet.truncated ? " (only the first 20,000 are read)" : ""}.
             </p>
           </div>
           {sheets.length > 1 && (
@@ -246,7 +245,7 @@ export function ImportColumns({
               <Check aria-hidden="true" />
               Read by {readBy}
               {categorized > 0
-                ? ` · ${categorized} value${categorized === 1 ? "" : "s"} sorted into categories`
+                ? `, ${categorized} value${categorized === 1 ? "" : "s"} sorted into categories`
                 : ""}
             </Badge>
           )}
@@ -265,7 +264,9 @@ export function ImportColumns({
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="space-y-1.5">
-            <span className="eyebrow text-muted-foreground block">What&apos;s in it</span>
+            <span className="text-muted-foreground block text-[13px] font-medium">
+              What&apos;s in it
+            </span>
             <FieldSelect
               className="w-full"
               value={mapping.kind}
@@ -276,7 +277,9 @@ export function ImportColumns({
             </FieldSelect>
           </label>
           <label className="space-y-1.5">
-            <span className="eyebrow text-muted-foreground block">Column names are in</span>
+            <span className="text-muted-foreground block text-[13px] font-medium">
+              Column names are in
+            </span>
             <FieldSelect
               className="w-full"
               value={mapping.headerRow}
@@ -295,7 +298,9 @@ export function ImportColumns({
             !has("moneyIn") &&
             !has("moneyOut") && (
               <label className="space-y-1.5">
-                <span className="eyebrow text-muted-foreground block">Money in or out</span>
+                <span className="text-muted-foreground block text-[13px] font-medium">
+                  Money in or out
+                </span>
                 <FieldSelect
                   className="w-full"
                   value={mapping.amountSign}
@@ -311,7 +316,9 @@ export function ImportColumns({
             )}
           {mapping.kind === "transactions" && has("date") && (
             <label className="space-y-1.5">
-              <span className="eyebrow text-muted-foreground block">Dates are written</span>
+              <span className="text-muted-foreground block text-[13px] font-medium">
+                Dates are written
+              </span>
               <FieldSelect
                 className="w-full"
                 value={mapping.dateOrder}
@@ -392,7 +399,7 @@ export function ImportColumns({
                         </option>
                       ))}
                     </FieldSelect>
-                    <span className="mt-1.5 block max-w-48 truncate px-0.5 font-medium">
+                    <span className="mt-1.5 block max-w-48 px-0.5 font-medium break-words">
                       {header?.[c] || `Column ${c + 1}`}
                     </span>
                   </TableHead>

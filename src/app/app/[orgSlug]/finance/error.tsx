@@ -31,22 +31,20 @@ export default function FinanceError({
         title="This finance page couldn't load"
         description={
           <>
-            Try again in a moment. If it keeps happening, send your e-board this code so they can
-            look it up:{" "}
+            Couldn&apos;t load. Code:{" "}
             <code className="bg-muted rounded-[6px] px-1.5 py-0.5 font-mono text-xs">
               {error.digest ?? "no code"}
             </code>
             {orgSlug && (
               <>
                 {" "}
-                Your{" "}
                 <Link
                   href={`/app/${orgSlug}/finance/my-reimbursements`}
                   className="text-foreground focus-glow rounded-sm font-medium underline underline-offset-3"
                 >
-                  reimbursements
+                  My requests
                 </Link>{" "}
-                still open.
+                still opens.
               </>
             )}
           </>

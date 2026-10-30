@@ -130,10 +130,8 @@ export function RunwaySection({
         </p>
       )}
       <p className="text-muted-foreground text-xs">
-        Spending is money out that counts toward the balance: submitted, approved and reimbursed
-        expenses and other outgoing transactions. Drafts, rejected expenses and voided transactions
-        never count. The rate averages the last {plural(runway.burnWindowDays, "day")} of spending.
-        Meetings are this period&apos;s calendar events other than board meetings.
+        Averages the last {plural(runway.burnWindowDays, "day")}. Drafts, rejected and voided never
+        count.
       </p>
     </section>
   );

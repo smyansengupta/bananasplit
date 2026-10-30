@@ -326,9 +326,9 @@ function ErrorLine({ error }: { error: string | null }) {
   );
 }
 
-/** A field's label: the muted 13px eyebrow above it. */
+/** A field's label: muted 13px text above it. */
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className="eyebrow text-muted-foreground block">{children}</span>;
+  return <span className="text-muted-foreground block text-[13px] font-medium">{children}</span>;
 }
 
 /** A choice tile's radio mark: a ring, filled with the text colour when chosen. */
@@ -709,11 +709,11 @@ function PeopleStep({ orgId, members, canAppoint, currentUserId }: FinanceSetupP
     <div className="space-y-4">
       <dl className="grid gap-2.5 sm:grid-cols-2">
         <div className="bg-muted/60 rounded-tile space-y-1 p-4">
-          <dt className="eyebrow text-muted-foreground">Owners</dt>
+          <dt className="text-muted-foreground text-[13px] font-medium">Owners</dt>
           <dd className="text-sm font-semibold">{names(owners)}</dd>
         </div>
         <div className="bg-muted/60 rounded-tile space-y-1 p-4">
-          <dt className="eyebrow text-muted-foreground">Treasurers</dt>
+          <dt className="text-muted-foreground text-[13px] font-medium">Treasurers</dt>
           <dd
             className={cn("text-sm font-semibold", !treasurers.length && "text-muted-foreground")}
           >
@@ -809,7 +809,7 @@ function BoardStep({ orgId, board, onSaved }: StepProps) {
     >
       {groups.map((g) => (
         <fieldset key={g} className="space-y-2.5">
-          <legend className="eyebrow text-muted-foreground mb-2.5">{g}</legend>
+          <legend className="text-muted-foreground mb-2.5 text-[13px] font-medium">{g}</legend>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {FINANCE_WIDGETS.filter((w) => w.group === g).map((w) => {
               const WIcon = BOARD_ICONS[w.icon] ?? LayoutGrid;
@@ -853,7 +853,7 @@ function BoardStep({ orgId, board, onSaved }: StepProps) {
         </fieldset>
       ))}
       <div className="space-y-2">
-        <p className="eyebrow text-muted-foreground">
+        <p className="text-muted-foreground text-[13px] font-medium">
           Your dashboard ({preview.length} widget{preview.length === 1 ? "" : "s"})
         </p>
         <div className="bg-muted/60 rounded-tile grid grid-cols-4 gap-1.5 p-2" aria-hidden="true">

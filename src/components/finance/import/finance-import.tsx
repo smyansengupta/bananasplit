@@ -274,8 +274,7 @@ export function FinanceImport(props: FinanceImportProps) {
                 Drop a spreadsheet, a bank export, a PDF or a photo
               </p>
               <p className="text-muted-foreground mx-auto max-w-prose text-sm">
-                CSV, Excel (.xlsx), a Venmo or bank statement, receipts, last year&apos;s budget.
-                Anything you kept money records in.
+                CSV, Excel, a statement, receipts or a budget.
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-2 pt-1">
