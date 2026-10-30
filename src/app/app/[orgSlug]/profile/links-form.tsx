@@ -1,7 +1,7 @@
 "use client";
 
 import { Link2, Loader2, Plus, X } from "@/components/icons";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -72,21 +72,39 @@ export function LinksForm({ initial }: { initial: ProfileLink[] }) {
     return result.ok ? null : result.error;
   }
 
+  // Saves itself a moment after the last change, once every row is a valid
+  // link (an empty new row waits quietly until it's filled in or removed).
+  const lastSaved = useRef(JSON.stringify(initial.map((l) => ({ kind: l.kind, url: l.url }))));
+  useEffect(() => {
+    const links = rows.map((r) => ({ kind: r.kind, url: r.url }));
+    const json = JSON.stringify(links);
+    if (json === lastSaved.current) return;
+    if (rows.some((r) => localError(r))) return;
+    const timer = setTimeout(() => save(false), 900);
+    return () => clearTimeout(timer);
+    // save and localError read only the current rows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setTouched(Object.fromEntries(rows.map((r) => [r.key, true])));
+    save(true);
+  }
+
+  function save(showErrors: boolean) {
+    if (showErrors) setTouched(Object.fromEntries(rows.map((r) => [r.key, true])));
     if (rows.some((r) => localError(r))) return;
     const links = rows.map((r) => ({ kind: r.kind, url: r.url }));
     startTransition(async () => {
       const result = await saveProfileLinks({ links });
       if (result.ok) {
         // Show the normalized URLs (https:// added, and so on).
-        setRows((rs) =>
-          rs.map((r) => {
-            const n = normalizeLinkUrl(r.kind, r.url);
-            return n.ok ? { ...r, url: n.url } : r;
-          }),
-        );
+        const normalized = rows.map((r) => {
+          const n = normalizeLinkUrl(r.kind, r.url);
+          return n.ok ? { ...r, url: n.url } : r;
+        });
+        lastSaved.current = JSON.stringify(normalized.map((r) => ({ kind: r.kind, url: r.url })));
+        setRows(normalized);
         setSaved(true);
       } else {
         setErrors(result.fieldErrors);
@@ -97,8 +115,13 @@ export function LinksForm({ initial }: { initial: ProfileLink[] }) {
   const statusLine =
     errors.links || errors.form ? (
       <span className="text-destructive">{errors.links ?? errors.form}</span>
+    ) : pending ? (
+      <span className="text-muted-foreground inline-flex items-center gap-1.5">
+        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+        Saving
+      </span>
     ) : saved ? (
-      <span className="text-success">Saved.</span>
+      <span className="text-success">Saved</span>
     ) : rows.length >= MAX_LINKS ? (
       <span className="text-muted-foreground">You can add up to {MAX_LINKS} links.</span>
     ) : null;
@@ -107,7 +130,7 @@ export function LinksForm({ initial }: { initial: ProfileLink[] }) {
     <form onSubmit={submit} noValidate>
       <SettingsCard
         title="Links"
-        description={`LinkedIn, GitHub, your website and so on. Up to ${MAX_LINKS}.`}
+        description={`Up to ${MAX_LINKS}.`}
         action={
           <Button
             type="button"
@@ -121,21 +144,9 @@ export function LinksForm({ initial }: { initial: ProfileLink[] }) {
           </Button>
         }
         status={statusLine && <p aria-live="polite">{statusLine}</p>}
-        footer={
-          <Button type="submit" disabled={pending}>
-            {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Save links
-          </Button>
-        }
       >
         {rows.length === 0 ? (
-          <EmptyState
-            size="compact"
-            icon={Link2}
-            title="No links yet."
-            description="Add one so members can find your work."
-            className="py-0"
-          />
+          <EmptyState size="compact" icon={Link2} title="No links" className="py-0" />
         ) : (
           <ul className="space-y-3">
             {rows.map((row, index) => {

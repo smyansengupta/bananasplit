@@ -1,9 +1,8 @@
 "use client";
 
 import { Loader2 } from "@/components/icons";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,7 +34,10 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-/** Name, pronouns, major and year, bio and timezone. */
+/**
+ * Name, pronouns, major and year, bio and timezone. Saves itself a moment
+ * after you stop typing (or as soon as a picker changes); there is no Save.
+ */
 export function DetailsForm({
   initial,
   orgTimezone,
@@ -54,8 +56,12 @@ export function DetailsForm({
     setSaved(false);
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const lastSaved = useRef(JSON.stringify(initial));
+
+  function save(snapshot: DetailsInitial) {
+    const json = JSON.stringify(snapshot);
+    if (json === lastSaved.current) return;
+    const values = snapshot;
     const trimmedYear = values.gradYear.trim();
     const input = {
       name: values.name,
@@ -73,9 +79,23 @@ export function DetailsForm({
     setErrors({});
     startTransition(async () => {
       const result = await saveProfileDetails(input);
-      if (result.ok) setSaved(true);
-      else setErrors(result.fieldErrors);
+      if (result.ok) {
+        lastSaved.current = json;
+        setSaved(true);
+      } else setErrors(result.fieldErrors);
     });
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => save(values), 900);
+    return () => clearTimeout(timer);
+    // save reads only refs and setters besides its argument.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values]);
+
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    save(values);
   }
 
   const describedBy = (key: string, extra?: string) =>
@@ -85,23 +105,25 @@ export function DetailsForm({
     <form onSubmit={submit} noValidate>
       <SettingsCard
         title="Details"
-        description="Your name and a little about you. The same in every organization."
         status={
           errors.form ? (
             <p role="status" aria-live="polite" className="text-destructive text-sm">
               {errors.form}
             </p>
+          ) : pending ? (
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-muted-foreground flex items-center gap-1.5 text-sm"
+            >
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              Saving
+            </p>
           ) : saved ? (
             <p role="status" aria-live="polite" className="text-success text-sm">
-              Saved.
+              Saved
             </p>
           ) : null
-        }
-        footer={
-          <Button type="submit" disabled={pending}>
-            {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-            Save details
-          </Button>
         }
       >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

@@ -110,7 +110,7 @@ export function ConnectedAppsCard({
   return (
     <SettingsCard
       title="AI apps"
-      description="Use your Personal space and organizations from Claude, ChatGPT and other AI apps. An app only ever sees what you can see here, in the spaces you chose when you connected it."
+      description="Apps see only what you can see."
       status={
         <p aria-live="polite" className="text-muted-foreground">
           {message}
@@ -138,10 +138,10 @@ export function ConnectedAppsCard({
               <div className="min-w-0 flex-1 basis-64">
                 <p className="truncate text-sm font-semibold">{app.name}</p>
                 <p className="text-muted-foreground mt-0.5 text-[13px]">
-                  {ACCESS_LABELS[app.access]} · {spaceLabel(app.space)}
+                  {ACCESS_LABELS[app.access]}, {spaceLabel(app.space)}
                 </p>
                 <p className="text-muted-foreground text-[13px]" suppressHydrationWarning>
-                  Connected {formatDate(app.connectedAt)} · Last used {formatDate(app.lastUsedAt)}
+                  Connected {formatDate(app.connectedAt)}, last used {formatDate(app.lastUsedAt)}
                 </p>
               </div>
               <Button type="button" size="sm" variant="outline" onClick={() => disconnect(app)}>
