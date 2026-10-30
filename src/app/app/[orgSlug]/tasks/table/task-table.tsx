@@ -3,7 +3,7 @@
 import { ChevronDown, ChevronRight, Columns3 } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
 
 import { useBlockedReason, useConfirmFlagged } from "@/components/tasks/prompts";
 import { QuickPriority, QuickStatus } from "@/components/tasks/quick-controls";
@@ -127,18 +127,18 @@ export function TaskTable({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [visible, setVisible] = useState<Record<ColumnKey, boolean>>(DEFAULT_COLUMNS);
-  // The columns you picked, remembered in this browser.
-  useEffect(() => {
-    const saved = readColumns();
-    if (saved) setVisible(saved);
-  }, []);
-  const showColumn = (key: ColumnKey, on: boolean) =>
-    setVisible((prev) => {
-      const next = { ...prev, [key]: on };
-      writeColumns(next);
-      return next;
-    });
+  // The columns you picked, remembered in this browser (read once it's here).
+  const storedColumns = useSyncExternalStore(noSubscribe, readColumnsRaw, () => null);
+  const [picked, setPicked] = useState<Record<ColumnKey, boolean> | null>(null);
+  const visible = useMemo(
+    () => picked ?? parseColumns(storedColumns) ?? DEFAULT_COLUMNS,
+    [picked, storedColumns],
+  );
+  const showColumn = (key: ColumnKey, on: boolean) => {
+    const next = { ...visible, [key]: on };
+    writeColumns(next);
+    setPicked(next);
+  };
 
   const sorted = useMemo(() => {
     if (!sortKey) return tasks;
@@ -664,10 +664,19 @@ const DEFAULT_COLUMNS: Record<ColumnKey, boolean> = {
 };
 const COLUMNS_KEY = "bs-task-table-columns";
 
-function readColumns(): Record<ColumnKey, boolean> | null {
+const noSubscribe = () => () => {};
+
+function readColumnsRaw(): string | null {
   try {
-    const raw = window.localStorage.getItem(COLUMNS_KEY);
-    if (!raw) return null;
+    return window.localStorage.getItem(COLUMNS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function parseColumns(raw: string | null): Record<ColumnKey, boolean> | null {
+  if (!raw) return null;
+  try {
     const parsed = JSON.parse(raw) as Partial<Record<ColumnKey, unknown>>;
     return Object.fromEntries(
       COLUMN_KEYS.map((k) => [k, typeof parsed[k] === "boolean" ? parsed[k] : DEFAULT_COLUMNS[k]]),
