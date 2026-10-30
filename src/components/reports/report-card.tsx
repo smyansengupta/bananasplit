@@ -1,6 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowUpRight, ChartNoAxesColumn, TriangleAlert, type IconComponent } from "@/components/icons";
+import {
+  ArrowUpRight,
+  ChartNoAxesColumn,
+  TriangleAlert,
+  type IconComponent,
+} from "@/components/icons";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +39,7 @@ export function ReportCard({
 }: {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   viewHref?: string | null;
   viewLabel?: string;
   computedAt?: string | null;
@@ -47,7 +52,7 @@ export function ReportCard({
     <Card className={cn("min-w-0 flex-1", className)} aria-labelledby={headingId} role="region">
       <CardHeader>
         <CardTitle id={headingId}>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        {description && <CardDescription>{description}</CardDescription>}
         {viewHref ? (
           <CardAction>
             <Button asChild variant="outline" size="icon-sm">

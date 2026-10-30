@@ -249,7 +249,6 @@ export default async function DatabaseViewPage({
             summary || restricted ? (
               <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
                 {summary && <span className="tabular-nums">{summary}</span>}
-                {summary && restricted && <span aria-hidden="true">·</span>}
                 {restricted && (
                   <span className="inline-flex items-center gap-1.5">
                     <Lock className="size-3.5" aria-hidden="true" />
@@ -300,8 +299,7 @@ export default async function DatabaseViewPage({
       {anonymous && (
         <p className={cn(notice.info, "flex items-start gap-2")}>
           <EyeOff className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          Votes are anonymous. You see totals; individual ballots are visible only as Admin panel ›
-          Privacy allows.
+          Votes are anonymous; you see totals.
         </p>
       )}
 
@@ -315,8 +313,8 @@ export default async function DatabaseViewPage({
               title="No polls yet"
               description={
                 admin
-                  ? "Import a poll definition to see its results here."
-                  : "Results show up here once your organization runs a poll."
+                  ? "Import a poll definition to see its results."
+                  : "Results show here once a poll runs."
               }
               action={
                 admin ? (
@@ -477,7 +475,7 @@ async function loadPage(
               formInitial={initial}
               mergeCandidates={nearby.map((n) => ({
                 id: n.id,
-                label: `${n.title} · ${fmtDate(n.startsAt, vctx.timezone)}`,
+                label: `${n.title}, ${fmtDate(n.startsAt, vctx.timezone)}`,
               }))}
             />
           ),
@@ -556,7 +554,7 @@ async function loadPage(
       members,
       sessions: sessions.map((s) => ({
         id: s.id,
-        label: `${s.title} · ${fmtDate(s.startsAt, vctx.timezone)}`,
+        label: `${s.title}, ${fmtDate(s.startsAt, vctx.timezone)}`,
       })),
     };
   }

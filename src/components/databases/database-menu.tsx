@@ -17,10 +17,11 @@ function download(href: string) {
 }
 
 /**
- * The "…" in a database's header: Export CSV for everyone, and for admins
- * the setup pages (CSV import, possible duplicates, poll definitions) that
- * used to sit beside the table as buttons. Plain props only: the server
- * page passes hrefs, this builds the entries.
+ * A database's header actions: Export CSV for everyone, and for admins the
+ * one setup page that kind has (CSV import, possible duplicates or poll
+ * definitions). Two at most, so ItemMenu shows them as icon buttons rather
+ * than behind a "…". Plain props only: the server page passes hrefs, this
+ * builds the entries.
  *
  * The table export carries the current view's query (filters, search,
  * sort, date range) and its visible columns, the same as the page shows;

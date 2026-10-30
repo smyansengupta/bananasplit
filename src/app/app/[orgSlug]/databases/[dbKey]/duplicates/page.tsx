@@ -63,7 +63,7 @@ export default async function DuplicatesPage({
   const pairs = findDuplicatePairs(data.events, tz);
   const flagged = data.events.filter((e) => e.needsReview);
   const describe = (e: (typeof data.events)[number]) =>
-    `${e.title} · ${fmtDateTime(e.startsAt, tz)} · ${e.attendanceCount} check-ins${e.sourceSessionId ? " · website" : ""}${e.googleEventId ? " · Google" : ""}`;
+    `${e.title}, ${fmtDateTime(e.startsAt, tz)}, ${e.attendanceCount} check-ins${e.sourceSessionId ? ", website" : ""}${e.googleEventId ? ", Google" : ""}`;
 
   const Row = ({ e, keep }: { e: (typeof data.events)[number]; keep?: boolean }) => (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
@@ -93,7 +93,7 @@ export default async function DuplicatesPage({
           pairs.length > 0 && `${pairs.length} likely ${pairs.length === 1 ? "pair" : "pairs"}`,
         ]
           .filter(Boolean)
-          .join(" · ");
+          .join(", ");
 
   return (
     <div className="max-w-3xl space-y-7.5">

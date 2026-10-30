@@ -137,7 +137,7 @@ export default async function ReportsPage({
       <div className="space-y-7.5">
         <PageHeader
           title="Reports"
-          description={`${range.label} · ${ids.length} ${ids.length === 1 ? "report" : "reports"} · times in ${tz}`}
+          description={`Times in ${tz}`}
           actions={
             <>
               <RangePicker
@@ -158,7 +158,7 @@ export default async function ReportsPage({
           <EmptyState
             icon={ChartNoAxesColumn}
             title="No reports to show"
-            description="The databases these reports read are not visible to your role in this organization."
+            description="Your role can't see the databases behind them."
           />
         ) : (
           <ReportsBody className="grid grid-cols-1 gap-4.5 lg:grid-cols-3">
