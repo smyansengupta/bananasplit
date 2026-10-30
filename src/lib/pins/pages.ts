@@ -69,7 +69,7 @@ const SUBPAGES: Record<string, string> = {
   "calendar/polls/ask": "Quick poll",
   "forms/new": "New form",
   "calendar/polls/new": "New find-a-time poll",
-  "meetings": "Meetings",
+  meetings: "Meetings",
   "calendar/sync": "Calendar sync",
   "databases/reports": "Reports",
   "finance/budget": "Budget",
@@ -191,6 +191,10 @@ export function describePath(orgSlug: string, address: string): PageInfo | null 
     parts.length === 3 &&
     ID.test(third)
   ) {
+    return { href, kind: "event", label: "Poll", lookup: { type: "poll", id: third } };
+  }
+  // A members' quick poll under Forms is a question poll, looked up the same way.
+  if (section === "forms" && second === "polls" && third && parts.length === 3 && ID.test(third)) {
     return { href, kind: "event", label: "Poll", lookup: { type: "poll", id: third } };
   }
   if (section === "calendar" && parts.length === 2 && ID.test(second)) {

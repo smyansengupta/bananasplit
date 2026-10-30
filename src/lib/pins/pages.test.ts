@@ -6,7 +6,9 @@ describe("describePath", () => {
   it("names fixed pages and sub-pages", () => {
     expect(describePath("cbc", "/app/cbc/tasks")).toMatchObject({ kind: "page", label: "Tasks" });
     expect(describePath("cbc", "/app/cbc/finance/budget")).toMatchObject({ label: "Budget" });
-    expect(describePath("cbc", "/app/cbc/settings/members")).toMatchObject({ label: "Admin panel · Members" });
+    expect(describePath("cbc", "/app/cbc/settings/members")).toMatchObject({
+      label: "Admin panel · Members",
+    });
     expect(describePath("cbc", "/app/cbc/")).toMatchObject({ label: "Overview", skipRecent: true });
   });
 
@@ -30,7 +32,7 @@ describe("describePath", () => {
     expect(describePath("cbc", "/app/cbc/calendar/polls/ask")).toEqual({
       href: "/app/cbc/calendar/polls/ask",
       kind: "page",
-      label: "Ask a question",
+      label: "Quick poll",
     });
     expect(describePath("cbc", "/app/cbc/calendar/polls/new")?.lookup).toBeUndefined();
     // Find a time is a section of its own; its polls are polls all the same.
@@ -98,13 +100,17 @@ describe("describePath", () => {
       lookup: { type: "folder", id: "f_1" },
       suffix: " · Uploads",
     });
-    expect(describePath("cbc", "/app/cbc/notes?tab=files")).toMatchObject({ label: "Files · Uploads" });
+    expect(describePath("cbc", "/app/cbc/notes?tab=files")).toMatchObject({
+      label: "Files · Uploads",
+    });
     expect(describePath("cbc", "/app/cbc/tasks?scope=mine&view=board")).toMatchObject({
       href: "/app/cbc/tasks?view=board&scope=mine",
       label: "Tasks · Board · Mine",
     });
     // The old "mine" view is the Week, scoped to you.
-    expect(canonicalHref("cbc", "/app/cbc/tasks?view=mine")).toBe("/app/cbc/tasks?view=week&scope=mine");
+    expect(canonicalHref("cbc", "/app/cbc/tasks?view=mine")).toBe(
+      "/app/cbc/tasks?view=week&scope=mine",
+    );
     // Anything else in a query is dropped, so one view has one address.
     expect(canonicalHref("cbc", "/app/cbc/finance?period=x")).toBe("/app/cbc/finance");
     expect(canonicalHref("cbc", "/app/cbc/tasks?view=nonsense")).toBe("/app/cbc/tasks");
