@@ -343,7 +343,7 @@ describe("org overview", () => {
     // In the polls widget (Up next above it lists them by urgency instead).
     const widget = html.slice(html.lastIndexOf("Open polls"));
     expect(widget.indexOf("Pizza or tacos?")).toBeLessThan(widget.indexOf("Exec sync time"));
-    expect(html).toContain('href="/app/cbc/calendar/polls/qp_1"');
+    expect(html).toContain('href="/app/cbc/forms/polls/qp_1"');
     expect(html).toContain('href="/app/cbc/calendar/find-a-time/ap_1"');
     expect(html).toContain("Question · Open");
     expect(html).toContain("Find a time · Open");

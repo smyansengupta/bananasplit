@@ -94,6 +94,12 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // Question-poll votes without who cast them, so an anonymous poll stays
   // anonymous in the export too (the counts per option are still there).
   { model: "PollVote", key: ID, omit: ["userId"] },
+  // Forms: the questions and settings; the answers are in the form's own
+  // database (DatabaseRecord, exported with the rest). A response's review
+  // (status, rating, officers' notes) and who sent it, as the suite shows
+  // them to owners.
+  { model: "Form", key: ID },
+  { model: "FormResponse", key: ID },
   { model: "BudgetPeriod", key: ID },
   { model: "BudgetCategory", key: ID },
   { model: "Transaction", key: ID },
