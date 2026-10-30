@@ -1,4 +1,4 @@
-import type { EventKind, RSVPStatus } from "@/generated/prisma/client";
+import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/client";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { dayWordOfKey, dueLabel, whenWord } from "@/lib/overview/format";
 import { arrangeUpNext, taskTone, type UpNextCandidate } from "@/lib/overview/up-next";
@@ -18,6 +18,8 @@ import type { EventGoing, PersonFace, PollStat, TaskExtras } from "./queries";
 export interface UpNextBlock extends UpNextCandidate {
   /** The event's kind, so its card can take that kind's colour. */
   eventKind?: EventKind | null;
+  /** A task's status now, so Done on the card can be undone back to it. */
+  taskStatus?: TaskStatus;
   kicker: string;
   title: string;
   subtitle: string | null;
@@ -59,6 +61,7 @@ export function buildUpNext(input: {
     blocks.push({
       id: task.id,
       kind: "task",
+      taskStatus: task.status,
       tone: taskTone(dueKey, input.todayKey),
       at: task.dueDate,
       kicker:
@@ -97,7 +100,7 @@ export function buildUpNext(input: {
         tone: waiting ? "answer" : "quiet",
         eventKind: event.kind,
         at: event.startsAt,
-        kicker: waiting ? `Your RSVP · ${when}` : when,
+        kicker: when,
         title: event.title,
         subtitle: event.location,
         ...(count > 0
@@ -122,7 +125,7 @@ export function buildUpNext(input: {
     const asked = poll.closesAt ?? addDays(poll.createdAt, OPEN_POLL_DAYS);
     if (asked.getTime() <= input.now.getTime()) continue;
     const closes = poll.closesAt
-      ? ` · closes ${dayWordOfKey(localDateKey(poll.closesAt, input.zones.viewer), input.todayKey)}`
+      ? `, closes ${dayWordOfKey(localDateKey(poll.closesAt, input.zones.viewer), input.todayKey)}`
       : "";
     blocks.push({
       id: poll.id,

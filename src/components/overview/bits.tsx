@@ -69,8 +69,10 @@ export function TileIcon({ children, className }: { children: ReactNode; classNa
 export function TileText({ title, sub }: { title: ReactNode; sub?: ReactNode }) {
   return (
     <span className="min-w-0">
-      <span className="block truncate text-sm leading-tight font-semibold">{title}</span>
-      {sub && <span className="text-muted-foreground mt-0.5 block truncate text-[13px]">{sub}</span>}
+      <span className="block text-sm leading-tight font-semibold break-words">{title}</span>
+      {sub && (
+        <span className="text-muted-foreground mt-0.5 block text-[13px] break-words">{sub}</span>
+      )}
     </span>
   );
 }

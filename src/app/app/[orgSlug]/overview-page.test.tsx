@@ -261,7 +261,7 @@ describe("org overview", () => {
     expect(html).toContain('href="/app/cbc/tasks/t_stuck"');
     expect(html).toContain("8 open");
     expect(html).toContain("1 overdue");
-    expect(html).toContain("Overdue · Thu, Oct 1");
+    expect(html).toContain("Overdue, Thu, Oct 1");
     expect(html).toContain("Blocked");
     expect(html).toContain("Part of Fall kickoff logistics");
     expect(html).toContain('aria-label="Private task"');
@@ -348,14 +348,14 @@ describe("org overview", () => {
     expect(widget.indexOf("Pizza or tacos?")).toBeLessThan(widget.indexOf("Exec sync time"));
     expect(html).toContain('href="/app/cbc/calendar/polls/qp_1"');
     expect(html).toContain('href="/app/cbc/calendar/find-a-time/ap_1"');
-    expect(html).toContain("Question · Open");
-    expect(html).toContain("Find a time · Open");
+    expect(html).toContain("Question, open");
+    expect(html).toContain("Find a time, open");
   });
 
   it("shows a next step when there is nothing pinned or coming up", async () => {
     const html = await render();
     expect(html).toContain("Nothing pinned yet");
-    expect(html).toContain("Nothing needs you this week");
+    expect(html).toContain("Nothing this week.");
     mocks.loadSavedBoard.mockResolvedValue([
       { id: "meetings", type: "meetings", w: 2, h: null },
       { id: "events", type: "events", w: 2, h: null },
@@ -433,7 +433,8 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain('id="up-next-heading"');
     expect(html).toContain('aria-label="Weekly pulse"');
     // The RSVP waiting on the viewer is an answer block.
-    expect(html).toContain("Your RSVP · Today · 7:00 PM");
+    expect(html).toContain("Today, 7:00 PM");
+    expect(html).toContain("Can&#x27;t go");
     expect(html.indexOf('id="up-next-heading"')).toBeLessThan(
       html.indexOf('aria-label="My tasks"'),
     );

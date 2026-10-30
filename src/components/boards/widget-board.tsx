@@ -429,9 +429,7 @@ export function WidgetBoard({
                       <GripVertical className="size-4" aria-hidden="true" />
                     </span>
                   )}
-                  <h2 title={m.title} className="heading min-w-0 truncate text-[17px]">
-                    {m.title}
-                  </h2>
+                  <h2 className="heading min-w-0 text-[17px] break-words">{m.title}</h2>
                   {actions && (
                     <div className="flex min-w-0 flex-1 items-center gap-1.5">{actions}</div>
                   )}
@@ -497,7 +495,7 @@ export function WidgetBoard({
             <div className="space-y-5">
               {groups.map((group) => (
                 <section key={group} className="space-y-2">
-                  <h3 className="eyebrow text-muted-foreground">{group}</h3>
+                  <h3 className="text-muted-foreground text-[13px] font-semibold">{group}</h3>
                   <ul className="grid gap-2.5 sm:grid-cols-2">
                     {types
                       .filter((t) => t.group === group)

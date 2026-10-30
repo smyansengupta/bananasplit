@@ -58,7 +58,9 @@ import {
   rsvpSeatsTaken,
 } from "@/server/overview/queries";
 import { buildUpNext } from "@/server/overview/up-next";
-import { hideUpNextCard, showHiddenUpNextCards } from "./up-next-actions";
+import { hideUpNextCard, showHiddenUpNextCards, unhideUpNextCard } from "./up-next-actions";
+import { rsvpToEvent } from "./calendar/actions";
+import { setTaskStatus } from "./tasks/actions";
 import { listPins, listRecent } from "@/server/pins";
 import { listOpenPolls } from "@/server/polls/open-polls";
 import {
@@ -500,7 +502,10 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
               slots={upNext}
               calendarHref={calendarHref}
               onHide={hideUpNextCard.bind(null, org.id)}
+              onUnhide={unhideUpNextCard.bind(null, org.id)}
               onShowAll={showHiddenUpNextCards.bind(null, org.id)}
+              onDone={setTaskStatus.bind(null, org.id)}
+              onRsvp={rsvpToEvent.bind(null, org.id)}
               hiddenCount={data.hiddenUpNext.length}
             />
             {started}
