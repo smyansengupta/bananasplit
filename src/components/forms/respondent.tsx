@@ -694,6 +694,8 @@ function UploadField({
   const input = useRef<HTMLInputElement>(null);
 
   async function send(file: File) {
+    // The builder's preview has no form to send to.
+    if (!slug) return;
     setBusy(true);
     onError(null);
     const body = new FormData();
@@ -857,6 +859,56 @@ function Results({ results }: { results: { summary: QuestionSummary[]; total: nu
           </div>
         ),
       )}
+    </div>
+  );
+}
+
+/**
+ * One question as respondents see it, for the builder's preview: the same
+ * screen, answerable, nothing sent. Key it by question and type so a new
+ * question starts blank.
+ */
+export function QuestionPreview({ q, number }: { q: Question; number: number }) {
+  const [value, setValue] = useState<Answer | undefined>(undefined);
+  const [other, setOther] = useState("");
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h2 className="display-title text-[24px] leading-snug">
+          {q.type !== "section" && q.type !== "hidden" && (
+            <span className="text-muted-foreground me-2 text-[0.7em] tabular-nums">{number}.</span>
+          )}
+          {q.title || "Untitled question"}
+          {q.required && q.type !== "section" && <span className="text-muted-foreground"> *</span>}
+        </h2>
+        {q.help && (
+          <p className="text-muted-foreground text-[15px] whitespace-pre-line">{q.help}</p>
+        )}
+      </div>
+      {q.type === "hidden" ? (
+        <p className="text-muted-foreground text-[14px]">
+          Not shown. Filled from the link: ?{q.param ?? "source"}=...
+        </p>
+      ) : (
+        <Field
+          q={q}
+          value={value}
+          other={other}
+          onOther={setOther}
+          onChange={setValue}
+          onPick={(id) =>
+            setValue((now) => {
+              if (q.type !== "checkboxes") return id;
+              const list = Array.isArray(now) ? now : [];
+              return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+            })
+          }
+          members={[]}
+          slug=""
+          onError={() => undefined}
+        />
+      )}
+      <Go onClick={() => undefined} label="OK" />
     </div>
   );
 }

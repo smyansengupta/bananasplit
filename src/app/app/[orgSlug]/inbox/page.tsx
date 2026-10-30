@@ -15,6 +15,7 @@ import {
   localDateKey,
 } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { toReviewForOwner } from "@/server/forms/forms";
 import { getMyOpenTasks } from "@/server/tasks/queries";
 
 import { InboxNeeds, InboxUpdates, MarkAllRead, type NeedRow, type UpdateRow } from "./inbox-list";
@@ -90,7 +91,9 @@ export default async function InboxPage({
       orderBy: { createdAt: "desc" },
       take: UPDATES_LIMIT,
     });
-    return { tz, todayKey, invites, tasks, toReview, notifications };
+    // Forms this person made whose responses wait on a review.
+    const forms = can(ctx, "databases.write") ? await toReviewForOwner(db, org.id, user.id) : [];
+    return { tz, todayKey, invites, tasks, toReview, forms, notifications };
   });
 
   const weekEnd = addDaysToKey(data.todayKey, TASK_DAYS);
@@ -133,6 +136,13 @@ export default async function InboxPage({
           },
         ]
       : []),
+    ...data.forms.map((f) => ({
+      kind: "review" as const,
+      id: `form-${f.id}`,
+      title: f.count === 1 ? "1 response to review" : `${f.count} responses to review`,
+      meta: f.title,
+      href: `${base}/forms/${f.id}?tab=responses&view=review`,
+    })),
   ];
   const updates: UpdateRow[] = data.notifications.map((n) => ({
     id: n.id,
