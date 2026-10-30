@@ -116,6 +116,7 @@ model User {
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  itemLinksMade          ItemLink[]
 }
 
 /// When a user can't meet (profile setup A5, the profile page). Its own
@@ -430,6 +431,7 @@ model Organization {
   noteFolders       NoteFolder[]
   pulseIssues       PulseIssue[]
   connectorGrants   ConnectorGrant[]
+  itemLinks               ItemLink[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -2777,4 +2779,26 @@ model ConnectorGrant {
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, clientId])
+}
+
+/// A link between any two things in a space (a meeting and its sign-up
+/// form, a task and the notes it came from), shown in the Linked panel on
+/// both ends. It holds only the two references: titles and links are looked
+/// up as the viewer each time, so a private note linked from a meeting never
+/// shows its title to someone who can't open it.
+model ItemLink {
+  id             String   @id @default(cuid())
+  organizationId String
+  fromKind       String
+  fromId         String
+  toKind         String
+  toId           String
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, fromKind, fromId, toKind, toId])
+  @@index([organizationId, toKind, toId])
 }
