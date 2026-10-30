@@ -42,7 +42,6 @@ export function JoinForm({ initialCode }: { initialCode: string }) {
 
   const value = code.join("");
   const complete = code.every(Boolean);
-  const empty = code.every((c) => !c);
 
   useEffect(() => {
     latest.current = complete ? value : "";
@@ -89,13 +88,13 @@ export function JoinForm({ initialCode }: { initialCode: string }) {
           logoUrl={org.logoUrl}
           detail={
             <>
-              {org.memberCount} {org.memberCount === 1 ? "member" : "members"} ·{" "}
-              {found.alreadyMember ? "you're already a member" : "you'll join as a member"}
+              {org.memberCount} {org.memberCount === 1 ? "member" : "members"}
+              {found.alreadyMember ? ", you're a member" : ""}
             </>
           }
           badge={
             <span className="bg-tint-success text-tint-success-foreground flex-none rounded-full px-2.5 py-[5px] text-[12px] font-bold">
-              ✓ Found
+              Found
             </span>
           }
         />
@@ -105,11 +104,6 @@ export function JoinForm({ initialCode }: { initialCode: string }) {
         <p role="alert" className="text-destructive m-0 text-[14px]">
           {error}
         </p>
-      )}
-      {empty && !error && (
-        <span className="text-muted-foreground text-[14px]">
-          Tip: you can paste the whole code into the first box.
-        </span>
       )}
 
       {org && ready && found.alreadyMember ? (
@@ -135,13 +129,13 @@ export function JoinForm({ initialCode }: { initialCode: string }) {
               ? `Join ${org.name}`
               : complete && checking
                 ? "Finding your organization…"
-                : `Enter all ${code.length} characters`}
+                : "Join"}
         </button>
       )}
 
       <div className="text-muted-foreground flex justify-between gap-4 text-[14px]">
         <Link href="/onboarding/organization" className="text-muted-foreground font-semibold">
-          Starting a new organization instead?
+          Start one instead
         </Link>
         <button
           type="button"

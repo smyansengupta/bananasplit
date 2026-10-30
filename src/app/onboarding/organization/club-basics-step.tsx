@@ -77,10 +77,7 @@ export function ClubBasicsStep({
 
   return (
     <SetupCard>
-      <StepIntro title="Name your organization.">
-        You&apos;ll be its owner, and its {TRIAL_DAYS} days of Team Advanced start now, free, with
-        no card. You can change all of this later.
-      </StepIntro>
+      <StepIntro title="Name your organization.">{TRIAL_DAYS} days free, no card.</StepIntro>
 
       {notice ? (
         <StepBody>{notice}</StepBody>

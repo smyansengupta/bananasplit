@@ -37,9 +37,7 @@ export function ImportStep(props: SetupStepProps & { spreadsheetHref: string }) 
     <SetupCard>
       <StepIntro
         title={flow === "org" ? "Bring your team's work with you." : "Bring your stuff with you."}
-      >
-        Start fresh, or pick where you&apos;re coming from.
-      </StepIntro>
+      ></StepIntro>
       <StepBody className="gap-3">
         <button
           type="button"
