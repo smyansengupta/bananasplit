@@ -42,11 +42,11 @@ import type { LabelOption, MemberOption } from "./types";
 export function FieldLabel({
   children,
   htmlFor,
-  optional,
   required,
 }: {
   children: ReactNode;
   htmlFor?: string;
+  /** Kept for callers; optional is the default, so it isn't printed. */
   optional?: boolean;
   required?: boolean;
 }) {
@@ -56,9 +56,6 @@ export function FieldLabel({
         {children}
         {required && <span className="text-destructive"> *</span>}
       </label>
-      {optional && (
-        <span className="text-muted-foreground/80 text-[11px] font-normal">Optional</span>
-      )}
     </div>
   );
 }
