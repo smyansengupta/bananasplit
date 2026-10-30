@@ -38,6 +38,9 @@ function row(overrides: Partial<Row> = {}): Row {
     kind: "BOARD_MEETING",
     format: "ONLINE",
     location: null,
+    meetingType: null,
+    hostUserId: null,
+    featured: false,
     conferenceProvider: "ZOOM",
     conferenceManaged: true,
     conferenceUrl: JOIN,
@@ -54,6 +57,7 @@ function base(overrides: Partial<Props> = {}): Props {
     status: { kind: "ready" },
     href: "/app/acme/meetings/e1",
     timeZone: "America/New_York",
+    type: null,
     // Two hours before the meeting in row().
     now: new Date("2026-11-02T20:00:00Z"),
     going: 0,
@@ -107,18 +111,19 @@ describe("MeetingCard: the link to the meeting", () => {
     expect(container.querySelectorAll("a a, a button").length).toBe(0);
   });
 
-  it("has none with everything on it: a picture, the faces and your answer", () => {
+  it("has none with everything on it: a picture, a type, the faces and your answer", () => {
     const { container } = card({
       event: row({ rsvpEnabled: true, rsvpSlug: "exec", rsvpCover: COVER }),
       canManage: true,
       featured: true,
       going: 3,
       myRsvp: "YES",
+      type: { name: "Standup", color: "#22aa66" },
       crowd: { faces: [ADA, GRACE], going: 2, maybe: 0, awaited: 0, invited: 2 },
     });
 
     expect(container.querySelectorAll("a a, a button").length).toBe(0);
-    // Your answer sits beside the title, not inside its link.
+    // Your answer sits under the title, not inside its link.
     expect(screen.getByRole("link", { name: "Exec sync" }).textContent).toBe("Exec sync");
   });
 
@@ -134,29 +139,36 @@ describe("MeetingCard: the link to the meeting", () => {
 });
 
 describe("MeetingCard: its shape", () => {
-  it.each(["ONLINE", "IN_PERSON", "HYBRID"] as const)("shows the %s badge", (format) => {
-    card({ event: row({ format }) });
+  it.each(["ONLINE", "IN_PERSON", "HYBRID"] as const)(
+    "says %s when there is no call or place to name",
+    (format) => {
+      card({
+        event: row({ format, conferenceProvider: "NONE", conferenceUrl: null }),
+        status: { kind: "none" },
+      });
 
-    expect(screen.getByText(FORMAT_LABEL[format])).toBeTruthy();
-  });
+      expect(screen.getByText(FORMAT_LABEL[format])).toBeTruthy();
+    },
+  );
 
-  it("shows a Sign-ups badge when the meeting takes sign-ups", () => {
-    card({ event: row({ rsvpEnabled: true, rsvpSlug: "exec" }) });
-
-    expect(screen.getByText("Sign-ups")).toBeTruthy();
-  });
-
-  it("shows no Sign-ups badge when it does not", () => {
-    card({ event: row({ rsvpEnabled: false, rsvpSlug: null }) });
-
-    expect(screen.queryByText("Sign-ups")).toBeNull();
-  });
-
-  it("says when a sign-up page exists but is turned off", () => {
-    card({ event: row({ rsvpEnabled: false, rsvpSlug: "exec" }) });
+  it("tells hosts when a sign-up page exists but is turned off", () => {
+    card({ event: row({ rsvpEnabled: false, rsvpSlug: "exec" }), canManage: true });
 
     expect(screen.getByText("Sign-ups off")).toBeTruthy();
-    expect(screen.queryByText("Sign-ups")).toBeNull();
+  });
+
+  it("names its meeting type", () => {
+    card({ type: { name: "Standup", color: "#22aa66" } });
+
+    expect(screen.getByText("Standup")).toBeTruthy();
+  });
+
+  it("names no type when it has none", () => {
+    const { container } = card({ type: null });
+
+    expect(container.querySelector("[style*='background: color-mix']")?.textContent).not.toBe(
+      "Standup",
+    );
   });
 
   it("shows where an in-person meeting is", () => {
@@ -316,7 +328,7 @@ describe("MeetingCard: the host's link", () => {
   });
 });
 
-describe("MeetingCard: sign-ups on the right", () => {
+describe("MeetingCard: sign-ups", () => {
   it("shows hosts the head count", () => {
     card({
       event: row({ rsvpEnabled: true, rsvpSlug: "exec", rsvpCapacity: 20 }),
@@ -325,23 +337,22 @@ describe("MeetingCard: sign-ups on the right", () => {
       waiting: 2,
     });
 
-    // "7" and " of 20 going · 2 waitlisted" are sibling spans.
-    expect(screen.getByText(/going/).parentElement?.textContent).toBe(
-      "7 of 20 going · 2 waitlisted",
-    );
+    expect(screen.getByText("Signed up, 2 waitlisted")).toBeTruthy();
+    // "7" and " of 20" are sibling spans.
+    expect(screen.getByText(/of 20/).parentElement?.textContent).toBe("7 of 20");
   });
 
   it("says nothing about sign-ups on a meeting without a sign-up page", () => {
     card({ canManage: true });
 
-    expect(screen.queryByText("No sign-up page")).toBeNull();
-    expect(screen.queryByText(/going/)).toBeNull();
+    expect(screen.queryByText(/signed up/i)).toBeNull();
   });
 
-  it("tells a member they are going", () => {
+  it("tells a member they are signed up", () => {
     card({ event: row({ rsvpEnabled: true, rsvpSlug: "exec" }), mine: "GOING" });
 
-    expect(screen.getByText("You're going")).toBeTruthy();
+    expect(screen.getByText("You're signed up")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "RSVP" })).toBeNull();
   });
 
   it("tells a member they are waitlisted", () => {
@@ -351,22 +362,25 @@ describe("MeetingCard: sign-ups on the right", () => {
   });
 
   it("invites a member who has not signed up to RSVP", () => {
-    card({ event: row({ rsvpEnabled: true, rsvpSlug: "exec" }), mine: null });
+    card({
+      event: row({ rsvpEnabled: true, rsvpSlug: "exec", conferenceUrl: null }),
+      status: { kind: "none" },
+      mine: null,
+    });
 
-    expect(screen.getByText("RSVP")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "RSVP" }).getAttribute("href")).toBe("/e/exec");
   });
 });
 
 describe("MeetingCard: a long title", () => {
-  // jsdom has no CSS, so this pins the classes. `line-clamp-2` only cuts at two
-  // lines on a -webkit-box, and `block` after it in the stylesheet would turn
-  // that back into a plain block and let a long title stretch the card.
-  it("is cut at two lines: line-clamp-2, and no class that would override its display", () => {
+  // jsdom has no CSS, so this pins the classes. A meeting's title is how
+  // people tell two apart, so it wraps in full rather than being cut.
+  it("is never cut: it wraps, with no line clamp or truncation", () => {
     card();
 
     const title = screen.getByRole("link", { name: "Exec sync" });
-    expect(title.classList.contains("line-clamp-2")).toBe(true);
-    expect(title.classList.contains("block")).toBe(false);
+    expect(title.className).not.toMatch(/line-clamp|truncate/);
+    expect(title.classList.contains("break-words")).toBe(true);
   });
 
   it("keeps the stretched-link overlay", () => {
@@ -376,39 +390,40 @@ describe("MeetingCard: a long title", () => {
     expect(screen.getByRole("link", { name: "Exec sync" }).classList).toContain("after:inset-0");
   });
 
-  it("is a block box on the featured card, which does not clamp", () => {
+  it("is not cut on the featured card either", () => {
     card({ featured: true });
 
-    const title = screen.getByRole("link", { name: "Exec sync" });
-    expect(title.classList.contains("block")).toBe(true);
-    expect(title.classList.contains("line-clamp-2")).toBe(false);
+    expect(screen.getByRole("link", { name: "Exec sync" }).className).not.toMatch(
+      /line-clamp|truncate/,
+    );
   });
 });
 
-describe("MeetingCard: the featured card", () => {
-  it("says it is next up, and is still one card", () => {
-    card({ featured: true });
-
-    const item = screen.getByText("Next up").closest("li") as HTMLElement;
-    expect(within(item).getByRole("link", { name: "Exec sync" })).toBeTruthy();
-  });
-
-  it("says next up on a featured card with a picture", () => {
-    card({ featured: true, event: row({ rsvpCover: COVER }) });
-
-    expect(screen.getByText("Next up")).toBeTruthy();
-  });
-
-  it("says next up on the first card even when it is not wide", () => {
+describe("MeetingCard: the next one and the wide one", () => {
+  it("fills the next meeting's countdown in its colour", () => {
     card({ first: true });
 
-    expect(screen.getByText("Next up")).toBeTruthy();
+    expect(screen.getByText("in 2 hours").classList).toContain("bg-(--kind)");
   });
 
-  it("says nothing of the kind on the others", () => {
+  it("leaves the others' countdowns plain", () => {
     card();
 
+    expect(screen.getByText("in 2 hours").classList).not.toContain("bg-(--kind)");
+  });
+
+  it("puts no label above the title", () => {
+    card({ featured: true, first: true });
+
     expect(screen.queryByText("Next up")).toBeNull();
+  });
+
+  it("takes two columns when featured, and is still one card", () => {
+    card({ featured: true });
+
+    const item = screen.getByRole("link", { name: "Exec sync" }).closest("li") as HTMLElement;
+    expect(item.classList).toContain("lg:col-span-2");
+    expect(within(item).getByRole("link", { name: "Join Exec sync" })).toBeTruthy();
   });
 });
 
@@ -447,7 +462,7 @@ describe("MeetingCard: who is coming", () => {
 
     expect(screen.getByText("AL")).toBeTruthy();
     expect(screen.getByText("GH")).toBeTruthy();
-    expect(screen.getByText("2 going · 1 maybe · 1 yet to answer")).toBeTruthy();
+    expect(screen.getByText("2 going, 1 maybe, 1 yet to answer")).toBeTruthy();
   });
 
   it("says how many were asked before anyone has said yes", () => {
@@ -463,25 +478,40 @@ describe("MeetingCard: who is coming", () => {
   });
 });
 
-describe("MeetingCard: your own answer", () => {
-  it("says you're going when you said yes", () => {
-    card({ myRsvp: "YES" });
+describe("MeetingCard: your part in it", () => {
+  it("says you're hosting", () => {
+    card({ hosting: true, myRsvp: "YES" });
 
-    expect(screen.getByText("You're going")).toBeTruthy();
+    expect(screen.getByText("You're hosting")).toBeTruthy();
+    expect(screen.queryByText(/^Invited/)).toBeNull();
   });
 
-  it("says you said maybe", () => {
-    card({ myRsvp: "MAYBE" });
+  it("asks for a reply to an invite you haven't answered", () => {
+    card({ myRsvp: "PENDING" });
 
-    expect(screen.getByText("You said maybe")).toBeTruthy();
+    expect(screen.getByText("Invited, reply needed")).toBeTruthy();
   });
 
-  it("says nothing while you have not answered, or said no", () => {
-    for (const myRsvp of ["PENDING", "NO", null] as const) {
-      const { unmount } = card({ myRsvp });
-      expect(screen.queryByText("You're going")).toBeNull();
-      expect(screen.queryByText("You said maybe")).toBeNull();
-      unmount();
-    }
+  it("only says you were invited once the meeting is over", () => {
+    card({ myRsvp: "PENDING", past: true });
+
+    expect(screen.getByText("You were invited")).toBeTruthy();
+    expect(screen.queryByText("Invited, reply needed")).toBeNull();
+  });
+
+  it.each([
+    ["YES", "Invited, you're going"],
+    ["MAYBE", "Invited, you said maybe"],
+    ["NO", "Invited, you declined"],
+  ] as const)("says what you answered (%s)", (myRsvp, text) => {
+    card({ myRsvp });
+
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+
+  it("says nothing on a meeting you weren't asked to", () => {
+    card({ myRsvp: null });
+
+    expect(screen.queryByText(/invited|hosting/i)).toBeNull();
   });
 });

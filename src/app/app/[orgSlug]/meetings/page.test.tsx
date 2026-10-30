@@ -69,6 +69,9 @@ function stored(overrides: Record<string, unknown> = {}) {
     kind: "BOARD_MEETING",
     format: "ONLINE",
     location: null,
+    meetingType: null,
+    hostUserId: null,
+    featured: false,
     conferenceProvider: "ZOOM",
     conferenceManaged: true,
     conferenceUrl: "https://us02web.zoom.us/j/98765432100",
@@ -80,7 +83,10 @@ function stored(overrides: Record<string, unknown> = {}) {
 
 function signIn(
   role: "OWNER" | "ADMIN" | "MEMBER",
-  settings: { meetingReminderMinutes: number[] } | null = null,
+  settings: {
+    meetingReminderMinutes?: number[];
+    eventTypes?: { name: string; color: string }[];
+  } | null = null,
 ) {
   mocks.context.mockResolvedValue({
     organization: { id: "org_1", kind: "CLUB", timezone: "America/New_York" },
@@ -110,8 +116,8 @@ async function render(search: Record<string, string | string[]> = {}) {
 }
 
 /** Every MeetingCard's props. */
-async function cards() {
-  return propsOf(await render(), mocks.Card);
+async function cards(search: Record<string, string | string[]> = {}) {
+  return propsOf(await render(search), mocks.Card);
 }
 
 /** Every New meeting button's props, header first. */
@@ -323,14 +329,11 @@ describe("the Meetings list: who is coming", () => {
   });
 });
 
-describe("the Meetings list: Next up", () => {
+describe("the Meetings list: the next one and the wide one", () => {
   const COVER = { key: "k", s480: "/covers/k-480.webp", s960: "/covers/k-960.webp" };
 
-  it("makes the first meeting the wide card when it has a picture", async () => {
-    mocks.findMany.mockResolvedValue([
-      stored({ id: "a", rsvpCover: COVER }),
-      stored({ id: "b", rsvpCover: COVER }),
-    ]);
+  it("makes the first meeting the wide card, picture or not", async () => {
+    mocks.findMany.mockResolvedValue([stored({ id: "a" }), stored({ id: "b", rsvpCover: COVER })]);
 
     const [a, b] = await cards();
 
@@ -338,20 +341,30 @@ describe("the Meetings list: Next up", () => {
     expect(b).toMatchObject({ featured: false, first: false });
   });
 
-  it("keeps a first meeting with no picture in the grid, still saying Next up", async () => {
-    mocks.findMany.mockResolvedValue([stored({ id: "a" }), stored({ id: "b" })]);
+  it("widens a Featured meeting instead, and still lights the first", async () => {
+    mocks.findMany.mockResolvedValue([stored({ id: "a" }), stored({ id: "b", featured: true })]);
+
+    const [a, b] = await cards();
+
+    expect(a).toMatchObject({ featured: false, first: true });
+    expect(b).toMatchObject({ featured: true, first: false });
+  });
+
+  it("does not widen a lone meeting", async () => {
+    mocks.findMany.mockResolvedValue([stored({ id: "a" })]);
 
     const [a] = await cards();
 
     expect(a).toMatchObject({ featured: false, first: true });
   });
 
-  it("does not say Next up on the Past list", async () => {
+  it("widens and lights nothing on the Past list", async () => {
     const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     mocks.findMany.mockResolvedValue([
       stored({
         id: "old",
         rsvpCover: COVER,
+        featured: true,
         startsAt: lastWeek,
         endsAt: new Date(lastWeek.getTime() + 60 * 60 * 1000),
       }),
@@ -360,6 +373,54 @@ describe("the Meetings list: Next up", () => {
     const [old] = await cards();
 
     expect(old).toMatchObject({ featured: false, first: false, past: true });
+  });
+});
+
+describe("the Meetings list: your part and the type", () => {
+  it("tells a card you are hosting it", async () => {
+    mocks.findMany.mockResolvedValue([
+      stored({ id: "a", hostUserId: "user_1" }),
+      stored({ id: "b", hostUserId: "user_2" }),
+    ]);
+
+    const [a, b] = await cards();
+
+    expect(a).toMatchObject({ hosting: true });
+    expect(b).toMatchObject({ hosting: false });
+  });
+
+  it("gives a card its type in the organization's colour", async () => {
+    signIn("ADMIN", { eventTypes: [{ name: "Standup", color: "#22aa66" }] });
+    mocks.findMany.mockResolvedValue([
+      stored({ id: "a", meetingType: "Standup" }),
+      stored({ id: "b", meetingType: "Retired type" }),
+      stored({ id: "c" }),
+    ]);
+
+    const [a, b, c] = await cards();
+
+    expect(a).toMatchObject({ type: { name: "Standup", color: "#22aa66" } });
+    // A type no longer on the organization's list has no colour to draw.
+    expect(b).toMatchObject({ type: null });
+    expect(c).toMatchObject({ type: null });
+  });
+
+  it("shows only the chosen type with ?type=", async () => {
+    signIn("ADMIN", { eventTypes: [{ name: "Standup", color: "#22aa66" }] });
+    mocks.findMany.mockResolvedValue([
+      stored({ id: "a", meetingType: "Standup" }),
+      stored({ id: "b" }),
+    ]);
+
+    expect((await cards({ type: "Standup" })).map((c) => (c.event as { id: string }).id)).toEqual([
+      "a",
+    ]);
+    expect((await cards({ type: "-" })).map((c) => (c.event as { id: string }).id)).toEqual(["b"]);
+    // A type nothing here has any more shows everything.
+    expect((await cards({ type: "Gone" })).map((c) => (c.event as { id: string }).id)).toEqual([
+      "a",
+      "b",
+    ]);
   });
 });
 

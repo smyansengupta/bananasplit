@@ -55,6 +55,12 @@ export function kindStyle(kind: EventKind): React.CSSProperties {
   return { ["--kind" as string]: `var(${KIND_META[kind].token})` };
 }
 
+/**
+ * Black or white, whichever reads on a SOLID fill of `--kind` (set as
+ * `color` beside `background: var(--kind)`), as block-card.tsx does.
+ */
+export const KIND_INK = "oklch(from var(--kind) clamp(0, (0.62 - l) * 1000, 1) 0 0)";
+
 /** A chip's colour: its meeting type's, else its kind's, or the primary for a task's due date. */
 export function itemStyle(item: {
   kind: EventKind;

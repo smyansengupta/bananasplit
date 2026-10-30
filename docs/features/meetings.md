@@ -674,19 +674,44 @@ everything, split into Coming up and Past; everyone else sees what they can act
 on - something still to come that has a link to join or a page open for
 sign-ups.
 
-Each meeting is a card (`meeting-card.tsx`): its sign-up picture with the date
-on it, or, with no picture, a calendar-leaf date and how soon it is ("in 2
-hours") instead of a placeholder; its title, when it is, its format (Online, In
-person or Hybrid, `FORMAT_LABEL`), whether sign-ups are on, off or not set up,
-and where it is. For an online meeting it names the call, and while the link is
-being made, or if it could not be, says so on the card. Under that, who is
-coming from its invitees: the faces of the people going (or of the people
-asked, before anyone has said yes) and "2 going · 1 maybe · 1 yet to answer";
-a meeting nobody was invited to leaves the row out. Your own answer ("You're
-going", "You said maybe") sits beside the title. For hosts the right-hand side
-is the head count of a sign-up page; for everyone else it is their own sign-up.
-A meeting with no sign-up page says nothing there. The first upcoming meeting
-says **Next up**, and is the wide card only when it has a picture to fill it.
+Each meeting is a card (`meeting-card.tsx`) that reads the same way every
+time. First when: its sign-up picture with the date on it, or, with no
+picture, a date tile (month, day, weekday) beside the title, and how soon it is
+("in 2 hours", or "Happening now"). Then the title, in full: it wraps and is
+never cut off. Then one details line: your part in it, its meeting type, and
+what you join or where to be. Then a footer of who is coming, with Join beside
+it.
+
+**Your part** comes first on the details line, because the list is the whole
+organization's and most meetings on it are not yours: "You're hosting"
+(Event.hostUserId), "Invited, reply needed" for an invite you have not answered,
+or "Invited, you're going", "Invited, you said maybe" or "Invited, you
+declined". Once a meeting is over an unanswered invite only says "You were
+invited". A meeting you neither host nor were invited to has no tag.
+
+**The type** is the meeting's type (Event.meetingType) in the colour the
+organization gave it (Settings, `meetingTypeColor`). That colour is on the date
+tile's month and the type's pill, which always has the name in it. A type no
+longer on the organization's list draws in its kind's colour instead and has
+no pill. A row of chips above the list filters it to one type, or to the
+meetings with none (`?type=`), and **By type** groups it under each type
+(`?sort=type`); both are on the URL, so a filtered view can be shared.
+
+For an online meeting the details line names the call, and says so on the card
+while the link is being made, or if it could not be. A meeting with no call
+and no place says its format (Online, In person or Hybrid, `FORMAT_LABEL`).
+Hosts also see "Sign-ups off" when its sign-up page is turned off, and, in the
+footer, the head count of its sign-up page with a meter when the cap is 60 or
+fewer. Everyone else sees their own sign-up ("You're signed up", "On the
+waitlist") or an **RSVP** button while the page is open. The faces in the
+footer are the people going (or the people asked, before anyone has said yes),
+with "2 going, 1 maybe, 1 yet to answer"; a meeting nobody was invited to
+leaves that out.
+
+The next meeting's date tile and countdown fill solid in its type's colour, so
+the page has one place the eye lands first. A meeting marked Featured takes two
+columns; when none is, the next one does (when there is more than one). There
+is no label above any title. Past meetings keep the same card in grey.
 
 The title is the one link to the meeting's page, stretched over the whole card
 so the card still clicks through. **Join** and **Copy link** sit above it as its
