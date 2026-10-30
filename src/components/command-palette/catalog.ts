@@ -395,7 +395,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       key: `page:/settings/${s.segment}`,
       group: "pages",
       title: s.label,
-      detail: `Admin panel · ${s.description}`,
+      detail: `Admin panel, ${s.description}`,
       keywords: SETTINGS_KEYWORDS[s.segment] ?? [],
       icon: s.icon,
       command: { type: "href", href: `${base}/settings/${s.segment}` },

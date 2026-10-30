@@ -67,7 +67,7 @@ export function StorageBanner({
       </p>
       {showLink && (
         <Button asChild size="sm" variant="outline">
-          <Link href={`/app/${orgSlug}/settings/plan/storage`}>See storage</Link>
+          <Link href={`/app/${orgSlug}/settings/plan`}>See storage</Link>
         </Button>
       )}
     </div>

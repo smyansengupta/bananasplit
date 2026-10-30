@@ -191,7 +191,7 @@ export function OrgSwitcher({
             ) : null}
             {canInvite ? (
               <DropdownMenuItem asChild>
-                <Link href={`${base}/settings/members`}>
+                <Link href={`${base}/people?view=table&invite=1`}>
                   <UserPlus className="size-4" aria-hidden="true" />
                   Invite people
                 </Link>

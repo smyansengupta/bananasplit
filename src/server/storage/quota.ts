@@ -176,7 +176,7 @@ export async function confirmFits(
 
 /** Where the storage page is. */
 export function storagePageHref(slug: string): string {
-  return `/app/${slug}/settings/plan/storage`;
+  return `/app/${slug}/settings/plan`;
 }
 
 /**

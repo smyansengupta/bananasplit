@@ -166,7 +166,7 @@ export default async function NotesPage({
               maxFileBytes={storage.maxFileBytes}
               parts={storageParts}
               personal={personal}
-              href={storage.canManage ? `/app/${orgSlug}/settings/plan/storage` : null}
+              href={storage.canManage ? `/app/${orgSlug}/settings/plan` : null}
             />
             <NotesNewMenu
               orgId={org.id}

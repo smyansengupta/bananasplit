@@ -89,14 +89,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     feature: "privacy",
   },
   {
-    label: "Integrations",
-    segment: "integrations",
-    description: "Email, Claude, Google Calendar and website data.",
-    icon: "Plug",
-    permission: "integrations.view",
-    feature: "integrations",
-  },
-  {
     label: "Audit log",
     segment: "audit",
     description: "Who changed what, and when.",

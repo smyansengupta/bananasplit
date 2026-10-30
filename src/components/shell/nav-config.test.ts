@@ -336,7 +336,6 @@ describe("Admin panel navigation", () => {
       "Theme",
       "Members",
       "Privacy",
-      "Integrations",
       "Audit log",
       "Danger zone",
     ]);

@@ -98,7 +98,7 @@ describe("Settings › Plan and storage: a club", () => {
     const { data } = fake.db.notification.createMany.mock.calls[0][0];
     expect(data.map((n: { userId: string }) => n.userId)).toEqual(["owner_1", "admin_1"]);
     expect(data[0].title).toBe("Robotics is using 85% of its storage");
-    expect(data[0].linkUrl).toBe("/app/robotics/settings/plan/storage");
+    expect(data[0].linkUrl).toBe("/app/robotics/settings/plan");
   });
 
   it("lets a downgrade leave the club over its storage (uploads pause; nothing is deleted)", async () => {
