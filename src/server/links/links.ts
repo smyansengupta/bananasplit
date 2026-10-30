@@ -31,6 +31,7 @@ export async function resolveRefs(
   orgId: string,
   orgSlug: string,
   refs: readonly LinkRef[],
+  timeZone = "UTC",
 ): Promise<Map<string, ResolvedRef>> {
   const base = `/app/${orgSlug}`;
   const ids = (kind: LinkKind) => [
@@ -69,7 +70,15 @@ export async function resolveRefs(
       select: { id: true, title: true, startsAt: true },
     });
     for (const e of rows) {
-      put("event", e.id, e.title, `${base}/meetings/${e.id}`, DAY.format(e.startsAt));
+      put(
+        "event",
+        e.id,
+        e.title,
+        `${base}/meetings/${e.id}`,
+        new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(
+          e.startsAt,
+        ),
+      );
     }
   }
   const noteIds = ids("note");
@@ -121,12 +130,6 @@ export async function resolveRefs(
   return out;
 }
 
-const DAY = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-
 /**
  * What `ref` is linked to, both ways, as the viewer can see it: newest
  * link first, and only the ends that resolve for them.
@@ -136,6 +139,7 @@ export async function listLinked(
   orgId: string,
   orgSlug: string,
   ref: LinkRef,
+  timeZone = "UTC",
 ): Promise<LinkedItem[]> {
   const rows = await db.itemLink.findMany({
     where: {
@@ -154,7 +158,7 @@ export async function listLinked(
     const id = fromHere ? r.toId : r.fromId;
     return isLinkKind(kind) ? [{ kind, id, linkId: r.id }] : [];
   });
-  const resolved = await resolveRefs(db, orgId, orgSlug, others);
+  const resolved = await resolveRefs(db, orgId, orgSlug, others, timeZone);
   return others.flatMap((o) => {
     const hit = resolved.get(key(o));
     return hit ? [{ ...hit, linkId: o.linkId }] : [];

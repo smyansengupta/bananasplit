@@ -501,17 +501,21 @@ export function EventDetailView({
               <CardTitle>Invited</CardTitle>
               <Badge variant="secondary">{event.attendees.length}</Badge>
               <span className="flex-1" />
-              {going.length > 0 && <FaceStack people={going.map((a) => a.user)} />}
-              {canEdit && (
-                <InviteButton
-                  orgId={orgId}
-                  eventId={event.id}
-                  members={members}
-                  invited={event.attendees.map((a) => a.userId)}
-                />
-              )}
+              {!canEdit && going.length > 0 && <FaceStack people={going.map((a) => a.user)} />}
             </CardHeader>
             <CardContent>
+              {canEdit && (
+                // The picker shows who's invited itself, so it gets the card's
+                // full width rather than a corner of the header.
+                <div className="mb-3">
+                  <InviteButton
+                    orgId={orgId}
+                    eventId={event.id}
+                    members={members}
+                    invited={event.attendees.map((a) => a.userId)}
+                  />
+                </div>
+              )}
               {event.attendees.length > 0 ? (
                 <>
                   <p className="text-muted-foreground mb-3 text-[13px] tabular-nums">

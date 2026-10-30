@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-import { withOrgAction } from "@/server/db/context";
+import { withOrgAction, type OrgContext } from "@/server/db/context";
 import {
   isLinkKind,
   listLinked,
@@ -24,10 +24,19 @@ const refSchema = z.object({
 });
 const slugSchema = z.string().min(1).max(100);
 
+/** The organization's time zone, for the dates on linked meetings. */
+async function zoneOf(ctx: OrgContext): Promise<string> {
+  const org = await ctx.db.organization.findUnique({
+    where: { id: ctx.organizationId },
+    select: { timezone: true },
+  });
+  return org?.timezone ?? "UTC";
+}
+
 export const listLinksAction = withOrgAction(
   async (ctx, orgSlug: string, ref: LinkRef): Promise<LinkedItem[]> => {
     const at = refSchema.parse(ref) as LinkRef;
-    return listLinked(ctx.db, ctx.organizationId, slugSchema.parse(orgSlug), at);
+    return listLinked(ctx.db, ctx.organizationId, slugSchema.parse(orgSlug), at, await zoneOf(ctx));
   },
 );
 
@@ -42,7 +51,7 @@ export const addLinkAction = withOrgAction(
     const b = refSchema.parse(to) as LinkRef;
     if (a.kind === b.kind && a.id === b.id) return { error: "That's this page." };
     const slug = slugSchema.parse(orgSlug);
-    const seen = await resolveRefs(ctx.db, ctx.organizationId, slug, [a, b]);
+    const seen = await resolveRefs(ctx.db, ctx.organizationId, slug, [a, b], await zoneOf(ctx));
     if (!seen.has(`${a.kind}:${a.id}`) || !seen.has(`${b.kind}:${b.id}`)) {
       return { error: "Couldn't find that." };
     }

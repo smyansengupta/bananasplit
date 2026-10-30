@@ -18,7 +18,13 @@ export async function LinkedSection({
   at: LinkRef;
   className?: string;
 }) {
-  const items = await withOrgTx(orgId, ({ db }) => listLinked(db, orgId, orgSlug, at));
+  const items = await withOrgTx(orgId, async ({ db }) => {
+    const org = await db.organization.findUnique({
+      where: { id: orgId },
+      select: { timezone: true },
+    });
+    return listLinked(db, orgId, orgSlug, at, org?.timezone ?? "UTC");
+  });
   return (
     <LinkedPanel orgId={orgId} orgSlug={orgSlug} at={at} initial={items} className={className} />
   );
