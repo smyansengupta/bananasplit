@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable theme/no-raw-colors, @next/next/no-html-link-for-pages -- the root layout failed: no theme tokens, stylesheet or router to lean on, so plain colours and a full-page link. */
+
 /**
  * The last resort: the root layout itself failed, so nothing of the app's
  * (fonts, theme, components) can be counted on. Plain HTML, the same two
