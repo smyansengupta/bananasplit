@@ -7,7 +7,6 @@ import { kindStyle } from "@/components/calendar/kinds";
 import { CONFERENCE_LABELS } from "@/lib/meetings/conference-status";
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { FORMAT_LABEL } from "@/lib/meetings/shape";
-import { timeLine } from "@/lib/rsvp/when";
 import { cn } from "@/lib/utils";
 
 import { PastMeetingBrowser, type PastMonth } from "./past-meeting-browser";
@@ -205,11 +204,10 @@ function PastRow({
         >
           {e.title}
         </Link>
-        <span className="text-muted-foreground block text-[13px]">
-          {facts.host
-            ? `Hosted by ${facts.host}`
-            : timeLine(e.startsAt, e.endsAt, timeZone, e.allDay)}
-        </span>
+        {/* The plan's row: who hosted it, and no time line without a host. */}
+        {facts.host && (
+          <span className="text-muted-foreground block text-[13px]">Hosted by {facts.host}</span>
+        )}
         {/* On a phone the other columns fold under the title. */}
         <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] md:hidden">
           {typeName && <TypePill name={typeName} />}
