@@ -46,18 +46,6 @@ export const TASK_KEYS = {
   updates: "u",
 } as const;
 
-/**
- * Keys for the task under the keyboard (Board, List, Table): move with j and
- * k, open with Enter, and act on it without opening it.
- */
-export const TASK_ITEM_KEYS = {
-  next: "j",
-  previous: "k",
-  done: "d",
-  assign: "a",
-  due: "s",
-} as const;
-
 /** Whose work: the scope chips' keys. */
 export const SCOPE_KEYS: Partial<Record<"mine" | "team" | "all", string>> = {
   mine: "m",
@@ -183,22 +171,12 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
     if (input.taskViews && input.teamwork) {
       tasks.push({ keys: [[upper(TASK_KEYS.updates)]], label: "Weekly update" });
     }
-    tasks.push(
-      {
-        keys: [[upper(TASK_ITEM_KEYS.next)], [upper(TASK_ITEM_KEYS.previous)]],
-        label: "Next or previous task",
-      },
-      { keys: [["Enter"]], label: "Open the task" },
-      { keys: [[upper(TASK_ITEM_KEYS.done)]], label: "Mark it done (again to reopen)" },
-      { keys: [[upper(TASK_ITEM_KEYS.assign)]], label: "Change its owner" },
-      { keys: [[upper(TASK_ITEM_KEYS.due)]], label: "Change its due date" },
-    );
     groups.push(
       { title: "Tasks page", rows: tasks },
       {
         title: "In a task",
         rows: [
-          { keys: [[mod, "Enter"]], label: "Create (a new task)" },
+          { keys: [[mod, "Enter"]], label: "Save" },
           { keys: [["Esc"]], label: "Close" },
           {
             keys: [["T"], ["M"], ["F"], ["W"]],

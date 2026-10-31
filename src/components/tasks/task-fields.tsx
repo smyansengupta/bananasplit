@@ -42,11 +42,11 @@ import type { LabelOption, MemberOption } from "./types";
 export function FieldLabel({
   children,
   htmlFor,
+  optional,
   required,
 }: {
   children: ReactNode;
   htmlFor?: string;
-  /** Kept for callers; optional is the default, so it isn't printed. */
   optional?: boolean;
   required?: boolean;
 }) {
@@ -56,6 +56,9 @@ export function FieldLabel({
         {children}
         {required && <span className="text-destructive"> *</span>}
       </label>
+      {optional && (
+        <span className="text-muted-foreground/80 text-[11px] font-normal">Optional</span>
+      )}
     </div>
   );
 }
@@ -333,30 +336,15 @@ export function OwnerField({
   onChange,
   disabled,
   allowNone = true,
-  trigger,
-  align = "end",
-  open: openProp,
-  onOpenChange,
 }: {
   id?: string;
   value: string | null;
   onChange: (id: string | null) => void;
   disabled?: boolean;
   allowNone?: boolean;
-  /** Something else to open the menu with (a card's avatar) instead of the well. */
-  trigger?: ReactNode;
-  align?: "start" | "end";
-  /** Controlled, for a keyboard shortcut that opens it. */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 }) {
   const { members, memberById } = useTasks();
-  const [ownOpen, setOwnOpen] = useState(false);
-  const open = openProp ?? ownOpen;
-  const setOpen = (next: boolean) => {
-    setOwnOpen(next);
-    onOpenChange?.(next);
-  };
+  const [open, setOpen] = useState(false);
   const owner = value ? memberById.get(value) : undefined;
   const search = useMemberSearch(members, {
     always: true,
@@ -370,26 +358,24 @@ export function OwnerField({
   return (
     <Popover open={open} onOpenChange={(o) => (setOpen(o), o || search.reset())}>
       <PopoverTrigger asChild>
-        {trigger ?? (
-          <button
-            id={id}
-            type="button"
-            disabled={disabled}
-            aria-label="Owner"
-            className={wellClass(open, !owner)}
-          >
-            {owner && (
-              <span className="flex shrink-0 pe-1">
-                <UserAvatar user={owner} size="xs" className="ring-card -me-1.5 ring-2" />
-              </span>
-            )}
-            <span className="truncate">{owner ? firstName(owner) : "No owner"}</span>
-            <UpDown />
-          </button>
-        )}
+        <button
+          id={id}
+          type="button"
+          disabled={disabled}
+          aria-label="Owner"
+          className={wellClass(open, !owner)}
+        >
+          {owner && (
+            <span className="flex shrink-0 pe-1">
+              <UserAvatar user={owner} size="xs" className="ring-card -me-1.5 ring-2" />
+            </span>
+          )}
+          <span className="truncate">{owner ? firstName(owner) : "No owner"}</span>
+          <UpDown />
+        </button>
       </PopoverTrigger>
       <PopoverContent
-        align={align}
+        align="end"
         className={MENU}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
@@ -427,7 +413,7 @@ export function OwnerField({
           className="flex max-h-72 flex-col gap-px overflow-y-auto"
         >
           {search.filtered.length === 0 && (
-            <p className="text-muted-foreground px-2 py-2 text-[13px]">No match</p>
+            <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
           )}
           {search.filtered.map((m, i) => {
             const on = m.id === value;
@@ -443,7 +429,7 @@ export function OwnerField({
                 onClick={() => search.pick(m)}
               >
                 <UserAvatar user={m} size="xs" />
-                <span className="break-words">{m.name ?? "Member"}</span>
+                <span className="truncate">{m.name ?? "Member"}</span>
                 {on ? (
                   <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
                 ) : (
@@ -510,7 +496,7 @@ export function PeopleField({
               ))}
             </span>
           )}
-          <span className="break-words">
+          <span className="truncate">
             {picked.length === 0 ? "Nobody else" : picked.map((m) => firstName(m)).join(", ")}
           </span>
           <UpDown />
@@ -575,7 +561,7 @@ export function PeopleField({
                 onClick={() => search.pick(m)}
               >
                 <UserAvatar user={m} size="xs" />
-                <span className="break-words">{m.name ?? "Member"}</span>
+                <span className="truncate">{m.name ?? "Member"}</span>
                 {on ? (
                   <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
                 ) : (
@@ -782,9 +768,6 @@ export function DueField({
   disabled,
   label = "Due date",
   emptyLabel = "No due date",
-  trigger,
-  open: openProp,
-  onOpenChange,
 }: {
   id?: string;
   value: string;
@@ -793,34 +776,22 @@ export function DueField({
   /** The same picker for another date (the start date). */
   label?: string;
   emptyLabel?: string;
-  /** Something else to open the menu with (a card's date) instead of the well. */
-  trigger?: ReactNode;
-  /** Controlled, for a keyboard shortcut that opens it. */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 }) {
-  const [ownOpen, setOwnOpen] = useState(false);
-  const open = openProp ?? ownOpen;
-  const setOpen = (next: boolean) => {
-    setOwnOpen(next);
-    onOpenChange?.(next);
-  };
+  const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        {trigger ?? (
-          <button
-            id={id}
-            type="button"
-            disabled={disabled}
-            aria-label={label}
-            className={wellClass(open, !value)}
-          >
-            <Calendar className="text-muted-foreground size-[15px] shrink-0" aria-hidden="true" />
-            <span className="truncate">{value ? shortDue(value) : emptyLabel}</span>
-            <UpDown />
-          </button>
-        )}
+        <button
+          id={id}
+          type="button"
+          disabled={disabled}
+          aria-label={label}
+          className={wellClass(open, !value)}
+        >
+          <Calendar className="text-muted-foreground size-[15px] shrink-0" aria-hidden="true" />
+          <span className="truncate">{value ? shortDue(value) : emptyLabel}</span>
+          <UpDown />
+        </button>
       </PopoverTrigger>
       <PopoverContent align="start" className={MENU}>
         <DueMenu
@@ -892,7 +863,7 @@ export function PartOfField({
           ) : (
             <EpicDot epic={picked ?? null} />
           )}
-          <span className="text-start break-words">
+          <span className="truncate">
             {picked ? (
               <>
                 {epic && <span className="text-muted-foreground font-normal">{epic.title} / </span>}

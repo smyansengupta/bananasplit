@@ -63,10 +63,10 @@ test("full workspace workflow", async ({ page }) => {
   // --- create a task, then drag it to a different status column ---
   await page.goto(`/app/${orgSlug}/tasks?view=board`);
   const taskTitle = `E2E task ${uniqueSuffix()}`;
-  // A column's + opens a one-line quick add at its top; Enter adds the task.
   await page.getByRole("button", { name: "Add a task to Not started" }).click();
-  await page.getByLabel("Title, @owner, date").fill(taskTitle);
-  await page.getByLabel("Title, @owner, date").press("Enter");
+  await page.getByLabel("Title", { exact: true }).fill(taskTitle);
+  await page.getByRole("button", { name: "Create task" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
 
   const card = page.getByRole("button", { name: taskTitle, exact: true });
   await expect(card).toBeVisible();

@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { loadTaskActivity } from "@/app/app/[orgSlug]/tasks/actions";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { formatDueKey } from "@/lib/tasks/dates";
 import { typeLabel } from "@/lib/tasks/hierarchy";
 import type { TaskActivityItem } from "@/server/tasks/queries";
 
-import { STATUS_LABEL as STATUS_LABELS } from "./layout-ui";
+import { STATUS_LABELS } from "./status-select";
 import { useTasks } from "./tasks-context";
 
 /** The task's history (TaskActivity, append-only), loaded on demand. */
@@ -53,19 +53,10 @@ function describe(item: TaskActivityItem, nameOf: (id: unknown) => string): stri
   }
 }
 
-export function TaskActivity({ taskId, autoLoad = false }: { taskId: string; autoLoad?: boolean }) {
+export function TaskActivity({ taskId }: { taskId: string }) {
   const { org, memberById } = useTasks();
   const [items, setItems] = useState<TaskActivityItem[] | null>(null);
   const [isPending, startTransition] = useTransition();
-  // On a task's own page the history is nearly always wanted: load it.
-  useEffect(() => {
-    if (!autoLoad) return;
-    let live = true;
-    void loadTaskActivity(org.id, taskId).then((loaded) => live && setItems(loaded));
-    return () => {
-      live = false;
-    };
-  }, [autoLoad, org.id, taskId]);
   const nameOf = (id: unknown) =>
     typeof id === "string" ? (memberById.get(id)?.name ?? "a former member") : "someone";
 
@@ -82,7 +73,7 @@ export function TaskActivity({ taskId, autoLoad = false }: { taskId: string; aut
           })
         }
       >
-        {isPending || autoLoad ? "Loading history" : "Show history"}
+        {isPending ? "Loading history…" : "Show history"}
       </Button>
     );
   }

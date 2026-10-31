@@ -46,20 +46,20 @@ async function readTaskLink(to: string, title: string, timeoutMs = 30_000): Prom
   throw new Error(`No assignment email to ${to} for "${title}" in ${MAIL_DIR}.`);
 }
 
+function inDays(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 test("a handed-down task emails a deep link that survives sign-in", async ({ page }) => {
   const title = `E2E hand-down ${uniqueSuffix()}`;
 
   await signIn(page, oliver);
   await page.goto(`/app/${ORG}/tasks?view=board`);
-  // New task (the header's create button) opens the form.
-  await page.getByRole("button", { name: "New task", exact: true }).click();
+  await page.getByRole("button", { name: "Add a task to Not started" }).click();
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Owner", { exact: true }).click();
   await page.getByRole("option", { name: /Alex Green/ }).click();
-  // The date menu reads typed dates.
-  await page.getByRole("button", { name: "Due date", exact: true }).click();
-  await page.getByLabel("Type a date").fill("in 14 days");
-  await page.getByLabel("Type a date").press("Enter");
+  await page.getByLabel("Due", { exact: true }).fill(inDays(14));
   await page.getByRole("button", { name: "Create task" }).click();
   // (The owner popover is also a role=dialog while it animates out.)
   await expect(page.getByRole("dialog", { name: "New task" })).toBeHidden({ timeout: 20_000 });
@@ -79,7 +79,8 @@ test("a handed-down task emails a deep link that survives sign-in", async ({ pag
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue(title);
   await expect(page.getByText("Created by")).toBeVisible();
 
-  // Alex owns it now; clean up. Deleting doesn't ask (it offers Undo).
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  // Alex owns it now; clean up.
+  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete task" }).click();
   await page.waitForURL(new RegExp(`/app/${ORG}/tasks$`));
 });

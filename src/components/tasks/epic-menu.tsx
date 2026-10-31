@@ -144,9 +144,7 @@ export function ParentMenu({
               onClick={() => onPick(p.id)}
             >
               {p.type === "EPIC" ? <EpicDot epic={p} /> : <TaskTypeChip type="STORY" iconOnly />}
-              <span
-                className={cn("break-words", p.status === "COMPLETED" && "text-muted-foreground")}
-              >
+              <span className={cn("truncate", p.status === "COMPLETED" && "text-muted-foreground")}>
                 {p.type === "STORY" && epic ? (
                   <>
                     <span className="text-muted-foreground">{epic.title} / </span>
@@ -177,9 +175,7 @@ export function ParentMenu({
             disabled={isPending}
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
-            <span className="break-words">
-              {isPending ? "Creating…" : `Create epic “${typed}”`}
-            </span>
+            <span className="truncate">{isPending ? "Creating…" : `Create epic “${typed}”`}</span>
           </button>
         )}
       </div>

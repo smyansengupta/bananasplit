@@ -16,15 +16,15 @@ import {
 import { useModKey } from "@/components/command-palette/use-mod-key";
 import { PinToggle } from "@/components/pins/pins-context";
 import { Button } from "@/components/ui/button";
-import { SavedMark, type FieldSaveStatus } from "@/components/ui/autosave";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { undoable } from "@/components/ui/toaster";
+import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { TaskPriority, TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
 import { canAcknowledgeFlag, canEditTask } from "@/lib/tasks/access";
 import { relationFor } from "@/lib/tasks/assignment";
 import { dueDateKey } from "@/lib/tasks/dates";
-import { allowedTypes, typeLabel, type TaskTypeValue } from "@/lib/tasks/hierarchy";
+import { allowedTypes, TASK_TYPES, typeLabel, type TaskTypeValue } from "@/lib/tasks/hierarchy";
 import { LABEL_COLOR_PALETTE } from "@/lib/label-colors";
 import { epicColor, parentTypesFor } from "@/lib/tasks/epic";
 import { MAX_BLOCKED_REASON } from "@/lib/tasks/status";
@@ -64,12 +64,8 @@ import { AudienceList } from "./visibility-control";
  * The task form, in the side panel and on the task's own page, laid out as
  * the task drawer design has it: the title and description set straight on
  * the panel, then labelled fields (dropdown wells, and segments for status,
- * priority and who can see it).
- *
- * An existing task saves itself: a pick saves the moment it's made, the
- * title and description when you leave them (or on ⌘↵), and a small "Saved"
- * says so. Nothing to press and nothing lost by closing. A new task (made
- * from the task's own page) keeps its Create button.
+ * priority and who can see it), with Cancel and Create (⌘↵) along the
+ * bottom.
  * Create and edit:
  * title, description with @mentions, status (a reason when Blocked),
  * priority, due date (and a start date for epics and stories), what it's
@@ -119,11 +115,8 @@ export function TaskEditor({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmElement, confirmFlagged] = useConfirmFlagged();
+  const [confirmEl, confirm] = useConfirm();
   const hashTags = useHashTags();
-  // The version this editor last saw (each save bumps it), so a save made
-  // after someone else's change is caught instead of overwriting it.
-  const [version, setVersion] = useState(task?.version);
-  const [saveStatus, setSaveStatus] = useState<FieldSaveStatus>("idle");
   const mod = useModKey();
   const saving = useRef(false);
 
@@ -207,76 +200,6 @@ export function TaskEditor({
   const ownerRequired = org.requireOwner && isTopLevel;
   const dueRequired = org.requireDueDate && isTopLevel;
   const hasStart = type === "EPIC" || type === "STORY";
-
-  /**
-   * Saves one change to an existing task. An above-level owner or helper is
-   * confirmed first (the server asks); declining puts the field back.
-   */
-  async function commit(patch: Record<string, unknown>, revert?: () => void) {
-    if (!task || readOnly) return;
-    setError(null);
-    setSaveStatus("saving");
-    const send = (extra: { confirmFlagged?: boolean } = {}) =>
-      updateTask(org.id, task.id, { ...patch, ...extra, expectedVersion: version });
-    let result = await send();
-    if ("confirm" in result && result.confirm) {
-      const ok = await confirmFlagged(result.confirm.flagged.map((f) => f.name ?? "Someone"));
-      if (!ok) {
-        revert?.();
-        setSaveStatus("idle");
-        return;
-      }
-      result = await send({ confirmFlagged: true });
-    }
-    if (result.error) {
-      setError(result.error);
-      setSaveStatus("error");
-      revert?.();
-      return;
-    }
-    if ("version" in result && typeof result.version === "number") setVersion(result.version);
-    if ("droppedMentions" in result && result.droppedMentions?.length) {
-      announce(`Not mentioned (can't see this task): ${result.droppedMentions.join(", ")}`);
-    }
-    setSaveStatus("saved");
-  }
-
-  /** The title, on leaving it: `#tags` in it tag the task. */
-  async function commitTitle() {
-    if (!task || readOnly) return;
-    const next = title.trim();
-    if (!next) {
-      setTitle(task.title);
-      return;
-    }
-    if (next === task.title && hashTags.preview(next).length === 0) return;
-    let finalTitle = next;
-    let finalLabelIds: string[] | undefined;
-    if (hashTags.preview(next).length > 0) {
-      const resolved = await hashTags.resolve(next);
-      if (resolved.error) {
-        setError(resolved.error);
-        return;
-      }
-      finalTitle = resolved.title;
-      finalLabelIds = [...new Set([...labelIds, ...resolved.labelIds])];
-      setTitle(finalTitle);
-      setLabelIds(finalLabelIds);
-    }
-    await commit({ title: finalTitle, ...(finalLabelIds ? { labelIds: finalLabelIds } : {}) });
-  }
-
-  function commitDescription() {
-    if (!task || readOnly) return;
-    if ((task.description ?? "") === description) return;
-    void commit({ description: description.trim() ? description : null });
-  }
-
-  /** A field changed: show it now, save it now (existing tasks only). */
-  function change<T>(set: (v: T) => void, prev: T, next: T, patch: Record<string, unknown>) {
-    set(next);
-    if (!isNew) void commit(patch, () => set(prev));
-  }
 
   async function save() {
     // One save at a time: ⌘↵ held down, or pressed while the first is in flight.
@@ -371,17 +294,27 @@ export function TaskEditor({
     );
   }
 
-  function remove() {
+  async function remove() {
     if (!task) return;
     const subtasks = task.subtasks?.length ?? 0;
-    void undoable({
-      title: subtasks > 0 ? `Deleted with ${subtasks} subtasks` : "Deleted",
-      run: async () => {
-        const error = (await deleteTask(org.id, task.id)).error;
-        if (!error) (onDeleted ?? onDone)?.();
-        return error;
+    const ok = await confirm({
+      title: `Delete “${task.title}”?`,
+      description:
+        subtasks > 0
+          ? `Its ${subtasks} subtask${subtasks === 1 ? "" : "s"} go${subtasks === 1 ? "es" : ""} with it. You can undo this right after.`
+          : "You can undo this right after.",
+      confirmLabel: `Delete ${typeLabel(type).toLowerCase()}`,
+      run: async () => (await deleteTask(org.id, task.id)).error,
+    });
+    if (!ok) return;
+    (onDeleted ?? onDone)?.();
+    toast({
+      title: `${typeLabel(type)} deleted`,
+      description: task.title,
+      action: {
+        label: "Undo",
+        run: async () => (await restoreTask(org.id, task.id)).error,
       },
-      undo: async () => (await restoreTask(org.id, task.id)).error,
     });
   }
 
@@ -430,23 +363,34 @@ export function TaskEditor({
   const involved = self.owner || self.joined;
   const isAssignee = self.joined;
 
-  const heading = isNew ? `New ${typeLabel(type).toLowerCase()}` : null;
+  const heading = isNew ? `New ${typeLabel(type).toLowerCase()}` : typeLabel(type);
+  const visibilityHint =
+    visibility === TaskVisibility.PRIVATE
+      ? "Only the people on it, plus the organization's owners and admins, can see this task."
+      : "Anyone in the organization can find and open this task.";
 
-  // A new task: Create (⌘↵). An existing one saves itself, so its footer is
-  // just Delete and the Saved mark.
   const footer = (
     <div
       className={cn("flex items-center gap-2", mode === "dialog" ? "border-t px-5 py-3.5" : "pt-1")}
     >
       {task && canEdit && (
-        <Button type="button" variant="destructive" onClick={remove} disabled={isPending}>
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={() => void remove()}
+          disabled={isPending}
+        >
           <Trash2 className="size-4" aria-hidden="true" />
-          Delete
+          Delete {typeLabel(type).toLowerCase()}
         </Button>
       )}
       <span className="flex-1" />
-      {task && <SavedMark status={saveStatus} error={null} />}
-      {isNew && canEdit && (
+      {mode === "dialog" && onDone && (
+        <Button type="button" variant="outline" size="lg" className="px-4" onClick={onDone}>
+          {canEdit ? "Cancel" : "Close"}
+        </Button>
+      )}
+      {canEdit && (
         <Button
           type="button"
           size="lg"
@@ -454,7 +398,7 @@ export function TaskEditor({
           onClick={() => void save()}
           disabled={isPending || !title.trim()}
         >
-          {isPending ? "Creating" : `Create ${typeLabel(type).toLowerCase()}`}
+          {isPending ? "Saving…" : isNew ? `Create ${typeLabel(type).toLowerCase()}` : "Save"}
           <span aria-hidden="true" className="hidden gap-0.5 sm:inline-flex">
             <kbd className="bg-primary-foreground/15 inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] px-1 font-mono text-[11px] font-semibold">
               {mod}
@@ -489,12 +433,8 @@ export function TaskEditor({
             autoFocus={isNew}
             placeholder="Untitled task"
             onChange={(next) => setTitle(next.replace(/\n/g, " "))}
-            onBlur={() => void commitTitle()}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
-                e.preventDefault();
-                if (!isNew) e.currentTarget.blur();
-              }
+              if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) e.preventDefault();
             }}
             className="placeholder:text-muted-foreground/70 field-sizing-content w-full resize-none border-0 bg-transparent p-0 text-[26px] leading-[1.25] font-semibold tracking-[-0.015em] outline-none disabled:opacity-100"
           />
@@ -506,7 +446,9 @@ export function TaskEditor({
         {readOnly ? (
           description ? (
             <TaskMarkdown className="text-foreground/80 text-sm">{description}</TaskMarkdown>
-          ) : null
+          ) : (
+            <p className="text-muted-foreground text-sm">No description.</p>
+          )
         ) : (
           <MentionTextarea
             id="task-description"
@@ -514,10 +456,9 @@ export function TaskEditor({
             linkFrom={task ? { kind: "task", id: task.id } : null}
             value={description}
             onChange={setDescription}
-            onBlur={commitDescription}
-            onSubmitShortcut={() => (isNew ? void save() : commitDescription())}
+            onSubmitShortcut={() => void save()}
             rows={2}
-            placeholder="Description"
+            placeholder="Add a description. Markdown, @mentions and /file links work."
             className="text-foreground/80 placeholder:text-muted-foreground/70 field-sizing-content min-h-0 resize-none rounded-none border-0 bg-transparent p-0 text-sm leading-[1.55] shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
           />
         )}
@@ -530,15 +471,14 @@ export function TaskEditor({
             id="task-type"
             label="Type"
             value={type}
-            onChange={(next) =>
-              change(setType, type, next, {
-                type: next,
-                ...(next === "EPIC" ? { parentTaskId: null } : {}),
-              })
-            }
+            onChange={setType}
             options={typeOptions}
             disabled={readOnly}
           />
+          <p className="text-muted-foreground text-xs">
+            {TASK_TYPES.find((t) => t.value === type)?.hint}
+            {type === "EPIC" && ". Its progress rolls up from the stories and tasks inside it."}
+          </p>
         </Field>
       )}
 
@@ -550,29 +490,26 @@ export function TaskEditor({
           <OwnerField
             id="task-owner"
             value={ownerId}
-            onChange={(next) =>
-              change(setOwnerId, ownerId, next, {
-                ownerId: next,
-                assigneeIds: assigneeIds.filter((id) => id !== next),
-              })
-            }
+            onChange={setOwnerId}
             disabled={readOnly}
             allowNone={!ownerRequired}
           />
-          {isNew && ownerId && relationFor(viewer.chart, ownerId) === "ABOVE" && (
-            <p className="text-warning text-xs">Will be flagged (above you)</p>
-          )}
+          {ownerId &&
+            relationFor(viewer.chart, ownerId) === "ABOVE" &&
+            ownerId !== task?.ownerId && (
+              <p className="text-warning text-xs">
+                Above your level: this assignment will be flagged.
+              </p>
+            )}
         </Field>
         <Field>
-          <FieldLabel htmlFor="task-involved">Involved</FieldLabel>
+          <FieldLabel htmlFor="task-involved" optional>
+            Involved people
+          </FieldLabel>
           <PeopleField
             id="task-involved"
             value={assigneeIds}
-            onChange={(next) =>
-              change(setAssigneeIds, assigneeIds, next, {
-                assigneeIds: next.filter((id) => id !== ownerId),
-              })
-            }
+            onChange={setAssigneeIds}
             exclude={ownerId}
             disabled={readOnly}
           />
@@ -581,13 +518,15 @@ export function TaskEditor({
 
       {hasStart && (
         <Field>
-          <FieldLabel htmlFor="task-start-date">Start date</FieldLabel>
+          <FieldLabel htmlFor="task-start-date" optional>
+            Start date
+          </FieldLabel>
           <DueField
             id="task-start-date"
             label="Start date"
             emptyLabel="No start date"
             value={startDate}
-            onChange={(next) => change(setStartDate, startDate, next, { startDate: next || null })}
+            onChange={setStartDate}
             disabled={readOnly}
           />
         </Field>
@@ -598,16 +537,13 @@ export function TaskEditor({
           <FieldLabel htmlFor="task-due-date" required={dueRequired}>
             Due date
           </FieldLabel>
-          <DueField
-            id="task-due-date"
-            value={dueDate}
-            onChange={(next) => change(setDueDate, dueDate, next, { dueDate: next || null })}
-            disabled={readOnly}
-          />
+          <DueField id="task-due-date" value={dueDate} onChange={setDueDate} disabled={readOnly} />
         </Field>
         {type === "EPIC" ? (
           <Field>
-            <FieldLabel htmlFor="task-color">Colour</FieldLabel>
+            <FieldLabel htmlFor="task-color" optional>
+              Colour
+            </FieldLabel>
             <div
               id="task-color"
               role="radiogroup"
@@ -621,7 +557,7 @@ export function TaskEditor({
                 aria-label="Theme colour"
                 title="Theme colour"
                 disabled={readOnly}
-                onClick={() => change(setColor, color, null, { color: null })}
+                onClick={() => setColor(null)}
                 className={cn(
                   "focus-glow hatch bg-muted size-6 rounded-full transition-transform active:scale-[0.94]",
                   color === null && "ring-foreground ring-offset-card ring-2 ring-offset-2",
@@ -635,7 +571,7 @@ export function TaskEditor({
                   aria-checked={color === c}
                   aria-label={`Colour ${c}`}
                   disabled={readOnly}
-                  onClick={() => change<string | null>(setColor, color, c, { color: c })}
+                  onClick={() => setColor(c)}
                   className={cn(
                     "focus-glow size-6 rounded-full transition-transform active:scale-[0.94]",
                     color === c && "ring-foreground ring-offset-card ring-2 ring-offset-2",
@@ -647,13 +583,13 @@ export function TaskEditor({
           </Field>
         ) : (
           <Field>
-            <FieldLabel htmlFor="task-parent">Part of</FieldLabel>
+            <FieldLabel htmlFor="task-parent" optional>
+              Part of
+            </FieldLabel>
             <PartOfField
               id="task-parent"
               value={parentTaskId}
-              onChange={(next) =>
-                change(setParentTaskId, parentTaskId, next, { parentTaskId: next })
-              }
+              onChange={setParentTaskId}
               types={parentTypesFor(type)}
               disabled={readOnly}
               current={task?.parentTask ?? null}
@@ -669,17 +605,7 @@ export function TaskEditor({
           id="task-status"
           label="Status"
           value={status}
-          onChange={(next) => {
-            // Blocked waits for its reason (saved when you leave the box).
-            if (next === TaskStatus.BLOCKED) {
-              setStatus(next);
-              if (!isNew && blockedReason.trim()) {
-                void commit({ status: next, blockedReason: blockedReason.trim() });
-              }
-              return;
-            }
-            change(setStatus, status, next, { status: next, blockedReason: null });
-          }}
+          onChange={setStatus}
           options={STATUS_OPTIONS}
           disabled={readOnly}
         />
@@ -691,18 +617,8 @@ export function TaskEditor({
             maxLength={MAX_BLOCKED_REASON}
             rows={2}
             disabled={readOnly}
-            autoFocus={!isNew && !blockedReason}
             placeholder="What is it blocked on?"
             onChange={(e) => setBlockedReason(e.target.value)}
-            onBlur={() => {
-              if (isNew || !blockedReason.trim()) return;
-              if (
-                task?.status === TaskStatus.BLOCKED &&
-                task.blockedReason === blockedReason.trim()
-              )
-                return;
-              void commit({ status: TaskStatus.BLOCKED, blockedReason: blockedReason.trim() });
-            }}
             className="bg-card dark:bg-card min-h-0 rounded-[11px] text-[13px]"
           />
         )}
@@ -714,19 +630,21 @@ export function TaskEditor({
           id="task-priority"
           label="Priority"
           value={priority}
-          onChange={(next) => change(setPriority, priority, next, { priority: next })}
+          onChange={setPriority}
           options={PRIORITY_OPTIONS}
           disabled={readOnly}
         />
       </Field>
 
       <Field>
-        <FieldLabel htmlFor="task-labels">Tags</FieldLabel>
+        <FieldLabel htmlFor="task-labels" optional>
+          Tags
+        </FieldLabel>
         <LabelsField
           id="task-labels"
           labels={labels}
           value={labelIds}
-          onChange={(next) => change(setLabelIds, labelIds, next, { labelIds: next })}
+          onChange={setLabelIds}
           disabled={readOnly}
         />
       </Field>
@@ -737,11 +655,11 @@ export function TaskEditor({
           id="task-visibility"
           label="Who can see this task"
           value={visibility}
-          onChange={(next) => change(setVisibility, visibility, next, { visibility: next })}
+          onChange={setVisibility}
           options={VISIBILITY_OPTIONS}
           disabled={readOnly || !canSetVisibility}
         />
-        {visibilityLocked && <p className="text-muted-foreground text-xs">{visibilityLocked}</p>}
+        <p className="text-muted-foreground text-xs">{visibilityLocked ?? visibilityHint}</p>
         {visibility === TaskVisibility.PRIVATE && (
           <div className="bg-card rounded-[11px] border p-3">
             <AudienceList
@@ -751,8 +669,10 @@ export function TaskEditor({
             />
             <p className="text-muted-foreground mt-2 text-xs">
               {audience.length === 1
-                ? "Only you and admins."
-                : `${audience.length} people and admins.`}
+                ? "Only you, and the organization's owners and admins."
+                : `${audience.length} people plus owners and admins.`}{" "}
+              Comments, history and @mentions on it are hidden too. To mention somebody else, add
+              them here first.
             </p>
           </div>
         )}
@@ -799,7 +719,8 @@ export function TaskEditor({
             <div key={`${f.role}-${f.userId}`} className="flex flex-wrap items-center gap-2">
               <FlagBadge />
               <span className="min-w-0 flex-1">
-                {memberById.get(f.userId)?.name ?? "Someone"}: assigned from below
+                {memberById.get(f.userId)?.name ?? "Someone"} was given this task by someone below
+                them on the org chart.
               </span>
               {canAcknowledgeFlag(actor, f.userId) && (
                 <Button
@@ -818,7 +739,10 @@ export function TaskEditor({
 
       {task && readOnly && (
         <div className="bg-card flex flex-wrap items-center gap-2 rounded-[11px] border p-3 text-sm">
-          <span className="text-muted-foreground min-w-0 flex-1">View only</span>
+          <span className="text-muted-foreground min-w-0 flex-1">
+            Only the creator, owner, collaborators, their managers and admins edit this task. You
+            can still add yourself.
+          </span>
           {self.owner && <span className="text-sm font-medium">You own this task.</span>}
           {self.joined && <span className="text-sm font-medium">You&apos;re on this task.</span>}
           {!task.ownerId && !self.owner && (
@@ -868,7 +792,7 @@ export function TaskEditor({
       </section>
       <section className="space-y-2 border-t pt-5">
         <h3 className="heading text-sm">History</h3>
-        <TaskActivity taskId={task.id} autoLoad={mode === "page"} />
+        <TaskActivity taskId={task.id} />
       </section>
     </div>
   );
@@ -890,12 +814,12 @@ export function TaskEditor({
           !isPending
         ) {
           e.preventDefault();
-          if (isNew) void save();
-          else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          void save();
         }
       }}
     >
       {confirmElement}
+      {confirmEl}
 
       <header className="flex shrink-0 items-center justify-between gap-2 py-3.5 ps-6 pe-3.5">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -909,7 +833,7 @@ export function TaskEditor({
           ) : (
             <TaskTypeChip type={type} iconOnly />
           )}
-          {heading && <span className="text-sm font-semibold">{heading}</span>}
+          <span className="truncate text-sm font-semibold">{heading}</span>
           {task && isTaskPrivate(task) && <PrivateBadge />}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -958,8 +882,8 @@ export function TaskEditor({
             {error}
           </p>
         )}
-        {extras}
         {mode === "page" && footer}
+        {extras}
       </div>
 
       {mode === "dialog" && footer}

@@ -125,7 +125,7 @@ export function TagMenu({
                 className="size-[7px] shrink-0 rounded-full"
                 style={{ background: l.color }}
               />
-              <span className="break-words">{l.name}</span>
+              <span className="truncate">{l.name}</span>
               {on && <Check className="ms-auto size-3.5 shrink-0" aria-hidden="true" />}
             </button>
           );
@@ -143,7 +143,7 @@ export function TagMenu({
             disabled={isPending}
           >
             <Plus className="size-4 shrink-0" aria-hidden="true" />
-            <span className="break-words">{isPending ? "Creating…" : `Create tag “${typed}”`}</span>
+            <span className="truncate">{isPending ? "Creating…" : `Create tag “${typed}”`}</span>
           </button>
         )}
       </div>
