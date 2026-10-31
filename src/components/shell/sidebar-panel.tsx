@@ -45,9 +45,10 @@ function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => v
 
 /**
  * The sidebar's insides, the same in every face: the organization menu
- * (switching spaces, the Admin panel) at the top, the nav, then at the foot
- * you (your picture and name, opening your menu) and, always last, the
- * Bananasplit logo with the panel's collapse button when given.
+ * (switching spaces, the Admin panel) at the top with you (your picture,
+ * opening your menu) beside it, the nav, then, always last, the
+ * Bananasplit logo with the panel's collapse button when given. On the
+ * rail your picture sits under the organization's circle.
  */
 export function SidebarBody({
   clubMenu,
@@ -59,7 +60,7 @@ export function SidebarBody({
   onNavigate,
 }: {
   clubMenu: React.ReactNode;
-  /** You: the user menu as a sidebar row (UserMenu variant="row"). */
+  /** You: the user menu beside the organization menu (UserMenu variant="corner"). */
   profile?: React.ReactNode;
   children: React.ReactNode;
   toggle?: React.ReactNode;
@@ -70,19 +71,25 @@ export function SidebarBody({
   const tone = surfaceTone(chrome);
   return (
     <>
-      {/* The organization you're in, and the way to switch, at the top. */}
-      <div className="shrink-0 pb-3">{clubMenu}</div>
-      {children}
-      {/* You, then the Bananasplit mark, always last. */}
+      {/* The organization you're in, the way to switch, and you, at the top. */}
       <div
         className={cn(
-          "mt-2 flex shrink-0 flex-col gap-1.5 border-t pt-2 transition-colors duration-300",
+          "flex shrink-0 pb-3",
+          rail ? "flex-col items-start gap-3" : "items-center gap-1.5",
+        )}
+      >
+        <div className="min-w-0 flex-1">{clubMenu}</div>
+        {profile && <div className={cn("shrink-0", rail && "pl-0.5")}>{profile}</div>}
+      </div>
+      {children}
+      {/* The Bananasplit mark, always last. */}
+      <div
+        className={cn(
+          "mt-2 flex shrink-0 items-center border-t pt-2 transition-colors duration-300",
+          rail ? "gap-0" : "gap-2.5",
           tone.border,
         )}
       >
-        {profile}
-      </div>
-      <div className={cn("mt-1.5 flex shrink-0 items-center", rail ? "gap-0" : "gap-2.5")}>
         <SidebarLogo rail={rail} onNavigate={onNavigate} />
         {toggle}
       </div>

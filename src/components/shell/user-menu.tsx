@@ -39,10 +39,11 @@ export function UserMenu({
   user: UserMenuUser;
   /**
    * capsule: a round avatar button; row: a sidebar row (your picture and
-   * name) at the sidebar's foot, opening upwards. On the rail, the row is
-   * the picture alone.
+   * name), opening upwards (the phone menu's foot); corner: your picture
+   * alone beside the organization menu at the top of the sidebar, opening
+   * downwards.
    */
-  variant?: "capsule" | "row";
+  variant?: "capsule" | "row" | "corner";
   className?: string;
 }) {
   const displayName = user.name ?? user.email;
@@ -56,11 +57,27 @@ export function UserMenu({
   const { rail, chrome, holdPeek } = useSidebarMode();
   const tone = surfaceTone(chrome);
   const row = variant === "row";
+  const corner = variant === "corner";
 
   return (
-    <DropdownMenu onOpenChange={row ? holdPeek : undefined}>
+    <DropdownMenu onOpenChange={row || corner ? holdPeek : undefined}>
       <DropdownMenuTrigger asChild>
-        {row ? (
+        {corner ? (
+          <button
+            type="button"
+            title={displayName}
+            className={cn(
+              "focus-glow grid size-9 shrink-0 place-items-center rounded-full outline-none",
+              "transition-[background-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
+              tone.hover,
+              chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15",
+              className,
+            )}
+            aria-label={`Open user menu for ${displayName}`}
+          >
+            <UserAvatar user={user} size="md" />
+          </button>
+        ) : row ? (
           <button
             type="button"
             title={rail ? displayName : undefined}

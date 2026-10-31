@@ -146,7 +146,7 @@ export function AppShell({
       canInvite={canInvite}
     />
   );
-  const profile = <UserMenu user={user} variant="row" />;
+  const profile = <UserMenu user={user} variant="corner" />;
   const nav = (onNavigate?: () => void) => (
     <SidebarNav
       sections={sections}
