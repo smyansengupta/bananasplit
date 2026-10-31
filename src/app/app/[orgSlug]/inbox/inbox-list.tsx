@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 
 import { markAllNotificationsRead, markNotificationRead } from "@/app/app/notifications-actions";
 import { rsvpToEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { approveExpense } from "@/app/app/[orgSlug]/finance/transactions-actions";
 import { setTaskStatus } from "@/app/app/[orgSlug]/tasks/actions";
 import { TASK_PANEL } from "@/components/tasks/layout-ui";
 import { TaskCheck } from "@/components/tasks/task-check";
@@ -27,7 +28,9 @@ export type NeedRow =
       href: string;
       status: TaskStatus;
     }
-  | { kind: "review"; id: string; title: string; meta: string; href: string };
+  | { kind: "review"; id: string; title: string; meta: string; href: string }
+  /** One reimbursement request waiting on a treasurer: Approve right here. */
+  | { kind: "request"; id: string; title: string; meta: string; href: string };
 
 export interface UpdateRow {
   id: string;
@@ -107,6 +110,21 @@ export function InboxNeeds({ orgId, rows }: { orgId: string; rows: NeedRow[] }) 
     });
   }
 
+  function approve(row: Extract<NeedRow, { kind: "request" }>) {
+    const key = `request:${row.id}`;
+    hide(key);
+    start(async () => {
+      const result = await approveExpense(orgId, row.id);
+      if (result && "error" in result && result.error) {
+        show(key);
+        toast({ title: result.error, tone: "error" });
+        return;
+      }
+      toast({ title: "Approved", action: { label: "Open", run: () => router.push(row.href) } });
+      router.refresh();
+    });
+  }
+
   const shown = rows.filter((r) => !gone.has(`${r.kind}:${r.id}`));
   if (shown.length === 0) {
     return <p className="text-muted-foreground px-1 text-sm">All caught up.</p>;
@@ -175,6 +193,16 @@ export function InboxNeeds({ orgId, rows }: { orgId: string; rows: NeedRow[] }) 
             <Button variant="outline" size="sm" asChild>
               <Link href={row.href}>Review</Link>
             </Button>
+          )}
+          {row.kind === "request" && (
+            <span className="flex shrink-0 gap-1.5">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={row.href}>Review</Link>
+              </Button>
+              <Button size="sm" onClick={() => approve(row)}>
+                Approve
+              </Button>
+            </span>
           )}
         </li>
       ))}

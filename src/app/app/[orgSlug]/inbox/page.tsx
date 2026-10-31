@@ -81,11 +81,21 @@ export default async function InboxPage({
       limit: TASKS_LIMIT,
       today: fromDateKey(todayKey),
     });
+    // Each reimbursement request waiting on a treasurer, oldest first.
     const toReview = canReview
-      ? await db.transaction.count({
+      ? await db.transaction.findMany({
           where: { organizationId: org.id, status: "SUBMITTED", voidedAt: null },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            description: true,
+            amountCents: true,
+            occurredAt: true,
+            submittedBy: { select: { name: true } },
+          },
+          take: 30,
         })
-      : 0;
+      : [];
     const notifications = await db.notification.findMany({
       where: { organizationId: org.id, userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -122,20 +132,19 @@ export default async function InboxPage({
           status: t.status,
         };
       }),
-    ...(data.toReview > 0
-      ? [
-          {
-            kind: "review" as const,
-            id: "reimbursements",
-            title:
-              data.toReview === 1
-                ? "1 reimbursement to review"
-                : `${data.toReview} reimbursements to review`,
-            meta: "Finance",
-            href: `${base}/finance/transactions?status=SUBMITTED`,
-          },
-        ]
-      : []),
+    ...data.toReview.map((t): NeedRow => ({
+      kind: "request",
+      id: t.id,
+      title: t.description,
+      meta: [
+        MONEY.format(t.amountCents / 100),
+        t.submittedBy?.name ? `from ${t.submittedBy.name}` : null,
+        DAY.format(t.occurredAt),
+      ]
+        .filter(Boolean)
+        .join(", "),
+      href: `${base}/finance/transactions?open=${t.id}`,
+    })),
     ...data.forms.map((f) => ({
       kind: "review" as const,
       id: `form-${f.id}`,
@@ -194,6 +203,8 @@ export default async function InboxPage({
 }
 
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" });
+const MONEY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** "Friday" for a day key in the coming week. */
 function dayName(key: string): string {
