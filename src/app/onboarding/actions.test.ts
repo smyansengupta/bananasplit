@@ -104,7 +104,7 @@ describe("joinPendingInvitationAction", () => {
     expect(acceptMock).not.toHaveBeenCalled();
   });
 
-  it("accepts, then asks for the role in that club", async () => {
+  it("accepts, then asks for the role in that organization", async () => {
     pendingMock.mockResolvedValue([
       {
         id: "inv_1",

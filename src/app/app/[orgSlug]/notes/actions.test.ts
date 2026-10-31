@@ -266,7 +266,7 @@ describe("deleteNote / restoreNote", () => {
 });
 
 describe("createNote", () => {
-  it("creates a club note everyone in the club can see, authored by the caller", async () => {
+  it("creates an organization note everyone in the organization can see, authored by the caller", async () => {
     db.organization.findUnique.mockResolvedValue({ kind: "CLUB" });
     db.note.create.mockResolvedValue({ id: "note_new" });
 
@@ -584,7 +584,7 @@ describe("note sharing — who sees and edits", () => {
     expect((await updateNote("org_1", "note_1", validInput, 1)).error).toBe("Note not found.");
   });
 
-  it("lets every member edit a club note that allows it", async () => {
+  it("lets every member edit an organization note that allows it", async () => {
     db.note.findFirst.mockResolvedValue(
       othersNote(NoteVisibility.ORGANIZATION, { memberCanEdit: true }),
     );
@@ -627,7 +627,7 @@ describe("note sharing — who sees and edits", () => {
 });
 
 describe("updateNoteAccess — general access", () => {
-  it("lets the author open a note to the club as editors, and closes live sessions", async () => {
+  it("lets the author open a note to the organization as editors, and closes live sessions", async () => {
     db.note.findFirst.mockResolvedValue({
       ...othersNote(NoteVisibility.PRIVATE),
       authorId: MEMBER_ID,
@@ -641,7 +641,7 @@ describe("updateNoteAccess — general access", () => {
     expect(state.afterCommit).toHaveBeenCalledTimes(1);
   });
 
-  it("lets an admin change a club note's access, but only the author makes it private", async () => {
+  it("lets an admin change an organization note's access, but only the author makes it private", async () => {
     actAs("admin_1", Role.ADMIN);
     db.note.findFirst.mockResolvedValue(othersNote(NoteVisibility.ORGANIZATION));
     db.note.updateMany.mockResolvedValue({ count: 1 });
@@ -666,7 +666,7 @@ describe("shareNote — adding people", () => {
     listNoteShares.mockResolvedValue([]);
   });
 
-  it("shares with club members and tells only the people newly added", async () => {
+  it("shares with organization members and tells only the people newly added", async () => {
     db.membership.findMany.mockResolvedValue([{ userId: "u_a" }, { userId: "u_b" }]);
     db.noteShare.findMany.mockResolvedValue([{ userId: "u_b", role: NoteShareRole.VIEWER }]);
     const result = await shareNote("org_1", "note_1", {
@@ -691,7 +691,7 @@ describe("shareNote — adding people", () => {
     expect(state.afterCommit).toHaveBeenCalledTimes(1);
   });
 
-  it("refuses anyone outside the club, and anyone but the author on a private note", async () => {
+  it("refuses anyone outside the organization, and anyone but the author on a private note", async () => {
     db.membership.findMany.mockResolvedValue([]);
     expect(
       (await shareNote("org_1", "note_1", { userIds: ["stranger"], role: "VIEWER" })).error,

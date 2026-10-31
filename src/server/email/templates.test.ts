@@ -106,7 +106,7 @@ describe("trialEndingEmail", () => {
     url: "https://app.example.com/app/robotics/settings/plan",
   };
 
-  it("tells an organization's owner the trial is almost up, naming the club in the subject", () => {
+  it("tells an organization's owner the trial is almost up, naming the organization in the subject", () => {
     const email = trialEndingEmail({ ...base, orgName: "Robotics Club" });
     expect(email.subject).toBe("Robotics Club's free trial ends in 3 days");
     expect(email.text).toContain("Robotics Club's free trial of Team Advanced ends in 3 days");

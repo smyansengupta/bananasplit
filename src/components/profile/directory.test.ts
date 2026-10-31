@@ -90,7 +90,7 @@ describe("directory list", () => {
   it("sorts by name into letters (accents folded) and by newest", () => {
     expect(groupPeople(people, "name", teams).map((g) => g.label)).toEqual(["B", "E", "L", "M"]);
     expect(letterOf({ name: "Élodie" })).toBe("E");
-    expect(letterOf({ name: "42 Club" })).toBe("#");
+    expect(letterOf({ name: "42 Organization" })).toBe("#");
     expect(letterOf({ name: null })).toBe("#");
     expect(groupPeople(people, "new", teams)[0].people.map((p) => p.id)).toEqual(["u3", "u4", "u2", "u1"]);
     expect(groupPeople([], "team", teams)).toEqual([]);

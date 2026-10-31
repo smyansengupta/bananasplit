@@ -42,7 +42,7 @@ describe("shareMetadata", () => {
 });
 
 describe("the site's own icons", () => {
-  it("are the banana files in public, so a club page can replace them outright", () => {
+  it("are the banana files in public, so an organization page can replace them outright", () => {
     expect(SITE_ICONS).toMatchObject({
       icon: [{ url: "/favicon.ico" }, { url: "/icon.svg" }],
       apple: [{ url: "/apple-icon.png" }],
@@ -51,14 +51,14 @@ describe("the site's own icons", () => {
 });
 
 describe("clubIcons", () => {
-  it("points the tab at the club's own stored logo", () => {
+  it("points the tab at the organization's own stored logo", () => {
     expect(clubIcons(LOGO)).toEqual({
       icon: [{ url: LOGO.s64, type: "image/webp", sizes: "64x64" }],
       apple: [{ url: LOGO.s256, type: "image/webp", sizes: "256x256" }],
     });
   });
 
-  it("gives nothing for a club without a logo, so the banana stays", () => {
+  it("gives nothing for an organization without a logo, so the banana stays", () => {
     expect(clubIcons(null)).toBeUndefined();
     expect(clubIcons({})).toBeUndefined();
     expect(clubIcons({ s64: "javascript:alert(1)", s256: "/a", s512: "/b" })).toBeUndefined();
@@ -70,7 +70,7 @@ describe("clubShare", () => {
   const share = (over: Partial<Parameters<typeof clubShare>[0]> = {}) =>
     clubShare({ club, title: "t", description: "d", fallback: FALLBACK_CARDS.invite, ...over });
 
-  it("says the club's name and shows the club's logo", () => {
+  it("says the organization's name and shows the organization's logo", () => {
     const meta = share({
       title: "You've been invited to join Claude Builder Club on Bananasplit",
       description: "Open the link to accept.",
@@ -86,11 +86,11 @@ describe("clubShare", () => {
     expect(meta.twitter).toMatchObject({ card: "summary", images: [LOGO.s512] });
   });
 
-  it("keeps a club page out of search by default", () => {
+  it("keeps an organization page out of search by default", () => {
     expect(share().robots).toEqual({ index: false, follow: false });
   });
 
-  it("shows the drawn card, and keeps the banana, for a club with no logo", () => {
+  it("shows the drawn card, and keeps the banana, for an organization with no logo", () => {
     const meta = share({ club: { name: "No Logo", logo: null } });
     expect(meta.openGraph).toMatchObject({
       images: [{ url: "/og/invite.png", width: 1200, height: 630 }],
@@ -102,7 +102,7 @@ describe("clubShare", () => {
     });
   });
 
-  it("handles a page whose club could not be loaded", () => {
+  it("handles a page whose organization could not be loaded", () => {
     const meta = share({ club: null, fallback: FALLBACK_CARDS.poll });
     expect(meta).not.toHaveProperty("icons");
     expect(meta.openGraph).toMatchObject({ images: [{ url: "/og/poll.png" }] });

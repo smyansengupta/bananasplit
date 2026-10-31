@@ -188,7 +188,7 @@ describe("several organizations against the local database", () => {
     expect(await getPersonBusyHours(orgA.id, both.id)).toEqual(["0-9", "2-13"]);
   });
 
-  it("in invite mode, a platform admin's single-use code lets another club's founder create their org", async () => {
+  it("in invite mode, a platform admin's single-use code lets another organization's founder create their org", async () => {
     if (!reachable) return;
     vi.stubEnv("ORG_CREATION_MODE", "invite");
     vi.stubEnv("PLATFORM_ADMIN_EMAILS", founderA.email);
@@ -198,7 +198,7 @@ describe("several organizations against the local database", () => {
       const noCode = await createOrganization(founderC, { name: `Chess ${tag}`, slug: `chess-${tag}`, timezone: "UTC" });
       expect(noCode.ok).toBe(false);
 
-      const { code } = await issueOrgCreationCode(founderA.id, `Chess club ${tag}`);
+      const { code } = await issueOrgCreationCode(founderA.id, `Chess organization ${tag}`);
       const made = await createOrganization(founderC, {
         name: `Chess ${tag}`,
         slug: `chess-${tag}`,

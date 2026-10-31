@@ -11,7 +11,7 @@ describe("an all-day event's date", () => {
   const berlin = allDayInstants("2026-10-15", "2026-10-15", "Europe/Berlin");
   const la = allDayInstants("2026-10-15", "2026-10-16", "America/Los_Angeles");
 
-  it("is the club's date, ahead of UTC or behind it", () => {
+  it("is the organization's date, ahead of UTC or behind it", () => {
     expect(berlin.startsAt.toISOString()).toBe("2026-10-14T22:00:00.000Z");
     expect(dateLine(berlin.startsAt, "Europe/Berlin")).toBe("Thursday, October 15");
     expect(dateTile(berlin.startsAt, "Europe/Berlin")).toEqual({ month: "OCT", day: "15" });
@@ -27,7 +27,7 @@ describe("an all-day event's date", () => {
   it("goes into Google Calendar as dates, the end the day after the last", () => {
     const url = new URL(
       googleCalendarUrl({
-        title: "Club fair",
+        title: "Organization fair",
         ...berlin,
         allDay: true,
         timeZone: "Europe/Berlin",
@@ -58,7 +58,7 @@ describe("startShort", () => {
   const zone = "America/New_York";
   const start = new Date("2026-10-15T23:00:00Z"); // Thu, Oct 15, 7:00 PM EDT
 
-  it("says today and tomorrow in the club's timezone", () => {
+  it("says today and tomorrow in the organization's timezone", () => {
     expect(startShort(start, zone, false, new Date("2026-10-15T14:00:00Z"))).toBe("Today, 7:00 PM");
     // 10 PM EDT on the 14th is already the 15th in UTC.
     expect(startShort(start, zone, false, new Date("2026-10-15T02:00:00Z"))).toBe(

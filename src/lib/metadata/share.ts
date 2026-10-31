@@ -56,11 +56,11 @@ export interface FallbackCard {
 export const FALLBACK_CARDS = {
   invite: {
     url: "/og/invite.png",
-    alt: "You're invited to join a club's workspace on Bananasplit.",
+    alt: "You're invited to join an organization's workspace on Bananasplit.",
   },
   join: {
     url: "/og/join.png",
-    alt: "Join your club on Bananasplit: an eight-box invite code.",
+    alt: "Join your organization on Bananasplit: an eight-box invite code.",
   },
   poll: {
     url: "/og/poll.png",

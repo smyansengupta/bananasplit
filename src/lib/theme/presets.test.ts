@@ -49,7 +49,7 @@ describe("presets", () => {
     expect(CBC_PRESET.dark).toEqual(CBC_THEME.dark);
   });
 
-  it("follow the club website's brand for Claude Builders Club", () => {
+  it("follow the organization website's brand for Claude Builders Club", () => {
     // DESIGN.md: warm paper, near-black ink, terracotta words, coral fill.
     expect(CBC_PRESET.light).toMatchObject({
       background: "#faf9f5",

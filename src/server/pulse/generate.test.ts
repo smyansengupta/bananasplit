@@ -108,7 +108,7 @@ describe("shapePulseData", () => {
     ]);
   });
 
-  it("keeps next week to the seven days after the send day, dated in the club's zone", () => {
+  it("keeps next week to the seven days after the send day, dated in the organization's zone", () => {
     expect(data.nextWeek).toEqual([
       { kind: "event", id: "n1", title: "Officer meeting", date: "2026-10-13", ownerId: null },
       { kind: "event", id: "n2", title: "General meeting", date: "2026-10-15", ownerId: null },
@@ -144,7 +144,7 @@ describe("shapePulseData", () => {
 });
 
 describe("the week's instants", () => {
-  it("runs midnight to midnight in the club's zone and never reaches past now", () => {
+  it("runs midnight to midnight in the organization's zone and never reaches past now", () => {
     const now = at("2026-10-09T21:00:00Z"); // Fri 5pm in New York
     const { start, end } = rangeInstants(range, "America/New_York", now);
     expect(start.toISOString()).toBe("2026-10-03T04:00:00.000Z");

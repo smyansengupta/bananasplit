@@ -108,7 +108,7 @@ export default async function DevOgGalleryPage() {
         </section>
       ))}
       <section data-group="With a logo" className="mb-12">
-        <h2 className="m-0 mb-1 text-[20px] font-semibold">When the club has a logo</h2>
+        <h2 className="m-0 mb-1 text-[20px] font-semibold">When the organization has a logo</h2>
         <p className="text-muted-foreground mt-0 mb-5 text-[15px]">
           Invites, codes and polls send the club&apos;s own logo instead of the card above.
         </p>

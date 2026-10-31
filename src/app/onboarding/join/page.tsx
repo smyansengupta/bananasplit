@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  * whatever unfurls it is redirected before reading any of this.
  */
 export const metadata = shareMetadata({
-  title: "Join your club",
+  title: "Join your organization",
   description: "Enter the invite code whoever invited you sent, and join their workspace.",
   noIndex: true,
 });

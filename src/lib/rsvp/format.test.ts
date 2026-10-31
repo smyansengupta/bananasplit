@@ -123,7 +123,7 @@ describe("names, phones and emails", () => {
   });
 });
 
-describe("dates in the club's timezone", () => {
+describe("dates in the organization's timezone", () => {
   const start = new Date("2026-11-07T00:00:00Z"); // Fri Nov 6, 7:00 PM in New York
   const end = new Date("2026-11-07T03:00:00Z");
   it("names the zone and keeps one AM/PM when both share it", () => {

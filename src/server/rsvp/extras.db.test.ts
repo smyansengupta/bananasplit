@@ -325,7 +325,7 @@ describe("tickets and check-in", () => {
     expect(await isEventHost(stranger.id, clubId)).toBe(false);
   });
 
-  it("in a club, a check-in lands in its People and Attendance databases, and undoing it takes it out", async () => {
+  it("in an organization, a check-in lands in its People and Attendance databases, and undoing it takes it out", async () => {
     if (!reachable) return;
     const event = await makeEvent(clubId);
     const guest = await signUp(event, "Hana Door");

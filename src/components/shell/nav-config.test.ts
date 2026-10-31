@@ -234,7 +234,7 @@ describe("the sidebar in each space", () => {
     expect(nav(ended, true).find((i) => i.label === "Finance")?.locked).toBe(true);
   });
 
-  it("locks nothing on Club and Society", () => {
+  it("locks nothing on Organization and Society", () => {
     for (const p of ["CLUB", "SOCIETY"] as const) {
       expect(nav(club(p), true).some((i) => i.locked)).toBe(false);
       expect(nav(club(p)).map((i) => i.label)).toEqual(links().map((i) => i.label));

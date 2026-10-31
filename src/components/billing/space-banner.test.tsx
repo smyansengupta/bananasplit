@@ -59,7 +59,7 @@ describe("SpaceBanner", () => {
     expect(render({ ...space, trialEndsAt: new Date(NOW.getTime() - DAY) }, true)).toBe("");
   });
 
-  it("says nothing in Personal or a paid club", () => {
+  it("says nothing in Personal or a paid organization", () => {
     expect(
       render({ kind: "PERSONAL", plan: "FREE", trialEndsAt: null, planAfterTrial: null }, true),
     ).toBe("");

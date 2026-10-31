@@ -83,7 +83,7 @@ describe("OnboardingPage", () => {
     expect(mocks.personalHomeHref).toHaveBeenCalledWith("u1");
   });
 
-  it("opens Personal for a club member too: switching is from there", async () => {
+  it("opens Personal for an organization member too: switching is from there", async () => {
     mocks.profile.mockResolvedValue(profile({ memberships: [{ name: "CBC", slug: "cbc" }] }));
     await expect(render()).rejects.toMatchObject({ url: "/app/me-abc" });
   });

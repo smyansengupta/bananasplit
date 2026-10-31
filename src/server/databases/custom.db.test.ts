@@ -304,11 +304,11 @@ describe("club-made databases against the local database", () => {
     expect(listed.map((d) => d.key)).not.toContain(roster.key);
   });
 
-  it("shows another club nothing, and can't be written into from another club", async () => {
+  it("shows another organization nothing, and can't be written into from another organization", async () => {
     if (!reachable) return;
     const roster = await newRoster(`Walled ${tag}`);
     const row = await as(ownerA, orgA, (a) =>
-      createRecord(a, roster.id, { [roster.field("Name").id]: "Club A only" }),
+      createRecord(a, roster.id, { [roster.field("Name").id]: "Organization A only" }),
     );
     const peek = await as(ownerB, orgB, (_a, ctx) =>
       Promise.all([
@@ -329,7 +329,7 @@ describe("club-made databases against the local database", () => {
       ),
     ).rejects.toThrow();
     const still = await ownerDb.databaseRecord.findUniqueOrThrow({ where: { id: row.id } });
-    expect((still.values as Record<string, unknown>)[roster.field("Name").id]).toBe("Club A only");
+    expect((still.values as Record<string, unknown>)[roster.field("Name").id]).toBe("Organization A only");
   });
 
   it("keeps rows only in club-made databases, never in the built-ins", async () => {
@@ -689,7 +689,7 @@ describe("club-made databases against the local database", () => {
       [f("Major").id]: "Economics_101",
       [tags.id]: ["t_alum"],
     });
-    await add({ [f("Name").id]: "Sam Okafor", [f("Major").id]: "1000 Club" });
+    await add({ [f("Name").id]: "Sam Okafor", [f("Major").id]: "1000 Organization" });
 
     const find = async (q: string) =>
       (await as(ownerA, orgA, (a) => loadRecords(a, roster.id, { q }))).records

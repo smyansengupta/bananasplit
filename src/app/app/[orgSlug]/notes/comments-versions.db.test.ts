@@ -122,11 +122,11 @@ describe.skipIf(!seeded)("comments and versions on the RLS path (seeded CBC)", (
     expect(saved.versions?.map((v) => v.name)).toContain("Kickoff");
   });
 
-  it("another club's member sees none of the note's comments or versions", async () => {
+  it("another organization's member sees none of the note's comments or versions", async () => {
     const id = await clubNote();
     as(s.kristine);
-    await addNoteComment(s.cbcId, id, { body: "Inside the club" });
-    await saveNamedVersion(s.cbcId, id, "Club only");
+    await addNoteComment(s.cbcId, id, { body: "Inside the organization" });
+    await saveNamedVersion(s.cbcId, id, "Organization only");
 
     as(s.alice);
     const rows = await withOrgTx(s.roboticsId, async ({ db }) => ({

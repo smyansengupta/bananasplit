@@ -9,8 +9,8 @@ import {
 
 const none = Object.fromEntries(STARTED_STEP_KEYS.map((k) => [k, false])) as StartedState;
 
-describe("get your club started", () => {
-  it("counts what the club has and what it checked off", () => {
+describe("get your organization started", () => {
+  it("counts what the organization has and what it checked off", () => {
     const p = startedProgress({ ...none, picture: true, event: true }, ["database"]);
     expect(p.finished).toBe(3);
     expect(p.total).toBe(STARTED_STEP_KEYS.length);
@@ -39,12 +39,12 @@ describe("get your club started", () => {
     expect(p.finished).toBe(1);
   });
 
-  it("no longer asks a club to pick its sections, or to check the name it just typed", () => {
+  it("no longer asks an organization to pick its sections, or to check the name it just typed", () => {
     expect(STARTED_STEP_KEYS).not.toContain("sections" as never);
     expect(STARTED_STEP_KEYS).not.toContain("name" as never);
   });
 
-  it("links setup pages whole and app pages under the club", () => {
+  it("links setup pages whole and app pages under the organization", () => {
     expect(startedHref("acme", "/onboarding/organization/{slug}/teams")).toBe(
       "/onboarding/organization/acme/teams",
     );

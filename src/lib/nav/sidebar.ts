@@ -150,7 +150,7 @@ export const SECTIONS: readonly SectionDef[] = [
     path: "/integrations",
     also: ["/settings/integrations", "/setup"],
     group: "collect",
-    description: "The apps your club connects.",
+    description: "The apps your organization connects.",
   },
   {
     id: "finance",

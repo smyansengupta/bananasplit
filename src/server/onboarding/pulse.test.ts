@@ -35,7 +35,7 @@ const input = {
 beforeEach(() => vi.clearAllMocks());
 
 describe("savePulseSettings", () => {
-  it("writes the six pulse fields to the club's settings, and audits the change", async () => {
+  it("writes the six pulse fields to the organization's settings, and audits the change", async () => {
     const c = ctx();
     await expect(savePulseSettings(c as never, input)).resolves.toEqual({ ok: true });
     expect(c.db.orgSettings.update).toHaveBeenCalledWith({

@@ -42,7 +42,7 @@ describe("CheckoutForm", () => {
     expect(screen.getByText(/Renews Oct 27, 2027/)).toBeTruthy();
   });
 
-  it("prices Team (?plan=club) at $8 a member a month, with thousands separators", () => {
+  it("prices Team (?plan=organization) at $8 a member a month, with thousands separators", () => {
     render(<CheckoutForm {...props} plan="club" initialMembers={300} />);
     expect(screen.getByRole("heading", { name: "Subscribe to Team" })).toBeTruthy();
     expect(screen.getByText("Team, Robotics Club")).toBeTruthy();

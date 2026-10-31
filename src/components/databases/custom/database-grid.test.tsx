@@ -178,7 +178,7 @@ describe("paging and search", () => {
 });
 
 describe("the trash", () => {
-  it("shows when rows were deleted in the club's time zone, the same on the server", () => {
+  it("shows when rows were deleted in the organization's time zone, the same on the server", () => {
     const trash = db({
       records: [row("r1", { f_name: "Maya" }, { deletedAt: "2026-01-01T12:00:00.000Z" })],
       trashCount: 1,

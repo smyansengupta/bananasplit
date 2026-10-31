@@ -24,7 +24,7 @@ const base = {
 };
 
 describe("renderNoteDocx", () => {
-  it("writes the title, the body and the club in the header, on Letter by default", async () => {
+  it("writes the title, the body and the organization in the header, on Letter by default", async () => {
     const { body, header } = await documentXml({
       ...base,
       title: "Run of show",

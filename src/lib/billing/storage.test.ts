@@ -60,13 +60,13 @@ describe("each tier's limits at the gate", () => {
 });
 
 describe("uploadRefusal", () => {
-  it("lets both Personal plans and every club upload notes files", () => {
+  it("lets both Personal plans and every organization upload notes files", () => {
     for (const s of [free(), plus(), team(), advanced(), trial(3)]) {
       expect(uploadRefusal(s, MB, files)).toBeNull();
     }
   });
 
-  it("refuses receipts in a Personal space (finance is for clubs)", () => {
+  it("refuses receipts in a Personal space (finance is for organizations)", () => {
     const refusal = uploadRefusal(plus(), MB, { feature: "finance", now: NOW });
     expect(refusal).toMatchObject({ status: 403, code: "SPACE_FEATURE", refused: "feature" });
     expect(uploadRefusal(team(), MB, { feature: "finance", now: NOW })).toBeNull();

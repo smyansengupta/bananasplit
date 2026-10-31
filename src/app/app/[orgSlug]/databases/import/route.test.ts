@@ -155,7 +155,7 @@ describe("POST /app/{orgSlug}/databases/import", () => {
     ]);
   });
 
-  it("refuses cross-site posts, strangers, unknown clubs and too many imports", async () => {
+  it("refuses cross-site posts, strangers, unknown organizations and too many imports", async () => {
     expect((await post(csv("a\n1"), { origin: "https://evil.example" })).status).toBe(403);
 
     m.user.mockRejectedValueOnce(new Error("NEXT_REDIRECT"));

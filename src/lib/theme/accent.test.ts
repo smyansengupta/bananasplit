@@ -125,7 +125,7 @@ describe("accent CSS", () => {
     expect(brandPageAccentStyle("javascript:alert(1)")).toEqual({});
   });
 
-  it("re-points a brand page's yellows (and ring) at a club's accent", () => {
+  it("re-points a brand page's yellows (and ring) at an organization's accent", () => {
     const style = brandPageAccentStyle("#1d4ed8");
     expect(style["--color-banana"]).toBe("#1d4ed8");
     expect(style["--brand-accent"]).toBe("#1d4ed8");

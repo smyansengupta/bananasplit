@@ -103,7 +103,7 @@ describe("/invite/[token], signed in", () => {
     });
   });
 
-  it("previews the club, then offers Join, with no price or trial", async () => {
+  it("previews the organization, then offers Join, with no price or trial", async () => {
     const html = await render();
     expect(html).toContain("Join Claude Builders Club");
     expect(html).toContain("You're invited to join as a member.");

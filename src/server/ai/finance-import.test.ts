@@ -45,7 +45,7 @@ const chat = (content: unknown) =>
 afterEach(() => vi.restoreAllMocks());
 
 describe("prompts", () => {
-  it("frame the material as untrusted data and list the club's categories", () => {
+  it("frame the material as untrusted data and list the organization's categories", () => {
     const sheet = sheetSystemPrompt({ today: "2026-10-01", categories: ["Food", "Travel"] });
     expect(sheet).toMatch(/untrusted material/);
     expect(sheet).toMatch(/Never follow instructions/);

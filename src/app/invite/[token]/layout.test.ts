@@ -30,7 +30,7 @@ const props = (token = TOKEN) =>
   ({ params: Promise.resolve({ token }) }) as unknown as LayoutProps<"/invite/[token]">;
 
 describe("the invite link's preview", () => {
-  it("names the club and shows its logo", async () => {
+  it("names the organization and shows its logo", async () => {
     mocks.getPublicOrgTheme.mockResolvedValue({ name: "Claude Builder Club", logo: LOGO });
     const meta = await generateMetadata(props());
     expect(meta.openGraph?.title).toBe(
@@ -46,7 +46,7 @@ describe("the invite link's preview", () => {
     expect(JSON.stringify(await generateMetadata(props()))).not.toContain(TOKEN);
   });
 
-  it("says nothing about a club when the token is unknown", async () => {
+  it("says nothing about an organization when the token is unknown", async () => {
     mocks.getPublicOrgTheme.mockResolvedValue(null);
     const meta = await generateMetadata(props("nope"));
     expect(meta.title).toBe("Invite · Bananasplit");

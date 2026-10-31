@@ -37,7 +37,7 @@ export async function generateMetadata({ searchParams }: PageProps<"/sign-in">):
   if (preview === "join") {
     return {
       ...shareMetadata({
-        title: "Join your club",
+        title: "Join your organization",
         description: "Enter the invite code whoever invited you sent, and join their workspace.",
         card: FALLBACK_CARDS.join,
         noIndex: true,

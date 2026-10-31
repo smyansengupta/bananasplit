@@ -126,7 +126,7 @@ describe("Organization.storageUsedBytes", () => {
     expect(await used(club.id)).toBe(before + 1234);
   });
 
-  it("lets a Personal space upload a note file, and send a copy to a club that counts there", async () => {
+  it("lets a Personal space upload a note file, and send a copy to an organization that counts there", async () => {
     if (!reachable) return;
     requireUserMock.mockResolvedValue(owner);
     const personalBefore = await used(personalId);

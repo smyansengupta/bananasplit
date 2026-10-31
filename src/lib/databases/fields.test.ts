@@ -63,7 +63,7 @@ describe("parseCell: what each field type stores", () => {
     expect(parseCell(field("MULTI_SELECT", { choices }), [])).toEqual(ok(null));
   });
 
-  it("members must be in the club", () => {
+  it("members must be in the organization", () => {
     const members = new Set(["u_1"]);
     expect(parseCell(field("MEMBER"), "u_1", members)).toEqual(ok("u_1"));
     expect(parseCell(field("MEMBER"), "u_2", members).ok).toBe(false);
