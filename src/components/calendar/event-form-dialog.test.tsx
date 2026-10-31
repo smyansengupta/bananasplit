@@ -795,10 +795,11 @@ describe("EventFormDialog: after a create", () => {
 });
 
 describe("EventFormDialog: reminders", () => {
-  it("names them in the disclosure's summary", () => {
+  it("shows invites and the description before More details", () => {
     open();
 
-    expect(screen.getByText("host, RSVP link, invites, description, reminders")).toBeTruthy();
+    expect(screen.getByLabelText("Description")).toBeTruthy();
+    expect(screen.queryByText("host, RSVP link, invites, description, reminders")).toBeNull();
   });
 
   it("keeps the reminders behind More details for a new event", () => {

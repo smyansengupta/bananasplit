@@ -580,10 +580,8 @@ function EventForm({
     <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="contents">
       <DialogHeader>
         <DialogTitle>{event ? "Edit event" : `New ${noun}`}</DialogTitle>
-        <DialogDescription>
-          {event
-            ? "Changes reach the website and Google Calendar the same way the original did."
-            : "A title and a time are all it takes. Everything else has a sensible default."}
+        <DialogDescription className="sr-only">
+          {event ? "Change this meeting's details." : "A new meeting's details."}
         </DialogDescription>
       </DialogHeader>
 
@@ -895,6 +893,28 @@ function EventForm({
           />
         )}
 
+        {/* The two most used: who's invited and what it's about. */}
+        <div className="grid gap-1.5">
+          <Label htmlFor="event-attendees">Invite members</Label>
+          <MemberMultiPicker
+            id="event-attendees"
+            members={members}
+            selectedIds={attendeeIds}
+            onChange={setAttendeeIds}
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label htmlFor="event-description">Description</Label>
+          <Textarea
+            id="event-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="What it covers, what to bring, anything the website should say."
+          />
+        </div>
+
         <div>
           <button
             type="button"
@@ -908,11 +928,6 @@ function EventForm({
               className={cn("size-4 transition-transform", showMore && "rotate-180")}
             />
             {showMore ? "Fewer details" : "More details"}
-            {!showMore && (
-              <span className="text-muted-foreground/80 ml-1 text-xs font-normal">
-                host, RSVP link, invites, description, reminders
-              </span>
-            )}
           </button>
         </div>
 
@@ -1012,32 +1027,11 @@ function EventForm({
             )}
 
             <div className="grid gap-1.5">
-              <Label htmlFor="event-description">Description</Label>
-              <Textarea
-                id="event-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="What it covers, what to bring, anything the website should say."
-              />
-            </div>
-
-            <div className="grid gap-1.5">
               <Label htmlFor="event-reminders">Reminders</Label>
               <ReminderPicker
                 id="event-reminders"
                 value={reminderMinutes}
                 onChange={setReminderMinutes}
-              />
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="event-attendees">Invite members</Label>
-              <MemberMultiPicker
-                id="event-attendees"
-                members={members}
-                selectedIds={attendeeIds}
-                onChange={setAttendeeIds}
               />
             </div>
 
