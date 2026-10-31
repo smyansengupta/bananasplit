@@ -4,6 +4,7 @@ import { meetingTypeColor, type MeetingType } from "@/lib/meetings/meeting-types
 import { TagChip } from "@/components/ui/chip";
 import {
   AlertTriangle,
+  DoorOpen,
   CalendarPlus,
   ExternalLink,
   MapPin,
@@ -101,9 +102,12 @@ export function EventDetailView({
   defaultReminderMinutes,
   meetingTypes,
   linked = null,
+  tasks = null,
 }: {
   /** The Linked panel (components/links), last in the side column. */
   linked?: React.ReactNode;
+  /** Tasks from this meeting (components/meetings/meeting-tasks), under the notes. */
+  tasks?: React.ReactNode;
   orgId: string;
   orgSlug: string;
   timeZone: string;
@@ -179,6 +183,22 @@ export function EventDetailView({
   const zone = useViewerTimeZone(timeZone);
   const going = event.attendees.filter((a) => a.rsvp === "YES");
   const capacityPct = rsvp.capacity ? (rsvp.going / rsvp.capacity) * 100 : 0;
+  // Who's coming, at a glance in the header: sign-ups when the meeting takes
+  // them, else invitees who said yes.
+  const goingCount = rsvp.enabled ? rsvp.going : going.length;
+  // On the meeting's own day, the door list is one click from the header.
+  const dayKey = (d: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+  const doorToday =
+    section === "meetings" &&
+    canEdit &&
+    rsvp.enabled &&
+    dayKey(event.startsAt) === dayKey(new Date());
   // A meeting with no call (stored as In person), on its own page, for those who can edit it.
   const canAddCall = section === "meetings" && canEdit && event.conferenceProvider === "NONE";
 
@@ -196,6 +216,14 @@ export function EventDetailView({
         actions={
           canEdit ? (
             <>
+              {doorToday && (
+                <Button asChild>
+                  <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
+                    <DoorOpen aria-hidden className="size-4" />
+                    Door
+                  </Link>
+                </Button>
+              )}
               {/* Delete is in the form, with Undo; one place, not two. */}
               <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
                 <Repeat aria-hidden className="size-4" />
@@ -211,6 +239,8 @@ export function EventDetailView({
       />
 
       <div className="-mt-3 flex flex-wrap gap-1.5">
+        {event.host?.id === currentUserId && <Badge variant="info">You&apos;re hosting</Badge>}
+        {goingCount > 0 && <Badge variant="success">{goingCount} going</Badge>}
         {event.meetingType && (
           <TagChip
             color={
@@ -330,13 +360,13 @@ export function EventDetailView({
                 <Button variant="outline" asChild>
                   <a href={`/api/calendar/${event.id}/ics`} download>
                     <CalendarPlus className="size-4" />
-                    Download .ics
+                    Apple / Outlook
                   </a>
                 </Button>
                 <Button variant="outline" asChild>
                   <a href={buildGoogleCalendarUrl(event)} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="size-4" />
-                    Add to Google Calendar
+                    Google Calendar
                   </a>
                 </Button>
               </div>
@@ -383,12 +413,11 @@ export function EventDetailView({
                   ))}
                 </ul>
               ) : (
-                <p className="text-muted-foreground text-sm">
-                  Nothing yet. Meeting notes made here stay linked to this event.
-                </p>
+                <p className="text-muted-foreground text-sm">No notes yet.</p>
               )}
             </CardContent>
           </Card>
+          {tasks}
         </div>
 
         <aside className="space-y-[18px]">

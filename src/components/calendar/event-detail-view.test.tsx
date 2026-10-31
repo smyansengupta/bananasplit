@@ -130,8 +130,8 @@ describe("EventDetailView: the Calendar's page, unchanged", () => {
     view();
 
     expect(screen.getByRole("link", { name: /join meeting/i }).getAttribute("href")).toBe(JOIN);
-    expect(screen.getByRole("link", { name: /download \.ics/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /add to google calendar/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /apple \/ outlook/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /^google calendar$/i })).toBeTruthy();
   });
 
   it("shows the place as plain text, with no map link or directions", () => {
@@ -175,8 +175,8 @@ describe("EventDetailView: a meeting's page", () => {
     expect(screen.getByTestId("join-card")).toBeTruthy();
     expect(screen.queryByRole("link", { name: /join meeting/i })).toBeNull();
     // The calendar buttons beside it stay.
-    expect(screen.getByRole("link", { name: /download \.ics/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /add to google calendar/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /apple \/ outlook/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /^google calendar$/i })).toBeTruthy();
   });
 
   it("shows the join card even before there is a link to join", () => {

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { EventDetailView } from "@/components/calendar/event-detail-view";
 import { LinkedSection } from "@/components/links/linked-section";
+import { MeetingTasks, type MeetingTask } from "@/components/meetings/meeting-tasks";
 import { MeetingJoinCard } from "@/components/meetings/meeting-join-card";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
@@ -49,9 +50,50 @@ export default async function MeetingPage({
             _count: { _all: true },
           })
         : [];
-    return { event, signups };
+    // Tasks from this meeting: the tasks linked to it either way round.
+    const links = event
+      ? await db.itemLink.findMany({
+          where: {
+            organizationId: org.id,
+            OR: [
+              { fromKind: "event", fromId: event.id, toKind: "task" },
+              { toKind: "event", toId: event.id, fromKind: "task" },
+            ],
+          },
+          select: { fromKind: true, fromId: true, toId: true },
+        })
+      : [];
+    const taskIds = links.map((l) => (l.fromKind === "task" ? l.fromId : l.toId));
+    const tasks = taskIds.length
+      ? await db.task.findMany({
+          where: { organizationId: org.id, id: { in: taskIds }, deletedAt: null },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            dueDate: true,
+            owner: { select: { name: true } },
+          },
+          orderBy: [{ status: "asc" }, { dueDate: { sort: "asc", nulls: "last" } }],
+        })
+      : [];
+    return { event, signups, tasks };
   });
-  const { event, signups } = loaded;
+  const { event, signups, tasks } = loaded;
+  const dueFmt = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+  const meetingTasks: MeetingTask[] = tasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    meta:
+      [t.owner?.name?.split(" ")[0], t.dueDate ? dueFmt.format(t.dueDate) : null]
+        .filter(Boolean)
+        .join(", ") || null,
+  }));
   if (!event) notFound();
   const countOf = (s: string) => signups.find((r) => r.status === s)?._count._all ?? 0;
   const members = canEdit ? await getOrgMembersForPicker(org.id) : [];
