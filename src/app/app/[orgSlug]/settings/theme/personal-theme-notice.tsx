@@ -19,7 +19,7 @@ export function PersonalThemeNotice({
 }: {
   themeName: string;
   profileHref: string;
-  /** The club's default light/dark, applied when switching back to it. */
+  /** The organization's default light/dark, applied when switching back to it. */
   clubMode?: "light" | "dark" | "system";
 }) {
   const router = useRouter();
@@ -60,7 +60,7 @@ export function PersonalThemeNotice({
         }
       >
         {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
-        Use the club theme
+        Use the organization theme
       </Button>
     </div>
   );

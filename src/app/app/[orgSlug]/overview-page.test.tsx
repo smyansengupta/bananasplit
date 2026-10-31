@@ -212,7 +212,7 @@ describe("org overview", () => {
     ]);
     const html = await render();
     expect(html).toContain("This week");
-    expect(html).toContain("Open polls");
+    expect(html).toContain("Open forms");
     expect(html).toContain("height:240px");
     // Not on this member's board.
     expect(html).not.toContain(">Meetings<");
@@ -344,7 +344,7 @@ describe("org overview", () => {
       }),
     );
     // In the polls widget (Up next above it lists them by urgency instead).
-    const widget = html.slice(html.lastIndexOf("Open polls"));
+    const widget = html.slice(html.lastIndexOf("Open forms"));
     expect(widget.indexOf("Pizza or tacos?")).toBeLessThan(widget.indexOf("Exec sync time"));
     expect(html).toContain('href="/app/cbc/forms/polls/qp_1"');
     expect(html).toContain('href="/app/cbc/calendar/find-a-time/ap_1"');
@@ -389,7 +389,7 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain("Next 14 days");
     expect(html).not.toContain("Open tasks");
     expect(html.indexOf("Due this week")).toBeLessThan(html.indexOf('id="up-next-heading"'));
-    expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open polls"));
+    expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open forms"));
   });
 
   it("shows owners the organization's first steps until each is done or checked off", async () => {

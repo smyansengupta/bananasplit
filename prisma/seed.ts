@@ -937,7 +937,7 @@ async function seedMoonstoneShowcase(
     due: -14,
   });
   await plainEpic({
-    title: "Club operations",
+    title: "Organization operations",
     description: "Budget, rooms, the board calendar and everything that keeps the club running.",
     color: "#64748b",
     owner: "jackson",

@@ -1,29 +1,29 @@
 "use client";
 
 import { capsuleButtonClass } from "@/components/shell/capsule";
-import { NotificationBell } from "@/components/shell/notification-bell";
 import { PinButton } from "@/components/shell/pin-button";
 import { UserMenu, type UserMenuUser } from "@/components/shell/user-menu";
 import { cn } from "@/lib/utils";
 
 /**
  * The tool capsule: one glass pill at the top right of every page, with the
- * page's pin, notifications (the Inbox) and you. Search and New live at the
- * top of the sidebar (sidebar-tools.tsx), so they aren't repeated here; on a
- * phone, the menu button opens them with every section.
+ * page's pin and you. Search and New live at the top of the sidebar
+ * (sidebar-tools.tsx), and notifications are the Inbox (its sidebar entry
+ * carries the count), so none of them are repeated here; on a phone, the
+ * menu button opens them with every section.
  *
  * It floats: its row is sticky and lets clicks through everywhere but the
  * pill, and it takes the same room at the top the old bar did, so every
  * page's title and actions sit below it. On a phone it spans the width with
- * the menu (the organization, search, New and every section, full screen),
- * notifications and you.
+ * the menu (the organization, search, New and every section, full screen)
+ * and you.
  */
 export function ToolCapsule({
-  orgSlug,
   user,
   menuButton,
 }: {
-  orgSlug: string;
+  /** Kept for callers; nothing here needs the space any more. */
+  orgSlug?: string;
   user: UserMenuUser;
   /** The phone's menu button (NavMenu), first in the capsule. */
   menuButton?: React.ReactNode;
@@ -38,7 +38,6 @@ export function ToolCapsule({
         {menuButton}
         <span className="flex-1 md:hidden" />
         <PinButton className={cn(capsuleButtonClass, "max-md:hidden")} />
-        <NotificationBell href={`/app/${orgSlug}/inbox`} />
         <UserMenu user={user} />
       </div>
     </div>

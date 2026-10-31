@@ -60,7 +60,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
   },
   {
     type: "rsvp-goal",
-    title: "Next RSVP event",
+    title: "Next sign-up",
     description: "Seats taken for the next event with a capacity.",
     group: "Calendar",
     icon: "Ticket",
@@ -79,8 +79,8 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
   },
   {
     type: "polls",
-    title: "Open polls",
-    description: "Questions and find-a-time polls still taking answers.",
+    title: "Open forms",
+    description: "Forms and quick polls still taking answers.",
     group: "Calendar",
     icon: "Vote",
     w: 1,
@@ -134,7 +134,7 @@ export function overviewWidgetsFor(isAdmin: boolean): OverviewWidgetMeta[] {
  * Up next always leads, under the stat strip, and isn't a widget (nor is
  * the stat strip or "Get your club started"; see page.tsx). Then rows that
  * each fill the four columns: your work and what's waiting on an answer
- * (my tasks, the next RSVP event, open polls), the club's next seven days,
+ * (my tasks, the next sign-up, open forms), the organization's next seven days,
  * the weekly pulse, and where you were beside what you pinned. Meetings and
  * Events feed Up next, so they're offered, not placed.
  */

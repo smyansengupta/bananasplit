@@ -83,42 +83,42 @@ export default async function IntegrationsPage({
           key: "imessage",
           brand: M.imessage,
           name: "iMessage",
-          body: "Text Bananasplit to add tasks, RSVP and answer polls.",
+          body: "Text Bananasplit to add tasks, RSVP, answer polls.",
           state: "soon",
         },
         {
           key: "sms",
           brand: M.sms,
           name: "Text messages",
-          body: "Reminders and polls by text for anyone without iMessage.",
+          body: "Reminders and polls by SMS for anyone without iMessage.",
           state: "soon",
         },
         {
           key: "slack",
           brand: M.slack,
           name: "Slack",
-          body: "New forms, polls and reminders in a channel.",
+          body: "Post polls, new forms and reminders to a channel.",
           state: "soon",
         },
         {
           key: "discord",
           brand: M.discord,
           name: "Discord",
-          body: "The same, for organizations that live on Discord.",
+          body: "Same as Slack, for organizations that live on Discord.",
           state: "soon",
         },
         {
           key: "groupme",
           brand: M.groupme,
           name: "GroupMe",
-          body: "Announcements and quick polls in the group chat.",
+          body: "Announcements and quick polls to the organization chat.",
           state: "soon",
         },
         {
           key: "email",
           brand: M.email,
-          name: "Email sender",
-          body: "Invites and reminders from your organization's own address.",
+          name: "Email",
+          body: "Invites, reminders and form receipts from your organization's address.",
           // Organization email sends even without a sender of its own (the
           // platform's address), so the tile says Connected unless it's off.
           state:
@@ -138,7 +138,7 @@ export default async function IntegrationsPage({
           key: "google-calendar",
           brand: brandOr("google-workspace"),
           name: "Google Calendar",
-          body: "Your organization's calendar, kept in sync both ways.",
+          body: "Two-way sync with an organization calendar.",
           state: stateOf("GOOGLE_CALENDAR"),
           href: setup("google-calendar"),
         },
@@ -146,7 +146,7 @@ export default async function IntegrationsPage({
           key: "gmail",
           brand: brandOr("google-workspace"),
           name: "Gmail",
-          body: "Emails and invites become tasks.",
+          body: "Turn emails and invites into tasks.",
           state: "soon",
         },
         {
@@ -160,7 +160,7 @@ export default async function IntegrationsPage({
           key: "canvas",
           brand: brandOr("canvas"),
           name: "Canvas",
-          body: "Assignment due dates on your calendar.",
+          body: "Assignment due dates on your personal calendar.",
           state: "soon",
         },
       ],
@@ -169,22 +169,22 @@ export default async function IntegrationsPage({
       name: "Video calls",
       tiles: (
         [
-          ["GOOGLE_MEET", "google-meet", "Google Meet"],
           ["ZOOM", "zoom", "Zoom"],
+          ["GOOGLE_MEET", "google-meet", "Google Meet"],
           ["MICROSOFT_TEAMS", "microsoft-teams", "Microsoft Teams"],
         ] as const
       ).map(([provider, slug, name]) => ({
         key: slug,
         brand: brandOr(slug),
         name,
-        body: "A join link on every online meeting.",
+        body: "A meeting link on any event.",
         state: meeting(provider),
         connectSlug: slugOf(provider),
         href: `${base}/meetings`,
       })),
     },
     {
-      name: "Notes and AI",
+      name: "Notes, AI and data",
       tiles: [
         {
           key: "granola",
@@ -197,37 +197,41 @@ export default async function IntegrationsPage({
           key: "wispr-flow",
           brand: brandOr("wispr-flow"),
           name: "Wispr Flow",
-          body: "Dictate into notes and tasks.",
+          body: "Dictation into notes and tasks.",
           state: "soon",
         },
         {
           key: "claude",
           brand: brandOr("claude"),
           name: "Claude",
-          body: "Imports, and answers about your organization's data.",
+          body: "Ask about your organization's data, including form responses.",
           state: stateOf("CLAUDE"),
           href: setup("claude"),
         },
         {
           key: "chatgpt",
           brand: brandOr("chatgpt"),
-          name: "Other AI models",
-          body: "ChatGPT or any compatible model, instead of Claude.",
-          state: stateOf("OPENAI_COMPATIBLE"),
-          href: setup("ai-model"),
+          name: "ChatGPT",
+          body: "The same, for organizations on ChatGPT.",
+          state: "soon",
         },
-      ],
-    },
-    {
-      name: "Website and data",
-      tiles: [
         {
           key: "supabase",
           brand: brandOr("supabase"),
           name: "Supabase",
-          body: "Check-ins, sign-ups and votes from your website.",
+          body: "Keep your own tables in sync with a database.",
           state: stateOf("SUPABASE_SOURCE"),
           href: setup("data-source"),
+        },
+        // Beyond the plan's tiles, so nothing that works today is lost: a
+        // model of your choice instead of Claude, and the website's rebuild.
+        {
+          key: "ai-model",
+          brand: M.generic,
+          name: "Other AI models",
+          body: "Any compatible model, instead of Claude.",
+          state: stateOf("OPENAI_COMPATIBLE"),
+          href: setup("ai-model"),
         },
         {
           key: "website",
@@ -254,13 +258,6 @@ export default async function IntegrationsPage({
     <div className="space-y-7.5">
       <PageHeader
         title={sectionLabel(ctx.settings?.sidebar, "integrations")}
-        actions={
-          canManage ? (
-            <Button asChild variant="outline">
-              <Link href={`${base}/setup`}>Guided setup</Link>
-            </Button>
-          ) : null
-        }
         tabs={
           <PageTabs
             label="Show"

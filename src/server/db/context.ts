@@ -418,7 +418,7 @@ export class ConnectorRefusedError extends AppError {
     super(
       reason === "scope"
         ? "This app was connected to one space only, and this isn't it. To use another, disconnect the app on your Bananasplit profile and connect it again."
-        : `${clubName ?? "This club"} has turned off AI apps. Its owners and admins can turn them back on in Admin panel › Privacy.`,
+        : `${clubName ?? "This organization"} has turned off AI apps. Its owners and admins can turn them back on in Admin panel › Privacy.`,
       403,
       reason === "scope" ? "CONNECTOR_SCOPE" : "CONNECTORS_OFF",
     );
