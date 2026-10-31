@@ -75,7 +75,7 @@ export function SidebarBody({
       {/* The organization you're in, the way to switch, and you, at the top. */}
       <div
         className={cn(
-          "flex shrink-0 pb-3",
+          "flex shrink-0 pb-4",
           rail ? "flex-col items-start gap-3" : "items-center gap-1",
         )}
       >

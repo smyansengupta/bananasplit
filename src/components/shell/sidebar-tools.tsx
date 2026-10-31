@@ -33,7 +33,7 @@ export function SidebarTools({
   const { rail, chrome } = useSidebarMode();
   const mod = useModKey();
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 pb-3">
+    <div className="flex shrink-0 flex-col gap-1.5 pb-4">
       {createActions.length > 0 && (
         <CreateMenu
           orgId={orgId}

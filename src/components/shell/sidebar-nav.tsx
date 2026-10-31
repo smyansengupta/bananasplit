@@ -200,7 +200,7 @@ export const SECTION_NAMES: Record<string, string> = {
 };
 
 /** A section heading's box: more room above it than below, the same everywhere. */
-const HEADING = "mt-5 mb-1 flex h-6 shrink-0 items-center gap-1 px-2";
+const HEADING = "mt-3.5 mb-1 flex h-6 shrink-0 items-center gap-1 px-2";
 
 /**
  * A section's name, small and quiet, with room above it; on the rail, only
@@ -507,8 +507,6 @@ export function SidebarNav({
               );
             }
             const collapsed = !rail && (edit?.my.collapsed.includes(section.id) ?? false);
-            // Shut, the page you're on still shows under the heading.
-            const here = section.items.filter((l) => isLinkActive(l, pathname, all, search));
             return (
               <div key={section.id} className="flex flex-col">
                 <SectionHeader
@@ -517,14 +515,17 @@ export function SidebarNav({
                   collapsed={collapsed}
                   waiting={section.items.reduce((sum, l) => sum + (counts[l.id] ?? 0), 0)}
                 />
-                <Fold open={!collapsed}>
-                  <div id={`sidebar-section-${section.id}`} className="flex flex-col gap-0.5">
-                    {section.items.map(row)}
-                  </div>
-                </Fold>
-                {collapsed && here.length > 0 && (
-                  <div className="flex flex-col gap-0.5">{here.map(row)}</div>
-                )}
+                {/* Each row folds on its own: shut, the page you're on stays in place. */}
+                <div id={`sidebar-section-${section.id}`} className="flex flex-col">
+                  {section.items.map((link) => (
+                    <Fold
+                      key={link.id}
+                      open={!collapsed || isLinkActive(link, pathname, all, search)}
+                    >
+                      <div className="pb-0.5">{row(link)}</div>
+                    </Fold>
+                  ))}
+                </div>
               </div>
             );
           })}
