@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "@/components/icons";
+import { ArrowRight, Check } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 
 import { saveDesignAction } from "@/app/app/[orgSlug]/forms/actions";
@@ -16,6 +16,7 @@ import {
   thanksLine,
   type FormDesign,
 } from "@/lib/forms/design";
+import { hasOptions, type Question } from "@/lib/forms/questions";
 import { TAG_COLOR_NAMES, TAG_COLORS, type TagColor } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 
@@ -31,12 +32,13 @@ export function FormDesignPanel({
   orgId,
   formId,
   initial,
-  title,
+  question,
 }: {
   orgId: string;
   formId: string;
   initial: FormDesign;
-  title: string;
+  /** The form's first question, drawn in the preview as it is. */
+  question: Question | null;
 }) {
   const [design, setDesign] = useState(initial);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,15 +139,21 @@ export function FormDesignPanel({
         <SavedMark status={status} error={error} />
       </section>
 
-      <DesignPreview design={design} title={title} />
+      <DesignPreview design={design} question={question} />
     </div>
   );
 }
 
 /** A small picture of the answer page with this design. */
-function DesignPreview({ design, title }: { design: FormDesign; title: string }) {
+function DesignPreview({ design, question }: { design: FormDesign; question: Question | null }) {
   const accent = accentVar(design.accent);
   const ink = `oklch(from ${accent} clamp(0, (0.62 - l) * 1000, 1) 0 0)`;
+  const choices =
+    question && hasOptions(question.type)
+      ? (question.options ?? []).slice(0, 3).map((o) => o.label || "Untitled choice")
+      : question?.type === "yesno"
+        ? ["Yes", "No"]
+        : [];
   return (
     <section
       aria-label="Preview"
@@ -162,30 +170,50 @@ function DesignPreview({ design, title }: { design: FormDesign; title: string })
       )}
       <div className="absolute inset-x-0 top-0 h-1" style={{ background: accent, width: "38%" }} />
       <div className="relative space-y-5 p-8">
-        <p className="display-title text-[22px] leading-snug">
-          <span className="text-muted-foreground me-2 text-[0.7em]">1.</span>
-          {title || "Your first question"}
-        </p>
-        <div className="grid max-w-xs gap-2">
-          {["A", "B"].map((l, i) => (
-            <span
-              key={l}
-              className="flex items-center gap-2.5 rounded-[12px] border px-3 py-2 text-[14px]"
-              style={{
-                borderColor: `color-mix(in oklab, ${accent} 40%, var(--border))`,
-                background: `color-mix(in oklab, ${accent} ${i === 0 ? 14 : 5}%, transparent)`,
-              }}
-            >
-              <span
-                className="grid size-5 place-items-center rounded-[6px] border text-[11px] font-semibold"
-                style={{ borderColor: accent, color: accent }}
-              >
-                {l}
-              </span>
-              {i === 0 ? "A choice" : "Another choice"}
-            </span>
-          ))}
+        <div className="space-y-2">
+          <p
+            className="flex items-center gap-1 font-mono text-[12px] font-medium"
+            style={{ color: accent }}
+          >
+            1
+            <ArrowRight className="size-3" aria-hidden="true" />
+          </p>
+          <p className="display-title text-[22px] leading-snug">
+            {question?.title || "Your first question"}
+          </p>
         </div>
+        {/* What the first question really asks for: its own choices when it
+            has them, Yes and No, or a line to type on (never made-up choices
+            under a short answer). */}
+        {choices.length > 0 ? (
+          <div className="grid max-w-xs gap-2">
+            {choices.map((label, i) => (
+              <span
+                key={i}
+                className="flex items-center gap-2.5 rounded-[12px] border px-3 py-2 text-[14px]"
+                style={{
+                  borderColor: `color-mix(in oklab, ${accent} 40%, var(--border))`,
+                  background: `color-mix(in oklab, ${accent} ${i === 0 ? 14 : 5}%, transparent)`,
+                }}
+              >
+                <span
+                  className="grid size-5 place-items-center rounded-[6px] border text-[11px] font-semibold"
+                  style={{ borderColor: accent, color: accent }}
+                >
+                  {String.fromCharCode(65 + i)}
+                </span>
+                <span className="min-w-0 truncate">{label}</span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p
+            className="text-muted-foreground max-w-sm border-b-2 pb-1.5 text-[15px]"
+            style={{ borderColor: `color-mix(in oklab, ${accent} 55%, var(--border))` }}
+          >
+            {question?.type === "long" ? "Type your answer here" : "Type your answer"}
+          </p>
+        )}
         <span
           className="inline-flex h-9 items-center rounded-full px-4 text-[14px] font-semibold"
           style={{ background: accent, color: ink }}

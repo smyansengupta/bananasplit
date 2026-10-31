@@ -140,7 +140,7 @@ export default async function FormPage({
           orgId={org.id}
           formId={form.id}
           initial={readDesign(form.design)}
-          title={questions[0]?.title ?? form.title}
+          question={questions.find((q) => q.type !== "section" && q.type !== "hidden") ?? null}
         />
       )}
       {tab === "settings" && (
