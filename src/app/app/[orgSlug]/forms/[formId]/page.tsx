@@ -6,7 +6,6 @@ import { FormBuilder, FormSettingsPanel, SharePanel } from "@/components/forms/f
 import { LinkedSection } from "@/components/links/linked-section";
 import { FormPublish } from "@/components/forms/form-publish";
 import { FormResponses } from "@/components/forms/form-responses";
-import { PageHeader } from "@/components/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { appUrl } from "@/lib/app-url";
 import { familyOf, formatBytes } from "@/lib/files/types";
@@ -94,19 +93,15 @@ export default async function FormPage({
 
   return (
     <div className="space-y-7">
-      <div className="space-y-3">
+      {/* One bar, as the plan draws it: the title, the five tabs, then
+          Preview and Publish. On a narrow screen the tabs take their own row. */}
+      <header className="space-y-3">
         <BackLink href={`${base}/forms`} label="Forms" />
-        <PageHeader
-          title={form.title}
-          actions={
-            <FormPublish
-              orgId={org.id}
-              formId={form.id}
-              previewHref={`/f/${form.slug}?preview=1`}
-              published={form.publishedAt !== null}
-            />
-          }
-          tabs={
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <h1 className="heading min-w-0 text-[26px] leading-tight break-words max-lg:flex-1">
+            {form.title}
+          </h1>
+          <div className="flex min-w-0 flex-1 justify-center max-lg:order-3 max-lg:basis-full max-lg:justify-start">
             <PageTabs
               label="Form"
               tabs={[
@@ -121,9 +116,15 @@ export default async function FormPage({
                 },
               ]}
             />
-          }
-        />
-      </div>
+          </div>
+          <FormPublish
+            orgId={org.id}
+            formId={form.id}
+            previewHref={`/f/${form.slug}?preview=1`}
+            published={form.publishedAt !== null}
+          />
+        </div>
+      </header>
 
       {tab === "build" && (
         <FormBuilder
