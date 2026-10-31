@@ -137,7 +137,7 @@ export function pulseHeadline(data: PulseIssueData): string {
   return parts.join(" · ");
 }
 
-/** "Fall Showcase 5 · Recruitment 3 · Club operations 1" (projects with work done, most first). */
+/** "Fall Showcase 5 · Recruitment 3 · Organization operations 1" (projects with work done, most first). */
 export function pulseProjectLine(data: PulseIssueData, max = 4): string {
   const done = data.byProject.filter((p) => p.done > 0);
   // Only loose tasks: "No project 2" says nothing the count doesn't.
@@ -163,7 +163,10 @@ export function pollOutcome(poll: PulseIssueData["pollResults"][number]): string
  */
 export function pulseNextWeek(data: PulseIssueData, max = 3): { text: string; title: string }[] {
   return [...data.nextWeek]
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === "event" ? -1 : 1))
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === "event" ? -1 : 1),
+    )
     .slice(0, max)
     .map((item) => {
       const day = WEEKDAY.format(keyDate(item.date));
@@ -194,14 +197,19 @@ export function pulseRows(data: PulseIssueData): PulseRow[] {
   }
   rows.push({
     icon: "done",
-    title: data.doneCount === 0 ? "Nothing finished this week" : `${plural(data.doneCount, "task")} finished`,
+    title:
+      data.doneCount === 0
+        ? "Nothing finished this week"
+        : `${plural(data.doneCount, "task")} finished`,
     detail: pulseProjectLine(data) || null,
   });
   for (const event of data.events.slice(0, 4)) {
     rows.push({
       icon: "people",
       title:
-        event.checkIns > 0 ? `${event.checkIns} came to the ${event.title}` : `${event.title} was held`,
+        event.checkIns > 0
+          ? `${event.checkIns} came to the ${event.title}`
+          : `${event.title} was held`,
       detail: null,
     });
   }

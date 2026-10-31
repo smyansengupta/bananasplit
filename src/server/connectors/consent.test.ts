@@ -24,7 +24,7 @@ describe("consentOptions", () => {
           },
           { group: "Personal", choices: [{ value: "org_personal", label: "Personal only" }] },
           {
-            group: "Clubs",
+            group: "Organizations",
             choices: [
               { value: "org_robotics", label: "Robotics Club only" },
               { value: "org_chess", label: "Chess Club only" },

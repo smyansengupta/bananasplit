@@ -175,7 +175,7 @@ export const CBC_POSITIONS: readonly CbcPosition[] = [
     isOpen: false,
     isAdvisor: false,
     responsibilities: [
-      "Sets semester vision, goals, and priorities for the club",
+      "Sets semester vision, goals, and priorities for the organization",
       "Owns all partnerships: Anthropic, Khoury, faculty advisor, sponsors, guest speakers",
       "Leads funding asks with Anthony",
       "Final say on budget, Anthropic brand use, new partnerships, and board changes",
@@ -201,7 +201,7 @@ export const CBC_POSITIONS: readonly CbcPosition[] = [
       "Sounding board for Jackson on strategy and tough calls",
       "Answers questions from Jackson as needed",
       "Optional technical input on the ops suite and workshops",
-      "Provides continuity from the club's founding",
+      "Provides continuity from the organization's founding",
     ],
     decidesAlone: [],
   },
@@ -231,8 +231,8 @@ export const CBC_POSITIONS: readonly CbcPosition[] = [
     isOpen: false,
     isAdvisor: false,
     responsibilities: [
-      "Owns member growth, event turnout, and club brand on campus",
-      "Builds relationships with other clubs and campus orgs",
+      "Owns member growth, event turnout, and organization brand on campus",
+      "Builds relationships with other organizations on campus",
       "Manages the designer and sets priority across all design requests",
       "Signs off on brand consistency for posts, flyers, and decks",
       "Leads recruitment for the next board application round",
@@ -1569,7 +1569,7 @@ export async function seedCbcDemoData(
     ],
     [
       "lucas",
-      ["Tabling at Club Fair follow-ups sent", "Instagram reach up 30% week over week"],
+      ["Tabling at Activities Fair follow-ups sent", "Instagram reach up 30% week over week"],
       ["Board application round plan", "Designer job post"],
       ["Designer hire: waiting on job post approval"],
     ],
@@ -2137,7 +2137,7 @@ async function seedCbcBudget(
     ["alex", 0, "Pizza for Workshop 1", 18_450, "REIMBURSED"],
     ["kristine", 3, "Boba for the Welcome Social", 21_600, "REIMBURSED"],
     ["alex", 0, "Pizza for Workshop 2", 16_900, "APPROVED"],
-    ["kristine", 2, "Club fair flyers (print)", 4_800, "APPROVED"],
+    ["kristine", 2, "Activities Fair flyers (print)", 4_800, "APPROVED"],
     ["alex", 0, "Pizza for Workshop 4", 17_350, "SUBMITTED"],
     ["smyan", 0, "Snacks for Workshop 5", 6_200, "SUBMITTED"],
   ];

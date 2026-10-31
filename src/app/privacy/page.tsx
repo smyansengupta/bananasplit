@@ -169,8 +169,8 @@ function Policy() {
           that links to this Privacy Notice
         </li>
         <li>
-          Use bananasplit. Tasks, availability polls, RSVPs, notes, databases and the club budget in
-          one workspace. Replace the pile of apps your board juggles today.
+          Use bananasplit. Tasks, availability polls, RSVPs, notes, databases and the organization
+          budget in one workspace. Replace the pile of apps your board juggles today.
         </li>
         <li>Engage with us in other related ways, including any marketing or events</li>
       </ul>
