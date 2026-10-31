@@ -21,6 +21,7 @@ import { planGate } from "@/server/billing/plan-gate";
 import { canManageStorage, readStorageUsed } from "@/server/storage/quota";
 import { storageBreakdown } from "@/server/storage/usage";
 
+import { FilesTabs } from "./files-tabs";
 import { NotesFilterChoices, NotesListFilters } from "./notes-list-filters";
 import {
   countDeleted,
@@ -34,8 +35,8 @@ import {
 export const metadata: Metadata = { title: "Files" };
 
 /**
- * Files (at /notes): the club's notes and uploaded files in one list, filed
- * in shared folders. "New" starts a blank note or a template, turns a Word
+ * Files (at /notes): the organization's notes and uploaded files in one
+ * list, filed in shared folders, with All, Notes and Uploads as its tabs. "New" starts a blank note or a template, turns a Word
  * document or Google Doc into a note (previewed first), uploads a file, or
  * makes a folder. In Personal they're all its owner's, with no sharing.
  */
@@ -160,6 +161,7 @@ export default async function NotesPage({
     <div className="space-y-6">
       <PageHeader
         title={sectionLabel(settings?.sidebar, "notes")}
+        tabs={inTrash ? undefined : <FilesTabs />}
         actions={
           <>
             {/* The space's storage, split by what uses it, beside the create button. */}
@@ -183,15 +185,9 @@ export default async function NotesPage({
         }
       />
       <SpaceStorageBanner orgSlug={orgSlug} />
-      {/* The page's uploader: the whole page takes dropped files (not the trash). */}
-      {!inTrash && (
-        <FilesDropZone
-          orgId={org.id}
-          folderId={uploadFolder}
-          storage={storage}
-          personal={personal}
-        />
-      )}
+      {/* The page's uploader: the whole page takes dropped files (in the
+          trash too, where they land in no folder rather than in the trash). */}
+      <FilesDropZone orgId={org.id} folderId={uploadFolder} storage={storage} personal={personal} />
       <NotesLibrary
         moveTargets={moveTargets}
         orgId={org.id}

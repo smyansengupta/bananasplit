@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
+import { NOTE_SORT_OPTIONS } from "@/app/app/[orgSlug]/notes/notes-list-filters";
 import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { Segmented } from "@/components/ui/segmented";
 import { toast, undoable } from "@/components/ui/toaster";
@@ -156,10 +157,10 @@ function folderDot(color: string | null) {
   return folderTone(color);
 }
 
-/** Grid or list, as icons only (the names are read out and shown on hover). */
+/** Grid or list, as People's layouts: an icon and its name (the name hides on a phone). */
 const LAYOUTS = [
-  { value: "grid", label: <span className="sr-only">Grid</span>, icon: LayoutGrid, title: "Grid" },
-  { value: "list", label: <span className="sr-only">List</span>, icon: List, title: "List" },
+  { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
+  { value: "list", label: "List", icon: List, compact: true, title: "List" },
 ];
 
 /**
@@ -260,20 +261,69 @@ export function NotesLibrary({
     });
   }
 
+  /** Files a note or file in a folder (null: no folder), with Undo. */
+  function move(item: Item, folderId: string | null, folderName?: string) {
+    const from = item.folderId;
+    if (from === folderId) return;
+    const ids = (kind: "note" | "file") =>
+      kind === "note" ? { noteIds: [item.id] } : { fileIds: [item.id] };
+    const name = folderId
+      ? (folderName ?? folders.find((f) => f.id === folderId)?.name ?? "the folder")
+      : "Not in a folder";
+    void undoable({
+      title: folderId ? `Moved to ${name}` : "Taken out of the folder",
+      run: async () => {
+        const result = await moveToFolderAction(orgId, ids(item.kind), folderId);
+        router.refresh();
+        if (!result.ok) return result.error ?? "That didn't work.";
+      },
+      undo: async () => {
+        const result = await moveToFolderAction(orgId, ids(item.kind), from);
+        router.refresh();
+        if (!result.ok) return result.error ?? "That didn't work.";
+      },
+    });
+  }
+
   function dropOn(folderId: string | null, data: DataTransfer) {
     setOverFolder(null);
     const noteId = data.getData(NOTE_MIME);
     const fileId = data.getData(FILE_MIME);
-    if (!noteId && !fileId) return;
-    run(() =>
-      moveToFolderAction(orgId, noteId ? { noteIds: [noteId] } : { fileIds: [fileId] }, folderId),
-    );
+    const note = noteId ? notes.find((n) => n.id === noteId) : undefined;
+    const file = fileId ? files.find((f) => f.id === fileId) : undefined;
+    if (note) {
+      move({ kind: "note", id: note.id, name: note.title, folderId: note.folderId }, folderId);
+    } else if (file) {
+      move({ kind: "file", id: file.id, name: file.name, folderId: file.folderId }, folderId);
+    }
   }
 
   const isCardDrag = (e: React.DragEvent) => {
     const types = Array.from(e.dataTransfer.types);
     return types.includes(NOTE_MIME) || types.includes(FILE_MIME);
   };
+
+  // dragleave fires on a target whenever the pointer crosses into one of its
+  // own children (the icon, the name, the count), so a highlight cleared on
+  // every dragleave blinks off and on as you move over it. Only a leave that
+  // really goes outside counts.
+  const leftFor = (e: React.DragEvent) =>
+    !(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget));
+
+  // A drag that ends anywhere (dropped, cancelled with Escape, let go
+  // outside the window) leaves no folder lit.
+  useEffect(() => {
+    const clear = () => {
+      setOverFolder(null);
+      setOverTrash(false);
+    };
+    window.addEventListener("dragend", clear);
+    window.addEventListener("drop", clear);
+    return () => {
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("drop", clear);
+    };
+  }, []);
 
   // A folder takes a card (filed there) or files from the computer (uploaded
   // there). preventDefault on the drop tells the page's uploader it's handled.
@@ -285,12 +335,14 @@ export function NotesLibrary({
       e.dataTransfer.dropEffect = card ? "move" : "copy";
       setOverFolder(id ?? "none");
     },
-    onDragLeave: () => setOverFolder((f) => (f === (id ?? "none") ? null : f)),
+    onDragLeave: (e: React.DragEvent) => {
+      if (leftFor(e)) setOverFolder((f) => (f === (id ?? "none") ? null : f));
+    },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
-      if (!isCardDrag(e) && e.dataTransfer.files.length > 0) {
-        setOverFolder(null);
-        uploadFiles(Array.from(e.dataTransfer.files), id);
+      setOverFolder(null);
+      if (!isCardDrag(e)) {
+        if (e.dataTransfer.files.length > 0) uploadFiles(Array.from(e.dataTransfer.files), id);
         return;
       }
       dropOn(id, e.dataTransfer);
@@ -394,7 +446,9 @@ export function NotesLibrary({
       e.dataTransfer.dropEffect = "move";
       setOverTrash(true);
     },
-    onDragLeave: () => setOverTrash(false),
+    onDragLeave: (e: React.DragEvent) => {
+      if (leftFor(e)) setOverTrash(false);
+    },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       setOverTrash(false);
@@ -492,6 +546,8 @@ export function NotesLibrary({
             e.dataTransfer.setData("text/uri-list", `${window.location.origin}${href}`);
             e.dataTransfer.setData("text/plain", `${window.location.origin}${href}`);
             if (n.canMove) e.dataTransfer.setData(NOTE_MIME, n.id);
+            // Moved into a folder, or linked from Pinned.
+            e.dataTransfer.effectAllowed = "all";
           }}
           className={cardLink}
         >
@@ -596,6 +652,7 @@ export function NotesLibrary({
             e.dataTransfer.setData("text/uri-list", `${window.location.origin}${href}`);
             e.dataTransfer.setData("text/plain", `${window.location.origin}${href}`);
             if (f.canMove) e.dataTransfer.setData(FILE_MIME, f.id);
+            e.dataTransfer.effectAllowed = "all";
           }}
           className={cardLink}
         >
@@ -791,305 +848,323 @@ export function NotesLibrary({
     return { title: "Nothing here yet", description: "", action: uploadButton };
   }
 
+  const searching = Boolean(params.get("q"));
+  const filtering = ["visibility", "author"].some((k) => params.get(k) && params.get(k) !== "all");
+
+  const searchForm = (phone: boolean) => (
+    <form
+      role="search"
+      className={phone ? undefined : "min-w-[220px] flex-1"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        go({ q: q.trim() || null });
+      }}
+    >
+      <SearchField
+        value={q}
+        onValueChange={(v) => {
+          setQ(v);
+          if (!v) go({ q: null });
+        }}
+        onClear={() => {
+          setQ("");
+          go({ q: null });
+        }}
+        placeholder="Search"
+        aria-label="Search files"
+        className={phone ? undefined : "sm:w-full"}
+        autoComplete="off"
+        autoFocus={phone}
+      />
+    </form>
+  );
+
+  const layoutSwitch = (
+    <Segmented
+      label="Layout"
+      options={LAYOUTS}
+      value={view}
+      onSelect={(v) => go({ layout: v === "grid" ? null : v })}
+    />
+  );
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
-      {/* Not on a phone: there the folder is a filter (the toolbar's sheet). */}
-      <aside className="space-y-4 max-md:hidden lg:sticky lg:top-20 lg:self-start">
-        <div className="space-y-0.5">
-          {railItem(
-            null,
-            "Everything",
-            <Library className="size-4 shrink-0" aria-hidden="true" />,
-            totals.notes + totals.files,
-            false,
-          )}
-          {railItem(
-            "none",
-            "Not in a folder",
-            <Inbox className="size-4 shrink-0" aria-hidden="true" />,
-            totals.unfiled,
-            true,
-          )}
-        </div>
-        <div className="space-y-0.5 border-t pt-3">
-          {folders.map((f) =>
-            renaming?.id === f.id ? (
-              <form
-                key={f.id}
-                className="px-1"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const name = renaming.name.trim();
-                  setRenaming(null);
-                  if (name && name !== f.name) run(() => updateFolderAction(orgId, f.id, { name }));
-                }}
-              >
-                <Input
-                  autoFocus
-                  value={renaming.name}
-                  maxLength={80}
-                  onChange={(e) => setRenaming({ id: f.id, name: e.target.value })}
-                  onBlur={(e) => e.currentTarget.form?.requestSubmit()}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setRenaming(null);
-                  }}
-                  aria-label="Folder name"
-                />
-              </form>
-            ) : (
-              railItem(
-                f.id,
-                f.name,
-                folder === f.id ? (
-                  <FolderOpen
-                    className="size-4 shrink-0"
-                    style={{ color: folderDot(f.color) }}
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <Folder
-                    className="size-4 shrink-0"
-                    style={{ color: folderDot(f.color) }}
-                    aria-hidden="true"
-                  />
-                ),
-                f.noteCount + f.fileCount,
-                true,
-                <>
-                  <PinToggle
-                    href={`${base}?folder=${f.id}`}
-                    label={`folder ${f.name}`}
-                    className="rounded-lg border-transparent bg-transparent opacity-0 shadow-none group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-                  />
-                  {f.canEdit && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Delete ${f.name}`}
-                      title="Delete"
-                      onClick={() => void removeFolder(f)}
-                      className="text-muted-foreground hover:text-tint-danger-foreground me-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-                    >
-                      <Trash2 className="size-4" aria-hidden="true" />
-                    </Button>
-                  )}
-                </>,
-                f.canEdit ? () => setRenaming({ id: f.id, name: f.name }) : undefined,
-              )
-            ),
-          )}
-          {folders.length === 0 && (
-            <p className="text-muted-foreground px-2.5 text-xs">No folders yet.</p>
-          )}
-        </div>
-        <div
-          {...trashDropProps}
-          className={cn(
-            "rounded-md border-t pt-3",
-            overTrash && "ring-destructive bg-destructive/10 ring-2",
-          )}
-        >
-          {railItem(
-            "trash",
-            "Recently deleted",
-            <Trash2 className="size-4 shrink-0" aria-hidden="true" />,
-            totals.trash,
-            false,
-          )}
-          {overTrash && <p className="text-destructive px-2.5 pt-1 text-xs">Drop to delete</p>}
-        </div>
-        {error && <p className="text-destructive px-2 text-xs">{error}</p>}
-      </aside>
-
-      <div className="min-w-0 space-y-4">
-        <PhoneToolbar
-          leading={
+    <div className="space-y-4">
+      {/*
+        The toolbar every list page has (People, Tasks): the search, the
+        order and the layout on one row, the filters as chips under it with
+        what they found at the end. The trash is a plain list, so none of it.
+      */}
+      {!inTrash && (
+        <div className="space-y-3 max-md:hidden">
+          <div className="flex flex-wrap items-center gap-2">
+            {searchForm(false)}
             <Segmented
-              label="Layout"
-              options={LAYOUTS}
-              value={view}
-              onSelect={(v) => go({ layout: v === "grid" ? null : v })}
-              className="[&>button]:gap-0 [&>button]:px-2"
+              label="Sort"
+              options={[...NOTE_SORT_OPTIONS]}
+              value={params.get("sort") ?? "edited"}
+              onSelect={(v) => go({ sort: v === "edited" ? null : v })}
             />
-          }
-          filterCount={
-            (folder ? 1 : 0) +
-            ["tab", "visibility", "author"].filter((k) => params.get(k) && params.get(k) !== "all")
-              .length
-          }
-          onFilters={() => setFiltersOpen(true)}
-          searchLabel="Search files"
-          searchActive={Boolean(params.get("q"))}
-          search={
-            <form
-              role="search"
-              onSubmit={(e) => {
-                e.preventDefault();
-                go({ q: q.trim() || null });
-              }}
-            >
-              <SearchField
-                value={q}
-                onValueChange={(v) => {
-                  setQ(v);
-                  if (!v) go({ q: null });
-                }}
-                placeholder="Search files"
-                aria-label="Search files"
-                autoFocus
-              />
-            </form>
-          }
-          onCancelSearch={() => {
-            setQ("");
-            if (params.get("q")) go({ q: null });
-          }}
-        />
-        <FilterSheet
-          open={filtersOpen}
-          onOpenChange={setFiltersOpen}
-          title="Filters"
-          description=""
-          canClear={Boolean(
-            folder || ["tab", "visibility", "author", "sort"].some((k) => params.get(k)),
-          )}
-          onClear={() =>
-            go({ folder: null, tab: null, visibility: null, author: null, sort: null })
-          }
-        >
-          <FilterChoices
-            title="Folder"
-            value={folder ?? ""}
-            onPick={(v) => go({ folder: v || null })}
-            options={[
-              { value: "", label: "Everything" },
-              { value: "none", label: "Not in a folder" },
-              ...folders.map((f) => ({
-                value: f.id,
-                label: f.name,
-                color: f.color ? folderDot(f.color) : undefined,
-              })),
-              { value: "trash", label: "Recently deleted" },
-            ]}
-          />
-          {sheetFilters}
-        </FilterSheet>
-        {/* On a phone, which folder you're in (Everything says nothing). */}
-        {(folder || error) && (
-          <div className="space-y-1 md:hidden">
-            {folder && <h2 className="heading text-lg break-words">{heading}</h2>}
-            {error && <p className="text-destructive text-xs">{error}</p>}
+            {layoutSwitch}
           </div>
-        )}
-        <div className="flex flex-wrap items-center gap-2 max-md:hidden">
-          <h2 className="heading mr-auto flex min-w-0 items-center gap-2 text-lg">
-            {currentFolder ? (
-              <FolderOpen
-                className="size-5 shrink-0"
-                style={{ color: folderDot(currentFolder.color) }}
-                aria-hidden="true"
-              />
-            ) : null}
-            <span className="min-w-0 break-words">{heading}</span>
-          </h2>
-          {!inTrash && (
-            <>
-              <form
-                role="search"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  go({ q: q.trim() || null });
-                }}
-              >
-                <SearchField
-                  value={q}
-                  onValueChange={(v) => {
-                    setQ(v);
-                    if (!v) go({ q: null });
-                  }}
-                  placeholder="Search files"
-                  aria-label="Search files"
-                />
-              </form>
+          {(!personal || searching) && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
               {filters}
-              <Segmented
-                label="Layout"
-                options={LAYOUTS}
-                value={view}
-                onSelect={(v) => go({ layout: v === "grid" ? null : v })}
-                className="[&>button]:gap-0 [&>button]:px-2"
-              />
-            </>
+              {(searching || filtering) && (
+                <span
+                  className="text-muted-foreground ml-auto text-[13px]"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {entries.length} found
+                </span>
+              )}
+            </div>
           )}
         </div>
+      )}
 
-        {/*
+      <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
+        {/* Not on a phone: there the folder is a filter (the toolbar's sheet). */}
+        <aside className="space-y-4 max-md:hidden lg:sticky lg:top-20 lg:self-start">
+          <div className="space-y-0.5">
+            {railItem(
+              null,
+              "Everything",
+              <Library className="size-4 shrink-0" aria-hidden="true" />,
+              totals.notes + totals.files,
+              false,
+            )}
+            {railItem(
+              "none",
+              "Not in a folder",
+              <Inbox className="size-4 shrink-0" aria-hidden="true" />,
+              totals.unfiled,
+              true,
+            )}
+          </div>
+          <div className="space-y-0.5 border-t pt-3">
+            {folders.map((f) =>
+              renaming?.id === f.id ? (
+                <form
+                  key={f.id}
+                  className="px-1"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const name = renaming.name.trim();
+                    setRenaming(null);
+                    if (name && name !== f.name)
+                      run(() => updateFolderAction(orgId, f.id, { name }));
+                  }}
+                >
+                  <Input
+                    autoFocus
+                    value={renaming.name}
+                    maxLength={80}
+                    onChange={(e) => setRenaming({ id: f.id, name: e.target.value })}
+                    onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setRenaming(null);
+                    }}
+                    aria-label="Folder name"
+                  />
+                </form>
+              ) : (
+                railItem(
+                  f.id,
+                  f.name,
+                  folder === f.id ? (
+                    <FolderOpen
+                      className="size-4 shrink-0"
+                      style={{ color: folderDot(f.color) }}
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Folder
+                      className="size-4 shrink-0"
+                      style={{ color: folderDot(f.color) }}
+                      aria-hidden="true"
+                    />
+                  ),
+                  f.noteCount + f.fileCount,
+                  true,
+                  <>
+                    <PinToggle
+                      href={`${base}?folder=${f.id}`}
+                      label={`folder ${f.name}`}
+                      className="rounded-lg border-transparent bg-transparent opacity-0 shadow-none group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+                    />
+                    {f.canEdit && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Delete ${f.name}`}
+                        title="Delete"
+                        onClick={() => void removeFolder(f)}
+                        className="text-muted-foreground hover:text-tint-danger-foreground me-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </Button>
+                    )}
+                  </>,
+                  f.canEdit ? () => setRenaming({ id: f.id, name: f.name }) : undefined,
+                )
+              ),
+            )}
+            {folders.length === 0 && (
+              <p className="text-muted-foreground px-2.5 text-xs">No folders yet.</p>
+            )}
+          </div>
+          <div
+            {...trashDropProps}
+            className={cn(
+              "rounded-md border-t pt-3",
+              overTrash && "ring-destructive bg-destructive/10 ring-2",
+            )}
+          >
+            {railItem(
+              "trash",
+              "Recently deleted",
+              <Trash2 className="size-4 shrink-0" aria-hidden="true" />,
+              totals.trash,
+              false,
+            )}
+            {overTrash && <p className="text-destructive px-2.5 pt-1 text-xs">Drop to delete</p>}
+          </div>
+          {error && <p className="text-destructive px-2 text-xs">{error}</p>}
+        </aside>
+
+        <div className="min-w-0 space-y-4">
+          <PhoneToolbar
+            leading={layoutSwitch}
+            filterCount={
+              (folder ? 1 : 0) +
+              ["visibility", "author"].filter((k) => params.get(k) && params.get(k) !== "all")
+                .length
+            }
+            onFilters={() => setFiltersOpen(true)}
+            searchLabel="Search files"
+            searchActive={searching}
+            search={searchForm(true)}
+            onCancelSearch={() => {
+              setQ("");
+              if (params.get("q")) go({ q: null });
+            }}
+          />
+          <FilterSheet
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            title="Filters"
+            description=""
+            canClear={Boolean(
+              folder || ["visibility", "author", "sort"].some((k) => params.get(k)),
+            )}
+            onClear={() => go({ folder: null, visibility: null, author: null, sort: null })}
+          >
+            <FilterChoices
+              title="Folder"
+              value={folder ?? ""}
+              onPick={(v) => go({ folder: v || null })}
+              options={[
+                { value: "", label: "Everything" },
+                { value: "none", label: "Not in a folder" },
+                ...folders.map((f) => ({
+                  value: f.id,
+                  label: f.name,
+                  color: f.color ? folderDot(f.color) : undefined,
+                })),
+                { value: "trash", label: "Recently deleted" },
+              ]}
+            />
+            {sheetFilters}
+          </FilterSheet>
+          {/* Where you are, inside a folder or the trash (Everything says nothing). */}
+          {(folder || error) && (
+            <div className="space-y-1">
+              {folder && (
+                <h2 className="heading flex min-w-0 items-center gap-2 text-lg">
+                  {currentFolder ? (
+                    <FolderOpen
+                      className="size-5 shrink-0"
+                      style={{ color: folderDot(currentFolder.color) }}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  <span className="min-w-0 break-words">{heading}</span>
+                </h2>
+              )}
+              {error && <p className="text-destructive text-xs">{error}</p>}
+            </div>
+          )}
+
+          {/*
           Everything is the root of the tree: its folders first, as tiles you
           open or drop a file onto, then whatever is in no folder. A search
           looks everywhere instead, so the tiles step aside for it.
         */}
-        {atRoot && folders.length > 0 && (
-          <section aria-label="Folders" className="space-y-6">
-            <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))] gap-x-4 gap-y-5">
-              {folders.map((f) => (
-                <li key={f.id}>
-                  <FolderCard
-                    name={f.name}
-                    color={f.color}
-                    noteCount={f.noteCount}
-                    fileCount={f.fileCount}
-                    peek={f.peek ?? []}
-                    colors={COLORS}
-                    onColor={
-                      f.canEdit
-                        ? (c) => run(() => updateFolderAction(orgId, f.id, { color: c }))
-                        : undefined
-                    }
-                    onRename={
-                      f.canEdit
-                        ? (name) => run(() => updateFolderAction(orgId, f.id, { name }))
-                        : undefined
-                    }
-                    onDelete={f.canEdit ? () => void removeFolder(f) : undefined}
-                    dropping={overFolder === f.id}
-                    onOpen={() => go({ folder: f.id })}
-                    dropProps={dropProps(f.id)}
-                  />
-                </li>
-              ))}
-            </ul>
-            {entries.length > 0 && (
-              <h3 className="heading flex items-center gap-2 text-[17px]">
-                Not in a folder <Badge variant="secondary">{entries.length}</Badge>
-              </h3>
-            )}
-          </section>
-        )}
+          {atRoot && folders.length > 0 && (
+            <section aria-label="Folders" className="space-y-6">
+              <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))] gap-x-4 gap-y-5">
+                {folders.map((f) => (
+                  <li key={f.id}>
+                    <FolderCard
+                      name={f.name}
+                      color={f.color}
+                      noteCount={f.noteCount}
+                      fileCount={f.fileCount}
+                      peek={f.peek ?? []}
+                      colors={COLORS}
+                      onColor={
+                        f.canEdit
+                          ? (c) => run(() => updateFolderAction(orgId, f.id, { color: c }))
+                          : undefined
+                      }
+                      onRename={
+                        f.canEdit
+                          ? (name) => run(() => updateFolderAction(orgId, f.id, { name }))
+                          : undefined
+                      }
+                      onDelete={f.canEdit ? () => void removeFolder(f) : undefined}
+                      dropping={overFolder === f.id}
+                      onOpen={() => go({ folder: f.id })}
+                      dropProps={dropProps(f.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+              {entries.length > 0 && (
+                <h3 className="heading flex items-center gap-2 text-[17px]">
+                  Not in a folder <Badge variant="secondary">{entries.length}</Badge>
+                </h3>
+              )}
+            </section>
+          )}
 
-        {inTrash ? (
-          <TrashView
-            trash={trash}
-            pending={pending}
-            onRestore={restore}
-            onEmpty={canEmptyTrash && totals.trash > 0 ? () => void emptyTrash() : undefined}
-          />
-        ) : entries.length === 0 ? (
-          atRoot && folders.length > 0 ? null : (
-            <EmptyState {...emptyCopy()} />
-          )
-        ) : (
-          <ul
-            className={cn(
-              view === "grid"
-                ? "grid [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))] gap-[18px]"
-                : "space-y-2",
-              pending && "opacity-70",
-            )}
-          >
-            {entries.map((e) => e.card())}
-          </ul>
-        )}
+          {inTrash ? (
+            <TrashView
+              trash={trash}
+              pending={pending}
+              onRestore={restore}
+              onEmpty={canEmptyTrash && totals.trash > 0 ? () => void emptyTrash() : undefined}
+            />
+          ) : entries.length === 0 ? (
+            atRoot && folders.length > 0 ? null : (
+              <EmptyState {...emptyCopy()} />
+            )
+          ) : (
+            <ul
+              className={cn(
+                view === "grid"
+                  ? "grid [grid-template-columns:repeat(auto-fill,minmax(14rem,1fr))] gap-[18px]"
+                  : "space-y-2",
+                pending && "opacity-70",
+              )}
+            >
+              {entries.map((e) => e.card())}
+            </ul>
+          )}
+        </div>
       </div>
       {confirmEl}
       <MoveDialog
@@ -1099,17 +1174,7 @@ export function NotesLibrary({
         onClose={() => setMoving(null)}
         onMove={(item, folderId, newName) => {
           setMoving(null);
-          run(() =>
-            moveToFolderAction(
-              orgId,
-              item.kind === "note" ? { noteIds: [item.id] } : { fileIds: [item.id] },
-              folderId,
-            ),
-          );
-          const name = folderId
-            ? (newName ?? folders.find((f) => f.id === folderId)?.name ?? "the folder")
-            : "Not in a folder";
-          toast({ title: "Moved", description: name, duration: 3_000 });
+          move(item, folderId, newName);
         }}
       />
     </div>

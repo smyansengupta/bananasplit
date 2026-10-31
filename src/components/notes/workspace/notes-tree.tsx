@@ -159,7 +159,11 @@ export function NotesTree({
       e.dataTransfer.dropEffect = "move";
       setOver(parentId ?? "root");
     },
-    onDragLeave: () => setOver((o) => (o === (parentId ?? "root") ? null : o)),
+    // Crossing into the row's own chevron or title isn't leaving it.
+    onDragLeave: (e: React.DragEvent) => {
+      if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+      setOver((o) => (o === (parentId ?? "root") ? null : o));
+    },
     onDrop: (e: React.DragEvent) => {
       const id = e.dataTransfer.getData(PAGE_MIME);
       if (!id) return;
