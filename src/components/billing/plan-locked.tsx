@@ -1,6 +1,7 @@
 import { Lock } from "@/components/icons";
 import Link from "next/link";
 
+import { PlusUpgradeButton } from "@/components/billing/plus-upgrade-button";
 import { Button } from "@/components/ui/button";
 import type { OrgKind, OrgPlan } from "@/generated/prisma/enums";
 import {
@@ -17,7 +18,7 @@ import {
  * What a page shows when the space doesn't include it (planGate, on the
  * server, so typing the URL shows this too):
  * - Personal, a Personal Plus feature (themes, calendar sync, AI): what it
- *   does and the way to Personal Plus (Settings › Plan and storage).
+ *   does and one button that starts Personal Plus right here.
  * - Personal, a club feature: it is for clubs; start one or join one. No price.
  * - A club: the feature, one line on what it does, the plan that has it,
  *   and the way there (Settings › Plan and storage for the owner and admins;
@@ -25,6 +26,7 @@ import {
  */
 export function PlanLocked({
   feature,
+  orgId,
   orgSlug,
   kind = "CLUB",
   plan,
@@ -32,6 +34,7 @@ export function PlanLocked({
   title,
 }: {
   feature: PlanFeature;
+  orgId: string;
   orgSlug: string;
   kind?: OrgKind;
   /** The space's current plan. */
@@ -56,9 +59,7 @@ export function PlanLocked({
           </p>
           <p className="text-muted-foreground max-w-prose text-sm">{FEATURE_PITCH[feature]}</p>
           <div className="flex flex-wrap items-center gap-2 pt-1.5">
-            <Button asChild size="sm">
-              <Link href={`${base}/settings/plan`}>Get {PLAN_NAMES.PERSONAL_PLUS}</Link>
-            </Button>
+            <PlusUpgradeButton orgId={orgId} />
           </div>
         </div>
       </div>
