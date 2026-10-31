@@ -18,6 +18,7 @@ import { SidebarPanel } from "@/components/shell/sidebar-panel";
 import { SidebarTools } from "@/components/shell/sidebar-tools";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
+import { UserMenu } from "@/components/shell/user-menu";
 import { Toaster } from "@/components/ui/toaster";
 import { ContextActionsHost } from "@/components/context-actions";
 import { PendingLinkWatcher } from "@/components/links/pending-link";
@@ -31,10 +32,10 @@ import { cn } from "@/lib/utils";
  * - the sidebar (sidebar-panel.tsx): docked, rail or peek, its mode kept
  *   per member in a cookie the org layout reads (`sidebarMode`), so the
  *   server renders the right one;
- * - the tool capsule (tool-capsule.tsx) at the top right, in place of the
- *   old top bar;
- * - below md, the menu button at the left of the tool capsule
- *   (nav-menu.tsx), which opens the phone's full-screen menu;
+ * - no top bar: search, New, the page's pin and you all live in the
+ *   sidebar, so every page starts at the top of the window;
+ * - below md, a floating menu button at the top left (tool-capsule.tsx,
+ *   nav-menu.tsx), which opens the phone's full-screen menu;
  * - the corona (globals.css) drifting behind the top of the page, and the
  *   glass's refraction filter, mounted once.
  *
@@ -145,6 +146,7 @@ export function AppShell({
       canInvite={canInvite}
     />
   );
+  const profile = <UserMenu user={user} variant="row" />;
   const nav = (onNavigate?: () => void) => (
     <SidebarNav
       sections={sections}
@@ -180,7 +182,7 @@ export function AppShell({
       <div
         className={cn(
           "corona isolate grid min-h-svh grid-cols-1",
-          "[--shell-bottom:calc(env(safe-area-inset-bottom)+1rem)] [--shell-top:4.25rem] md:[--shell-bottom:0px] md:[--shell-top:4.5rem]",
+          "[--shell-bottom:calc(env(safe-area-inset-bottom)+1rem)] [--shell-top:4.25rem] md:[--shell-bottom:0px] md:[--shell-top:0.75rem]",
           "motion-reduce:transition-none md:transition-[grid-template-columns] md:duration-500 md:ease-(--ease-ink)",
           mode === "docked"
             ? "md:grid-cols-[248px_minmax(0,1fr)]"
@@ -195,7 +197,13 @@ export function AppShell({
         </a>
         <GlassRefraction />
 
-        <SidebarPanel mode={mode} setMode={setMode} onToggle={toggleSidebar} clubMenu={clubMenu}>
+        <SidebarPanel
+          mode={mode}
+          setMode={setMode}
+          onToggle={toggleSidebar}
+          clubMenu={clubMenu}
+          profile={profile}
+        >
           {nav()}
         </SidebarPanel>
 
@@ -205,6 +213,7 @@ export function AppShell({
               <NavMenu
                 sections={sections}
                 clubMenu={clubMenu}
+                user={user}
                 counts={counts}
                 orgId={orgId}
                 orgSlug={orgSlug}
@@ -212,8 +221,6 @@ export function AppShell({
                 onSearch={() => setCommandOpen(true)}
               />
             }
-            orgSlug={orgSlug}
-            user={user}
           />
           <main
             id="main-content"

@@ -1,44 +1,30 @@
 "use client";
 
-import { capsuleButtonClass } from "@/components/shell/capsule";
-import { PinButton } from "@/components/shell/pin-button";
-import { UserMenu, type UserMenuUser } from "@/components/shell/user-menu";
-import { cn } from "@/lib/utils";
-
 /**
- * The tool capsule: one glass pill at the top right of every page, with the
- * page's pin and you. Search and New live at the top of the sidebar
- * (sidebar-tools.tsx), and notifications are the Inbox (its sidebar entry
- * carries the count), so none of them are repeated here; on a phone, the
- * menu button opens them with every section.
+ * The phone's one piece of floating chrome: a glass circle at the top left
+ * holding the menu button (NavMenu), which opens the organization, you,
+ * search, New and every section, full screen. From md up there is no top
+ * bar at all: everything it held lives in the sidebar (search and New at the
+ * top, the pin beside the pins, you at the foot), so every page starts at
+ * the top of the window.
  *
  * It floats: its row is sticky and lets clicks through everywhere but the
- * pill, and it takes the same room at the top the old bar did, so every
- * page's title and actions sit below it. On a phone it spans the width with
- * the menu (the organization, search, New and every section, full screen)
- * and you.
+ * circle.
  */
 export function ToolCapsule({
-  user,
   menuButton,
 }: {
-  /** Kept for callers; nothing here needs the space any more. */
-  orgSlug?: string;
-  user: UserMenuUser;
-  /** The phone's menu button (NavMenu), first in the capsule. */
+  /** The phone's menu button (NavMenu). */
   menuButton?: React.ReactNode;
 }) {
   return (
-    <div className="pointer-events-none sticky top-0 z-30 flex justify-end pt-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:px-6 md:pt-3.5">
+    <div className="pointer-events-none sticky top-0 z-30 flex pt-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:hidden">
       <div
         role="toolbar"
         aria-label="Tools"
-        className="glass-light pointer-events-auto flex max-w-full min-w-0 items-center gap-0.5 rounded-full p-1 max-md:flex-1"
+        className="glass-light pointer-events-auto flex items-center rounded-full p-1"
       >
         {menuButton}
-        <span className="flex-1 md:hidden" />
-        <PinButton className={cn(capsuleButtonClass, "max-md:hidden")} />
-        <UserMenu user={user} />
       </div>
     </div>
   );

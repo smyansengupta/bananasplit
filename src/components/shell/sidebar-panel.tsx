@@ -33,23 +33,25 @@ function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => v
       tabIndex={rail ? -1 : undefined}
       aria-hidden={rail || undefined}
       className={cn(
-        "focus-glow flex h-10 min-w-0 items-center overflow-hidden rounded-full px-1.5 whitespace-nowrap outline-none",
+        "focus-glow flex h-8 min-w-0 items-center overflow-hidden rounded-[7px] px-1.5 whitespace-nowrap outline-none",
         "transition-[max-width,opacity] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
         rail ? "max-w-0 flex-none px-0 opacity-0" : "max-w-[170px] flex-1 opacity-100 delay-75",
       )}
     >
-      <Logo size={22} textSize={17} className="gap-2" />
+      <Logo size={20} textSize={16} className="gap-2" />
     </Link>
   );
 }
 
 /**
- * The sidebar's insides, the same in every face: the club menu (switching
- * spaces, the Admin panel) at the top, the nav, and the Bananasplit logo
- * at the foot with the panel's collapse button when given.
+ * The sidebar's insides, the same in every face: the organization menu
+ * (switching spaces, the Admin panel) at the top, the nav, then at the foot
+ * you (your picture and name, opening your menu) and, always last, the
+ * Bananasplit logo with the panel's collapse button when given.
  */
 export function SidebarBody({
   clubMenu,
+  profile,
   children,
   toggle,
   rail = false,
@@ -57,6 +59,8 @@ export function SidebarBody({
   onNavigate,
 }: {
   clubMenu: React.ReactNode;
+  /** You: the user menu as a sidebar row (UserMenu variant="row"). */
+  profile?: React.ReactNode;
   children: React.ReactNode;
   toggle?: React.ReactNode;
   rail?: boolean;
@@ -66,17 +70,19 @@ export function SidebarBody({
   const tone = surfaceTone(chrome);
   return (
     <>
-      {/* The club you're in, and the way to switch, at the top. */}
+      {/* The organization you're in, and the way to switch, at the top. */}
       <div className="shrink-0 pb-3">{clubMenu}</div>
       {children}
-      {/* The Bananasplit mark, always last. */}
+      {/* You, then the Bananasplit mark, always last. */}
       <div
         className={cn(
-          "mt-2.5 flex shrink-0 items-center border-t pt-3 transition-colors duration-300",
+          "mt-2 flex shrink-0 flex-col gap-1.5 border-t pt-2 transition-colors duration-300",
           tone.border,
-          rail ? "gap-0" : "gap-2.5",
         )}
       >
+        {profile}
+      </div>
+      <div className={cn("mt-1.5 flex shrink-0 items-center", rail ? "gap-0" : "gap-2.5")}>
         <SidebarLogo rail={rail} onNavigate={onNavigate} />
         {toggle}
       </div>
@@ -107,12 +113,14 @@ export function SidebarPanel({
   setMode,
   onToggle,
   clubMenu,
+  profile,
   children,
 }: {
   mode: SidebarState;
   setMode: React.Dispatch<React.SetStateAction<SidebarState>>;
   onToggle: () => void;
   clubMenu: React.ReactNode;
+  profile?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const mod = useModKey();
@@ -220,6 +228,7 @@ export function SidebarPanel({
           >
             <SidebarBody
               clubMenu={clubMenu}
+              profile={profile}
               rail={rail}
               chrome={chrome}
               toggle={
@@ -236,15 +245,15 @@ export function SidebarPanel({
                   aria-keyshortcuts="Meta+Backslash Control+Backslash"
                   title={`${label} (${mod === "⌘" ? "⌘\\" : "Ctrl \\"})`}
                   className={cn(
-                    "focus-glow grid size-10 shrink-0 place-items-center rounded-full border outline-none",
-                    "transition-[background-color,border-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
-                    tone.border,
+                    "focus-glow grid size-8 shrink-0 place-items-center rounded-[7px] outline-none",
+                    "transition-[background-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
+                    tone.text,
                     tone.hover,
                   )}
                 >
                   <PanelLeft
                     className={cn(
-                      "size-5 transition-transform duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+                      "size-4 transition-transform duration-500 ease-(--ease-ink) motion-reduce:transition-none",
                       chrome && "-scale-x-100",
                     )}
                     strokeWidth={1.75}

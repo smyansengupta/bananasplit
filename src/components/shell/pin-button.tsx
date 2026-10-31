@@ -10,24 +10,41 @@ import { canonicalHref } from "@/lib/pins/pages";
 import { cn } from "@/lib/utils";
 
 /**
- * The tool capsule's pin: pins whatever is on screen (a note, a folder, a
- * task, a Tasks board, a database, any page) to the sidebar and the
- * Overview, and unpins it again. Pinning anything else is the sidebar's +
- * under Pinned. `className` styles the button (the capsule's round one).
+ * The page on screen, as a pin: its canonical address and whether it's
+ * pinned, or null where there's nothing to pin (outside a space, or the
+ * Overview, which is where pins show).
  */
-export function PinButton({ className }: { className?: string }) {
+export function usePinTarget(): { address: string; pinned: boolean } | null {
   const pins = usePins();
   const pathname = usePathname().replace(/\/+$/, "");
   const search = useSearchParams().toString();
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   if (!pins) return null;
   const address = search ? `${pathname}?${search}` : pathname;
   const href = canonicalHref(pins.orgSlug, address);
-  const pinned = href ? pins.pinned.has(href) : false;
-  // The Overview is where pins show; pinning it would only point at itself.
   if (!href || href === `/app/${pins.orgSlug}`) return null;
+  return { address, pinned: pins.pinned.has(href) };
+}
+
+/**
+ * Pins whatever is on screen (a note, a folder, a task, a Tasks board, a
+ * database, any page) to the sidebar and the Overview, and unpins it again.
+ * It sits on the line above the sidebar's pins. `className` styles the
+ * button; `iconClassName` sizes the pin.
+ */
+export function PinButton({
+  className,
+  iconClassName = "size-5",
+}: {
+  className?: string;
+  iconClassName?: string;
+}) {
+  const pins = usePins();
+  const target = usePinTarget();
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  if (!pins || !target) return null;
+  const { address, pinned } = target;
   const label = pinned ? "Unpin this page" : "Pin this page";
 
   return (
@@ -48,7 +65,7 @@ export function PinButton({ className }: { className?: string }) {
       }
     >
       <Pin
-        className={cn("size-5", pinned && "fill-current")}
+        className={cn(iconClassName, pinned && "fill-current")}
         strokeWidth={1.75}
         aria-hidden="true"
       />

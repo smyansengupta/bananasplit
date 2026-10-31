@@ -17,6 +17,8 @@ import {
   type NavSection,
 } from "@/components/shell/nav-config";
 import { ICON_STROKE, NAV_ICONS } from "@/components/shell/sidebar-nav";
+import type { ShellUser } from "@/components/shell/types";
+import { UserMenu } from "@/components/shell/user-menu";
 import { segmentedTrack } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
@@ -24,14 +26,15 @@ import { cn } from "@/lib/utils";
  * The phone's navigation, in place of the sidebar below md: a menu button at
  * the left of the tool capsule opens a full-screen menu over the page, in
  * the sidebar's order. Your organization (its menu switches spaces and has
- * the Admin panel) sits at the top, then Search or jump and New, then every
- * section in its group (a thin line between groups), one roomy row each,
- * the page you're on lit, and the Bananasplit mark last. Going anywhere,
- * Escape or the X closes it.
+ * the Admin panel) sits at the top, then New and Search or jump under it,
+ * then every section in its group (a thin line between groups), one roomy
+ * row each, the page you're on lit, then you (your menu) and the
+ * Bananasplit mark last. Going anywhere, Escape or the X closes it.
  */
 export function NavMenu({
   sections,
   clubMenu,
+  user,
   counts = {},
   orgId,
   orgSlug,
@@ -41,6 +44,8 @@ export function NavMenu({
   sections: readonly NavSection[];
   /** The organization menu (OrgSwitcher), as the sidebar shows it; it has the Admin panel. */
   clubMenu: ReactNode;
+  /** You, at the foot: your picture and name, opening your menu. */
+  user?: ShellUser;
   counts?: Record<string, number>;
   orgId: string;
   orgSlug: string;
@@ -97,26 +102,15 @@ export function NavMenu({
             </div>
           </div>
 
-          {/* Search or jump, and New: the sidebar's own two, under the organization. */}
-          <div className="mt-3 flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                close();
-                onSearch();
-              }}
-              className="focus-glow bg-muted text-muted-foreground flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full px-4 text-[15px] outline-none"
-            >
-              <Search className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
-              Search or jump
-            </button>
+          {/* New, then Search or jump under it: the sidebar's own two, under the organization. */}
+          <div className="mt-3 flex shrink-0 flex-col gap-2">
             {createActions.length > 0 && (
-              <CreateMenu orgId={orgId} orgSlug={orgSlug} actions={createActions} align="end">
+              <CreateMenu orgId={orgId} orgSlug={orgSlug} actions={createActions} align="start">
                 {({ pending, icon }) => (
                   <button
                     type="button"
                     aria-busy={pending || undefined}
-                    className="focus-glow bg-create text-create-foreground flex h-12 shrink-0 items-center gap-2 rounded-full px-4 text-[15px] font-semibold outline-none"
+                    className="focus-glow bg-primary text-primary-foreground flex h-12 w-full shrink-0 items-center gap-2 rounded-2xl px-4 text-[15px] font-semibold outline-none"
                   >
                     {pending ? icon : <Plus className="size-5" aria-hidden="true" />}
                     New
@@ -124,6 +118,17 @@ export function NavMenu({
                 )}
               </CreateMenu>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                onSearch();
+              }}
+              className="focus-glow bg-muted text-muted-foreground flex h-12 w-full min-w-0 items-center gap-2.5 rounded-2xl px-4 text-[15px] outline-none"
+            >
+              <Search className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
+              Search or jump
+            </button>
           </div>
 
           <nav aria-label="Sections" className="mt-4 min-h-0 flex-1 overflow-y-auto">
@@ -155,8 +160,9 @@ export function NavMenu({
             })}
           </nav>
 
-          {/* The foot, as in the sidebar: the Bananasplit mark. */}
-          <div className="mt-4 shrink-0">
+          {/* The foot, as in the sidebar: you, then the Bananasplit mark. */}
+          <div className="border-border/70 mt-4 flex shrink-0 flex-col gap-3 border-t pt-3">
+            {user && <UserMenu user={user} variant="row" className="h-12 text-[15px]" />}
             <Link
               href="/"
               onClick={close}
@@ -194,15 +200,15 @@ function Row({
       className={cn(
         "focus-glow group flex h-12 items-center gap-3 rounded-2xl px-2 text-[15px] font-medium outline-none",
         "transition-[background-color,scale] duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
-        "hover:bg-muted aria-[current]:bg-foreground aria-[current]:text-background",
+        "hover:bg-brand-accent/15 aria-[current]:bg-brand-accent aria-[current]:text-brand-accent-foreground",
       )}
     >
-      <span className="bg-muted group-aria-[current]:bg-background/15 grid size-9 shrink-0 place-items-center rounded-xl">
+      <span className="bg-muted group-aria-[current]:bg-brand-accent-foreground/15 grid size-9 shrink-0 place-items-center rounded-xl">
         <Icon className="size-[18px]" strokeWidth={ICON_STROKE} aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">{label}</span>
       {count > 0 && (
-        <span className="bg-muted group-aria-[current]:bg-background/15 shrink-0 rounded-full px-2 text-[13px] leading-6 font-semibold tabular-nums">
+        <span className="bg-muted group-aria-[current]:bg-brand-accent-foreground/15 shrink-0 rounded-full px-2 text-[13px] leading-6 font-semibold tabular-nums">
           {count > 99 ? "99+" : count}
           <span className="sr-only"> waiting</span>
         </span>
