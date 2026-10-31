@@ -1,6 +1,6 @@
 import type { TxClient } from "@/server/db/context";
 
-/** A poll still taking answers, of either kind (the Overview's "Open polls"). */
+/** A poll still taking answers, of either kind (the Overview's "Open forms"). */
 export interface OpenPoll {
   id: string;
   kind: "question" | "availability";

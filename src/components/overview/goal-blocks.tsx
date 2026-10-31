@@ -35,7 +35,7 @@ export function RsvpGoalBlock({
   /** Seats taken, or null when the page hides its count. */
   taken: number | null;
   href: string | null;
-  /** Where an officer sets up an RSVP page (none for members). */
+  /** Where an officer adds a sign-up page (none for members). */
   createHref: string | null;
 }) {
   if (!event || !href) {
@@ -43,7 +43,7 @@ export function RsvpGoalBlock({
       <div className="bg-muted/60 rounded-block flex h-full min-h-40 flex-col justify-between gap-4 p-5">
         <span className="text-muted-foreground inline-flex items-center gap-2 text-[13px] font-medium">
           <Ticket className="size-4" aria-hidden="true" />
-          RSVPs
+          Sign-ups
         </span>
         <p className="text-sm">
           No event with a capacity coming up.
@@ -51,7 +51,7 @@ export function RsvpGoalBlock({
             <>
               {" "}
               <Link href={createHref} className="font-semibold underline underline-offset-4">
-                Make an RSVP page
+                Add a sign-up page
               </Link>
             </>
           )}

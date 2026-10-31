@@ -41,7 +41,7 @@ export const STARTED_STEPS: readonly StartedStep[] = [
   {
     key: "picture",
     label: "Add a picture",
-    hint: "Your logo on the sidebar, invites and RSVP pages.",
+    hint: "Your logo on the sidebar, invites and sign-up pages.",
     path: "/onboarding/organization/{slug}/picture",
   },
   {

@@ -137,7 +137,7 @@ function closesWord(word: string): string {
   return word === "Today" || word === "Tomorrow" ? word.toLowerCase() : word;
 }
 
-/** Open polls, one tick per member who can vote. */
+/** Open forms (quick polls are forms, as the plan has it), one tick per member who can answer. */
 export function PollList({
   orgSlug,
   polls,
@@ -153,13 +153,13 @@ export function PollList({
     return (
       <EmptyState
         size="compact"
-        title="No open polls"
+        title="No open forms"
         action={
           <Link
-            href={`/app/${orgSlug}/calendar/polls`}
+            href={`/app/${orgSlug}/forms/new`}
             className="text-sm font-semibold underline underline-offset-4"
           >
-            Start a poll
+            New form
           </Link>
         }
       />

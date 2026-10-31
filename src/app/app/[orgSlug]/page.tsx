@@ -421,7 +421,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ),
     polls: (
       <CardControls count={data.polls.length || undefined}>
-        <OpenLink href={`${base}/calendar/polls`} label="Polls" />
+        <OpenLink href={`${base}/forms`} label="Forms" />
       </CardControls>
     ),
     "weekly-pulse": (
