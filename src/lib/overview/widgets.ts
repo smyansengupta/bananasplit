@@ -122,15 +122,6 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     w: 1,
     h: null,
   },
-  {
-    type: "shortcuts",
-    title: "Shortcuts",
-    description: "One-click links to every section.",
-    group: "Organization",
-    icon: "Link2",
-    w: 1,
-    h: null,
-  },
 ];
 
 export const OVERVIEW_WIDGET_TYPES = OVERVIEW_WIDGETS.map((w) => w.type);
