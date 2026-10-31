@@ -260,20 +260,69 @@ export function NotesLibrary({
     });
   }
 
+  /** Files a note or file in a folder (null: no folder), with Undo. */
+  function move(item: Item, folderId: string | null, folderName?: string) {
+    const from = item.folderId;
+    if (from === folderId) return;
+    const ids = (kind: "note" | "file") =>
+      kind === "note" ? { noteIds: [item.id] } : { fileIds: [item.id] };
+    const name = folderId
+      ? (folderName ?? folders.find((f) => f.id === folderId)?.name ?? "the folder")
+      : "Not in a folder";
+    void undoable({
+      title: folderId ? `Moved to ${name}` : "Taken out of the folder",
+      run: async () => {
+        const result = await moveToFolderAction(orgId, ids(item.kind), folderId);
+        router.refresh();
+        if (!result.ok) return result.error ?? "That didn't work.";
+      },
+      undo: async () => {
+        const result = await moveToFolderAction(orgId, ids(item.kind), from);
+        router.refresh();
+        if (!result.ok) return result.error ?? "That didn't work.";
+      },
+    });
+  }
+
   function dropOn(folderId: string | null, data: DataTransfer) {
     setOverFolder(null);
     const noteId = data.getData(NOTE_MIME);
     const fileId = data.getData(FILE_MIME);
-    if (!noteId && !fileId) return;
-    run(() =>
-      moveToFolderAction(orgId, noteId ? { noteIds: [noteId] } : { fileIds: [fileId] }, folderId),
-    );
+    const note = noteId ? notes.find((n) => n.id === noteId) : undefined;
+    const file = fileId ? files.find((f) => f.id === fileId) : undefined;
+    if (note) {
+      move({ kind: "note", id: note.id, name: note.title, folderId: note.folderId }, folderId);
+    } else if (file) {
+      move({ kind: "file", id: file.id, name: file.name, folderId: file.folderId }, folderId);
+    }
   }
 
   const isCardDrag = (e: React.DragEvent) => {
     const types = Array.from(e.dataTransfer.types);
     return types.includes(NOTE_MIME) || types.includes(FILE_MIME);
   };
+
+  // dragleave fires on a target whenever the pointer crosses into one of its
+  // own children (the icon, the name, the count), so a highlight cleared on
+  // every dragleave blinks off and on as you move over it. Only a leave that
+  // really goes outside counts.
+  const leftFor = (e: React.DragEvent) =>
+    !(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget));
+
+  // A drag that ends anywhere (dropped, cancelled with Escape, let go
+  // outside the window) leaves no folder lit.
+  useEffect(() => {
+    const clear = () => {
+      setOverFolder(null);
+      setOverTrash(false);
+    };
+    window.addEventListener("dragend", clear);
+    window.addEventListener("drop", clear);
+    return () => {
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("drop", clear);
+    };
+  }, []);
 
   // A folder takes a card (filed there) or files from the computer (uploaded
   // there). preventDefault on the drop tells the page's uploader it's handled.
@@ -285,12 +334,14 @@ export function NotesLibrary({
       e.dataTransfer.dropEffect = card ? "move" : "copy";
       setOverFolder(id ?? "none");
     },
-    onDragLeave: () => setOverFolder((f) => (f === (id ?? "none") ? null : f)),
+    onDragLeave: (e: React.DragEvent) => {
+      if (leftFor(e)) setOverFolder((f) => (f === (id ?? "none") ? null : f));
+    },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
-      if (!isCardDrag(e) && e.dataTransfer.files.length > 0) {
-        setOverFolder(null);
-        uploadFiles(Array.from(e.dataTransfer.files), id);
+      setOverFolder(null);
+      if (!isCardDrag(e)) {
+        if (e.dataTransfer.files.length > 0) uploadFiles(Array.from(e.dataTransfer.files), id);
         return;
       }
       dropOn(id, e.dataTransfer);
@@ -394,7 +445,9 @@ export function NotesLibrary({
       e.dataTransfer.dropEffect = "move";
       setOverTrash(true);
     },
-    onDragLeave: () => setOverTrash(false),
+    onDragLeave: (e: React.DragEvent) => {
+      if (leftFor(e)) setOverTrash(false);
+    },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       setOverTrash(false);
@@ -492,6 +545,8 @@ export function NotesLibrary({
             e.dataTransfer.setData("text/uri-list", `${window.location.origin}${href}`);
             e.dataTransfer.setData("text/plain", `${window.location.origin}${href}`);
             if (n.canMove) e.dataTransfer.setData(NOTE_MIME, n.id);
+            // Moved into a folder, or linked from Pinned.
+            e.dataTransfer.effectAllowed = "all";
           }}
           className={cardLink}
         >
@@ -596,6 +651,7 @@ export function NotesLibrary({
             e.dataTransfer.setData("text/uri-list", `${window.location.origin}${href}`);
             e.dataTransfer.setData("text/plain", `${window.location.origin}${href}`);
             if (f.canMove) e.dataTransfer.setData(FILE_MIME, f.id);
+            e.dataTransfer.effectAllowed = "all";
           }}
           className={cardLink}
         >
@@ -1099,17 +1155,7 @@ export function NotesLibrary({
         onClose={() => setMoving(null)}
         onMove={(item, folderId, newName) => {
           setMoving(null);
-          run(() =>
-            moveToFolderAction(
-              orgId,
-              item.kind === "note" ? { noteIds: [item.id] } : { fileIds: [item.id] },
-              folderId,
-            ),
-          );
-          const name = folderId
-            ? (newName ?? folders.find((f) => f.id === folderId)?.name ?? "the folder")
-            : "Not in a folder";
-          toast({ title: "Moved", description: name, duration: 3_000 });
+          move(item, folderId, newName);
         }}
       />
     </div>

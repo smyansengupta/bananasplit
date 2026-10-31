@@ -183,15 +183,9 @@ export default async function NotesPage({
         }
       />
       <SpaceStorageBanner orgSlug={orgSlug} />
-      {/* The page's uploader: the whole page takes dropped files (not the trash). */}
-      {!inTrash && (
-        <FilesDropZone
-          orgId={org.id}
-          folderId={uploadFolder}
-          storage={storage}
-          personal={personal}
-        />
-      )}
+      {/* The page's uploader: the whole page takes dropped files (in the
+          trash too, where they land in no folder rather than in the trash). */}
+      <FilesDropZone orgId={org.id} folderId={uploadFolder} storage={storage} personal={personal} />
       <NotesLibrary
         moveTargets={moveTargets}
         orgId={org.id}

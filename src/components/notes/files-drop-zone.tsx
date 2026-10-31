@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { NOTE_FILE_ACCEPT } from "@/lib/files/types";
 import { formatStorage, storageLevel } from "@/lib/billing/storage";
 import { uploadNoteFile } from "@/lib/files/upload";
+import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
 
 import { isFileDrag, registerUploader } from "./upload-queue";
@@ -19,7 +20,7 @@ import { isFileDrag, registerUploader } from "./upload-queue";
  * opens the picker for several files at once. Each file gets a line with
  * its progress, and you never leave the page.
  *
- * Uploads are shared with the club, or in Personal private to its owner;
+ * Uploads are shared with the organization, or in Personal private to its owner;
  * who can see one is changed on its page afterwards. A full space says so
  * here and takes nothing.
  */
@@ -111,7 +112,10 @@ export function FilesDropZone({
     () =>
       registerUploader({
         upload: (files, into) => {
-          if (latest.current.full) return;
+          if (latest.current.full) {
+            toast({ title: "Storage is full", tone: "error" });
+            return;
+          }
           void uploadAll(files, into === undefined ? latest.current.folderId : into);
         },
         pick: (into) => {
@@ -126,30 +130,54 @@ export function FilesDropZone({
   );
 
   // Files dragged anywhere over the page: the whole page becomes the target.
+  // The frame shows while dragover keeps arriving (every few hundred ms at
+  // most, even with the pointer still) and goes a moment after it stops, so
+  // it can't get stuck on: counting dragenter against dragleave did, whenever
+  // the element under the pointer was redrawn mid-drag and its leave never came.
   useEffect(() => {
-    let depth = 0;
+    let hide: ReturnType<typeof setTimeout> | undefined;
+    const off = () => {
+      clearTimeout(hide);
+      setPageDrag(false);
+    };
     const start = () => {
       fromPage.current = true;
     };
     const end = () => {
       fromPage.current = false;
+      off();
     };
-    const enter = (e: DragEvent) => {
-      if (!isUpload(e)) return;
-      depth += 1;
-      setPageDrag(true);
+    const over = (e: DragEvent) => {
+      if (isUpload(e)) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = latest.current.full ? "none" : "copy";
+        setPageDrag(true);
+        clearTimeout(hide);
+        hide = setTimeout(off, 400);
+        return;
+      }
+      // A card from this page let go anywhere but a folder or Pinned does
+      // nothing: without this the browser drops its address into the search
+      // box or opens it.
+      if (fromPage.current && !e.defaultPrevented) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "none";
+      }
     };
     const leave = (e: DragEvent) => {
-      if (!isUpload(e)) return;
-      depth = Math.max(0, depth - 1);
-      if (depth === 0) setPageDrag(false);
-    };
-    const overPage = (e: DragEvent) => {
-      if (isUpload(e)) e.preventDefault();
+      // Out of the window: hide at once rather than after the pause.
+      if (
+        isUpload(e) &&
+        (e.clientX <= 0 ||
+          e.clientY <= 0 ||
+          e.clientX >= window.innerWidth ||
+          e.clientY >= window.innerHeight)
+      ) {
+        off();
+      }
     };
     const drop = (e: DragEvent) => {
-      depth = 0;
-      setPageDrag(false);
+      off();
       // A folder card or sidebar folder took it already (and said where).
       if (e.defaultPrevented || !isUpload(e)) return;
       e.preventDefault();
@@ -158,16 +186,15 @@ export function FilesDropZone({
     };
     window.addEventListener("dragstart", start);
     window.addEventListener("dragend", end);
-    window.addEventListener("dragenter", enter);
+    window.addEventListener("dragover", over);
     window.addEventListener("dragleave", leave);
-    window.addEventListener("dragover", overPage);
     window.addEventListener("drop", drop);
     return () => {
+      clearTimeout(hide);
       window.removeEventListener("dragstart", start);
       window.removeEventListener("dragend", end);
-      window.removeEventListener("dragenter", enter);
+      window.removeEventListener("dragover", over);
       window.removeEventListener("dragleave", leave);
-      window.removeEventListener("dragover", overPage);
       window.removeEventListener("drop", drop);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,17 +224,23 @@ export function FilesDropZone({
 
       {/* The whole page, while files from the computer are over it: a frame
           and a hint, light enough that the folder cards stay visible to drop on. */}
-      {pageDrag && !full && (
+      {pageDrag && (
         <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40">
           <span className="border-foreground/30 rounded-shell absolute inset-3 border-2 border-dashed" />
           <span className="bg-card edge shadow-e2 animate-in fade-in-0 slide-in-from-bottom-2 absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full py-2 pr-4 pl-2 text-[14px] font-medium duration-200 motion-reduce:animate-none">
             <span className="bg-muted grid size-8 place-items-center rounded-full">
               <CloudUpload className="size-4" aria-hidden="true" />
             </span>
-            Drop to upload, or onto a folder
-            <span className="text-muted-foreground font-normal">
-              up to {formatStorage(storage.maxFileBytes)} each
-            </span>
+            {full ? (
+              "Storage is full"
+            ) : (
+              <>
+                Drop to upload, or onto a folder
+                <span className="text-muted-foreground font-normal">
+                  up to {formatStorage(storage.maxFileBytes)} each
+                </span>
+              </>
+            )}
           </span>
         </div>
       )}
