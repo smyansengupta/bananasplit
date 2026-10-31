@@ -38,7 +38,7 @@ import {
 } from "@/components/shell/nav-config";
 import { usePinDrop } from "@/components/pins/pin-dnd";
 import { usePins } from "@/components/pins/pins-context";
-import { PinButton } from "@/components/shell/pin-button";
+import { PinButton, usePinTarget } from "@/components/shell/pin-button";
 import { useSidebarEdit } from "@/components/shell/sidebar-edit-context";
 import { SidebarEditHeader, SidebarEditRows } from "@/components/shell/sidebar-edit-rows";
 import { PIN_ICONS } from "@/components/shell/pin-icons";
@@ -230,7 +230,6 @@ function SectionHeader({
   label,
   collapsed,
   waiting = 0,
-  boxed = false,
   children,
 }: {
   id: string;
@@ -238,8 +237,6 @@ function SectionHeader({
   collapsed: boolean;
   /** What waits on you inside, shown while it's shut. */
   waiting?: number;
-  /** Inside its own box (Pinned): no room above, the box gives it. */
-  boxed?: boolean;
   children?: React.ReactNode;
 }) {
   const { rail, chrome } = useSidebarMode();
@@ -248,12 +245,7 @@ function SectionHeader({
   if (rail) return <div aria-hidden="true" className="h-4 shrink-0" />;
   if (!edit) return <GroupLabel label={label}>{children}</GroupLabel>;
   return (
-    <div
-      className={cn(
-        boxed ? "mb-0.5 flex h-7 shrink-0 items-center gap-1 px-2" : HEADING,
-        "group/heading pr-1",
-      )}
-    >
+    <div className={cn(HEADING, "group/heading pr-1")}>
       <button
         type="button"
         onClick={() => edit.toggleGroup(id)}
@@ -336,6 +328,7 @@ function PinnedList({
   const router = useRouter();
   const pinsCtx = usePins();
   const edit = useSidebarEdit();
+  const target = usePinTarget();
   const { rail, chrome, requestPeek } = useSidebarMode();
   const tone = surfaceTone(chrome);
   const current = pinsCtx
@@ -347,38 +340,111 @@ function PinnedList({
     pins.map((p) => p.id),
   );
   const onAPin = pins.some((p) => p.href === current);
-  const collapsed = !over && (edit?.my.collapsed.includes("pinned") ?? false);
+  const collapsed = !over && pins.length > 0 && (edit?.my.collapsed.includes("pinned") ?? false);
   // Shut, the pin you're on still shows, so where you are never disappears.
   const shown = collapsed ? pins.filter((p) => p.href === current) : pins;
+  const accent = chrome
+    ? "bg-chrome-accent text-chrome-accent-foreground"
+    : "bg-brand-accent text-brand-accent-foreground";
+
   return (
     <div
       {...zone}
       className={cn(
-        "flex flex-col rounded-xl transition-colors",
-        // Docked, Pinned is its own box: a dashed outline 4px outside the
-        // rows, so its text lines up with everything above it.
-        !rail && "-mx-1 mt-4 border border-dashed p-[3px]",
-        !rail && (chrome ? "border-chrome-foreground/25" : "border-sidebar-foreground/20"),
-        over && "bg-sidebar-accent/60 border-sidebar-ring border-solid",
+        "flex shrink-0 flex-col",
+        // Docked, Pinned is its own place: a box in the accent's tint with
+        // a dashed edge, its pin mark and name at the top. Dragging a page
+        // over it turns the edge solid.
+        !rail && "mt-5 rounded-xl border border-dashed p-1.5 transition-colors duration-200",
+        !rail &&
+          (chrome
+            ? "border-chrome-accent/45 bg-chrome-accent/10"
+            : "border-brand-accent/40 bg-brand-accent/[0.06]"),
+        !rail &&
+          over &&
+          (chrome
+            ? "border-chrome-accent bg-chrome-accent/20 border-solid"
+            : "border-brand-accent bg-brand-accent/15 border-solid"),
       )}
     >
-      {/* Pinned, with the pin for the page on screen at the heading's right. */}
-      <SectionHeader id="pinned" label="Pinned" collapsed={collapsed} boxed>
-        <PinButton
-          iconClassName="size-3.5"
-          className={cn(
-            "focus-glow grid size-6 shrink-0 place-items-center rounded-md outline-none",
-            "transition-colors duration-150 motion-reduce:transition-none",
-            tone.quiet,
-            tone.hover,
+      {rail ? (
+        <div aria-hidden="true" className="h-4 shrink-0" />
+      ) : (
+        <div className="group/heading flex h-8 shrink-0 items-center gap-1 pr-0.5">
+          <button
+            type="button"
+            onClick={() => edit?.toggleGroup("pinned")}
+            disabled={!edit || pins.length === 0}
+            aria-expanded={pins.length > 0 ? !collapsed : undefined}
+            aria-controls="sidebar-section-pinned"
+            className="focus-glow flex h-8 min-w-0 items-center gap-2 rounded-lg pr-1.5 pl-1 outline-none disabled:cursor-default"
+          >
+            {/* The section's mark: the pin on the accent, like a label tab. */}
+            <span className={cn("grid size-6 shrink-0 place-items-center rounded-md", accent)}>
+              <Pin className="size-3.5 fill-current" strokeWidth={ICON_STROKE} aria-hidden="true" />
+            </span>
+            <span
+              className={cn(
+                "truncate text-[13px] font-semibold",
+                chrome ? "text-chrome-foreground" : "text-sidebar-foreground",
+              )}
+            >
+              Pinned
+            </span>
+            {pins.length > 0 && (
+              <span className={cn("text-xs tabular-nums", tone.quiet)}>{pins.length}</span>
+            )}
+            {pins.length > 0 && (
+              <ChevronRight
+                className={cn(
+                  "size-3 shrink-0 transition-[rotate,opacity] duration-200 motion-reduce:transition-none",
+                  tone.quiet,
+                  collapsed
+                    ? "opacity-100"
+                    : "rotate-90 opacity-0 group-focus-within/heading:opacity-100 group-hover/heading:opacity-100",
+                )}
+                strokeWidth={2.25}
+                aria-hidden="true"
+              />
+            )}
+          </button>
+          <span className="flex-1" />
+          {pins.length > 0 && (
+            <PinButton
+              iconClassName="size-3.5"
+              className={cn(
+                "focus-glow grid size-7 shrink-0 place-items-center rounded-md outline-none",
+                "transition-colors duration-150 motion-reduce:transition-none",
+                tone.text,
+                tone.hover,
+              )}
+            />
           )}
-        />
-      </SectionHeader>
+        </div>
+      )}
       <Fold open={!rail}>
         {pins.length === 0 ? (
-          <p className={cn("px-2 py-1.5 text-xs whitespace-nowrap", over ? tone.text : tone.quiet)}>
-            {over ? "Drop to pin" : "Pin a page to keep it here"}
-          </p>
+          // Nothing pinned yet: what it's for, and the way to start.
+          <div className="flex flex-col items-start gap-2 px-1 pt-1 pb-1">
+            <p className={cn("text-xs leading-snug", tone.text)}>
+              {over
+                ? "Drop to pin it here."
+                : target
+                  ? "Keep the pages you use most one click away."
+                  : "Open any page and pin it to keep it here."}
+            </p>
+            {!over && (
+              <PinButton
+                showLabel
+                iconClassName="size-3.5"
+                className={cn(
+                  "focus-glow inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold outline-none",
+                  "transition-[opacity,scale] duration-150 hover:opacity-90 active:scale-[0.97] motion-reduce:transition-none",
+                  accent,
+                )}
+              />
+            )}
+          </div>
         ) : (
           <ul id="sidebar-section-pinned" className="flex flex-col gap-0.5">
             {shown.map((pin) => {
@@ -424,16 +490,7 @@ function PinnedList({
                 </li>
               );
             })}
-            {over && (
-              <li
-                className={cn(
-                  "mx-1 rounded-full border border-dashed px-3 py-1.5 text-xs",
-                  tone.text,
-                )}
-              >
-                Drop to pin
-              </li>
-            )}
+            {over && <li className={cn("px-2 py-1.5 text-xs", tone.text)}>Drop to pin it here.</li>}
           </ul>
         )}
       </Fold>

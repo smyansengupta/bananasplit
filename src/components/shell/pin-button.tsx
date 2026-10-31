@@ -34,9 +34,12 @@ export function usePinTarget(): { address: string; pinned: boolean } | null {
 export function PinButton({
   className,
   iconClassName = "size-5",
+  showLabel = false,
 }: {
   className?: string;
   iconClassName?: string;
+  /** Says "Pin this page" beside the pin (Pinned's empty state). */
+  showLabel?: boolean;
 }) {
   const pins = usePins();
   const target = usePinTarget();
@@ -69,6 +72,7 @@ export function PinButton({
         strokeWidth={1.75}
         aria-hidden="true"
       />
+      {showLabel && label}
     </button>
   );
 }
