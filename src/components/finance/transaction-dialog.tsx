@@ -40,6 +40,7 @@ import {
 import type { TransactionWithRelations } from "@/app/app/[orgSlug]/finance/queries";
 import { lastPayMethod, PayMethodChips, rememberPayMethod } from "@/components/finance/pay-method";
 import { LinkedLoader } from "@/components/links/linked-loader";
+import { announceCreated } from "@/components/links/pending-link";
 import { ReceiptDrop, uploadReceipt, type ReceiptRead } from "@/components/finance/receipt-drop";
 import { KIND_LABELS } from "@/components/finance/transaction-kind-select";
 import { TransactionStatusBadge } from "@/components/finance/transaction-status-badge";
@@ -319,6 +320,9 @@ function NewTransaction({
         paymentMethod: asRequest ? null : paymentMethod.trim() || null,
         purpose: asRequest ? "request" : "record",
       });
+      if (result.transactionId) {
+        announceCreated({ kind: "transaction", id: result.transactionId });
+      }
       if (result.error || !result.transactionId) {
         setError(result.error ?? "That didn't save. Try again.");
         return;

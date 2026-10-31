@@ -59,6 +59,15 @@ export function linkKindOfSearch(kind: string): LinkKind | null {
   return isLinkKind(kind) ? kind : null;
 }
 
+/** The thing a search hit ("task:abc") is, when it can be linked. */
+export function linkRefOfHit(hit: { kind: string; key: string }): LinkRef | null {
+  const kind = linkKindOfSearch(hit.kind);
+  if (!kind) return null;
+  const at = hit.key.indexOf(":");
+  const id = at === -1 ? "" : hit.key.slice(at + 1);
+  return id ? { kind, id } : null;
+}
+
 const ID = "([A-Za-z0-9_-]{1,64})";
 const PAGE_KINDS: [RegExp, LinkKind][] = [
   [new RegExp(`^/app/[^/]+/tasks/${ID}$`), "task"],
@@ -83,4 +92,22 @@ export function refFromPath(pathname: string): LinkRef | null {
     if (m && !NOT_AN_ID.has(m[1]!)) return { kind, id: m[1]! };
   }
   return null;
+}
+
+/**
+ * What the side peek shows for one linked thing: its title, what it is, a
+ * few facts as label and value, and a passage of its text, read as the
+ * viewer (row-level security), so a peek never shows more than the page
+ * would. Null when they can't see it.
+ */
+export interface PeekSummary {
+  kind: LinkKind;
+  id: string;
+  title: string;
+  /** "Task, due Fri": the same second line the Linked panel shows. */
+  detail: string;
+  href: string;
+  facts: { label: string; value: string }[];
+  /** Up to a few hundred characters of its own words. */
+  text: string | null;
 }

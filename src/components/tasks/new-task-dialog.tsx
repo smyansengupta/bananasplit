@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { announceCreated } from "@/components/links/pending-link";
 import { toast } from "@/components/ui/toaster";
 import { TaskPriority, TaskStatus, TaskVisibility } from "@/generated/prisma/enums";
 import { LABEL_COLOR_PALETTE } from "@/lib/label-colors";
@@ -222,6 +223,8 @@ function NewTaskForm({
             return;
           }
           toast({ title: "Created", tone: "success", duration: 3_000 });
+          if ("taskId" in result && result.taskId)
+            announceCreated({ kind: "task", id: result.taskId });
           if ("droppedMentions" in result && result.droppedMentions?.length) {
             announce(`Not mentioned (can't see this task): ${result.droppedMentions.join(", ")}`);
           }

@@ -1,5 +1,16 @@
 import { Extension, type Editor } from "@tiptap/core";
 
+import type { LinkRef } from "@/lib/links";
+
+export interface LinkableItem {
+  ref: LinkRef;
+  /** The search kind ("epic", "form"), for the icon. */
+  kind: string;
+  title: string;
+  href: string;
+  detail?: string | null;
+}
+
 /**
  * What the slash menu and block menu ask the page for: things that need a
  * dialog, an upload or a server call (insert a task, pick a database or a
@@ -13,6 +24,10 @@ export interface NoteHooks {
   pages: () => { id: string; title: string; icon: string | null }[];
   selfId: () => string | null;
   noteId: () => string | null;
+  /** Anything else @ can point at (a task, a meeting, a form), from the space's search. */
+  findItems: (query: string) => Promise<LinkableItem[]>;
+  /** Records that this page links to the item (ItemLink), both ways. */
+  linkItem: (ref: LinkRef) => void;
   /** A comment highlight was clicked. */
   clickThread: (id: string) => void;
   /** Pasted or dropped pictures; false when they weren't taken. */

@@ -4,6 +4,7 @@ import { useRef } from "react";
 
 import { Popover, PopoverAnchor } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import type { LinkRef } from "@/lib/links";
 
 import { TokenMenu } from "./token-menu";
 import { useTokenMenu } from "./use-token-menu";
@@ -11,7 +12,7 @@ import { useTokenMenu } from "./use-token-menu";
 /**
  * A Textarea with the two typing menus (useTokenMenu): "@" opens the member
  * list and inserts @[Name](user:id), which the server validates against
- * membership and renders as a chip; "/" opens the club's files and inserts
+ * membership and renders as a chip; "/" opens the organization's files and inserts
  * [Name.pdf](file:id), which renders as a link to the file. Arrow keys
  * move, Enter or Tab picks, Escape closes. Focus stays in the textarea.
  *
@@ -28,6 +29,7 @@ export function MentionTextarea({
   onChange,
   onSubmitShortcut,
   audience,
+  linkFrom,
   className,
   ...props
 }: Omit<React.ComponentProps<typeof Textarea>, "value" | "onChange"> & {
@@ -37,9 +39,11 @@ export function MentionTextarea({
   onSubmitShortcut?: () => void;
   /** C4: on a private task, the only people who may be mentioned. */
   audience?: readonly string[] | null;
+  /** The saved task: `@` can then link anything in the space to it. */
+  linkFrom?: LinkRef | null;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const menu = useTokenMenu({ value, onChange, element: ref, audience });
+  const menu = useTokenMenu({ value, onChange, element: ref, audience, linkFrom });
 
   return (
     <Popover open={menu.open} onOpenChange={(o) => !o && menu.close()}>

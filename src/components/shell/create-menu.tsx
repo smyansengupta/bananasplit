@@ -8,6 +8,7 @@ import {
   Loader2,
   NotebookPen,
   Plus,
+  Receipt,
   Video,
   Vote,
   type IconComponent,
@@ -16,7 +17,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
+import { addLinkAction } from "@/app/app/[orgSlug]/links/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
+import { rememberLinkOrigin } from "@/components/links/pending-link";
+import { refFromPath } from "@/lib/links";
 import type { CreateAction } from "@/components/shell/nav-config";
 import {
   DropdownMenu,
@@ -33,6 +37,7 @@ const ICONS: Record<string, IconComponent> = {
   ClipboardList,
   CheckSquare,
   NotebookPen,
+  Receipt,
   Video,
   Vote,
 };
@@ -65,8 +70,11 @@ export function CreateMenu({
   function newNote() {
     start(async () => {
       try {
+        // Made from a page that is one thing (a meeting): linked to it.
+        const from = refFromPath(window.location.pathname);
         const res = await createNote(orgId);
         if (res.noteId) {
+          if (from) await addLinkAction(orgId, orgSlug, from, { kind: "note", id: res.noteId });
           router.push(`/app/${orgSlug}/notes/${res.noteId}`);
           return;
         }
@@ -104,7 +112,9 @@ export function CreateMenu({
           );
           return action.href ? (
             <DropdownMenuItem key={action.id} asChild>
-              <Link href={action.href}>{content}</Link>
+              <Link href={action.href} onClick={() => rememberLinkOrigin(action.id)}>
+                {content}
+              </Link>
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem key={action.id} disabled={pending} onSelect={newNote}>

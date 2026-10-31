@@ -212,7 +212,7 @@ export function isExactPage(href: string, pathname: string, search: string = "")
 }
 
 export type CreateActionId =
-  "task" | "event" | "meeting" | "note" | "poll" | "form" | "find-a-time";
+  "task" | "event" | "meeting" | "note" | "poll" | "form" | "expense" | "find-a-time";
 
 export interface CreateAction {
   id: CreateActionId;
@@ -286,6 +286,14 @@ export function createActions(
       label: "New form",
       icon: "ClipboardList",
       href: `${path("forms")}/new`,
+    });
+  }
+  if (links.has("finance")) {
+    actions.push({
+      id: "expense",
+      label: "New expense",
+      icon: "Receipt",
+      href: `${path("finance")}/my-reimbursements?new=1`,
     });
   }
   if (links.has("meetings")) {

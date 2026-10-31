@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { addLinkAction } from "@/app/app/[orgSlug]/links/actions";
+import { searchWorkspaceAction } from "@/app/app/[orgSlug]/search/actions";
+import { linkRefOfHit, type LinkRef } from "@/lib/links";
 import { fileRefToken } from "@/lib/tasks/file-refs";
 import { mentionToken } from "@/lib/tasks/mentions";
 
@@ -11,12 +14,16 @@ import type { FileOption, MemberOption } from "./types";
 /**
  * The typing menus a task's title and description share.
  *
- * `@` offers members and writes @[Name](user:id); `/` offers the club's
+ * `@` offers members and writes @[Name](user:id); `/` offers the organization's
  * files and writes [Name.pdf](file:id). One hook for both, because they are
  * the same interaction — a sigil at a word boundary opens a list, arrows
  * move, Enter or Tab picks, Escape closes, and the caret lands after what
  * was written — and because a field should never have two of these open at
  * once.
+ *
+ * With `linkFrom` (a saved task), `@` also searches the space once two
+ * letters are typed: a meeting, a form, another task. Picking one writes
+ * [Title](/app/...) and records an ItemLink, so each page lists the other.
  *
  * It owns no markup: the field keeps its own element and renders
  * <TokenMenu> with what this returns, so an <input> (the title) and a
@@ -29,16 +36,26 @@ const MEMBER_TRIGGER = /(?:^|[\s(])@([\p{L}\p{N}._'-]{0,30})$/u;
 const FILE_TRIGGER = /(?:^|[\s(])\/([\p{L}\p{N}._'-]{0,40})$/u;
 
 const MAX_OPTIONS = 8;
+const MAX_ITEMS = 5;
+const ITEM_QUERY_MIN = 2;
 
 export type TokenKind = "member" | "file";
 
+export interface LinkableOption {
+  ref: LinkRef;
+  title: string;
+  href: string;
+  detail?: string | null;
+}
+
 export interface TokenChoice {
-  kind: TokenKind;
+  kind: TokenKind | "item";
   id: string;
   /** What the row reads. */
   label: string;
   member?: MemberOption;
   file?: FileOption;
+  item?: LinkableOption;
 }
 
 interface Trigger {
@@ -73,6 +90,7 @@ export function useTokenMenu({
   element,
   kinds = ["member", "file"],
   audience,
+  linkFrom,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -82,8 +100,11 @@ export function useTokenMenu({
   kinds?: readonly TokenKind[];
   /** On a private task, the only people who may be mentioned. */
   audience?: readonly string[] | null;
+  /** The saved task this text belongs to: `@` can then link anything to it. */
+  linkFrom?: LinkRef | null;
 }): TokenMenuState {
-  const { members, files } = useTasks();
+  const { members, files, org } = useTasks();
+  const [found, setFound] = useState<{ query: string; items: LinkableOption[] } | null>(null);
   const listId = useId();
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [highlight, setHighlight] = useState(0);
@@ -96,6 +117,40 @@ export function useTokenMenu({
     [members, audience],
   );
 
+  // `@` plus two letters also asks the space's search (a beat after typing stops).
+  const fromKind = linkFrom?.kind;
+  const fromId = linkFrom?.id;
+  const itemQuery =
+    fromKind && trigger?.kind === "member" && trigger.query.length >= ITEM_QUERY_MIN
+      ? trigger.query
+      : null;
+  useEffect(() => {
+    if (!itemQuery || !fromKind) return;
+    let live = true;
+    const timer = setTimeout(async () => {
+      try {
+        const result = await searchWorkspaceAction(org.id, { query: itemQuery, scope: "all" });
+        if (!live) return;
+        const items = (result.groups ?? [])
+          .flatMap((g) => g.hits)
+          .flatMap((hit) => {
+            const ref = linkRefOfHit(hit);
+            if (!ref || ref.kind === "person") return [];
+            if (ref.kind === fromKind && ref.id === fromId) return [];
+            return [{ ref, title: hit.title, href: hit.href, detail: hit.detail }];
+          })
+          .slice(0, MAX_ITEMS);
+        setFound({ query: itemQuery, items });
+      } catch {
+        // No search: the member list still works.
+      }
+    }, 180);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [itemQuery, fromKind, fromId, org.id]);
+
   const options = useMemo<TokenChoice[]>(() => {
     if (!trigger) return [];
     const q = trigger.query.toLowerCase();
@@ -105,16 +160,26 @@ export function useTokenMenu({
         .split(/[\s._-]+/)
         .some((part) => part.startsWith(q));
     if (trigger.kind === "member") {
-      return mentionable
+      const people = mentionable
         .filter((m) => starts(m.name ?? "") || (m.name ?? "").toLowerCase().includes(q))
         .slice(0, MAX_OPTIONS)
         .map((m) => ({ kind: "member" as const, id: m.id, label: m.name ?? "Member", member: m }));
+      const items =
+        found && itemQuery && found.query === itemQuery
+          ? found.items.map((item) => ({
+              kind: "item" as const,
+              id: `${item.ref.kind}:${item.ref.id}`,
+              label: item.title || "Untitled",
+              item,
+            }))
+          : [];
+      return [...people, ...items];
     }
     return files
       .filter((f) => starts(f.name) || f.name.toLowerCase().includes(q))
       .slice(0, MAX_OPTIONS)
       .map((f) => ({ kind: "file" as const, id: f.id, label: f.name, file: f }));
-  }, [trigger, mentionable, files]);
+  }, [trigger, mentionable, files, found, itemQuery]);
 
   const close = useCallback(() => setTrigger(null), []);
 
@@ -150,7 +215,12 @@ export function useTokenMenu({
       const token =
         choice.kind === "member"
           ? `${mentionToken(choice.member?.name ?? "member", choice.id)} `
-          : `${fileRefToken(choice.file?.name ?? "file", choice.file?.kind ?? "file", choice.id)} `;
+          : choice.kind === "item" && choice.item
+            ? `${itemLinkToken(choice.item)} `
+            : `${fileRefToken(choice.file?.name ?? "file", choice.file?.kind ?? "file", choice.id)} `;
+      if (choice.kind === "item" && choice.item && fromKind && fromId) {
+        void addLinkAction(org.id, org.slug, { kind: fromKind, id: fromId }, choice.item.ref);
+      }
       const next = value.slice(0, trigger.start) + token + value.slice(trigger.end);
       justPicked.current = true;
       onChange(next);
@@ -161,7 +231,7 @@ export function useTokenMenu({
         element.current?.setSelectionRange(caret, caret);
       });
     },
-    [trigger, value, onChange, element],
+    [trigger, value, onChange, element, fromKind, fromId, org.id, org.slug],
   );
 
   const open = trigger !== null && options.length > 0;
@@ -207,4 +277,14 @@ export function useTokenMenu({
     handleKey,
     close,
   };
+}
+
+/** [Title](/app/...): an ordinary link to the thing, read by any markdown. */
+function itemLinkToken(item: LinkableOption): string {
+  const clean =
+    item.title
+      .replace(/[[\]()\n\r]/g, "")
+      .trim()
+      .slice(0, 120) || "Link";
+  return `[${clean}](${item.href})`;
 }

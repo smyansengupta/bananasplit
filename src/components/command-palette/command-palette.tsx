@@ -9,6 +9,7 @@ import { useMemo, useRef, useState } from "react";
 import { addLinkAction } from "@/app/app/[orgSlug]/links/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
+import { rememberLinkOrigin } from "@/components/links/pending-link";
 import { refFromPath } from "@/lib/links";
 import { parseQuickAdd } from "@/lib/tasks/quick-add";
 import { localDateKey } from "@/lib/tasks/dates";
@@ -184,8 +185,10 @@ export function CommandPalette({
 
   async function newNote() {
     try {
+      const from = refFromPath(window.location.pathname);
       const res = await createNote(orgId);
       if (res.noteId) {
+        if (from) await addLinkAction(orgId, orgSlug, from, { kind: "note", id: res.noteId });
         router.push(`/app/${orgSlug}/notes/${res.noteId}`);
         return;
       }
@@ -224,6 +227,8 @@ export function CommandPalette({
 
   function run(item: PaletteItem, newTab = false) {
     const command = item.command;
+    // Made from the Create group: link it to this page once it exists.
+    if (item.key.startsWith("create:") && !newTab) rememberLinkOrigin(item.key.slice(7));
     if (command.type === "href") {
       if (newTab) {
         window.open(command.href, "_blank", "noopener");

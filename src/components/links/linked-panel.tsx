@@ -26,7 +26,9 @@ import { searchWorkspaceAction } from "@/app/app/[orgSlug]/search/actions";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/components/ui/toaster";
-import { linkKindOfSearch, type LinkedItem, type LinkKind, type LinkRef } from "@/lib/links";
+import { linkRefOfHit, type LinkedItem, type LinkKind, type LinkRef } from "@/lib/links";
+
+import { SidePeek } from "./side-peek";
 import type { SearchHit } from "@/lib/search/types";
 import { cn } from "@/lib/utils";
 
@@ -44,14 +46,6 @@ const ICONS: Record<LinkKind, IconComponent> = {
 };
 
 /** A search hit's key is "{kind}:{id}"; the id may itself hold colons. */
-function refOfHit(hit: SearchHit): LinkRef | null {
-  const kind = linkKindOfSearch(hit.kind);
-  if (!kind) return null;
-  const at = hit.key.indexOf(":");
-  const id = at === -1 ? "" : hit.key.slice(at + 1);
-  return id ? { kind, id } : null;
-}
-
 /**
  * What this page is linked to, both ways: a meeting's sign-up form and
  * notes, a task's files, a person's budget line. "Link" searches everything
@@ -76,6 +70,7 @@ export function LinkedPanel({
   className?: string;
 }) {
   const [items, setItems] = useState(initial);
+  const [peek, setPeek] = useState<LinkedItem | null>(null);
   const [, start] = useTransition();
 
   function link(ref: LinkRef) {
@@ -144,6 +139,13 @@ export function LinkedPanel({
                 </span>
                 <Link
                   href={item.href}
+                  onClick={(e) => {
+                    // A plain click peeks beside the page; Ctrl, Cmd, Shift
+                    // or the middle button still open it as a page.
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                    e.preventDefault();
+                    setPeek(item);
+                  }}
                   className="focus-visible:outline-foreground min-w-0 flex-1 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   <span className="block text-[14px] leading-snug font-medium break-words">
@@ -165,6 +167,7 @@ export function LinkedPanel({
           })}
         </ul>
       )}
+      <SidePeek orgId={orgId} orgSlug={orgSlug} target={peek} onClose={() => setPeek(null)} />
     </section>
   );
 }
@@ -199,7 +202,7 @@ function LinkPicker({
           result.groups
             .flatMap((g) => g.hits)
             .filter((h) => {
-              const ref = refOfHit(h);
+              const ref = linkRefOfHit(h);
               if (!ref) return false;
               if (ref.kind === at.kind && ref.id === at.id) return false;
               return !taken.some((t) => t.kind === ref.kind && t.id === ref.id);
@@ -247,7 +250,7 @@ function LinkPicker({
             <li className="text-muted-foreground px-3 py-3 text-sm">Nothing to link</li>
           )}
           {hits.map((hit) => {
-            const ref = refOfHit(hit)!;
+            const ref = linkRefOfHit(hit)!;
             const Icon = ICONS[ref.kind] ?? Link2;
             return (
               <li key={hit.key}>
