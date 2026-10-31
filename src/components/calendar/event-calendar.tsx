@@ -1,13 +1,7 @@
 "use client";
 
 import type { MeetingType } from "@/lib/meetings/meeting-types";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Globe,
-  Lock,
-} from "@/components/icons";
+import { CalendarDays, ChevronLeft, ChevronRight, Globe, Lock } from "@/components/icons";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -420,17 +414,6 @@ export function EventCalendar({
 
   const openItem = peek ? (items.find((i) => i.id === peek.id && !i.task) ?? null) : null;
   const count = items.length;
-  const eventCount = items.filter((i) => !i.task).length;
-  const taskCount = count - eventCount;
-  const countLabel =
-    count === 0
-      ? "Nothing scheduled"
-      : [
-          eventCount > 0 && (eventCount === 1 ? "1 event" : `${eventCount} events`),
-          taskCount > 0 && (taskCount === 1 ? "1 task due" : `${taskCount} tasks due`),
-        ]
-          .filter(Boolean)
-          .join(", ");
 
   const filtered = range.kinds.length > 0 || Boolean(range.visibility);
   const emptyState = (
@@ -482,10 +465,7 @@ export function EventCalendar({
           </div>
           <div className="min-w-0">
             <h2 className="cal-head__month">{rangeLabel(range, monthKey, dayCount)}</h2>
-            <p className="cal-head__count">
-              {countLabel}
-              {isPending && <span className="ml-2 opacity-70">Loading…</span>}
-            </p>
+            {isPending && <p className="cal-head__count opacity-70">Loading…</p>}
           </div>
         </div>
 

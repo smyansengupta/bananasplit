@@ -132,7 +132,7 @@ export async function setRegistrationCheckIn(
   } catch (error) {
     await db.$executeRaw`ROLLBACK TO SAVEPOINT rsvp_attendance`;
     console.warn(
-      "[rsvp] check-in saved without the club's attendance row",
+      "[rsvp] check-in saved without the organization's attendance row",
       error instanceof Error ? error.message : error,
     );
     attendance = false;
