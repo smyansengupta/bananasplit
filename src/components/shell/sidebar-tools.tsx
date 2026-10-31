@@ -78,7 +78,9 @@ export function SidebarTools({
             <button
               type="button"
               aria-label="New"
-              title={rail ? "New" : undefined}
+              aria-keyshortcuts="c"
+              data-new-button=""
+              title={rail ? "New (c)" : undefined}
               aria-busy={pending || undefined}
               className={cn(
                 "focus-glow glow-halo flex h-10 shrink-0 items-center gap-2.5 overflow-hidden rounded-full pr-3 pl-2.5 text-sm font-semibold outline-none",

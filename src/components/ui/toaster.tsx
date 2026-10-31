@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, Loader2, X, XCircle } from "@/components/icons";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -115,8 +115,40 @@ const snapshot = () => items;
 const NO_TOASTS: ToastItem[] = [];
 const serverSnapshot = () => NO_TOASTS;
 
+/**
+ * Ctrl Z (⌘Z) undoes the newest toast that offers Undo, when focus isn't in
+ * a field (where Ctrl Z belongs to the text). The toast handles it like a
+ * click on its Undo, so an error shows the same way.
+ */
+function useUndoKey() {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "z") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        return;
+      }
+      const latest = [...items].reverse().find((t) => t.action?.label === "Undo");
+      if (!latest) return;
+      event.preventDefault();
+      undoRequests.add(latest.id);
+      emit();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+}
+
+/** Toasts whose Undo was asked for by the keyboard; each card runs its own. */
+const undoRequests = new Set<number>();
+
 export function Toaster() {
   const list = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  useUndoKey();
   return (
     <div
       aria-live="polite"
@@ -134,6 +166,18 @@ export function Toaster() {
 function ToastCard({ item }: { item: ToastItem }) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  // Ctrl Z asked for this one: the same as clicking its Undo.
+  const requested = useSyncExternalStore(
+    subscribe,
+    () => undoRequests.has(item.id),
+    () => false,
+  );
+  useEffect(() => {
+    if (!requested) return;
+    undoRequests.delete(item.id);
+    undoRef.current?.click();
+  }, [requested, item.id]);
   const Icon = item.tone === "error" ? XCircle : item.tone === "success" ? CheckCircle2 : null;
   return (
     <div
@@ -177,7 +221,9 @@ function ToastCard({ item }: { item: ToastItem }) {
       </div>
       {item.action && (
         <button
+          ref={undoRef}
           type="button"
+          aria-keyshortcuts={item.action.label === "Undo" ? "Control+Z Meta+Z" : undefined}
           disabled={running}
           onClick={async () => {
             setRunning(true);
