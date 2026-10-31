@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { UserAvatar } from "@/components/user-avatar";
 import { parseNotificationPreferences } from "@/lib/notifications/preferences";
 import { personHref, type ProfileSection } from "@/lib/profile/href";
 import { effectiveTimezone } from "@/lib/profile/timezone";
@@ -77,7 +76,15 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
     <div className="mx-auto w-full max-w-3xl space-y-7.5">
       <div className="space-y-5">
         <header className="flex flex-wrap items-center gap-x-5 gap-y-4">
-          <UserAvatar user={profile} size="xl" className="shrink-0" />
+          <AvatarEditor
+            button
+            user={{
+              name: profile.name,
+              email: profile.email,
+              image: profile.image,
+              avatar: profile.avatar,
+            }}
+          />
           <div className="min-w-0 flex-1 basis-56">
             <h1 className="page-title">Your profile</h1>
             <p className="text-muted-foreground mt-2 text-[15px]">{summary}</p>
