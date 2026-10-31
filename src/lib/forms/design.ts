@@ -54,9 +54,13 @@ export function buttonWord(design: FormDesign, last: boolean): string {
  */
 export function thanksLine(design: FormDesign, firstName: string | null): string {
   if (design.thanks) {
-    return design.thanks
-      .replace(/\{name\}/g, firstName ?? "")
+    // Without a name, "{name}" goes with the comma before it.
+    const filled = firstName
+      ? design.thanks.replace(/\{name\}/g, firstName)
+      : design.thanks.replace(/,?\s*\{name\}/g, "");
+    return filled
       .replace(/\s+([,.!?])/g, "$1")
+      .replace(/^[\s,]+/, "")
       .trim();
   }
   return firstName ? `Thanks, ${firstName}.` : "Thanks.";
