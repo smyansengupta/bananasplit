@@ -104,19 +104,36 @@ export function paragraph(text: string): string {
   return `<p style="margin:0 0 14px">${escapeHtml(text)}</p>`;
 }
 
-/** The email copy of an in-app notification. */
+/**
+ * The email copy of an in-app notification. `cta` replaces the usual "Open
+ * in Bananasplit" (an online meeting's reminder leads with Join the
+ * meeting); `choices` are answers as buttons (an invite's Going and Can't
+ * go), each opening the app where the answer is one click.
+ */
 export function notificationEmail(input: {
   orgName: string;
   title: string;
   body?: string | null;
   url?: string | null;
+  cta?: { label: string; url: string };
+  choices?: { label: string; url: string }[];
 }): RenderedEmail {
+  const choices = input.choices?.length
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 0"><tr>${input.choices
+        .map(
+          (c) =>
+            `<td style="padding:0 8px 0 0"><a href="${safeHref(c.url)}" style="display:inline-block;padding:10px 18px;border-radius:999px;border:1px solid ${C.ink};color:${C.ink};font-size:14px;font-weight:600;line-height:1.2;text-decoration:none">${escapeHtml(c.label)}</a></td>`,
+        )
+        .join("")}</tr></table>`
+    : "";
   return layout({
     subject: input.title,
     eyebrow: input.orgName,
-    bodyHtml: `<p style="margin:0 0 10px;font-size:18px;font-weight:600;line-height:1.35">${escapeHtml(input.title)}</p>${input.body ? paragraph(input.body) : ""}`,
-    bodyText: [input.title, input.body].filter(Boolean).join("\n\n"),
-    cta: input.url ? { label: "Open in Bananasplit", url: input.url } : undefined,
+    bodyHtml: `<p style="margin:0 0 10px;font-size:18px;font-weight:600;line-height:1.35">${escapeHtml(input.title)}</p>${input.body ? paragraph(input.body) : ""}${choices}`,
+    bodyText: [input.title, input.body, ...(input.choices ?? []).map((c) => `${c.label}: ${c.url}`)]
+      .filter(Boolean)
+      .join("\n\n"),
+    cta: input.cta ?? (input.url ? { label: "Open in Bananasplit", url: input.url } : undefined),
     footer: "Change which notifications email you on your profile.",
   });
 }

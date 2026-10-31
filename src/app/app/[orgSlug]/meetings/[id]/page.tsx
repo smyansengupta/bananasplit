@@ -98,7 +98,10 @@ export default async function MeetingPage({
   const countOf = (s: string) => signups.find((r) => r.status === s)?._count._all ?? 0;
   const members = canEdit ? await getOrgMembersForPicker(org.id) : [];
   // "Edit" sends people here with the form already open, as on the Calendar.
-  const { edit } = await searchParams;
+  const { edit, rsvp: rsvpParam } = await searchParams;
+  // An invite email's Going / Can't go: the answer, ready to confirm.
+  const asked = Array.isArray(rsvpParam) ? rsvpParam[0] : rsvpParam;
+  const askedRsvp = asked === "YES" || asked === "NO" || asked === "MAYBE" ? asked : null;
   const startInEdit = (Array.isArray(edit) ? edit[0] : edit) === "1";
 
   const joinCard =
@@ -128,6 +131,7 @@ export default async function MeetingPage({
       tasks={
         <MeetingTasks orgId={org.id} orgSlug={orgSlug} eventId={event.id} initial={meetingTasks} />
       }
+      askedRsvp={askedRsvp}
       section="meetings"
       joinCard={joinCard}
       locationDetails={event.locationDetails}

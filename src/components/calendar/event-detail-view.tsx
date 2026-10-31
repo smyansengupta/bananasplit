@@ -103,7 +103,10 @@ export function EventDetailView({
   meetingTypes,
   linked = null,
   tasks = null,
+  askedRsvp = null,
 }: {
+  /** The answer an invite email's button asked for (?rsvp=): ready to confirm. */
+  askedRsvp?: "YES" | "NO" | "MAYBE" | null;
   /** The Linked panel (components/links), last in the side column. */
   linked?: React.ReactNode;
   /** Tasks from this meeting (components/meetings/meeting-tasks), under the notes. */
@@ -431,6 +434,18 @@ export function EventDetailView({
               }
               className="min-h-0"
             >
+              {/* From the invite email's Going / Can't go: one click to say so. */}
+              {askedRsvp && myAttendance.rsvp !== askedRsvp && (
+                <button
+                  type="button"
+                  autoFocus
+                  disabled={isPending}
+                  onClick={() => handleRsvp(askedRsvp)}
+                  className="bg-block-answer-foreground text-block-answer relative z-10 mt-3 h-10 w-full rounded-full text-sm font-semibold transition-transform active:scale-[0.98] disabled:opacity-60"
+                >
+                  Confirm: {RSVP_META[askedRsvp].label}
+                </button>
+              )}
               <div className="relative z-10 mt-4 flex gap-1.5" role="group" aria-label="Your RSVP">
                 {(["YES", "MAYBE", "NO"] as const).map((status) => {
                   const on = myAttendance.rsvp === status;
