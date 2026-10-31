@@ -223,6 +223,7 @@ export function TaskComments({
                       onChange={(v) => setEditing({ id: c.id, body: v })}
                       onSubmitShortcut={saveEdit}
                       audience={audience}
+                      linkFrom={{ kind: "task", id: taskId }}
                     />
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
@@ -267,6 +268,7 @@ export function TaskComments({
           onChange={setBody}
           onSubmitShortcut={submit}
           audience={audience}
+          linkFrom={{ kind: "task", id: taskId }}
         />
         <div className="flex items-center justify-end gap-2">
           <Button size="sm" onClick={submit} disabled={!body.trim()}>

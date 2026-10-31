@@ -59,6 +59,15 @@ export function linkKindOfSearch(kind: string): LinkKind | null {
   return isLinkKind(kind) ? kind : null;
 }
 
+/** The thing a search hit ("task:abc") is, when it can be linked. */
+export function linkRefOfHit(hit: { kind: string; key: string }): LinkRef | null {
+  const kind = linkKindOfSearch(hit.kind);
+  if (!kind) return null;
+  const at = hit.key.indexOf(":");
+  const id = at === -1 ? "" : hit.key.slice(at + 1);
+  return id ? { kind, id } : null;
+}
+
 const ID = "([A-Za-z0-9_-]{1,64})";
 const PAGE_KINDS: [RegExp, LinkKind][] = [
   [new RegExp(`^/app/[^/]+/tasks/${ID}$`), "task"],

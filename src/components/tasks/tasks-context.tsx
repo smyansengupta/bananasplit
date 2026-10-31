@@ -48,7 +48,7 @@ interface TasksContextValue {
   members: MemberOption[];
   memberById: Map<string, MemberOption>;
   labels: LabelOption[];
-  /** The club's files, for the `/` picker in a title or a description. */
+  /** The organization's files, for the `/` picker in a title or a description. */
   files: FileOption[];
   /** Live epics and stories (what work can be part of). */
   parents: ParentOption[];
@@ -88,10 +88,10 @@ export function TasksProvider({
   viewer: TasksViewer;
   members: MemberOption[];
   labels: LabelOption[];
-  /** The club's files (none passed: the `/` picker has nothing to offer). */
+  /** The organization's files (none passed: the `/` picker has nothing to offer). */
   files?: FileOption[];
   parents: ParentOption[];
-  /** The club's creation rules for this viewer (admins only when left out). */
+  /** The organization's creation rules for this viewer (admins only when left out). */
   can?: TasksCan;
   children: React.ReactNode;
 }) {

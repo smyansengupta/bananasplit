@@ -511,6 +511,7 @@ export function TaskEditor({
           <MentionTextarea
             id="task-description"
             audience={visibility === TaskVisibility.PRIVATE ? mentionAudience : null}
+            linkFrom={task ? { kind: "task", id: task.id } : null}
             value={description}
             onChange={setDescription}
             onBlur={commitDescription}
