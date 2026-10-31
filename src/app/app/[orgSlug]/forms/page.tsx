@@ -12,7 +12,7 @@ import { isPollOpen } from "@/lib/polls/question-poll";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { describeQuestions } from "@/lib/forms/describe";
 import { readQuestions } from "@/lib/forms/questions";
-import { isFormOpen, listForms } from "@/server/forms/forms";
+import { isFormOpen, isWebsitePollOpen, listForms, listWebsitePolls } from "@/server/forms/forms";
 import { listQuestionPolls } from "@/server/polls/question-polls";
 import { planGate } from "@/server/billing/plan-gate";
 
@@ -39,9 +39,10 @@ export default async function FormsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const { forms, polls } = await withOrgTx(org.id, async ({ db }) => ({
+  const { forms, polls, website } = await withOrgTx(org.id, async ({ db }) => ({
     forms: await listForms(db, org.id),
     polls: await listQuestionPolls(db, org.id),
+    website: await listWebsitePolls(db, org.id),
   }));
 
   const short = (at: Date) =>
@@ -101,6 +102,29 @@ export default async function FormsPage({
         databaseHref: null,
         canTrash: p.createdById === user.id || isAdmin,
         at: p.createdAt.getTime(),
+      };
+    }),
+    // Polls from the organization's website: anonymous ballots, results in Ballots.
+    ...website.map((p) => {
+      const open = isWebsitePollOpen(p, now);
+      const results = p.databaseKey
+        ? `${base}/databases/${p.databaseKey}?f=${encodeURIComponent(`poll:eq:${p.slug}`)}`
+        : `${base}/databases`;
+      return {
+        id: p.id,
+        kind: "website-poll" as const,
+        title: p.title,
+        detail: "From your website, anonymous",
+        href: results,
+        open,
+        draft: false,
+        status: open ? (p.closesAt ? `Open until ${short(p.closesAt)}` : "Open") : "Closed",
+        responses: p.responses,
+        outOf: null,
+        toReview: 0,
+        databaseHref: canMake && p.databaseKey ? results : null,
+        canTrash: false,
+        at: (p.opensAt ?? p.createdAt).getTime(),
       };
     }),
   ].sort((a, b) => b.at - a.at);

@@ -91,6 +91,58 @@ export interface FormListItem {
   members: number | null;
 }
 
+/**
+ * The organization's website polls (BallotDefinition, synced from the
+ * website), listed in Forms beside the forms themselves: each is a quick
+ * poll whose anonymous ballots live in the Ballots database. Test polls
+ * stay out. `databaseKey` is the Ballots database, where results open.
+ */
+export interface WebsitePollItem {
+  id: string;
+  slug: string;
+  title: string;
+  opensAt: Date | null;
+  closesAt: Date | null;
+  createdAt: Date;
+  responses: number;
+  databaseKey: string | null;
+}
+
+export async function listWebsitePolls(
+  db: TxClient,
+  organizationId: string,
+): Promise<WebsitePollItem[]> {
+  const polls = await db.ballotDefinition.findMany({
+    where: { organizationId, isTest: false },
+    orderBy: [{ opensAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    select: { id: true, slug: true, title: true, opensAt: true, closesAt: true, createdAt: true },
+  });
+  if (polls.length === 0) return [];
+  const counts = await db.ballot.groupBy({
+    by: ["ballotDefinitionId"],
+    where: {
+      organizationId,
+      ballotDefinitionId: { in: polls.map((p) => p.id) },
+      excludedReason: null,
+    },
+    _count: { _all: true },
+  });
+  const ballots = await db.databaseDefinition.findFirst({
+    where: { organizationId, kind: "BALLOTS" },
+    select: { key: true },
+  });
+  return polls.map((p) => ({
+    ...p,
+    responses: counts.find((c) => c.ballotDefinitionId === p.id)?._count._all ?? 0,
+    databaseKey: ballots?.key ?? null,
+  }));
+}
+
+/** Whether a website poll takes ballots now: opened (or no start) and not yet closed. */
+export function isWebsitePollOpen(p: Pick<WebsitePollItem, "opensAt" | "closesAt">, now: Date) {
+  return (!p.opensAt || p.opensAt <= now) && (!p.closesAt || p.closesAt > now);
+}
+
 export async function listForms(db: TxClient, organizationId: string): Promise<FormListItem[]> {
   const forms = await db.form.findMany({
     where: { organizationId, deletedAt: null },

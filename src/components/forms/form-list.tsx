@@ -16,8 +16,11 @@ import { cn } from "@/lib/utils";
 
 export interface FormListRow {
   id: string;
-  /** A form, a quick poll made in Forms, or an anonymous members' poll. */
-  kind: "form" | "poll" | "member-poll";
+  /**
+   * A form, a quick poll made in Forms, an anonymous members' poll, or a
+   * poll from the organization's website (its ballots live in Ballots).
+   */
+  kind: "form" | "poll" | "member-poll" | "website-poll";
   title: string;
   /** The second line: what it asks, or who can answer. */
   detail: string | null;
@@ -155,7 +158,9 @@ export function FormList({ orgId, rows }: { orgId: string; rows: FormListRow[] }
                   </Link>
                 ) : (
                   <span className="text-muted-foreground">
-                    {row.kind === "member-poll" ? "Private votes" : ""}
+                    {row.kind === "member-poll" || row.kind === "website-poll"
+                      ? "Private votes"
+                      : ""}
                   </span>
                 )}
               </span>

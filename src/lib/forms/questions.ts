@@ -321,7 +321,11 @@ export const FORM_TEMPLATES: readonly FormTemplate[] = [
       }),
       q("long", "Why do you want to join?", { required: true }),
       q("file", "Drop your resume", { help: "PDF, up to 10 MB." }),
+      q("image", "A photo of something you built"),
       q("scale", "How many hours a week can you give?", { min: 1, max: 10 }),
+      q("checkboxes", "Which build nights work?", {
+        options: [opt("Tuesday"), opt("Thursday"), opt("Friday"), opt("Saturday")],
+      }),
     ],
   },
   {
