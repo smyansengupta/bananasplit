@@ -7,7 +7,7 @@ import { spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
-import { countAwaitingApproval, getCategoryOptions, getOrgPeriods } from "./queries";
+import { getCategoryOptions, getOrgPeriods } from "./queries";
 
 /**
  * Every finance page's header: the title and, for the treasurer, one short
@@ -27,24 +27,19 @@ export default async function FinanceLayout({
   if (!spaceIncludes(org, "finance")) return children;
   const isFinance = can({ role }, "finance.manage");
   // For the header's new-entry dialog (which period, which category).
-  const { periods, categories, toReview } = await withOrgTx(org.id, async ({ db }) => {
+  const { periods, categories } = await withOrgTx(org.id, async ({ db }) => {
     const periods = await getOrgPeriods(db, org.id);
     return {
       periods,
       // Names only (no amounts): a member opens this layout too.
       categories: await getCategoryOptions(db, periods),
-      // The header's live line: requests waiting on an owner, admin or treasurer.
-      toReview: isFinance ? await countAwaitingApproval(db, org.id) : 0,
     };
   }).catch(handleAuthErrorInPage);
   const base = `/app/${orgSlug}/finance`;
   const active = periods.find((p) => p.isActive);
-  // One short line, only when it says something: the budget year, and the
-  // requests waiting (the sidebar carries the same count).
-  const summary = isFinance
-    ? [active?.label, toReview > 0 && `${toReview} to review`].filter(Boolean).join(", ") ||
-      undefined
-    : undefined;
+  // The budget year, for the people who run the money. Requests waiting are
+  // counted on the sidebar and in the Inbox, not here as well.
+  const summary = isFinance ? active?.label : undefined;
 
   return (
     <div className="space-y-7.5">
