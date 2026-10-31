@@ -4,7 +4,7 @@ import { getOrgContextBySlug } from "@/server/db/context";
 import type { IntegrationDto } from "@/server/integrations/catalog";
 import { loadIntegrations } from "@/server/integrations/service";
 
-/** What an integration sub-page needs: the org, the viewer's rights and the DTO (never a secret). */
+/** What an integration window needs: the org, the viewer's rights and the DTO (never a secret). */
 export async function loadIntegrationPage(orgSlug: string, provider: IntegrationProvider) {
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "integrations.view")) return null;
