@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { LinkedSection } from "@/components/links/linked-section";
 import { PersonProfile } from "@/components/profile/person-profile";
+import { PinToggle } from "@/components/pins/pins-context";
 import { peopleHref } from "@/lib/profile/href";
 import { getOrgContextBySlug } from "@/server/db/context";
 import { getPersonSheet } from "@/server/profiles/directory";
@@ -41,6 +42,14 @@ export default async function PersonPage({ params }: PageProps<"/app/[orgSlug]/p
           viewerId={user.id}
           timeZone={organization.timezone}
           headingLevel="h1"
+          // Pin them right from their page (on a phone too, where the
+          // header's pin isn't).
+          extraActions={
+            <PinToggle
+              path={`/people/${encodeURIComponent(userId)}`}
+              label={person.name ?? "this person"}
+            />
+          }
         />
       </article>
       <LinkedSection
