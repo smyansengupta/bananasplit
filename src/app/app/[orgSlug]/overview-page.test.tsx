@@ -22,9 +22,19 @@ const mocks = vi.hoisted(() => ({
   latestSentPulse: vi.fn(),
   weeklyDoneTrend: vi.fn(),
   nextRsvpGoalEvent: vi.fn(),
+  listForms: vi.fn(),
+  listWebsitePolls: vi.fn(),
 }));
 
-vi.mock("@/server/overview/queries", () => ({
+// The Forms list's own reads; whether each is open is the real rule.
+vi.mock("@/server/forms/forms", async (actual) => ({
+  ...(await actual<typeof import("@/server/forms/forms")>()),
+  listForms: mocks.listForms,
+  listWebsitePolls: mocks.listWebsitePolls,
+}));
+vi.mock("@/server/overview/queries", async (actual) => ({
+  // Home's Open forms is the real merge of what the Forms list shows.
+  loadOpenForms: (await actual<typeof import("@/server/overview/queries")>()).loadOpenForms,
   loadTaskExtras: vi.fn(async () => new Map()),
   loadEventGoing: vi.fn(async () => new Map()),
   loadPollStats: vi.fn(
@@ -48,6 +58,7 @@ const db = {
   event: { count: vi.fn() },
   availabilityPoll: { findMany: vi.fn() },
   poll: { findMany: vi.fn() },
+  formResponse: { findMany: vi.fn(async () => []) },
   membership: { findMany: vi.fn(), count: vi.fn() },
   budgetPeriod: { count: vi.fn() },
   orgChartVersion: { count: vi.fn(async () => 0) },
@@ -148,6 +159,8 @@ beforeEach(() => {
   mocks.listPins.mockResolvedValue([]);
   mocks.listRecent.mockResolvedValue([]);
   mocks.loadSavedBoard.mockResolvedValue(null);
+  mocks.listForms.mockResolvedValue([]);
+  mocks.listWebsitePolls.mockResolvedValue([]);
   db.availabilityPoll.findMany.mockResolvedValue([]);
   db.poll.findMany.mockResolvedValue([]);
   db.membership.findMany.mockResolvedValue([]);
@@ -318,14 +331,67 @@ describe("org overview", () => {
     expect(html).toContain("2 hours ago");
   });
 
-  it("lists open polls of both kinds, newest first", async () => {
+  it("lists what the Forms list shows as open, newest first, linking where Forms does", async () => {
     mocks.loadSavedBoard.mockResolvedValue([{ id: "polls", type: "polls", w: 1, h: null }]);
-    db.availabilityPoll.findMany.mockResolvedValue([
+    const form = (id: string, title: string, at: string, extra: object = {}) => ({
+      id,
+      title,
+      kind: "FORM",
+      access: "PUBLIC",
+      publishedAt: new Date(at),
+      closedAt: null,
+      closesAt: null,
+      responseCap: null,
+      deletedAt: null,
+      createdAt: new Date(at),
+      ...extra,
+    });
+    mocks.listForms.mockResolvedValue([
       {
-        id: "ap_1",
-        title: "Exec sync time",
+        form: form("f_app", "Organization application", "2026-10-03T12:00:00Z"),
+        responses: 7,
+        toReview: 2,
+        databaseKey: "form-app",
+        members: null,
+      },
+      {
+        form: form("f_quick", "Snack pick", "2026-10-02T12:00:00Z", {
+          kind: "QUICK_POLL",
+          access: "MEMBERS",
+        }),
+        responses: 3,
+        toReview: 0,
+        databaseKey: "form-snack",
+        members: 12,
+      },
+      // A draft and a closed form stay out, as in the Forms list's Open tab.
+      {
+        form: form("f_draft", "Draft survey", "2026-10-04T12:00:00Z", { publishedAt: null }),
+        responses: 0,
+        toReview: 0,
+        databaseKey: "form-draft",
+        members: null,
+      },
+      {
+        form: form("f_closed", "Old signup", "2026-09-01T12:00:00Z", {
+          closedAt: new Date("2026-09-10T12:00:00Z"),
+        }),
+        responses: 4,
+        toReview: 0,
+        databaseKey: "form-old",
+        members: null,
+      },
+    ]);
+    mocks.listWebsitePolls.mockResolvedValue([
+      {
+        id: "bd_1",
+        slug: "fall-vote",
+        title: "Fall social vote",
+        opensAt: new Date("2026-10-01T12:00:00Z"),
         closesAt: null,
-        createdAt: new Date("2026-10-01T12:00:00Z"),
+        createdAt: new Date("2026-09-30T12:00:00Z"),
+        responses: 41,
+        databaseKey: "ballots",
       },
     ]);
     db.poll.findMany.mockResolvedValue([
@@ -338,18 +404,22 @@ describe("org overview", () => {
     ]);
 
     const html = await render();
-    expect(db.poll.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ organizationId: "org_cbc", closedAt: null }),
-      }),
-    );
-    // In the polls widget (Up next above it lists them by urgency instead).
+    // In the Open forms widget (Up next above it lists polls by urgency instead).
     const widget = html.slice(html.lastIndexOf("Open forms"));
-    expect(widget.indexOf("Pizza or tacos?")).toBeLessThan(widget.indexOf("Exec sync time"));
-    expect(html).toContain('href="/app/cbc/forms/polls/qp_1"');
-    expect(html).toContain('href="/app/cbc/calendar/find-a-time/ap_1"');
-    expect(html).toContain("Question, open");
-    expect(html).toContain("Find a time, open");
+    const order = ["Pizza or tacos?", "Organization application", "Snack pick", "Fall social vote"];
+    for (let i = 1; i < order.length; i++)
+      expect(widget.indexOf(order[i - 1])).toBeLessThan(widget.indexOf(order[i]));
+    expect(widget).not.toContain("Draft survey");
+    expect(widget).not.toContain("Old signup");
+    expect(widget).toContain('href="/app/cbc/forms/f_app"');
+    expect(widget).toContain('href="/app/cbc/forms/f_quick"');
+    expect(widget).toContain('href="/app/cbc/forms/polls/qp_1"');
+    expect(widget).toContain('href="/app/cbc/databases/ballots?f=poll%3Aeq%3Afall-vote"');
+    expect(widget).toContain("Form, 7 responses, open");
+    expect(widget).toContain("Quick poll, open");
+    expect(widget).toContain("3/12");
+    expect(widget).toContain("Member poll, open");
+    expect(widget).toContain("Website poll, 41 responses, open");
   });
 
   it("shows a next step when there is nothing pinned or coming up", async () => {

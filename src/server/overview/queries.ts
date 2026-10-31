@@ -1,6 +1,8 @@
 import type { TaskPriority } from "@/generated/prisma/client";
 import { withSystemOrgTx, type TxClient } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
+import { pollHref } from "@/lib/polls/paths";
+import { isFormOpen, isWebsitePollOpen, listForms, listWebsitePolls } from "@/server/forms/forms";
 import type { OpenPoll } from "@/server/polls/open-polls";
 import { pollVoteCounts } from "@/server/polls/question-polls";
 
@@ -183,6 +185,95 @@ export async function loadPollStats(
     faces: faces.get(p.id) ?? [],
     ...(choices.has(p.id) ? { choices: choices.get(p.id) } : {}),
   }));
+}
+
+/**
+ * A row of Home's "Open forms": the same open forms, member polls and
+ * website polls the Forms list shows, each linking where Forms links it.
+ */
+export interface OpenFormStat {
+  id: string;
+  kind: "form" | "poll" | "question" | "website";
+  title: string;
+  href: string;
+  responses: number;
+  /** Who can answer, when that's a known number (members-only forms, member polls). */
+  outOf: number | null;
+  closesAt: Date | null;
+  mine: boolean;
+  at: number;
+}
+
+/**
+ * Open forms and website polls, newest first, with the member polls from
+ * `polls` (already counted for Up next) mixed in. Drafts, closed and full
+ * forms stay out, as in the Forms list's Open tab.
+ */
+export async function loadOpenForms(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  base: string,
+  polls: readonly PollStat[],
+  now: Date,
+  limit: number,
+): Promise<OpenFormStat[]> {
+  const forms = await listForms(db, organizationId);
+  const website = await listWebsitePolls(db, organizationId);
+  const open = forms.filter(({ form, responses }) => isFormOpen(form, responses, now));
+  const answered = new Set(
+    open.length > 0
+      ? (
+          await db.formResponse.findMany({
+            where: { organizationId, userId, formId: { in: open.map((f) => f.form.id) } },
+            select: { formId: true },
+            distinct: ["formId"],
+          })
+        ).map((r) => r.formId)
+      : [],
+  );
+  const rows: OpenFormStat[] = [
+    ...open.map(({ form, responses, members }) => ({
+      id: form.id,
+      kind: form.kind === "QUICK_POLL" ? ("poll" as const) : ("form" as const),
+      title: form.title,
+      href: `${base}/forms/${form.id}`,
+      responses,
+      outOf: members,
+      closesAt: form.closesAt,
+      mine: answered.has(form.id),
+      at: form.createdAt.getTime(),
+    })),
+    ...polls
+      .filter((p) => p.kind === "question")
+      .map((p) => ({
+        id: p.id,
+        kind: "question" as const,
+        title: p.title,
+        href: pollHref(base, "question", p.id),
+        responses: p.voters,
+        outOf: p.eligible,
+        closesAt: p.closesAt,
+        mine: p.mine,
+        at: p.createdAt.getTime(),
+      })),
+    ...website
+      .filter((p) => isWebsitePollOpen(p, now))
+      .map((p) => ({
+        id: p.id,
+        kind: "website" as const,
+        title: p.title,
+        href: p.databaseKey
+          ? `${base}/databases/${p.databaseKey}?f=${encodeURIComponent(`poll:eq:${p.slug}`)}`
+          : `${base}/forms`,
+        responses: p.responses,
+        outOf: null,
+        closesAt: p.closesAt,
+        mine: false,
+        at: (p.opensAt ?? p.createdAt).getTime(),
+      })),
+  ];
+  return rows.sort((a, b) => b.at - a.at).slice(0, limit);
 }
 
 export interface RsvpGoalEvent {

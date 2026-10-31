@@ -10,11 +10,10 @@ import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { familyOf } from "@/lib/files/types";
 import { dayWordOfKey } from "@/lib/overview/format";
 import type { PinKind } from "@/lib/pins/pages";
-import { pollHref } from "@/lib/polls/paths";
 import { ago } from "@/lib/relative-time";
 import { localDateKey } from "@/lib/tasks/dates";
 import { cn } from "@/lib/utils";
-import type { PollStat } from "@/server/overview/queries";
+import type { OpenFormStat } from "@/server/overview/queries";
 
 import { TileIcon, TileText, tileClass } from "./bits";
 
@@ -137,19 +136,30 @@ function closesWord(word: string): string {
   return word === "Today" || word === "Tomorrow" ? word.toLowerCase() : word;
 }
 
-/** Open forms (quick polls are forms, as the plan has it), one tick per member who can answer. */
+const FORM_KIND_WORDS: Record<OpenFormStat["kind"], string> = {
+  form: "Form",
+  poll: "Quick poll",
+  question: "Member poll",
+  website: "Website poll",
+};
+
+/**
+ * Open forms, as the Forms list has them: forms, quick polls, member polls
+ * and website polls. Where who can answer is a known number, one tick per
+ * person; otherwise the response count.
+ */
 export function PollList({
   orgSlug,
-  polls,
+  forms,
   now,
   timeZone,
 }: {
   orgSlug: string;
-  polls: readonly PollStat[];
+  forms: readonly OpenFormStat[];
   now: Date;
   timeZone: string;
 }) {
-  if (polls.length === 0) {
+  if (forms.length === 0) {
     return (
       <EmptyState
         size="compact"
@@ -168,32 +178,39 @@ export function PollList({
   const todayKey = localDateKey(now, timeZone);
   return (
     <ul className="space-y-4">
-      {polls.map((p, i) => (
-        <li key={p.id}>
-          <Link href={pollHref(`/app/${orgSlug}`, p.kind, p.id)} className="group/poll block">
+      {forms.map((f, i) => (
+        <li key={f.id}>
+          <Link href={f.href} className="group/poll block">
             <span className="flex items-baseline justify-between gap-2.5">
               <span className="min-w-0 text-[15px] font-semibold break-words group-hover/poll:underline">
-                {p.title}
+                {f.title}
               </span>
               <span className="shrink-0 text-[13px] font-semibold tabular-nums">
-                {p.voters}/{p.eligible}
+                {f.outOf !== null
+                  ? `${f.responses}/${Math.max(f.outOf, f.responses)}`
+                  : f.responses}
               </span>
             </span>
-            <TickMeter
-              total={p.eligible}
-              filled={p.voters}
-              height={20}
-              color={TICK_COLORS[i % TICK_COLORS.length]}
-              label={`${p.voters} of ${p.eligible} ${p.kind === "question" ? "voted" : "answered"}`}
-              className="mt-2"
-            />
+            {f.outOf !== null && (
+              <TickMeter
+                total={Math.max(f.outOf, f.responses)}
+                filled={f.responses}
+                height={20}
+                color={TICK_COLORS[i % TICK_COLORS.length]}
+                label={`${f.responses} of ${Math.max(f.outOf, f.responses)} answered`}
+                className="mt-2"
+              />
+            )}
             <span className="text-muted-foreground mt-1.5 block text-[13px]">
               {[
-                p.kind === "question" ? "Question" : "Find a time",
-                p.closesAt
-                  ? `closes ${closesWord(dayWordOfKey(localDateKey(p.closesAt, timeZone), todayKey))}`
+                FORM_KIND_WORDS[f.kind],
+                f.outOf === null
+                  ? `${f.responses} ${f.responses === 1 ? "response" : "responses"}`
+                  : null,
+                f.closesAt
+                  ? `closes ${closesWord(dayWordOfKey(localDateKey(f.closesAt, timeZone), todayKey))}`
                   : "open",
-                p.mine ? "you answered" : null,
+                f.mine ? "you answered" : null,
               ]
                 .filter(Boolean)
                 .join(", ")}

@@ -51,6 +51,7 @@ import { listNoteFiles } from "@/server/notes/files";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import {
   loadEventGoing,
+  loadOpenForms,
   loadPollStats,
   loadTaskExtras,
   nextRsvpGoalEvent,
@@ -132,7 +133,13 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     const weekEvents = await getUpcomingEvents(db, org.id, now, 100);
     const myTasks = await getMyOpenTasks(db, org.id, user.id, { limit: MY_TASKS_LIMIT, today });
     const memberCount = await db.membership.count({ where: { organizationId: org.id } });
-    const polls = await listOpenPolls(db, org.id, now, 5);
+    const polls = await loadPollStats(
+      db,
+      org.id,
+      user.id,
+      await listOpenPolls(db, org.id, now, 5),
+      memberCount,
+    );
     // Cards this member hid from their own Up next (own-row RLS).
     const dismissed = await db.upNextDismissal.findMany({
       where: { organizationId: org.id, userId: user.id },
@@ -189,8 +196,10 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       recent: await listRecent(db, org.id, org.slug, user.id, RECENT_LIMIT),
       notes: await getRecentNotes(db, org.id, user.id, 6),
       files: (await listNoteFiles(db, org.id)).slice(0, 6),
-      // Questions and find-a-time polls still taking answers, newest first.
-      polls: await loadPollStats(db, org.id, user.id, polls, memberCount),
+      // Questions and find-a-time polls still taking answers, newest first (Up next).
+      polls,
+      // What the Forms list shows as open: forms, member polls, website polls.
+      openForms: await loadOpenForms(db, org.id, user.id, `/app/${org.slug}`, polls, now, 5),
       goal: await nextRsvpGoalEvent(db, org.id, now),
       pulse: await latestSentPulse(db, org.id),
       trend: await weeklyDoneTrend(db, org.id, { timeZone: orgZone, pulseDay, now }),
@@ -367,7 +376,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       />
     ),
     week: <WeekStrip orgSlug={orgSlug} days={week} />,
-    polls: <PollList orgSlug={orgSlug} polls={data.polls} now={now} timeZone={timeZone} />,
+    polls: <PollList orgSlug={orgSlug} forms={data.openForms} now={now} timeZone={timeZone} />,
     "weekly-pulse": (
       <WeeklyPulseCard
         issue={data.pulse}
@@ -420,7 +429,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       </CardControls>
     ),
     polls: (
-      <CardControls count={data.polls.length || undefined}>
+      <CardControls count={data.openForms.length || undefined}>
         <OpenLink href={`${base}/forms`} label="Forms" />
       </CardControls>
     ),
