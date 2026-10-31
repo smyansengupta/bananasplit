@@ -168,7 +168,7 @@ function PickerRow({ item }: { item: PinnableItem }) {
           <span className="block truncate text-sm font-semibold">{item.label}</span>
           <span className="text-muted-foreground block truncate text-[13px]">
             {PIN_KIND_LABELS[item.kind]}
-            {item.detail ? ` · ${item.detail}` : ""}
+            {item.detail ? `, ${item.detail}` : ""}
           </span>
         </span>
         <span

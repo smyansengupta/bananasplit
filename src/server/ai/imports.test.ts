@@ -74,7 +74,7 @@ describe("readActionItems", () => {
         protocol: "openai",
         apiKey: "k".repeat(20),
         model: "m",
-        label: "OpenAI · m",
+        label: "OpenAI, m",
         vendorId: "openai",
         baseUrl: "https://api.openai.com/v1",
         maxTokensParam: "max_completion_tokens",

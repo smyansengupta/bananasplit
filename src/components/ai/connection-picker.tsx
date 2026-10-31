@@ -107,7 +107,7 @@ export function ConnectionPicker({
           <span>
             <span className="text-muted-foreground">Read with </span>
             <span className="font-medium">{selected?.label}</span>
-            <span className="text-muted-foreground"> · {selected?.detail}</span>
+            <span className="text-muted-foreground">, {selected?.detail}</span>
           </span>
         )}
       </div>

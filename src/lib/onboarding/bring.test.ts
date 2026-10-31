@@ -68,11 +68,11 @@ describe("bringSections", () => {
       kind: "event",
       title: "Picnic",
       // 00:00 UTC is 7 PM the evening before in Chicago.
-      meta: "Sat, Oct 17, 7:00 PM · 12 going",
+      meta: "Sat, Oct 17, 7:00 PM, 12 going",
     });
     expect(sections[1].groups[0].items.map((i) => i.meta)).toEqual([
-      "Availability poll · 1 response · its event comes too",
-      "Question poll · 3 votes",
+      "Availability poll, 1 response, its event comes too",
+      "Question poll, 3 votes",
     ]);
     expect(sections[2].groups.map((g) => [g.label, g.items.map((i) => i.meta)])).toEqual([
       [null, ["2 subtasks come too"]],
@@ -100,7 +100,7 @@ describe("bringSections with Files", () => {
     ]);
     expect(meta("notes")).toEqual([
       // Edited dates in the space's time zone (the evening before in Chicago).
-      ["Packing list", "Edited Oct 17 · In Trips · 1 sub-page and 2 files come too"],
+      ["Packing list", "Edited Oct 17, In Trips, 1 sub-page and 2 files come too"],
       ["Untitled note", "Edited Oct 19"],
     ]);
     expect(meta("files")).toEqual([["Lease.pdf", "2.5 MB"]]);

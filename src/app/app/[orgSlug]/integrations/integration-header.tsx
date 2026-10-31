@@ -9,7 +9,7 @@ import { integrationSummary } from "./status-copy";
 
 /**
  * The top of an integration sub-page: ← Integrations, the title with its
- * live state under it ("Connected · key ending 3f9a · checked Oct 12"), and
+ * live state under it ("Connected, key ending 3f9a, checked Oct 12"), and
  * what the integration is for.
  */
 export function IntegrationHeader({

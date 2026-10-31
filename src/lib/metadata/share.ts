@@ -152,7 +152,7 @@ export function shareMetadata({
   card?: FallbackCard;
 }): Metadata {
   return {
-    title: `${title} · ${SITE_NAME}`,
+    title: `${title}, ${SITE_NAME}`,
     description,
     ...(noIndex ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
@@ -188,7 +188,7 @@ export function mainShare({
   noIndex?: boolean;
 }): Metadata {
   return {
-    title: `${title} · ${SITE_NAME}`,
+    title: `${title}, ${SITE_NAME}`,
     description,
     ...(noIndex ? { robots: { index: false, follow: false } } : {}),
   };
@@ -232,7 +232,7 @@ export function clubShare({
 }): Metadata {
   const variants = club ? orgLogoVariants(club.logo) : null;
   return {
-    title: `${title} · ${SITE_NAME}`,
+    title: `${title}, ${SITE_NAME}`,
     description,
     ...(noIndex ? { robots: { index: false, follow: false } } : {}),
     ...(variants ? { icons: clubIcons(club?.logo) } : {}),

@@ -50,7 +50,7 @@ export function questionItem(
       people(poll.voterCount, "voted"),
     ]
       .filter(Boolean)
-      .join(" · "),
+      .join(", "),
     canDelete,
   };
 }
@@ -96,7 +96,7 @@ export function availabilityItem(
         : null,
     ]
       .filter(Boolean)
-      .join(" · "),
+      .join(", "),
     canDelete,
     deleteNote: poll.finalizedEventId ? "The event it scheduled stays on the calendar." : undefined,
   };

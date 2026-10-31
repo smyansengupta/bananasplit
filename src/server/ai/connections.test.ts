@@ -73,7 +73,7 @@ describe("which models an organization can use", () => {
       label: "Claude Sonnet 5",
       detail: "Your organization's Claude key",
     });
-    expect(list[1].label).toBe("OpenAI · gpt-4.1-mini");
+    expect(list[1].label).toBe("OpenAI, gpt-4.1-mini");
     expect(JSON.stringify(list)).not.toMatch(/sk-|fp1|fp2/);
     expect(getSecret).not.toHaveBeenCalled();
   });

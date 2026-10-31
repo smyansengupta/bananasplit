@@ -21,7 +21,7 @@ const LOGO = {
 describe("shareMetadata", () => {
   it("names the site in the title and repeats the line on both cards", () => {
     const meta = shareMetadata({ title: "Pricing", description: "What it costs." });
-    expect(meta.title).toBe(`Pricing · ${SITE_NAME}`);
+    expect(meta.title).toBe(`Pricing, ${SITE_NAME}`);
     expect(meta.openGraph).toMatchObject({ title: "Pricing", description: "What it costs." });
     expect(meta.twitter).toMatchObject({ card: "summary_large_image", title: "Pricing" });
     // Pages anyone may find stay findable unless they ask not to be.
@@ -76,7 +76,7 @@ describe("clubShare", () => {
       description: "Open the link to accept.",
     });
     expect(meta.title).toBe(
-      "You've been invited to join Claude Builder Club on Bananasplit · Bananasplit",
+      "You've been invited to join Claude Builder Club on Bananasplit, Bananasplit",
     );
     expect(meta.openGraph).toMatchObject({
       images: [{ url: LOGO.s512, width: 512, height: 512, alt: club.name }],
@@ -131,7 +131,7 @@ describe("mainShare", () => {
   it("sets no openGraph or twitter, so the root's main card is inherited intact", () => {
     const meta = mainShare({ title: "Privacy Policy", description: "How we handle data." });
     expect(meta).toEqual({
-      title: "Privacy Policy · Bananasplit",
+      title: "Privacy Policy, Bananasplit",
       description: "How we handle data.",
     });
     expect(meta).not.toHaveProperty("openGraph");

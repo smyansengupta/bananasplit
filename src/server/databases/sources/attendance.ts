@@ -121,7 +121,7 @@ function map(a: Row, ctx: ViewContext): MappedRow {
       session: {
         t: "link",
         href: sessionHref,
-        label: `${a.event.title} · ${fmtDate(a.event.startsAt, ctx.timezone)}`,
+        label: `${a.event.title}, ${fmtDate(a.event.startsAt, ctx.timezone)}`,
       },
       checkedInAt: dateTimeCell(a.checkedInAt, ctx.timezone),
       method: { t: "badge", v: METHOD_LABELS[a.method] ?? a.method, tone: "outline" },

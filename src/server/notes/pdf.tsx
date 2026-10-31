@@ -574,7 +574,7 @@ function NoteDocument({ note }: { note: NotePdfInput }) {
         <View style={styles.header}>
           <Text style={styles.org}>{toWinAnsi(note.orgName)}</Text>
           <Text style={styles.title}>{toWinAnsi(title)}</Text>
-          <Text style={styles.meta}>{toWinAnsi(meta.join("  ·  "))}</Text>
+          <Text style={styles.meta}>{toWinAnsi(meta.join(", "))}</Text>
           {note.event && (
             <Text style={styles.meta}>
               {toWinAnsi(

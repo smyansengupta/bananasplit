@@ -35,7 +35,7 @@ export interface PollListItem {
   /** An open availability poll takes guests' answers on its public page. */
   takesGuests?: boolean;
   status: { tone: PollStatusTone; label: string };
-  /** "3 options · Anonymous · 12 people voted" */
+  /** "3 options, Anonymous, 12 people voted" */
   meta: string;
   /** Its creator, or an owner/admin (the actions check again). */
   canDelete: boolean;

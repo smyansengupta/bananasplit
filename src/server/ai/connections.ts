@@ -146,7 +146,7 @@ export async function listAiConnections(
     if (picked && vendor) {
       out.push({
         id: "ai-model",
-        label: `${vendor.label.replace(/ \(.*\)$/, "")} · ${picked.model}`,
+        label: `${vendor.label.replace(/ \(.*\)$/, "")}, ${picked.model}`,
         detail: `Your organization's ${vendor.label.replace(/ \(.*\)$/, "")} key`,
         sentTo: `${vendor.label.replace(/ \(.*\)$/, "")} (your organization's account)`,
       });

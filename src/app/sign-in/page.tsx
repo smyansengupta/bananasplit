@@ -42,7 +42,7 @@ export async function generateMetadata({ searchParams }: PageProps<"/sign-in">):
         card: FALLBACK_CARDS.join,
         noIndex: true,
       }),
-      title: "Log in · Bananasplit",
+      title: "Log in, Bananasplit",
     };
   }
   // Everything else inherits the root layout's title, line and main card

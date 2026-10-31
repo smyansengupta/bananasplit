@@ -4,7 +4,7 @@ export type AiConnectionId = "claude" | "ai-model" | "platform" | "standin";
 
 export interface AiConnectionInfo {
   id: AiConnectionId;
-  /** "Claude Sonnet 5", "OpenAI · gpt-4.1-mini". */
+  /** "Claude Sonnet 5", "OpenAI, gpt-4.1-mini". */
   label: string;
   /** "Your club's Claude key", "Bananasplit's Claude key". */
   detail: string;

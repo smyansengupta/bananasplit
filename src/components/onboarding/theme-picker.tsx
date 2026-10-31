@@ -365,7 +365,7 @@ export function ThemePicker({
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold">
               Match my organization{" "}
-              <span className="text-muted-foreground text-xs font-normal">· recommended</span>
+              <span className="text-muted-foreground text-xs font-normal">(recommended)</span>
             </span>
             <span className="text-muted-foreground block text-xs">
               Your organization&apos;s colours, updated whenever an admin changes them.

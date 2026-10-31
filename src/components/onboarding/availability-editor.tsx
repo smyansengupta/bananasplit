@@ -244,7 +244,7 @@ export function AvailabilityEditor({
               <span className="text-foreground font-medium">
                 {DAY_LABELS[hover.day]} {hourLabelLong(hover.hour)}
               </span>
-              {" · "}
+              {", "}
               {hoverIsRule
                 ? "from a regular commitment below"
                 : hoverKind

@@ -117,7 +117,7 @@ function eventItem(e: EventIn, timeZone: string): BringItem {
   const parts = [when(e, timeZone)];
   if (e.rsvp) parts.push(`${e.going} going`);
   if (e.past) parts.push("past");
-  return { id: e.id, kind: "event", title: e.title, meta: parts.join(" · ") };
+  return { id: e.id, kind: "event", title: e.title, meta: parts.join(", ") };
 }
 
 function pollItem(p: PollIn): BringItem {
@@ -126,12 +126,12 @@ function pollItem(p: PollIn): BringItem {
       id: p.id,
       kind: "question",
       title: p.title,
-      meta: `Question poll · ${plural(p.responses, "vote")}`,
+      meta: `Question poll, ${plural(p.responses, "vote")}`,
     };
   }
   const parts = ["Availability poll", plural(p.responses, "response")];
   if (p.finalizedEventId) parts.push("its event comes too");
-  return { id: p.id, kind: "poll", title: p.title, meta: parts.join(" · ") };
+  return { id: p.id, kind: "poll", title: p.title, meta: parts.join(", ") };
 }
 
 function taskItem(t: TaskIn, timeZone: string): BringItem {
@@ -143,7 +143,7 @@ function taskItem(t: TaskIn, timeZone: string): BringItem {
   }
   if (t.subtasks)
     parts.push(`${plural(t.subtasks, "subtask")} come${t.subtasks === 1 ? "s" : ""} too`);
-  return { id: t.id, kind: "task", title: t.title, meta: parts.join(" · ") || "No due date" };
+  return { id: t.id, kind: "task", title: t.title, meta: parts.join(", ") || "No due date" };
 }
 
 function folderItem(f: FolderIn): BringItem {
@@ -176,13 +176,13 @@ function noteItem(n: NoteIn, timeZone: string): BringItem {
     .filter(Boolean)
     .join(" and ");
   if (along) parts.push(`${along} come${n.subpages + n.files === 1 ? "s" : ""} too`);
-  return { id: n.id, kind: "note", title: n.title || "Untitled note", meta: parts.join(" · ") };
+  return { id: n.id, kind: "note", title: n.title || "Untitled note", meta: parts.join(", ") };
 }
 
 function fileItem(f: FileIn): BringItem {
   const parts = [formatStorage(f.sizeBytes)];
   if (f.folder) parts.push(`In ${f.folder}`);
-  return { id: f.id, kind: "file", title: f.name, meta: parts.join(" · ") };
+  return { id: f.id, kind: "file", title: f.name, meta: parts.join(", ") };
 }
 
 /** The checklist's sections, in order; empty ones are left out. */

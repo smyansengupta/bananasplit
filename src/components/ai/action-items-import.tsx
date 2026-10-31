@@ -565,7 +565,7 @@ function ItemRow({
             {members.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
-                {m.title ? ` · ${m.title}` : ""}
+                {m.title ? `, ${m.title}` : ""}
               </option>
             ))}
           </FieldSelect>

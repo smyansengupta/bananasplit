@@ -11,7 +11,7 @@ import { needsProfileSetup } from "@/server/onboarding/profile";
 
 import { ClubBasicsStep } from "./club-basics-step";
 
-export const metadata = { title: "Set up your organization · Bananasplit" };
+export const metadata = { title: "Set up your organization, Bananasplit" };
 
 /**
  * B1 · Club basics (onboarding Flow B, entered from A7's "Create a club").

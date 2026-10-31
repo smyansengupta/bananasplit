@@ -49,7 +49,7 @@ describe("the invite link's preview", () => {
   it("says nothing about an organization when the token is unknown", async () => {
     mocks.getPublicOrgTheme.mockResolvedValue(null);
     const meta = await generateMetadata(props("nope"));
-    expect(meta.title).toBe("Invite · Bananasplit");
+    expect(meta.title).toBe("Invite, Bananasplit");
     expect(meta.openGraph).toBeUndefined();
     expect(meta.robots).toEqual({ index: false, follow: false });
   });
