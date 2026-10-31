@@ -104,7 +104,7 @@ export function SidebarBody({
 /**
  * The desktop sidebar, in three faces (src/components/shell/sidebar-mode-context.tsx):
  *
- * - docked (the default): 248px down the window's edge on the sidebar
+ * - docked (the default): 264px down the window's edge on the sidebar
  *   colour, with a hairline on its right;
  * - rail: lifted 14px off the edges into a 68px glass pill of 40px round
  *   icons; group names become hairlines, the pins fold into one Pin item,
@@ -189,7 +189,7 @@ export function SidebarPanel({
         <div
           aria-hidden="true"
           className={cn(
-            "bg-sidebar border-sidebar-border pointer-events-none absolute inset-y-0 left-0 w-[248px] border-r",
+            "bg-sidebar border-sidebar-border pointer-events-none absolute inset-y-0 left-0 w-[264px] border-r",
             "[transition:opacity_350ms,translate_500ms_var(--ease-ink)] motion-reduce:[transition:none]",
             chrome && "-translate-x-[70px] opacity-0",
           )}
@@ -233,7 +233,7 @@ export function SidebarPanel({
               "[transition:width_500ms_var(--ease-ink),height_500ms_var(--ease-ink),margin_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),border-radius_500ms_var(--ease-ink),background-color_350ms,box-shadow_350ms,color_350ms]",
               "motion-reduce:[transition:none]",
               mode === "docked" &&
-                "text-sidebar-foreground m-0 h-svh w-[248px] rounded-none px-3.5 py-4",
+                "text-sidebar-foreground m-0 h-svh w-[264px] rounded-none px-3.5 py-4",
               mode === "rail" && "glass m-3.5 h-[calc(100svh-28px)] w-[68px] rounded-[36px] p-3.5",
               mode === "peek" &&
                 "glass m-3.5 h-[calc(100svh-28px)] w-64 rounded-[28px] p-3.5 [--glass-strength:93%]",

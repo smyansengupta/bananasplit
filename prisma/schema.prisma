@@ -103,6 +103,7 @@ model User {
   reminderSends          EventReminderSend[]
   upNextDismissals       UpNextDismissal[]
   inboxItemStates        InboxItemState[]
+  memberPresence         MemberPresence[]
   pins                   Pin[]
   recentVisits           RecentVisit[]
   memberPrefs            MemberPrefs[]
@@ -417,6 +418,7 @@ model Organization {
   settings          OrgSettings?
   upNextDismissals  UpNextDismissal[]
   inboxItemStates   InboxItemState[]
+  memberPresence    MemberPresence[]
   integrations      OrgIntegration[]
   slugHistory       OrgSlugHistory[]
   exports           OrgExport[]
@@ -1438,6 +1440,21 @@ model InboxItemState {
 
   @@id([userId, organizationId, itemKey])
   @@index([organizationId, userId])
+}
+
+/// Who's online (the sidebar's foot): the open app marks its member here
+/// about once a minute; a recent lastSeenAt is "online". Members of the org
+/// read every row; each writes only their own (RLS pins userId).
+model MemberPresence {
+  organizationId String
+  userId         String
+  lastSeenAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([organizationId, lastSeenAt])
 }
 
 /// organizationId is denormalized from Event (Phase 7) and kept equal by the

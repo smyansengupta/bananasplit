@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, LogOut, Plus, Settings, ShieldCheck } from "@/components/icons";
+import { Check, ChevronDown, LogOut, Plus, Settings, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useTransition, type ReactNode } from "react";
 
@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -121,17 +122,17 @@ export function OrgSwitcher({
         <button
           type="button"
           className={cn(
-            "focus-glow relative flex min-h-9 w-full min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden py-1.5 text-left outline-none",
+            "focus-glow group/switch relative flex min-h-9 w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden py-1.5 text-left outline-none",
             "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
             rail ? "rounded-full p-0" : "rounded-lg px-2",
             !rail &&
               (chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15"),
             !rail && tone.hover,
           )}
-          aria-label={`${nameOf(active)} menu`}
-          title={nameOf(active)}
+          aria-label={`${nameOf(active)}: switch organization`}
+          title="Switch organization"
         >
-          <span className={cn("flex min-w-0 flex-1 items-center gap-2.5", fadeLabel(rail))}>
+          <span className={cn("flex min-w-0 items-center gap-2.5", fadeLabel(rail))}>
             {(!personal && brand) || (
               <>
                 {mark(active, "size-[22px] rounded-[6px] text-[10px]")}
@@ -141,6 +142,15 @@ export function OrgSwitcher({
               </>
             )}
           </span>
+          {/* The arrow right after the name says it opens: where you switch. */}
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 opacity-60 transition-transform duration-200 group-aria-expanded/switch:rotate-180 motion-reduce:transition-none",
+              fadeLabel(rail),
+            )}
+            strokeWidth={2.25}
+            aria-hidden="true"
+          />
           {/* On the rail, the club becomes a circle tile. */}
           <span
             aria-hidden="true"
@@ -162,6 +172,9 @@ export function OrgSwitcher({
         {/* The workspace plan's menu: your organizations (the one you're in
             ticked), Personal, then what belongs to the space (Admin panel),
             and one way to join or start another. Invites live on People. */}
+        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+          Switch organization
+        </DropdownMenuLabel>
         {clubs.map((org) => (
           <DropdownMenuItem
             key={org.slug}

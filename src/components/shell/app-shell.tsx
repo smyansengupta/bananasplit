@@ -116,7 +116,7 @@ export function AppShell({
   mySidebar?: MySidebar;
   /** Its cookie's name (mySidebarCookieName); without it, edits last until you leave. */
   mySidebarCookie?: string;
-  /** Who's in the organization, at the sidebar's foot (none in Personal). */
+  /** Who's here now, at the sidebar's foot (none in Personal). */
   people?: SidebarPeopleData | null;
   /** Above every page: the club's trial or paused notice (SpaceBanner). */
   banner?: React.ReactNode;
@@ -235,7 +235,7 @@ export function AppShell({
             "[--shell-bottom:calc(env(safe-area-inset-bottom)+1rem)] [--shell-top:4.25rem] md:[--shell-bottom:0px] md:[--shell-top:0.75rem]",
             "motion-reduce:transition-none md:transition-[grid-template-columns] md:duration-500 md:ease-(--ease-ink)",
             mode === "docked"
-              ? "md:grid-cols-[248px_minmax(0,1fr)]"
+              ? "md:grid-cols-[264px_minmax(0,1fr)]"
               : "md:grid-cols-[96px_minmax(0,1fr)]",
           )}
         >
@@ -253,7 +253,7 @@ export function AppShell({
             onToggle={toggleSidebar}
             clubMenu={clubMenu}
             profile={profile}
-            people={people && <SidebarPeople orgSlug={orgSlug} people={people} />}
+            people={people && <SidebarPeople orgId={orgId} orgSlug={orgSlug} people={people} />}
           >
             {nav()}
           </SidebarPanel>
