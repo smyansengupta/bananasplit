@@ -129,7 +129,7 @@ describe("shapePulseData", () => {
   });
 
   it("reads as the guide's issue", () => {
-    expect(pulseHeadline(data)).toBe("6 things done · 32 at the General meeting · 3 new members");
+    expect(pulseHeadline(data)).toBe("6 things done, 32 at the General meeting, 3 new members");
     const rows = pulseRows(data).map((r) => r.title);
     expect(rows).toEqual([
       "Spring kickoff is done",

@@ -127,17 +127,17 @@ function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** The one-line headline: "9 things done · 32 at the General meeting · 4 new members". */
+/** The one-line headline: "9 things done, 32 at the General meeting, 4 new members". */
 export function pulseHeadline(data: PulseIssueData): string {
   const parts = [`${plural(data.doneCount, "thing")} done`];
   const biggest = [...data.events].sort((a, b) => b.checkIns - a.checkIns)[0];
   if (biggest && biggest.checkIns > 0) parts.push(`${biggest.checkIns} at the ${biggest.title}`);
   else if (data.events.length > 0) parts.push(plural(data.events.length, "event") + " held");
   if (data.newMembers.length > 0) parts.push(plural(data.newMembers.length, "new member"));
-  return parts.join(" · ");
+  return parts.join(", ");
 }
 
-/** "Fall Showcase 5 · Recruitment 3 · Organization operations 1" (projects with work done, most first). */
+/** "Fall Showcase 5, Recruitment 3, Organization operations 1" (projects with work done, most first). */
 export function pulseProjectLine(data: PulseIssueData, max = 4): string {
   const done = data.byProject.filter((p) => p.done > 0);
   // Only loose tasks: "No project 2" says nothing the count doesn't.
@@ -146,7 +146,7 @@ export function pulseProjectLine(data: PulseIssueData, max = 4): string {
     .sort((a, b) => b.done - a.done || a.name.localeCompare(b.name))
     .slice(0, max)
     .map((p) => `${p.name} ${p.done}`)
-    .join(" · ");
+    .join(", ");
 }
 
 /** A poll's result in words: "Midnight blue won", or "Tied: A and B", or "No votes yet". */
@@ -159,7 +159,7 @@ export function pollOutcome(poll: PulseIssueData["pollResults"][number]): string
 
 /**
  * Next week's top items, deadlines and events together, soonest first:
- * "Officer meeting Tue · General meeting Thu · SAO application due Fri".
+ * "Officer meeting Tue, General meeting Thu, SAO application due Fri".
  */
 export function pulseNextWeek(data: PulseIssueData, max = 3): { text: string; title: string }[] {
   return [...data.nextWeek]
@@ -233,7 +233,7 @@ export function pulseRows(data: PulseIssueData): PulseRow[] {
   rows.push({
     icon: "calendar",
     title: "Next week",
-    detail: next.length > 0 ? next.map((n) => n.text).join(" · ") : "Nothing on the calendar yet",
+    detail: next.length > 0 ? next.map((n) => n.text).join(", ") : "Nothing on the calendar yet",
   });
   return rows;
 }
