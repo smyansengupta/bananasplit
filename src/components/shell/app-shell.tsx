@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { PaletteSection } from "@/components/command-palette/catalog";
 import { CommandPalette } from "@/components/command-palette/command-palette";
@@ -159,16 +159,20 @@ export function AppShell({
   // Edit sidebar: your order and hidden rows, kept in a cookie as you go.
   const [my, setMy] = useState<MySidebar>(mySidebar);
   const [editing, setEditing] = useState(false);
+  // Every change saves, from the latest state (two quick clicks both count).
+  const changed = useRef(false);
+  useEffect(() => {
+    if (!changed.current || !mySidebarCookie) return;
+    document.cookie = serializeMySidebarCookie(
+      mySidebarCookie,
+      my,
+      window.location.protocol === "https:",
+    );
+  }, [my, mySidebarCookie]);
   const edit = useMemo<SidebarEdit>(() => {
-    const keep = (next: MySidebar) => {
-      setMy(next);
-      if (mySidebarCookie) {
-        document.cookie = serializeMySidebarCookie(
-          mySidebarCookie,
-          next,
-          window.location.protocol === "https:",
-        );
-      }
+    const keep = (change: (prev: MySidebar) => MySidebar) => {
+      changed.current = true;
+      setMy(change);
     };
     return {
       my,
@@ -178,12 +182,12 @@ export function AppShell({
         setEditing(true);
       },
       stopEditing: () => setEditing(false),
-      reorder: (groupIds) => keep(reorderGroup(my, sections, groupIds)),
-      toggle: (id) => keep(toggleHidden(my, id)),
-      toggleGroup: (id) => keep(toggleCollapsed(my, id)),
-      reset: () => keep({ ...EMPTY_MY_SIDEBAR, collapsed: my.collapsed }),
+      reorder: (groupIds) => keep((prev) => reorderGroup(prev, sections, groupIds)),
+      toggle: (id) => keep((prev) => toggleHidden(prev, id)),
+      toggleGroup: (id) => keep((prev) => toggleCollapsed(prev, id)),
+      reset: () => keep((prev) => ({ ...EMPTY_MY_SIDEBAR, collapsed: prev.collapsed })),
     };
-  }, [my, editing, mode, keepMode, mySidebarCookie, sections]);
+  }, [my, editing, mode, keepMode, sections]);
   // The phone's menu follows the same arrangement.
   const mySections = useMemo(() => arrangeSections(sections, my), [sections, my]);
 
