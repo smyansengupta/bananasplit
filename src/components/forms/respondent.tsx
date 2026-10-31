@@ -1089,10 +1089,14 @@ export function QuestionPreview({ q, number }: { q: Question; number: number }) 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
+        {q.type !== "section" && q.type !== "hidden" && (
+          // The question's number with an arrow, as the answer page shows it.
+          <p className="text-primary flex items-center gap-1 font-mono text-[12px] font-medium tabular-nums">
+            {number}
+            <ArrowRight className="size-3" aria-hidden="true" />
+          </p>
+        )}
         <h2 className="display-title text-[24px] leading-snug">
-          {q.type !== "section" && q.type !== "hidden" && (
-            <span className="text-muted-foreground me-2 text-[0.7em] tabular-nums">{number}.</span>
-          )}
           {q.title || "Untitled question"}
           {q.required && q.type !== "section" && <span className="text-muted-foreground"> *</span>}
         </h2>

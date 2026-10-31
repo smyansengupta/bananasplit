@@ -150,6 +150,13 @@ export function FormBuilder({
     });
   }
 
+  // How far along this question is, for the preview's progress line.
+  const asked = questions.filter((q) => q.type !== "section" && q.type !== "hidden");
+  const progressOf = (q: Question) => {
+    const at = asked.findIndex((x) => x.id === q.id);
+    return asked.length ? Math.round(((at < 0 ? 0 : at + 1) / asked.length) * 100) : 0;
+  };
+
   return (
     <div className="grid gap-5 lg:grid-cols-[17rem_minmax(0,1fr)_19rem]">
       <aside className="space-y-2">
@@ -165,7 +172,10 @@ export function FormBuilder({
                   q.id === selected ? "bg-muted" : "hover:bg-muted/60",
                 )}
               >
-                <span className="bg-muted text-muted-foreground grid size-6 shrink-0 place-items-center rounded-[7px] font-mono text-[11px] font-semibold">
+                <span
+                  className="bg-muted text-muted-foreground grid size-6 shrink-0 place-items-center rounded-[7px] font-mono text-[11px] font-semibold"
+                  style={tileStyle(q.type)}
+                >
                   {q.type === "section" ? (
                     "§"
                   ) : q.type === "hidden" ? (
@@ -194,9 +204,15 @@ export function FormBuilder({
         </div>
       </aside>
 
-      <section className="bg-muted/40 edge rounded-card flex min-h-[26rem] items-center p-6 sm:p-10">
+      {/* The answer page as the person will see it: the progress line along
+          the top, the number with its arrow, then the question and its
+          choices, near the top so nothing hides below the fold. */}
+      <section className="bg-muted/40 edge rounded-card p-4 sm:p-6 lg:self-start">
         {current ? (
-          <div className="w-full max-w-xl">
+          <div className="bg-card edge relative mx-auto w-full max-w-xl overflow-hidden rounded-[16px] px-7 pt-9 pb-8 sm:px-10">
+            <div aria-hidden="true" className="bg-muted absolute inset-x-0 top-0 h-1">
+              <div className="bg-primary h-full" style={{ width: `${progressOf(current)}%` }} />
+            </div>
             <QuestionPreview
               key={`${current.id}:${current.type}`}
               q={current}
@@ -227,6 +243,16 @@ export function FormBuilder({
       )}
     </div>
   );
+}
+
+/** A question's number tile, in its family's colour (the same as its type chip). */
+function tileStyle(type: QuestionType): React.CSSProperties | undefined {
+  const color = QUESTION_CHIPS.find((c) => c.type === type)?.color;
+  if (!color) return undefined;
+  return {
+    color: tagVar(color),
+    background: `color-mix(in oklab, ${tagVar(color)} 14%, transparent)`,
+  };
 }
 
 /**
