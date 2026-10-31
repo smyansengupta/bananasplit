@@ -190,7 +190,7 @@ export default async function MeetingsPage({
           ? await db.note.findMany({
               where: { organizationId: org.id, eventId: { in: pastIds }, deletedAt: null },
               orderBy: { updatedAt: "desc" },
-              select: { id: true, eventId: true },
+              select: { id: true, eventId: true, title: true },
             })
           : [];
       // A new meeting of a type starts where the last one was.
