@@ -21,6 +21,7 @@ import {
   type PanelContext,
 } from "@/components/databases/detail-panels";
 import { RowDrawer } from "@/components/databases/row-drawer";
+import { LinkedSection } from "@/components/links/linked-section";
 import {
   SessionFormDialog,
   type SessionFormInitial,
@@ -102,7 +103,7 @@ const VISIBILITY_NOTE: Record<string, string | undefined> = {
 };
 
 type Drawer =
-  | { kind: "session"; title: string; description?: string; node: ReactNode }
+  | { kind: "session"; title: string; description?: string; node: ReactNode; eventId?: string }
   | { kind: "other"; title: string; description?: string; node: ReactNode };
 
 function localInput(date: Date, timezone: string): string {
@@ -347,6 +348,13 @@ export default async function DatabaseViewPage({
       {drawer && (
         <RowDrawer title={drawer.title} description={drawer.description}>
           {drawer.node}
+          {drawer.kind === "session" && drawer.eventId && (
+            <LinkedSection
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              at={{ kind: "event", id: drawer.eventId }}
+            />
+          )}
         </RowDrawer>
       )}
     </div>
@@ -466,6 +474,7 @@ async function loadPage(
           : [];
         drawer = {
           kind: "session",
+          eventId: e.id,
           title: e.title,
           description: fmtDate(e.startsAt, vctx.timezone),
           node: (

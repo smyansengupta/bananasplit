@@ -39,6 +39,7 @@ import {
 } from "@/app/app/[orgSlug]/finance/receipts-actions";
 import type { TransactionWithRelations } from "@/app/app/[orgSlug]/finance/queries";
 import { lastPayMethod, PayMethodChips, rememberPayMethod } from "@/components/finance/pay-method";
+import { LinkedLoader } from "@/components/links/linked-loader";
 import { ReceiptDrop, uploadReceipt, type ReceiptRead } from "@/components/finance/receipt-drop";
 import { KIND_LABELS } from "@/components/finance/transaction-kind-select";
 import { TransactionStatusBadge } from "@/components/finance/transaction-status-badge";
@@ -770,6 +771,8 @@ function SavedTransaction({
       )}
 
       {isFinance && <History transaction={transaction} />}
+
+      <LinkedLoader orgId={orgId} at={{ kind: "transaction", id: transaction.id }} />
 
       <DialogFooter className="flex-row flex-wrap items-center gap-2 pt-1 sm:justify-start">
         {canVoid && (

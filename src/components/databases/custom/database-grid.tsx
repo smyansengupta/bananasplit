@@ -1,5 +1,6 @@
 "use client";
 
+import { LinkedLoader } from "@/components/links/linked-loader";
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
 import {
@@ -231,7 +232,10 @@ export function DatabaseGrid({
   const [exporting, setExporting] = useState(false);
   const [sort, setSort] = useState<Sort>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // ?row= (a link to one row, as the Linked panel makes) opens it.
+  const [expanded, setExpanded] = useState<string | null>(() =>
+    new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get("row"),
+  );
   const [renaming, setRenaming] = useState<FieldDef | null>(null);
   const [editingChoices, setEditingChoices] = useState<FieldDef | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1099,6 +1103,13 @@ export function DatabaseGrid({
                   </div>
                 ))}
               </dl>
+              <div className="px-6 pb-8">
+                <LinkedLoader
+                  orgId={orgId}
+                  orgSlug={orgSlug}
+                  at={{ kind: "record", id: expandedRecord.id }}
+                />
+              </div>
             </>
           )}
         </SheetContent>

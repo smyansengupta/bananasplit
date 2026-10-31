@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({ pathname: "/app/cbc/finance" }));
 
+vi.mock("@/components/links/linked-loader", () => ({ LinkedLoader: () => null }));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useRouter: () => ({ refresh: vi.fn() }),

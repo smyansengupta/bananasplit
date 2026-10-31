@@ -13,6 +13,7 @@ export const LINK_KINDS = [
   "transaction",
   "form",
   "budget",
+  "record",
 ] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
@@ -47,6 +48,7 @@ export const KIND_WORD: Record<LinkKind, string> = {
   transaction: "Finance",
   form: "Form",
   budget: "Budget",
+  record: "Row",
 };
 
 /** The search palette's kinds that can be linked, and what they link as. */

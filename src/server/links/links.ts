@@ -237,6 +237,37 @@ export async function resolveRefs(
       );
     }
   }
+  const recordIds = ids("record");
+  if (recordIds.length) {
+    // A database row: its first field's value names it, in its database.
+    const rows = await db.databaseRecord.findMany({
+      where: { organizationId: orgId, id: { in: recordIds }, deletedAt: null },
+      select: {
+        id: true,
+        values: true,
+        database: {
+          select: {
+            key: true,
+            name: true,
+            fields: { select: { id: true }, orderBy: { sortOrder: "asc" }, take: 3 },
+          },
+        },
+      },
+    });
+    for (const r of rows) {
+      const values = (r.values ?? {}) as Record<string, unknown>;
+      const named = r.database.fields
+        .map((f) => values[f.id])
+        .find((v) => typeof v === "string" && v.trim()) as string | undefined;
+      put(
+        "record",
+        r.id,
+        named?.trim() || "Untitled row",
+        `${base}/databases/${r.database.key}?row=${r.id}`,
+        `in ${r.database.name}`,
+      );
+    }
+  }
   const formIds = ids("form");
   if (formIds.length) {
     const rows = await db.form.findMany({

@@ -12,6 +12,7 @@ import {
   PiggyBank,
   Plus,
   Search,
+  Table,
   Users,
   Wallet,
   X,
@@ -39,6 +40,7 @@ const ICONS: Record<LinkKind, IconComponent> = {
   transaction: Wallet,
   form: ClipboardList,
   budget: PiggyBank,
+  record: Table,
 };
 
 /** A search hit's key is "{kind}:{id}"; the id may itself hold colons. */

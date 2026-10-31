@@ -16,6 +16,7 @@ const a = vi.hoisted(() => ({
   loadRecords: vi.fn(),
 }));
 
+vi.mock("@/components/links/linked-loader", () => ({ LinkedLoader: () => null }));
 vi.mock("@/app/app/[orgSlug]/databases/custom-actions", () => ({
   addChoiceAction: vi.fn(),
   addFieldAction: vi.fn(),

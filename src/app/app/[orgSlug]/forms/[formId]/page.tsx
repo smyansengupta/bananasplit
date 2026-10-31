@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { FormBuilder, FormSettingsPanel, SharePanel } from "@/components/forms/form-editor";
+import { LinkedSection } from "@/components/links/linked-section";
 import { FormResponses } from "@/components/forms/form-responses";
 import { PageHeader } from "@/components/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
@@ -115,6 +116,14 @@ export default async function FormPage({
         />
       )}
       {tab === "share" && <SharePanel link={link} open={open} title={form.title} />}
+      {(tab === "settings" || tab === "share") && (
+        <LinkedSection
+          orgId={org.id}
+          orgSlug={orgSlug}
+          at={{ kind: "form", id: form.id }}
+          className="max-w-2xl"
+        />
+      )}
       {tab === "responses" && (
         <FormResponses
           orgId={org.id}
