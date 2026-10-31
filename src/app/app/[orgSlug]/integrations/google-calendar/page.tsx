@@ -58,7 +58,7 @@ export default async function GoogleCalendarIntegrationPage({
         title="Google Calendar"
         dto={dto}
         secretLabel="token"
-        description="Events you create here are mirrored to your Google calendars, so members can subscribe in their own calendar apps. The portal stays the source of truth."
+        description="Events you create here are mirrored to your Google calendars, so members can subscribe in their own calendar apps. Bananasplit stays the source of truth."
       />
       <div className="space-y-4.5">
         {notice && (

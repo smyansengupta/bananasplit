@@ -324,10 +324,10 @@ function CalendarResult({
         <dt className="text-muted-foreground">Public events go to</dt>
         <dd>{publicName ?? "Nowhere — pick a calendar below"}</dd>
         <dt className="text-muted-foreground">Internal events go to</dt>
-        <dd>{internalName ?? "Nowhere. They stay in the portal only."}</dd>
+        <dd>{internalName ?? "Nowhere. They stay in Bananasplit only."}</dd>
       </dl>
       <p className="text-muted-foreground text-sm">
-        From now on, a session you create here appears on that calendar within a minute. The portal
+        From now on, a session you create here appears on that calendar within a minute. Bananasplit
         only changes the events it mirrors, and reads other events only if you run the import from
         the public calendar.
       </p>

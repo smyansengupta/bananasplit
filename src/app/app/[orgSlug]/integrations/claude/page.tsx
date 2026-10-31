@@ -34,7 +34,7 @@ export default async function ClaudeIntegrationPage({
             name="the Claude key"
             canTest={canWrite}
             canRemove={canRemove}
-            removeCopy="The key is deleted. Imports keep working with the portal's own parser; documents it cannot read will need a new key."
+            removeCopy="The key is deleted. Imports keep working with Bananasplit's own parser; documents it cannot read will need a new key."
           />
         )}
       </div>

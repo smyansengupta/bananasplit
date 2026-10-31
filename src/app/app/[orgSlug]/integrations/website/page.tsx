@@ -27,7 +27,7 @@ export default async function WebsiteIntegrationPage({
         title="Website build hook"
         dto={dto}
         secretLabel="hook"
-        description="When public events change, the portal asks Netlify to rebuild your website so it shows the new schedule (at most once a minute)."
+        description="When public events change, Bananasplit asks Netlify to rebuild your website so it shows the new schedule (at most once a minute)."
       />
       <div className="space-y-4.5">
         <StatusPanel dto={dto} secretLabel="Hook" />

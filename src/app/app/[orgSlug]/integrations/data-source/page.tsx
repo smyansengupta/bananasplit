@@ -29,7 +29,7 @@ export default async function DataSourceIntegrationPage({
         title="Website data (Supabase)"
         dto={dto}
         secretLabel="password"
-        description={`Check-ins, signups and ballots from your website's Supabase database, synced into the Databases and Reports sections. The portal connects with a read-only role that can only call the export functions.${version ? ` Export contract version ${version}.` : ""}`}
+        description={`Check-ins, signups and ballots from your website's Supabase database, synced into the Databases and Reports sections. Bananasplit connects with a read-only role that can only call the export functions.${version ? ` Export contract version ${version}.` : ""}`}
       />
       <div className="space-y-4.5">
         <StatusPanel dto={dto} secretLabel="Password" />

@@ -213,8 +213,8 @@ export function ClaudeForm({
               ? `$${selected.inputPerMTok} in / $${selected.outputPerMTok} out per million
           tokens`
               : "list price"}
-            ), billed to your Anthropic account. Most documents never reach Claude at all: the
-            portal reads them itself, for nothing.
+            ), billed to your Anthropic account. Most documents never reach Claude at all:
+            Bananasplit reads them itself, for nothing.
           </p>
         </div>
         {selected?.serverFallbacks && (
@@ -644,7 +644,7 @@ export function GoogleCalendarPanel({
       {canWrite && dto.hasSecret && dto.status !== "DISCONNECTED" && (
         <SettingsCard
           title="Disconnect"
-          description="Revokes the portal's access at Google. Events stop mirroring until you connect again."
+          description="Revokes Bananasplit's access at Google. Events stop mirroring until you connect again."
           status={disconnect.feedback && <FeedbackLine feedback={disconnect.feedback} />}
           footer={
             <Button
