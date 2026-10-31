@@ -22,7 +22,8 @@ import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
 import { clubIcons } from "@/lib/metadata/share";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { sidebarCookieName } from "@/lib/sidebar-mode";
-import { getSidebarMode } from "@/lib/sidebar-mode-cookie";
+import { mySidebarCookieName } from "@/lib/nav/my-sidebar";
+import { getMySidebar, getSidebarMode } from "@/lib/sidebar-mode-cookie";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
@@ -171,6 +172,25 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   ).catch(() => null);
   // Docked or rail, as the member left it, so the first paint is right.
   const sidebarMode = await getSidebarMode(ctx.user.id);
+  // Your own order and hidden rows, on top of the organization's sidebar.
+  const mySidebar = await getMySidebar(ctx.user.id, ctx.organization.id);
+  // Who's in the organization, at the sidebar's foot (not in Personal).
+  const people =
+    ctx.organization.kind === "PERSONAL"
+      ? null
+      : await withOrgTx(ctx.organization.id, async ({ db }) => {
+          const where = { organizationId: ctx.organization.id };
+          const [count, recent] = await Promise.all([
+            db.membership.count({ where }),
+            db.membership.findMany({
+              where: { ...where, userId: { not: ctx.user.id } },
+              orderBy: { joinedAt: "desc" },
+              take: 3,
+              select: { user: { select: { id: true, name: true, image: true, avatar: true } } },
+            }),
+          ]);
+          return { count, faces: recent.map((m) => m.user) };
+        }).catch(() => null);
 
   return (
     <OrgThemeRoot key={ctx.organization.id} theme={theme}>
@@ -206,6 +226,9 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         canCreateEvents={can({ role: ctx.role }, "events.write")}
         sidebarMode={sidebarMode}
         sidebarCookie={sidebarCookieName(ctx.user.id)}
+        mySidebar={mySidebar}
+        mySidebarCookie={mySidebarCookieName(ctx.user.id, ctx.organization.id)}
+        people={people}
         taskViews={spaceIncludes(ctx.organization, "taskViews")}
         teamwork={spaceIncludes(ctx.organization, "teamwork")}
         banner={

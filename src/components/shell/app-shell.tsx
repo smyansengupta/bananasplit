@@ -12,9 +12,11 @@ import { createActions, type NavSection } from "@/components/shell/nav-config";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { VisitTracker } from "@/components/shell/pin-button";
 import { SectionGate } from "@/components/shell/section-gate";
+import { SidebarEditProvider, type SidebarEdit } from "@/components/shell/sidebar-edit-context";
 import { type SidebarState } from "@/components/shell/sidebar-mode-context";
 import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { SidebarPanel } from "@/components/shell/sidebar-panel";
+import { SidebarPeople, type SidebarPeopleData } from "@/components/shell/sidebar-people";
 import { SidebarTools } from "@/components/shell/sidebar-tools";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
@@ -23,6 +25,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { ContextActionsHost } from "@/components/context-actions";
 import { PendingLinkWatcher } from "@/components/links/pending-link";
 import type { Role } from "@/generated/prisma/enums";
+import {
+  arrangeSections,
+  EMPTY_MY_SIDEBAR,
+  reorderGroup,
+  serializeMySidebarCookie,
+  toggleHidden,
+  type MySidebar,
+} from "@/lib/nav/my-sidebar";
 import { serializeSidebarCookie, type SidebarMode } from "@/lib/sidebar-mode";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +74,9 @@ export function AppShell({
   teamwork = true,
   sidebarMode = "docked",
   sidebarCookie,
+  mySidebar = EMPTY_MY_SIDEBAR,
+  mySidebarCookie,
+  people = null,
   banner,
   children,
 }: {
@@ -99,6 +112,12 @@ export function AppShell({
   sidebarMode?: SidebarMode;
   /** The member's sidebar cookie name (sidebarCookieName); without it, the mode isn't kept. */
   sidebarCookie?: string;
+  /** Your own order and hidden rows in this organization (src/lib/nav/my-sidebar.ts). */
+  mySidebar?: MySidebar;
+  /** Its cookie's name (mySidebarCookieName); without it, edits last until you leave. */
+  mySidebarCookie?: string;
+  /** Who's in the organization, at the sidebar's foot (none in Personal). */
+  people?: SidebarPeopleData | null;
   /** Above every page: the club's trial or paused notice (SpaceBanner). */
   banner?: React.ReactNode;
   children: React.ReactNode;
@@ -135,6 +154,36 @@ export function AppShell({
     () => keepMode(mode === "docked" ? "rail" : "docked"),
     [keepMode, mode],
   );
+
+  // Edit sidebar: your order and hidden rows, kept in a cookie as you go.
+  const [my, setMy] = useState<MySidebar>(mySidebar);
+  const [editing, setEditing] = useState(false);
+  const edit = useMemo<SidebarEdit>(() => {
+    const keep = (next: MySidebar) => {
+      setMy(next);
+      if (mySidebarCookie) {
+        document.cookie = serializeMySidebarCookie(
+          mySidebarCookie,
+          next,
+          window.location.protocol === "https:",
+        );
+      }
+    };
+    return {
+      my,
+      editing,
+      startEditing: () => {
+        if (mode !== "docked") keepMode("docked");
+        setEditing(true);
+      },
+      stopEditing: () => setEditing(false),
+      reorder: (groupIds) => keep(reorderGroup(my, sections, groupIds)),
+      toggle: (id) => keep(toggleHidden(my, id)),
+      reset: () => keep(EMPTY_MY_SIDEBAR),
+    };
+  }, [my, editing, mode, keepMode, mySidebarCookie, sections]);
+  // The phone's menu follows the same arrangement.
+  const mySections = useMemo(() => arrangeSections(sections, my), [sections, my]);
 
   const clubMenu = (
     <OrgSwitcher
@@ -178,87 +227,90 @@ export function AppShell({
   }, []);
 
   return (
-    <PinsProvider orgId={orgId} orgSlug={orgSlug} pinnedHrefs={pins.map((p) => p.href)}>
-      <div
-        className={cn(
-          "corona isolate grid min-h-svh grid-cols-1",
-          "[--shell-bottom:calc(env(safe-area-inset-bottom)+1rem)] [--shell-top:4.25rem] md:[--shell-bottom:0px] md:[--shell-top:0.75rem]",
-          "motion-reduce:transition-none md:transition-[grid-template-columns] md:duration-500 md:ease-(--ease-ink)",
-          mode === "docked"
-            ? "md:grid-cols-[248px_minmax(0,1fr)]"
-            : "md:grid-cols-[96px_minmax(0,1fr)]",
-        )}
-      >
-        <a
-          href="#main-content"
-          className="bg-background text-foreground focus-glow sr-only rounded-full px-4 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50"
+    <SidebarEditProvider value={edit}>
+      <PinsProvider orgId={orgId} orgSlug={orgSlug} pinnedHrefs={pins.map((p) => p.href)}>
+        <div
+          className={cn(
+            "corona isolate grid min-h-svh grid-cols-1",
+            "[--shell-bottom:calc(env(safe-area-inset-bottom)+1rem)] [--shell-top:4.25rem] md:[--shell-bottom:0px] md:[--shell-top:0.75rem]",
+            "motion-reduce:transition-none md:transition-[grid-template-columns] md:duration-500 md:ease-(--ease-ink)",
+            mode === "docked"
+              ? "md:grid-cols-[248px_minmax(0,1fr)]"
+              : "md:grid-cols-[96px_minmax(0,1fr)]",
+          )}
         >
-          Skip to content
-        </a>
-        <GlassRefraction />
-
-        <SidebarPanel
-          mode={mode}
-          setMode={setMode}
-          onToggle={toggleSidebar}
-          clubMenu={clubMenu}
-          profile={profile}
-        >
-          {nav()}
-        </SidebarPanel>
-
-        <div className="flex min-w-0 flex-col">
-          <ToolCapsule
-            menuButton={
-              <NavMenu
-                sections={sections}
-                clubMenu={clubMenu}
-                user={user}
-                counts={counts}
-                orgId={orgId}
-                orgSlug={orgSlug}
-                createActions={creatable}
-                onSearch={() => setCommandOpen(true)}
-              />
-            }
-          />
-          <main
-            id="main-content"
-            className="reveal-page relative isolate min-w-0 flex-1 py-4 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] max-md:overflow-x-clip md:p-6"
+          <a
+            href="#main-content"
+            className="bg-background text-foreground focus-glow sr-only rounded-full px-4 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50"
           >
-            {banner}
-            <SectionGate orgSlug={orgSlug} sectionPaths={sectionPaths} isAdmin={isAdmin}>
-              {children}
-            </SectionGate>
-          </main>
-          {/* Room under the last of the page, clear of the home indicator. */}
-          <div aria-hidden="true" className="h-(--shell-bottom) shrink-0 md:hidden" />
-        </div>
+            Skip to content
+          </a>
+          <GlassRefraction />
 
-        <VisitTracker orgId={orgId} />
-        <PendingLinkWatcher orgId={orgId} orgSlug={orgSlug} />
-        <KeyboardShortcuts
-          orgSlug={orgSlug}
-          links={shortcutLinks}
-          isAdmin={isAdmin}
-          taskViews={taskViews}
-          teamwork={teamwork}
-          onToggleSidebar={toggleSidebar}
-        />
-        <CommandPalette
-          key={command.session}
-          orgId={orgId}
-          orgSlug={orgSlug}
-          role={role}
-          sections={sectionPaths}
-          orgs={orgs}
-          open={command.open}
-          onOpenChange={setCommandOpen}
-        />
-        <Toaster />
-        {/* One listener for every right-click menu in the app. */}
-        <ContextActionsHost />
-      </div>
-    </PinsProvider>
+          <SidebarPanel
+            mode={mode}
+            setMode={setMode}
+            onToggle={toggleSidebar}
+            clubMenu={clubMenu}
+            profile={profile}
+            people={people && <SidebarPeople orgSlug={orgSlug} people={people} />}
+          >
+            {nav()}
+          </SidebarPanel>
+
+          <div className="flex min-w-0 flex-col">
+            <ToolCapsule
+              menuButton={
+                <NavMenu
+                  sections={mySections}
+                  clubMenu={clubMenu}
+                  user={user}
+                  counts={counts}
+                  orgId={orgId}
+                  orgSlug={orgSlug}
+                  createActions={creatable}
+                  onSearch={() => setCommandOpen(true)}
+                />
+              }
+            />
+            <main
+              id="main-content"
+              className="reveal-page relative isolate min-w-0 flex-1 py-4 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] max-md:overflow-x-clip md:p-6"
+            >
+              {banner}
+              <SectionGate orgSlug={orgSlug} sectionPaths={sectionPaths} isAdmin={isAdmin}>
+                {children}
+              </SectionGate>
+            </main>
+            {/* Room under the last of the page, clear of the home indicator. */}
+            <div aria-hidden="true" className="h-(--shell-bottom) shrink-0 md:hidden" />
+          </div>
+
+          <VisitTracker orgId={orgId} />
+          <PendingLinkWatcher orgId={orgId} orgSlug={orgSlug} />
+          <KeyboardShortcuts
+            orgSlug={orgSlug}
+            links={shortcutLinks}
+            isAdmin={isAdmin}
+            taskViews={taskViews}
+            teamwork={teamwork}
+            onToggleSidebar={toggleSidebar}
+          />
+          <CommandPalette
+            key={command.session}
+            orgId={orgId}
+            orgSlug={orgSlug}
+            role={role}
+            sections={sectionPaths}
+            orgs={orgs}
+            open={command.open}
+            onOpenChange={setCommandOpen}
+          />
+          <Toaster />
+          {/* One listener for every right-click menu in the app. */}
+          <ContextActionsHost />
+        </div>
+      </PinsProvider>
+    </SidebarEditProvider>
   );
 }

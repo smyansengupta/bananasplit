@@ -53,6 +53,7 @@ function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => v
 export function SidebarBody({
   clubMenu,
   profile,
+  people,
   children,
   toggle,
   rail = false,
@@ -62,6 +63,8 @@ export function SidebarBody({
   clubMenu: React.ReactNode;
   /** You: the user menu beside the organization menu (UserMenu variant="corner"). */
   profile?: React.ReactNode;
+  /** Who's in the organization, over the logo (SidebarPeople). */
+  people?: React.ReactNode;
   children: React.ReactNode;
   toggle?: React.ReactNode;
   rail?: boolean;
@@ -75,13 +78,14 @@ export function SidebarBody({
       <div
         className={cn(
           "flex shrink-0 pb-3",
-          rail ? "flex-col items-start gap-3" : "items-center gap-1.5",
+          rail ? "flex-col items-start gap-3" : "items-center gap-1",
         )}
       >
         <div className="min-w-0 flex-1">{clubMenu}</div>
         {profile && <div className={cn("shrink-0", rail && "pl-0.5")}>{profile}</div>}
       </div>
       {children}
+      {people}
       {/* The Bananasplit mark, always last. */}
       <div
         className={cn(
@@ -121,6 +125,7 @@ export function SidebarPanel({
   onToggle,
   clubMenu,
   profile,
+  people,
   children,
 }: {
   mode: SidebarState;
@@ -128,6 +133,7 @@ export function SidebarPanel({
   onToggle: () => void;
   clubMenu: React.ReactNode;
   profile?: React.ReactNode;
+  people?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const mod = useModKey();
@@ -236,6 +242,7 @@ export function SidebarPanel({
             <SidebarBody
               clubMenu={clubMenu}
               profile={profile}
+              people={people}
               rail={rail}
               chrome={chrome}
               toggle={

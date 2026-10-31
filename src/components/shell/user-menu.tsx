@@ -1,12 +1,13 @@
 "use client";
 
-import { LogOut, Monitor, Moon, Sun, UserRound } from "@/components/icons";
+import { LogOut, Monitor, Moon, SlidersHorizontal, Sun, UserRound } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 
 import { capsuleButtonClass } from "@/components/shell/capsule";
+import { useSidebarEdit } from "@/components/shell/sidebar-edit-context";
 import { fadeLabel, surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
 import type { ShellUser } from "@/components/shell/types";
 import {
@@ -58,6 +59,8 @@ export function UserMenu({
   const tone = surfaceTone(chrome);
   const row = variant === "row";
   const corner = variant === "corner";
+  // Edit sidebar lives in your menu beside the sidebar (not the phone's).
+  const edit = useSidebarEdit();
 
   return (
     <DropdownMenu onOpenChange={row || corner ? holdPeek : undefined}>
@@ -67,7 +70,7 @@ export function UserMenu({
             type="button"
             title={displayName}
             className={cn(
-              "focus-glow grid size-9 shrink-0 place-items-center rounded-full outline-none",
+              "focus-glow grid size-8 shrink-0 place-items-center rounded-full outline-none",
               "transition-[background-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
               tone.hover,
               chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15",
@@ -128,6 +131,12 @@ export function UserMenu({
               </Link>
             </DropdownMenuItem>
           </>
+        )}
+        {corner && edit && (
+          <DropdownMenuItem onSelect={edit.startEditing}>
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+            Edit sidebar
+          </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">

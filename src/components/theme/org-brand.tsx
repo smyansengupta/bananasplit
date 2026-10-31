@@ -41,7 +41,8 @@ export function OrgBrand({
   const markClass = compact
     ? "size-[22px] rounded-[6px] text-[10px]"
     : "size-8 rounded-md text-[0.8rem]";
-  const nameClass = compact ? "text-[13.5px] font-semibold" : "heading text-[0.95rem]";
+  // In the sidebar the name keeps to one line, ending in "…" when long.
+  const nameClass = compact ? "truncate text-[13.5px] font-semibold" : "heading text-[0.95rem]";
   const mark = orgLogoSource(logo, 32);
 
   let content: React.ReactNode;

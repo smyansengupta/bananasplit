@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronsUpDown, LogOut, Plus, Settings, ShieldCheck } from "@/components/icons";
+import { Check, LogOut, Plus, Settings, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useTransition, type ReactNode } from "react";
 
@@ -129,21 +129,18 @@ export function OrgSwitcher({
             !rail && tone.hover,
           )}
           aria-label={`${nameOf(active)} menu`}
+          title={nameOf(active)}
         >
           <span className={cn("flex min-w-0 flex-1 items-center gap-2.5", fadeLabel(rail))}>
             {(!personal && brand) || (
               <>
                 {mark(active, "size-[22px] rounded-[6px] text-[10px]")}
-                <span className="min-w-0 text-[13.5px] leading-tight font-semibold break-words">
+                <span className="min-w-0 truncate text-[13.5px] leading-tight font-semibold">
                   {nameOf(active)}
                 </span>
               </>
             )}
           </span>
-          <ChevronsUpDown
-            className={cn("size-4 shrink-0 opacity-50", fadeLabel(rail))}
-            aria-hidden="true"
-          />
           {/* On the rail, the club becomes a circle tile. */}
           <span
             aria-hidden="true"

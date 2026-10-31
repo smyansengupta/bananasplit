@@ -38,8 +38,11 @@ import {
 import { usePinDrop } from "@/components/pins/pin-dnd";
 import { usePins } from "@/components/pins/pins-context";
 import { PinButton, usePinTarget } from "@/components/shell/pin-button";
+import { useSidebarEdit } from "@/components/shell/sidebar-edit-context";
+import { SidebarEditHeader, SidebarEditRows } from "@/components/shell/sidebar-edit-rows";
 import { PIN_ICONS } from "@/components/shell/pin-icons";
 import { fadeLabel, surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
+import { arrangeSections, EMPTY_MY_SIDEBAR } from "@/lib/nav/my-sidebar";
 import { canonicalHref } from "@/lib/pins/pages";
 import type { PinKind } from "@/lib/pins/pages";
 import { cn } from "@/lib/utils";
@@ -426,39 +429,49 @@ export function SidebarNav({
   const search = useSearchParams().toString();
   const { rail } = useSidebarMode();
   const all = sections.flatMap((s) => s.items);
+  // Your own order and hidden rows (Edit sidebar), on top of the organization's.
+  const edit = useSidebarEdit();
+  const editing = Boolean(edit?.editing) && !rail;
+  const arranged = arrangeSections(sections, edit?.my ?? EMPTY_MY_SIDEBAR, {
+    keepHidden: editing,
+  });
 
   return (
     <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col">
-      {tools}
+      {editing ? <SidebarEditHeader /> : tools}
       <div
         className={cn(
           "-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-1 pb-1",
           rail && "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         )}
       >
-        {sections.map((section, i) => (
-          <div key={section.id} className="flex flex-col gap-0.5">
-            {section.label ? <GroupLabel label={section.label} /> : i > 0 && <GroupGap />}
-            {section.items.map((link) => (
-              <NavItemLink
-                key={link.id}
-                link={link}
-                pathname={pathname}
-                search={search}
-                all={all}
-                count={counts[link.id] ?? 0}
-                onNavigate={onNavigate}
-              />
-            ))}
-          </div>
-        ))}
-        <PinnedList
-          pins={pins}
-          orgId={orgId}
-          pathname={pathname}
-          search={search}
-          onNavigate={onNavigate}
-        />
+        {editing && <SidebarEditRows sections={arranged} />}
+        {!editing &&
+          arranged.map((section, i) => (
+            <div key={section.id} className="flex flex-col gap-0.5">
+              {section.label ? <GroupLabel label={section.label} /> : i > 0 && <GroupGap />}
+              {section.items.map((link) => (
+                <NavItemLink
+                  key={link.id}
+                  link={link}
+                  pathname={pathname}
+                  search={search}
+                  all={all}
+                  count={counts[link.id] ?? 0}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
+          ))}
+        {!editing && (
+          <PinnedList
+            pins={pins}
+            orgId={orgId}
+            pathname={pathname}
+            search={search}
+            onNavigate={onNavigate}
+          />
+        )}
       </div>
       {/* Personal and the clubs: at the foot of the sidebar, never pushed
           under the pins (they scroll on their own when there are many). */}
