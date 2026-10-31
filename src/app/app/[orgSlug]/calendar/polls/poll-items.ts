@@ -9,7 +9,7 @@ import type { getOrgPolls } from "../queries";
 
 /**
  * The rows of the two poll lists (Polls: questions; Find a time:
- * availability polls), labelled on the server in the poll's or the club's
+ * availability polls), labelled on the server in the poll's or the organization's
  * zone.
  */
 

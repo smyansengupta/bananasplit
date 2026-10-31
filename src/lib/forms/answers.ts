@@ -120,6 +120,7 @@ export function answerProblem(
     }
     case "file":
     case "image":
+    case "signature":
     case "member":
       return typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? null : "Try again.";
     case "section":

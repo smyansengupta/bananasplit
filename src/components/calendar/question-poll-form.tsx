@@ -215,7 +215,10 @@ export function QuestionPollForm({
     }
     setError(null);
     startTransition(async () => {
-      if (who === "anyone") {
+      // A real form (its own database, one row per vote) whenever this
+      // person can make one; an anonymous members' poll stays on the poll
+      // engine, whose own rules keep every vote private.
+      if (who === "anyone" || (canMakeForms && !anonymous)) {
         const labels = options.map((o) => cleanText(o.text)).filter(Boolean);
         const made = await createFormAction(orgId, {
           kind: "QUICK_POLL",
@@ -240,6 +243,7 @@ export function QuestionPollForm({
           anonymous,
           hideResultsUntilClosed: hideResults,
           closesAt: closesAt ? closesAt.toISOString() : null,
+          ...(who === "members" ? { access: "MEMBERS" as const, onePerPerson: true } : {}),
         });
         await copyLink(`${window.location.origin}/f/${made.data.slug}`);
         router.push(`/app/${orgSlug}/forms/${made.data.id}?tab=share`);

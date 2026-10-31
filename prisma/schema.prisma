@@ -1523,6 +1523,8 @@ model Poll {
   /// Voters see only their own choice until it closes (the creator and admins see counts).
   hideResultsUntilClosed Boolean   @default(false)
   closesAt               DateTime?
+  /// The form it was moved into (Forms); its page opens the form.
+  formId                 String?
   /// Set when someone closes it by hand; cleared on reopen.
   closedAt               DateTime?
   createdById            String
@@ -1638,6 +1640,12 @@ model Form {
   review                 Boolean    @default(false)
   /// The Files folder uploads go into.
   folderId               String?
+  /// When it went live; null while it's a draft (nobody can answer a draft).
+  publishedAt            DateTime?
+  /// How the answer page looks: {accent, cover, button, thanks} (lib/forms/design.ts).
+  design                 Json       @default("{}")
+  /// Email the person a copy of their answers when they gave an email.
+  receipt                Boolean    @default(false)
   createdById            String
   deletedAt              DateTime?
   createdAt              DateTime   @default(now())

@@ -41,6 +41,10 @@ export interface PublicForm {
   open: boolean;
   /** Is this person a member (for members-only forms and the member picker)? */
   member: boolean;
+  /** An owner or admin of the organization: may preview a draft. */
+  manager: boolean;
+  /** Not published yet: nobody can answer it. */
+  draft: boolean;
   /** Have they answered already (one each)? */
   answered: boolean;
   /** Members, for a member question: id and name. */
@@ -65,11 +69,14 @@ export async function loadPublicForm(
     });
     if (!org) return null;
     const responses = await countResponses(db, form);
-    const member = viewerId
-      ? (await db.membership.count({
+    const membership = viewerId
+      ? await db.membership.findFirst({
           where: { organizationId: form.organizationId, userId: viewerId },
-        })) > 0
-      : false;
+          select: { role: true },
+        })
+      : null;
+    const member = Boolean(membership);
+    const manager = membership?.role === "OWNER" || membership?.role === "ADMIN";
     const answered =
       viewerId && form.onePerPerson
         ? (await db.formResponse.count({ where: { formId: form.id, userId: viewerId } })) > 0
@@ -92,6 +99,8 @@ export async function loadPublicForm(
       responses,
       open: isFormOpen(form, responses),
       member,
+      manager,
+      draft: form.publishedAt === null,
       answered,
       members,
     };
@@ -252,7 +261,10 @@ export async function submitResponse(
         input = raw.map((id, i) => `${i + 1}. ${label.get(id) ?? id}`).join("\n");
       }
       if (q.type === "yesno") input = raw === true;
-      if ((q.type === "file" || q.type === "image") && typeof raw === "string") {
+      if (
+        (q.type === "file" || q.type === "image" || q.type === "signature") &&
+        typeof raw === "string"
+      ) {
         const file = await db.orgFile.findFirst({
           where: {
             id: raw,

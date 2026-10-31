@@ -8,10 +8,10 @@ import { FORM_SELECT, isFormOpen } from "./forms";
 import type { FormTarget, Respondent } from "./public";
 
 /**
- * A file sent with a form answer (a resume, a photo): stored in the club's
+ * A file sent with a form answer (a resume, a photo): stored in the organization's
  * Files, in the folder the form was made with, credited to the form's
  * creator (the respondent may have no account), and counted toward the
- * club's storage like any upload: confirmFits re-checks the counter in the
+ * organization's storage like any upload: confirmFits re-checks the counter in the
  * row's own transaction and refuses (rolling back) when the space is full.
  * The answer holds the file's id; submitting turns it into a link.
  */
@@ -54,7 +54,10 @@ export async function storeFormUpload(
   if (!form.member) throw new FormUploadError("Only members can answer this form.", 403);
   if (!form.row.folderId) throw new FormUploadError("This form can't take files.", 409);
   const question = readQuestions(form.row.questions).find((q) => q.id === questionId);
-  if (!question || (question.type !== "file" && question.type !== "image"))
+  if (
+    !question ||
+    (question.type !== "file" && question.type !== "image" && question.type !== "signature")
+  )
     throw new FormUploadError("That question doesn't take a file.");
 
   const contentType = sniffNoteFile(file.bytes, file.filename);
@@ -63,7 +66,10 @@ export async function storeFormUpload(
       "That kind of file isn't accepted. Try a PDF, a document or an image.",
       415,
     );
-  if (question.type === "image" && !contentType.startsWith("image/"))
+  if (
+    (question.type === "image" || question.type === "signature") &&
+    !contentType.startsWith("image/")
+  )
     throw new FormUploadError("Send a picture: JPEG, PNG or WebP.", 415);
 
   const stored = await putBlob("files", target.organizationId, [randomKeyId()], file.bytes, {
@@ -95,7 +101,7 @@ export async function storeFormUpload(
     await deleteBlobs([stored.key]).catch(() => undefined);
     if (error instanceof UploadRefusedError)
       throw new FormUploadError(
-        "This club is out of storage, so files can't be sent right now.",
+        "This organization is out of storage, so files can't be sent right now.",
         413,
       );
     throw error;

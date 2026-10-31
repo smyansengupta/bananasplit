@@ -15,6 +15,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formResults, submitForm } from "@/app/f/[slug]/actions";
 import { checkOne, OTHER, type Answer } from "@/lib/forms/answers";
 import {
+  accentVar,
+  buttonWord,
+  DEFAULT_DESIGN,
+  thanksLine,
+  type FormDesign,
+} from "@/lib/forms/design";
+import {
   firstQuestionId,
   hasOptions,
   nextQuestionId,
@@ -43,6 +50,9 @@ export function Respondent({
   hidden,
   members,
   showResults,
+  design = DEFAULT_DESIGN,
+  preview = false,
+  allowAnother = false,
 }: {
   slug: string;
   title: string;
@@ -52,6 +62,12 @@ export function Respondent({
   hidden: Record<string, string>;
   members: { id: string; name: string }[];
   showResults: boolean;
+  /** How the page looks (the form's Design tab). */
+  design?: FormDesign;
+  /** An owner or admin trying it out: nothing is sent. */
+  preview?: boolean;
+  /** "Submit another" on the thank-you screen (forms that aren't one each). */
+  allowAnother?: boolean;
 }) {
   const visible = useMemo(() => questions.filter((q) => q.type !== "hidden"), [questions]);
   const [stage, setStage] = useState<"intro" | "ask" | "done">(
@@ -96,6 +112,11 @@ export function Respondent({
   }, []);
 
   async function finish(final: Record<string, Answer>) {
+    if (preview) {
+      // A preview never sends: it shows what the end looks like.
+      setStage("done");
+      return;
+    }
     setSending(true);
     setError(null);
     const result = await submitForm(slug, {
@@ -207,8 +228,51 @@ export function Respondent({
     }
   }
 
+  /** Starts again from the top, for the next person (or the next entry). */
+  function again() {
+    setAnswers({ ...hidden });
+    setOther({});
+    setResults(null);
+    setError(null);
+    const first = firstQuestionId(questions);
+    setTrail(first ? [first] : []);
+    setStage(description || visible.length > 1 ? "intro" : "ask");
+  }
+
+  const { firstName, keyAnswer } = useMemo(
+    () => (stage === "done" ? doneFacts(questions, answers) : { firstName: null, keyAnswer: null }),
+    [stage, questions, answers],
+  );
+  const accent = design.accent ? accentVar(design.accent) : null;
+
   return (
-    <div className="relative flex flex-1 flex-col">
+    <div
+      className="relative flex flex-1 flex-col"
+      style={
+        accent
+          ? ({
+              ["--primary" as string]: accent,
+              ["--primary-foreground" as string]: `oklch(from ${accent} clamp(0, (0.62 - l) * 1000, 1) 0 0)`,
+            } as React.CSSProperties)
+          : undefined
+      }
+    >
+      {design.cover === "wash" && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64"
+          style={{
+            background:
+              "linear-gradient(to bottom, color-mix(in oklab, var(--primary) 16%, transparent), transparent)",
+          }}
+        />
+      )}
+      {design.cover === "band" && <div aria-hidden="true" className="bg-primary h-20 w-full" />}
+      {preview && (
+        <p className="bg-muted text-muted-foreground px-4 py-2 text-center text-[13px] font-medium">
+          Preview. Answers aren&apos;t saved.
+        </p>
+      )}
       <div aria-hidden="true" className="bg-muted fixed inset-x-0 top-0 z-10 h-1">
         <div
           className="bg-primary h-full transition-[width] duration-300 motion-reduce:transition-none"
@@ -243,9 +307,15 @@ export function Respondent({
           </div>
         ) : stage === "done" ? (
           <div className="space-y-5" aria-live="polite">
-            <h1 className="display-title text-[34px] leading-tight">Thanks. It&apos;s in.</h1>
-            <p className="text-muted-foreground text-[15px]">{orgName} has your answers.</p>
+            <h1 className="display-title text-[34px] leading-tight">
+              {thanksLine(design, firstName)}
+            </h1>
+            <p className="text-muted-foreground text-[15px]">
+              {keyAnswer ? `You picked ${keyAnswer}. ` : ""}
+              {orgName} has your answers.
+            </p>
             {results && <Results results={results} />}
+            {(allowAnother || preview) && <Go onClick={again} label="Submit another" autoFocus />}
           </div>
         ) : current ? (
           <div
@@ -295,7 +365,10 @@ export function Respondent({
             <div className="flex items-center gap-3">
               <Go
                 onClick={() => next()}
-                label={nextQuestionId(questions, current.id, answers[current.id]) ? "OK" : "Send"}
+                label={buttonWord(
+                  design,
+                  !nextQuestionId(questions, current.id, answers[current.id]),
+                )}
                 pending={sending}
               />
               <span className="text-muted-foreground text-[12px] max-sm:hidden">
@@ -309,7 +382,8 @@ export function Respondent({
       </div>
 
       {stage === "ask" && current && (
-        <div className="fixed right-4 bottom-4 flex overflow-hidden rounded-full shadow-[var(--edge-highlight)]">
+        // In the page's corner, above the footer line rather than over it.
+        <div className="absolute right-4 bottom-4 flex overflow-hidden rounded-full shadow-[var(--edge-highlight)] sm:right-8">
           <button
             type="button"
             onClick={back}
@@ -353,7 +427,7 @@ function Go({
     >
       {pending ? (
         <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-      ) : label === "Send" ? (
+      ) : label === "Submit" ? (
         <Check className="size-4" aria-hidden="true" />
       ) : (
         <ArrowRight className="size-4" aria-hidden="true" />
@@ -562,6 +636,10 @@ function Field({
     case "file":
     case "image":
       return <UploadField q={q} value={value} onChange={onChange} slug={slug} onError={onError} />;
+    case "signature":
+      return (
+        <SignatureField q={q} value={value} onChange={onChange} slug={slug} onError={onError} />
+      );
     case "member":
       return <MemberField q={q} value={value} onChange={onChange} members={members} />;
     case "hidden":
@@ -675,6 +753,156 @@ function Ranking({
   );
 }
 
+/** Sends one file for question `questionId`; its stored id, or an error to show. */
+async function uploadAnswer(
+  slug: string,
+  questionId: string,
+  file: File,
+): Promise<{ id: string; name: string } | { error: string }> {
+  const body = new FormData();
+  body.set("file", file);
+  body.set("questionId", questionId);
+  try {
+    const res = await fetch(`/f/${slug}/upload`, { method: "POST", body });
+    const data = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      name?: string;
+      error?: string;
+    };
+    if (!res.ok || !data.id) return { error: data.error ?? "That didn't upload. Try again." };
+    return { id: data.id, name: data.name ?? file.name };
+  } catch {
+    return { error: "That didn't upload. Check your connection and try again." };
+  }
+}
+
+/**
+ * A signature, drawn with a finger, a pen or the mouse. "Use this" saves it
+ * to the organization's Files as a picture, the same way an image upload
+ * goes; Clear starts again.
+ */
+function SignatureField({
+  q,
+  value,
+  onChange,
+  slug,
+  onError,
+}: {
+  q: Question;
+  value: Answer | undefined;
+  onChange: (v: Answer) => void;
+  slug: string;
+  onError: (message: string | null) => void;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const [inked, setInked] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const saved = typeof value === "string" && value;
+
+  function point(e: React.PointerEvent<HTMLCanvasElement>) {
+    const c = canvas.current!;
+    const r = c.getBoundingClientRect();
+    return {
+      x: ((e.clientX - r.left) / r.width) * c.width,
+      y: ((e.clientY - r.top) / r.height) * c.height,
+    };
+  }
+  function start(e: React.PointerEvent<HTMLCanvasElement>) {
+    const ctx = canvas.current?.getContext("2d");
+    if (!ctx) return;
+    drawing.current = true;
+    canvas.current!.setPointerCapture(e.pointerId);
+    const p = point(e);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = getComputedStyle(canvas.current!).color;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  }
+  function move(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawing.current) return;
+    const ctx = canvas.current?.getContext("2d");
+    if (!ctx) return;
+    const p = point(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    setInked(true);
+  }
+  function stop() {
+    drawing.current = false;
+  }
+  function clear() {
+    const c = canvas.current;
+    c?.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+    setInked(false);
+    onChange("");
+  }
+  async function use() {
+    const c = canvas.current;
+    if (!c || !inked) return;
+    // The builder's preview has no form to send to.
+    if (!slug) return;
+    setBusy(true);
+    onError(null);
+    const blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
+    if (!blob) {
+      setBusy(false);
+      onError("That didn't save. Try again.");
+      return;
+    }
+    const result = await uploadAnswer(
+      slug,
+      q.id,
+      new File([blob], "signature.png", { type: "image/png" }),
+    );
+    setBusy(false);
+    if ("error" in result) onError(result.error);
+    else onChange(result.id);
+  }
+
+  return (
+    <div className="max-w-md space-y-2">
+      <canvas
+        ref={canvas}
+        width={800}
+        height={260}
+        data-autofocus=""
+        tabIndex={0}
+        aria-label={`${q.title}: draw your signature`}
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={stop}
+        onPointerLeave={stop}
+        className="border-primary/35 bg-primary/5 text-foreground block aspect-[80/26] w-full touch-none rounded-[16px] border-2 border-dashed"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void use()}
+          disabled={!inked || busy}
+          className="bg-primary text-primary-foreground inline-flex h-9 items-center gap-2 rounded-full px-4 text-[14px] font-semibold disabled:opacity-50"
+        >
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Check className="size-4" aria-hidden="true" />
+          )}
+          {saved ? "Saved" : "Use this"}
+        </button>
+        <button
+          type="button"
+          onClick={clear}
+          className="text-muted-foreground hover:text-foreground h-9 rounded-full px-3 text-[14px] font-medium"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function UploadField({
   q,
   value,
@@ -698,27 +926,14 @@ function UploadField({
     if (!slug) return;
     setBusy(true);
     onError(null);
-    const body = new FormData();
-    body.set("file", file);
-    body.set("questionId", q.id);
-    try {
-      const res = await fetch(`/f/${slug}/upload`, { method: "POST", body });
-      const data = (await res.json().catch(() => ({}))) as {
-        id?: string;
-        name?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.id) {
-        onError(data.error ?? "That didn't upload. Try again.");
-        return;
-      }
-      setName(data.name ?? file.name);
-      onChange(data.id);
-    } catch {
-      onError("That didn't upload. Check your connection and try again.");
-    } finally {
-      setBusy(false);
+    const result = await uploadAnswer(slug, q.id, file);
+    setBusy(false);
+    if ("error" in result) {
+      onError(result.error);
+      return;
     }
+    setName(result.name);
+    onChange(result.id);
   }
 
   const has = typeof value === "string" && value;
@@ -911,4 +1126,31 @@ export function QuestionPreview({ q, number }: { q: Question; number: number }) 
       <Go onClick={() => undefined} label="OK" />
     </div>
   );
+}
+
+/**
+ * What the thank-you screen says back: the person's first name (from a
+ * name question, else the first short answer) and their key answer (the
+ * first single choice they made).
+ */
+export function doneFacts(
+  questions: readonly Question[],
+  answers: Readonly<Record<string, Answer>>,
+): { firstName: string | null; keyAnswer: string | null } {
+  const short = questions.filter((q) => q.type === "short");
+  const nameQ = short.find((q) => /\bname\b/i.test(q.title)) ?? short[0];
+  const raw = nameQ ? answers[nameQ.id] : undefined;
+  const firstName =
+    typeof raw === "string" && raw.trim() ? (raw.trim().split(/\s+/)[0] ?? null) : null;
+  let keyAnswer: string | null = null;
+  for (const q of questions) {
+    if (q.type !== "choice" && q.type !== "dropdown") continue;
+    const v = answers[q.id];
+    const label = q.options?.find((o) => o.id === v)?.label;
+    if (label) {
+      keyAnswer = label;
+      break;
+    }
+  }
+  return { firstName, keyAnswer };
 }

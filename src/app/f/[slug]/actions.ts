@@ -14,6 +14,7 @@ import {
   submitResponse,
   type SubmitResult,
 } from "@/server/forms/public";
+import { sendFormReceipt } from "@/server/forms/receipt";
 
 /**
  * The public form's two calls: send the answers, and (for a quick poll
@@ -45,7 +46,7 @@ export async function submitForm(slug: string, raw: unknown): Promise<SubmitResu
   if (!target) return { ok: false, error: "This form isn't taking answers." };
   const session = await getSession();
   try {
-    return await submitResponse(
+    const result = await submitResponse(
       target,
       { answers: parsed.data.answers, other: parsed.data.other },
       {
@@ -54,6 +55,13 @@ export async function submitForm(slug: string, raw: unknown): Promise<SubmitResu
         email: session?.user.email ?? null,
       },
     );
+    // A copy of their answers, when the form sends one; never fails the answer.
+    if (result.ok && result.responseId !== "ok") {
+      await sendFormReceipt(target, result.responseId).catch((error) =>
+        console.error("[forms] receipt failed", error),
+      );
+    }
+    return result;
   } catch (error) {
     console.error("[forms] submit failed", error);
     return { ok: false, error: "That didn't send. Try again." };

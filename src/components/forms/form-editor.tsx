@@ -4,13 +4,16 @@ import {
   ArrowDown,
   ArrowUp,
   Copy,
+  Database,
   ExternalLink,
+  EyeOff,
   Lock,
   Plus,
   RotateCcw,
   Trash2,
   X,
 } from "@/components/icons";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
@@ -24,32 +27,28 @@ import { QuestionPreview } from "@/components/forms/respondent";
 import { QrCode } from "@/components/rsvp/qr-code";
 import { SavedMark, useSaveOnChange } from "@/components/ui/autosave";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast, undoable } from "@/components/ui/toaster";
+import { FIELD_TYPE_META } from "@/lib/databases/fields";
+import { questionKind } from "@/lib/forms/describe";
 import {
   blankQuestion,
   canBranch,
   FORM_LIMITS,
   hasOptions,
   opt,
+  QUESTION_CHIPS,
   QUESTION_GROUPS,
   QUESTION_META,
   QUESTION_TYPES,
   type Question,
   type QuestionType,
 } from "@/lib/forms/questions";
+import { tagVar } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 
 /** How long typing waits before the questions save. */
@@ -67,11 +66,13 @@ export function FormBuilder({
   formId,
   initial,
   databaseName,
+  databaseHref,
 }: {
   orgId: string;
   formId: string;
   initial: Question[];
   databaseName: string;
+  databaseHref: string;
 }) {
   const [questions, setQuestions] = useState(initial);
   const [selected, setSelected] = useState<string | null>(initial[0]?.id ?? null);
@@ -104,8 +105,8 @@ export function FormBuilder({
 
   const current = questions.find((q) => q.id === selected) ?? null;
   const index = current ? questions.indexOf(current) : -1;
-  const numberOf = (q: Question) =>
-    questions.filter((x) => x.type !== "hidden").findIndex((x) => x.id === q.id) + 1;
+  const numbered = questions.filter((x) => x.type !== "hidden");
+  const numberOf = (q: Question) => numbered.findIndex((x) => x.id === q.id) + 1;
 
   function update(patch: Partial<Question>, typing = false) {
     if (!current) return;
@@ -165,14 +166,20 @@ export function FormBuilder({
                 )}
               >
                 <span className="bg-muted text-muted-foreground grid size-6 shrink-0 place-items-center rounded-[7px] font-mono text-[11px] font-semibold">
-                  {q.type === "section" ? "§" : q.type === "hidden" ? "·" : numberOf(q)}
+                  {q.type === "section" ? (
+                    "§"
+                  ) : q.type === "hidden" ? (
+                    <EyeOff className="size-3.5" aria-hidden="true" />
+                  ) : (
+                    numberOf(q)
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13.5px] leading-snug font-medium break-words">
                     {q.title || "Untitled question"}
                   </span>
                   <span className="text-muted-foreground block text-[12px]">
-                    {QUESTION_META[q.type].label}
+                    {questionKind(q)}
                     {q.required ? ", required" : ""}
                   </span>
                 </span>
@@ -206,7 +213,9 @@ export function FormBuilder({
           key={current.id}
           q={current}
           later={questions.slice(index + 1)}
+          numberOf={numberOf}
           databaseName={databaseName}
+          databaseHref={databaseHref}
           onChange={update}
           onMove={(by) => move(current.id, by)}
           onRemove={() => void remove(current.id)}
@@ -220,6 +229,10 @@ export function FormBuilder({
   );
 }
 
+/**
+ * "Add a question" opens every question type as a chip, coloured by its
+ * family, so a type is one click away rather than down a menu.
+ */
 function AddQuestion({
   onAdd,
   disabled,
@@ -227,37 +240,66 @@ function AddQuestion({
   onAdd: (type: QuestionType) => void;
   disabled: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="w-full justify-start" disabled={disabled}>
-          <Plus className="size-4" aria-hidden="true" />
-          Add a question
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-[70vh] w-60 overflow-y-auto">
-        {QUESTION_GROUPS.map((g, gi) => (
-          <div key={g.id}>
-            {gi > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-              {g.label}
-            </DropdownMenuLabel>
-            {QUESTION_TYPES.filter((t) => QUESTION_META[t].group === g.id).map((t) => (
-              <DropdownMenuItem key={t} onSelect={() => onAdd(t)}>
-                {QUESTION_META[t].label}
-              </DropdownMenuItem>
-            ))}
-          </div>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="space-y-2">
+      <Button
+        variant="outline"
+        className="w-full justify-start"
+        disabled={disabled}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Plus className="size-4" aria-hidden="true" />
+        Add a question
+      </Button>
+      {open && !disabled && (
+        <div
+          role="group"
+          aria-label="Question types"
+          className="bg-card edge rounded-card flex flex-wrap gap-1.5 p-2.5"
+        >
+          {QUESTION_CHIPS.map(({ type, color }) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => {
+                onAdd(type);
+                setOpen(false);
+              }}
+              className="focus-visible:outline-foreground rounded-[7px] px-2.5 py-1 text-[12.5px] font-semibold transition-[filter] outline-none hover:brightness-95 focus-visible:outline-2"
+              style={{
+                color: tagVar(color),
+                background: `color-mix(in oklab, ${tagVar(color)} 13%, transparent)`,
+              }}
+            >
+              {QUESTION_META[type].label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
+}
+
+/** "a select", "an email": the article for a column type's name. */
+function withArticle(word: string): string {
+  return `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;
+}
+
+/** Single choice types, and the one "Allow more than one" turns them into. */
+function allowsMany(type: QuestionType): boolean | null {
+  if (type === "checkboxes") return true;
+  if (type === "choice" || type === "dropdown") return false;
+  return null;
 }
 
 function QuestionSettings({
   q,
   later,
+  numberOf,
   databaseName,
+  databaseHref,
   onChange,
   onMove,
   onRemove,
@@ -266,7 +308,9 @@ function QuestionSettings({
 }: {
   q: Question;
   later: Question[];
+  numberOf: (q: Question) => number;
   databaseName: string;
+  databaseHref: string;
   onChange: (patch: Partial<Question>, typing?: boolean) => void;
   onMove: (by: number) => void;
   onRemove: () => void;
@@ -277,6 +321,8 @@ function QuestionSettings({
   const setOptions = (next: { id: string; label: string }[], typing = false) =>
     onChange({ options: next }, typing);
   const targets = later.filter((x) => x.type !== "hidden");
+  const many = allowsMany(q.type);
+  const field = QUESTION_META[q.type].field;
 
   function changeType(type: QuestionType) {
     const fresh = blankQuestion(type, q.title);
@@ -291,25 +337,18 @@ function QuestionSettings({
     });
   }
 
+  const branches =
+    q.type === "yesno"
+      ? [
+          { id: "yes", label: "Yes" },
+          { id: "no", label: "No" },
+        ]
+      : options;
+
   return (
     <aside className="bg-card edge rounded-card space-y-4 p-4">
       <div className="flex items-center gap-1">
-        <select
-          value={q.type}
-          onChange={(e) => changeType(e.target.value as QuestionType)}
-          aria-label="Question type"
-          className="border-input bg-background h-9 min-w-0 flex-1 rounded-[10px] border px-2.5 text-[13.5px]"
-        >
-          {QUESTION_GROUPS.map((g) => (
-            <optgroup key={g.id} label={g.label}>
-              {QUESTION_TYPES.filter((t) => QUESTION_META[t].group === g.id).map((t) => (
-                <option key={t} value={t}>
-                  {QUESTION_META[t].label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        <h2 className="flex-1 text-[14px] font-semibold">Question</h2>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -333,6 +372,25 @@ function QuestionSettings({
         </Button>
       </div>
 
+      <div className="grid gap-1.5">
+        <Label htmlFor="q-type">Type</Label>
+        <select
+          id="q-type"
+          value={q.type}
+          onChange={(e) => changeType(e.target.value as QuestionType)}
+          className="border-input bg-background h-9 min-w-0 rounded-[10px] border px-2.5 text-[13.5px]"
+        >
+          {QUESTION_GROUPS.map((g) => (
+            <optgroup key={g.id} label={g.label}>
+              {QUESTION_TYPES.filter((t) => QUESTION_META[t].group === g.id).map((t) => (
+                <option key={t} value={t}>
+                  {QUESTION_META[t].label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
       <div className="grid gap-1.5">
         <Label htmlFor="q-title">Question</Label>
         <Textarea
@@ -360,6 +418,22 @@ function QuestionSettings({
           label="Required"
           checked={q.required}
           onChange={(v) => onChange({ required: v })}
+        />
+      )}
+      {many !== null && (
+        <Toggle
+          id="q-many"
+          label="Allow more than one"
+          checked={many}
+          onChange={(v) => changeType(v ? "checkboxes" : "choice")}
+        />
+      )}
+      {hasOptions(q.type) && q.type !== "ranking" && (
+        <Toggle
+          id="q-other"
+          label='Add "Other"'
+          checked={Boolean(q.allowOther)}
+          onChange={(v) => onChange({ allowOther: v || undefined })}
         />
       )}
 
@@ -426,14 +500,6 @@ function QuestionSettings({
             <Plus className="size-4" aria-hidden="true" />
             Add a choice
           </Button>
-          {q.type !== "ranking" && (
-            <Toggle
-              id="q-other"
-              label='Add "Other"'
-              checked={Boolean(q.allowOther)}
-              onChange={(v) => onChange({ allowOther: v || undefined })}
-            />
-          )}
         </div>
       )}
 
@@ -490,25 +556,18 @@ function QuestionSettings({
       )}
 
       {canBranch(q.type) && targets.length > 0 && (
-        <div className="space-y-2">
-          <Label>Then go to</Label>
-          {(q.type === "yesno"
-            ? [
-                { id: "yes", label: "Yes" },
-                { id: "no", label: "No" },
-              ]
-            : options
-          ).map((o) => {
+        <div className="space-y-2 border-t pt-3">
+          <h3 className="text-[14px] font-semibold">Logic</h3>
+          {branches.map((o) => {
             const rule = q.logic?.find((r) => r.when === o.id);
             return (
-              <div
-                key={o.id}
-                className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-center gap-2 text-[13px]"
-              >
-                <span className="min-w-0 break-words">{o.label || "Untitled"}</span>
+              <div key={o.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px]">
+                <span className="min-w-0 break-words">
+                  If <b className="font-semibold">{o.label || "Untitled"}</b>, skip to
+                </span>
                 <select
                   value={rule?.goTo ?? ""}
-                  aria-label={`After ${o.label}`}
+                  aria-label={`If ${o.label}, skip to`}
                   onChange={(e) => {
                     const rest = (q.logic ?? []).filter((r) => r.when !== o.id);
                     onChange({
@@ -519,15 +578,17 @@ function QuestionSettings({
                           : undefined,
                     });
                   }}
-                  className="border-input bg-background h-8 min-w-0 rounded-[8px] border px-2"
+                  className="border-input bg-background h-8 max-w-full min-w-0 rounded-[8px] border px-2"
                 >
-                  <option value="">Next question</option>
+                  <option value="">the next question</option>
                   {targets.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {(t.title || "Untitled").slice(0, 40)}
+                      {t.type === "section"
+                        ? `Section: ${(t.title || "Untitled").slice(0, 36)}`
+                        : `question ${numberOf(t)}: ${(t.title || "Untitled").slice(0, 32)}`}
                     </option>
                   ))}
-                  <option value="end">End of form</option>
+                  <option value="end">the end</option>
                 </select>
               </div>
             );
@@ -535,10 +596,26 @@ function QuestionSettings({
         </div>
       )}
 
-      {q.type !== "section" && (
-        <p className="text-muted-foreground border-t pt-3 text-[12px]">
-          Saves to {databaseName}, column &ldquo;{(q.title || "Question").slice(0, 60)}&rdquo;
-        </p>
+      {field && (
+        <div className="space-y-2 border-t pt-3">
+          <h3 className="text-[14px] font-semibold">Saves to</h3>
+          <div className="bg-muted/50 rounded-field space-y-1 p-3">
+            <Link
+              href={databaseHref}
+              className="flex items-center gap-1.5 text-[13.5px] font-semibold hover:underline"
+            >
+              <Database className="size-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 break-words">{databaseName}</span>
+            </Link>
+            <p className="text-muted-foreground text-[12.5px] leading-snug">
+              Column &ldquo;{(q.title || "Question").slice(0, 60)}&rdquo;,{" "}
+              {withArticle(FIELD_TYPE_META[field].label.toLowerCase())}
+              {hasOptions(q.type) && q.type !== "ranking"
+                ? ` with ${options.length} ${options.length === 1 ? "choice" : "choices"}. Renaming a choice here renames it in the database.`
+                : "."}
+            </p>
+          </div>
+        </div>
       )}
     </aside>
   );
@@ -586,6 +663,7 @@ interface SettingsForm {
   responseCap: number | null;
   closesAt: string | null;
   notifyOwner: boolean;
+  receipt: boolean;
   review: boolean;
   open: boolean;
   closed: boolean;
@@ -720,6 +798,13 @@ export function FormSettingsPanel({
           label="Tell me about each response"
           checked={state.notifyOwner}
           onChange={(v) => set({ notifyOwner: v })}
+        />
+        <Toggle
+          id="f-receipt"
+          label="Email a copy of their answers"
+          hint="Sent from your organization's address to the email they give."
+          checked={state.receipt}
+          onChange={(v) => set({ receipt: v })}
         />
       </section>
 
