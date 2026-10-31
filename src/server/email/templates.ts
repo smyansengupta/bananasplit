@@ -180,14 +180,14 @@ export function reimbursementStatusEmail(input: {
 
 export function treasurerDigestEmail(input: {
   orgName: string;
-  pending: { description: string; amountFormatted: string; submitterName: string }[];
+  pending: { description: string; amountFormatted: string; submitterName: string; url?: string }[];
   url: string;
 }): RenderedEmail {
   const n = input.pending.length;
   const items = input.pending
     .map(
       (p) =>
-        `<li style="margin:0 0 6px">${escapeHtml(p.description)} &mdash; ${escapeHtml(p.amountFormatted)} <span style="color:${C.muted}">(${escapeHtml(p.submitterName)})</span></li>`,
+        `<li style="margin:0 0 6px">${escapeHtml(p.description)}, ${escapeHtml(p.amountFormatted)} <span style="color:${C.muted}">(${escapeHtml(p.submitterName)})</span>${p.url ? ` <a href="${safeHref(p.url)}" style="color:${C.ink};font-weight:600">Approve</a>` : ""}</li>`,
     )
     .join("");
   return layout({
@@ -197,7 +197,10 @@ export function treasurerDigestEmail(input: {
       paragraph("Waiting on your review:") +
       `<ul style="margin:0 0 14px;padding-left:20px">${items}</ul>`,
     bodyText: `These expenses are waiting on an owner, admin or treasurer in ${input.orgName}:\n\n${input.pending
-      .map((p) => `- ${p.description} — ${p.amountFormatted} (${p.submitterName})`)
+      .map(
+        (p) =>
+          `- ${p.description}, ${p.amountFormatted} (${p.submitterName})${p.url ? `\n  Approve: ${p.url}` : ""}`,
+      )
       .join("\n")}`,
     cta: { label: "Review expenses", url: input.url },
   });

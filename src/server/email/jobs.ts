@@ -180,6 +180,7 @@ export const reimbursementEmailJob: JobHandler<{
     db.transaction.findFirst({
       where: { id: transactionId, organizationId: orgId },
       select: {
+        id: true,
         description: true,
         status: true,
         rejectionReason: true,
@@ -201,7 +202,8 @@ export const reimbursementEmailJob: JobHandler<{
         description: t.description,
         status,
         rejectionReason: t.rejectionReason,
-        url: appUrl(`/app/${t.organization.slug}/finance/my-reimbursements`),
+        // The request itself; a rejected one opens where Edit and resend is.
+        url: appUrl(`/app/${t.organization.slug}/finance/my-reimbursements?open=${t.id}`),
       }),
     },
     { signal: run.signal, idempotencyKey: `reimbursement-email-${transactionId}-${status}` },
@@ -254,6 +256,7 @@ async function sendTreasurerDigest(
       orderBy: { occurredAt: "asc" },
       take: 50,
       select: {
+        id: true,
         description: true,
         amountCents: true,
         submittedBy: { select: { name: true, email: true } },
@@ -275,6 +278,8 @@ async function sendTreasurerDigest(
           description: p.description,
           amountFormatted: formatCents(p.amountCents),
           submitterName: p.submittedBy.name ?? p.submittedBy.email,
+          // Opens that request, where Approve is one click.
+          url: appUrl(`/app/${org.slug}/finance/transactions?open=${p.id}`),
         })),
         url: appUrl(`/app/${org.slug}/finance/transactions?status=SUBMITTED`),
       }),
