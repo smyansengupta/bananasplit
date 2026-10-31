@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, Database, Trash2, Vote } from "@/components/icons";
+import { Database, Trash2 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,22 +16,32 @@ import { cn } from "@/lib/utils";
 
 export interface FormListRow {
   id: string;
-  /** A form, a quick poll made in Forms, or a members' question poll. */
+  /** A form, a quick poll made in Forms, or an anonymous members' poll. */
   kind: "form" | "poll" | "member-poll";
   title: string;
+  /** The second line: what it asks, or who can answer. */
+  detail: string | null;
   href: string;
   open: boolean;
+  draft: boolean;
   status: string;
   responses: number;
+  /** Members-only: out of how many members ("36 of 40"). */
+  outOf: number | null;
   toReview: number;
   databaseHref: string | null;
   canTrash: boolean;
 }
 
-const ROW =
-  "group hover:bg-muted/60 focus-within:bg-muted/60 rounded-field relative flex items-center gap-3 px-3 py-3 transition-colors duration-150 sm:gap-3.5 [li+&]:before:bg-border [li+&]:before:absolute [li+&]:before:inset-x-3 [li+&]:before:top-0 [li+&]:before:h-px";
+/** Form | Kind | Responses | Status | Saves to, then the row's menu. */
+const COLS =
+  "md:grid md:grid-cols-[minmax(0,1fr)_7rem_9.5rem_9.5rem_7rem_2rem] md:items-center md:gap-4";
 
-/** The forms and polls, drawn like the Tasks List's rows. */
+/**
+ * Every form and quick poll, one row each: what it is, its kind, how many
+ * answered (and how many wait on a review), whether it's open, and the
+ * database its answers go into. The row opens the form.
+ */
 export function FormList({ orgId, rows }: { orgId: string; rows: FormListRow[] }) {
   const router = useRouter();
   const [confirmElement, confirm] = useConfirm();
@@ -46,7 +56,7 @@ export function FormList({ orgId, rows }: { orgId: string; rows: FormListRow[] }
 
   async function trash(row: FormListRow) {
     if (row.kind === "member-poll") {
-      // A question poll has no trash: its votes go with it, so it still asks.
+      // An anonymous poll has no trash: its votes go with it, so it still asks.
       const deleted = await confirm({
         title: `Delete “${row.title}”?`,
         description: "Everyone's votes go with it. This can't be undone.",
@@ -74,60 +84,100 @@ export function FormList({ orgId, rows }: { orgId: string; rows: FormListRow[] }
     else router.refresh();
   }
 
+  const shown = rows.filter((r) => !gone.has(r.id));
   return (
     <>
       {confirmElement}
-      <ul className={TASK_PANEL} aria-label="Forms">
-        {rows
-          .filter((r) => !gone.has(r.id))
-          .map((row) => {
-            const Icon = row.kind === "form" ? ClipboardList : Vote;
-            return (
-              <li key={row.id} className={ROW}>
-                <span className="bg-muted text-muted-foreground grid size-[22px] shrink-0 place-items-center rounded-full">
-                  <Icon className="size-3.5" aria-hidden="true" />
-                </span>
+      <div className={TASK_PANEL}>
+        <div
+          aria-hidden="true"
+          className={cn(
+            COLS,
+            "text-muted-foreground hidden px-3 pt-1 pb-2 text-[12px] font-medium md:grid",
+          )}
+        >
+          <span>Form</span>
+          <span>Kind</span>
+          <span>Responses</span>
+          <span>Status</span>
+          <span>Saves to</span>
+          <span />
+        </div>
+        <ul aria-label="Forms">
+          {shown.map((row) => (
+            <li
+              key={row.id}
+              className={cn(
+                COLS,
+                "group hover:bg-muted/60 focus-within:bg-muted/60 rounded-field relative flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-3 transition-colors duration-150",
+                "[li+&]:before:bg-border [li+&]:before:absolute [li+&]:before:inset-x-3 [li+&]:before:top-0 [li+&]:before:h-px",
+              )}
+            >
+              <span className="min-w-0 basis-full md:basis-auto">
                 <Link
                   href={row.href}
-                  className="focus-visible:outline-foreground min-w-0 flex-1 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="block text-[15px] leading-snug font-medium break-words underline-offset-4 after:absolute after:inset-0 hover:underline focus-visible:outline-none"
                 >
-                  <span className="block text-[15px] leading-snug font-medium break-words">
-                    {row.title}
-                  </span>
-                  <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-                    <span>{row.kind === "form" ? "Form" : "Quick poll"}</span>
-                    <span className="tabular-nums">
-                      {row.responses === 1
-                        ? row.kind === "form"
-                          ? "1 response"
-                          : "1 vote"
-                        : `${row.responses} ${row.kind === "form" ? "responses" : "votes"}`}
-                    </span>
-                    {row.toReview > 0 && <Badge variant="accent">{row.toReview} to review</Badge>}
-                  </span>
+                  {row.title}
                 </Link>
-                <Badge variant={row.open ? "success" : "secondary"} className="shrink-0">
+                {row.detail && (
+                  <span className="text-muted-foreground mt-0.5 block text-[13px] break-words">
+                    {row.detail}
+                  </span>
+                )}
+              </span>
+              <span className="text-muted-foreground text-[13px]">
+                {row.kind === "form" ? "Form" : "Quick poll"}
+              </span>
+              <span className="flex flex-wrap items-center gap-1.5 text-[13px] tabular-nums">
+                <span className="font-medium">{row.responses}</span>
+                {row.outOf !== null && (
+                  <span className="text-muted-foreground">of {row.outOf}</span>
+                )}
+                {row.toReview > 0 && <Badge variant="accent">{row.toReview} to review</Badge>}
+              </span>
+              <span>
+                <Badge
+                  variant={row.draft ? "outline" : row.open ? "success" : "secondary"}
+                  className="whitespace-nowrap"
+                >
                   {row.status}
                 </Badge>
-                <ItemMenu
-                  label={`Actions for ${row.title}`}
-                  items={[
-                    row.databaseHref
-                      ? { label: "Open database", icon: Database, href: row.databaseHref }
-                      : null,
-                    row.canTrash && {
-                      label: "Delete",
-                      icon: Trash2,
-                      destructive: true,
-                      onSelect: () => void trash(row),
-                    },
-                  ]}
-                  className={cn(!row.canTrash && !row.databaseHref && "hidden")}
-                />
-              </li>
-            );
-          })}
-      </ul>
+              </span>
+              <span className="relative z-10 text-[13px]">
+                {row.databaseHref ? (
+                  <Link
+                    href={row.databaseHref}
+                    className="hover:text-foreground text-muted-foreground inline-flex items-center gap-1.5 font-medium underline-offset-4 hover:underline"
+                  >
+                    <Database className="size-3.5" aria-hidden="true" />
+                    Database
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {row.kind === "member-poll" ? "Private votes" : ""}
+                  </span>
+                )}
+              </span>
+              <span className="relative z-10 ms-auto md:ms-0">
+                {row.canTrash && (
+                  <ItemMenu
+                    label={`Actions for ${row.title}`}
+                    items={[
+                      {
+                        label: "Delete",
+                        icon: Trash2,
+                        destructive: true,
+                        onSelect: () => void trash(row),
+                      },
+                    ]}
+                  />
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </>
   );
 }

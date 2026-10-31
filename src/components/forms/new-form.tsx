@@ -5,6 +5,7 @@ import {
   FileText,
   ListChecks,
   MessageSquare,
+  Plus,
   Star,
   Users,
   Vote,
@@ -15,8 +16,9 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { createFormAction } from "@/app/app/[orgSlug]/forms/actions";
+import { Button } from "@/components/ui/button";
 import { CreateSplitButton } from "@/components/ui/create-split-button";
-import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toaster";
 import { FORM_TEMPLATES } from "@/lib/forms/questions";
 import { cn } from "@/lib/utils";
@@ -45,9 +47,9 @@ function useCreate(orgId: string, orgSlug: string) {
 }
 
 /**
- * Forms' one create button: New form (blank) for owners and admins, its
- * menu a quick poll and the templates; a member's is Quick poll alone,
- * which is what members could always start.
+ * Forms' two ways to start: Quick poll beside New form (blank, its menu the
+ * templates) for owners and admins; a member's is Quick poll alone, which
+ * is what members could always start.
  */
 export function NewFormButton({
   orgId,
@@ -69,29 +71,30 @@ export function NewFormButton({
     );
   }
   return (
-    <CreateSplitButton
-      label="New form"
-      onClick={() => create("blank")}
-      pending={pending}
-      menuLabel="More ways to start"
-    >
-      <DropdownMenuItem asChild>
+    <div className="flex items-center gap-2">
+      <Button variant="outline" asChild>
         <Link href={`/app/${orgSlug}/forms/new?poll=1`}>
-          <Vote className="size-4" aria-hidden="true" />
+          <Plus className="size-4" aria-hidden="true" />
           Quick poll
         </Link>
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      {FORM_TEMPLATES.filter((t) => t.id !== "blank").map((t) => {
-        const Icon = TEMPLATE_ICONS[t.id] ?? FileText;
-        return (
-          <DropdownMenuItem key={t.id} onSelect={() => create(t.id)}>
-            <Icon className="size-4" aria-hidden="true" />
-            {t.name}
-          </DropdownMenuItem>
-        );
-      })}
-    </CreateSplitButton>
+      </Button>
+      <CreateSplitButton
+        label="New form"
+        onClick={() => create("blank")}
+        pending={pending}
+        menuLabel="Start from a template"
+      >
+        {FORM_TEMPLATES.filter((t) => t.id !== "blank").map((t) => {
+          const Icon = TEMPLATE_ICONS[t.id] ?? FileText;
+          return (
+            <DropdownMenuItem key={t.id} onSelect={() => create(t.id)}>
+              <Icon className="size-4" aria-hidden="true" />
+              {t.name}
+            </DropdownMenuItem>
+          );
+        })}
+      </CreateSplitButton>
+    </div>
   );
 }
 
@@ -117,12 +120,14 @@ export function TemplateRow({
     })),
   ];
   return (
-    <ul className={cn("grid grid-cols-2 gap-3", withBlank ? "lg:grid-cols-3" : "lg:grid-cols-5")}>
-      <li>
-        <Link href={`/app/${orgSlug}/forms/new?poll=1`} className={TILE}>
-          <Tile icon={MessageSquare} name="Quick poll" blurb="One question, one tap" />
-        </Link>
-      </li>
+    <ul className={cn("grid grid-cols-2 gap-3", withBlank ? "lg:grid-cols-3" : "lg:grid-cols-4")}>
+      {withBlank && (
+        <li>
+          <Link href={`/app/${orgSlug}/forms/new?poll=1`} className={TILE}>
+            <Tile icon={MessageSquare} name="Quick poll" blurb="One question, one tap" />
+          </Link>
+        </li>
+      )}
       {starts.map((s) => (
         <li key={s.key}>
           <button
@@ -140,16 +145,21 @@ export function TemplateRow({
 }
 
 const TILE =
-  "bg-card text-card-foreground edge rounded-card hover:shadow-e2 focus-visible:outline-foreground flex h-full items-start gap-3 p-4 text-left transition-shadow duration-200 outline-none focus-visible:outline-2 disabled:opacity-60";
+  "bg-card text-card-foreground edge rounded-card hover:shadow-e2 focus-visible:outline-foreground flex h-full flex-col gap-2.5 p-3.5 text-left transition-shadow duration-200 outline-none focus-visible:outline-2 disabled:opacity-60";
 
+/** A start: a small picture of a form (an icon over two lines), its name, what it's for. */
 function Tile({ icon: Icon, name, blurb }: { icon: IconComponent; name: string; blurb: string }) {
   return (
     <>
-      <span className="bg-muted grid size-9 shrink-0 place-items-center rounded-full">
-        <Icon className="size-[18px]" aria-hidden="true" />
+      <span aria-hidden="true" className="bg-muted rounded-tile flex h-14 items-center gap-3 px-3">
+        <Icon className="text-muted-foreground size-[18px] shrink-0" />
+        <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="bg-border h-1.5 w-3/4 rounded-full" />
+          <span className="bg-border h-1.5 w-1/2 rounded-full" />
+        </span>
       </span>
       <span className="min-w-0">
-        <span className="block text-[14px] font-semibold">{name}</span>
+        <span className="block text-[13.5px] font-semibold">{name}</span>
         <span className="text-muted-foreground mt-0.5 block text-[12.5px] leading-snug">
           {blurb}
         </span>

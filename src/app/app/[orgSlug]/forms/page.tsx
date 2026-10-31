@@ -10,15 +10,17 @@ import { safeTimeZone } from "@/lib/calendar/dates";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { isPollOpen } from "@/lib/polls/question-poll";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { describeQuestions } from "@/lib/forms/describe";
+import { readQuestions } from "@/lib/forms/questions";
 import { isFormOpen, listForms } from "@/server/forms/forms";
 import { listQuestionPolls } from "@/server/polls/question-polls";
 import { planGate } from "@/server/billing/plan-gate";
 
 /**
- * Forms: every form and quick poll the club runs, newest first, with how
- * many answered and how many wait on a review. Owners and admins make
- * forms (each writes into its own database); any member starts a quick
- * poll, as they always could ask the club a question.
+ * Forms: every form and quick poll the organization runs, newest first,
+ * with how many answered and how many wait on a review. Owners and admins
+ * make forms (each writes into its own database); any member starts a
+ * quick poll, as they always could ask the organization a question.
  */
 export default async function FormsPage({
   params,
@@ -45,16 +47,37 @@ export default async function FormsPage({
   const short = (at: Date) =>
     new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(at);
   const rows: (FormListRow & { at: number })[] = [
-    ...forms.map(({ form, responses, toReview, databaseKey }) => {
+    ...forms.map(({ form, responses, toReview, databaseKey, members }) => {
       const open = isFormOpen(form, responses, now);
+      const draft = form.publishedAt === null;
+      const who =
+        form.access === "MEMBERS"
+          ? form.onePerPerson
+            ? "Members only, one per person"
+            : "Members only"
+          : form.access === "SIGNED_IN"
+            ? "Signed in, one per person"
+            : null;
       return {
         id: form.id,
         kind: form.kind === "QUICK_POLL" ? ("poll" as const) : ("form" as const),
         title: form.title,
+        detail:
+          form.kind === "QUICK_POLL"
+            ? who
+            : [describeQuestions(readQuestions(form.questions)), who].filter(Boolean).join(", "),
         href: `${base}/forms/${form.id}`,
         open,
-        status: open ? (form.closesAt ? `Open until ${short(form.closesAt)}` : "Open") : "Closed",
+        draft,
+        status: draft
+          ? "Draft"
+          : open
+            ? form.closesAt
+              ? `Open until ${short(form.closesAt)}`
+              : "Open"
+            : "Closed",
         responses,
+        outOf: members,
         toReview,
         databaseHref: canMake ? `${base}/databases/${databaseKey}` : null,
         canTrash: canMake,
@@ -67,10 +90,13 @@ export default async function FormsPage({
         id: p.id,
         kind: "member-poll" as const,
         title: p.question,
+        detail: "Members only, anonymous",
         href: `${base}/forms/polls/${p.id}`,
         open,
+        draft: false,
         status: open ? (p.closesAt ? `Open until ${short(p.closesAt)}` : "Open") : "Closed",
         responses: p.voterCount,
+        outOf: null,
         toReview: 0,
         databaseHref: null,
         canTrash: p.createdById === user.id || isAdmin,
