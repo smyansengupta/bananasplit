@@ -160,17 +160,13 @@ export function WorkspaceToolbar() {
           <EpicFilter />
           {labels.length > 0 && <TagFilter />}
           {/*
-            Status as buttons, one click each, once the bar has the room;
-            the chip beside them keeps the rest (needs a look, who can see
-            it). A tighter bar folds status back into the chip.
+            Status as buttons, one click each, at every width (the workspace
+            plan): the bar wraps onto a second line rather than folding them
+            away. The chip beside them keeps the rest (needs a look, who can
+            see it).
           */}
-          <StatusButtons className="hidden @[76rem]/toolbar:flex" />
-          <div className="@[76rem]/toolbar:hidden">
-            <StatusFilter />
-          </div>
-          <div className="hidden @[76rem]/toolbar:block">
-            <StatusFilter withStatus={false} />
-          </div>
+          <StatusButtons className="flex flex-wrap" />
+          <StatusFilter withStatus={false} />
 
           <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
             {/* The board's lanes: one per epic, or none. */}
