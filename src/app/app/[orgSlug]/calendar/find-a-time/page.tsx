@@ -11,7 +11,9 @@ import { sectionLabel } from "@/lib/nav/sidebar";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { FIND_A_TIME_KEEP_DAYS } from "@/lib/polls/expiry";
 import { responsesLite, summarizePoll } from "@/lib/polls/poll-summary";
+import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { meetingsWhere } from "@/server/meetings/where";
 import { planGate } from "@/server/billing/plan-gate";
 
 import { availabilityItem, availabilityOpen, dateSpan } from "../polls/poll-items";
@@ -33,20 +35,27 @@ export default async function FindATimePage({
 
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
   const personal = org.kind === "PERSONAL";
-  const { polls, results, questionCount } = await withOrgTx(org.id, async ({ db }) => {
-    const polls = await getOrgPolls(db, org.id);
-    return {
-      polls,
-      results: await getPollResults(
-        db,
-        org.id,
-        polls.map((p) => p.id),
-      ),
-      questionCount: personal ? await db.poll.count({ where: { organizationId: org.id } }) : 0,
-    };
-  });
-  const now = new Date();
   const isAdmin = can({ role }, "events.write");
+  const now = new Date();
+  const { polls, results, questionCount, meetingCount } = await withOrgTx(
+    org.id,
+    async ({ db }) => {
+      const polls = await getOrgPolls(db, org.id);
+      return {
+        // The Meetings tab's count: the meetings still to come, as Meetings counts them.
+        meetingCount: await db.event.count({
+          where: { AND: [meetingsWhere(org.id, user.id, isAdmin, now), { endsAt: { gt: now } }] },
+        }),
+        polls,
+        results: await getPollResults(
+          db,
+          org.id,
+          polls.map((p) => p.id),
+        ),
+        questionCount: personal ? await db.poll.count({ where: { organizationId: org.id } }) : 0,
+      };
+    },
+  );
   const base = `/app/${orgSlug}`;
   // Each poll as a card: its results summed up on the server (the rows hold
   // user ids), in the poll's own zone.
@@ -80,17 +89,33 @@ export default async function FindATimePage({
             ? undefined
             : `${openPolls.length} open, ${answered === 1 ? "1 answer" : `${answered} answers`} so far`
         }
+        // The same two as Meetings' header: Find a time beside New meeting,
+        // which opens the create form on Meetings (?new=1).
         actions={
-          <Button variant="create" asChild>
-            <Link href={`${base}/calendar/find-a-time/new`}>
-              <Plus aria-hidden className="size-4" />
-              Find a time
-            </Link>
-          </Button>
+          <>
+            <Button variant={isAdmin ? "outline" : "create"} asChild>
+              <Link href={`${base}/calendar/find-a-time/new`}>
+                <Plus aria-hidden="true" />
+                Find a time
+              </Link>
+            </Button>
+            {isAdmin && (
+              <Button variant="create" asChild>
+                <Link href={`${base}/meetings?${NEW_EVENT_PARAM}=1`}>
+                  <Plus aria-hidden="true" />
+                  New meeting
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
 
-      <MeetingsTabs orgSlug={orgSlug} current="find" counts={{ find: openPolls.length }} />
+      <MeetingsTabs
+        orgSlug={orgSlug}
+        current="find"
+        counts={{ upcoming: meetingCount, find: openPolls.length }}
+      />
 
       {items.length === 0 ? (
         <EmptyState

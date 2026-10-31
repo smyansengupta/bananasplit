@@ -30,6 +30,7 @@ import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker, userPublicSelect } from "@/server/members";
+import { meetingsWhere } from "@/server/meetings/where";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
 import {
@@ -115,26 +116,7 @@ export default async function MeetingsPage({
   ] = await Promise.all([
     withOrgTx(org.id, async ({ db }) => {
       const rows: MeetingRow[] = await db.event.findMany({
-        where: {
-          organizationId: org.id,
-          deletedAt: null,
-          mergedIntoId: null,
-          // Hosts work from the whole list. Everyone else sees what they can
-          // act on: something to join, or a page open for sign-ups, still to
-          // come. Row policies have already limited this to what they may see.
-          ...(canManage
-            ? {}
-            : {
-                endsAt: { gt: now },
-                // Something to join, a page taking sign-ups, or a meeting
-                // they were invited to (an in-person one has neither).
-                OR: [
-                  { rsvpEnabled: true },
-                  { conferenceUrl: { not: null } },
-                  { attendees: { some: { userId: user.id } } },
-                ],
-              }),
-        },
+        where: meetingsWhere(org.id, user.id, canManage, now),
         orderBy: { startsAt: "asc" },
         select: {
           id: true,
