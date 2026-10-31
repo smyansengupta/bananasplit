@@ -335,6 +335,28 @@ export const verifyEmailJob: JobHandler<{ userId: string }> = async (run) => {
 };
 
 /**
+ * A fresh reset link for the user (only its sha256 is stored), replacing any
+ * earlier one.
+ */
+async function mintResetUrl(userId: string): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  // Built before any write, as in verifyEmailJob: no usable app URL fails
+  // the job instead of mailing a link to localhost.
+  const resetUrl = appUrl(`/reset-password/${token}`);
+  await authDb.$transaction([
+    authDb.passwordResetToken.deleteMany({ where: { userId } }),
+    authDb.passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash: hashResetToken(token),
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000),
+      },
+    }),
+  ]);
+  return resetUrl;
+}
+
+/**
  * password-reset-email:{userId} — a platform job (app_auth enqueues it from
  * "Forgot your password?"). Mints a reset token (only its sha256 is stored,
  * in PasswordResetToken), replacing any earlier link, and mails it through
@@ -349,21 +371,7 @@ export const passwordResetEmailJob: JobHandler<{ userId: string }> = async (run)
   });
   if (!user) return;
 
-  const token = randomBytes(32).toString("base64url");
-  // Built before any write, as in verifyEmailJob: no usable app URL fails
-  // the job instead of mailing a link to localhost.
-  const resetUrl = appUrl(`/reset-password/${token}`);
-  await authDb.$transaction([
-    authDb.passwordResetToken.deleteMany({ where: { userId: user.id } }),
-    authDb.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: hashResetToken(token),
-        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000),
-      },
-    }),
-  ]);
-
+  const resetUrl = await mintResetUrl(user.id);
   await getPlatformMailer().send(
     {
       to: user.email,
@@ -377,17 +385,22 @@ export const passwordResetEmailJob: JobHandler<{ userId: string }> = async (run)
   );
 };
 
-/** password-changed-email:{userId} — the notice after a reset (platform sender). */
+/**
+ * password-changed-email:{userId} — the notice after a reset (platform
+ * sender). Its "Wasn't you?" button carries a reset of its own, so nobody
+ * has to type their email again to take the account back.
+ */
 export const passwordChangedEmailJob: JobHandler<{ userId: string }> = async (run) => {
   const user = await authDb.user.findUnique({
     where: { id: run.payload.userId },
-    select: { email: true, name: true },
+    select: { id: true, email: true, name: true },
   });
   if (!user) return;
+  const resetUrl = await mintResetUrl(user.id);
   await getPlatformMailer().send(
     {
       to: user.email,
-      ...passwordChangedEmail({ name: user.name, resetUrl: appUrl("/forgot-password") }),
+      ...passwordChangedEmail({ name: user.name, resetUrl }),
     },
     { signal: run.signal },
   );
