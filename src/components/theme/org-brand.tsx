@@ -22,8 +22,11 @@ export function OrgBrand({
   display,
   href,
   hideNameOnly = false,
+  compact = false,
   className,
 }: {
+  /** The sidebar's size (the workspace plan): a 22px mark and the name in the body font. */
+  compact?: boolean;
   name: string;
   logo: unknown;
   display: LogoDisplayValue;
@@ -35,13 +38,15 @@ export function OrgBrand({
   if (display === "NAME_ONLY" && hideNameOnly) return null;
 
   const wide = display === "LOGO_ONLY" ? orgLogoSource(logo, 40) : null;
+  const markClass = compact
+    ? "size-[22px] rounded-[6px] text-[10px]"
+    : "size-8 rounded-md text-[0.8rem]";
+  const nameClass = compact ? "text-[13.5px] font-semibold" : "heading text-[0.95rem]";
   const mark = orgLogoSource(logo, 32);
 
   let content: React.ReactNode;
   if (display === "NAME_ONLY") {
-    content = (
-      <span className="heading min-w-0 text-[0.95rem] leading-tight break-words">{name}</span>
-    );
+    content = <span className={cn("min-w-0 leading-tight break-words", nameClass)}>{name}</span>;
   } else if (wide) {
     content = (
       // eslint-disable-next-line @next/next/no-img-element -- pre-sized public WebP variants
@@ -64,24 +69,27 @@ export function OrgBrand({
             alt=""
             width={32}
             height={32}
-            className="size-8 shrink-0 rounded-md object-contain"
+            className={cn("shrink-0 object-contain", markClass)}
             decoding="async"
           />
         ) : (
           // A monogram: the initials on the primary.
           <span
             aria-hidden="true"
-            className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-md font-sans text-[0.8rem] font-extrabold"
+            className={cn(
+              "bg-primary text-primary-foreground flex shrink-0 items-center justify-center font-sans font-extrabold",
+              markClass,
+            )}
           >
             {orgInitials(name)}
           </span>
         )}
-        <span className="heading min-w-0 text-[0.95rem] leading-tight break-words">{name}</span>
+        <span className={cn("min-w-0 leading-tight break-words", nameClass)}>{name}</span>
       </>
     );
   }
 
-  const classes = cn("flex min-w-0 items-center gap-2.5 text-sm", className);
+  const classes = cn("flex min-w-0 items-center text-sm", compact ? "gap-2" : "gap-2.5", className);
   if (href) {
     return (
       <Link

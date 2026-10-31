@@ -75,9 +75,11 @@ export const NAV_ICONS: Record<string, IconComponent> = {
 export const ICON_STROKE = 1.75;
 
 /**
- * One row of the sidebar: a 40px pill with the icon 10px in, so collapsing
- * to the rail is only a change of width (40px, a circle around the icon).
- * The page you're on is the accent pill with the glow under it.
+ * One row of the sidebar, as the workspace plan draws it ("Option A,
+ * revised"): a compact 32px row with a 16px icon 8px in, so collapsing to
+ * the rail is only a change of width (a 32px square around the icon). The
+ * page you're on is the card colour with a thin outline and a bold label,
+ * not a coloured pill.
  */
 export function sidebarItemClass({
   active,
@@ -90,14 +92,15 @@ export function sidebarItemClass({
 }) {
   const tone = surfaceTone(chrome);
   return cn(
-    "focus-glow relative flex h-10 shrink-0 items-center gap-3 overflow-hidden rounded-full pr-3 pl-2.5 text-sm font-medium whitespace-nowrap outline-none",
+    "focus-glow relative flex h-8 shrink-0 items-center gap-2.5 overflow-hidden rounded-[7px] px-2 text-[13.5px] whitespace-nowrap outline-none",
+    "[&>svg:first-child]:opacity-70",
     "[transition:width_500ms_var(--ease-ink),background-color_200ms,color_200ms,box-shadow_200ms] motion-reduce:[transition:none]",
-    rail ? "w-10" : "w-full",
+    rail ? "w-8" : "w-full",
     active
       ? chrome
-        ? "bg-chrome-accent text-chrome-accent-foreground glow-halo font-semibold"
-        : "bg-brand-accent text-brand-accent-foreground glow-halo font-semibold"
-      : cn(tone.text, tone.hover),
+        ? "bg-chrome-foreground/12 text-chrome-foreground font-semibold shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--chrome-foreground)_18%,transparent)] [&>svg:first-child]:opacity-100"
+        : "bg-card text-foreground font-semibold shadow-[inset_0_0_0_1px_var(--border)] [&>svg:first-child]:opacity-100"
+      : cn("font-medium", tone.text, tone.hover),
   );
 }
 
@@ -133,14 +136,14 @@ function NavItemLink({
         link.locked && !isActive && "opacity-60",
       )}
     >
-      <Icon className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
+      <Icon className="size-4 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
       <span className={cn("min-w-0 flex-1 truncate", fadeLabel(rail))}>{link.label}</span>
       {count > 0 && !link.locked && (
         <>
           <span
             className={cn(
-              "shrink-0 rounded-full px-1.5 text-[12px] leading-5 font-semibold tabular-nums",
-              isActive ? "bg-black/10 dark:bg-white/15" : "bg-sidebar-accent",
+              // The plan's count: a small dark pill, so what waits on you stands out.
+              "bg-foreground text-background shrink-0 rounded-full px-1.5 font-mono text-[11px] leading-[18px] font-medium tabular-nums",
               fadeLabel(rail),
             )}
           >
@@ -150,7 +153,7 @@ function NavItemLink({
           {rail && (
             <span
               aria-hidden="true"
-              className="bg-glow absolute top-2 left-7 size-2 rounded-full"
+              className="bg-foreground absolute top-1.5 left-5 size-1.5 rounded-full"
             />
           )}
           <span className="sr-only">, {count} waiting</span>
@@ -205,7 +208,7 @@ export function GroupGap({ children }: { children?: React.ReactNode }) {
   const { chrome } = useSidebarMode();
   const tone = surfaceTone(chrome);
   return (
-    <div className="relative flex h-5 shrink-0 items-center gap-2 pr-1 pl-3">
+    <div className="relative mx-2 my-2 flex shrink-0 items-center gap-2">
       <span aria-hidden="true" className={cn("h-px flex-1", tone.line)} />
       {children}
     </div>
@@ -309,14 +312,10 @@ function PinnedList({
                     onClick={onNavigate}
                     draggable={false}
                     aria-current={active ? "page" : undefined}
-                    className={cn(
-                      sidebarItemClass({ active, rail: false, chrome }),
-                      "pr-9",
-                      !active && "font-normal",
-                    )}
+                    className={cn(sidebarItemClass({ active, rail: false, chrome }), "pr-8")}
                   >
                     <Icon
-                      className="size-5 shrink-0 opacity-80"
+                      className="size-4 shrink-0"
                       strokeWidth={ICON_STROKE}
                       aria-hidden="true"
                     />
@@ -339,8 +338,8 @@ function PinnedList({
                       })
                     }
                     className={cn(
-                      "focus-glow absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 place-items-center rounded-full opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100",
-                      active ? "text-brand-accent-foreground" : tone.hover,
+                      "focus-glow absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded-md opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100",
+                      tone.hover,
                     )}
                   >
                     <X className="size-3.5" aria-hidden="true" />

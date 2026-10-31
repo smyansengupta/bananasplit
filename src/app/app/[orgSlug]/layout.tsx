@@ -234,6 +234,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
             name={ctx.organization.name}
             logo={ctx.organization.logo}
             display={theme.logoDisplay}
+            compact
           />
         }
       >

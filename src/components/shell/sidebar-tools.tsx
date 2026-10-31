@@ -33,7 +33,7 @@ export function SidebarTools({
   const { rail, chrome } = useSidebarMode();
   const mod = useModKey();
   return (
-    <div className="flex shrink-0 flex-col gap-2 pb-3">
+    <div className="flex shrink-0 flex-col gap-1 pb-2">
       <button
         type="button"
         onClick={() => {
@@ -44,22 +44,23 @@ export function SidebarTools({
         aria-keyshortcuts="Meta+K Control+K"
         title={rail ? "Search or jump" : undefined}
         className={cn(
-          "focus-glow flex h-10 shrink-0 items-center gap-2.5 overflow-hidden rounded-full pr-2 pl-2.5 text-sm outline-none",
+          // The plan's search field: bordered, on the card colour, quiet text.
+          "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-lg border px-2 text-[13px] outline-none",
           "[transition:width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
           chrome
-            ? "bg-chrome-foreground/8 text-chrome-foreground/70 hover:bg-chrome-foreground/12"
-            : "bg-background/70 text-sidebar-foreground/70 hover:bg-background ring-sidebar-border ring-1",
-          rail ? "w-10" : "w-full",
+            ? "border-chrome-foreground/15 bg-chrome-foreground/6 text-chrome-foreground/60 hover:bg-chrome-foreground/10"
+            : "bg-card text-muted-foreground hover:text-foreground border-border",
+          rail ? "w-8 justify-center px-0" : "w-full",
         )}
       >
-        <Search className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
+        <Search className="size-3.5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
         <span className={cn("min-w-0 flex-1 truncate text-left", fadeLabel(rail))}>
           Search or jump
         </span>
         <kbd
           className={cn(
-            "rounded-md px-1.5 py-1 font-mono text-[11px] leading-none",
-            chrome ? "bg-chrome-foreground/10" : "bg-sidebar-accent",
+            "rounded border px-1 font-mono text-[10.5px] leading-4",
+            chrome ? "border-chrome-foreground/15" : "border-border",
             fadeLabel(rail),
           )}
         >
@@ -83,14 +84,19 @@ export function SidebarTools({
               title={rail ? "New (c)" : undefined}
               aria-busy={pending || undefined}
               className={cn(
-                "focus-glow glow-halo flex h-10 shrink-0 items-center gap-2.5 overflow-hidden rounded-full pr-3 pl-2.5 text-sm font-semibold outline-none",
-                "[transition:width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
-                "bg-create text-create-foreground hover:brightness-105",
-                rail ? "w-10" : "w-full",
+                // The plan's New: one dark, full-width button.
+                "focus-glow mb-1 flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-lg px-2 text-[13.5px] font-semibold outline-none",
+                "[transition:width_500ms_var(--ease-ink),opacity_200ms] motion-reduce:[transition:none]",
+                "bg-primary text-primary-foreground hover:opacity-90",
+                rail ? "w-8 justify-center px-0" : "w-full",
               )}
             >
-              <span className="grid size-5 shrink-0 place-items-center">
-                {pending ? icon : <Plus className="size-5" strokeWidth={2} aria-hidden="true" />}
+              <span className="grid size-4 shrink-0 place-items-center">
+                {pending ? (
+                  icon
+                ) : (
+                  <Plus className="size-3.5" strokeWidth={2.25} aria-hidden="true" />
+                )}
               </span>
               <span className={cn("min-w-0 truncate", fadeLabel(rail))}>New</span>
             </button>

@@ -131,9 +131,9 @@ export function OrgSwitcher({
         <button
           type="button"
           className={cn(
-            "focus-glow relative flex min-h-12 w-full min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden py-1 text-left outline-none",
+            "focus-glow relative flex min-h-9 w-full min-w-0 shrink-0 items-center justify-between gap-2 overflow-hidden py-1.5 text-left outline-none",
             "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
-            rail ? "rounded-full p-0" : "rounded-field px-1.5",
+            rail ? "rounded-full p-0" : "rounded-lg px-2",
             !rail &&
               (chrome
                 ? "aria-expanded:bg-chrome-foreground/10"
@@ -145,8 +145,8 @@ export function OrgSwitcher({
           <span className={cn("flex min-w-0 flex-1 items-center gap-2.5", fadeLabel(rail))}>
             {(!personal && brand) || (
               <>
-                {mark(active, "size-8")}
-                <span className="heading min-w-0 text-[0.95rem] leading-tight break-words">
+                {mark(active, "size-[22px] rounded-[6px] text-[10px]")}
+                <span className="min-w-0 text-[13.5px] leading-tight font-semibold break-words">
                   {nameOf(active)}
                 </span>
               </>
