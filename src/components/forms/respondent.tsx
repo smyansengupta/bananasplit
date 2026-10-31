@@ -70,9 +70,10 @@ export function Respondent({
   allowAnother?: boolean;
 }) {
   const visible = useMemo(() => questions.filter((q) => q.type !== "hidden"), [questions]);
-  const [stage, setStage] = useState<"intro" | "ask" | "done">(
-    description || visible.length > 1 ? "intro" : "ask",
-  );
+  // The form opens on its first question (the plan has no Start screen):
+  // a Start button that held the focus took the first space someone typed,
+  // and with it everything before it ("Jordan Park" arrived as "Park").
+  const [stage, setStage] = useState<"ask" | "done">("ask");
   const [trail, setTrail] = useState<string[]>(() => {
     const first = firstQuestionId(questions);
     return first ? [first] : [];
@@ -160,7 +161,6 @@ export function Respondent({
   function back() {
     setError(null);
     if (trail.length > 1) setTrail((t) => t.slice(0, -1));
-    else if (description || visible.length > 1) setStage("intro");
   }
 
   /** Picks a choice: on a single-choice question, goes on by itself a moment later. */
@@ -177,13 +177,6 @@ export function Respondent({
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (stage === "intro") {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        setStage("ask");
-      }
-      return;
-    }
     if (stage !== "ask" || !current || sending) return;
     const typing =
       e.target instanceof HTMLTextAreaElement ||
@@ -236,7 +229,7 @@ export function Respondent({
     setError(null);
     const first = firstQuestionId(questions);
     setTrail(first ? [first] : []);
-    setStage(description || visible.length > 1 ? "intro" : "ask");
+    setStage("ask");
   }
 
   const { firstName, keyAnswer } = useMemo(
@@ -295,17 +288,7 @@ export function Respondent({
         onKeyDown={onKeyDown}
         className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-5 py-16 outline-none sm:px-8"
       >
-        {stage === "intro" ? (
-          <div className="space-y-5">
-            <h1 className="display-title text-[34px] leading-tight sm:text-[42px]">{title}</h1>
-            {description && (
-              <p className="text-muted-foreground max-w-[60ch] text-[16px] leading-relaxed whitespace-pre-line">
-                {description}
-              </p>
-            )}
-            <Go onClick={() => setStage("ask")} label="Start" autoFocus />
-          </div>
-        ) : stage === "done" ? (
+        {stage === "done" ? (
           <div className="space-y-5" aria-live="polite">
             <h1 className="display-title text-[34px] leading-tight">
               {thanksLine(design, firstName)}
@@ -322,13 +305,21 @@ export function Respondent({
             key={current.id}
             className="animate-in fade-in-0 slide-in-from-bottom-2 space-y-6 duration-300 motion-reduce:animate-none"
           >
+            <h1 className="sr-only">{title}</h1>
+            {description && trail.length === 1 && (
+              // The form's description, above question 1 only.
+              <p className="text-muted-foreground max-w-[60ch] text-[16px] leading-relaxed whitespace-pre-line">
+                {description}
+              </p>
+            )}
             <div className="space-y-2">
+              {current.type !== "section" && (
+                <p className="text-primary flex items-center gap-1 font-mono text-[13px] font-medium tabular-nums">
+                  {number}
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </p>
+              )}
               <h2 className="display-title text-[26px] leading-snug sm:text-[30px]">
-                {current.type !== "section" && (
-                  <span className="text-muted-foreground me-2 text-[0.7em] tabular-nums">
-                    {number}.
-                  </span>
-                )}
                 {current.title || "Untitled question"}
                 {current.required && current.type !== "section" && (
                   <span className="text-muted-foreground" aria-label="required">
