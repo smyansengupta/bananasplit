@@ -32,10 +32,13 @@ import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 export function ClubBasicsStep({
   requiresCode,
   notice,
+  plan,
 }: {
   requiresCode: boolean;
-  /** Why this person can't create a club yet, in place of the fields. */
+  /** Why this person can't create an organization yet, in place of the fields. */
   notice?: React.ReactNode;
+  /** The plan picked on Pricing ("club" or "society"), kept for after the trial. */
+  plan?: "club" | "society";
 }) {
   const [state, formAction, isPending] = useActionState(createOrganizationAction, {});
   const router = useRouter();
@@ -97,6 +100,7 @@ export function ClubBasicsStep({
           className="flex flex-1 flex-col"
         >
           <input type="hidden" name="flow" value="onboarding" />
+          {plan && <input type="hidden" name="plan" value={plan} />}
           <StepBody className="gap-5">
             <BrandField id="org-name" label="Organization name">
               <BrandInput
