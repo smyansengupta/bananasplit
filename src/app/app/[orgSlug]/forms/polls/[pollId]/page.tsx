@@ -26,6 +26,12 @@ export default async function PollDetailPage({
       where: { id: pollId, organizationId: org.id },
     });
     if (timePoll > 0) return { kind: "availability" as const };
+    // Moved into Forms: its page is the form's now.
+    const moved = await db.poll.findFirst({
+      where: { id: pollId, organizationId: org.id },
+      select: { formId: true },
+    });
+    if (moved?.formId) return { kind: "moved" as const, formId: moved.formId };
     const question = await loadQuestionPollSource(db, org.id, pollId, user.id);
     if (!question) return null;
     const me = await db.user.findUnique({
@@ -38,6 +44,7 @@ export default async function PollDetailPage({
   });
   if (!loaded) notFound();
   if (loaded.kind === "availability") redirect(`/app/${orgSlug}/calendar/find-a-time/${pollId}`);
+  if (loaded.kind === "moved") redirect(`/app/${orgSlug}/forms/${loaded.formId}`);
 
   const view = buildQuestionPollView(
     loaded.question,

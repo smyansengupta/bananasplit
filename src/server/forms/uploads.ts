@@ -101,7 +101,7 @@ export async function storeFormUpload(
     await deleteBlobs([stored.key]).catch(() => undefined);
     if (error instanceof UploadRefusedError)
       throw new FormUploadError(
-        "This club is out of storage, so files can't be sent right now.",
+        "This organization is out of storage, so files can't be sent right now.",
         413,
       );
     throw error;
