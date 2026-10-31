@@ -147,6 +147,21 @@ function PanelBody({
               {variant === "placeholder" && <Badge variant="outline">Not a member</Badge>}
             </div>
           </div>
+          {/* Up here, beside what it edits, not under everything. */}
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className={buttonVariants({
+                variant: "outline",
+                size: "sm",
+                className: "ms-auto shrink-0 self-start",
+              })}
+            >
+              <Pencil aria-hidden="true" />
+              Edit
+            </button>
+          )}
         </div>
       </SheetHeader>
 
@@ -263,17 +278,6 @@ function PanelBody({
             </div>
           )}
         </Section>
-      )}
-
-      {onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          className={buttonVariants({ variant: "outline", size: "sm", className: "w-fit" })}
-        >
-          <Pencil aria-hidden="true" />
-          Edit
-        </button>
       )}
     </div>
   );

@@ -79,6 +79,12 @@ export function DropZone({
           setOver(true);
         }}
         onDragLeave={() => setOver(false)}
+        // Anywhere in the zone opens the file picker, not just its button.
+        // (The input's own click bubbles here too: leave that one alone.)
+        onClick={(e) => {
+          if (inactive || e.target === input.current) return;
+          input.current?.click();
+        }}
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
@@ -89,7 +95,7 @@ export function DropZone({
         className={cn(
           "flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
           over ? "border-primary bg-primary/5" : "border-border",
-          inactive && "opacity-60",
+          inactive ? "opacity-60" : "hover:bg-muted/40 cursor-pointer",
         )}
       >
         {busy ? (
@@ -125,7 +131,10 @@ export function DropZone({
               variant="outline"
               size="sm"
               disabled={inactive}
-              onClick={() => input.current?.click()}
+              onClick={(e) => {
+                e.stopPropagation();
+                input.current?.click();
+              }}
             >
               Choose a file
             </Button>
