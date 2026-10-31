@@ -181,7 +181,7 @@ export function StepPanel({
           </p>
         )}
         <Link
-          href={`/app/${orgSlug}/settings/integrations/${step.settingsSegment}`}
+          href={`/app/${orgSlug}/integrations/${step.settingsSegment}`}
           className="text-muted-foreground hover:text-foreground focus-glow ml-auto rounded-full text-[13px] font-medium underline-offset-4 hover:underline"
         >
           Full settings for this

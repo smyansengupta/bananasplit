@@ -440,7 +440,7 @@ export default async function DatabasesPage({
           lastError={sync.lastError}
           endpoint={sync.endpoint}
           configError={sync.configError}
-          settingsHref={`/app/${orgSlug}/settings/integrations`}
+          settingsHref={`/app/${orgSlug}/integrations`}
           streams={sync.streams.map((s) => ({
             stream: s.stream,
             label: s.label,

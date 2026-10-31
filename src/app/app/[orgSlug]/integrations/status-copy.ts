@@ -35,16 +35,13 @@ export const PROVIDER_ICONS: Record<IntegrationProvider, string> = {
 const checkedFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 /**
- * The integration page's live one-line summary: its state, the key's last
- * four characters and when it was last checked ("Connected · •••• 3f9a ·
- * checked Oct 12").
+ * The integration page's live one-line summary: its state and when it was
+ * last checked ("Connected, checked Oct 12"). The key's last four
+ * characters show once, in the Connection card, not here as well.
  */
-export function integrationSummary(dto: IntegrationDto, secretLabel = "key"): string {
+export function integrationSummary(dto: IntegrationDto, _secretLabel = "key"): string {
   const parts = [STATUS_COPY[dto.status]];
-  if (dto.hasSecret) {
-    parts.push(dto.last4 ? `${secretLabel} ending ${dto.last4}` : `${secretLabel} saved`);
-  }
   if (dto.lastVerifiedAt)
     parts.push(`checked ${checkedFormat.format(new Date(dto.lastVerifiedAt))}`);
-  return parts.join(" · ");
+  return parts.join(", ");
 }

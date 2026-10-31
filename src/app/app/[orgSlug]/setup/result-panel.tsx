@@ -252,10 +252,10 @@ function DataResult({
         <NextStepLink orgSlug={orgSlug} nextStep="calendar" />
         <TestButton orgId={orgId} step="data" label="Test again" variant="ghost" />
         <Link
-          href={`/app/${orgSlug}/setup/status`}
+          href={`/app/${orgSlug}/integrations`}
           className="text-muted-foreground hover:text-foreground focus-glow ml-auto rounded-full text-[13px] font-medium underline-offset-4 hover:underline"
         >
-          Connection status
+          Integrations
         </Link>
       </div>
     </div>
@@ -340,7 +340,7 @@ function CalendarResult({
             detail="Schedule a session and watch it appear in Google"
           />
           <Destination
-            href={`/app/${orgSlug}/settings/integrations/google-calendar`}
+            href={`/app/${orgSlug}/integrations/google-calendar`}
             icon={ArrowRight}
             label="Import existing events"
             detail="A dry run first; nothing is written until you apply it"

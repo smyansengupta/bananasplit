@@ -222,7 +222,7 @@ export function SyncPanel({
             ) : (
               <p className="text-muted-foreground">
                 Not connected. Connect the organization&apos;s Google account in{" "}
-                <Link className="underline" href={`/app/${orgSlug}/settings/integrations`}>
+                <Link className="underline" href={`/app/${orgSlug}/integrations`}>
                   Admin panel › Integrations
                 </Link>
                 .
@@ -249,7 +249,7 @@ export function SyncPanel({
                 in{" "}
                 <Link
                   className="underline"
-                  href={`/app/${orgSlug}/settings/integrations/google-calendar`}
+                  href={`/app/${orgSlug}/integrations/google-calendar`}
                 >
                   Admin panel › Integrations › Google Calendar
                 </Link>

@@ -29,7 +29,7 @@ export function IntegrationHeader({
 }) {
   return (
     <div className="space-y-4">
-      <BackLink href={`/app/${orgSlug}/settings/integrations`} label="Integrations" />
+      <BackLink href={`/app/${orgSlug}/integrations`} label="Integrations" />
       <PageHeader
         title={title}
         description={dto ? integrationSummary(dto, secretLabel) : undefined}

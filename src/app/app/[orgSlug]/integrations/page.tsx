@@ -13,10 +13,11 @@ import { cn } from "@/lib/utils";
 import { planGate } from "@/server/billing/plan-gate";
 import { loadMeetingConnections } from "@/server/conference/connections";
 import { getOrgContextBySlug } from "@/server/db/context";
+import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { loadIntegrations } from "@/server/integrations/service";
 
 /**
- * Integrations: every app a club can connect, in one grid, as the sidebar's
+ * Integrations: every app an organization can connect, in one grid, as the sidebar's
  * own page (it used to be a page deep in the Admin panel). What works today
  * shows its state and a Connect or Manage button; what's planned shows
  * "Coming soon", so each can be wired up later without moving anything.
@@ -52,11 +53,12 @@ export default async function IntegrationsPage({
   const { organization: org } = ctx;
   const canManage = can({ role: ctx.role }, "integrations.write");
   const base = `/app/${orgSlug}`;
-  const setup = (segment: string) => `${base}/settings/integrations/${segment}`;
+  const setup = (segment: string) => `${base}/integrations/${segment}`;
 
-  const [dtos, meetings] = await Promise.all([
+  const [dtos, meetings, mail] = await Promise.all([
     loadIntegrations(org.id),
     loadMeetingConnections(org.id),
+    resolveOrgMailRouting(org.id),
   ]);
   const stateOf = (provider: string): State => {
     const dto = dtos.find((d) => d.provider === provider);
@@ -102,22 +104,29 @@ export default async function IntegrationsPage({
           key: "discord",
           brand: M.discord,
           name: "Discord",
-          body: "The same, for clubs that live on Discord.",
+          body: "The same, for organizations that live on Discord.",
           state: "soon",
         },
         {
           key: "groupme",
           brand: M.groupme,
           name: "GroupMe",
-          body: "Announcements and quick polls in the club chat.",
+          body: "Announcements and quick polls in the group chat.",
           state: "soon",
         },
         {
           key: "email",
           brand: M.email,
           name: "Email sender",
-          body: "Invites and reminders from your club's own address.",
-          state: stateOf("EMAIL_RESEND"),
+          body: "Invites and reminders from your organization's own address.",
+          // Organization email sends even without a sender of its own (the
+          // platform's address), so the tile says Connected unless it's off.
+          state:
+            stateOf("EMAIL_RESEND") === "attention"
+              ? "attention"
+              : mail.mode === "none"
+                ? "off"
+                : "connected",
           href: setup("email"),
         },
       ],
@@ -129,7 +138,7 @@ export default async function IntegrationsPage({
           key: "google-calendar",
           brand: brandOr("google-workspace"),
           name: "Google Calendar",
-          body: "Your club's calendar, kept in sync both ways.",
+          body: "Your organization's calendar, kept in sync both ways.",
           state: stateOf("GOOGLE_CALENDAR"),
           href: setup("google-calendar"),
         },
@@ -195,7 +204,7 @@ export default async function IntegrationsPage({
           key: "claude",
           brand: brandOr("claude"),
           name: "Claude",
-          body: "Imports, and answers about your club's data.",
+          body: "Imports, and answers about your organization's data.",
           state: stateOf("CLAUDE"),
           href: setup("claude"),
         },
@@ -245,6 +254,13 @@ export default async function IntegrationsPage({
     <div className="space-y-7.5">
       <PageHeader
         title={sectionLabel(ctx.settings?.sidebar, "integrations")}
+        actions={
+          canManage ? (
+            <Button asChild variant="outline">
+              <Link href={`${base}/setup`}>Guided setup</Link>
+            </Button>
+          ) : null
+        }
         tabs={
           <PageTabs
             label="Show"

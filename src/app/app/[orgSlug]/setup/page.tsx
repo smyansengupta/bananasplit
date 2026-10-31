@@ -165,7 +165,7 @@ export default async function SetupPage({
           description={headerSummary}
           actions={
             <Button asChild variant="outline">
-              <Link href={`/app/${orgSlug}/setup/status`}>Connection status</Link>
+              <Link href={`/app/${orgSlug}/integrations`}>Integrations</Link>
             </Button>
           }
         />
