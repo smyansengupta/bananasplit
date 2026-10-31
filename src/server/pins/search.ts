@@ -52,7 +52,6 @@ const PAGES = [
   "/profile",
   "/settings",
   "/settings/members",
-  "/settings/notifications",
 ];
 
 const PER_KIND = 6;

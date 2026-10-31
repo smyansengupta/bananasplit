@@ -43,8 +43,7 @@ function roleLabel(role: string): string {
 /**
  * The signed-in user's own profile (Phase 2). One profile across every org
  * the user belongs to; titles are per org and set by that org's admins.
- * Sections: details, picture, links, notifications, calendar feed (the old
- * settings/notifications and settings/calendar pages redirect here), and
+ * Sections: details, picture, links, notifications, calendar feed, and
  * the AI apps the user connected while AI connectors are on.
  */
 export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/profile">) {
