@@ -134,6 +134,8 @@ export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
     "Each member's own inbox: personal, not organization data, and only its recipient can read it.",
   UpNextDismissal:
     "Cards each member hid from their own Overview: a personal preference, not organization data.",
+  InboxItemState:
+    "What each member snoozed or finished in their own Inbox: personal, not organization data.",
   OrgJoinCode:
     "The live invite code is a credential for joining the org; an export must not carry it.",
   Job: "Background job bookkeeping (ids and sanitized errors), not org data.",

@@ -102,6 +102,7 @@ model User {
   availability           UserAvailability?
   reminderSends          EventReminderSend[]
   upNextDismissals       UpNextDismissal[]
+  inboxItemStates        InboxItemState[]
   pins                   Pin[]
   recentVisits           RecentVisit[]
   memberPrefs            MemberPrefs[]
@@ -113,10 +114,10 @@ model User {
   noteComments           NoteComment[]        @relation("NoteCommentAuthor")
   noteCommentsResolved   NoteComment[]        @relation("NoteCommentResolvedBy")
   noteVersions           NoteVersion[]        @relation("NoteVersionCreatedBy")
+  itemLinksMade          ItemLink[]
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
-  itemLinksMade          ItemLink[]
 }
 
 /// When a user can't meet (profile setup A5, the profile page). Its own
@@ -415,6 +416,7 @@ model Organization {
   secrets           OrgSecret[]
   settings          OrgSettings?
   upNextDismissals  UpNextDismissal[]
+  inboxItemStates   InboxItemState[]
   integrations      OrgIntegration[]
   slugHistory       OrgSlugHistory[]
   exports           OrgExport[]
@@ -433,7 +435,7 @@ model Organization {
   noteFolders       NoteFolder[]
   pulseIssues       PulseIssue[]
   connectorGrants   ConnectorGrant[]
-  itemLinks               ItemLink[]
+  itemLinks         ItemLink[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -1417,6 +1419,24 @@ model UpNextDismissal {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, organizationId, kind, refId])
+  @@index([organizationId, userId])
+}
+
+/// The Inbox's memory, per member: an item put off until later (snoozedUntil)
+/// or finished with (doneAt). itemKey is "<kind>:<id>" (invite, task,
+/// request, review, update). Own rows only (RLS pins userId).
+model InboxItemState {
+  organizationId String
+  userId         String
+  itemKey        String
+  snoozedUntil   DateTime?
+  doneAt         DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId, itemKey])
   @@index([organizationId, userId])
 }
 

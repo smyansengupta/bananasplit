@@ -203,6 +203,18 @@ export function shortcutGroups(input: ShortcutSheetInput): ShortcutGroup[] {
       },
     );
   }
+  if (has("inbox")) {
+    groups.push({
+      title: "Inbox",
+      rows: [
+        { keys: [["J"], ["K"]], label: "Next or previous item" },
+        { keys: [["Enter"]], label: "Open it beside the list" },
+        { keys: [["O"]], label: "Open its page" },
+        { keys: [["E"], ["D"]], label: "Done (a task or an update)" },
+        { keys: [["S"]], label: "Snooze until tomorrow" },
+      ],
+    });
+  }
   return groups;
 }
 
