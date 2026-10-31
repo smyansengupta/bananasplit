@@ -18,8 +18,10 @@ import { cancelOrgDeletion, scheduleOrgDeletion } from "@/server/settings/deleti
  */
 
 export const requestExportAction = withOrgAction(
-  async (ctx): Promise<{ error?: string; exportId?: string }> => {
-    const result = await requestOrgExport(ctx);
+  async (ctx, retryOf?: string): Promise<{ error?: string; exportId?: string }> => {
+    const result = await requestOrgExport(ctx, {
+      retryOf: retryOf === undefined ? undefined : z.string().max(64).parse(retryOf),
+    });
     return result.ok ? { exportId: result.exportId } : { error: result.error };
   },
 );

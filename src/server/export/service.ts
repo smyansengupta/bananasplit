@@ -61,13 +61,31 @@ const DEADLINE_MARGIN_MS = 45_000;
 
 export type RequestExportResult = { ok: true; exportId: string } | { ok: false; error: string };
 
-export async function requestOrgExport(ctx: OrgContext): Promise<RequestExportResult> {
+/**
+ * Queue an export: one a day. `retryOf` is Export again on a failed one: the
+ * latest export, failed, may be run again without waiting out the day (it
+ * gave nothing to download).
+ */
+export async function requestOrgExport(
+  ctx: OrgContext,
+  { retryOf }: { retryOf?: string } = {},
+): Promise<RequestExportResult> {
   requirePermission(ctx, "org.export");
-  const limited = await checkRateLimit(
-    rateLimitKey("org-export", ctx.organizationId),
-    1,
-    24 * 60 * 60,
-  );
+  let retry = false;
+  if (retryOf) {
+    const latest = await ctx.db.orgExport.findFirst({
+      where: { organizationId: ctx.organizationId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true },
+    });
+    if (latest?.id !== retryOf || latest.status !== OrgExportStatus.FAILED) {
+      return { ok: false, error: "Only the latest export, if it failed, can be run again." };
+    }
+    retry = true;
+  }
+  const limited = retry
+    ? { allowed: true as const }
+    : await checkRateLimit(rateLimitKey("org-export", ctx.organizationId), 1, 24 * 60 * 60);
   if (!limited.allowed) {
     return {
       ok: false,

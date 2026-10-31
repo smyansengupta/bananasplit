@@ -10,7 +10,16 @@ import { toast } from "@/components/ui/toaster";
 import { requestExportAction } from "../../actions";
 
 /** A failed or expired export's one way forward: ask for a new one right here. */
-export function ExportAgain({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
+export function ExportAgain({
+  orgId,
+  orgSlug,
+  retryOf,
+}: {
+  orgId: string;
+  orgSlug: string;
+  /** A failed export: run it again without waiting out the day. */
+  retryOf?: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   return (
@@ -18,7 +27,7 @@ export function ExportAgain({ orgId, orgSlug }: { orgId: string; orgSlug: string
       disabled={busy}
       onClick={async () => {
         setBusy(true);
-        const result = await requestExportAction(orgId);
+        const result = await requestExportAction(orgId, retryOf);
         setBusy(false);
         if (result.error) {
           toast({ title: result.error, tone: "error" });

@@ -54,6 +54,19 @@ export function ExportCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  // Export again shows on the latest export, when it failed.
+  const latestFailed = exports[0]?.status === "FAILED" ? exports[0].id : null;
+
+  const request = (retryOf?: string) =>
+    startTransition(async () => {
+      setMessage(null);
+      const result = await requestExportAction(orgId, retryOf);
+      if (result.error) setMessage({ tone: "error", text: result.error });
+      else {
+        setMessage({ tone: "ok", text: "Requested. We'll notify you." });
+        router.refresh();
+      }
+    });
 
   return (
     <SettingsCard
@@ -65,23 +78,7 @@ export function ExportCard({
       }
       status={message && <SettingsStatus status={message} />}
       footer={
-        <Button
-          disabled={isPending}
-          onClick={() =>
-            startTransition(async () => {
-              setMessage(null);
-              const result = await requestExportAction(orgId);
-              if (result.error) setMessage({ tone: "error", text: result.error });
-              else {
-                setMessage({
-                  tone: "ok",
-                  text: "Requested. We'll notify you.",
-                });
-                router.refresh();
-              }
-            })
-          }
-        >
+        <Button disabled={isPending} onClick={() => request()}>
           {isPending ? "Requesting…" : "Export"}
         </Button>
       }
@@ -106,6 +103,16 @@ export function ExportCard({
                 <Badge variant={STATUS_VARIANT[e.status] ?? "secondary"}>
                   {STATUS[e.status] ?? e.status}
                 </Badge>
+                {e.id === latestFailed && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPending}
+                    onClick={() => request(e.id)}
+                  >
+                    Export again
+                  </Button>
+                )}
                 {e.downloadHref && (
                   <Button asChild variant="outline" size="sm">
                     <a href={e.downloadHref}>

@@ -73,7 +73,11 @@ export default async function ExportLandingPage({
               </a>
             </Button>
           ) : row.status === "FAILED" || row.status === "EXPIRED" ? (
-            <ExportAgain orgId={organization.id} orgSlug={orgSlug} />
+            <ExportAgain
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              retryOf={row.status === "FAILED" ? row.id : undefined}
+            />
           ) : null
         }
       >
