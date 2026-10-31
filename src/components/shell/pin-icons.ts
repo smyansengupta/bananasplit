@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   CheckSquare,
+  ClipboardList,
   Database,
   FileText,
   Folder,
@@ -22,6 +23,7 @@ export const PIN_ICONS: Record<PinKind, IconComponent> = {
   person: User,
   file: Paperclip,
   folder: Folder,
+  form: ClipboardList,
 };
 
 /** What each kind is called on a pin card. */
@@ -34,4 +36,5 @@ export const PIN_KIND_LABELS: Record<PinKind, string> = {
   person: "Person",
   file: "File",
   folder: "Folder",
+  form: "Form",
 };

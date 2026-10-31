@@ -92,6 +92,14 @@ async function resolveLabels(
       : null,
   );
   await load(
+    "form",
+    notEmpty(ids("form"))
+      ? db.form
+          .findMany({ where: { organizationId: orgId, id: { in: ids("form") }, deletedAt: null }, select: { id: true, title: true } })
+          .then((r) => r.map((f) => ({ id: f.id, name: f.title || "Untitled form" })))
+      : null,
+  );
+  await load(
     "database",
     notEmpty(keys)
       ? db.databaseDefinition

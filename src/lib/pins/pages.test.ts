@@ -7,7 +7,7 @@ describe("describePath", () => {
     expect(describePath("cbc", "/app/cbc/tasks")).toMatchObject({ kind: "page", label: "Tasks" });
     expect(describePath("cbc", "/app/cbc/finance/budget")).toMatchObject({ label: "Budget" });
     expect(describePath("cbc", "/app/cbc/settings/members")).toMatchObject({
-      label: "Admin panel · Members",
+      label: "Admin panel, Members",
     });
     expect(describePath("cbc", "/app/cbc/")).toMatchObject({ label: "Overview", skipRecent: true });
   });
@@ -41,10 +41,26 @@ describe("describePath", () => {
       kind: "page",
       label: "Find a time",
     });
+    // Making one reads as the page it is, not "New find-a-time poll".
+    expect(describePath("cbc", "/app/cbc/calendar/find-a-time/new")).toMatchObject({
+      kind: "page",
+      label: "Find a time",
+    });
     expect(describePath("cbc", "/app/cbc/calendar/find-a-time/new")?.lookup).toBeUndefined();
     expect(describePath("cbc", "/app/cbc/calendar/find-a-time/p_1")).toMatchObject({
       kind: "event",
       lookup: { type: "poll", id: "p_1" },
+    });
+    // A form shows its own title, looked up like a note's.
+    expect(describePath("cbc", "/app/cbc/forms/f_1")).toEqual({
+      href: "/app/cbc/forms/f_1",
+      kind: "form",
+      label: "Form",
+      lookup: { type: "form", id: "f_1" },
+    });
+    expect(describePath("cbc", "/app/cbc/forms/new")).toMatchObject({
+      kind: "page",
+      label: "New form",
     });
     expect(describePath("cbc", "/app/cbc/meetings")?.label).toBe("Meetings");
     expect(describePath("cbc", "/app/cbc/people/u_1")?.kind).toBe("person");
@@ -64,12 +80,12 @@ describe("describePath", () => {
       kind: "event",
       label: "RSVP page",
       lookup: { type: "event", id: "e_1" },
-      suffix: " · RSVPs",
+      suffix: ", RSVPs",
     });
     // Door mode is named by its section and last segment, as it was under the Calendar.
     expect(describePath("cbc", "/app/cbc/meetings/e_1/rsvp/door")).toMatchObject({
       kind: "page",
-      label: "Meetings · Door",
+      label: "Meetings, Door",
     });
     // Neither is a bare section: the list itself is still just "Meetings".
     expect(describePath("cbc", "/app/cbc/meetings")).toEqual({
@@ -83,7 +99,7 @@ describe("describePath", () => {
       kind: "event",
       label: "RSVP page",
       lookup: { type: "event", id: "e_1" },
-      suffix: " · RSVPs",
+      suffix: ", RSVPs",
     });
     expect(describePath("cbc", "/app/cbc/calendar/e_1")).toMatchObject({
       kind: "event",
@@ -98,14 +114,14 @@ describe("describePath", () => {
       kind: "folder",
       label: "Folder",
       lookup: { type: "folder", id: "f_1" },
-      suffix: " · Uploads",
+      suffix: ", Uploads",
     });
     expect(describePath("cbc", "/app/cbc/notes?tab=files")).toMatchObject({
-      label: "Files · Uploads",
+      label: "Files, Uploads",
     });
     expect(describePath("cbc", "/app/cbc/tasks?scope=mine&view=board")).toMatchObject({
       href: "/app/cbc/tasks?view=board&scope=mine",
-      label: "Tasks · Board · Mine",
+      label: "Tasks, Board, Mine",
     });
     // The old "mine" view is the Week, scoped to you.
     expect(canonicalHref("cbc", "/app/cbc/tasks?view=mine")).toBe(
