@@ -84,6 +84,7 @@ export const KIND_ICONS: Record<SearchKind, IconComponent> = {
   event: CalendarDays,
   poll: CalendarCheck,
   form: ClipboardList,
+  budget: PiggyBank,
   person: User,
   position: Network,
   database: Database,

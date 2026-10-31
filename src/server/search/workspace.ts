@@ -930,7 +930,31 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
         })
       : [];
 
+  // Budget lines of the active period (finance roles; members can't read
+  // them), so a meeting or a task can be linked to the line it spends from.
+  const budgets =
+    manager && !ctx.browsing
+      ? await db.budgetCategory.findMany({
+          where: {
+            organizationId: viewer.orgId,
+            budgetPeriod: { isActive: true },
+            ...everyWord<Prisma.BudgetCategoryWhereInput>(q.terms, (c) => [{ name: c }]),
+          },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, name: true, budgetPeriodId: true },
+          take: ctx.pool,
+        })
+      : [];
+
   const hits = [
+    ...budgets.map((c) =>
+      hit("budget", c.id, {
+        title: c.name,
+        href: `${ctx.base}/finance/budget?period=${c.budgetPeriodId}`,
+        detail: "Budget line",
+        score: scoreFields([{ text: c.name, weight: 3 }], q),
+      }),
+    ),
     ...transactions.map((t) => {
       const amount = formatCents(t.amountCents, t.currency);
       const category =

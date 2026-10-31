@@ -36,6 +36,7 @@ export type SearchKind =
   | "event"
   | "poll"
   | "form"
+  | "budget"
   | "person"
   | "position"
   | "database"

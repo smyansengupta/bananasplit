@@ -9,6 +9,7 @@ import {
   Link2,
   Loader2,
   NotebookText,
+  PiggyBank,
   Plus,
   Search,
   Users,
@@ -37,6 +38,7 @@ const ICONS: Record<LinkKind, IconComponent> = {
   database: Database,
   transaction: Wallet,
   form: ClipboardList,
+  budget: PiggyBank,
 };
 
 /** A search hit's key is "{kind}:{id}"; the id may itself hold colons. */
