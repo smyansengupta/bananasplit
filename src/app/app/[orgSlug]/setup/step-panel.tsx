@@ -78,10 +78,7 @@ export function StepPanel({
         </header>
 
         {view.status === "skipped" ? (
-          <p className="rounded-tile bg-muted/60 text-muted-foreground p-3 text-sm">
-            You passed over this one. Nothing has been lost — connect it now and it stops counting
-            as skipped, or put it back on the list at the bottom of this page.
-          </p>
+          <p className="rounded-tile bg-muted/60 text-muted-foreground p-3 text-sm">Skipped.</p>
         ) : null}
 
         {reconnecting && view.lastError ? (

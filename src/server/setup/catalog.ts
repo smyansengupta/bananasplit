@@ -156,9 +156,9 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
     ],
     consequences: [
       "Reading one document is one Claude API call, billed to your organization's own Anthropic workspace. At Claude Opus 5 that is a few cents a document; Sonnet and Haiku cost less and are in the list below.",
-      "Nothing here runs on a schedule and nothing else in the portal calls Claude. You are billed when somebody presses Import on an org chart, and at no other time.",
+      "Nothing here runs on a schedule and nothing else in Bananasplit calls Claude. You are billed when somebody presses Import on an org chart, and at no other time.",
       "The document you upload is sent to Anthropic's API to be read.",
-      "Set a monthly spend limit on the workspace. A key with no limit is a key with no limit.",
+      "Set a monthly spend limit on the workspace.",
     ],
     ifSkipped:
       "The org chart still works — you build it by hand instead of uploading a document. Nothing else changes.",
