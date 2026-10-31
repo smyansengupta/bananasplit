@@ -1,29 +1,27 @@
 import { formatDistanceToNow } from "date-fns";
-import { FileText, Lock, NotebookText } from "@/components/icons";
+import { Check, ClipboardList, Globe, ListChecks, Vote } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
-import { FILE_ICONS } from "@/components/notes/file-card";
-import { PIN_ICONS, PIN_KIND_LABELS } from "@/components/shell/pin-icons";
-import { TickMeter } from "@/components/ui/meters";
+import { PIN_KIND_LABELS } from "@/components/shell/pin-icons";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
-import { familyOf } from "@/lib/files/types";
 import { dayWordOfKey } from "@/lib/overview/format";
 import type { PinKind } from "@/lib/pins/pages";
 import { ago } from "@/lib/relative-time";
+import { tagToken } from "@/lib/tag-colors";
 import { localDateKey } from "@/lib/tasks/dates";
-import { cn } from "@/lib/utils";
 import type { OpenFormStat } from "@/server/overview/queries";
 
-import { TileIcon, TileText, tileClass } from "./bits";
+import { KindIcon, KindTile } from "./kind-tiles";
 
 /**
  * Bodies of the Overview widgets (redesign guide 9.2), as server
- * components: the board places them in its cards. Tiles carry an icon
- * chip; lists are rows separated by space, a hairline at most.
+ * components: the board places them in its cards. Pages, notes, files and
+ * pins are coloured tiles, one colour per kind (kind-tiles.tsx); open
+ * forms are bars of their responses.
  */
 
-const TILE_GRID = "grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(12.5rem,1fr))]";
+const TILE_GRID = "grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))]";
 
 export function RecentList({
   items,
@@ -33,120 +31,50 @@ export function RecentList({
   now: Date;
 }) {
   if (items.length === 0) {
-    return <EmptyState size="compact" title="Nothing here yet" />;
+    return (
+      <EmptyState
+        size="compact"
+        title="Nothing here yet"
+        description="Pages you open show up here."
+      />
+    );
   }
   return (
     <ul className={TILE_GRID}>
-      {items.map((item) => {
-        const Icon = PIN_ICONS[item.kind] ?? FileText;
-        return (
-          <li key={item.href} className="min-w-0">
-            <Link href={item.href} className={tileClass}>
-              <TileIcon>
-                <Icon />
-              </TileIcon>
-              <TileText
-                title={item.label}
-                sub={`${PIN_KIND_LABELS[item.kind] ?? "Page"}, ${ago(item.visitedAt, now)}`}
-              />
-            </Link>
-          </li>
-        );
-      })}
+      {items.map((item) => (
+        <li key={item.href} className="min-w-0">
+          <KindTile
+            href={item.href}
+            kind={item.kind}
+            title={item.label}
+            sub={`${PIN_KIND_LABELS[item.kind] ?? "Page"}, ${ago(item.visitedAt, now)}`}
+          />
+        </li>
+      ))}
     </ul>
   );
 }
-
-export interface WeekDay {
-  key: string;
-  /** "Mon". */
-  weekday: string;
-  /** "12". */
-  date: string;
-  isToday: boolean;
-  events: { id: string; title: string; time: string }[];
-}
-
-/**
- * Seven day tiles, today in the accent. On a phone they stack as one row
- * per day (the day on the left, its events beside it), so a free day is a
- * line, not a tall empty tile.
- */
-export function WeekStrip({ orgSlug, days }: { orgSlug: string; days: WeekDay[] }) {
-  return (
-    <ol className="grid grid-cols-2 gap-2.5 max-sm:grid-cols-1 max-sm:gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
-      {days.map((d) => (
-        <li
-          key={d.key}
-          aria-current={d.isToday ? "date" : undefined}
-          className={cn(
-            "rounded-tile flex min-h-28 min-w-0 flex-col gap-2 p-3",
-            "max-sm:min-h-0 max-sm:flex-row max-sm:items-start max-sm:gap-3 max-sm:py-2.5",
-            d.isToday ? "bg-brand-accent text-brand-accent-foreground glow-halo" : "bg-muted/60",
-          )}
-        >
-          <p className="flex items-baseline gap-1.5 max-sm:w-24 max-sm:shrink-0">
-            <span className={cn("text-[13px] font-medium", !d.isToday && "text-muted-foreground")}>
-              {d.isToday ? "Today" : d.weekday}
-            </span>
-            <span className="numeral text-[22px]">{d.date}</span>
-          </p>
-          <ul className="space-y-1.5 max-sm:min-w-0 max-sm:flex-1 max-sm:self-center">
-            {d.events.length === 0 && (
-              <li className={cn("text-[12px]", d.isToday ? "opacity-70" : "text-muted-foreground")}>
-                Free
-              </li>
-            )}
-            {d.events.slice(0, 3).map((e) => (
-              <li key={e.id}>
-                <Link
-                  href={`/app/${orgSlug}/calendar/${e.id}`}
-                  className={cn(
-                    "block rounded-[10px] px-2 py-1.5 text-[12px] leading-tight",
-                    d.isToday ? "bg-black/10 hover:bg-black/15" : "bg-card hover:bg-background",
-                  )}
-                >
-                  <span className={cn("block", d.isToday ? "opacity-80" : "text-muted-foreground")}>
-                    {e.time}
-                  </span>
-                  <span className="line-clamp-2 font-semibold">{e.title}</span>
-                </Link>
-              </li>
-            ))}
-            {d.events.length > 3 && (
-              <li className="text-[12px] font-medium opacity-80">+{d.events.length - 3} more</li>
-            )}
-          </ul>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-const TICK_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-4)",
-  "var(--chart-3)",
-  "var(--chart-5)",
-];
 
 /** "today" and "tomorrow" read lower-case mid-sentence; day names keep their capital. */
 function closesWord(word: string): string {
   return word === "Today" || word === "Tomorrow" ? word.toLowerCase() : word;
 }
 
-const FORM_KIND_WORDS: Record<OpenFormStat["kind"], string> = {
-  form: "Form",
-  poll: "Quick poll",
-  question: "Member poll",
-  website: "Website poll",
+const FORM_KIND: Record<
+  OpenFormStat["kind"],
+  { word: string; color: string; Icon: typeof ClipboardList }
+> = {
+  form: { word: "Form", color: `var(${tagToken("teal")})`, Icon: ClipboardList },
+  poll: { word: "Quick poll", color: `var(${tagToken("navy")})`, Icon: ListChecks },
+  question: { word: "Member poll", color: `var(${tagToken("plum")})`, Icon: Vote },
+  website: { word: "Website poll", color: `var(${tagToken("rust")})`, Icon: Globe },
 };
 
 /**
  * Open forms, as the Forms list has them: forms, quick polls, member polls
- * and website polls. Where who can answer is a known number, one tick per
- * person; otherwise the response count.
+ * and website polls, each a bar of its responses. Where who can answer is
+ * a known number the bar runs to it ("12 of 40"); otherwise the bars
+ * compare the forms' response counts with each other.
  */
 export function PollList({
   orgSlug,
@@ -164,6 +92,7 @@ export function PollList({
       <EmptyState
         size="compact"
         title="No open forms"
+        description="Applications, sign-ups and quick polls show up here while they take answers."
         action={
           <Link
             href={`/app/${orgSlug}/forms/new`}
@@ -176,49 +105,78 @@ export function PollList({
     );
   }
   const todayKey = localDateKey(now, timeZone);
+  const loudest = Math.max(1, ...forms.filter((f) => f.outOf === null).map((f) => f.responses));
+  const total = forms.reduce((n, f) => n + f.responses, 0);
   return (
-    <ul className="space-y-4">
-      {forms.map((f, i) => (
-        <li key={f.id}>
-          <Link href={f.href} className="group/poll block">
-            <span className="flex items-baseline justify-between gap-2.5">
-              <span className="min-w-0 text-[15px] font-semibold break-words group-hover/poll:underline">
-                {f.title}
-              </span>
-              <span className="shrink-0 text-[13px] font-semibold tabular-nums">
-                {f.outOf !== null
-                  ? `${f.responses}/${Math.max(f.outOf, f.responses)}`
-                  : f.responses}
-              </span>
-            </span>
-            {f.outOf !== null && (
-              <TickMeter
-                total={Math.max(f.outOf, f.responses)}
-                filled={f.responses}
-                height={20}
-                color={TICK_COLORS[i % TICK_COLORS.length]}
-                label={`${f.responses} of ${Math.max(f.outOf, f.responses)} answered`}
-                className="mt-2"
-              />
-            )}
-            <span className="text-muted-foreground mt-1.5 block text-[13px]">
-              {[
-                FORM_KIND_WORDS[f.kind],
-                f.outOf === null
-                  ? `${f.responses} ${f.responses === 1 ? "response" : "responses"}`
-                  : null,
-                f.closesAt
-                  ? `closes ${closesWord(dayWordOfKey(localDateKey(f.closesAt, timeZone), todayKey))}`
-                  : "open",
-                f.mine ? "you answered" : null,
-              ]
-                .filter(Boolean)
-                .join(", ")}
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-4">
+      <p className="flex items-baseline gap-2">
+        <b className="numeral text-[32px] leading-none">{total}</b>
+        <span className="text-muted-foreground text-[13px]">
+          {total === 1 ? "response" : "responses"} so far
+        </span>
+      </p>
+      <ul className="space-y-3.5">
+        {forms.map((f) => {
+          const kind = FORM_KIND[f.kind];
+          const outOf = f.outOf !== null ? Math.max(f.outOf, f.responses) : null;
+          const pct = (f.responses / Math.max(1, outOf ?? loudest)) * 100;
+          const closes = f.closesAt
+            ? `closes ${closesWord(dayWordOfKey(localDateKey(f.closesAt, timeZone), todayKey))}`
+            : "open";
+          return (
+            <li key={f.id}>
+              <Link href={f.href} className="group/form flex items-start gap-3">
+                <KindIcon color={kind.color} className="size-8 rounded-[10px] [&_svg]:size-4">
+                  <kind.Icon />
+                </KindIcon>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="min-w-0 truncate text-[14px] font-semibold group-hover/form:underline">
+                      {f.title}
+                    </span>
+                    <span className="shrink-0 text-[13px] font-semibold tabular-nums">
+                      {outOf !== null ? (
+                        <>
+                          {f.responses}
+                          <span className="text-muted-foreground font-medium">/{outOf}</span>
+                        </>
+                      ) : (
+                        f.responses
+                      )}
+                    </span>
+                  </span>
+                  <span
+                    role="img"
+                    aria-label={
+                      outOf !== null
+                        ? `${f.responses} of ${outOf} answered`
+                        : `${f.responses} ${f.responses === 1 ? "response" : "responses"}`
+                    }
+                    className="bg-muted-strong mt-1.5 block h-2 overflow-hidden rounded-full"
+                  >
+                    <span
+                      className="block h-full rounded-full bg-(--chart-1) transition-[width] duration-700"
+                      style={{ width: `${Math.max(pct, f.responses > 0 ? 4 : 0)}%` }}
+                    />
+                  </span>
+                  <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+                    <span>
+                      {kind.word}, {closes}
+                    </span>
+                    {f.mine && (
+                      <span className="bg-tint-success text-tint-success-foreground inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[11.5px] font-semibold">
+                        <Check className="size-3" strokeWidth={3} aria-hidden="true" />
+                        You answered
+                      </span>
+                    )}
+                  </span>
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -255,15 +213,12 @@ export function NoteList({
     <ul className={TILE_GRID}>
       {notes.map((n) => (
         <li key={n.id} className="min-w-0">
-          <Link href={`/app/${orgSlug}/notes/${n.id}`} className={tileClass}>
-            <TileIcon>
-              {n.visibility === "PRIVATE" ? <Lock aria-label="Private" /> : <NotebookText />}
-            </TileIcon>
-            <TileText
-              title={n.title || "Untitled note"}
-              sub={`${n.updatedBy?.name ?? "Someone"}, ${formatDistanceToNow(n.updatedAt, { addSuffix: true })}`}
-            />
-          </Link>
+          <KindTile
+            href={`/app/${orgSlug}/notes/${n.id}`}
+            kind="note"
+            title={n.title || "Untitled note"}
+            sub={`${n.visibility === "PRIVATE" ? "Private, " : ""}${n.updatedBy?.name ?? "Someone"}, ${formatDistanceToNow(n.updatedAt, { addSuffix: true })}`}
+          />
         </li>
       ))}
     </ul>
@@ -282,22 +237,16 @@ export function FileList({
   }
   return (
     <ul className={TILE_GRID}>
-      {files.map((f) => {
-        const Icon = FILE_ICONS[familyOf(f.contentType)];
-        return (
-          <li key={f.id} className="min-w-0">
-            <Link href={`/app/${orgSlug}/notes/files/${f.id}`} className={tileClass}>
-              <TileIcon>
-                <Icon />
-              </TileIcon>
-              <TileText
-                title={f.name}
-                sub={formatDistanceToNow(f.createdAt, { addSuffix: true })}
-              />
-            </Link>
-          </li>
-        );
-      })}
+      {files.map((f) => (
+        <li key={f.id} className="min-w-0">
+          <KindTile
+            href={`/app/${orgSlug}/notes/files/${f.id}`}
+            kind="file"
+            title={f.name}
+            sub={formatDistanceToNow(f.createdAt, { addSuffix: true })}
+          />
+        </li>
+      ))}
     </ul>
   );
 }

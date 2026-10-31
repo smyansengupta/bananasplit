@@ -54,7 +54,7 @@ vi.mock("@/server/pulse/queries", () => ({
 
 const db = {
   user: { findUnique: vi.fn() },
-  task: { count: vi.fn() },
+  task: { count: vi.fn(), groupBy: vi.fn(async () => []) },
   event: { count: vi.fn() },
   availabilityPoll: { findMany: vi.fn() },
   poll: { findMany: vi.fn() },
@@ -415,11 +415,14 @@ describe("org overview", () => {
     expect(widget).toContain('href="/app/cbc/forms/f_quick"');
     expect(widget).toContain('href="/app/cbc/forms/polls/qp_1"');
     expect(widget).toContain('href="/app/cbc/databases/ballots?f=poll%3Aeq%3Afall-vote"');
-    expect(widget).toContain("Form, 7 responses, open");
+    // Each is a bar of its responses: to who can answer when that's known.
+    expect(widget).toContain("Form, open");
+    expect(widget).toContain('aria-label="7 responses"');
     expect(widget).toContain("Quick poll, open");
-    expect(widget).toContain("3/12");
+    expect(widget).toContain('aria-label="3 of 12 answered"');
     expect(widget).toContain("Member poll, open");
-    expect(widget).toContain("Website poll, 41 responses, open");
+    expect(widget).toContain("Website poll, open");
+    expect(widget).toContain('aria-label="41 responses"');
   });
 
   it("shows a next step when there is nothing pinned or coming up", async () => {

@@ -1,11 +1,10 @@
 "use client";
 
-import { Ban, CalendarDays, Lock } from "@/components/icons";
+import { Ban, CalendarDays, Flag, Lock } from "@/components/icons";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 
 import { setTaskStatus } from "@/app/app/[orgSlug]/tasks/actions";
-import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";
 import { toast } from "@/components/ui/toaster";
 import { TaskStatus } from "@/generated/prisma/enums";
@@ -36,10 +35,11 @@ export interface TaskRowData {
   high: boolean;
 }
 
+/** The due date as a pill on the right: red when late or today, firm tomorrow, quiet after. */
 const DUE_TONE: Record<DueTone, string> = {
-  danger: "text-tint-danger-foreground font-semibold",
-  bold: "text-foreground font-semibold",
-  muted: "text-muted-foreground",
+  danger: "bg-tint-danger text-tint-danger-foreground",
+  bold: "bg-tint-info text-tint-info-foreground",
+  muted: "bg-muted text-muted-foreground",
 };
 
 export function TaskRows({ orgId, tasks }: { orgId: string; tasks: readonly TaskRowData[] }) {
@@ -83,7 +83,7 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
   return (
     <li
       className={cn(
-        "group/row hover:bg-muted/60 rounded-field relative -mx-3 flex items-center gap-3.5 px-3 py-3 transition-[background-color,opacity] duration-300",
+        "group/row hover:bg-muted/60 rounded-field relative -mx-3 flex items-center gap-3.5 px-3 py-2.5 transition-[background-color,opacity] duration-300",
         !first &&
           "before:bg-border before:absolute before:top-0 before:right-3 before:left-12 before:h-px hover:before:opacity-0",
         done && "opacity-70",
@@ -103,42 +103,49 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
           )}
           <span className="break-words">{task.title}</span>
         </Link>
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]">
-          {task.epic && (
-            <TagChip color={task.epic.color ?? "var(--chart-3)"}>{task.epic.name}</TagChip>
-          )}
-          {task.status === TaskStatus.BLOCKED && (
-            <span className="text-tint-danger-foreground inline-flex items-center gap-1 font-medium">
-              <Ban className="size-3.5" aria-hidden="true" />
-              Blocked
-            </span>
-          )}
-          {task.due && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 whitespace-nowrap",
-                DUE_TONE[task.due.tone],
-              )}
-            >
-              <CalendarDays className="size-3.5" aria-hidden="true" />
-              {task.due.text}
-            </span>
-          )}
-          {task.context && (
-            <span className="text-muted-foreground break-words">{task.context}</span>
-          )}
-        </div>
+        {(task.epic || task.context || task.status === TaskStatus.BLOCKED) && (
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px]">
+            {task.epic && (
+              <TagChip color={task.epic.color ?? "var(--chart-3)"}>{task.epic.name}</TagChip>
+            )}
+            {task.status === TaskStatus.BLOCKED && (
+              <span className="text-tint-danger-foreground inline-flex items-center gap-1 font-medium">
+                <Ban className="size-3.5" aria-hidden="true" />
+                Blocked
+              </span>
+            )}
+            {task.context && (
+              <span className="text-muted-foreground min-w-0 truncate">{task.context}</span>
+            )}
+          </div>
+        )}
         {error && (
           <p role="alert" className="text-destructive mt-1 text-xs">
             {error}
           </p>
         )}
       </div>
-      {task.high && (
-        <Badge variant="accent" className="shrink-0">
-          High
-        </Badge>
-      )}
+      <span className="flex shrink-0 items-center gap-1.5">
+        {task.high && (
+          <span
+            title="High priority"
+            className="bg-tint-accent text-tint-accent-foreground grid size-6 place-items-center rounded-full"
+          >
+            <Flag className="size-3.5" aria-label="High priority" />
+          </span>
+        )}
+        {task.due && (
+          <span
+            className={cn(
+              "inline-flex h-6 items-center gap-1 rounded-full px-2 text-[12px] font-semibold whitespace-nowrap",
+              DUE_TONE[task.due.tone],
+            )}
+          >
+            <CalendarDays className="size-3.5" aria-hidden="true" />
+            {task.due.text.replace(/^Overdue, /, "Late, ")}
+          </span>
+        )}
+      </span>
     </li>
   );
 }
