@@ -343,8 +343,8 @@ function Column({
                 {kind === "blocked" && i.blockedReason}
                 {kind === "next" &&
                   (i.dueKey ? `Due ${formatDueKey(i.dueKey, org.todayKey)}` : "In progress")}
-                {i.role === "collaborator" && " · involved"}
-                {i.isPrivate && " · private, not posted"}
+                {i.role === "collaborator" && ", involved"}
+                {i.isPrivate && ", private, not posted"}
               </div>
             </li>
           ))}

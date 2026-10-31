@@ -434,7 +434,7 @@ function NewTaskForm({
           <div className="flex flex-col gap-4 px-6 pb-5">
             <div className="grid content-start gap-1.5">
               <Label htmlFor="task-description">Description</Label>
-              {/* @ mentions a member, / links a club file, markdown works. */}
+              {/* @ mentions a member, / links an organization file, markdown works. */}
               <MentionTextarea
                 id="task-description"
                 value={description}
