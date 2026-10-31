@@ -264,27 +264,27 @@ export function EventDetailView({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          canEdit ? (
-          <>
-            {doorToday && (
-              <Button asChild>
-                <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
-                  <DoorOpen aria-hidden className="size-4" />
-                  Door
-                </Link>
+          {canEdit ? (
+            <>
+              {doorToday && (
+                <Button asChild>
+                  <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
+                    <DoorOpen aria-hidden className="size-4" />
+                    Door
+                  </Link>
+                </Button>
+              )}
+              {/* Delete is in the form, with Undo; one place, not two. */}
+              <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
+                <Repeat aria-hidden className="size-4" />
+                {event.seriesId ? "Add 4 weeks" : "Again next week"}
               </Button>
-            )}
-            {/* Delete is in the form, with Undo; one place, not two. */}
-            <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
-              <Repeat aria-hidden className="size-4" />
-              {event.seriesId ? "Add 4 weeks" : "Again next week"}
-            </Button>
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil aria-hidden className="size-4" />
-              Edit
-            </Button>
-          </>
-          ) : null
+              <Button variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil aria-hidden className="size-4" />
+                Edit
+              </Button>
+            </>
+          ) : null}
         </div>
       </header>
 
