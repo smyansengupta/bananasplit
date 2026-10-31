@@ -47,6 +47,9 @@ const GRANTS = {
   // Cards a member hid from their own "Up next". Own row only; hiding is an
   // insert and un-hiding a delete, so there is no UPDATE.
   UpNextDismissal: ["SID", "SD", ""],
+  // Who's online: each member marks only themselves here (lastSeenAt is
+  // app_user's only UPDATE column); the service path reads and prunes.
+  MemberPresence: ["SIu", "SD", ""],
   EventLinkLog: ["SI", "SI", ""],
   FinanceAuditLog: ["S", "S", ""],
   Invitation: ["SIUD", "SIUD", ""],
@@ -191,6 +194,7 @@ const NEW_TENANT_TABLES = [
   "EventRegistration",
   "EventReminderSend",
   "UpNextDismissal",
+  "MemberPresence",
   "DatabaseField",
   "DatabaseRecord",
   "RsvpItem",

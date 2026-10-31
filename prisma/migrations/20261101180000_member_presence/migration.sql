@@ -37,6 +37,8 @@ CREATE POLICY app_user_insert ON "MemberPresence" FOR INSERT TO app_user
 CREATE POLICY app_user_update ON "MemberPresence" FOR UPDATE TO app_user
   USING ("organizationId" = (SELECT app.member_org_id()) AND "userId" = (SELECT app.user_id()))
   WITH CHECK ("organizationId" = (SELECT app.member_org_id()) AND "userId" = (SELECT app.user_id()));
+CREATE POLICY app_service_select ON "MemberPresence" FOR SELECT TO app_service
+  USING ((SELECT app.org_id()) IS NOT NULL AND "organizationId" = (SELECT app.org_id()));
 CREATE POLICY app_service_delete ON "MemberPresence" FOR DELETE TO app_service
   USING ((SELECT app.org_id()) IS NOT NULL AND "organizationId" = (SELECT app.org_id()));
 

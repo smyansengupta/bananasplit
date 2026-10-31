@@ -2292,6 +2292,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "EventAttendee:UPDATE",
         "MemberPrefs:INSERT",
         "MemberPrefs:UPDATE",
+        // Who's online: each member marks only themselves here.
+        "MemberPresence:INSERT",
+        "MemberPresence:UPDATE",
         "Note:INSERT",
         // Note comments and versions: app.can_view_note, app.can_edit_note
         // and app.can_share_note are the role checks (Moonstone).
