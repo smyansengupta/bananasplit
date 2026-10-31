@@ -21,7 +21,7 @@ import type { TxClient } from "@/server/db/context";
 /**
  * Forms (docs/features/forms.md): making and changing a form, as an owner
  * or admin (RLS on Form insists), and reading its responses. Each form owns
- * a club database, made with it: a "Response" column that names each row
+ * an organization database, made with it: a "Response" column that names each row
  * (who answered, or "Response 12"), then one column per question. Questions
  * keep their column through renames and moves; a question removed keeps
  * its column (and the answers in it), so nothing anyone sent is lost.
@@ -213,7 +213,7 @@ export async function createForm(
       description: "Responses to a form",
       icon: "ClipboardList",
       kind: "CUSTOM",
-      // Answers are the club's to see, not every member's: owners and
+      // Answers are the organization's to see, not every member's: owners and
       // admins, until someone opens the database up.
       memberVisibility: "ADMINS",
       allowEdits: true,

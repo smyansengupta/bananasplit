@@ -44,7 +44,7 @@ export default async function PublicFormPage({ params, searchParams }: PageProps
   const form = await loadPublicForm(slug, viewerId);
   if (!form) notFound();
   const target = await formPageTarget(slug);
-  const club = target ? await getPublicOrgTheme(target.organizationId) : null;
+  const orgTheme = target ? await getPublicOrgTheme(target.organizationId) : null;
   const signIn = `/sign-in?callbackUrl=${encodeURIComponent(`/f/${slug}`)}`;
   const preview = sp.preview === "1" && form.manager;
   const design = readDesign(form.form.design);
@@ -124,8 +124,8 @@ export default async function PublicFormPage({ params, searchParams }: PageProps
     </div>
   );
 
-  return club ? (
-    <OrgThemeRoot theme={club.theme}>{body}</OrgThemeRoot>
+  return orgTheme ? (
+    <OrgThemeRoot theme={orgTheme.theme}>{body}</OrgThemeRoot>
   ) : (
     <PublicThemeRoot>{body}</PublicThemeRoot>
   );

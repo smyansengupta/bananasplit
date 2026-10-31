@@ -8,10 +8,10 @@ import { FORM_SELECT, isFormOpen } from "./forms";
 import type { FormTarget, Respondent } from "./public";
 
 /**
- * A file sent with a form answer (a resume, a photo): stored in the club's
+ * A file sent with a form answer (a resume, a photo): stored in the organization's
  * Files, in the folder the form was made with, credited to the form's
  * creator (the respondent may have no account), and counted toward the
- * club's storage like any upload: confirmFits re-checks the counter in the
+ * organization's storage like any upload: confirmFits re-checks the counter in the
  * row's own transaction and refuses (rolling back) when the space is full.
  * The answer holds the file's id; submitting turns it into a link.
  */
