@@ -430,9 +430,10 @@ describe("the Meetings list: your part and the type", () => {
     const [a, b, c] = await cards();
 
     expect(a).toMatchObject({ type: { name: "Standup", color: "#22aa66" } });
-    // A type no longer on the organization's list has no colour to draw.
-    expect(b).toMatchObject({ type: null });
-    expect(c).toMatchObject({ type: null });
+    // A type no longer on the organization's list keeps its name in the
+    // kind's colour; no type at all shows the kind itself.
+    expect(b).toMatchObject({ type: { name: "Retired type", color: "var(--tag-plum)" } });
+    expect(c).toMatchObject({ type: { name: "Board meeting", color: "var(--tag-plum)" } });
   });
 
   it("shows only the chosen type with ?type=", async () => {

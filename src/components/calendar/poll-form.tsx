@@ -351,34 +351,12 @@ export function PollForm({
               </p>
             )}
           </div>
-          <div className="grid gap-1.5 sm:col-span-2">
-            <span id="poll-granularity-label" className="text-sm leading-none font-medium">
-              Time step
-            </span>
-            <div
-              role="radiogroup"
-              aria-labelledby="poll-granularity-label"
-              className={cn(segmentedTrack, "self-start")}
-            >
-              {([15, 30, 60] as const).map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  role="radio"
-                  aria-checked={granularity === g}
-                  onClick={() => setGranularity(g)}
-                  className={segmentedItem(granularity === g)}
-                >
-                  {g === 60 ? "1 hr" : `${g} min`}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </Section>
 
-      {/* The rarely changed bits: the hours' time zone (the org's, or yours)
-          and a closing time. Folded away until asked for. */}
+      {/* The rarely changed bits, folded behind More (the workspace plan):
+          the time step, the hours' time zone (the organization's, or yours)
+          and a closing time. */}
       <div className="space-y-4">
         <button
           type="button"
@@ -393,6 +371,7 @@ export function PollForm({
           More
           {!more && (
             <span className="font-normal">
+              {granularity === 60 ? "1 hr" : `${granularity} min`} steps,{" "}
               {timeZoneDisplayName(timezone)}
               {closesAt ? ", closes on a date" : ""}
             </span>
@@ -400,6 +379,29 @@ export function PollForm({
         </button>
         {more && (
           <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:col-span-2">
+              <span id="poll-granularity-label" className="text-sm leading-none font-medium">
+                Time step
+              </span>
+              <div
+                role="radiogroup"
+                aria-labelledby="poll-granularity-label"
+                className={cn(segmentedTrack, "self-start")}
+              >
+                {([15, 30, 60] as const).map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    role="radio"
+                    aria-checked={granularity === g}
+                    onClick={() => setGranularity(g)}
+                    className={segmentedItem(granularity === g)}
+                  >
+                    {g === 60 ? "1 hr" : `${g} min`}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid gap-1.5 sm:col-span-2">
               <Label htmlFor="poll-timezone">Time zone</Label>
               <TimeZoneCombobox

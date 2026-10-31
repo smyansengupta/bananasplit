@@ -138,3 +138,38 @@ export async function retryConferenceSync(
     return actionError(error);
   }
 }
+
+const recordingUrl = z
+  .string()
+  .trim()
+  .max(2000)
+  .refine((v) => v === "" || /^https?:\/\/\S+$/i.test(v), "Paste a link that starts with https://");
+
+const recordingTx = withOrgAction(async (ctx, eventId: string, url: string) => {
+  requirePermission(ctx, "events.write");
+  const parsed = recordingUrl.safeParse(url);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "That link won't work." };
+  const { count } = await ctx.db.event.updateMany({
+    where: { id: eventId, organizationId: ctx.organizationId, deletedAt: null },
+    data: { recordingUrl: parsed.data || null },
+  });
+  if (count === 0) throw new NotFoundError();
+  return {};
+});
+
+/**
+ * The meeting's recording (the plan's Past list links it under After):
+ * pasted by whoever can edit the meeting. An empty link clears it.
+ */
+export async function setMeetingRecording(
+  orgId: string,
+  eventId: string,
+  url: string,
+): Promise<{ error?: string }> {
+  try {
+    return await recordingTx(orgId, eventId, url);
+  } catch (error) {
+    if (error instanceof NotFoundError) return { error: "That meeting no longer exists." };
+    return actionError(error);
+  }
+}

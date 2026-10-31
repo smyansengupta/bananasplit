@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/components/meetings/meeting-tasks", () => ({ MeetingTasks: () => null }));
 vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
+vi.mock("@/components/meetings/create-meeting-notes", () => ({ CreateMeetingNotes: () => null }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -40,6 +41,7 @@ vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({ getEventById: mocks.get
 vi.mock("@/lib/app-url", () => ({ appUrl: (path: string) => `https://app.test${path}` }));
 vi.mock("@/components/calendar/event-detail-view", () => ({ EventDetailView: () => null }));
 vi.mock("@/components/meetings/meeting-join-card", () => ({ MeetingJoinCard: () => null }));
+vi.mock("@/components/meetings/meeting-recording", () => ({ MeetingRecording: () => null }));
 
 const { default: MeetingPage } = await import("./page");
 

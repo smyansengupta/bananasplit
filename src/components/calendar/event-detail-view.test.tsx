@@ -36,6 +36,9 @@ vi.mock("@/app/app/[orgSlug]/calendar/actions", () => ({
   rsvpToEvent: vi.fn(),
 }));
 vi.mock("@/app/app/[orgSlug]/notes/actions", () => ({ createNote: vi.fn() }));
+vi.mock("@/components/meetings/meeting-agenda", () => ({
+  MeetingAgenda: ({ initial }: { initial: string | null }) => <p>{initial ?? "No agenda yet."}</p>,
+}));
 vi.mock("@/components/ui/confirm-dialog", () => ({
   useConfirm: () => [null, mocks.confirm],
 }));

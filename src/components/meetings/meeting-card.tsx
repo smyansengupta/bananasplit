@@ -54,6 +54,8 @@ export interface MeetingRow {
   conferenceSyncError: string | null;
   /** Check-ins (maintained by the rollups); the past list's "came". */
   attendanceCount?: number;
+  /** The recording link a host pasted; the past list's "Recording". */
+  recordingUrl?: string | null;
 }
 
 /**

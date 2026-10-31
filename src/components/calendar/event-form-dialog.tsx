@@ -702,7 +702,7 @@ function EventForm({
             <div role="radiogroup" aria-label="When" className={segmentedTrack}>
               {(
                 [
-                  ["pick", "Pick a time"],
+                  ["pick", "Pick a date"],
                   ["find", "Don't know yet, find a time"],
                 ] as const
               ).map(([value, label]) => (

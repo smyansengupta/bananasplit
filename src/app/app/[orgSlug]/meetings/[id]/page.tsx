@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 
 import { EventDetailView } from "@/components/calendar/event-detail-view";
 import { LinkedSection } from "@/components/links/linked-section";
+import { CreateMeetingNotes } from "@/components/meetings/create-meeting-notes";
 import { MeetingTasks, type MeetingTask } from "@/components/meetings/meeting-tasks";
 import { MeetingJoinCard } from "@/components/meetings/meeting-join-card";
+import { MeetingRecording } from "@/components/meetings/meeting-recording";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { CONFERENCE_LABELS, conferenceStatus } from "@/lib/meetings/conference-status";
@@ -126,10 +128,44 @@ export default async function MeetingPage({
       orgSlug={orgSlug}
       timeZone={org.timezone}
       linked={
-        <LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "event", id: event.id }} />
+        // The plan's side column: everything tied to the meeting, its notes
+        // among them, closed by a dashed "Link something" tile.
+        <LinkedSection
+          orgId={org.id}
+          orgSlug={orgSlug}
+          at={{ kind: "event", id: event.id }}
+          title="Linked to this meeting"
+          closingTile
+          fixed={event.notes.map((n) => ({
+            key: `note:${n.id}`,
+            kind: "note" as const,
+            title: n.title || "Untitled note",
+            detail: "Meeting notes",
+            href: `/app/${orgSlug}/notes/${n.id}`,
+          }))}
+          actions={
+            <CreateMeetingNotes
+              orgId={org.id}
+              orgSlug={orgSlug}
+              eventId={event.id}
+              eventTitle={event.title}
+            />
+          }
+        />
       }
       tasks={
         <MeetingTasks orgId={org.id} orgSlug={orgSlug} eventId={event.id} initial={meetingTasks} />
+      }
+      recording={
+        // Once it has started there may be a recording to paste or watch.
+        event.startsAt <= new Date() ? (
+          <MeetingRecording
+            orgId={org.id}
+            eventId={event.id}
+            initial={event.recordingUrl}
+            canEdit={canEdit}
+          />
+        ) : null
       }
       askedRsvp={askedRsvp}
       section="meetings"

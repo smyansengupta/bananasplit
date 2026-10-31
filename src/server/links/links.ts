@@ -49,6 +49,10 @@ export async function resolveRefs(
 
   const day = (d: Date) =>
     new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone }).format(d);
+  // A task's due date is a calendar day stored as midnight UTC: read it in
+  // UTC, as Tasks does, or it lands a day early west of Greenwich.
+  const dueDay = (d: Date) =>
+    new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(d);
   const money = (cents: number) =>
     new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -83,7 +87,7 @@ export async function resolveRefs(
           .reduce((n, k) => n + k._count._all, 0);
         fact = total > 0 ? `${done} of ${total} done` : "nothing in it yet";
       } else if (t.status === "COMPLETED") fact = "done";
-      else if (t.dueDate) fact = `due ${day(t.dueDate)}`;
+      else if (t.dueDate) fact = `due ${dueDay(t.dueDate)}`;
       out.set(key({ kind: "task", id: t.id }), {
         kind: "task",
         id: t.id,
