@@ -5,7 +5,7 @@ import type { IntegrationDto } from "@/server/integrations/catalog";
 import type { GoogleSyncStatus } from "@/server/google-calendar/requests";
 
 /**
- * Settings > Integrations > Google Calendar shows the calendar's own import
+ * Integrations > Google Calendar's window shows the calendar's own import
  * card (SyncPanel, "import" only) while the connection is usable, with the
  * same status data as Calendar > Sync, and nothing of the rest of the Sync
  * page. The request behind its buttons is tested in
@@ -18,23 +18,29 @@ const { loadIntegrationPageMock, getGoogleSyncStatusMock, withOrgTxMock } = vi.h
   withOrgTxMock: vi.fn(),
 }));
 
-vi.mock("../load", () => ({ loadIntegrationPage: loadIntegrationPageMock }));
-vi.mock("@/server/db/context", () => ({ withOrgTx: withOrgTxMock }));
-// The plan check (src/server/billing/plan-gate.tsx): this club has the feature.
+vi.mock("./load", () => ({ loadIntegrationPage: loadIntegrationPageMock }));
+vi.mock("@/server/db/context", () => ({
+  withOrgTx: withOrgTxMock,
+  getOrgContextBySlug: vi.fn(),
+}));
+vi.mock("@/server/email/mailer", () => ({}));
+vi.mock("@/server/conference/connections", () => ({}));
+vi.mock("@/components/integrations/video-provider-panel", () => ({}));
+// The plan check (src/server/billing/plan-gate.tsx): this organization has the feature.
 vi.mock("@/server/billing/plan-gate", () => ({ planGate: async () => null }));
 vi.mock("@/server/google-calendar/requests", () => ({
   getGoogleSyncStatus: getGoogleSyncStatusMock,
 }));
 vi.mock("@/server/integrations/google-connect", () => ({ GOOGLE_CALLBACK_MESSAGES: {} }));
 vi.mock("@/server/integrations/google", () => ({ isGoogleConfigured: () => true }));
-vi.mock("../actions", () => ({}));
+vi.mock("./actions", () => ({}));
 vi.mock("@/app/app/[orgSlug]/calendar/sync/actions", () => ({
   importGoogleEvents: vi.fn(),
   syncGoogleNow: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
-const { default: GoogleCalendarIntegrationPage } = await import("./page");
+const { loadPanel } = await import("./panels");
 const { SyncPanel } = await import("@/components/calendar/sync-panel");
 
 const org = { id: "org_cbc", name: "Claude Builders Club", slug: "cbc", timezone: "UTC" };
@@ -84,11 +90,8 @@ async function render(status: IntegrationDto["status"]) {
     canWrite: true,
     canRemove: false,
   });
-  const page = await GoogleCalendarIntegrationPage({
-    params: Promise.resolve({ orgSlug: "cbc" }),
-    searchParams: Promise.resolve({}),
-  } as unknown as PageProps<"/app/[orgSlug]/integrations/google-calendar">);
-  return renderToStaticMarkup(page);
+  const panel = await loadPanel("google-calendar", "cbc", {});
+  return renderToStaticMarkup(<>{panel?.body}</>);
 }
 
 beforeEach(() => {
@@ -99,7 +102,7 @@ beforeEach(() => {
   getGoogleSyncStatusMock.mockResolvedValue(syncStatus);
 });
 
-describe("Admin panel › Integrations › Google Calendar", () => {
+describe("Integrations › Google Calendar window", () => {
   it("shows the calendar's import card with the dry run's results while connected", async () => {
     const html = await render("CONNECTED");
     expect(withOrgTxMock).toHaveBeenCalledWith(org.id, expect.any(Function));
