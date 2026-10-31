@@ -498,9 +498,18 @@ export async function loadResponses(
 ): Promise<{ rows: ResponseRow[]; choices: Map<string, Choice[]> }> {
   const form = await db.form.findFirst({
     where: { id: formId, organizationId },
-    select: { databaseId: true },
+    select: { databaseId: true, questions: true, anonymous: true },
   });
   if (!form) return { rows: [], choices: new Map() };
+  // Who answered, from their own answers: the form's name question (a short
+  // answer asking for a name, else the first short answer) and its email
+  // question. Never the person reading the responses.
+  const asked = readQuestions(form.questions);
+  const nameQ =
+    asked.find((q) => q.type === "short" && /name/i.test(q.title) && q.fieldId) ??
+    asked.find((q) => q.type === "short" && q.fieldId);
+  const emailQ = asked.find((q) => q.type === "email" && q.fieldId);
+  const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
   const [responses, fields] = await Promise.all([
     db.formResponse.findMany({
       where: { organizationId, formId, record: { deletedAt: null } },
@@ -537,10 +546,13 @@ export async function loadResponses(
         rating: r.rating,
         notes: r.notes,
         userId: r.userId,
-        email: r.email,
+        email: (emailQ?.fieldId ? text(values[emailQ.fieldId]) : null) ?? r.email,
         createdAt: r.createdAt,
-        who:
-          primary && typeof values[primary] === "string" ? (values[primary] as string) : "Response",
+        who: form.anonymous
+          ? "Anonymous"
+          : ((nameQ?.fieldId ? text(values[nameQ.fieldId]) : null) ??
+            (primary ? text(values[primary]) : null) ??
+            "Anonymous"),
       };
     }),
   };
