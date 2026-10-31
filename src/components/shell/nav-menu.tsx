@@ -16,7 +16,7 @@ import {
   type NavLink,
   type NavSection,
 } from "@/components/shell/nav-config";
-import { ICON_STROKE, NAV_ICONS } from "@/components/shell/sidebar-nav";
+import { ICON_STROKE, NAV_ICONS, SECTION_NAMES } from "@/components/shell/sidebar-nav";
 import type { ShellUser } from "@/components/shell/types";
 import { UserMenu } from "@/components/shell/user-menu";
 import { segmentedTrack } from "@/components/ui/segmented";
@@ -135,12 +135,15 @@ export function NavMenu({
             {sections.map((section, i) => {
               const links = section.items.filter((l) => !l.locked);
               if (links.length === 0) return null;
+              const name = section.label ?? SECTION_NAMES[section.id];
               return (
-                // Groups have no names: a thin line between them, as in the sidebar.
-                <div
-                  key={section.id}
-                  className={cn(i > 0 && "border-border/70 mt-3 border-t pt-3")}
-                >
+                // Named sections with room above them, as in the sidebar.
+                <div key={section.id} className={cn(i > 0 && "mt-5")}>
+                  {name && (
+                    <p className="text-muted-foreground mb-1 px-3 text-[13px] font-medium">
+                      {name}
+                    </p>
+                  )}
                   <ul className="space-y-1">
                     {links.map((link) => (
                       <li key={link.id}>
@@ -161,7 +164,7 @@ export function NavMenu({
           </nav>
 
           {/* The foot, as in the sidebar: you, then the Bananasplit mark. */}
-          <div className="border-border/70 mt-4 flex shrink-0 flex-col gap-3 border-t pt-3">
+          <div className="mt-4 flex shrink-0 flex-col gap-3 pt-1">
             {user && <UserMenu user={user} variant="row" className="h-12 text-[15px]" />}
             <Link
               href="/"
