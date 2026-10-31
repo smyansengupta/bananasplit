@@ -190,7 +190,7 @@ describe("paletteGroups", () => {
 });
 
 describe("the Create group", () => {
-  it("makes a task and a quick poll from the typed text, and starts the rest", async () => {
+  it("makes only a quick poll and a task from the typed text", async () => {
     const { createGroup } = await import("./palette-groups");
     const { buildCatalog } = await import("./catalog");
     const catalog = buildCatalog({ orgSlug: "cbc", role: "OWNER", sections: [] });
@@ -205,7 +205,8 @@ describe("the Create group", () => {
       type: "href",
       href: "/app/cbc/forms/new?poll=1&question=fall%20social",
     });
-    expect(byKey["create:meeting"]!.title).toBe("New meeting");
+    // Meetings, forms, notes and expenses are under New, not here.
+    expect(group.items.map((i) => i.key)).toEqual(["create:poll", "create:task"]);
     expect(createGroup(catalog, "   ")).toBeNull();
   });
 });

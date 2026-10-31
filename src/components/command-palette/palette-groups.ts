@@ -74,12 +74,12 @@ export const CREATE_KEYS = { "create:poll": "p", "create:task": "t" } as const;
 
 /**
  * What the typed text makes, for the Create group (catalog keys "create:"),
- * as the workspace plan words it: New quick poll "…" (Alt P) first, then
- * New task "…" (Alt T), then a meeting, form, note or expense.
+ * as the workspace plan draws it: only New quick poll "…" (Alt P) and
+ * New task "…" (Alt T). Meetings, forms, notes and expenses are under New.
  */
 export function createGroup(catalog: readonly CatalogEntry[], text: string): PaletteGroup | null {
   const typed = text.trim();
-  const order = (key: string) => (key === "create:poll" ? 0 : key === "create:task" ? 1 : 2);
+  const order = (key: string) => (key === "create:poll" ? 0 : 1);
   const items = catalog
     .filter((e) => e.key.startsWith("create:"))
     .sort((a, b) => order(a.key) - order(b.key))

@@ -248,7 +248,7 @@ async function searchFolders(ctx: Ctx): Promise<SearchGroup> {
     hit("folder", f.id, {
       title: f.name,
       href: `${ctx.base}/notes?folder=${f.id}`,
-      detail: "Folder in Files",
+      detail: "In Files",
       meta: `${f._count.notes} ${f._count.notes === 1 ? "note" : "notes"}`,
       score: scoreFields([{ text: f.name, weight: 3 }], q),
     }),
@@ -277,7 +277,7 @@ async function searchFiles(ctx: Ctx): Promise<SearchGroup> {
     return hit("file", f.id, {
       title: f.name,
       href: `${ctx.base}/notes/files/${f.id}`,
-      detail: excerptAround(f.excerpt, q.folded) ?? f.folder?.name ?? "File",
+      detail: excerptAround(f.excerpt, q.folded) ?? f.folder?.name ?? null,
       meta: ext ?? null,
       score: scoreFields(
         [
@@ -435,7 +435,7 @@ async function searchEpics(ctx: Ctx): Promise<SearchGroup> {
         title: l.name,
         href: `${ctx.base}/tasks?view=table&scope=all&label=${l.id}`,
         detail: "Tasks with this tag",
-        meta: "Tag",
+        meta: null,
         score: scoreFields([{ text: l.name, weight: 3 }], q),
       }),
     ),
@@ -599,8 +599,7 @@ async function searchPolls(ctx: Ctx): Promise<SearchGroup> {
         title: f.title,
         href: `${ctx.base}/forms/${f.id}`,
         detail:
-          excerptAround(f.description, q.folded) ??
-          (f.kind === "QUICK_POLL" ? "Quick poll" : "Form"),
+          excerptAround(f.description, q.folded) ?? (f.kind === "QUICK_POLL" ? "Quick poll" : null),
         meta: f.closedAt || closed(f.closesAt) ? "Closed" : "Open",
         score: scoreFields(
           [
@@ -780,7 +779,6 @@ const DATABASE_KIND: Record<string, string> = {
   SIGNUPS: "Sign-ups",
   SESSIONS: "Sessions",
   PEOPLE: "People",
-  CUSTOM: "Organization database",
 };
 
 async function searchDatabases(ctx: Ctx): Promise<SearchGroup> {
@@ -813,10 +811,7 @@ async function searchDatabases(ctx: Ctx): Promise<SearchGroup> {
     hit("database", d.key, {
       title: d.name,
       href: `${ctx.base}/databases/${d.key}`,
-      detail: join(
-        d.kind === "CUSTOM" && viewer.personal ? "Database" : (DATABASE_KIND[d.kind] ?? null),
-        d.tag,
-      ),
+      detail: join(DATABASE_KIND[d.kind] ?? null, d.tag),
       meta: null,
       score: scoreFields(
         [
@@ -951,7 +946,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
       hit("budget", c.id, {
         title: c.name,
         href: `${ctx.base}/finance/budget?period=${c.budgetPeriodId}`,
-        detail: "Budget line",
+        detail: null,
         score: scoreFields([{ text: c.name, weight: 3 }], q),
       }),
     ),
@@ -989,7 +984,7 @@ async function searchFinance(ctx: Ctx): Promise<SearchGroup> {
       hit("sponsor", s.id, {
         title: s.name,
         href: `${ctx.base}/finance/sponsorships`,
-        detail: join("Sponsor", s.contactName),
+        detail: s.contactName ?? null,
         meta: `${s._count.sponsorships} ${s._count.sponsorships === 1 ? "sponsorship" : "sponsorships"}`,
         score: scoreFields(
           [

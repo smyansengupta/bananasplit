@@ -408,9 +408,9 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
   const action = (entry: Omit<CatalogEntry, "group">, section?: SectionId) => {
     if (sectionVisible(input, section)) entries.push({ ...entry, group: "actions" });
   };
-  // The Create group: shown under what you type, each made from it where it
-  // can be (a task's title, a quick poll's question). paletteGroups fills in
-  // the text; keys start "create:".
+  // The Create group: shown under what you type, made from it (a task's
+  // title, a quick poll's question), as the workspace plan has it: only these
+  // two. paletteGroups fills in the text; keys start "create:".
   const create = (entry: Omit<CatalogEntry, "group" | "keywords">, section: SectionId) => {
     if (sectionVisible(input, section)) entries.push({ ...entry, keywords: [], group: "actions" });
   };
@@ -431,37 +431,6 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       command: { type: "href", href: `${base}/forms/new?poll=1` },
     },
     "forms",
-  );
-  create(
-    {
-      key: "create:meeting",
-      title: "New meeting",
-      icon: "Video",
-      command: { type: "href", href: `${base}/meetings?new=1` },
-    },
-    "meetings",
-  );
-  create(
-    {
-      key: "create:form",
-      title: "New form",
-      icon: "ClipboardList",
-      command: { type: "href", href: `${base}/forms/new` },
-    },
-    "forms",
-  );
-  create(
-    { key: "create:note", title: "New note", icon: "SquarePen", command: { type: "new-note" } },
-    "notes",
-  );
-  create(
-    {
-      key: "create:expense",
-      title: "New expense",
-      icon: "Receipt",
-      command: { type: "href", href: `${base}/finance/my-reimbursements?new=1` },
-    },
-    "finance",
   );
   action(
     {
