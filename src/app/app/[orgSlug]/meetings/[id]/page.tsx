@@ -125,6 +125,9 @@ export default async function MeetingPage({
       linked={
         <LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "event", id: event.id }} />
       }
+      tasks={
+        <MeetingTasks orgId={org.id} orgSlug={orgSlug} eventId={event.id} initial={meetingTasks} />
+      }
       section="meetings"
       joinCard={joinCard}
       locationDetails={event.locationDetails}
