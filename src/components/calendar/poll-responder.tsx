@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } f
 
 import { finalizePoll } from "@/app/app/[orgSlug]/calendar/polls/actions";
 import { submitPollResponse } from "@/app/poll/[pollId]/actions";
+import { copyGuestPollLink } from "@/components/polls/copy-link";
 import { PollStatusBadge } from "@/components/polls/poll-status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -697,6 +698,7 @@ export function PollResponder({
             selectedStartId={highlight.length ? highlight[0] : null}
             onSelect={selectWindow}
             onSchedule={canSchedule ? openSchedule : undefined}
+            onCopyLink={isGuest ? undefined : () => copyGuestPollLink(poll.id)}
           />
           <RespondentList respondents={respondents} />
           {isGuest && !isClosed && (
@@ -848,9 +850,6 @@ function BrushPicker({
   return (
     <fieldset className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       <legend className="sr-only">Mark times as</legend>
-      <span aria-hidden className="text-sm font-medium">
-        Mark as
-      </span>
       {/* The shared segmented look, kept as radios: a brush is a choice, not a view. */}
       <div className={cn(segmentedTrack, "flex w-full sm:inline-flex sm:w-auto")}>
         {BRUSHES.map((option) => (

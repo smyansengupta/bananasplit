@@ -8,9 +8,13 @@ import { CONFERENCE_LABELS } from "@/lib/meetings/conference-status";
 import type { MeetingType } from "@/lib/meetings/meeting-types";
 import { FORMAT_LABEL } from "@/lib/meetings/shape";
 import { timeLine } from "@/lib/rsvp/when";
+import { cn } from "@/lib/utils";
+
+import { PastMeetingBrowser, type PastMonth } from "./past-meeting-browser";
 
 /**
- * Past meetings, as a list (docs/features/meetings.md). Coming-up meetings
+ * Past meetings, as a list (docs/features/meetings.md), in the columns of
+ * the workspace plan: Date, Meeting, Type, Where, Came and After. Coming-up meetings
  * are cards because there is something to do with them (join, reply, sign
  * up); once one has happened, what's left is a record, so it drops into a
  * plain list grouped by month, newest first, in the same panel and row
@@ -28,7 +32,7 @@ export interface PastMeetingFacts {
   /** Sign-ups (GOING) or invitees who said yes, when nobody checked in. */
   signedUp: number;
   /** The meeting's notes, newest first. */
-  notes: { id: string }[];
+  notes: { id: string; title?: string | null }[];
   /** Who hosted it, by name. */
   host?: string | null;
 }
@@ -46,33 +50,59 @@ export function PastMeetingList({
   typeOf: (e: MeetingRow) => MeetingType | null;
   facts: (e: MeetingRow) => PastMeetingFacts;
 }) {
-  const months = groupByMonth(meetings, timeZone);
+  const months: PastMonth[] = groupByMonth(meetings, timeZone).map((m) => ({
+    key: m.key,
+    label: m.label,
+    rows: m.items.map((e) => {
+      const f = facts(e);
+      const type = typeOf(e);
+      return {
+        id: e.id,
+        // What the search box matches: title, type, place and host.
+        text: [e.title, type?.name ?? e.meetingType, e.location, f.host]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+        node: (
+          <PastRow
+            key={e.id}
+            event={e}
+            timeZone={timeZone}
+            href={`/app/${orgSlug}/meetings/${e.id}`}
+            notesHref={(id) => `/app/${orgSlug}/notes/${id}`}
+            type={type}
+            facts={f}
+          />
+        ),
+      };
+    }),
+  }));
+  return <PastMeetingBrowser months={months} header={<ColumnHeads />} />;
+}
+
+/** The columns' names, above the rows on a wide screen. */
+function ColumnHeads() {
   return (
-    <div className="space-y-5">
-      {months.map((m) => (
-        <section key={m.key} aria-label={m.label} className="space-y-2">
-          <h3 className="flex items-baseline gap-2 px-1 text-[15px] font-semibold">
-            {m.label}
-            <span className="text-muted-foreground font-normal tabular-nums">{m.items.length}</span>
-          </h3>
-          <ul className="bg-card edge rounded-card p-2 max-sm:p-1.5">
-            {m.items.map((e) => (
-              <PastRow
-                key={e.id}
-                event={e}
-                timeZone={timeZone}
-                href={`/app/${orgSlug}/meetings/${e.id}`}
-                notesHref={(id) => `/app/${orgSlug}/notes/${id}`}
-                type={typeOf(e)}
-                facts={facts(e)}
-              />
-            ))}
-          </ul>
-        </section>
-      ))}
+    <div
+      aria-hidden="true"
+      className={cn(
+        COLUMNS,
+        "text-muted-foreground px-3 pt-1 pb-2 text-[12px] font-semibold max-md:hidden",
+      )}
+    >
+      <span>Date</span>
+      <span>Meeting</span>
+      <span>Type</span>
+      <span>Where</span>
+      <span>Came</span>
+      <span className="text-end">After</span>
     </div>
   );
 }
+
+/** Date, Meeting, Type, Where, Came, After: one grid, rows and heads alike. */
+const COLUMNS =
+  "md:grid md:grid-cols-[3rem_minmax(0,1fr)_8.5rem_10rem_8.5rem_7.5rem] md:items-center md:gap-4";
 
 function PastRow({
   event: e,
@@ -103,6 +133,10 @@ function PastRow({
   const share = ofSigned ? Math.min(1, facts.checkedIn / facts.signedUp) : null;
   const typeName = type?.name ?? e.meetingType?.trim() ?? null;
   const notes = facts.notes;
+  // After: the meeting's notes. A note called a recap is the Recap; the
+  // newest other note is the Notes.
+  const recap = notes.find((n) => /recap/i.test(n.title ?? ""));
+  const note = notes.find((n) => n !== recap);
   const integration =
     e.conferenceProvider === "MEET"
       ? "GOOGLE_MEET"
@@ -112,10 +146,40 @@ function PastRow({
           ? "MICROSOFT_TEAMS"
           : null;
   const place = e.location?.trim();
+  const where = e.conferenceUrl ? (
+    <span className="inline-flex items-center gap-1.5">
+      {integration && hasMeetingLogo(integration) ? (
+        <MeetingLogo provider={integration} className="size-3.5" />
+      ) : (
+        <Video className="size-3.5" aria-hidden="true" />
+      )}
+      {e.conferenceProvider === "OTHER" || e.conferenceProvider === "NONE"
+        ? FORMAT_LABEL.ONLINE
+        : CONFERENCE_LABELS[e.conferenceProvider]}
+    </span>
+  ) : place ? (
+    <span className="inline-flex min-w-0 items-start gap-1.5">
+      <MapPin className="mt-0.5 size-3.5 shrink-0 md:hidden" aria-hidden="true" />
+      <span className="min-w-0 break-words">{place}</span>
+    </span>
+  ) : null;
+  const afterLink = (href: string, label: string, aria: string) => (
+    <Link
+      href={href}
+      className="text-muted-foreground hover:text-foreground hover:bg-muted relative z-10 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-semibold transition-colors"
+      aria-label={aria}
+    >
+      <NotebookText className="size-3.5" aria-hidden="true" />
+      {label}
+    </Link>
+  );
   return (
     <li
       style={type ? { ["--kind" as string]: type.color } : kindStyle(e.kind)}
-      className="group hover:bg-muted/60 focus-within:bg-muted/60 rounded-field [li+&]:before:bg-border relative flex items-start gap-3.5 px-3 py-3 transition-colors duration-150 [li+&]:before:absolute [li+&]:before:inset-x-3 [li+&]:before:top-0 [li+&]:before:h-px"
+      className={cn(
+        COLUMNS,
+        "group hover:bg-muted/60 focus-within:bg-muted/60 rounded-field [li+&]:before:bg-border relative flex items-start gap-3.5 px-3 py-3 transition-colors duration-150 [li+&]:before:absolute [li+&]:before:inset-x-3 [li+&]:before:top-0 [li+&]:before:h-px",
+      )}
     >
       <DayStamp startsAt={e.startsAt} timeZone={timeZone} />
       <div className="min-w-0 flex-1">
@@ -125,61 +189,51 @@ function PastRow({
         >
           {e.title}
         </Link>
-        {facts.host && (
-          <span className="text-muted-foreground block text-[13px]">Hosted by {facts.host}</span>
-        )}
-        <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-          <span>{timeLine(e.startsAt, e.endsAt, timeZone, e.allDay)}</span>
+        <span className="text-muted-foreground block text-[13px]">
+          {timeLine(e.startsAt, e.endsAt, timeZone, e.allDay)}
+          {facts.host ? `, hosted by ${facts.host}` : ""}
+        </span>
+        {/* On a phone the other columns fold under the title. */}
+        <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] md:hidden">
           {typeName && <TypePill name={typeName} />}
-          {e.conferenceUrl ? (
-            <span className="inline-flex items-center gap-1.5">
-              {integration && hasMeetingLogo(integration) ? (
-                <MeetingLogo provider={integration} className="size-3.5" />
-              ) : (
-                <Video className="size-3.5" aria-hidden="true" />
-              )}
-              {e.conferenceProvider === "OTHER" || e.conferenceProvider === "NONE"
-                ? FORMAT_LABEL.ONLINE
-                : CONFERENCE_LABELS[e.conferenceProvider]}
-            </span>
-          ) : null}
-          {place && (
-            <span className="inline-flex min-w-0 items-start gap-1.5">
-              <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              <span className="min-w-0 break-words">{place}</span>
-            </span>
-          )}
+          {where}
           {came && (
             <span className="inline-flex items-center gap-1.5 tabular-nums">
               <Users className="size-3.5" aria-hidden="true" />
               {came}
-              {share !== null && (
-                <span
-                  aria-hidden="true"
-                  className="bg-muted ms-1 inline-block h-1.5 w-14 overflow-hidden rounded-full"
-                >
-                  <span
-                    className="block h-full rounded-full bg-(--kind)"
-                    style={{ width: `${Math.round(share * 100)}%` }}
-                  />
-                </span>
-              )}
             </span>
           )}
         </span>
       </div>
-      {notes.length > 0 && (
-        <Link
-          href={notes.length === 1 ? notesHref(notes[0]!.id) : `${href}#notes`}
-          className="text-muted-foreground hover:text-foreground hover:bg-muted relative z-10 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-semibold transition-colors"
-          aria-label={
-            notes.length === 1 ? `Notes: ${e.title}` : `${notes.length} notes: ${e.title}`
-          }
-        >
-          <NotebookText className="size-3.5" aria-hidden="true" />
-          {notes.length === 1 ? "Notes" : `${notes.length} notes`}
-        </Link>
-      )}
+      <span className="max-md:hidden">{typeName && <TypePill name={typeName} />}</span>
+      <span className="text-muted-foreground min-w-0 text-[13px] max-md:hidden">{where}</span>
+      <span className="text-muted-foreground text-[13px] tabular-nums max-md:hidden">
+        {came && (
+          <span className="flex flex-col gap-1">
+            {came}
+            {share !== null && (
+              <span
+                aria-hidden="true"
+                className="bg-muted block h-1.5 w-20 overflow-hidden rounded-full"
+              >
+                <span
+                  className="block h-full rounded-full bg-(--kind)"
+                  style={{ width: `${Math.round(share * 100)}%` }}
+                />
+              </span>
+            )}
+          </span>
+        )}
+      </span>
+      <span className="flex shrink-0 flex-wrap justify-end gap-1">
+        {note &&
+          afterLink(
+            notes.length > (recap ? 2 : 1) ? `${href}#notes` : notesHref(note.id),
+            "Notes",
+            `Notes: ${e.title}`,
+          )}
+        {recap && afterLink(notesHref(recap.id), "Recap", `Recap: ${e.title}`)}
+      </span>
     </li>
   );
 }

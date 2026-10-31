@@ -104,6 +104,7 @@ export const notifyEmailJob: JobHandler<{ notificationId: string }> = async (run
             title: n.title,
             body: n.body,
             url: n.linkUrl ? appUrl(n.linkUrl) : null,
+            ...meetingEmailButtons(n.type, n.body, n.linkUrl),
           })),
       },
       { signal: run.signal, idempotencyKey: `notify-email-${id}` },
@@ -450,3 +451,33 @@ export const trialReminderEmailJob: JobHandler<Record<string, never>> = async (r
     );
   }
 };
+
+/**
+ * A meeting's notification emails answer in the email: an invite gets Going
+ * and Can't go (they open the meeting page with that answer ready, one click
+ * to confirm; a link alone never answers, since mail scanners open links),
+ * and an online meeting's reminder leads with Join the meeting.
+ */
+export function meetingEmailButtons(
+  type: string,
+  body: string | null,
+  linkUrl: string | null,
+): {
+  cta?: { label: string; url: string };
+  choices?: { label: string; url: string }[];
+} {
+  if (type === "EVENT_INVITE" && linkUrl && /\/meetings\/[^/?#]+$/.test(linkUrl)) {
+    return {
+      cta: { label: "Open the meeting", url: appUrl(linkUrl) },
+      choices: [
+        { label: "Going", url: appUrl(`${linkUrl}?rsvp=YES`) },
+        { label: "Can't go", url: appUrl(`${linkUrl}?rsvp=NO`) },
+      ],
+    };
+  }
+  if (type === "EVENT_REMINDER" && body) {
+    const join = /^Join: (https:\/\/\S+)$/m.exec(body)?.[1];
+    if (join) return { cta: { label: "Join the meeting", url: join } };
+  }
+  return {};
+}

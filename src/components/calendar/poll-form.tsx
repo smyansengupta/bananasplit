@@ -1,8 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/back-link";
-import { Loader2, X } from "@/components/icons";
-import Link from "next/link";
+import { ChevronRight, Loader2, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 
@@ -19,6 +18,7 @@ import { pollSlots } from "@/lib/calendar/poll-slots";
 
 import { useViewerTimeZone } from "./hooks";
 import { dayLabel, intervalParts, timeOfDayLabel, timeZoneDisplayName } from "./poll-format";
+import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 import { TimeZoneCombobox } from "./time-zone-combobox";
 
 const MAX_SLOTS = 2000;
@@ -39,9 +39,15 @@ export function PollForm({
   orgSlug,
   defaultTimezone,
   defaultTitle = "",
+  members = [],
+  defaultAskIds = [],
 }: {
   orgId: string;
   orgSlug: string;
+  /** Who can be asked (members of the space); none in Personal. */
+  members?: CalendarMember[];
+  /** From the meeting form: the people it was going to invite. */
+  defaultAskIds?: string[];
   /** The org's timezone; the viewer's own is the fallback. */
   defaultTimezone?: string;
   /** From the meeting form's "Don't know yet, find a time": its title carries over. */
@@ -60,6 +66,8 @@ export function PollForm({
   const [granularity, setGranularity] = useState<15 | 30 | 60>(30);
   const [duration, setDuration] = useState(60);
   const [closesAt, setClosesAt] = useState("");
+  const [askIds, setAskIds] = useState<string[]>(defaultAskIds);
+  const [more, setMore] = useState(false);
   const [chosenZone, setChosenZone] = useState<string | null>(defaultTimezone ?? null);
   const timezone = chosenZone ?? deviceZone;
   const [today] = useState(() => {
@@ -146,6 +154,7 @@ export function PollForm({
         durationMinutes: duration,
         // datetime-local is the viewer's wall time; send the instant.
         closesAt: closesAt ? new Date(closesAt).toISOString() : null,
+        askUserIds: askIds,
       });
       if (result.error) {
         setError(result.error);
@@ -177,9 +186,7 @@ export function PollForm({
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="poll-description">
-            Description <span className="text-muted-foreground font-normal">(optional)</span>
-          </Label>
+          <Label htmlFor="poll-description">Description</Label>
           <Textarea
             id="poll-description"
             value={description}
@@ -189,6 +196,24 @@ export function PollForm({
             placeholder="Anything people should know before they answer"
           />
         </div>
+        {members.length > 0 && (
+          <div className="grid gap-1.5">
+            <Label htmlFor="poll-ask">Ask</Label>
+            <MemberMultiPicker
+              id="poll-ask"
+              members={members}
+              selectedIds={askIds}
+              onChange={setAskIds}
+              placeholder="Anyone with the link"
+            />
+            {askIds.length > 0 && (
+              <p className="text-muted-foreground text-xs">
+                {askIds.length === 1 ? "They're" : `All ${askIds.length} are`} notified when you
+                create it.
+              </p>
+            )}
+          </div>
+        )}
       </Section>
 
       <Section title="Days and hours">
@@ -214,11 +239,7 @@ export function PollForm({
                 ? "No days picked yet"
                 : `${dateKeys.length} ${dateKeys.length === 1 ? "day" : "days"} picked`}
             </span>
-            {dateKeys.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Pick one or more days on the calendar.
-              </p>
-            ) : (
+            {dateKeys.length === 0 ? null : (
               <>
                 <ul className="flex flex-wrap gap-1.5" aria-label="Days picked">
                   {dateKeys.map((key) => (
@@ -279,22 +300,6 @@ export function PollForm({
               {windowError}
             </p>
           )}
-          <div className="grid gap-1.5 sm:col-span-2">
-            <Label htmlFor="poll-timezone">Time zone for these hours</Label>
-            <TimeZoneCombobox
-              id="poll-timezone"
-              value={timezone}
-              onChange={setChosenZone}
-              orgTimeZone={defaultTimezone}
-              deviceTimeZone={deviceZone}
-              aria-describedby="poll-timezone-help"
-            />
-            <p id="poll-timezone-help" className="text-muted-foreground text-xs">
-              {localEcho
-                ? `${timeOfDayLabel(dailyStart)} – ${timeOfDayLabel(dailyEnd)} in ${timeZoneDisplayName(timezone)} is ${localEcho} for you. Everyone sees the times in their own zone.`
-                : "Everyone sees the times in their own time zone."}
-            </p>
-          </div>
         </div>
       </Section>
 
@@ -369,25 +374,65 @@ export function PollForm({
               ))}
             </div>
           </div>
-          <div className="grid gap-1.5 sm:col-span-2">
-            <Label htmlFor="poll-closes">
-              Stop taking answers{" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
-            </Label>
-            <Input
-              id="poll-closes"
-              type="datetime-local"
-              value={closesAt}
-              onChange={(e) => setClosesAt(e.target.value)}
-              aria-describedby="poll-closes-help"
-              className="sm:max-w-xs"
-            />
-            <p id="poll-closes-help" className="text-muted-foreground text-xs">
-              Your time zone.
-            </p>
-          </div>
         </div>
       </Section>
+
+      {/* The rarely changed bits: the hours' time zone (the org's, or yours)
+          and a closing time. Folded away until asked for. */}
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setMore((v) => !v)}
+          aria-expanded={more}
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm font-medium transition-colors"
+        >
+          <ChevronRight
+            className={cn("size-4 transition-transform duration-150", more && "rotate-90")}
+            aria-hidden="true"
+          />
+          More
+          {!more && (
+            <span className="font-normal">
+              {timeZoneDisplayName(timezone)}
+              {closesAt ? ", closes on a date" : ""}
+            </span>
+          )}
+        </button>
+        {more && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor="poll-timezone">Time zone</Label>
+              <TimeZoneCombobox
+                id="poll-timezone"
+                value={timezone}
+                onChange={setChosenZone}
+                orgTimeZone={defaultTimezone}
+                deviceTimeZone={deviceZone}
+                aria-describedby="poll-timezone-help"
+              />
+              <p id="poll-timezone-help" className="text-muted-foreground text-xs">
+                {localEcho
+                  ? `${timeOfDayLabel(dailyStart)} – ${timeOfDayLabel(dailyEnd)} in ${timeZoneDisplayName(timezone)} is ${localEcho} for you. Everyone sees the times in their own zone.`
+                  : "Everyone sees the times in their own time zone."}
+              </p>
+            </div>
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor="poll-closes">Stop taking answers</Label>
+              <Input
+                id="poll-closes"
+                type="datetime-local"
+                value={closesAt}
+                onChange={(e) => setClosesAt(e.target.value)}
+                aria-describedby="poll-closes-help"
+                className="sm:max-w-xs"
+              />
+              <p id="poll-closes-help" className="text-muted-foreground text-xs">
+                Your time zone.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="space-y-3 border-t pt-4">
         <p
@@ -414,12 +459,9 @@ export function PollForm({
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" asChild>
-            <Link href={`/app/${orgSlug}/calendar/find-a-time`}>Cancel</Link>
-          </Button>
           <Button type="submit" disabled={isPending || !canSubmit}>
             {isPending && <Loader2 aria-hidden className="size-4 animate-spin" />}
-            Create poll
+            Create
           </Button>
         </div>
       </div>

@@ -309,12 +309,8 @@ export function RsvpGuests({
       {guests.length === 0 ? (
         <EmptyState
           icon={Ticket}
-          title="Nobody has signed up yet"
-          description={
-            shareUrl
-              ? "Share the page's link in your group chat, newsletter or socials. Sign-ups show up here as they come in."
-              : "Turn on the RSVP page to start taking sign-ups."
-          }
+          title="No sign-ups yet."
+          description={shareUrl ? undefined : "Turn on the sign-up page to start taking sign-ups."}
         />
       ) : shown.length === 0 ? (
         <EmptyState

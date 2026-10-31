@@ -12,6 +12,8 @@ import {
   updateEvent,
 } from "@/app/app/[orgSlug]/calendar/actions";
 import { turnOnRsvpPage } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
+import { createPoll } from "@/app/app/[orgSlug]/calendar/polls/actions";
+import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
@@ -273,6 +275,12 @@ function EventForm({
   // A new meeting can skip the date: "Find a time" goes on to offer times,
   // and the time people pick becomes the meeting.
   const [whenMode, setWhenMode] = useState<"pick" | "find">("pick");
+  // "Don't know yet, find a time": the days and hours to offer instead of a
+  // date. The poll goes straight to whoever this meeting invites.
+  const [findDays, setFindDays] = useState<Date[]>([]);
+  const [findFrom, setFindFrom] = useState("09:00");
+  const [findUntil, setFindUntil] = useState("17:00");
+  const [findLength, setFindLength] = useState(60);
   // A new one can repeat weekly, as a linked series, through a last day
   // (eight weeks on, to start with).
   const [repeats, setRepeats] = useState(false);
@@ -441,12 +449,46 @@ function EventForm({
     submitEvent.preventDefault();
     if (isPending || !title.trim()) return;
     setError(null);
-    // No date yet: offer times instead, with the title carried over.
+    // No date yet: make the Find a time poll right here, from the days and
+    // hours picked, and ask everyone this meeting would have invited.
     if (!event && whenMode === "find" && params.orgSlug) {
-      onOpenChange(false);
-      router.push(
-        `/app/${params.orgSlug}/calendar/find-a-time/new?title=${encodeURIComponent(title.trim())}`,
-      );
+      const minutes = (v: string) => {
+        const [h, m] = v.split(":").map(Number);
+        return h * 60 + m;
+      };
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const keys = findDays
+        .map((d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`)
+        .sort();
+      if (keys.length === 0) {
+        setError("Pick at least one day to offer.");
+        return;
+      }
+      if (minutes(findUntil) <= minutes(findFrom)) {
+        setError("The hours must end after they start.");
+        return;
+      }
+      const slug = params.orgSlug;
+      startTransition(async () => {
+        const result = await createPoll(orgId, {
+          title: title.trim(),
+          description: description.trim() || null,
+          timezone: timeZone,
+          dates: keys,
+          dailyStartMinutes: minutes(findFrom),
+          dailyEndMinutes: minutes(findUntil),
+          granularityMinutes: 30,
+          durationMinutes: findLength,
+          closesAt: null,
+          askUserIds: attendeeIds,
+        });
+        if (result.error || !result.pollId) {
+          setError(result.error ?? "Couldn't make the poll.");
+          return;
+        }
+        onOpenChange(false);
+        router.push(`/app/${slug}/calendar/find-a-time/${result.pollId}`);
+      });
       return;
     }
     if (
@@ -538,10 +580,8 @@ function EventForm({
     <form onSubmit={handleSubmit} onKeyDown={onKeyDown} className="contents">
       <DialogHeader>
         <DialogTitle>{event ? "Edit event" : `New ${noun}`}</DialogTitle>
-        <DialogDescription>
-          {event
-            ? "Changes reach the website and Google Calendar the same way the original did."
-            : "A title and a time are all it takes. Everything else has a sensible default."}
+        <DialogDescription className="sr-only">
+          {event ? "Change this meeting's details." : "A new meeting's details."}
         </DialogDescription>
       </DialogHeader>
 
@@ -681,9 +721,66 @@ function EventForm({
           )}
 
           {whenMode === "find" ? (
-            <p className="text-muted-foreground text-sm">
-              Next you offer days and hours. The time people pick becomes this meeting.
-            </p>
+            <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+              <Calendar
+                mode="multiple"
+                selected={findDays}
+                onSelect={(value) => setFindDays((value ?? []).slice(0, 31))}
+                disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                aria-label="Days to offer"
+                className="w-fit rounded-lg border [--cell-size:--spacing(9)]"
+              />
+              <div className="grid content-start gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="find-from">From</Label>
+                    <Input
+                      id="find-from"
+                      type="time"
+                      step={900}
+                      value={findFrom}
+                      onChange={(e) => setFindFrom(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="find-until">Until</Label>
+                    <Input
+                      id="find-until"
+                      type="time"
+                      step={900}
+                      value={findUntil}
+                      onChange={(e) => setFindUntil(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <span id="find-length" className="text-sm leading-none font-medium">
+                    Length
+                  </span>
+                  <div role="radiogroup" aria-labelledby="find-length" className={segmentedTrack}>
+                    {[30, 45, 60, 90].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={findLength === m}
+                        onClick={() => setFindLength(m)}
+                        className={segmentedItem(findLength === m)}
+                      >
+                        {m < 60 ? `${m} min` : m === 60 ? "1 hr" : "1.5 hr"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {findDays.length === 0
+                    ? "Pick the days to offer."
+                    : attendeeIds.length > 0
+                      ? `${attendeeIds.length} invited ${attendeeIds.length === 1 ? "person is" : "people are"} asked when they're free.`
+                      : "Share the link to ask people."}
+                </p>
+              </div>
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -796,6 +893,28 @@ function EventForm({
           />
         )}
 
+        {/* The two most used: who's invited and what it's about. */}
+        <div className="grid gap-1.5">
+          <Label htmlFor="event-attendees">Invite members</Label>
+          <MemberMultiPicker
+            id="event-attendees"
+            members={members}
+            selectedIds={attendeeIds}
+            onChange={setAttendeeIds}
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <Label htmlFor="event-description">Description</Label>
+          <Textarea
+            id="event-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="What it covers, what to bring, anything the website should say."
+          />
+        </div>
+
         <div>
           <button
             type="button"
@@ -809,11 +928,6 @@ function EventForm({
               className={cn("size-4 transition-transform", showMore && "rotate-180")}
             />
             {showMore ? "Fewer details" : "More details"}
-            {!showMore && (
-              <span className="text-muted-foreground/80 ml-1 text-xs font-normal">
-                host, RSVP link, invites, description, reminders
-              </span>
-            )}
           </button>
         </div>
 
@@ -913,32 +1027,11 @@ function EventForm({
             )}
 
             <div className="grid gap-1.5">
-              <Label htmlFor="event-description">Description</Label>
-              <Textarea
-                id="event-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="What it covers, what to bring, anything the website should say."
-              />
-            </div>
-
-            <div className="grid gap-1.5">
               <Label htmlFor="event-reminders">Reminders</Label>
               <ReminderPicker
                 id="event-reminders"
                 value={reminderMinutes}
                 onChange={setReminderMinutes}
-              />
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="event-attendees">Invite members</Label>
-              <MemberMultiPicker
-                id="event-attendees"
-                members={members}
-                selectedIds={attendeeIds}
-                onChange={setAttendeeIds}
               />
             </div>
 
@@ -1005,7 +1098,9 @@ function EventForm({
             : event
               ? "Save"
               : whenMode === "find"
-                ? "Next: offer times"
+                ? attendeeIds.length > 0
+                  ? "Ask when they're free"
+                  : "Find a time"
                 : `Create ${noun}`}
         </Button>
       </DialogFooter>

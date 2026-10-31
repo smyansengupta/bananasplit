@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   members: vi.fn(),
 }));
 
+vi.mock("@/components/meetings/meeting-tasks", () => ({ MeetingTasks: () => null }));
 vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -26,7 +27,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.context,
   withOrgTx: async (_orgId: string, fn: (ctx: unknown) => unknown) =>
-    fn({ db: { eventRegistration: { groupBy: mocks.groupBy } } }),
+    fn({
+      db: {
+        eventRegistration: { groupBy: mocks.groupBy },
+        itemLink: { findMany: async () => [] },
+        task: { findMany: async () => [] },
+      },
+    }),
 }));
 vi.mock("@/server/members", () => ({ getOrgMembersForPicker: mocks.members }));
 vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({ getEventById: mocks.getEventById }));
