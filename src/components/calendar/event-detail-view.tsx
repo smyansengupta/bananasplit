@@ -310,8 +310,10 @@ export function EventDetailView({
         </p>
       )}
 
-      <div className="grid gap-[18px] lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-[18px]">
+      {/* On a phone the two columns fold into one list (display: contents),
+          with the Linked panel first, right under the header, as the plan has it. */}
+      <div className="flex flex-col gap-[18px] lg:grid lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="max-lg:contents lg:space-y-[18px]">
           <Card>
             <CardContent className="space-y-5">
               <MeetingAgenda
@@ -437,8 +439,8 @@ export function EventDetailView({
           {tasks}
         </div>
 
-        <aside className="space-y-[18px]">
-          {linked}
+        <aside className="max-lg:contents lg:space-y-[18px]">
+          {linked && <div className="max-lg:order-first">{linked}</div>}
           {myAttendance && (
             <BlockCard
               tone="answer"
