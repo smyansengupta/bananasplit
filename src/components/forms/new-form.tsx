@@ -18,7 +18,6 @@ import { useTransition } from "react";
 import { createFormAction } from "@/app/app/[orgSlug]/forms/actions";
 import { Button } from "@/components/ui/button";
 import { CreateSplitButton } from "@/components/ui/create-split-button";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toaster";
 import { FORM_TEMPLATES } from "@/lib/forms/questions";
 import { cn } from "@/lib/utils";
@@ -47,8 +46,8 @@ function useCreate(orgId: string, orgSlug: string) {
 }
 
 /**
- * Forms' two ways to start: Quick poll beside New form (blank, its menu the
- * templates) for owners and admins; a member's is Quick poll alone, which
+ * Forms' two ways to start: Quick poll beside New form (a blank form; the
+ * templates are the tiles on the page) for owners and admins; a member's is Quick poll alone, which
  * is what members could always start.
  */
 export function NewFormButton({
@@ -78,22 +77,8 @@ export function NewFormButton({
           Quick poll
         </Link>
       </Button>
-      <CreateSplitButton
-        label="New form"
-        onClick={() => create("blank")}
-        pending={pending}
-        menuLabel="Start from a template"
-      >
-        {FORM_TEMPLATES.filter((t) => t.id !== "blank").map((t) => {
-          const Icon = TEMPLATE_ICONS[t.id] ?? FileText;
-          return (
-            <DropdownMenuItem key={t.id} onSelect={() => create(t.id)}>
-              <Icon className="size-4" aria-hidden="true" />
-              {t.name}
-            </DropdownMenuItem>
-          );
-        })}
-      </CreateSplitButton>
+      {/* A plain button, as the plan draws it: the templates are the tiles below. */}
+      <CreateSplitButton label="New form" onClick={() => create("blank")} pending={pending} />
     </div>
   );
 }
