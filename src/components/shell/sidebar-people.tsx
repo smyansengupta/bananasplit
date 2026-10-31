@@ -19,8 +19,8 @@ export interface SidebarPeopleData {
 const BEAT_MS = 60_000;
 
 /**
- * Who's here now, at the sidebar's foot over the logo: the faces of the
- * others online and how many of you there are, opening People. While the
+ * Who's online now, at the sidebar's foot over the logo: a few faces (yours
+ * when you're the only one) and how many members are online, opening People. While the
  * tab is open and visible it marks you here once a minute and refreshes the
  * list (src/server/presence.ts); a hidden tab stops, so you drop off after
  * a couple of minutes away. Folds away on the rail.
@@ -28,11 +28,14 @@ const BEAT_MS = 60_000;
 export function SidebarPeople({
   orgId,
   orgSlug,
+  you,
   people: initial,
   onNavigate,
 }: {
   orgId: string;
   orgSlug: string;
+  /** You: the face shown when nobody else is online. */
+  you: UserAvatarUser;
   people: SidebarPeopleData;
   onNavigate?: () => void;
 }) {
@@ -60,7 +63,7 @@ export function SidebarPeople({
     };
   }, [orgId]);
 
-  const alone = people.count <= 1;
+  const faces = people.faces.length > 0 ? people.faces : [{ ...you, id: "you" }];
   return (
     <Link
       href={`/app/${orgSlug}/people`}
@@ -75,21 +78,18 @@ export function SidebarPeople({
         rail && "pointer-events-none opacity-0",
       )}
     >
-      {alone ? (
-        <span aria-hidden="true" className="grid size-5 shrink-0 place-items-center">
-          <span className="bg-success size-2 rounded-full" />
+      <span className="flex shrink-0">
+        {faces.map((face, i) => (
+          <span key={face.id} className={cn("relative", i > 0 && "-ml-1.5")}>
+            <UserAvatar user={face} size="xs" className="ring-sidebar ring-2" />
+          </span>
+        ))}
+      </span>
+      <span className={cn("flex min-w-0 items-center gap-1.5", fadeLabel(rail))}>
+        <span aria-hidden="true" className="bg-success size-1.5 shrink-0 rounded-full" />
+        <span className="truncate">
+          {people.count} {people.count === 1 ? "member" : "members"} online
         </span>
-      ) : (
-        <span className="flex shrink-0">
-          {people.faces.map((face, i) => (
-            <span key={face.id} className={cn("relative", i > 0 && "-ml-1.5")}>
-              <UserAvatar user={face} size="xs" className="ring-sidebar ring-2" />
-            </span>
-          ))}
-        </span>
-      )}
-      <span className={cn("min-w-0 truncate", fadeLabel(rail))}>
-        {alone ? "Just you here now" : `${people.count} here now`}
       </span>
     </Link>
   );

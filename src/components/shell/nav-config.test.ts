@@ -12,7 +12,7 @@ const item = (label: string, all = links()) => all.find((i) => i.label === label
 const active = (label: string, path: string) => isLinkActive(item(label), path, links());
 
 describe("sidebar navigation", () => {
-  it("lists every section in order by default, in unnamed groups", () => {
+  it("lists every section in order by default, in its groups", () => {
     expect(links().map((i) => i.label)).toEqual([
       "Home",
       "Inbox",
@@ -22,13 +22,14 @@ describe("sidebar navigation", () => {
       "Meetings",
       "Forms",
       "Databases",
+      "Finance",
       "Files",
       "Integrations",
-      "Finance",
     ]);
     const groups = navSections("cbc", visibleSidebar(null));
-    expect(groups.map((s) => s.id)).toEqual(["main", "plan", "collect", "money"]);
-    // Groups have no names: a thin line separates them.
+    // Finance is part of Data; the money group is empty by default and drops out.
+    expect(groups.map((s) => s.id)).toEqual(["main", "plan", "collect", "workspace"]);
+    // The sidebar names the groups itself (SECTION_NAMES).
     expect(groups.every((s) => s.label === null)).toBe(true);
     expect(item("Files").href).toBe("/app/cbc/notes");
     expect(item("Inbox").href).toBe("/app/cbc/inbox");
@@ -110,7 +111,7 @@ describe("sidebar navigation", () => {
     expect(labels).toContain("Meetings");
     expect(labels).toContain("Events");
     const groups = resolveSidebar(saved);
-    expect(groups.map((g) => g.id)).toEqual(["main", "plan", "collect", "money"]);
+    expect(groups.map((g) => g.id)).toEqual(["main", "plan", "collect", "workspace", "money"]);
     expect(groups.find((g) => g.id === "plan")!.items.map((i) => i.id)).toContain("calendar");
     expect(groups.every((g) => g.label === null)).toBe(true);
   });
@@ -118,7 +119,7 @@ describe("sidebar navigation", () => {
   it("names a section's page the way the organization's sidebar does", () => {
     expect(sectionLabel(null, "notes")).toBe("Files");
     const groups = resolveSidebar(null);
-    groups.find((g) => g.id === "collect")!.items.find((i) => i.id === "notes")!.label = "Docs";
+    groups.find((g) => g.id === "workspace")!.items.find((i) => i.id === "notes")!.label = "Docs";
     groups.find((g) => g.id === "plan")!.items.find((i) => i.id === "meetings")!.hidden = true;
     const config = toConfig(groups);
     expect(sectionLabel(config, "notes")).toBe("Docs");
@@ -137,8 +138,10 @@ describe("sidebar navigation", () => {
     const main = groups.find((g) => g.id === "main")!;
     main.items.find((i) => i.id === "people")!.label = "Members";
     // Move Finance into the first group, right after Home.
-    const money = groups.find((g) => g.id === "money")!;
-    const finance = money.items.splice(0, 1)[0];
+    const finance = collect.items.splice(
+      collect.items.findIndex((i) => i.id === "finance"),
+      1,
+    )[0]!;
     main.items.splice(1, 0, finance);
     const config = toConfig(groups);
     const labels = links(config).map((i) => i.label);
@@ -150,6 +153,7 @@ describe("sidebar navigation", () => {
       "main",
       "plan",
       "collect",
+      "workspace",
     ]);
     // Home and Inbox can't be hidden, whatever is saved.
     const tampered = {

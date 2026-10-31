@@ -196,6 +196,7 @@ function NavItemLink({
 export const SECTION_NAMES: Record<string, string> = {
   plan: "Planning",
   collect: "Data",
+  workspace: "Files & apps",
   money: "Money",
 };
 
@@ -229,6 +230,7 @@ function SectionHeader({
   label,
   collapsed,
   waiting = 0,
+  boxed = false,
   children,
 }: {
   id: string;
@@ -236,6 +238,8 @@ function SectionHeader({
   collapsed: boolean;
   /** What waits on you inside, shown while it's shut. */
   waiting?: number;
+  /** Inside its own box (Pinned): no room above, the box gives it. */
+  boxed?: boolean;
   children?: React.ReactNode;
 }) {
   const { rail, chrome } = useSidebarMode();
@@ -244,7 +248,12 @@ function SectionHeader({
   if (rail) return <div aria-hidden="true" className="h-4 shrink-0" />;
   if (!edit) return <GroupLabel label={label}>{children}</GroupLabel>;
   return (
-    <div className={cn(HEADING, "group/heading pr-1")}>
+    <div
+      className={cn(
+        boxed ? "mb-0.5 flex h-7 shrink-0 items-center gap-1 px-2" : HEADING,
+        "group/heading pr-1",
+      )}
+    >
       <button
         type="button"
         onClick={() => edit.toggleGroup(id)}
@@ -345,12 +354,16 @@ function PinnedList({
     <div
       {...zone}
       className={cn(
-        "flex flex-col rounded-[12px] transition-colors",
-        over && "bg-sidebar-accent/60 ring-sidebar-ring ring-1",
+        "flex flex-col rounded-xl transition-colors",
+        // Docked, Pinned is its own box: a dashed outline 4px outside the
+        // rows, so its text lines up with everything above it.
+        !rail && "-mx-1 mt-4 border border-dashed p-[3px]",
+        !rail && (chrome ? "border-chrome-foreground/25" : "border-sidebar-foreground/20"),
+        over && "bg-sidebar-accent/60 border-sidebar-ring border-solid",
       )}
     >
       {/* Pinned, with the pin for the page on screen at the heading's right. */}
-      <SectionHeader id="pinned" label="Pinned" collapsed={collapsed}>
+      <SectionHeader id="pinned" label="Pinned" collapsed={collapsed} boxed>
         <PinButton
           iconClassName="size-3.5"
           className={cn(

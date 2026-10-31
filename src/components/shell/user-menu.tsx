@@ -70,7 +70,7 @@ export function UserMenu({
             type="button"
             title={displayName}
             className={cn(
-              "focus-glow grid size-8 shrink-0 place-items-center rounded-full outline-none",
+              "focus-glow grid size-7 shrink-0 place-items-center rounded-full outline-none",
               "transition-[background-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
               tone.hover,
               chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15",
@@ -78,7 +78,7 @@ export function UserMenu({
             )}
             aria-label={`Open user menu for ${displayName}`}
           >
-            <UserAvatar user={user} size="md" />
+            <UserAvatar user={user} size="md" className="size-7 text-xs" />
           </button>
         ) : row ? (
           <button

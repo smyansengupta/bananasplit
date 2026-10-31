@@ -51,8 +51,8 @@ export const PERSONAL_NAV: readonly {
   path: string;
   also?: readonly string[];
   exact: boolean;
-  /** Which run of the sidebar it's in; a thin line separates runs. */
-  group: "main" | "plan" | "collect";
+  /** Which section of the sidebar it's in (SECTION_NAMES names them). */
+  group: "main" | "plan" | "collect" | "workspace";
 }[] = [
   { id: "home", label: "Home", icon: "House", path: "", exact: true, group: "main" },
   { id: "inbox", label: "Inbox", icon: "Inbox", path: "/inbox", exact: false, group: "main" },
@@ -89,7 +89,7 @@ export const PERSONAL_NAV: readonly {
     icon: "FolderOpen",
     path: "/notes",
     exact: false,
-    group: "collect",
+    group: "workspace",
   },
 ];
 
@@ -106,7 +106,7 @@ export function navSections(
 ): NavSection[] {
   const { space, showLocked = false } = options;
   if (space?.kind === "PERSONAL") {
-    return (["main", "plan", "collect"] as const).map((group) => ({
+    return (["main", "plan", "collect", "workspace"] as const).map((group) => ({
       id: group,
       label: null,
       items: PERSONAL_NAV.filter((i) => i.group === group).map((i) => ({

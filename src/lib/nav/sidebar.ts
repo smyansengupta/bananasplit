@@ -35,11 +35,13 @@ export type SectionId = (typeof SECTION_IDS)[number];
 const RETIRED_SECTION_IDS = ["org-chart", "rsvps", "polls", "find-a-time"] as const;
 
 /**
- * The sidebar's groups. They have no names: a thin line between them is the
- * whole heading, so the sidebar reads as one list of places, in the order
- * people reach for them.
+ * The sidebar's groups, in the order people reach for them. The sidebar
+ * names them (SECTION_NAMES, src/components/shell/sidebar-nav.tsx): the
+ * first has no name, then Planning, Data, and Files & apps. "money" is
+ * empty by default (Finance is part of Data) and stays for saved sidebars
+ * that put things there.
  */
-export const GROUP_IDS = ["main", "plan", "collect", "money"] as const;
+export const GROUP_IDS = ["main", "plan", "collect", "workspace", "money"] as const;
 export type GroupId = (typeof GROUP_IDS)[number];
 /** Group ids older saved sidebars used; read, then ignored (each section goes to its own group). */
 const LEGACY_GROUP_IDS = ["club", "data"] as const;
@@ -61,9 +63,9 @@ export interface SectionDef {
 }
 
 // Home, Inbox and People first (yours and who's here); then planning
-// (Tasks, Calendar, Meetings); then what the club collects (Forms,
-// Databases, Files, and Integrations, where outside data comes in); then
-// money on its own.
+// (Tasks, Calendar, Meetings); then the organization's data (Forms,
+// Databases, Finance); then where files live and apps connect (Files,
+// Integrations).
 export const SECTIONS: readonly SectionDef[] = [
   {
     id: "overview",
@@ -140,7 +142,7 @@ export const SECTIONS: readonly SectionDef[] = [
     label: "Files",
     icon: "FolderOpen",
     path: "/notes",
-    group: "collect",
+    group: "workspace",
     description: "Notes, documents and uploads.",
   },
   {
@@ -149,7 +151,7 @@ export const SECTIONS: readonly SectionDef[] = [
     icon: "Plug",
     path: "/integrations",
     also: ["/settings/integrations", "/setup"],
-    group: "collect",
+    group: "workspace",
     description: "The apps your organization connects.",
   },
   {
@@ -157,7 +159,7 @@ export const SECTIONS: readonly SectionDef[] = [
     label: "Finance",
     icon: "Wallet",
     path: "/finance",
-    group: "money",
+    group: "collect",
     description: "Budget, transactions and reimbursements.",
   },
 ];
@@ -200,6 +202,7 @@ export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = {
   main: null,
   plan: null,
   collect: null,
+  workspace: null,
   money: null,
 };
 

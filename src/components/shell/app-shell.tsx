@@ -259,7 +259,9 @@ export function AppShell({
             onToggle={toggleSidebar}
             clubMenu={clubMenu}
             profile={profile}
-            people={people && <SidebarPeople orgId={orgId} orgSlug={orgSlug} people={people} />}
+            people={
+              people && <SidebarPeople orgId={orgId} orgSlug={orgSlug} you={user} people={people} />
+            }
           >
             {nav()}
           </SidebarPanel>
