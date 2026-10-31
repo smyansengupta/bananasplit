@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { FieldType } from "@/lib/databases/fields";
+import type { TagColor } from "@/lib/tag-colors";
 
 /**
  * A form's questions, as stored in Form.questions (validated here, never
@@ -10,7 +11,7 @@ import type { FieldType } from "@/lib/databases/fields";
  * choice's id.
  *
  * Answers map onto the database's own field types, so a form's responses
- * are an ordinary club database (sortable, filterable, exportable):
+ * are an ordinary organization database (sortable, filterable, exportable):
  * uploads are links to the file in Files, a ranking is the choices in
  * order, one per line, ratings and scales are numbers.
  */
@@ -61,9 +62,9 @@ export const QUESTION_META: Record<
   image: { label: "Image upload", icon: "Image", field: "URL", group: "upload" },
   /** Drawn on the screen, saved to Files as a picture; the column links to it. */
   signature: { label: "Signature", icon: "PenLine", field: "URL", group: "upload" },
-  member: { label: "Member", icon: "User", field: "MEMBER", group: "contact" },
+  member: { label: "Member picker", icon: "User", field: "MEMBER", group: "contact" },
   section: { label: "Section break", icon: "SeparatorHorizontal", field: null, group: "layout" },
-  hidden: { label: "Hidden field", icon: "EyeOff", field: "TEXT", group: "layout" },
+  hidden: { label: "Hidden field from the link", icon: "EyeOff", field: "TEXT", group: "layout" },
 };
 
 export type QuestionGroup = "text" | "choice" | "scale" | "contact" | "upload" | "layout";
@@ -75,6 +76,35 @@ export const QUESTION_GROUPS: { id: QuestionGroup; label: string }[] = [
   { id: "contact", label: "Contact" },
   { id: "upload", label: "Uploads" },
   { id: "layout", label: "Layout" },
+];
+
+/**
+ * The question types as the builder's chips show them, in that order, each
+ * with the palette colour of its family (text navy, long text forest,
+ * single choice plum, many choices teal, ratings ochre, uploads rust,
+ * people burgundy, layout neutral).
+ */
+export const QUESTION_CHIPS: { type: QuestionType; color: TagColor | null }[] = [
+  { type: "short", color: "navy" },
+  { type: "email", color: "navy" },
+  { type: "phone", color: "navy" },
+  { type: "number", color: "navy" },
+  { type: "link", color: "navy" },
+  { type: "date", color: "navy" },
+  { type: "long", color: "forest" },
+  { type: "choice", color: "plum" },
+  { type: "dropdown", color: "plum" },
+  { type: "yesno", color: "plum" },
+  { type: "checkboxes", color: "teal" },
+  { type: "ranking", color: "teal" },
+  { type: "rating", color: "ochre" },
+  { type: "scale", color: "ochre" },
+  { type: "file", color: "rust" },
+  { type: "image", color: "rust" },
+  { type: "member", color: "burgundy" },
+  { type: "signature", color: "burgundy" },
+  { type: "section", color: null },
+  { type: "hidden", color: null },
 ];
 
 /** Types whose answer is one of `options`. */
