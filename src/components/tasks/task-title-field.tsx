@@ -24,7 +24,6 @@ import { useTokenMenu } from "./use-token-menu";
 export function TitleInput({
   value,
   onChange,
-  ref: outerRef,
   ...props
 }: Omit<React.ComponentProps<typeof Input>, "value" | "onChange"> & {
   value: string;
@@ -38,11 +37,7 @@ export function TitleInput({
       <PopoverAnchor asChild>
         <Input
           {...props}
-          ref={(el) => {
-            ref.current = el;
-            if (typeof outerRef === "function") outerRef(el);
-            else if (outerRef) outerRef.current = el;
-          }}
+          ref={ref}
           value={value}
           role="combobox"
           aria-autocomplete="list"

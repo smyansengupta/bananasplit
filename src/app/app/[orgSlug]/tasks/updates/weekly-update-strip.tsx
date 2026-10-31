@@ -19,9 +19,10 @@ export interface WeeklyStatus {
 }
 
 /**
- * The weekly update, on top of the Board and the List while it's still to
- * post: one line and one button. Once it's posted the strip goes (the
- * Dashboard and the update itself say so); it used to sit there all week.
+ * The weekly update, where it belongs: on top of the Week, which is the
+ * same question (what you did, what's next, what's stuck) the update
+ * answers. One line and one button; it used to be a header button that sat
+ * there all week whether or not it was due.
  */
 export function WeeklyUpdateStrip({ status }: { status: WeeklyStatus }) {
   const { org } = useTasks();
@@ -41,18 +42,15 @@ export function WeeklyUpdateStrip({ status }: { status: WeeklyStatus }) {
         <NotebookPen className="text-primary size-4 shrink-0" aria-hidden="true" />
       )}
       <p className="min-w-0 flex-1">
-        <span className="font-medium">
-          {status.posted ? "Weekly update posted" : "Weekly update due"}
-        </span>{" "}
-        {!status.posted && (
-          <span className={cn(late ? "text-tint-danger-foreground" : "text-muted-foreground")}>
-            {formatDueKey(dueKey, status.todayKey)}
-            {late ? ", late" : ""}
-          </span>
-        )}
+        <span className="font-medium">Weekly update</span>{" "}
+        <span className="text-muted-foreground">
+          {status.posted
+            ? "· posted for this week"
+            : `· due ${formatDueKey(dueKey, status.todayKey)}${late ? " (late)" : ""}. Done, next and blocked are drafted from your tasks.`}
+        </span>
       </p>
       <Button asChild size="sm" variant={status.posted ? "ghost" : "default"}>
-        <Link href={href}>{status.posted ? "Open" : "Write"}</Link>
+        <Link href={href}>{status.posted ? "View or edit" : "Write it"}</Link>
       </Button>
     </div>
   );

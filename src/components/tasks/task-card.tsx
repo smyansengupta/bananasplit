@@ -53,20 +53,14 @@ export function TaskCard({
   dragging = false,
   showEpic = true,
   check,
-  dueSlot,
-  ownerSlot,
 }: {
   task: TaskCardData;
   todayKey: string;
   dragging?: boolean;
   /** The parent epic's name (off inside an epic's swimlane). */
   showEpic?: boolean;
-  /** The completion circle (every card on the board has one). */
+  /** The completion circle, for cards in the Completed column. */
   check?: React.ReactNode;
-  /** The date, editable in place (QuickDue); the plain label without it. */
-  dueSlot?: React.ReactNode;
-  /** The owner's face, editable in place (QuickOwner); the plain avatar without it. */
-  ownerSlot?: React.ReactNode;
 }) {
   const done = task.status === "COMPLETED";
   const flagged = isTaskFlagged(task);
@@ -74,10 +68,10 @@ export function TaskCard({
   const progress = rollUp(task.subtasks);
   const epic = epicOf(task);
   const color = epicColor(epic);
-  const others = task.assignees.map((a) => a.user).filter((u) => u.id !== task.ownerId);
-  const people = [...(task.owner && !ownerSlot ? [task.owner] : []), ...others];
-  const shownTags = task.labels.slice(0, 3);
-  const moreTags = task.labels.length - shownTags.length;
+  const people = [
+    ...(task.owner ? [task.owner] : []),
+    ...task.assignees.map((a) => a.user).filter((u) => u.id !== task.ownerId),
+  ];
 
   return (
     <div
@@ -112,14 +106,11 @@ export function TaskCard({
         <div className="flex flex-wrap gap-1.5">
           {priv && <PrivateBadge />}
           {flagged && <FlagBadge />}
-          {shownTags.map(({ label }) => (
+          {task.labels.slice(0, 3).map(({ label }) => (
             <TagChip key={label.id} color={label.color}>
               {label.name}
             </TagChip>
           ))}
-          {moreTags > 0 && (
-            <span className="text-muted-foreground text-xs font-medium">+{moreTags}</span>
-          )}
         </div>
       )}
 
@@ -130,7 +121,7 @@ export function TaskCard({
       )}
 
       <div className="text-muted-foreground flex items-center gap-2.5 text-[13px]">
-        {dueSlot ?? <DueLabel dueDate={task.dueDate} todayKey={todayKey} done={done} />}
+        <DueLabel dueDate={task.dueDate} todayKey={todayKey} done={done} />
         {task._count.comments > 0 && (
           <span className="flex items-center gap-1">
             <MessageSquare className="size-3.5" aria-hidden="true" />
@@ -138,15 +129,14 @@ export function TaskCard({
           </span>
         )}
         <span className="flex-1" />
-        {(people.length > 0 || ownerSlot) && (
+        {people.length > 0 && (
           <span className="flex shrink-0 items-center">
-            {ownerSlot && <span className="ring-card z-[1] rounded-full ring-2">{ownerSlot}</span>}
             {people.slice(0, 3).map((u, i) => (
               <UserAvatar
                 key={u.id}
                 user={u}
                 size="sm"
-                className={cn("ring-card ring-2", (i > 0 || ownerSlot) && "-ms-2")}
+                className={cn("ring-card ring-2", i > 0 && "-ms-2")}
               />
             ))}
             {people.length > 3 && (

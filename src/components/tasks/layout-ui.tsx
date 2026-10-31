@@ -60,7 +60,7 @@ export function GroupHeader({
       <h2
         id={id}
         className={cn(
-          "text-sm font-semibold break-words",
+          "truncate text-sm font-semibold",
           tone === "danger" && "text-tint-danger-foreground",
           tone === "warning" && "text-warning",
         )}
@@ -71,7 +71,9 @@ export function GroupHeader({
         {count}
       </Badge>
       {description && (
-        <span className="text-muted-foreground hidden text-xs sm:inline">{description}</span>
+        <span className="text-muted-foreground hidden truncate text-xs sm:inline">
+          {description}
+        </span>
       )}
       {children && <span className="ms-auto flex items-center gap-1">{children}</span>}
     </div>

@@ -1,13 +1,11 @@
-import { isPersonalSpace } from "@/lib/billing/space";
-import { clubsUserRuns } from "@/server/personal/move";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { QueryProvider } from "@/components/providers/query-provider";
 import { TasksProvider } from "@/components/tasks/tasks-context";
 import { WorkspaceProvider } from "@/components/tasks/workspace-context";
 import { can } from "@/lib/auth/permissions";
-import { spaceIncludes } from "@/lib/billing/space";
+import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import {
   effectiveTimezone,
@@ -22,6 +20,7 @@ import {
 } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
+import { clubsUserRuns } from "@/server/personal/move";
 import { listFileRefOptions } from "@/server/notes/files";
 import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
 import { getTaskDashboard } from "@/server/tasks/dashboard";
@@ -56,10 +55,9 @@ import { RoadmapView } from "./roadmap/roadmap-view";
 import {
   DEFAULT_TASK_LAYOUT,
   isDestination,
-  parseRemembered,
   parseScope,
   parseWorkspaceQuery,
-  REMEMBER_COOKIE,
+  PHONE_HIDDEN_LAYOUTS,
   TASK_LIST_VIEW,
   type WorkspaceQuery,
 } from "./views";
@@ -97,9 +95,7 @@ export default async function TasksPage({
     redirect(`/app/${orgSlug}/calendar`);
   }
 
-  // Where this person left off (the last layout and scope), unless the URL says.
-  const remembered = parseRemembered((await cookies()).get(REMEMBER_COOKIE)?.value);
-  const parsed = parseWorkspaceQuery(query, remembered);
+  const parsed = parseWorkspaceQuery(query);
   // The Free plan has the List only: any other ?view= opens the List too,
   // so a typed URL doesn't reach the others.
   const simple = !spaceIncludes(org, "taskViews");
@@ -115,16 +111,15 @@ export default async function TasksPage({
   const positions = await getChartForPage(org.id);
   const chart = buildViewerChart(positions, user.id);
 
-  // A phone has every layout (the Board's columns and the Table scroll
-  // sideways), but opens on the List when neither the URL nor a remembered
-  // layout says otherwise.
+  // A phone has no Board or Table (PHONE_HIDDEN_LAYOUTS), so a remembered
+  // Board or a shared ?view=table link opens the List on one, without
+  // touching the remembered layout.
   const phone = PHONE_UA.test((await headers()).get("user-agent") ?? "");
-  const chosen = typeof query.view === "string" || remembered.view != null;
   const ws: WorkspaceQuery = simple
     ? { ...parsed, view: TASK_LIST_VIEW, scope: parseScope(query.scope) ?? "all" }
     : !teamwork && isDestination(parsed.view)
       ? { ...parsed, view: phone ? TASK_LIST_VIEW : DEFAULT_TASK_LAYOUT }
-      : phone && !chosen
+      : phone && (PHONE_HIDDEN_LAYOUTS as readonly string[]).includes(parsed.view)
         ? { ...parsed, view: TASK_LIST_VIEW }
         : parsed;
 
@@ -172,7 +167,6 @@ export default async function TasksPage({
     dueTo: dateParam(ws.dueTo),
     flagged: ws.flagged,
     overdue: ws.overdue,
-    unowned: ws.unowned,
     blockers: ws.blockers,
     visibility: ws.visibility,
   };
@@ -230,11 +224,8 @@ export default async function TasksPage({
           title={sectionLabel(settings?.sidebar, "tasks")}
           teamwork={teamwork && !simple}
           stats={stats}
-          weekEndKey={addDaysToKey(weekStartKey, 6)}
         />
-        {(ws.view === "list" || ws.view === "board") && weekly && !weekly.posted && (
-          <WeeklyUpdateStrip status={weekly} />
-        )}
+        {ws.view === "list" && weekly && <WeeklyUpdateStrip status={weekly} />}
         {content}
       </WorkspaceProvider>
     </TasksProvider>

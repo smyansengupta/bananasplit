@@ -1,22 +1,22 @@
 "use client";
 
-import { ExternalLink, Link2, Trash2 } from "@/components/icons";
+import { ExternalLink, Link2, PanelRightOpen, Trash2 } from "@/components/icons";
 
 import { deleteTask, restoreTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { ItemMenu } from "@/components/item-menu";
 import { moveToEntries } from "@/components/personal/move-to-organization";
-import { toast, undoable } from "@/components/ui/toaster";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toast } from "@/components/ui/toaster";
 
 import { useRouter } from "next/navigation";
 
 import { useTasks } from "./tasks-context";
 
 /**
- * The "…" on a task row or board card: open its page, copy its link, delete
- * it, and in Personal, move it to an organization you run. Clicking the
- * card itself opens it, so that isn't repeated here.
- * Deleting doesn't ask: it goes at once, subtasks with it, and Undo brings
- * the lot back. It needs the same right as editing; the action checks again.
+ * The "…" on a task row or board card: open it, open its page, copy its
+ * link, delete it (asked first, with Undo), and in Personal, move it to an
+ * organization you run. Deleting needs the same right as editing; the
+ * action checks again.
  */
 export function TaskItemMenu({
   task,
@@ -31,41 +31,65 @@ export function TaskItemMenu({
 }) {
   const { org, moveTargets } = useTasks();
   const router = useRouter();
-  void onOpen;
+  const [confirmEl, confirm] = useConfirm();
   const href = `/app/${org.slug}/tasks/${task.id}`;
 
-  const remove = () =>
-    undoable({
-      title: task.subtaskCount > 0 ? `Deleted with ${task.subtaskCount} subtasks` : "Deleted",
+  async function remove() {
+    const n = task.subtaskCount;
+    const ok = await confirm({
+      title: `Delete “${task.title}”?`,
+      description:
+        n > 0
+          ? `Its ${n} subtask${n === 1 ? "" : "s"} go${n === 1 ? "es" : ""} with it. You can undo this right after.`
+          : "You can undo this right after.",
+      confirmLabel: "Delete task",
       run: async () => (await deleteTask(org.id, task.id)).error,
-      undo: async () => (await restoreTask(org.id, task.id)).error,
     });
+    if (!ok) return;
+    toast({
+      title: "Task deleted",
+      description: task.title,
+      action: { label: "Undo", run: async () => (await restoreTask(org.id, task.id)).error },
+    });
+  }
 
   return (
-    <ItemMenu
-      label={`Actions for ${task.title}`}
-      className={className}
-      items={[
-        { label: "Open page", icon: ExternalLink, href },
-        {
-          label: "Copy link",
-          icon: Link2,
-          onSelect: () =>
-            void navigator.clipboard
-              ?.writeText(`${window.location.origin}${href}`)
-              .then(() => toast({ title: "Copied", tone: "success", duration: 3_000 }))
-              .catch(() => toast({ title: "Couldn't copy the link", tone: "error" })),
-        },
-        ...(editable
-          ? moveToEntries(moveTargets, { kind: "task", id: task.id }, () => router.refresh())
-          : []),
-        editable && {
-          label: "Delete",
-          icon: Trash2,
-          destructive: true,
-          onSelect: () => void remove(),
-        },
-      ]}
-    />
+    <>
+      <ItemMenu
+        label={`Actions for ${task.title}`}
+        className={className}
+        items={[
+          { label: "Open", icon: PanelRightOpen, onSelect: onOpen },
+          { label: "Open page", icon: ExternalLink, href },
+          {
+            label: "Copy link",
+            icon: Link2,
+            onSelect: () =>
+              void navigator.clipboard
+                ?.writeText(`${window.location.origin}${href}`)
+                .then(() => toast({ title: "Link copied", tone: "success", duration: 3_000 }))
+                .catch(() => toast({ title: "Couldn't copy the link", tone: "error" })),
+          },
+          ...(editable
+            ? moveToEntries(moveTargets, { kind: "task", id: task.id }, () => router.refresh())
+            : []),
+          editable && {
+            label: "Delete",
+            icon: Trash2,
+            destructive: true,
+            onSelect: () => void remove(),
+          },
+        ]}
+      />
+      {/* The dialog is portalled, but its events still bubble to the card it sits in. */}
+      <span
+        className="contents"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {confirmEl}
+      </span>
+    </>
   );
 }

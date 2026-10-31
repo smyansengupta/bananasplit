@@ -51,7 +51,7 @@ export function PrivateBadge({
         "bg-foreground/8 text-foreground/80 ring-border inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
         className,
       )}
-      title="Only its people and admins"
+      title="Only this task's owner, the people on it, its creator and admins can see it"
     >
       <Lock className="size-3" aria-hidden="true" />
       {label}
@@ -72,7 +72,7 @@ export function FlagBadge({
         "bg-warning/15 text-warning inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium",
         className,
       )}
-      title="Assigned from below"
+      title="Given this task by someone below them on the org chart"
     >
       <TriangleAlert className="size-3" aria-hidden="true" />
       {label}
@@ -84,7 +84,7 @@ export function BlockedNote({ reason, className }: { reason: string | null; clas
   return (
     <span className={cn("text-destructive inline-flex items-start gap-1 text-xs", className)}>
       <Ban className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-      <span className="break-words">{reason ?? "Blocked"}</span>
+      <span className="line-clamp-2">{reason ?? "Blocked"}</span>
     </span>
   );
 }
