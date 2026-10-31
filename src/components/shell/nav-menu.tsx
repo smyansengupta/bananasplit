@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Menu, X } from "@/components/icons";
+import { FileText, Menu, Plus, Search, X } from "@/components/icons";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
@@ -8,9 +8,11 @@ import { useState, type ReactNode } from "react";
 
 import { Logo } from "@/components/brand/logo";
 import { capsuleButtonClass } from "@/components/shell/capsule";
+import { CreateMenu } from "@/components/shell/create-menu";
 import {
   isExactPage,
   isLinkActive,
+  type CreateAction,
   type NavLink,
   type NavSection,
 } from "@/components/shell/nav-config";
@@ -20,18 +22,30 @@ import { cn } from "@/lib/utils";
 
 /**
  * The phone's navigation, in place of the sidebar below md: a menu button at
- * the left of the tool capsule opens a full-screen menu over the page. Your
- * club (its menu switches clubs and has the Admin panel) sits at the top,
- * then every section under the sidebar's headings, one roomy row each, the
- * page you're on lit. Going anywhere, Escape or the X closes it.
+ * the left of the tool capsule opens a full-screen menu over the page, in
+ * the sidebar's order. Your organization (its menu switches spaces and has
+ * the Admin panel) sits at the top, then Search or jump and New, then every
+ * section in its group (a thin line between groups), one roomy row each,
+ * the page you're on lit, and the Bananasplit mark last. Going anywhere,
+ * Escape or the X closes it.
  */
 export function NavMenu({
   sections,
   clubMenu,
+  counts = {},
+  orgId,
+  orgSlug,
+  createActions = [],
+  onSearch,
 }: {
   sections: readonly NavSection[];
-  /** The club menu (OrgSwitcher), as the sidebar shows it; it has the Admin panel. */
+  /** The organization menu (OrgSwitcher), as the sidebar shows it; it has the Admin panel. */
   clubMenu: ReactNode;
+  counts?: Record<string, number>;
+  orgId: string;
+  orgSlug: string;
+  createActions?: readonly CreateAction[];
+  onSearch: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -83,6 +97,35 @@ export function NavMenu({
             </div>
           </div>
 
+          {/* Search or jump, and New: the sidebar's own two, under the organization. */}
+          <div className="mt-3 flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                onSearch();
+              }}
+              className="focus-glow bg-muted text-muted-foreground flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full px-4 text-[15px] outline-none"
+            >
+              <Search className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
+              Search or jump
+            </button>
+            {createActions.length > 0 && (
+              <CreateMenu orgId={orgId} orgSlug={orgSlug} actions={createActions} align="end">
+                {({ pending, icon }) => (
+                  <button
+                    type="button"
+                    aria-busy={pending || undefined}
+                    className="focus-glow bg-create text-create-foreground flex h-12 shrink-0 items-center gap-2 rounded-full px-4 text-[15px] font-semibold outline-none"
+                  >
+                    {pending ? icon : <Plus className="size-5" aria-hidden="true" />}
+                    New
+                  </button>
+                )}
+              </CreateMenu>
+            )}
+          </div>
+
           <nav aria-label="Sections" className="mt-4 min-h-0 flex-1 overflow-y-auto">
             {sections.map((section, i) => {
               const links = section.items.filter((l) => !l.locked);
@@ -100,6 +143,7 @@ export function NavMenu({
                           href={link.href}
                           icon={NAV_ICONS[link.icon] ?? FileText}
                           label={link.label}
+                          count={counts[link.id] ?? 0}
                           current={current(link)}
                           onNavigate={close}
                         />
@@ -131,12 +175,14 @@ function Row({
   href,
   icon: Icon,
   label,
+  count = 0,
   current,
   onNavigate,
 }: {
   href: string;
   icon: typeof FileText;
   label: string;
+  count?: number;
   current: "page" | "true" | undefined;
   onNavigate: () => void;
 }) {
@@ -154,7 +200,13 @@ function Row({
       <span className="bg-muted group-aria-[current]:bg-background/15 grid size-9 shrink-0 place-items-center rounded-xl">
         <Icon className="size-[18px]" strokeWidth={ICON_STROKE} aria-hidden="true" />
       </span>
-      {label}
+      <span className="min-w-0 flex-1">{label}</span>
+      {count > 0 && (
+        <span className="bg-muted group-aria-[current]:bg-background/15 shrink-0 rounded-full px-2 text-[13px] leading-6 font-semibold tabular-nums">
+          {count > 99 ? "99+" : count}
+          <span className="sr-only"> waiting</span>
+        </span>
+      )}
     </Link>
   );
 }

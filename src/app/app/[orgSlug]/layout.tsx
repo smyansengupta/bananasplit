@@ -26,6 +26,7 @@ import { getSidebarMode } from "@/lib/sidebar-mode-cookie";
 import { applyPersonalTheme, parsePersonalTheme } from "@/lib/theme/personal";
 import { resolveTheme } from "@/lib/theme/resolve";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { sidebarCounts } from "@/server/inbox/counts";
 import { listPins } from "@/server/pins";
 import { guestPollRedirect } from "@/server/polls/guest-redirect";
 import { getShellUser, getViewerPrefs } from "@/server/profiles/queries";
@@ -158,6 +159,16 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   const pins = await withOrgTx(ctx.organization.id, ({ db }) =>
     listPins(db, ctx.organization.id, ctx.organization.slug, ctx.user.id),
   );
+  // The small counts beside Inbox, Forms and Finance (src/server/inbox/counts.ts).
+  const counts = await withOrgTx(ctx.organization.id, ({ db }) =>
+    sidebarCounts(db, {
+      orgId: ctx.organization.id,
+      userId: ctx.user.id,
+      org: ctx.organization,
+      canReviewFinance: can({ role: ctx.role }, "finance.manage"),
+      canReviewForms: can({ role: ctx.role }, "databases.write"),
+    }),
+  ).catch(() => null);
   // Docked or rail, as the member left it, so the first paint is right.
   const sidebarMode = await getSidebarMode(ctx.user.id);
 
@@ -169,6 +180,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         orgs={orgs}
         user={shellUser}
         pins={pins}
+        counts={counts ? { inbox: counts.inbox, forms: counts.forms, finance: counts.finance } : {}}
         sections={navSections(ctx.organization.slug, visibleSidebar(ctx.settings?.sidebar), {
           space: ctx.organization,
           // Owners and admins see what the plan lacks (locked); members don't.

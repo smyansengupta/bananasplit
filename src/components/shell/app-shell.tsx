@@ -15,6 +15,7 @@ import { SectionGate } from "@/components/shell/section-gate";
 import { type SidebarState } from "@/components/shell/sidebar-mode-context";
 import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { SidebarPanel } from "@/components/shell/sidebar-panel";
+import { SidebarTools } from "@/components/shell/sidebar-tools";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
 import { Toaster } from "@/components/ui/toaster";
@@ -50,6 +51,7 @@ export function AppShell({
   user,
   brand,
   pins = [],
+  counts = {},
   sections,
   sectionPaths = [],
   role = null,
@@ -73,6 +75,8 @@ export function AppShell({
   pins?: SidebarPin[];
   /** The org's sidebar (Admin panel › Sidebar). */
   sections: NavSection[];
+  /** Small counts beside sidebar entries, by section id (Inbox, Forms, Finance). */
+  counts?: Record<string, number>;
   /**
    * Every section (path, name, icon) and whether the org turned it off:
    * members see a notice there, and search leaves it out for them.
@@ -141,7 +145,22 @@ export function AppShell({
     />
   );
   const nav = (onNavigate?: () => void) => (
-    <SidebarNav sections={sections} orgId={orgId} pins={pins} onNavigate={onNavigate} />
+    <SidebarNav
+      sections={sections}
+      orgId={orgId}
+      pins={pins}
+      counts={counts}
+      tools={
+        <SidebarTools
+          orgId={orgId}
+          orgSlug={orgSlug}
+          createActions={creatable}
+          onSearch={() => setCommandOpen(true)}
+          onNavigate={onNavigate}
+        />
+      }
+      onNavigate={onNavigate}
+    />
   );
 
   useEffect(() => {
@@ -181,12 +200,19 @@ export function AppShell({
 
         <div className="flex min-w-0 flex-col">
           <ToolCapsule
-            menuButton={<NavMenu sections={sections} clubMenu={clubMenu} />}
-            orgId={orgId}
+            menuButton={
+              <NavMenu
+                sections={sections}
+                clubMenu={clubMenu}
+                counts={counts}
+                orgId={orgId}
+                orgSlug={orgSlug}
+                createActions={creatable}
+                onSearch={() => setCommandOpen(true)}
+              />
+            }
             orgSlug={orgSlug}
             user={user}
-            createActions={creatable}
-            onSearch={() => setCommandOpen(true)}
           />
           <main
             id="main-content"

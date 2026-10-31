@@ -106,9 +106,12 @@ function NavItemLink({
   pathname,
   search,
   all,
+  count = 0,
   onNavigate,
 }: {
   link: NavLink;
+  /** Waiting on you here (Inbox, Forms, Finance): a small number at the end. */
+  count?: number;
   pathname: string;
   search: string;
   all: readonly NavLink[];
@@ -132,6 +135,27 @@ function NavItemLink({
     >
       <Icon className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
       <span className={cn("min-w-0 flex-1 truncate", fadeLabel(rail))}>{link.label}</span>
+      {count > 0 && !link.locked && (
+        <>
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-1.5 text-[12px] leading-5 font-semibold tabular-nums",
+              isActive ? "bg-black/10 dark:bg-white/15" : "bg-sidebar-accent",
+              fadeLabel(rail),
+            )}
+          >
+            {count > 99 ? "99+" : count}
+          </span>
+          {/* On the rail, a dot on the icon instead of the number. */}
+          {rail && (
+            <span
+              aria-hidden="true"
+              className="bg-glow absolute top-2 left-7 size-2 rounded-full"
+            />
+          )}
+          <span className="sr-only">, {count} waiting</span>
+        </>
+      )}
       {link.locked && (
         <>
           <Lock className={cn("size-3.5 shrink-0", fadeLabel(rail))} aria-hidden="true" />
@@ -296,7 +320,13 @@ function PinnedList({
                       strokeWidth={ICON_STROKE}
                       aria-hidden="true"
                     />
-                    <span className="min-w-0 truncate">{pin.label}</span>
+                    <span className="min-w-0 flex-1 truncate">{pin.label}</span>
+                    {/* Pinned: the pin marks it, until hover shows Unpin. */}
+                    <Pin
+                      className="size-3.5 shrink-0 opacity-50 group-focus-within:opacity-0 group-hover:opacity-0"
+                      strokeWidth={ICON_STROKE}
+                      aria-hidden="true"
+                    />
                   </Link>
                   <button
                     type="button"
@@ -355,12 +385,18 @@ export function SidebarNav({
   sections,
   orgId,
   pins = [],
+  counts = {},
+  tools,
   spaces,
   onNavigate,
 }: {
   sections: NavSection[];
   orgId: string;
   pins?: SidebarPin[];
+  /** Small counts beside entries, by section id (Inbox, Forms, Finance). */
+  counts?: Record<string, number>;
+  /** Search and New, above the sections (SidebarTools). */
+  tools?: React.ReactNode;
   /** Kept for callers; the club switcher at the foot of the sidebar lists the spaces now. */
   spaces?: React.ReactNode;
   onNavigate?: () => void;
@@ -372,6 +408,7 @@ export function SidebarNav({
 
   return (
     <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col">
+      {tools}
       <div
         className={cn(
           "-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto px-1 pb-1",
@@ -388,6 +425,7 @@ export function SidebarNav({
                 pathname={pathname}
                 search={search}
                 all={all}
+                count={counts[link.id] ?? 0}
                 onNavigate={onNavigate}
               />
             ))}
