@@ -30,6 +30,7 @@ import {
   EMPTY_MY_SIDEBAR,
   reorderGroup,
   serializeMySidebarCookie,
+  toggleCollapsed,
   toggleHidden,
   type MySidebar,
 } from "@/lib/nav/my-sidebar";
@@ -179,7 +180,8 @@ export function AppShell({
       stopEditing: () => setEditing(false),
       reorder: (groupIds) => keep(reorderGroup(my, sections, groupIds)),
       toggle: (id) => keep(toggleHidden(my, id)),
-      reset: () => keep(EMPTY_MY_SIDEBAR),
+      toggleGroup: (id) => keep(toggleCollapsed(my, id)),
+      reset: () => keep({ ...EMPTY_MY_SIDEBAR, collapsed: my.collapsed }),
     };
   }, [my, editing, mode, keepMode, mySidebarCookie, sections]);
   // The phone's menu follows the same arrangement.

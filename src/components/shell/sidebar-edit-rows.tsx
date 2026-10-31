@@ -23,7 +23,7 @@ import { Eye, EyeOff, FileText, GripVertical, RotateCcw } from "@/components/ico
 import type { NavLink, NavSection } from "@/components/shell/nav-config";
 import { useSidebarEdit } from "@/components/shell/sidebar-edit-context";
 import { surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
-import { GroupGap, ICON_STROKE, NAV_ICONS } from "@/components/shell/sidebar-nav";
+import { GroupLabel, ICON_STROKE, NAV_ICONS, SECTION_NAMES } from "@/components/shell/sidebar-nav";
 import { ALWAYS_SHOWN } from "@/lib/nav/my-sidebar";
 import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -178,9 +178,11 @@ function EditGroup({ section }: { section: NavSection }) {
 export function SidebarEditRows({ sections }: { sections: NavSection[] }) {
   return (
     <>
-      {sections.map((section, i) => (
+      {sections.map((section) => (
         <div key={section.id} className="flex flex-col">
-          {i > 0 && <GroupGap />}
+          {(section.label ?? SECTION_NAMES[section.id]) && (
+            <GroupLabel label={(section.label ?? SECTION_NAMES[section.id])!} />
+          )}
           <EditGroup section={section} />
         </div>
       ))}

@@ -3,7 +3,8 @@ import { shortHash } from "@/lib/sidebar-mode";
 /**
  * Your own arrangement of the sidebar, on top of the organization's
  * (OrgSettings.sidebar, src/lib/nav/sidebar.ts): the order of the rows
- * inside each group, and the rows you'd rather not see. It only tidies
+ * inside each group, the rows you'd rather not see, and the groups you
+ * folded shut. It only tidies
  * your sidebar: a hidden page is still in Search and still opens.
  *
  * Kept per member and per organization in a cookie, like the sidebar's mode
@@ -16,9 +17,11 @@ export interface MySidebar {
   order: string[];
   /** Row ids you hid. */
   hidden: string[];
+  /** Group ids you folded shut ("pinned" for Pinned). */
+  collapsed: string[];
 }
 
-export const EMPTY_MY_SIDEBAR: MySidebar = { order: [], hidden: [] };
+export const EMPTY_MY_SIDEBAR: MySidebar = { order: [], hidden: [], collapsed: [] };
 
 /** Home can't be hidden: it's where the logo and every "back" lead. */
 export const ALWAYS_SHOWN = new Set(["overview"]);
@@ -45,14 +48,20 @@ export function parseMySidebar(raw: string | null | undefined): MySidebar {
   } catch {
     return EMPTY_MY_SIDEBAR;
   }
-  const [order, hidden] = text.split("~");
-  return { order: ids(order), hidden: ids(hidden).filter((id) => !ALWAYS_SHOWN.has(id)) };
+  const [order, hidden, collapsed] = text.split("~");
+  return {
+    order: ids(order),
+    hidden: ids(hidden).filter((id) => !ALWAYS_SHOWN.has(id)),
+    collapsed: ids(collapsed),
+  };
 }
 
 /** The document.cookie assignment that stores `value` under `name` for a year. */
 export function serializeMySidebarCookie(name: string, value: MySidebar, secure: boolean): string {
-  const empty = value.order.length === 0 && value.hidden.length === 0;
-  const body = encodeURIComponent(`${value.order.join(".")}~${value.hidden.join(".")}`);
+  const empty = !value.order.length && !value.hidden.length && !value.collapsed.length;
+  const body = encodeURIComponent(
+    [value.order, value.hidden, value.collapsed].map((list) => list.join(".")).join("~"),
+  );
   const parts = [`${name}=${empty ? "" : body}`, "Path=/", "SameSite=Lax"];
   parts.push(empty ? "Max-Age=0" : `Max-Age=${60 * 60 * 24 * 365}`);
   if (secure) parts.push("Secure");
@@ -96,6 +105,14 @@ export function reorderGroup(
     section.items.some((item) => moved.has(item.id)) ? groupIds : section.items.map((i) => i.id),
   );
   return { ...my, order };
+}
+
+/** `my` with group `id` folded shut, or open again. */
+export function toggleCollapsed(my: MySidebar, id: string): MySidebar {
+  const collapsed = my.collapsed.includes(id)
+    ? my.collapsed.filter((c) => c !== id)
+    : [...my.collapsed, id];
+  return { ...my, collapsed };
 }
 
 /** `my` with `id` hidden, or shown again. */

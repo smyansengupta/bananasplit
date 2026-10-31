@@ -19,6 +19,8 @@ export interface SidebarEdit {
   reorder: (groupIds: string[]) => void;
   /** Hides a row, or shows it again. */
   toggle: (id: string) => void;
+  /** Folds a group shut, or opens it again (also outside Edit sidebar). */
+  toggleGroup: (id: string) => void;
   /** Back to the organization's sidebar. */
   reset: () => void;
 }

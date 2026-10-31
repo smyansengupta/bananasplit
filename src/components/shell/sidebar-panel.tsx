@@ -57,7 +57,6 @@ export function SidebarBody({
   children,
   toggle,
   rail = false,
-  chrome = false,
   onNavigate,
 }: {
   clubMenu: React.ReactNode;
@@ -71,7 +70,6 @@ export function SidebarBody({
   chrome?: boolean;
   onNavigate?: () => void;
 }) {
-  const tone = surfaceTone(chrome);
   return (
     <>
       {/* The organization you're in, the way to switch, and you, at the top. */}
@@ -87,13 +85,7 @@ export function SidebarBody({
       {children}
       {people}
       {/* The Bananasplit mark, always last. */}
-      <div
-        className={cn(
-          "mt-2 flex shrink-0 items-center border-t pt-2 transition-colors duration-300",
-          rail ? "gap-0" : "gap-2.5",
-          tone.border,
-        )}
-      >
+      <div className={cn("mt-1 flex shrink-0 items-center pt-1", rail ? "gap-0" : "gap-2.5")}>
         <SidebarLogo rail={rail} onNavigate={onNavigate} />
         {toggle}
       </div>

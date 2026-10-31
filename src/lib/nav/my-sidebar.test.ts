@@ -7,6 +7,7 @@ import {
   parseMySidebar,
   reorderGroup,
   serializeMySidebarCookie,
+  toggleCollapsed,
   toggleHidden,
 } from "./my-sidebar";
 
@@ -19,7 +20,7 @@ const ids = (s: typeof SECTIONS) => s.map((g) => g.items.map((i) => i.id));
 
 describe("my sidebar", () => {
   it("reads back what it writes", () => {
-    const my = { order: ["calendar", "tasks"], hidden: ["finance"] };
+    const my = { order: ["calendar", "tasks"], hidden: ["finance"], collapsed: ["plan"] };
     const cookie = serializeMySidebarCookie("n", my, false);
     const value = cookie.split(";")[0]!.slice(2);
     expect(parseMySidebar(value)).toEqual(my);
@@ -28,7 +29,11 @@ describe("my sidebar", () => {
   it("treats junk and a hidden Home as the organization's own", () => {
     expect(parseMySidebar("%E0%A4%A")).toEqual(EMPTY_MY_SIDEBAR);
     expect(parseMySidebar(undefined)).toEqual(EMPTY_MY_SIDEBAR);
-    expect(parseMySidebar("~overview.inbox.<script>")).toEqual({ order: [], hidden: ["inbox"] });
+    expect(parseMySidebar("~overview.inbox.<script>")).toEqual({
+      order: [],
+      hidden: ["inbox"],
+      collapsed: [],
+    });
   });
 
   it("clears the cookie when nothing is changed", () => {
@@ -36,7 +41,7 @@ describe("my sidebar", () => {
   });
 
   it("orders inside each group and drops hidden rows and empty groups", () => {
-    const my = { order: ["meetings", "tasks"], hidden: ["finance", "overview"] };
+    const my = { order: ["meetings", "tasks"], hidden: ["finance", "overview"], collapsed: [] };
     expect(ids(arrangeSections(SECTIONS, my))).toEqual([
       ["overview", "inbox", "people"],
       ["meetings", "tasks", "calendar"],
@@ -58,6 +63,12 @@ describe("my sidebar", () => {
     expect(hidden.hidden).toEqual(["people"]);
     expect(toggleHidden(hidden, "people").hidden).toEqual([]);
     expect(toggleHidden(EMPTY_MY_SIDEBAR, "overview")).toBe(EMPTY_MY_SIDEBAR);
+  });
+
+  it("folds a group shut and open again", () => {
+    const shut = toggleCollapsed(EMPTY_MY_SIDEBAR, "plan");
+    expect(shut.collapsed).toEqual(["plan"]);
+    expect(toggleCollapsed(shut, "plan").collapsed).toEqual([]);
   });
 
   it("names a cookie per member and organization", () => {
