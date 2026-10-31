@@ -33,13 +33,14 @@ export async function peekRef(
   );
   if (!resolved) return null;
   const base: PeekSummary = { ...resolved, facts: [], text: null };
-  const when = (d: Date, allDay = false) =>
+  const when = (d: Date, allDay = false, dateOnly = false) =>
     new Intl.DateTimeFormat("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
       ...(allDay ? {} : { hour: "numeric", minute: "2-digit" }),
-      timeZone,
+      // A task's due date is a calendar day stored as midnight UTC.
+      timeZone: dateOnly ? "UTC" : timeZone,
     }).format(d);
   const money = (cents: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -70,7 +71,7 @@ export async function peekRef(
         }[t.status],
       );
       fact("Owner", t.owner?.name);
-      fact("Due", t.dueDate ? when(t.dueDate, true) : null);
+      fact("Due", t.dueDate ? when(t.dueDate, true, true) : null);
       fact("Part of", t.parentTask?.title);
       fact(
         "Involved",

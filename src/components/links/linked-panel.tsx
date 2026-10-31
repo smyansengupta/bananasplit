@@ -19,7 +19,7 @@ import {
   type IconComponent,
 } from "@/components/icons";
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
 import { addLinkAction, removeLinkAction } from "@/app/app/[orgSlug]/links/actions";
 import { searchWorkspaceAction } from "@/app/app/[orgSlug]/search/actions";
@@ -45,7 +45,33 @@ const ICONS: Record<LinkKind, IconComponent> = {
   record: Table,
 };
 
-/** A search hit's key is "{kind}:{id}"; the id may itself hold colons. */
+/**
+ * Each kind's colour, from the fixed tag palette (src/lib/tag-colors.ts), so
+ * a list of linked things reads as different things at a glance (the plan's
+ * meeting page: a navy form, a teal database, a rust epic, an ochre budget).
+ */
+const TONES: Record<LinkKind, string> = {
+  task: "var(--tag-rust)",
+  event: "var(--tag-plum)",
+  note: "var(--tag-plum)",
+  file: "var(--tag-teal)",
+  person: "var(--tag-forest)",
+  database: "var(--tag-teal)",
+  transaction: "var(--tag-ochre)",
+  form: "var(--tag-navy)",
+  budget: "var(--tag-ochre)",
+  record: "var(--tag-teal)",
+};
+
+/** A row the page attaches itself (a meeting's notes): opens like a link, can't be unlinked here. */
+export interface FixedLinkedRow {
+  key: string;
+  kind: LinkKind;
+  title: string;
+  detail: string;
+  href: string;
+}
+
 /**
  * What this page is linked to, both ways: a meeting's sign-up form and
  * notes, a task's files, a person's budget line. "Link" searches everything
@@ -60,6 +86,10 @@ export function LinkedPanel({
   orgSlug,
   at,
   initial,
+  title = "Linked",
+  closingTile = false,
+  fixed = [],
+  actions,
   className,
 }: {
   orgId: string;
@@ -67,6 +97,14 @@ export function LinkedPanel({
   /** This page's own thing. */
   at: LinkRef;
   initial: LinkedItem[];
+  /** The heading ("Linked to this meeting" on a meeting). */
+  title?: string;
+  /** Link from a dashed "+ Link something" tile closing the list, not a header button. */
+  closingTile?: boolean;
+  /** Rows the page attaches itself, listed after the links. */
+  fixed?: readonly FixedLinkedRow[];
+  /** Under the list, before the closing tile (e.g. Create meeting notes). */
+  actions?: ReactNode;
   className?: string;
 }) {
   const [items, setItems] = useState(initial);
@@ -116,27 +154,26 @@ export function LinkedPanel({
     >
       <div className="flex items-center justify-between gap-2">
         <h2 id="linked-heading" className="heading text-[15px]">
-          Linked
-          {items.length > 0 && (
+          {title}
+          {!closingTile && items.length + fixed.length > 0 && (
             <span className="text-muted-foreground ms-1.5 font-normal tabular-nums">
-              {items.length}
+              {items.length + fixed.length}
             </span>
           )}
         </h2>
-        <LinkPicker at={at} orgId={orgId} taken={items} onPick={link} />
+        {!closingTile && <LinkPicker at={at} orgId={orgId} taken={items} onPick={link} />}
       </div>
-      {items.length > 0 && (
-        <ul className="-mx-1.5">
+      {items.length + fixed.length > 0 && (
+        <ul className="flex flex-col gap-2">
           {items.map((item) => {
             const Icon = ICONS[item.kind];
             return (
               <li
                 key={item.linkId}
-                className="group hover:bg-muted/60 rounded-field relative flex items-start gap-2.5 px-1.5 py-2"
+                style={{ ["--c" as string]: TONES[item.kind] }}
+                className="group bg-card hover:bg-muted/40 relative flex items-start gap-2.5 rounded-[10px] border px-2.5 py-2 transition-colors"
               >
-                <span className="bg-muted text-muted-foreground mt-0.5 grid size-7 shrink-0 place-items-center rounded-full">
-                  <Icon className="size-3.5" aria-hidden="true" />
-                </span>
+                <KindTile Icon={Icon} />
                 <Link
                   href={item.href}
                   onClick={(e) => {
@@ -165,10 +202,46 @@ export function LinkedPanel({
               </li>
             );
           })}
+          {fixed.map((row) => {
+            const Icon = ICONS[row.kind];
+            return (
+              <li
+                key={row.key}
+                style={{ ["--c" as string]: TONES[row.kind] }}
+                className="bg-card hover:bg-muted/40 relative flex items-start gap-2.5 rounded-[10px] border px-2.5 py-2 transition-colors"
+              >
+                <KindTile Icon={Icon} />
+                <Link
+                  href={row.href}
+                  className="focus-visible:outline-foreground min-w-0 flex-1 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  <span className="block text-[14px] leading-snug font-medium break-words">
+                    {row.title}
+                  </span>
+                  <span className="text-muted-foreground block text-[12px]">{row.detail}</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
+      {actions}
+      {closingTile && <LinkPicker at={at} orgId={orgId} taken={items} onPick={link} tile />}
       <SidePeek orgId={orgId} orgSlug={orgSlug} target={peek} onClose={() => setPeek(null)} />
     </section>
+  );
+}
+
+/** A linked thing's icon on a wash of its kind's colour. */
+function KindTile({ Icon }: { Icon: IconComponent }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="mt-0.5 grid size-[22px] shrink-0 place-items-center rounded-[6px] text-(--c)"
+      style={{ background: "color-mix(in oklab, var(--c) 14%, transparent)" }}
+    >
+      <Icon className="size-3.5" />
+    </span>
   );
 }
 
@@ -178,11 +251,14 @@ function LinkPicker({
   orgId,
   taken,
   onPick,
+  tile = false,
 }: {
   at: LinkRef;
   orgId: string;
   taken: readonly LinkedItem[];
   onPick: (ref: LinkRef) => void;
+  /** The plan's dashed "+ Link something" tile instead of a small button. */
+  tile?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -225,12 +301,22 @@ function LinkPicker({
       }}
     >
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="sm">
-          <Plus className="size-4" aria-hidden="true" />
-          Link
-        </Button>
+        {tile ? (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/40 focus-glow flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-dashed px-2.5 py-2 text-[13px] font-medium outline-none"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            Link something
+          </button>
+        ) : (
+          <Button type="button" variant="ghost" size="sm">
+            <Plus className="size-4" aria-hidden="true" />
+            Link
+          </Button>
+        )}
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
+      <PopoverContent align={tile ? "center" : "end"} className="w-80 p-0">
         <label className="flex items-center gap-2 border-b px-3">
           <Search className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
           <input

@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/components/meetings/meeting-tasks", () => ({ MeetingTasks: () => null }));
 vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
+vi.mock("@/components/meetings/create-meeting-notes", () => ({ CreateMeetingNotes: () => null }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");

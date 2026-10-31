@@ -24,8 +24,8 @@ import { extendSeries, rsvpToEvent, updateEvent } from "@/app/app/[orgSlug]/cale
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
+import { MeetingAgenda } from "@/components/meetings/meeting-agenda";
 import { ReminderPicker } from "@/components/meetings/reminder-picker";
-import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { BlockCard } from "@/components/ui/block-card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ import { reminderLabel } from "@/lib/meetings/reminders";
 import { cn } from "@/lib/utils";
 
 import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
+import { KIND_META } from "./kinds";
 import { EventFormDialog, type EventFormEvent } from "./event-form-dialog";
 import { useViewerTimeZone } from "./hooks";
 import { RSVP_META } from "./kinds";
@@ -159,10 +160,13 @@ export function EventDetailView({
     });
   }
 
-  /** Adds four weeks after the last one (or makes a one-off repeat weekly). */
+  /**
+   * "Again next week" (the plan's wording): the same meeting a week later, as
+   * a linked series. A meeting already in a series adds four more weeks.
+   */
   function handleRepeat() {
     startTransition(async () => {
-      const result = await extendSeries(orgId, event.id, 4);
+      const result = await extendSeries(orgId, event.id, event.seriesId ? 4 : 1);
       if (result.error) {
         setError(result.error);
         return;
@@ -189,6 +193,10 @@ export function EventDetailView({
   // Who's coming, at a glance in the header: sign-ups when the meeting takes
   // them, else invitees who said yes.
   const goingCount = rsvp.enabled ? rsvp.going : going.length;
+  // Its type's colour: the organization's meeting type, else its kind's.
+  const typeColor =
+    (event.meetingType ? meetingTypeColor(meetingTypes ?? [], event.meetingType) : null) ??
+    `var(${KIND_META[event.kind].token})`;
   // On the meeting's own day, the door list is one click from the header.
   const dayKey = (d: Date) =>
     new Intl.DateTimeFormat("en-CA", {
@@ -209,56 +217,73 @@ export function EventDetailView({
     <div className="mx-auto max-w-5xl space-y-7">
       <BackLink href={sectionHref} label={section === "meetings" ? "Meetings" : "Calendar"} />
 
-      <PageHeader
-        title={<span className="break-words">{event.title}</span>}
-        description={
-          <span className="text-foreground font-medium">
+      {/* The plan's meeting header: a date tile beside the title, one line of
+          when and where, and the chips that matter (its type, your part, who's
+          coming). */}
+      <header className="flex flex-wrap items-start gap-4">
+        <DateTile startsAt={event.startsAt} timeZone={zone} color={typeColor} />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <h1 className="page-title break-words">{event.title}</h1>
+          <p className="text-foreground text-[15px] font-medium">
             {formatEventWhen(event, { viewer: zone, org: timeZone }, new Date())}
-          </span>
-        }
-        actions={
+            {event.location && (
+              <>
+                , <span>{event.location}</span>
+              </>
+            )}
+            {event.location && showMapLink && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open in Maps"
+                className="text-muted-foreground hover:text-foreground ms-2 inline-flex items-center gap-1 text-[13px] font-normal underline-offset-4 hover:underline"
+              >
+                <ExternalLink aria-hidden className="size-3.5" />
+                Map
+              </a>
+            )}
+          </p>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {event.meetingType ? (
+              <TagChip color={typeColor}>{event.meetingType}</TagChip>
+            ) : (
+              <KindBadge kind={event.kind} />
+            )}
+            {event.host?.id === currentUserId && <Badge variant="info">You&apos;re hosting</Badge>}
+            {goingCount > 0 && <Badge variant="success">{goingCount} going</Badge>}
+            {event.visibility === "PUBLIC" && <VisibilityBadge visibility={event.visibility} />}
+            {canEdit && event.googleSyncState !== "NOT_APPLICABLE" && (
+              <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />
+            )}
+            {event.capacityFull && <Badge variant="destructive">Full</Badge>}
+            {event.featured && <Badge variant="accent">Featured</Badge>}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           canEdit ? (
-            <>
-              {doorToday && (
-                <Button asChild>
-                  <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
-                    <DoorOpen aria-hidden className="size-4" />
-                    Door
-                  </Link>
-                </Button>
-              )}
-              {/* Delete is in the form, with Undo; one place, not two. */}
-              <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
-                <Repeat aria-hidden className="size-4" />
-                {event.seriesId ? "Add 4 weeks" : "Repeat weekly"}
+          <>
+            {doorToday && (
+              <Button asChild>
+                <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
+                  <DoorOpen aria-hidden className="size-4" />
+                  Door
+                </Link>
               </Button>
-              <Button variant="outline" onClick={() => setEditOpen(true)}>
-                <Pencil aria-hidden className="size-4" />
-                Edit
-              </Button>
-            </>
+            )}
+            {/* Delete is in the form, with Undo; one place, not two. */}
+            <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
+              <Repeat aria-hidden className="size-4" />
+              {event.seriesId ? "Add 4 weeks" : "Again next week"}
+            </Button>
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil aria-hidden className="size-4" />
+              Edit
+            </Button>
+          </>
           ) : null
-        }
-      />
-
-      <div className="-mt-3 flex flex-wrap gap-1.5">
-        {event.host?.id === currentUserId && <Badge variant="info">You&apos;re hosting</Badge>}
-        {goingCount > 0 && <Badge variant="success">{goingCount} going</Badge>}
-        {event.meetingType && (
-          <TagChip
-            color={
-              meetingTypeColor(meetingTypes ?? [], event.meetingType) ?? "var(--muted-foreground)"
-            }
-          >
-            {event.meetingType}
-          </TagChip>
-        )}
-        <KindBadge kind={event.kind} />
-        <VisibilityBadge visibility={event.visibility} />
-        {canEdit && <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />}
-        {event.capacityFull && <Badge variant="destructive">Full</Badge>}
-        {event.featured && <Badge variant="accent">Featured</Badge>}
-      </div>
+        </div>
+      </header>
 
       {event.needsReview && canEdit && (
         <p
@@ -286,36 +311,19 @@ export function EventDetailView({
         <div className="space-y-[18px]">
           <Card>
             <CardContent className="space-y-5">
-              {event.description ? (
-                <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                  {event.description}
-                </p>
-              ) : (
-                <p className="text-muted-foreground text-sm">No description yet.</p>
-              )}
+              <MeetingAgenda
+                orgId={orgId}
+                orgSlug={orgSlug}
+                eventId={event.id}
+                initial={event.description}
+                canEdit={canEdit}
+              />
 
-              {(event.location || hostLabel || event.rsvpUrl || event.publicNote) && (
+              {(locationDetails || hostLabel || event.rsvpUrl || event.publicNote) && (
                 <dl className="grid gap-1">
-                  {event.location && (
-                    <Fact icon={MapPin} label="Where">
-                      {event.location}
-                      {locationDetails && (
-                        <span className="mt-1 block text-[13px] font-normal">
-                          <span className="text-muted-foreground block">How to find it</span>
-                          <span className="block whitespace-pre-wrap">{locationDetails}</span>
-                        </span>
-                      )}
-                      {showMapLink && (
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1 text-[13px] font-normal underline-offset-4 hover:underline"
-                        >
-                          <ExternalLink aria-hidden className="size-3.5" />
-                          Open in Maps
-                        </a>
-                      )}
+                  {event.location && locationDetails && (
+                    <Fact icon={MapPin} label="How to find it">
+                      <span className="block whitespace-pre-wrap">{locationDetails}</span>
                     </Fact>
                   )}
                   {hostLabel && (
@@ -385,45 +393,48 @@ export function EventDetailView({
             />
           )}
 
-          <Card>
-            <CardHeader className="flex flex-wrap items-center gap-2">
-              <CardTitle>Linked notes</CardTitle>
-              {event.notes.length > 0 && <Badge variant="secondary">{event.notes.length}</Badge>}
-              <span className="flex-1" />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCreateMeetingNotes}
-                disabled={isPending}
-              >
-                <NotebookText className="size-4" />
-                Create meeting notes
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {event.notes.length > 0 ? (
-                <ul className="-mx-2">
-                  {event.notes.map((note) => (
-                    <li key={note.id}>
-                      <Link
-                        href={`/app/${orgSlug}/notes/${note.id}`}
-                        className="hover:bg-muted rounded-tile flex items-center gap-3 px-2 py-2 text-sm font-medium transition-colors"
-                      >
-                        <IconChip icon={NotebookText} />
-                        {note.title || "Untitled note"}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-sm">No notes yet.</p>
-              )}
-            </CardContent>
-          </Card>
+          {!linked && (
+            <Card>
+              <CardHeader className="flex flex-wrap items-center gap-2">
+                <CardTitle>Linked notes</CardTitle>
+                {event.notes.length > 0 && <Badge variant="secondary">{event.notes.length}</Badge>}
+                <span className="flex-1" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCreateMeetingNotes}
+                  disabled={isPending}
+                >
+                  <NotebookText className="size-4" />
+                  Create meeting notes
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {event.notes.length > 0 ? (
+                  <ul className="-mx-2">
+                    {event.notes.map((note) => (
+                      <li key={note.id}>
+                        <Link
+                          href={`/app/${orgSlug}/notes/${note.id}`}
+                          className="hover:bg-muted rounded-tile flex items-center gap-3 px-2 py-2 text-sm font-medium transition-colors"
+                        >
+                          <IconChip icon={NotebookText} />
+                          {note.title || "Untitled note"}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No notes yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
           {tasks}
         </div>
 
         <aside className="space-y-[18px]">
+          {linked}
           {myAttendance && (
             <BlockCard
               tone="answer"
@@ -594,7 +605,6 @@ export function EventDetailView({
               )}
             </CardContent>
           </Card>
-          {linked}
         </aside>
       </div>
 
@@ -758,4 +768,37 @@ function buildGoogleCalendarUrl(event: EventDetail): string {
   if (event.description) params.set("details", event.description);
   if (event.location) params.set("location", event.location);
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+const TILE_MONTH = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-US", { month: "short", timeZone });
+const TILE_DAY = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone });
+
+/** The plan's date tile: the month over the day, on a wash of the meeting type's colour. */
+function DateTile({
+  startsAt,
+  timeZone,
+  color,
+}: {
+  startsAt: Date;
+  timeZone: string;
+  color: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        ["--kind" as string]: color,
+        background: "color-mix(in oklab, var(--kind) 14%, var(--card))",
+        color: "color-mix(in oklab, var(--kind) 70%, var(--foreground))",
+      }}
+      className="rounded-tile grid w-16 shrink-0 place-items-center py-2 leading-none"
+    >
+      <span className="text-[11px] font-bold tracking-wide uppercase">
+        {TILE_MONTH(timeZone).format(startsAt)}
+      </span>
+      <span className="font-heading mt-1 text-[28px]">{TILE_DAY(timeZone).format(startsAt)}</span>
+    </span>
+  );
 }
