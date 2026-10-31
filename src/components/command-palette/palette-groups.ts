@@ -46,6 +46,35 @@ const HOME_ACTIONS = [
   "action:pin",
 ];
 
+/** What the typed text makes, for the Create group (catalog keys "create:"). */
+export function createGroup(catalog: readonly CatalogEntry[], text: string): PaletteGroup | null {
+  const typed = text.trim();
+  const items = catalog
+    .filter((e) => e.key.startsWith("create:"))
+    .map((e): PaletteItem => {
+      const base = fromEntry(e, 0, false);
+      if (e.key === "create:task") {
+        return {
+          ...base,
+          title: `New task: ${typed}`,
+          command: { type: "create-task", text: typed },
+        };
+      }
+      if (e.key === "create:poll" && e.command.type === "href") {
+        return {
+          ...base,
+          title: `Quick poll: ${typed}`,
+          command: {
+            type: "href",
+            href: `${e.command.href}&question=${encodeURIComponent(typed)}`,
+          },
+        };
+      }
+      return base;
+    });
+  return typed && items.length ? { id: "create", heading: "Create", items } : null;
+}
+
 function fromEntry(entry: CatalogEntry, score: number, highlight: boolean): PaletteItem {
   return {
     key: entry.key,
@@ -173,8 +202,12 @@ export function paletteGroups({
   for (const g of server) groups.push(fromServer(g, true));
 
   // The group holding the best match leads; ties keep their usual order.
-  return groups
+  const sorted = groups
     .map((group, i) => ({ group, i, best: best(group) }))
     .sort((a, b) => b.best - a.best || a.i - b.i)
     .map(({ group }) => group);
+  // Then Create: make something from what was typed (a task titled with it,
+  // a quick poll asking it), or start a meeting, form, note or expense.
+  const create = withClient ? createGroup(catalog, q.text) : null;
+  return create ? [...sorted, create] : sorted;
 }

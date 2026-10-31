@@ -17,6 +17,8 @@ import { scoreFields, type ParsedQuery } from "@/lib/search/text";
 
 export type PaletteCommand =
   | { type: "href"; href: string }
+  /** Makes a task from the typed text, right there (the Create group). */
+  | { type: "create-task"; text: string }
   | { type: "pin" }
   | { type: "new-note" }
   | { type: "shortcuts" }
@@ -227,7 +229,7 @@ const PAGES: readonly PageDef[] = [
   },
   {
     path: "/finance/my-reimbursements",
-    title: "My reimbursements",
+    title: "My requests",
     section: "finance",
     icon: "Receipt",
     keywords: ["expense", "receipt", "pay me back", "reimburse", "money owed"],
@@ -406,6 +408,61 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
   const action = (entry: Omit<CatalogEntry, "group">, section?: SectionId) => {
     if (sectionVisible(input, section)) entries.push({ ...entry, group: "actions" });
   };
+  // The Create group: shown under what you type, each made from it where it
+  // can be (a task's title, a quick poll's question). paletteGroups fills in
+  // the text; keys start "create:".
+  const create = (entry: Omit<CatalogEntry, "group" | "keywords">, section: SectionId) => {
+    if (sectionVisible(input, section)) entries.push({ ...entry, keywords: [], group: "actions" });
+  };
+  create(
+    {
+      key: "create:task",
+      title: "New task",
+      icon: "CheckSquare",
+      command: { type: "create-task", text: "" },
+    },
+    "tasks",
+  );
+  create(
+    {
+      key: "create:poll",
+      title: "Quick poll",
+      icon: "Vote",
+      command: { type: "href", href: `${base}/forms/new?poll=1` },
+    },
+    "forms",
+  );
+  create(
+    {
+      key: "create:meeting",
+      title: "New meeting",
+      icon: "Video",
+      command: { type: "href", href: `${base}/meetings?new=1` },
+    },
+    "meetings",
+  );
+  create(
+    {
+      key: "create:form",
+      title: "New form",
+      icon: "ClipboardList",
+      command: { type: "href", href: `${base}/forms/new` },
+    },
+    "forms",
+  );
+  create(
+    { key: "create:note", title: "New note", icon: "SquarePen", command: { type: "new-note" } },
+    "notes",
+  );
+  create(
+    {
+      key: "create:expense",
+      title: "New expense",
+      icon: "Receipt",
+      command: { type: "href", href: `${base}/finance/my-reimbursements?new=1` },
+    },
+    "finance",
+  );
   action(
     {
       key: "action:new-task",
@@ -533,6 +590,7 @@ export interface CatalogHit {
 export function matchCatalog(entries: readonly CatalogEntry[], q: ParsedQuery): CatalogHit[] {
   if (!q.folded.length) return [];
   return entries
+    .filter((entry) => !entry.key.startsWith("create:"))
     .map((entry, i) => ({
       entry,
       i,

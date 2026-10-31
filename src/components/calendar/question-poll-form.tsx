@@ -87,9 +87,12 @@ export function QuestionPollForm({
   orgId,
   orgSlug,
   canMakeForms = false,
+  initialQuestion = "",
 }: {
   orgId: string;
   orgSlug: string;
+  /** The question typed in the Ctrl K palette ("Quick poll: …"). */
+  initialQuestion?: string;
   /** Owners and admins can open a poll to anyone with the link. */
   canMakeForms?: boolean;
 }) {
@@ -97,7 +100,7 @@ export function QuestionPollForm({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(initialQuestion);
   const [description, setDescription] = useState("");
   const [options, setOptions] = useState<OptionRow[]>([
     { key: 1, text: "" },

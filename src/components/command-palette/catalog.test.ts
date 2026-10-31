@@ -50,7 +50,7 @@ describe("the page catalog", () => {
     expect(titles({ role: "ADMIN" }, "dark mode")).toEqual(
       expect.arrayContaining(["Theme", "Use dark theme"]),
     );
-    expect(titles({}, "pay me back")).toContain("My reimbursements");
+    expect(titles({}, "pay me back")).toContain("My requests");
     expect(titles({}, "trash")).toContain("Recently deleted");
   });
 
@@ -187,5 +187,25 @@ describe("paletteGroups", () => {
     });
     expect(groups.map((g) => g.id)).toEqual(["actions", "pages"]);
     expect(groups[1].items.length).toBeGreaterThan(20);
+  });
+});
+
+describe("the Create group", () => {
+  it("makes a task and a quick poll from the typed text, and starts the rest", async () => {
+    const { createGroup } = await import("./palette-groups");
+    const { buildCatalog } = await import("./catalog");
+    const catalog = buildCatalog({ orgSlug: "cbc", role: "OWNER", sections: [] });
+    const group = createGroup(catalog, "fall social")!;
+    expect(group.heading).toBe("Create");
+    const byKey = Object.fromEntries(group.items.map((i) => [i.key, i]));
+    expect(byKey["create:task"]!.title).toBe("New task: fall social");
+    expect(byKey["create:task"]!.command).toEqual({ type: "create-task", text: "fall social" });
+    expect(byKey["create:poll"]!.title).toBe("Quick poll: fall social");
+    expect(byKey["create:poll"]!.command).toEqual({
+      type: "href",
+      href: "/app/cbc/forms/new?poll=1&question=fall%20social",
+    });
+    expect(byKey["create:meeting"]!.title).toBe("New meeting");
+    expect(createGroup(catalog, "   ")).toBeNull();
   });
 });

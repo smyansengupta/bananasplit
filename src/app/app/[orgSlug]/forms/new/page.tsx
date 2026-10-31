@@ -21,7 +21,15 @@ export default async function NewFormPage({
   const { organization: org, role } = await getOrgContextBySlug(orgSlug);
   const canMake = can({ role }, "databases.write");
   if (sp.poll === "1" || !canMake) {
-    return <QuestionPollForm orgId={org.id} orgSlug={orgSlug} canMakeForms={canMake} />;
+    const question = typeof sp.question === "string" ? sp.question.slice(0, 300) : "";
+    return (
+      <QuestionPollForm
+        orgId={org.id}
+        orgSlug={orgSlug}
+        canMakeForms={canMake}
+        initialQuestion={question}
+      />
+    );
   }
   return (
     <div className="space-y-6">

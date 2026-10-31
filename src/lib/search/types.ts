@@ -12,7 +12,7 @@ export const SEARCH_SCOPES = [
   { id: "files", label: "Files" },
   { id: "tasks", label: "Tasks" },
   { id: "events", label: "Events" },
-  { id: "polls", label: "Polls" },
+  { id: "polls", label: "Forms" },
   { id: "people", label: "People" },
   { id: "databases", label: "Databases" },
   { id: "finance", label: "Finance" },
@@ -35,6 +35,7 @@ export type SearchKind =
   | "label"
   | "event"
   | "poll"
+  | "form"
   | "person"
   | "position"
   | "database"
@@ -69,7 +70,7 @@ export const GROUP_LABELS: Record<SearchGroupId, string> = {
   tasks: "Tasks",
   projects: "Epics and tags",
   events: "Events",
-  polls: "Polls",
+  polls: "Forms",
   people: "People",
   roles: "Org chart",
   databases: "Databases",

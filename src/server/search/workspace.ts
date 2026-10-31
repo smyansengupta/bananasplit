@@ -569,9 +569,48 @@ async function searchPolls(ctx: Ctx): Promise<SearchGroup> {
     take: ctx.pool,
   });
 
+  // Forms (quick polls open to anyone are forms too): the Forms section's own.
+  const forms = await db.form.findMany({
+    where: {
+      organizationId: viewer.orgId,
+      deletedAt: null,
+      ...(ctx.browsing ? { closedAt: null } : {}),
+      ...everyWord<Prisma.FormWhereInput>(q.terms, (c) => [{ title: c }, { description: c }]),
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      kind: true,
+      closesAt: true,
+      closedAt: true,
+      createdAt: true,
+    },
+    take: ctx.pool,
+  });
+
   const closed = (closesAt: Date | null) =>
     Boolean(closesAt && closesAt.getTime() <= now.getTime());
   const rows = [
+    ...forms.map((f) => ({
+      createdAt: f.createdAt,
+      hit: hit("form", f.id, {
+        title: f.title,
+        href: `${ctx.base}/forms/${f.id}`,
+        detail:
+          excerptAround(f.description, q.folded) ??
+          (f.kind === "QUICK_POLL" ? "Quick poll" : "Form"),
+        meta: f.closedAt || closed(f.closesAt) ? "Closed" : "Open",
+        score: scoreFields(
+          [
+            { text: f.title, weight: 3 },
+            { text: f.description, weight: 1 },
+          ],
+          q,
+        ),
+      }),
+    })),
     ...timePolls.map((p) => ({
       createdAt: p.createdAt,
       hit: hit("poll", p.id, {

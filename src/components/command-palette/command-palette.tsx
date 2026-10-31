@@ -6,7 +6,12 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 
+import { addLinkAction } from "@/app/app/[orgSlug]/links/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
+import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
+import { refFromPath } from "@/lib/links";
+import { parseQuickAdd } from "@/lib/tasks/quick-add";
+import { localDateKey } from "@/lib/tasks/dates";
 import { usePins } from "@/components/pins/pins-context";
 import { Button } from "@/components/ui/button";
 import { CommandDialog, CommandList } from "@/components/ui/command";
@@ -194,6 +199,29 @@ export function CommandPalette({
     }
   }
 
+  /**
+   * "New task: Order bolts fri": made right here, yours, due when the text
+   * says, and linked to the page you're on when it's one thing (a meeting,
+   * a note). The toast opens it.
+   */
+  async function newTask(text: string) {
+    const from = refFromPath(window.location.pathname);
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const parsed = parseQuickAdd(text, localDateKey(new Date(), zone), []);
+    const result = await createTask(orgId, { title: parsed.title || text, dueDate: parsed.dueKey });
+    if (result.error || !("taskId" in result) || !result.taskId) {
+      toast({ title: result.error ?? "Couldn't add that task.", tone: "error" });
+      return;
+    }
+    const taskId = result.taskId;
+    if (from) await addLinkAction(orgId, orgSlug, from, { kind: "task", id: taskId });
+    toast({
+      title: from ? "Task added and linked" : "Task added",
+      action: { label: "Open", run: () => router.push(`/app/${orgSlug}/tasks/${taskId}`) },
+    });
+    router.refresh();
+  }
+
   function run(item: PaletteItem, newTab = false) {
     const command = item.command;
     if (command.type === "href") {
@@ -210,6 +238,7 @@ export function CommandPalette({
     if (command.type === "pin") pins?.openPicker();
     else if (command.type === "theme") setTheme(command.theme);
     else if (command.type === "shortcuts") window.dispatchEvent(new Event(OPEN_SHORTCUTS_EVENT));
+    else if (command.type === "create-task") void newTask(command.text);
     else void newNote();
   }
 
