@@ -90,10 +90,16 @@ export function LinkedPanel({
   closingTile = false,
   fixed = [],
   actions,
+  omitKinds = NO_KINDS,
   className,
 }: {
   orgId: string;
   orgSlug: string;
+  /**
+   * Kinds the page lists in a section of its own (a meeting's "Tasks from
+   * this meeting"): left out here, and not offered to link from here.
+   */
+  omitKinds?: readonly LinkKind[];
   /** This page's own thing. */
   at: LinkRef;
   initial: LinkedItem[];
@@ -107,7 +113,8 @@ export function LinkedPanel({
   actions?: ReactNode;
   className?: string;
 }) {
-  const [items, setItems] = useState(initial);
+  const [all, setItems] = useState(initial);
+  const items = all.filter((i) => !omitKinds.includes(i.kind));
   const [peek, setPeek] = useState<LinkedItem | null>(null);
   const [, start] = useTransition();
 
@@ -161,7 +168,9 @@ export function LinkedPanel({
             </span>
           )}
         </h2>
-        {!closingTile && <LinkPicker at={at} orgId={orgId} taken={items} onPick={link} />}
+        {!closingTile && (
+          <LinkPicker at={at} orgId={orgId} taken={all} omitKinds={omitKinds} onPick={link} />
+        )}
       </div>
       {items.length + fixed.length > 0 && (
         <ul className="flex flex-col gap-2">
@@ -226,7 +235,9 @@ export function LinkedPanel({
         </ul>
       )}
       {actions}
-      {closingTile && <LinkPicker at={at} orgId={orgId} taken={items} onPick={link} tile />}
+      {closingTile && (
+        <LinkPicker at={at} orgId={orgId} taken={all} omitKinds={omitKinds} onPick={link} tile />
+      )}
       <SidePeek orgId={orgId} orgSlug={orgSlug} target={peek} onClose={() => setPeek(null)} />
     </section>
   );
@@ -245,17 +256,21 @@ function KindTile({ Icon }: { Icon: IconComponent }) {
   );
 }
 
+const NO_KINDS: readonly LinkKind[] = [];
+
 /** "Link": search the space and pick something to link. */
 function LinkPicker({
   at,
   orgId,
   taken,
+  omitKinds,
   onPick,
   tile = false,
 }: {
   at: LinkRef;
   orgId: string;
   taken: readonly LinkedItem[];
+  omitKinds: readonly LinkKind[];
   onPick: (ref: LinkRef) => void;
   /** The plan's dashed "+ Link something" tile instead of a small button. */
   tile?: boolean;
@@ -281,6 +296,7 @@ function LinkPicker({
               const ref = linkRefOfHit(h);
               if (!ref) return false;
               if (ref.kind === at.kind && ref.id === at.id) return false;
+              if (omitKinds.includes(ref.kind)) return false;
               return !taken.some((t) => t.kind === ref.kind && t.id === ref.id);
             })
             .slice(0, 12),
@@ -290,7 +306,7 @@ function LinkPicker({
       }
     }, 180);
     return () => clearTimeout(timer);
-  }, [open, query, orgId, at.kind, at.id, taken]);
+  }, [open, query, orgId, at.kind, at.id, taken, omitKinds]);
 
   return (
     <Popover

@@ -1,4 +1,5 @@
 import { withOrgTx } from "@/server/db/context";
+import type { LinkKind } from "@/lib/links";
 import { listLinked, type LinkRef } from "@/server/links/links";
 
 import type { ReactNode } from "react";
@@ -17,6 +18,7 @@ export async function LinkedSection({
   closingTile,
   fixed,
   actions,
+  omitKinds,
   className,
 }: {
   orgId: string;
@@ -26,6 +28,8 @@ export async function LinkedSection({
   closingTile?: boolean;
   fixed?: readonly FixedLinkedRow[];
   actions?: ReactNode;
+  /** Kinds the page lists on its own (LinkedPanel's omitKinds). */
+  omitKinds?: readonly LinkKind[];
   className?: string;
 }) {
   const items = await withOrgTx(orgId, async ({ db }) => {
@@ -45,6 +49,7 @@ export async function LinkedSection({
       closingTile={closingTile}
       fixed={fixed}
       actions={actions}
+      omitKinds={omitKinds}
       className={className}
     />
   );

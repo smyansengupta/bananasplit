@@ -136,6 +136,8 @@ export default async function MeetingPage({
           at={{ kind: "event", id: event.id }}
           title="Linked to this meeting"
           closingTile
+          // Its tasks are under "Tasks from this meeting", not here as well.
+          omitKinds={["task"]}
           fixed={event.notes.map((n) => ({
             key: `note:${n.id}`,
             kind: "note" as const,
