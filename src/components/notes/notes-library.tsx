@@ -35,6 +35,7 @@ import {
 import { emptyTrashAction } from "@/app/app/[orgSlug]/settings/plan/storage/actions";
 import { EmptyState } from "@/components/empty-state";
 import { ItemMenu } from "@/components/item-menu";
+import { moveToEntries, type MoveTarget } from "@/components/personal/move-to-organization";
 import { FILE_ICONS } from "@/components/notes/file-card";
 import { NewFolderForm } from "@/components/notes/new-folder-form";
 import { isFileDrag, pickFiles, uploadFiles } from "@/components/notes/upload-queue";
@@ -187,6 +188,7 @@ export function NotesLibrary({
   sheetFilters,
   personal = false,
   canEmptyTrash = false,
+  moveTargets,
 }: {
   orgId: string;
   orgSlug: string;
@@ -206,6 +208,8 @@ export function NotesLibrary({
   personal?: boolean;
   /** This member may empty the trash for good (owners and admins, or Personal's owner). */
   canEmptyTrash?: boolean;
+  /** In Personal: the organizations the viewer runs, each a "Move to ..." in a card's menu. */
+  moveTargets?: readonly MoveTarget[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -562,6 +566,9 @@ export function NotesLibrary({
                 icon: FolderInput,
                 onSelect: () => setMoving({ kind: "note", id: n.id, name, folderId: n.folderId }),
               },
+              ...(n.canMove
+                ? moveToEntries(moveTargets, { kind: "note", id: n.id }, () => router.refresh())
+                : []),
               n.canMove && {
                 label: "Delete",
                 icon: Trash2,
@@ -676,6 +683,9 @@ export function NotesLibrary({
                 onSelect: () =>
                   setMoving({ kind: "file", id: f.id, name: f.name, folderId: f.folderId }),
               },
+              ...(f.canMove
+                ? moveToEntries(moveTargets, { kind: "file", id: f.id }, () => router.refresh())
+                : []),
               f.canMove && {
                 label: "Delete",
                 icon: Trash2,

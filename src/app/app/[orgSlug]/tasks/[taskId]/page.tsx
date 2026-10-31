@@ -1,3 +1,5 @@
+import { isPersonalSpace } from "@/lib/billing/space";
+import { clubsUserRuns } from "@/server/personal/move";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
@@ -47,8 +49,11 @@ export default async function TaskPage({
   if (!data) notFound();
 
   const { task } = data;
+  // In Personal, a task's menu can move it to an organization you run.
+  const moveTargets = isPersonalSpace(org) ? await clubsUserRuns(user.id) : [];
   return (
     <TasksProvider
+      moveTargets={moveTargets}
       org={{
         id: org.id,
         slug: org.slug,
