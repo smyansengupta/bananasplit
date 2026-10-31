@@ -284,7 +284,12 @@ export function FormResponses({
           pickedByClaude={Boolean(only)}
         />
       ) : current === "summary" ? (
-        <Summary summary={summary} total={rows.length} />
+        // The plan ends Summary with the question box, so a pattern in the
+        // charts can be asked about without leaving them.
+        <div className="space-y-6">
+          <Summary summary={summary} total={rows.length} />
+          <Ask orgId={orgId} formId={formId} reviewHref={review ? hrefOf.review : hrefOf.table} />
+        </div>
       ) : (
         <Ask orgId={orgId} formId={formId} reviewHref={review ? hrefOf.review : hrefOf.table} />
       )}
