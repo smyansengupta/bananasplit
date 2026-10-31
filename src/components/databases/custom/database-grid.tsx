@@ -844,12 +844,6 @@ export function DatabaseGrid({
                   )}
                 </>
               )}
-              {!trash && canEdit && (
-                <Button variant="create" onClick={() => void addRow()}>
-                  <Plus aria-hidden="true" />
-                  New row
-                </Button>
-              )}
             </>
           }
         />
@@ -1043,9 +1037,29 @@ export function DatabaseGrid({
                 description={
                   canEdit && !trash ? "Paste rows from a spreadsheet, or add one." : undefined
                 }
+                action={
+                  canEdit && !trash ? (
+                    <Button variant="secondary" onClick={() => void addRow()}>
+                      <Plus aria-hidden="true" />
+                      New row
+                    </Button>
+                  ) : undefined
+                }
               />
             )
           ) : null}
+          {/* One New row, at the bottom where the next row goes (Enter on
+              the last row adds one too). */}
+          {!trash && canEdit && next === null && records.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void addRow()}
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-field flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-sm font-medium transition-colors"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              New row
+            </button>
+          )}
           {next !== null && (
             <div ref={moreRef} className="flex justify-center px-3.5 pt-3 pb-1">
               <Button

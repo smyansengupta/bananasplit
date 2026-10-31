@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import { setAttendanceNameAction } from "@/app/app/[orgSlug]/databases/actions";
-import { Button } from "@/components/ui/button";
+import { SavedMark, useSaveOnChange } from "@/components/ui/autosave";
 import { Input } from "@/components/ui/input";
 
 /** A suite-side name for one check-in; the website's row is unchanged. */
@@ -19,44 +19,28 @@ export function NameOverrideForm({
 }) {
   const router = useRouter();
   const [value, setValue] = useState(current ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { status, error, save } = useSaveOnChange(
+    async (name: string) => {
+      const r = await setAttendanceNameAction(organizationId, attendanceId, name.trim() || null);
+      if (r.error) return r.error;
+      router.refresh();
+    },
+    { initial: current ?? "" },
+  );
   return (
     <div className="space-y-1">
-      <div className="flex gap-2">
-        <Input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Name to show for this check-in"
-          aria-label="Name override"
-          maxLength={120}
-        />
-        <Button
-          variant="outline"
-          disabled={pending || value === (current ?? "")}
-          onClick={() =>
-            start(async () => {
-              const r = await setAttendanceNameAction(
-                organizationId,
-                attendanceId,
-                value.trim() || null,
-              );
-              if (r.error) setError(r.error);
-              else {
-                setError(null);
-                router.refresh();
-              }
-            })
-          }
-        >
-          Save name
-        </Button>
-      </div>
-      {error && (
-        <p role="alert" className="text-tint-danger-foreground text-xs">
-          {error}
-        </p>
-      )}
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void save(value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void save(value);
+        }}
+        placeholder="Name to show for this check-in"
+        aria-label="Name override"
+        maxLength={120}
+      />
+      <SavedMark status={status} error={error} />
     </div>
   );
 }

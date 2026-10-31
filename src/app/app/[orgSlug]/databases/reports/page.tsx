@@ -29,7 +29,7 @@ import { getVisibleReports } from "@/server/reports/visibility";
 import { planGate } from "@/server/billing/plan-gate";
 
 import { DatabasesTabs } from "../databases-tabs";
-import { AutoRefresh, RefreshButton } from "./refresh-controls";
+import { AutoRefresh } from "./refresh-controls";
 
 export const metadata = { title: "Reports" };
 
@@ -147,7 +147,6 @@ export default async function ReportsPage({
                 label={range.label}
                 span={range.span}
               />
-              <RefreshButton organizationId={organization.id} />
               <AutoRefresh seconds={refreshSeconds} />
             </>
           }

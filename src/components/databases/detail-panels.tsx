@@ -35,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { signupLabel } from "@/server/sync/supabase-map";
 
-import { ActionButton, ActionMenu } from "./action-button";
+import { ActionButton, ActionMenu, ActionSwitch } from "./action-button";
 import { AddAttendanceDialog } from "./add-row-dialogs";
 import { notice } from "./styles";
 import { ContactActions } from "./contact-actions";
@@ -405,7 +405,7 @@ export function AttendancePanel({ detail, ctx }: { detail: AttendanceDetail; ctx
                     label: "Delete check-in",
                     action: deleteAttendanceAction,
                     args: [ctx.organizationId, r.id],
-                    confirm: "Delete this check-in?",
+                    undoLabel: "Deleted",
                     destructive: true,
                   },
                 ]}
@@ -462,9 +462,11 @@ export function SignupPanel({ detail, ctx }: { detail: SignupDetail; ctx: PanelC
         <Field label="Meet days">{answerList(s.answers, "meet_days")}</Field>
         <Field label="Interests">{answerList(s.answers, "interests")}</Field>
         <Field label="Submissions">{s.submissions}</Field>
-        <Field label="Added to list">
-          {s.addedToListAt ? fmtDate(s.addedToListAt, ctx.timezone) : "Not yet"}
-        </Field>
+        {!ctx.canEdit && (
+          <Field label="On the list">
+            {s.addedToListAt ? fmtDate(s.addedToListAt, ctx.timezone) : "Not yet"}
+          </Field>
+        )}
         <Field label="First attended">
           {s.firstAttendedAt
             ? `${fmtDate(s.firstAttendedAt, ctx.timezone)} (${s.daysToFirstAttendance ?? 0} days after signing up)`
@@ -478,13 +480,14 @@ export function SignupPanel({ detail, ctx }: { detail: SignupDetail; ctx: PanelC
         <Field label="Record">{SOURCE_LABELS[s.recordSource] ?? s.recordSource}</Field>
       </dl>
       {ctx.canEdit && (
-        <div className="flex flex-wrap items-start gap-2">
-          <ActionButton
+        <div className="space-y-2">
+          <ActionSwitch
+            label="On the list"
             action={setSignupsAddedAction}
-            args={[ctx.organizationId, [s.id], !s.addedToListAt]}
-          >
-            {s.addedToListAt ? "Mark not on the list" : "Mark added to list"}
-          </ActionButton>
+            checked={Boolean(s.addedToListAt)}
+            argsOn={[ctx.organizationId, [s.id], true]}
+            argsOff={[ctx.organizationId, [s.id], false]}
+          />
           <ActionMenu
             label="More actions for this signup"
             items={[
@@ -587,16 +590,13 @@ export function BallotPanel({ detail, ctx }: { detail: BallotDetail; ctx: PanelC
         </dl>
       </Section>
       {ctx.canEdit && (
-        <div className="flex flex-wrap gap-2">
-          <ActionButton
-            action={setBallotSuppressedAction}
-            args={[ctx.organizationId, b.id, b.excludedReason !== "suppressed"]}
-          >
-            {b.excludedReason === "suppressed"
-              ? "Count this ballot again"
-              : "Don't count this ballot"}
-          </ActionButton>
-        </div>
+        <ActionSwitch
+          label="Counted"
+          action={setBallotSuppressedAction}
+          checked={b.excludedReason !== "suppressed"}
+          argsOn={[ctx.organizationId, b.id, false]}
+          argsOff={[ctx.organizationId, b.id, true]}
+        />
       )}
     </>
   );

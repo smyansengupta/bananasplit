@@ -4,8 +4,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
   CircleAlert,
   Columns3,
   Database,
@@ -13,7 +11,7 @@ import {
   Loader2,
   X,
 } from "@/components/icons";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -401,8 +399,7 @@ export function DataTable(props: DataTableProps) {
     });
   };
 
-  const pages = Math.max(1, Math.ceil(total / size));
-  const first = total === 0 ? 0 : (page - 1) * size + 1;
+  // Loaded so far: the first `size` rows (scrolling to the end loads more).
   const last = Math.min(total, page * size);
 
   const filtered = filters.some((f) => !f.isDefault) || Boolean(props.q || props.from || props.to);
@@ -621,44 +618,43 @@ export function DataTable(props: DataTableProps) {
         </Table>
       </TableFrame>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span className="text-muted-foreground tabular-nums">
-          {total === 0
-            ? "No rows"
-            : `${first.toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}`}
-        </span>
-        <div className="flex items-center gap-2">
-          <Segmented
-            label="Rows per page"
-            options={[25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
-            value={String(size)}
-            onSelect={(v) => view.update((p) => (v === "50" ? p.delete("size") : p.set("size", v)))}
-          />
-          <Button
-            variant="outline"
-            size="icon-sm"
-            disabled={page <= 1}
-            onClick={() =>
-              view.update(
-                (p) => (page - 1 <= 1 ? p.delete("page") : p.set("page", String(page - 1))),
-                { keepPage: true },
-              )
-            }
-            aria-label="Previous page"
-          >
-            <ChevronLeft />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            disabled={page >= pages}
-            onClick={() => view.update((p) => p.set("page", String(page + 1)), { keepPage: true })}
-            aria-label="Next page"
-          >
-            <ChevronRight />
-          </Button>
-        </div>
-      </div>
+      {/* More rows load as you scroll to the end: no pages to step through. */}
+      {last < total && <LoadMoreOnScroll size={size} pending={view.pending} view={view} />}
+    </div>
+  );
+}
+
+/** Rows load as the end of the table scrolls into view, 50 at a time. */
+const SCROLL_STEP = 50;
+const SCROLL_MAX = 1000;
+
+function LoadMoreOnScroll({
+  size,
+  pending,
+  view,
+}: {
+  size: number;
+  pending: boolean;
+  view: ReturnType<typeof useViewParams>;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || pending || size >= SCROLL_MAX) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        observer.disconnect();
+        view.update((p) => p.set("size", String(Math.min(size + SCROLL_STEP, SCROLL_MAX))));
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [size, pending, view]);
+  return (
+    <div ref={ref} className="text-muted-foreground flex justify-center py-3 text-sm">
+      {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
     </div>
   );
 }
