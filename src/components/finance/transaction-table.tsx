@@ -6,7 +6,6 @@ import {
   Banknote,
   Check,
   Lock,
-  Paperclip,
   ReceiptText,
   X,
 } from "@/components/icons";
@@ -14,7 +13,6 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import type { TransactionWithRelations } from "@/app/app/[orgSlug]/finance/queries";
-import { getSignedReceiptUrl } from "@/app/app/[orgSlug]/finance/receipts-actions";
 import {
   approveAndPayExpense,
   approveExpense,
@@ -48,6 +46,8 @@ import {
 import { formatCents } from "@/lib/finance/money";
 import { formatFinanceDate } from "@/lib/finance/stats";
 import { cn } from "@/lib/utils";
+
+import { ReceiptThumb } from "./receipt-thumb";
 
 import { TransactionDialog } from "./transaction-dialog";
 import { TransactionStatusBadge } from "./transaction-status-badge";
@@ -203,25 +203,8 @@ export function TransactionTable({
       </span>
     ) : null;
 
-  async function viewReceipt(receiptId: string) {
-    const result = await getSignedReceiptUrl(orgId, receiptId);
-    if (result.url) window.open(result.url, "_blank", "noopener,noreferrer");
-  }
   const receiptMark = (t: TransactionWithRelations) =>
-    t.receipts[0] ? (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          void viewReceipt(t.receipts[0]!.id);
-        }}
-        aria-label={`Receipt: ${t.receipts[0].filename}`}
-        title="Open the receipt"
-        className="text-muted-foreground hover:text-foreground hover:bg-muted relative z-10 inline-grid size-7 place-items-center rounded-full"
-      >
-        <Paperclip className="size-3.5" aria-hidden="true" />
-      </button>
-    ) : null;
+    t.receipts[0] ? <ReceiptThumb orgId={orgId} receipt={t.receipts[0]} /> : null;
   const stepButtons = (t: TransactionWithRelations) =>
     reviewable(t) ? (
       <span className="relative z-10 inline-flex gap-1.5" onClick={(e) => e.stopPropagation()}>
