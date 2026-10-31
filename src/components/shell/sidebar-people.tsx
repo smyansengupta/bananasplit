@@ -19,8 +19,9 @@ export interface SidebarPeopleData {
 const BEAT_MS = 60_000;
 
 /**
- * Who's online now, at the sidebar's foot over the logo: a few faces (yours
- * when you're the only one) and how many members are online, opening People. While the
+ * Who's online now, at the sidebar's foot beside the collapse button: a few
+ * faces (yours when you're the only one) and how many members are online,
+ * opening People. While the
  * tab is open and visible it marks you here once a minute and refreshes the
  * list (src/server/presence.ts); a hidden tab stops, so you drop off after
  * a couple of minutes away. Folds away on the rail.
@@ -71,11 +72,11 @@ export function SidebarPeople({
       tabIndex={rail ? -1 : undefined}
       aria-hidden={rail || undefined}
       className={cn(
-        "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[7px] px-2 text-xs whitespace-nowrap outline-none",
-        "transition-opacity duration-300 motion-reduce:transition-none",
+        "focus-glow flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-[7px] px-2 text-xs whitespace-nowrap outline-none",
+        "transition-[max-width,opacity,padding] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
         tone.text,
         tone.hover,
-        rail && "pointer-events-none opacity-0",
+        rail ? "pointer-events-none max-w-0 flex-none px-0 opacity-0" : "max-w-[220px] flex-1",
       )}
     >
       <span className="flex shrink-0">
@@ -85,11 +86,8 @@ export function SidebarPeople({
           </span>
         ))}
       </span>
-      <span className={cn("flex min-w-0 items-center gap-1.5", fadeLabel(rail))}>
-        <span aria-hidden="true" className="bg-success size-1.5 shrink-0 rounded-full" />
-        <span className="truncate">
-          {people.count} {people.count === 1 ? "member" : "members"} online
-        </span>
+      <span className={cn("min-w-0 truncate", fadeLabel(rail))}>
+        {people.count} {people.count === 1 ? "member" : "members"} online
       </span>
     </Link>
   );

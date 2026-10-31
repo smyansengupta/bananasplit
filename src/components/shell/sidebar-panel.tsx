@@ -1,10 +1,8 @@
 "use client";
 
 import { PanelLeft } from "@/components/icons";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import { Logo } from "@/components/brand/logo";
 import { useModKey } from "@/components/command-palette/use-mod-key";
 import {
   SidebarModeProvider,
@@ -20,35 +18,11 @@ const PEEK_DELAY_MS = 350;
 export const SIDEBAR_ID = "app-sidebar";
 
 /**
- * The platform's signature under the club's own nav: the Bananasplit mark
- * and wordmark (Young Serif, the logo's fixed colours), and the way back to
- * the home page. On the rail it tucks away and leaves the toggle.
- */
-function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => void }) {
-  return (
-    <Link
-      href="/"
-      onClick={onNavigate}
-      title="Bananasplit home page"
-      tabIndex={rail ? -1 : undefined}
-      aria-hidden={rail || undefined}
-      className={cn(
-        "focus-glow flex h-8 min-w-0 items-center overflow-hidden rounded-[7px] px-1.5 whitespace-nowrap outline-none",
-        "transition-[max-width,opacity] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
-        rail ? "max-w-0 flex-none px-0 opacity-0" : "max-w-[170px] flex-1 opacity-100 delay-75",
-      )}
-    >
-      <Logo size={20} textSize={16} className="gap-2" />
-    </Link>
-  );
-}
-
-/**
  * The sidebar's insides, the same in every face: the organization menu
  * (switching spaces, the Admin panel) at the top with you (your picture,
- * opening your menu) beside it, the nav, then, always last, the
- * Bananasplit logo with the panel's collapse button when given. On the
- * rail your picture sits under the organization's circle.
+ * opening your menu) beside it, the nav, then, last, who's online beside
+ * the panel's collapse button. On the rail your picture sits under the
+ * organization's circle and only the button stays at the foot.
  */
 export function SidebarBody({
   clubMenu,
@@ -57,12 +31,11 @@ export function SidebarBody({
   children,
   toggle,
   rail = false,
-  onNavigate,
 }: {
   clubMenu: React.ReactNode;
   /** You: the user menu beside the organization menu (UserMenu variant="corner"). */
   profile?: React.ReactNode;
-  /** Who's in the organization, over the logo (SidebarPeople). */
+  /** Who's online, at the foot (SidebarPeople). */
   people?: React.ReactNode;
   children: React.ReactNode;
   toggle?: React.ReactNode;
@@ -83,10 +56,9 @@ export function SidebarBody({
         {profile && <div className={cn("shrink-0", rail && "pl-0.5")}>{profile}</div>}
       </div>
       {children}
-      {people}
-      {/* The Bananasplit mark, always last. */}
-      <div className={cn("mt-1 flex shrink-0 items-center pt-1", rail ? "gap-0" : "gap-2.5")}>
-        <SidebarLogo rail={rail} onNavigate={onNavigate} />
+      {/* Last: who's online, and the collapse button at the right. */}
+      <div className={cn("mt-1 flex shrink-0 items-center pt-1", rail ? "gap-0" : "gap-2")}>
+        {people ?? <span className="flex-1" />}
         {toggle}
       </div>
     </>
