@@ -8,6 +8,7 @@ import { FormResponses } from "@/components/forms/form-responses";
 import { PageHeader } from "@/components/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { appUrl } from "@/lib/app-url";
+import { familyOf, formatBytes } from "@/lib/files/types";
 import { can } from "@/lib/auth/permissions";
 import { readDesign } from "@/lib/forms/design";
 import { readQuestions } from "@/lib/forms/questions";
@@ -20,6 +21,12 @@ const TABS = ["build", "design", "settings", "share", "responses"] as const;
 type Tab = (typeof TABS)[number];
 const VIEWS = ["table", "review", "summary", "ask"] as const;
 type View = (typeof VIEWS)[number];
+
+/** The Files id at the end of an upload answer's link, if it is one. */
+function fileIdOf(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return /\/files\/([A-Za-z0-9_-]{1,64})$/.exec(value)?.[1] ?? null;
+}
 
 /**
  * One form, for the owners and admins who run it: Build (questions, saved as
@@ -49,12 +56,31 @@ export default async function FormPage({
       select: { user: { select: { id: true, name: true, email: true } } },
       take: 500,
     });
-    return { form, admin: true as const, rows, choices, members };
+    // The files people sent (resumes, photos, signatures), for the cards in
+    // Review: each answer is a link ending in the file's id.
+    const uploadFields = readQuestions(form.questions)
+      .filter(
+        (q) => (q.type === "file" || q.type === "image" || q.type === "signature") && q.fieldId,
+      )
+      .map((q) => q.fieldId!);
+    const fileIds = new Set<string>();
+    for (const r of rows)
+      for (const f of uploadFields) {
+        const id = fileIdOf(r.values[f]);
+        if (id) fileIds.add(id);
+      }
+    const files = fileIds.size
+      ? await db.orgFile.findMany({
+          where: { organizationId: org.id, id: { in: [...fileIds] }, deletedAt: null },
+          select: { id: true, name: true, contentType: true, sizeBytes: true },
+        })
+      : [];
+    return { form, admin: true as const, rows, choices, members, files };
   });
   if (!loaded) notFound();
   if (!loaded.admin) redirect(`/f/${loaded.form.slug}`);
 
-  const { form, rows, choices, members } = loaded;
+  const { form, rows, choices, members, files } = loaded;
   const base = `/app/${orgSlug}`;
   const tab: Tab = TABS.find((t) => t === sp.tab) ?? (rows.length > 0 ? "responses" : "build");
   const view: View = VIEWS.find((v) => v === sp.view) ?? (form.review ? "review" : "summary");
@@ -144,6 +170,7 @@ export default async function FormPage({
         <FormResponses
           orgId={org.id}
           formId={form.id}
+          title={form.title}
           view={view}
           hrefOf={{
             table: href("responses", "table"),
@@ -153,6 +180,18 @@ export default async function FormPage({
           }}
           review={form.review}
           fresh={fresh}
+          only={typeof sp.ids === "string" ? sp.ids.split(",").filter(Boolean).slice(0, 50) : null}
+          files={Object.fromEntries(
+            files.map((f) => [
+              f.id,
+              {
+                name: f.name,
+                kind: familyOf(f.contentType),
+                size: formatBytes(f.sizeBytes),
+                src: `/api/orgs/${encodeURIComponent(org.id)}/files/${encodeURIComponent(f.id)}`,
+              },
+            ]),
+          )}
           databaseHref={databaseHref}
           questions={questions}
           rows={rows.map((r) => ({
