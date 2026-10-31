@@ -55,6 +55,11 @@ export function JoinCodeCard({
     });
   }
 
+  function saveDomain() {
+    if (pending || domain.trim() === (code.allowedDomain ?? "")) return;
+    apply(() => updateJoinCodeAction(orgId, { allowedDomain: domain.trim() || null }), "Saved.");
+  }
+
   async function copy(what: "code" | "link") {
     try {
       await navigator.clipboard.writeText(what === "code" ? code.code : link);
@@ -120,14 +125,12 @@ export function JoinCodeCard({
               }
             />
           </label>
+          {/* Saves itself: on Enter, or when you leave the box. */}
           <form
             className="grid gap-1.5"
             onSubmit={(e) => {
               e.preventDefault();
-              apply(
-                () => updateJoinCodeAction(orgId, { allowedDomain: domain.trim() || null }),
-                "Saved.",
-              );
+              saveDomain();
             }}
           >
             <label htmlFor="join-domain" className="text-sm">
@@ -139,15 +142,9 @@ export function JoinCodeCard({
                 value={domain}
                 placeholder="yourschool.edu (optional)"
                 onChange={(e) => setDomain(e.target.value)}
+                onBlur={saveDomain}
                 className="max-w-xs"
               />
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={pending || domain.trim() === (code.allowedDomain ?? "")}
-              >
-                Save
-              </Button>
             </div>
           </form>
           <div>

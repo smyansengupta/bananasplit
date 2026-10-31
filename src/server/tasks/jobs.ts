@@ -226,7 +226,7 @@ export const weeklyUpdateReminderJob: JobHandler<{ userId: string; weekStart: st
       type: NotificationType.WEEKLY_UPDATE_REMINDER,
       title: "Post your weekly update",
       body: "Done, next and blocked are drafted for you; review them and post.",
-      linkUrl: `/app/${org.slug}/tasks?view=updates`,
+      linkUrl: `/app/${org.slug}/tasks?view=updates&week=${weekStart}`,
       dedupeKey: `weekly:${weekStart}`,
     });
   });

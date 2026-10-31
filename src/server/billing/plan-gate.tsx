@@ -29,6 +29,7 @@ export async function planGate(
   return (
     <PlanLocked
       feature={feature}
+      orgId={organization.id}
       orgSlug={organization.slug}
       kind={organization.kind}
       plan={organization.plan}

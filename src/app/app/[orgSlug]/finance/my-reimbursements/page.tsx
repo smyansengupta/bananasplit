@@ -16,8 +16,13 @@ import {
 
 export default async function MyReimbursementsPage({
   params,
+  searchParams,
 }: PageProps<"/app/[orgSlug]/finance/my-reimbursements">) {
   const { orgSlug } = await params;
+  // ?open=<id>: an email's link straight to one request (approved, paid, or
+  // rejected and waiting to be edited and resent).
+  const openParam = (await searchParams).open;
+  const openId = typeof openParam === "string" ? openParam : undefined;
   const planLock = await planGate(orgSlug, "finance");
   if (planLock) return planLock;
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
@@ -66,6 +71,7 @@ export default async function MyReimbursementsPage({
         isFinance={isFinance}
         currentUserId={user.id}
         emptyDescription="No requests yet"
+        initialOpenId={openId && transactions.some((t) => t.id === openId) ? openId : undefined}
       />
     </div>
   );

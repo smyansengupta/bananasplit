@@ -78,7 +78,7 @@ export default async function ImportPage({ params }: PageProps<"/app/[orgSlug]/o
           : ""}{" "}
         {canSeeIntegrations && (
           <Link
-            href={`/app/${orgSlug}/settings/integrations/claude`}
+            href={`/app/${orgSlug}/integrations/claude`}
             className="text-foreground underline underline-offset-4"
           >
             {keySaved ? "Change the model" : "Add a key"}

@@ -87,7 +87,7 @@ async function render(status: IntegrationDto["status"]) {
   const page = await GoogleCalendarIntegrationPage({
     params: Promise.resolve({ orgSlug: "cbc" }),
     searchParams: Promise.resolve({}),
-  } as unknown as PageProps<"/app/[orgSlug]/settings/integrations/google-calendar">);
+  } as unknown as PageProps<"/app/[orgSlug]/integrations/google-calendar">);
   return renderToStaticMarkup(page);
 }
 

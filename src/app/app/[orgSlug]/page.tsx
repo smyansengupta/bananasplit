@@ -1,3 +1,4 @@
+import { voteOnQuestionPoll } from "@/app/app/[orgSlug]/calendar/polls/question-actions";
 import { Users } from "@/components/icons";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -11,7 +12,6 @@ import { MyTasksCard } from "@/components/overview/my-tasks-card";
 import { OverviewBoard } from "@/components/overview/overview-board";
 import { OverviewStats } from "@/components/overview/overview-stats";
 import { PinnedGrid } from "@/components/overview/pinned-grid";
-import { Shortcuts } from "@/components/overview/shortcuts";
 import { UpNext } from "@/components/overview/up-next";
 import { UpcomingEventsCard } from "@/components/overview/upcoming-events-card";
 import { WeeklyPulseCard } from "@/components/overview/weekly-pulse-card";
@@ -33,7 +33,6 @@ import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { safeTimeZone } from "@/lib/calendar/dates";
-import { visibleSidebar } from "@/lib/nav/sidebar";
 import { timeWord } from "@/lib/overview/format";
 import { startedProgress } from "@/lib/overview/getting-started";
 import { overviewWidgetsFor, resolveOverview } from "@/lib/overview/widgets";
@@ -280,11 +279,6 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     />
   );
 
-  const sidebarIcons = visibleSidebar(settings?.sidebar).flatMap((g) => g.items);
-  const shortcuts = sidebarIcons
-    .filter((i) => i.id !== "overview")
-    .map((i) => ({ id: i.id, label: i.label, icon: i.icon, href: `${base}${i.path}` }));
-
   const eventEmpty = (title: string, cta: string) => (
     <EmptyState
       size="compact"
@@ -387,7 +381,6 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     notes: <NoteList orgSlug={orgSlug} notes={data.notes} />,
     files: <FileList orgSlug={orgSlug} files={data.files} />,
     people: <PeopleList orgSlug={orgSlug} people={data.people} total={data.memberCount} />,
-    shortcuts: <Shortcuts links={shortcuts} />,
   };
 
   // Shown until every step is done or checked off, then gone by itself.
@@ -498,6 +491,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
               onShowAll={showHiddenUpNextCards.bind(null, org.id)}
               onDone={setTaskStatus.bind(null, org.id)}
               onRsvp={rsvpToEvent.bind(null, org.id)}
+              onVote={voteOnQuestionPoll.bind(null, org.id)}
               hiddenCount={data.hiddenUpNext.length}
             />
             {started}

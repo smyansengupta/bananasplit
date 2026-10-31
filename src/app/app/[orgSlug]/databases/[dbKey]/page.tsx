@@ -193,6 +193,21 @@ export default async function DatabaseViewPage({
   const kind = database.kind;
   const restricted = VISIBILITY_NOTE[database.memberVisibility];
   const anonymous = kind === "BALLOTS" && !rowAccess;
+  // Possible duplicate sessions, counted on the page so it shows without
+  // opening a menu.
+  const duplicates =
+    admin && kind === "SESSIONS"
+      ? await withOrgTx(organization.id, ({ db }) =>
+          db.event.count({
+            where: {
+              organizationId: organization.id,
+              deletedAt: null,
+              mergedIntoId: null,
+              needsReview: true,
+            },
+          }),
+        )
+      : 0;
 
   // The one primary action: adding a row, for admins where rows can be added
   // here. Setup pages and the export are in the "…" menu.
@@ -274,6 +289,15 @@ export default async function DatabaseViewPage({
                   ]}
                 />
               )}
+              {duplicates > 0 && (
+                <Button variant="outline" asChild>
+                  <Link href={`${base}/duplicates`}>
+                    {duplicates === 1
+                      ? "1 possible duplicate"
+                      : `${duplicates} possible duplicates`}
+                  </Link>
+                </Button>
+              )}
               {addRow}
               <DatabaseMenu
                 name={database.name}
@@ -289,7 +313,6 @@ export default async function DatabaseViewPage({
                     ? `${base}/import`
                     : undefined
                 }
-                duplicatesHref={admin && kind === "SESSIONS" ? `${base}/duplicates` : undefined}
                 definitionsHref={admin && kind === "BALLOTS" ? `${base}/definitions` : undefined}
               />
             </>

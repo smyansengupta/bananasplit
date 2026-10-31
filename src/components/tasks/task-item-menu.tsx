@@ -4,13 +4,17 @@ import { ExternalLink, Link2, Trash2 } from "@/components/icons";
 
 import { deleteTask, restoreTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { ItemMenu } from "@/components/item-menu";
+import { moveToEntries } from "@/components/personal/move-to-organization";
 import { toast, undoable } from "@/components/ui/toaster";
+
+import { useRouter } from "next/navigation";
 
 import { useTasks } from "./tasks-context";
 
 /**
  * The "…" on a task row or board card: open its page, copy its link, delete
- * it. Clicking the card itself opens it, so that isn't repeated here.
+ * it, and in Personal, move it to an organization you run. Clicking the
+ * card itself opens it, so that isn't repeated here.
  * Deleting doesn't ask: it goes at once, subtasks with it, and Undo brings
  * the lot back. It needs the same right as editing; the action checks again.
  */
@@ -25,7 +29,8 @@ export function TaskItemMenu({
   onOpen: () => void;
   className?: string;
 }) {
-  const { org } = useTasks();
+  const { org, moveTargets } = useTasks();
+  const router = useRouter();
   void onOpen;
   const href = `/app/${org.slug}/tasks/${task.id}`;
 
@@ -51,6 +56,9 @@ export function TaskItemMenu({
               .then(() => toast({ title: "Copied", tone: "success", duration: 3_000 }))
               .catch(() => toast({ title: "Couldn't copy the link", tone: "error" })),
         },
+        ...(editable
+          ? moveToEntries(moveTargets, { kind: "task", id: task.id }, () => router.refresh())
+          : []),
         editable && {
           label: "Delete",
           icon: Trash2,

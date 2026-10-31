@@ -38,7 +38,6 @@ const { club: TEAM, society: ADVANCED } = TEAM_PRICES;
 /** The four team cards in one mode: standard prices, or a verified student organization's. */
 function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
   const start = startHref(signedIn);
-  const create = createHref(signedIn);
   const student = mode === "student";
   return [
     {
@@ -72,7 +71,7 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
         "Integrations: Google Calendar, Gmail, Zoom, Granola and Supabase",
         `${formatStorage(PLAN_LIMITS.CLUB.storageBytes)} of files`,
       ],
-      cta: { label: `Start with ${TEAM.name}`, href: create },
+      cta: { label: `Start with ${TEAM.name}`, href: createHref(signedIn, "club") },
     },
     {
       name: ADVANCED.name,
@@ -93,7 +92,7 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
         "Website sync, audit log and themes",
         `${formatStorage(PLAN_LIMITS.SOCIETY.storageBytes)} of files`,
       ],
-      cta: { label: "Start free trial", href: create },
+      cta: { label: "Start free trial", href: createHref(signedIn, "society") },
     },
     {
       name: "Custom",

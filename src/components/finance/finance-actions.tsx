@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSpreadsheet, ListChecks, Plus, Receipt } from "@/components/icons";
+import { FileSpreadsheet, Plus, Receipt } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -72,12 +72,6 @@ export function FinanceActions({
               <Link href={`${base}/import`}>
                 <FileSpreadsheet className="size-4" aria-hidden="true" />
                 Import
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`${base}/setup`}>
-                <ListChecks className="size-4" aria-hidden="true" />
-                Setup
               </Link>
             </DropdownMenuItem>
           </>

@@ -90,8 +90,8 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
       { text: "Fill the four fields below and paste the password." },
     ],
     consequences: [
-      "The portal signs in as cbc_suite_reader, a role that may call six export functions and nothing else. It cannot select from your tables, and it cannot read the room codes that gate check-in.",
-      "It is read-only in both directions: nothing in this portal is ever written back to your website.",
+      "Bananasplit signs in as cbc_suite_reader, a role that may call six export functions and nothing else. It cannot select from your tables, and it cannot read the room codes that gate check-in.",
+      "It is read-only in both directions: nothing in Bananasplit is ever written back to your website.",
       "Do not add suite_export to Settings, API, Exposed schemas in Supabase. That would put a roster reader behind your website's public key.",
       "The password is encrypted before it is stored and is never shown again, here or anywhere else.",
     ],
@@ -123,13 +123,13 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
       },
     ],
     consequences: [
-      "The portal writes only to the calendar you pick, and only events it created itself. It cannot read, edit or delete anything else on that account — Google enforces this, not us.",
+      "Bananasplit writes only to the calendar you pick, and only events it created itself. It cannot read, edit or delete anything else on that account — Google enforces this, not us.",
       "Public events go to the calendar you choose for public. Internal events go to the internal calendar, or nowhere if you leave that blank.",
       "Disconnecting revokes the access at Google. Events already mirrored stay on the calendar; they stop updating.",
       "Signing in with a personal account means the organization's calendar leaves when you do. Use the shared account.",
     ],
     ifSkipped:
-      "Sessions live only in this portal. The calendar page still works, and the public events feed still works; nothing appears on Google.",
+      "Sessions live only in Bananasplit. The calendar page still works, and the public events feed still works; nothing appears on Google.",
   },
   {
     id: "claude",
@@ -156,9 +156,9 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
     ],
     consequences: [
       "Reading one document is one Claude API call, billed to your organization's own Anthropic workspace. At Claude Opus 5 that is a few cents a document; Sonnet and Haiku cost less and are in the list below.",
-      "Nothing here runs on a schedule and nothing else in the portal calls Claude. You are billed when somebody presses Import on an org chart, and at no other time.",
+      "Nothing here runs on a schedule and nothing else in Bananasplit calls Claude. You are billed when somebody presses Import on an org chart, and at no other time.",
       "The document you upload is sent to Anthropic's API to be read.",
-      "Set a monthly spend limit on the workspace. A key with no limit is a key with no limit.",
+      "Set a monthly spend limit on the workspace.",
     ],
     ifSkipped:
       "The org chart still works — you build it by hand instead of uploading a document. Nothing else changes.",

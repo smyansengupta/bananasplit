@@ -1,3 +1,5 @@
+import { isPersonalSpace } from "@/lib/billing/space";
+import { clubsUserRuns } from "@/server/personal/move";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -58,7 +60,6 @@ import {
   parseScope,
   parseWorkspaceQuery,
   REMEMBER_COOKIE,
-  PHONE_HIDDEN_LAYOUTS,
   TASK_LIST_VIEW,
   type WorkspaceQuery,
 } from "./views";
@@ -114,15 +115,16 @@ export default async function TasksPage({
   const positions = await getChartForPage(org.id);
   const chart = buildViewerChart(positions, user.id);
 
-  // A phone has no Board or Table (PHONE_HIDDEN_LAYOUTS), so a remembered
-  // Board or a shared ?view=table link opens the List on one, without
-  // touching the remembered layout.
+  // A phone has every layout (the Board's columns and the Table scroll
+  // sideways), but opens on the List when neither the URL nor a remembered
+  // layout says otherwise.
   const phone = PHONE_UA.test((await headers()).get("user-agent") ?? "");
+  const chosen = typeof query.view === "string" || remembered.view != null;
   const ws: WorkspaceQuery = simple
     ? { ...parsed, view: TASK_LIST_VIEW, scope: parseScope(query.scope) ?? "all" }
     : !teamwork && isDestination(parsed.view)
       ? { ...parsed, view: phone ? TASK_LIST_VIEW : DEFAULT_TASK_LAYOUT }
-      : phone && (PHONE_HIDDEN_LAYOUTS as readonly string[]).includes(parsed.view)
+      : phone && !chosen
         ? { ...parsed, view: TASK_LIST_VIEW }
         : parsed;
 
@@ -204,8 +206,11 @@ export default async function TasksPage({
     weekly,
   });
 
+  // In Personal, a task's menu can move it to an organization you run.
+  const moveTargets = isPersonalSpace(org) ? await clubsUserRuns(user.id) : [];
   return (
     <TasksProvider
+      moveTargets={moveTargets}
       org={{
         id: org.id,
         slug: org.slug,

@@ -17,7 +17,7 @@ import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { loadIntegrations } from "@/server/integrations/service";
 
 /**
- * Integrations: every app a club can connect, in one grid, as the sidebar's
+ * Integrations: every app an organization can connect, in one grid, as the sidebar's
  * own page (it used to be a page deep in the Admin panel). What works today
  * shows its state and a Connect or Manage button; what's planned shows
  * "Coming soon", so each can be wired up later without moving anything.
@@ -53,7 +53,7 @@ export default async function IntegrationsPage({
   const { organization: org } = ctx;
   const canManage = can({ role: ctx.role }, "integrations.write");
   const base = `/app/${orgSlug}`;
-  const setup = (segment: string) => `${base}/settings/integrations/${segment}`;
+  const setup = (segment: string) => `${base}/integrations/${segment}`;
 
   const [dtos, meetings, mail] = await Promise.all([
     loadIntegrations(org.id),
@@ -119,9 +119,14 @@ export default async function IntegrationsPage({
           brand: M.email,
           name: "Email sender",
           body: "Invites and reminders from your organization's own address.",
-          // Email already goes out from the platform's sender with nothing set
-          // up, so it reads Connected; Manage sets your own address.
-          state: mail.mode === "none" ? stateOf("EMAIL_RESEND") : "connected",
+          // Organization email sends even without a sender of its own (the
+          // platform's address), so the tile says Connected unless it's off.
+          state:
+            stateOf("EMAIL_RESEND") === "attention"
+              ? "attention"
+              : mail.mode === "none"
+                ? "off"
+                : "connected",
           href: setup("email"),
         },
       ],
@@ -249,6 +254,13 @@ export default async function IntegrationsPage({
     <div className="space-y-7.5">
       <PageHeader
         title={sectionLabel(ctx.settings?.sidebar, "integrations")}
+        actions={
+          canManage ? (
+            <Button asChild variant="outline">
+              <Link href={`${base}/setup`}>Guided setup</Link>
+            </Button>
+          ) : null
+        }
         tabs={
           <PageTabs
             label="Show"

@@ -15,6 +15,7 @@ import { listDeletedNoteFiles, listNoteFiles } from "@/server/notes/files";
 import { folderPeeks, listFolders } from "@/server/notes/folders";
 import { countNoteShares } from "@/server/notes/sharing";
 import { noteVisibleWhere } from "@/server/notes/visibility";
+import { clubsUserRuns } from "@/server/personal/move";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 import { canManageStorage, readStorageUsed } from "@/server/storage/quota";
@@ -51,6 +52,8 @@ export default async function NotesPage({
   const kind = query.tab === "files" || query.tab === "notes" ? query.tab : "all";
   const isAdmin = can({ role }, "settings.view");
   const personal = isPersonalSpace(org);
+  // In Personal, each card's menu can move it to an organization you run.
+  const moveTargets = personal ? await clubsUserRuns(user.id) : [];
 
   const str = (v: unknown) => (typeof v === "string" && v !== "all" ? v : undefined);
   const visibility = str(query.visibility) as "PRIVATE" | "ORGANIZATION" | "SHARED" | undefined;
@@ -190,6 +193,7 @@ export default async function NotesPage({
         />
       )}
       <NotesLibrary
+        moveTargets={moveTargets}
         orgId={org.id}
         orgSlug={orgSlug}
         kind={kind}

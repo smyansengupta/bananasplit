@@ -27,7 +27,7 @@ import {
   saveSupabaseAction,
   sendTestEmailAction,
 } from "./actions";
-import { SettingsCard } from "../settings-card";
+import { SettingsCard } from "../settings/settings-card";
 import { FeedbackLine, SecretInput, feedbackOf, type Feedback } from "./integration-ui";
 
 function str(v: unknown): string {
@@ -115,7 +115,6 @@ export function AiModelForm({
           id="ai-key"
           label="API key"
           hasSecret={dto.hasSecret}
-          last4={dto.last4}
           value={apiKey}
           onChange={setApiKey}
           placeholder={vendor.keyHint}
@@ -183,7 +182,6 @@ export function ClaudeForm({
           id="claude-key"
           label="API key"
           hasSecret={dto.hasSecret}
-          last4={dto.last4}
           value={apiKey}
           onChange={setApiKey}
           placeholder="sk-ant-…"
@@ -215,8 +213,8 @@ export function ClaudeForm({
               ? `$${selected.inputPerMTok} in / $${selected.outputPerMTok} out per million
           tokens`
               : "list price"}
-            ), billed to your Anthropic account. Most documents never reach Claude at all: the
-            portal reads them itself, for nothing.
+            ), billed to your Anthropic account. Most documents never reach Claude at all:
+            Bananasplit reads them itself, for nothing.
           </p>
         </div>
         {selected?.serverFallbacks && (
@@ -319,7 +317,6 @@ export function EmailSenderForm({
             id="resend-key"
             label="Resend API key"
             hasSecret={dto.hasSecret}
-            last4={dto.last4}
             value={apiKey}
             onChange={setApiKey}
             placeholder="re_…"
@@ -452,7 +449,6 @@ export function SupabaseForm({
           id="sb-password"
           label="Role password"
           hasSecret={dto.hasSecret}
-          last4={dto.last4}
           value={password}
           onChange={setPassword}
           placeholder="The cbc_suite_reader password"
@@ -500,7 +496,6 @@ export function NetlifyForm({
           id="netlify-hook"
           label="Build hook URL"
           hasSecret={dto.hasSecret}
-          last4={dto.last4}
           value={hook}
           onChange={setHook}
           placeholder="https://api.netlify.com/build_hooks/…"
@@ -649,7 +644,7 @@ export function GoogleCalendarPanel({
       {canWrite && dto.hasSecret && dto.status !== "DISCONNECTED" && (
         <SettingsCard
           title="Disconnect"
-          description="Revokes the portal's access at Google. Events stop mirroring until you connect again."
+          description="Revokes Bananasplit's access at Google. Events stop mirroring until you connect again."
           status={disconnect.feedback && <FeedbackLine feedback={disconnect.feedback} />}
           footer={
             <Button

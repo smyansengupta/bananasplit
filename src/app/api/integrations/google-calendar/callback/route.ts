@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   });
 
   const target = outcome.orgSlug
-    ? new URL(`/app/${outcome.orgSlug}/settings/integrations/google-calendar`, request.url)
+    ? new URL(`/app/${outcome.orgSlug}/integrations/google-calendar`, request.url)
     : new URL("/app", request.url);
   target.searchParams.set("google", outcome.ok ? "connected" : outcome.code);
   const res = NextResponse.redirect(target, 303);

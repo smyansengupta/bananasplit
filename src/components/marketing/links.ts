@@ -18,10 +18,12 @@ export function startLabel(signedIn: boolean): string {
 
 /**
  * A plan card's button: making a new organization on that plan, signed in
- * or after signing up.
+ * or after signing up. `plan` (a paid team plan's checkout key) rides along
+ * through sign-up into setup, which keeps it as the plan after the trial.
  */
-export function createHref(signedIn: boolean): string {
-  return signedIn ? "/onboarding/organization" : startHref(false);
+export function createHref(signedIn: boolean, plan?: "club" | "society"): string {
+  const create = plan ? `/onboarding/organization?plan=${plan}` : "/onboarding/organization";
+  return signedIn ? create : `/sign-up?callbackUrl=${encodeURIComponent(create)}`;
 }
 
 /** The secondary, sales action ("Request a demo"): the /demo form, which emails DEMO_REQUEST_INBOX. */

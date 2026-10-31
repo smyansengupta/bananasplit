@@ -315,7 +315,7 @@ export function CalendarForm({
                 value={internalId}
                 onChange={(e) => setInternalId(e.target.value)}
               >
-                <option value="">Nowhere (keep them in the portal)</option>
+                <option value="">Nowhere (keep them in Bananasplit)</option>
                 {calendars.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.summary}

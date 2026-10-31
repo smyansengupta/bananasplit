@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 
-  const back = new URL(`/app/${slug}/settings/integrations/google-calendar`, request.url);
+  const back = new URL(`/app/${slug}/integrations/google-calendar`, request.url);
   if (!isGoogleConfigured()) {
     back.searchParams.set("google", "not_configured");
     return NextResponse.redirect(back, 303);

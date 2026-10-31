@@ -105,7 +105,15 @@ export interface PollStat extends OpenPoll {
   mine: boolean;
   /** A few of the people who answered (none on an anonymous poll). */
   faces: PersonFace[];
+  /**
+   * A one-choice question with a few options: its options, so Up next can
+   * take the vote right on the card. Absent otherwise.
+   */
+  choices?: { id: string; label: string }[];
 }
+
+/** Up next votes on the card only up to this many options. */
+const CARD_CHOICES = 4;
 
 /** Turnout for each open poll, and whether the viewer has answered. */
 export async function loadPollStats(
@@ -153,12 +161,27 @@ export async function loadPollStats(
       if (r.user) addFace(r.pollId, r.user);
     }
   }
+  // One-choice questions with a handful of options can be answered on the card.
+  const choices = new Map<string, { id: string; label: string }[]>();
+  if (questionIds.length > 0) {
+    const single = await db.poll.findMany({
+      where: { organizationId, id: { in: questionIds }, multiple: false },
+      select: {
+        id: true,
+        options: { select: { id: true, label: true }, orderBy: { sortOrder: "asc" } },
+      },
+    });
+    for (const p of single) {
+      if (p.options.length > 1 && p.options.length <= CARD_CHOICES) choices.set(p.id, p.options);
+    }
+  }
   return polls.map((p) => ({
     ...p,
     voters: voters.get(p.id) ?? 0,
     eligible: Math.max(memberCount, voters.get(p.id) ?? 0),
     mine: mine.has(p.id),
     faces: faces.get(p.id) ?? [],
+    ...(choices.has(p.id) ? { choices: choices.get(p.id) } : {}),
   }));
 }
 

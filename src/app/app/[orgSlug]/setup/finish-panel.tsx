@@ -150,7 +150,7 @@ export function FinishPanel({
         <footer className="flex flex-wrap items-center gap-3 pt-2">
           <FinishButton orgId={orgId} orgSlug={orgSlug} done={Boolean(progress.completedAt)} />
           <Button asChild variant="outline">
-            <Link href={`/app/${orgSlug}/setup/status`}>Connection status</Link>
+            <Link href={`/app/${orgSlug}/integrations`}>Integrations</Link>
           </Button>
           <p className="text-muted-foreground min-w-0 flex-1 basis-56 text-[13px]">
             {progress.completedAt

@@ -26,12 +26,15 @@ export function CodeBoxes({
   invalid = false,
   autoFocus = false,
   label = "Invite code",
+  compact = false,
 }: {
   value: string[];
   onChange: (next: string[]) => void;
   invalid?: boolean;
   autoFocus?: boolean;
   label?: string;
+  /** Smaller boxes, for a code typed inside a card (the start screen's Join). */
+  compact?: boolean;
 }) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
   const length = value.length;
@@ -60,7 +63,7 @@ export function CodeBoxes({
       role="group"
       aria-label={label}
       onPaste={onPaste}
-      className={cn("flex gap-2.5", length > 6 && "gap-2")}
+      className={cn("flex gap-2.5", length > 6 && "gap-2", compact && "gap-1")}
     >
       {value.map((char, i) => [
         // Eight characters read as two groups of four, like the code itself.
@@ -68,7 +71,10 @@ export function CodeBoxes({
           <span
             key="dash"
             aria-hidden="true"
-            className="text-muted-foreground self-center text-[26px]"
+            className={cn(
+              "text-muted-foreground self-center",
+              compact ? "text-[18px]" : "text-[26px]",
+            )}
           >
             -
           </span>
@@ -122,6 +128,7 @@ export function CodeBoxes({
           className={cn(
             "focus-banana rounded-field text-foreground h-[64px] max-w-[56px] min-w-0 flex-1 basis-0 border text-center font-mono text-[28px] font-medium uppercase caret-(--glow) transition-[border-color,box-shadow,background-color] outline-none",
             length > 6 && "max-w-[46px] text-[24px]",
+            compact && "h-11 text-[18px]",
             char ? "border-foreground/40 bg-card" : "border-input bg-muted",
             invalid && "border-destructive",
           )}

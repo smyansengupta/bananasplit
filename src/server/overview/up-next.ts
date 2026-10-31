@@ -28,6 +28,8 @@ export interface UpNextBlock extends UpNextCandidate {
   faces: PersonFace[];
   facesTotal: number;
   href: string;
+  /** A one-choice poll's options, answered right on the card. */
+  choices?: { id: string; label: string }[];
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -140,6 +142,7 @@ export function buildUpNext(input: {
       faces: poll.faces,
       facesTotal: poll.voters,
       href: pollHref(base, poll.kind, poll.id),
+      ...(poll.choices ? { choices: poll.choices } : {}),
     });
   }
 

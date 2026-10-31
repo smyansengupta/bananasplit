@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { IntegrationDto } from "@/server/integrations/catalog";
 
-import { SettingsCard, SettingsStatus } from "../settings-card";
+import { SettingsCard, SettingsStatus } from "../settings/settings-card";
 import { removeIntegrationAction, testIntegrationAction } from "./actions";
 import { STATUS_COPY, statusVariant } from "./status-copy";
 
@@ -85,7 +85,6 @@ export function SecretInput({
   id,
   label,
   hasSecret,
-  last4,
   value,
   onChange,
   placeholder,
@@ -93,17 +92,14 @@ export function SecretInput({
 }: {
   id: string;
   label: string;
-  /** A secret is stored. last4 may still be null (a short one shows none). */
+  /** A secret is stored. */
   hasSecret: boolean;
-  last4: string | null;
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   help?: string;
 }) {
-  const saved = hasSecret
-    ? `Saved${last4 ? ` (•••• ${last4})` : ""}. Paste a new one to replace it.`
-    : placeholder;
+  const saved = hasSecret ? "Saved. Paste a new one to replace it." : placeholder;
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>

@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Check,
   FileSpreadsheet,
-  ListChecks,
   PiggyBank,
   ReceiptText,
   Target,
@@ -25,7 +24,7 @@ import { metaLine } from "@/components/ui/meta-list";
 import { IconChip } from "@/components/ui/stat";
 import type { DashboardData, DashboardTransaction } from "@/app/app/[orgSlug]/finance/queries";
 import { formatCents, formatDollars } from "@/lib/finance/money";
-import { SETUP_STEPS, stepDone, type FinanceSetupState } from "@/lib/finance/setup";
+import type { FinanceSetupState } from "@/lib/finance/setup";
 import type { WidgetTypeId } from "@/lib/finance/widgets";
 import { cn } from "@/lib/utils";
 
@@ -280,12 +279,11 @@ export function WidgetBody({
   type,
   data,
   orgSlug,
-  setup,
 }: {
   type: WidgetTypeId;
   data: DashboardData;
   orgSlug: string;
-  /** Where finance setup stands (the setup widget). */
+  /** Kept for callers; setup has its own banner now, not a widget. */
   setup?: FinanceSetupState;
 }) {
   const base = `/app/${orgSlug}/finance`;
@@ -591,51 +589,7 @@ export function WidgetBody({
                 : "Nothing waiting"
             }
           />
-          <Shortcut
-            href={`${base}/setup`}
-            icon={ListChecks}
-            label="Setup"
-            detail="Budget year, balance, treasurers"
-          />
         </div>
       );
-    case "setup": {
-      if (!setup) return <ChartEmpty text="Open Setup to see what's left" icon={ListChecks} />;
-      return (
-        <ul className="space-y-0.5">
-          {SETUP_STEPS.map((step) => {
-            const ok = stepDone(setup, step.id);
-            return (
-              <li key={step.id}>
-                <Link href={`${base}/setup`} className={cn(rowClass, "py-2")}>
-                  <span
-                    className={cn(
-                      "grid size-[22px] shrink-0 place-items-center rounded-full",
-                      ok
-                        ? "bg-block-goal text-block-goal-foreground"
-                        : "ring-input ring-[1.5px] ring-inset",
-                    )}
-                  >
-                    {ok && <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />}
-                  </span>
-                  <span
-                    className={cn(
-                      "min-w-0 flex-1 text-sm break-words",
-                      ok && "text-muted-foreground",
-                    )}
-                  >
-                    {step.title}
-                    {ok && <span className="sr-only"> (done)</span>}
-                  </span>
-                  {!ok && !step.core && (
-                    <span className="text-muted-foreground text-xs">Optional</span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      );
-    }
   }
 }

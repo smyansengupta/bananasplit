@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { loadTaskDetail } from "@/app/app/[orgSlug]/tasks/actions";
+import type { MoveTarget } from "@/components/personal/move-to-organization";
 import type { TaskAccessSubject, TaskActor } from "@/lib/tasks/access";
 import type { TaskVisibilitySubject } from "@/lib/tasks/visibility";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,8 @@ interface TasksContextValue {
   parentById: Map<string, ParentOption>;
   /** What the viewer may make on the spot (the club's creation rules). */
   can: TasksCan;
+  /** In Personal: the organizations a task can move to (its menu's "Move to ..."). */
+  moveTargets: readonly MoveTarget[];
   /** An epic just made inline (a picker's "Create epic"): usable at once. */
   addParent: (parent: ParentOption) => void;
   /** A tag just made inline: usable at once, before the page refreshes. */
@@ -74,6 +77,8 @@ interface TasksContextValue {
 
 const TasksContext = createContext<TasksContextValue | null>(null);
 
+const NO_TARGETS: readonly MoveTarget[] = [];
+
 export function TasksProvider({
   org,
   viewer,
@@ -82,6 +87,7 @@ export function TasksProvider({
   files = [],
   parents,
   can,
+  moveTargets = NO_TARGETS,
   children,
 }: {
   org: TasksOrg;
@@ -93,6 +99,8 @@ export function TasksProvider({
   parents: ParentOption[];
   /** The organization's creation rules for this viewer (admins only when left out). */
   can?: TasksCan;
+  /** In Personal: the organizations the viewer runs, where a task can move. */
+  moveTargets?: readonly MoveTarget[];
   children: React.ReactNode;
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -175,6 +183,7 @@ export function TasksProvider({
       epics,
       parentById: new Map(allParents.map((p) => [p.id, p])),
       can: can ?? { createTags: true },
+      moveTargets,
       addParent,
       addLabel,
       announce,
@@ -192,6 +201,7 @@ export function TasksProvider({
       allParents,
       epics,
       can,
+      moveTargets,
       addParent,
       addLabel,
       announce,

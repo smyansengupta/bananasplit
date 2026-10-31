@@ -9,7 +9,6 @@ import {
   ChartColumn,
   ChartLine,
   ChartPie,
-  Check,
   CheckSquare,
   Clock,
   FolderOpen,
@@ -20,7 +19,6 @@ import {
   Hourglass,
   Link2,
   ListChecks,
-  Loader2,
   NotebookText,
   PiggyBank,
   Pin,
@@ -120,10 +118,11 @@ export type SaveBoard = (layout: BoardWidget[] | null) => Promise<{ ok: boolean;
  * line up (a widget that isn't full width stops growing at a set height and
  * scrolls inside), and nothing is packed out of order to fill a gap.
  *
- * One button changes it: Customize. In Customize, a bar across the top
- * holds Add widget, Reset, Cancel and Done; each widget gets a handle to
- * drag it (arrow keys move it too), its width and height, and a remove x.
- * Only the member's own board changes.
+ * Removing and adding need no mode: every widget has an x (on hover) that
+ * takes it off with Undo, and a + at the end of the board adds one. Customize
+ * is a switch for the rest: each widget gets a handle to drag it (arrow keys
+ * move it too) and its width and height. Every change saves itself, so there
+ * is no Done or Cancel. Only the member's own board changes.
  *
  * Not on a phone: there the board is read, not arranged, so Customize is a
  * computer thing, and `hiddenOnPhone` widgets (the Overview's Recently
@@ -184,7 +183,7 @@ export function WidgetBoard({
   const meta = new Map(types.map((t) => [t.type, t]));
   const groups = [...new Set(types.map((t) => t.group))];
 
-  function persist(next: BoardWidget[] | null, { close = false } = {}) {
+  function persist(next: BoardWidget[] | null) {
     setError(null);
     start(async () => {
       const result = await onSave(next);
@@ -193,16 +192,14 @@ export function WidgetBoard({
         return;
       }
       if (next === null) setLayout(initialLayout);
-      if (close) setEditing(false);
       router.refresh();
     });
   }
 
-  // Customizing saves as you go: every change is sent a moment after the
-  // last one, so there is no Save, no Cancel, and Done only closes the bar.
+  // The board saves as you go: every change (a remove, an add, a drag) is
+  // sent a moment after the last one, so there is no Save, Done or Cancel.
   const saved = useRef(JSON.stringify(initialLayout));
   useEffect(() => {
-    if (!editing) return;
     const now = JSON.stringify(layout);
     if (now === saved.current) return;
     const timer = setTimeout(() => {
@@ -212,7 +209,7 @@ export function WidgetBoard({
     return () => clearTimeout(timer);
     // persist is stable enough here: it only reads onSave and the router.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout, editing]);
+  }, [layout]);
 
   function remove(id: string) {
     const at = layout.findIndex((x) => x.id === id);
@@ -279,7 +276,6 @@ export function WidgetBoard({
     if (!m) return;
     setLayout([...layout, { id: newWidgetId(type, layout), type, w: m.w, h: m.h }]);
     setAdding(false);
-    setEditing(true);
   };
 
   const body = (type: string) => (bodies ? bodies[type] : renderBody?.(type)) ?? null;
@@ -289,58 +285,30 @@ export function WidgetBoard({
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">{intro}</div>
-          {!editing && (
+          <div className="flex items-center gap-2 max-md:hidden">
+            {editing && <span className="text-muted-foreground text-sm">Only you see this.</span>}
+            {editing && customized && (
+              <Button type="button" variant="ghost" disabled={pending} onClick={reset}>
+                <RotateCcw className="size-4" aria-hidden="true" />
+                Reset
+              </Button>
+            )}
             <Button
               type="button"
-              variant="outline"
-              className="max-md:hidden"
-              disabled={pending}
-              onClick={() => setEditing(true)}
+              variant={editing ? "secondary" : "outline"}
+              aria-pressed={editing}
+              onClick={() => setEditing((on) => !on)}
             >
               <SlidersHorizontal className="size-4" aria-hidden="true" />
               Customize
             </Button>
-          )}
+          </div>
         </div>
         {introDescription && (
           <p className="text-muted-foreground text-[15px]">{introDescription}</p>
         )}
       </div>
       {belowIntro && <div className="pt-2 pb-3">{belowIntro}</div>}
-
-      {editing && (
-        <div className="bg-muted/60 rounded-tile flex flex-wrap items-center gap-2 py-2 pr-2 pl-4">
-          <p className="text-muted-foreground mr-auto text-sm">Only you see this.</p>
-          <Button type="button" size="sm" variant="secondary" onClick={() => setAdding(true)}>
-            <Plus className="size-4" aria-hidden="true" />
-            Add widget
-          </Button>
-          {customized && (
-            <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={reset}>
-              <RotateCcw className="size-4" aria-hidden="true" />
-              Reset
-            </Button>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              const now = JSON.stringify(layout);
-              if (now !== saved.current) {
-                saved.current = now;
-                persist(layout, { close: true });
-              } else setEditing(false);
-            }}
-          >
-            {pending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Check className="size-4" aria-hidden="true" />
-            )}
-            Done
-          </Button>
-        </div>
-      )}
 
       {error && (
         <p
@@ -359,15 +327,7 @@ export function WidgetBoard({
             <LayoutGrid className="size-6" aria-hidden="true" />
           </span>
           Your board is empty.
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setEditing(true);
-              setAdding(true);
-            }}
-          >
+          <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
             <Plus className="size-4" aria-hidden="true" />
             Add a widget
           </Button>
@@ -400,10 +360,10 @@ export function WidgetBoard({
                 className={cn(
                   SPAN[w.w] ?? SPAN[1],
                   hiddenOnPhone.includes(w.type) && "max-md:hidden",
-                  "relative flex min-w-0 flex-col transition-[opacity,outline-color]",
+                  "group/widget relative flex min-w-0 flex-col transition-[opacity,outline-color]",
                   bare
                     ? "rounded-block"
-                    : "bg-card text-card-foreground ring-foreground/6 edge rounded-card overflow-hidden ring-1",
+                    : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
                   // Part-width widgets stop at a common height so rows line up.
                   !bare && !w.h && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
                   editing && "outline-border outline-[1.5px] outline-offset-[3px] outline-dashed",
@@ -427,6 +387,16 @@ export function WidgetBoard({
                   setOverId(null);
                 }}
               >
+                {!editing && (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${m.title}`}
+                    onClick={() => remove(w.id)}
+                    className="bg-card text-muted-foreground hover:text-destructive ring-foreground/10 focus-glow absolute -top-2.5 -right-2.5 z-10 grid size-7 place-items-center rounded-full opacity-0 shadow-sm ring-1 transition-opacity outline-none group-focus-within/widget:opacity-100 group-hover/widget:opacity-100 focus-visible:opacity-100 max-md:hidden"
+                  >
+                    <X className="size-3.5" aria-hidden="true" />
+                  </button>
+                )}
                 {/* While editing, a narrow widget's controls wrap below its title. A
                     bare widget has no header until then: its body is its own surface. */}
                 <header
@@ -473,7 +443,12 @@ export function WidgetBoard({
                     <div className="flex min-w-0 flex-1 items-center gap-1.5">{actions}</div>
                   )}
                   {editing && (
-                    <div className="ms-auto flex shrink-0 flex-wrap items-center justify-end gap-1">
+                    <div
+                      className={cn(
+                        "ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1",
+                        w.w === 1 && "lg:ms-0 lg:basis-full lg:justify-start",
+                      )}
+                    >
                       <Segmented
                         label={`${m.title} width`}
                         value={String(w.w)}
@@ -507,7 +482,9 @@ export function WidgetBoard({
                 <div
                   className={cn(
                     "min-h-0 flex-1",
-                    bare ? "flex flex-col" : "overflow-auto px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
+                    bare
+                      ? "flex flex-col"
+                      : "overflow-auto rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
                   )}
                 >
                   {body(w.type)}
@@ -515,6 +492,16 @@ export function WidgetBoard({
               </section>
             );
           })}
+          {layout.length < MAX_WIDGETS && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              aria-label="Add a widget"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 border-border focus-glow rounded-card grid min-h-24 place-items-center border-[1.5px] border-dashed transition-colors outline-none max-md:hidden"
+            >
+              <Plus className="size-5" aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
 
