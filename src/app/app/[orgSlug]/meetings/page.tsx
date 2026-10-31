@@ -1,4 +1,4 @@
-import { Ticket, Video } from "@/components/icons";
+import { Plus, Ticket, Video } from "@/components/icons";
 import { meetingTypeColor, parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import Link from "next/link";
 
@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { isPlatformAdmin } from "@/lib/auth/org-creation";
+import { spaceIncludes } from "@/lib/billing/space";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
@@ -445,7 +446,20 @@ export default async function MeetingsPage({
         title={sectionLabel(ctx.settings?.sidebar, "meetings")}
         // The live line once there is something to count; nothing until then.
         description={summary || undefined}
-        actions={newMeeting("create", true)}
+        // The plan's header: Find a time beside New meeting.
+        actions={
+          <>
+            {spaceIncludes(org, "polls") && (
+              <Button variant="outline" asChild>
+                <Link href={`/app/${orgSlug}/calendar/find-a-time/new`}>
+                  <Plus aria-hidden="true" />
+                  Find a time
+                </Link>
+              </Button>
+            )}
+            {newMeeting("create", true)}
+          </>
+        }
       />
 
       <MeetingsTabs

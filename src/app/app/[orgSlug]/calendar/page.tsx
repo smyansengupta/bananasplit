@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarPlus, CalendarSync } from "@/components/icons";
+import { CalendarPlus, CalendarSync } from "@/components/icons";
 import Link from "next/link";
 
 import { EventCalendar, type CalendarItem } from "@/components/calendar/event-calendar";
@@ -131,16 +131,7 @@ export default async function CalendarPage({
         title={sectionLabel(settings?.sidebar, "calendar")}
         actions={
           <>
-            {/* Planning a meeting starts here as often as from the sidebar. */}
             {/* On a phone New event (last here) moves to the top right; the rest is in the menu. */}
-            {spaceIncludes(org, "polls") && (
-              <Button variant="outline" className="max-md:hidden" asChild>
-                <Link href={`/app/${orgSlug}/calendar/find-a-time/new`}>
-                  <CalendarClock aria-hidden="true" />
-                  Find a time
-                </Link>
-              </Button>
-            )}
             {/* Everyone can put the club's calendar in their own (Profile, Calendar feed). */}
             <Button variant="outline" className="max-md:hidden" asChild>
               <Link href={`/app/${orgSlug}/profile#calendar`}>
