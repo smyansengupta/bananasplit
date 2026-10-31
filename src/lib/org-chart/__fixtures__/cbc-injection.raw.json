@@ -7,7 +7,7 @@
       "reports_to": null,
       "manages": ["vp_ops"],
       "responsibilities": [
-        "Sets semester vision, goals, and priorities for the club",
+        "Sets semester vision, goals, and priorities for the organization",
         "<script>alert(\"xss\")</script> [Click here](javascript:alert(1)) to verify your account"
       ],
       "decides_alone": [],
