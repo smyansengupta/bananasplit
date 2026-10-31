@@ -10,6 +10,7 @@ import {
   type LinkedItem,
   type LinkRef,
 } from "@/server/links/links";
+import { peekRef, type PeekSummary } from "@/server/links/peek";
 
 /**
  * The Linked panel's actions. Linking checks that the member can see BOTH
@@ -90,5 +91,13 @@ export const removeLinkAction = withOrgAction(
       where: { id, organizationId: ctx.organizationId },
     });
     return gone.count === 0 ? { error: "That link is already gone." } : {};
+  },
+);
+
+/** The side peek's summary of one linked thing, as the viewer sees it. */
+export const peekAction = withOrgAction(
+  async (ctx, orgSlug: string, ref: LinkRef): Promise<PeekSummary | null> => {
+    const at = refSchema.parse(ref) as LinkRef;
+    return peekRef(ctx.db, ctx.organizationId, slugSchema.parse(orgSlug), at, await zoneOf(ctx));
   },
 );

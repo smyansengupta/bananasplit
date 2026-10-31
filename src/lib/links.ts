@@ -84,3 +84,21 @@ export function refFromPath(pathname: string): LinkRef | null {
   }
   return null;
 }
+
+/**
+ * What the side peek shows for one linked thing: its title, what it is, a
+ * few facts as label and value, and a passage of its text, read as the
+ * viewer (row-level security), so a peek never shows more than the page
+ * would. Null when they can't see it.
+ */
+export interface PeekSummary {
+  kind: LinkKind;
+  id: string;
+  title: string;
+  /** "Task, due Fri": the same second line the Linked panel shows. */
+  detail: string;
+  href: string;
+  facts: { label: string; value: string }[];
+  /** Up to a few hundred characters of its own words. */
+  text: string | null;
+}
