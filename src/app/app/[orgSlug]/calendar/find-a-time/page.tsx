@@ -84,19 +84,19 @@ export default async function FindATimePage({
           <Button variant="create" asChild>
             <Link href={`${base}/calendar/find-a-time/new`}>
               <Plus aria-hidden className="size-4" />
-              Offer times
+              Find a time
             </Link>
           </Button>
         }
       />
 
-      <MeetingsTabs orgSlug={orgSlug} current="find" />
+      <MeetingsTabs orgSlug={orgSlug} current="find" counts={{ find: openPolls.length }} />
 
       {items.length === 0 ? (
         <EmptyState
           icon={CalendarClock}
           title="No meeting times to pick yet"
-          description="Offer days and hours, share the link, see the best time."
+          description="Pick days and hours, share the link, see the best time."
         />
       ) : (
         <div className="space-y-7.5">
@@ -119,7 +119,7 @@ export default async function FindATimePage({
         </div>
       )}
 
-      {/* Not on a phone: the empty state and Offer times say it there. */}
+      {/* Not on a phone: the empty state and Find a time say it there. */}
       {items.length > 0 && (
         <p className="text-muted-foreground text-[13px] max-md:hidden">
           Each poll deletes itself {FIND_A_TIME_KEEP_DAYS} days after its last date.
