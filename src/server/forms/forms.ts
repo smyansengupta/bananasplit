@@ -13,6 +13,7 @@ import {
   takesAnswer,
   type Question,
 } from "@/lib/forms/questions";
+import { designSchema, type FormDesign } from "@/lib/forms/design";
 import { slugify } from "@/lib/slug";
 import { addField, DatabaseInputError, type Actor } from "@/server/databases/custom";
 import type { TxClient } from "@/server/db/context";
@@ -53,6 +54,9 @@ export const FORM_SELECT = {
   notifyOwner: true,
   review: true,
   folderId: true,
+  publishedAt: true,
+  design: true,
+  receipt: true,
   createdById: true,
   deletedAt: true,
   createdAt: true,
@@ -61,13 +65,16 @@ export const FORM_SELECT = {
 
 export type FormRow = Prisma.FormGetPayload<{ select: typeof FORM_SELECT }>;
 
-/** Open while not closed by hand, before its closing time, under its cap. */
+/** Open while published, not closed by hand, before its closing time, under its cap. */
 export function isFormOpen(
-  form: Pick<FormRow, "closedAt" | "closesAt" | "responseCap" | "deletedAt">,
+  form: Pick<FormRow, "closedAt" | "closesAt" | "responseCap" | "deletedAt"> & {
+    publishedAt?: Date | null;
+  },
   responses: number,
   now = new Date(),
 ): boolean {
   if (form.deletedAt || form.closedAt) return false;
+  if (form.publishedAt === null) return false;
   if (form.closesAt && form.closesAt <= now) return false;
   if (form.responseCap !== null && responses >= form.responseCap) return false;
   return true;
@@ -80,6 +87,8 @@ export interface FormListItem {
   responses: number;
   toReview: number;
   databaseKey: string;
+  /** Members-only forms: how many members there are ("36 of 40"). */
+  members: number | null;
 }
 
 export async function listForms(db: TxClient, organizationId: string): Promise<FormListItem[]> {
@@ -102,11 +111,15 @@ export async function listForms(db: TxClient, organizationId: string): Promise<F
       _count: { _all: true },
     }),
   ]);
+  const memberCount = forms.some((f) => f.access === "MEMBERS")
+    ? await db.membership.count({ where: { organizationId } })
+    : null;
   return forms.map(({ database, ...form }) => ({
     form,
     responses: all.find((c) => c.formId === form.id)?._count._all ?? 0,
     toReview: form.review ? (fresh.find((c) => c.formId === form.id)?._count._all ?? 0) : 0,
     databaseKey: database.key,
+    members: form.access === "MEMBERS" ? memberCount : null,
   }));
 }
 
@@ -231,6 +244,9 @@ export async function createForm(
       review: template.review,
       folderId: folder.id,
       createdById: userId,
+      // A form starts as a draft (Publish makes it live); a quick poll is
+      // meant to be answered the moment it's made.
+      publishedAt: input.kind === "QUICK_POLL" ? new Date() : null,
       // A quick poll from Forms: anyone with the link, results after you answer.
       ...(input.kind === "QUICK_POLL" ? { notifyOwner: false } : {}),
     },
@@ -323,6 +339,7 @@ export interface FormSettings {
   closesAt?: Date | null;
   notifyOwner?: boolean;
   review?: boolean;
+  receipt?: boolean;
 }
 
 export async function saveSettings(actor: Actor, formId: string, patch: FormSettings) {
@@ -346,6 +363,7 @@ export async function saveSettings(actor: Actor, formId: string, patch: FormSett
   if (patch.closesAt !== undefined) data.closesAt = patch.closesAt;
   if (patch.notifyOwner !== undefined) data.notifyOwner = patch.notifyOwner;
   if (patch.review !== undefined) data.review = patch.review;
+  if (patch.receipt !== undefined) data.receipt = patch.receipt;
   const updated = await actor.db.form.updateMany({
     where: { id: formId, organizationId: actor.organizationId, deletedAt: null },
     data: data as Prisma.FormUpdateManyMutationInput,
@@ -363,6 +381,29 @@ export async function saveSettings(actor: Actor, formId: string, patch: FormSett
         data: { name: String(data.title).slice(0, 60) },
       });
   }
+}
+
+/** Publishes a draft (it starts taking answers), or takes it back to a draft. */
+export async function setPublished(actor: Actor, formId: string, published: boolean) {
+  requireManage(actor);
+  const updated = await actor.db.form.updateMany({
+    where: { id: formId, organizationId: actor.organizationId, deletedAt: null },
+    data: { publishedAt: published ? new Date() : null },
+  });
+  if (updated.count === 0) throw new FormInputError("That form is gone.");
+}
+
+/** Saves the answer page's look (Design tab). */
+export async function saveDesign(actor: Actor, formId: string, raw: unknown): Promise<FormDesign> {
+  requireManage(actor);
+  const parsed = designSchema.safeParse(raw);
+  if (!parsed.success) throw new FormInputError("Something in that design doesn't fit.");
+  const updated = await actor.db.form.updateMany({
+    where: { id: formId, organizationId: actor.organizationId, deletedAt: null },
+    data: { design: parsed.data as unknown as Prisma.InputJsonObject },
+  });
+  if (updated.count === 0) throw new FormInputError("That form is gone.");
+  return parsed.data;
 }
 
 /** Closes or reopens by hand. */

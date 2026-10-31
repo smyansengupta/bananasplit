@@ -54,7 +54,10 @@ export async function storeFormUpload(
   if (!form.member) throw new FormUploadError("Only members can answer this form.", 403);
   if (!form.row.folderId) throw new FormUploadError("This form can't take files.", 409);
   const question = readQuestions(form.row.questions).find((q) => q.id === questionId);
-  if (!question || (question.type !== "file" && question.type !== "image"))
+  if (
+    !question ||
+    (question.type !== "file" && question.type !== "image" && question.type !== "signature")
+  )
     throw new FormUploadError("That question doesn't take a file.");
 
   const contentType = sniffNoteFile(file.bytes, file.filename);
@@ -63,7 +66,10 @@ export async function storeFormUpload(
       "That kind of file isn't accepted. Try a PDF, a document or an image.",
       415,
     );
-  if (question.type === "image" && !contentType.startsWith("image/"))
+  if (
+    (question.type === "image" || question.type === "signature") &&
+    !contentType.startsWith("image/")
+  )
     throw new FormUploadError("Send a picture: JPEG, PNG or WebP.", 415);
 
   const stored = await putBlob("files", target.organizationId, [randomKeyId()], file.bytes, {

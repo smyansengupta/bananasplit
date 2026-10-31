@@ -32,6 +32,7 @@ export const QUESTION_TYPES = [
   "link",
   "file",
   "image",
+  "signature",
   "member",
   "section",
   "hidden",
@@ -58,6 +59,8 @@ export const QUESTION_META: Record<
   link: { label: "Link", icon: "Link", field: "URL", group: "contact" },
   file: { label: "File upload", icon: "Upload", field: "URL", group: "upload" },
   image: { label: "Image upload", icon: "Image", field: "URL", group: "upload" },
+  /** Drawn on the screen, saved to Files as a picture; the column links to it. */
+  signature: { label: "Signature", icon: "PenLine", field: "URL", group: "upload" },
   member: { label: "Member", icon: "User", field: "MEMBER", group: "contact" },
   section: { label: "Section break", icon: "SeparatorHorizontal", field: null, group: "layout" },
   hidden: { label: "Hidden field", icon: "EyeOff", field: "TEXT", group: "layout" },
@@ -275,7 +278,7 @@ export const FORM_TEMPLATES: readonly FormTemplate[] = [
   },
   {
     id: "application",
-    name: "Club application",
+    name: "Organization application",
     blurb: "Resume, short answers, review",
     title: "Application",
     review: true,
@@ -330,7 +333,7 @@ export const FORM_TEMPLATES: readonly FormTemplate[] = [
   {
     id: "signup",
     name: "Sign-up sheet",
-    blurb: "Name, contact and a slot",
+    blurb: "Slots with a cap per slot",
     title: "Sign-up sheet",
     review: false,
     questions: () => [
