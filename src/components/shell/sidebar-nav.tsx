@@ -37,6 +37,7 @@ import {
 } from "@/components/shell/nav-config";
 import { usePinDrop } from "@/components/pins/pin-dnd";
 import { usePins } from "@/components/pins/pins-context";
+import { PinButton, usePinTarget } from "@/components/shell/pin-button";
 import { PIN_ICONS } from "@/components/shell/pin-icons";
 import { fadeLabel, surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
 import { canonicalHref } from "@/lib/pins/pages";
@@ -77,8 +78,8 @@ export const ICON_STROKE = 1.75;
  * One row of the sidebar, as the workspace plan draws it ("Option A,
  * revised"): a compact 32px row with a 16px icon 8px in, so collapsing to
  * the rail is only a change of width (a 32px square around the icon). The
- * page you're on is the card colour with a thin outline and a bold label,
- * not a coloured pill.
+ * page you're on is the whole row filled with the accent; a hover is a light
+ * wash of the same accent. No outlines.
  */
 export function sidebarItemClass({
   active,
@@ -93,14 +94,25 @@ export function sidebarItemClass({
   return cn(
     "focus-glow relative flex h-8 shrink-0 items-center gap-2.5 overflow-hidden rounded-[7px] px-2 text-[13.5px] whitespace-nowrap outline-none",
     "[&>svg:first-child]:opacity-70",
-    "[transition:width_500ms_var(--ease-ink),background-color_200ms,color_200ms,box-shadow_200ms] motion-reduce:[transition:none]",
+    "[transition:width_500ms_var(--ease-ink),background-color_200ms,color_200ms] motion-reduce:[transition:none]",
     rail ? "w-8" : "w-full",
     active
-      ? chrome
-        ? "bg-chrome-foreground/12 text-chrome-foreground font-semibold shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--chrome-foreground)_18%,transparent)] [&>svg:first-child]:opacity-100"
-        : "bg-card text-foreground font-semibold shadow-[inset_0_0_0_1px_var(--border)] [&>svg:first-child]:opacity-100"
+      ? cn(
+          "font-semibold [&>svg:first-child]:opacity-100",
+          chrome
+            ? "bg-chrome-accent text-chrome-accent-foreground"
+            : "bg-brand-accent text-brand-accent-foreground",
+        )
       : cn("font-medium", tone.text, tone.hover),
   );
+}
+
+/** The count pill's colours: dark on a plain row, the accent's text colour on the lit one. */
+function countTone(active: boolean, chrome: boolean): string {
+  if (!active) return "bg-foreground text-background";
+  return chrome
+    ? "bg-chrome-accent-foreground text-chrome-accent"
+    : "bg-brand-accent-foreground text-brand-accent";
 }
 
 function NavItemLink({
@@ -141,8 +153,10 @@ function NavItemLink({
         <>
           <span
             className={cn(
-              // The plan's count: a small dark pill, so what waits on you stands out.
-              "bg-foreground text-background shrink-0 rounded-full px-1.5 font-mono text-[11px] leading-[18px] font-medium tabular-nums",
+              // A small dark pill, so what waits on you stands out; on the
+              // accent row it turns to the accent's own text colour.
+              "shrink-0 rounded-full px-1.5 font-mono text-[11px] leading-[18px] font-medium tabular-nums",
+              countTone(isActive, chrome),
               fadeLabel(rail),
             )}
           >
@@ -152,7 +166,10 @@ function NavItemLink({
           {rail && (
             <span
               aria-hidden="true"
-              className="bg-foreground absolute top-1.5 left-5 size-1.5 rounded-full"
+              className={cn(
+                "absolute top-1.5 left-5 size-1.5 rounded-full",
+                countTone(isActive, chrome),
+              )}
             />
           )}
           <span className="sr-only">, {count} waiting</span>
@@ -264,6 +281,8 @@ function PinnedList({
     pins.map((p) => p.id),
   );
   const onAPin = pins.some((p) => p.href === current);
+  // The page on screen can be pinned: its pin sits on the line above the pins.
+  const target = usePinTarget();
   return (
     <div
       {...zone}
@@ -272,11 +291,26 @@ function PinnedList({
         over && "bg-sidebar-accent/60 ring-sidebar-ring ring-1",
       )}
     >
-      {/* The plan draws pins under a thin line, with nothing when there are
-          none; pinning itself is the pin on each page and Ctrl K. A drop
+      {/* Pins sit under a thin line, with the pin for the page on screen at
+          its right end; with no pins and nothing to pin, no line. A drop
           zone stays, so a page can still be dragged here. */}
-      {(pins.length > 0 || over) && <GroupGap />}
-      {pins.length === 0 && !over && <div aria-hidden="true" className="h-3" />}
+      {pins.length > 0 || over || (target && !rail) ? (
+        <GroupGap>
+          {!rail && (
+            <PinButton
+              iconClassName="size-3.5"
+              className={cn(
+                "focus-glow -my-1 grid size-6 shrink-0 place-items-center rounded-md outline-none",
+                "transition-colors duration-150 motion-reduce:transition-none",
+                tone.quiet,
+                tone.hover,
+              )}
+            />
+          )}
+        </GroupGap>
+      ) : (
+        <div aria-hidden="true" className="h-3" />
+      )}
       <Fold open={!rail}>
         {pins.length === 0 ? (
           over ? (
@@ -323,7 +357,11 @@ function PinnedList({
                     }
                     className={cn(
                       "focus-glow absolute top-1/2 right-1 grid size-6 -translate-y-1/2 place-items-center rounded-md opacity-0 outline-none group-hover:opacity-100 focus-visible:opacity-100",
-                      tone.hover,
+                      active
+                        ? chrome
+                          ? "text-chrome-accent-foreground hover:bg-chrome-accent-foreground/15"
+                          : "text-brand-accent-foreground hover:bg-brand-accent-foreground/15"
+                        : tone.hover,
                     )}
                   >
                     <X className="size-3.5" aria-hidden="true" />

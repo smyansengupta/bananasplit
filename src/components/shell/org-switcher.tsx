@@ -125,9 +125,7 @@ export function OrgSwitcher({
             "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
             rail ? "rounded-full p-0" : "rounded-lg px-2",
             !rail &&
-              (chrome
-                ? "aria-expanded:bg-chrome-foreground/10"
-                : "aria-expanded:bg-sidebar-accent"),
+              (chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15"),
             !rail && tone.hover,
           )}
           aria-label={`${nameOf(active)} menu`}
