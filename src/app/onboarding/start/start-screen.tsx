@@ -6,6 +6,7 @@ import { SetupShell } from "@/components/onboarding/setup-shell";
 import { TRIAL_DAYS } from "@/lib/billing/space";
 import { PERSONAL_STEPS, setupStepHref } from "@/lib/onboarding/steps";
 
+import { JoinForm } from "../join/join-form";
 import { PendingInviteCard, type PendingInviteView } from "../pending-invite-card";
 
 /** Where the three choices go (the dev preview points them at its own screens). */
@@ -23,18 +24,22 @@ const HREFS: StartHrefs = {
 
 /**
  * "What brings you here?": email invites waiting for this address, then
- * three choices in one card style (a small icon, a title, one line).
+ * three choices in one card style (a small icon, a title, one line). With
+ * `joinHere` (a verified email), the Join card holds the code boxes itself:
+ * type the code, see the organization, Join, without leaving the page.
  */
 export function StartScreen({
   first,
   invites,
   exit,
   hrefs = HREFS,
+  joinHere = false,
 }: {
   first: string | undefined;
   invites: readonly PendingInviteView[];
   exit: ReactNode;
   hrefs?: StartHrefs;
+  joinHere?: boolean;
 }) {
   return (
     <SetupShell exit={exit}>
@@ -55,14 +60,27 @@ export function StartScreen({
         )}
 
         <ul className="m-0 grid w-full list-none gap-3 p-0 md:grid-cols-3">
-          <Choice
-            href={hrefs.join}
-            icon={Users}
-            title="Join an organization"
-            body="Enter its invite code. You'll see who's in first."
-          >
-            <JoinPicture />
-          </Choice>
+          {joinHere ? (
+            <li className="border-border bg-card flex min-w-0 flex-col gap-4 rounded-[20px] border p-5">
+              <ChoiceHead
+                icon={Users}
+                title="Join an organization"
+                body="Enter its invite code. You'll see who's in first."
+              />
+              <div className="mt-auto flex flex-col gap-3">
+                <JoinForm initialCode="" compact />
+              </div>
+            </li>
+          ) : (
+            <Choice
+              href={hrefs.join}
+              icon={Users}
+              title="Join an organization"
+              body="Enter its invite code. You'll see who's in first."
+            >
+              <JoinPicture />
+            </Choice>
+          )}
           <Choice
             href={hrefs.create}
             icon={Plus}
@@ -188,19 +206,33 @@ function Choice({
         data-plain
         className="border-border bg-card hover:border-foreground/25 flex h-full flex-col gap-4 rounded-[20px] border p-5 transition-[border-color,box-shadow] hover:shadow-[var(--elevation-2)]"
       >
-        <span className="flex items-start gap-3">
-          <span className="bg-muted grid size-9 flex-none place-items-center rounded-full">
-            <Icon className="size-4" aria-hidden="true" />
-          </span>
-          <span className="flex flex-col gap-1">
-            <span className="text-[15px] font-semibold">{title}</span>
-            <span className="text-foreground/75 text-[14px] leading-[1.5]">{body}</span>
-          </span>
-        </span>
+        <ChoiceHead icon={Icon} title={title} body={body} />
         <span aria-hidden="true" className="mt-auto">
           {children}
         </span>
       </Link>
     </li>
+  );
+}
+
+function ChoiceHead({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: IconComponent;
+  title: string;
+  body: string;
+}) {
+  return (
+    <span className="flex items-start gap-3">
+      <span className="bg-muted grid size-9 flex-none place-items-center rounded-full">
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <span className="flex flex-col gap-1">
+        <span className="text-[15px] font-semibold">{title}</span>
+        <span className="text-foreground/75 text-[14px] leading-[1.5]">{body}</span>
+      </span>
+    </span>
   );
 }

@@ -26,11 +26,19 @@ function initialBoxes(initialCode: string): string[] {
 }
 
 /**
- * Enter the club's code in eight boxes, XXXX-XXXX (design: App screens, 03). Once every
- * box is filled the club is looked up on the server (the code, the verified
- * email and the club's allowed domain) and shown before anyone joins.
+ * Enter the organization's code in eight boxes, XXXX-XXXX (design: App
+ * screens, 03). Once every box is filled the organization is looked up on the
+ * server (the code, the verified email and its allowed domain) and shown
+ * before anyone joins. `compact` is the start screen's Join card: smaller
+ * boxes, no autofocus, and no "Start one instead" row (that's the next card).
  */
-export function JoinForm({ initialCode }: { initialCode: string }) {
+export function JoinForm({
+  initialCode,
+  compact = false,
+}: {
+  initialCode: string;
+  compact?: boolean;
+}) {
   const [code, setCode] = useState(() => initialBoxes(initialCode));
   const [found, setFound] = useState<Found | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +87,13 @@ export function JoinForm({ initialCode }: { initialCode: string }) {
   return (
     <>
       <div ref={boxes}>
-        <CodeBoxes value={code} onChange={edit} invalid={Boolean(error)} autoFocus={!complete} />
+        <CodeBoxes
+          value={code}
+          onChange={edit}
+          invalid={Boolean(error)}
+          autoFocus={!compact && !complete}
+          compact={compact}
+        />
       </div>
 
       {org && ready && (
@@ -133,21 +147,23 @@ export function JoinForm({ initialCode }: { initialCode: string }) {
         </button>
       )}
 
-      <div className="text-muted-foreground flex justify-between gap-4 text-[14px]">
-        <Link href="/onboarding/organization" className="text-muted-foreground font-semibold">
-          Start one instead
-        </Link>
-        <button
-          type="button"
-          onClick={() => {
-            edit(emptyCode());
-            setTimeout(() => boxes.current?.querySelector("input")?.focus(), 0);
-          }}
-          className="text-muted-foreground cursor-pointer border-none bg-transparent p-0 font-semibold"
-        >
-          Clear
-        </button>
-      </div>
+      {!compact && (
+        <div className="text-muted-foreground flex justify-between gap-4 text-[14px]">
+          <Link href="/onboarding/organization" className="text-muted-foreground font-semibold">
+            Start one instead
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              edit(emptyCode());
+              setTimeout(() => boxes.current?.querySelector("input")?.focus(), 0);
+            }}
+            className="text-muted-foreground cursor-pointer border-none bg-transparent p-0 font-semibold"
+          >
+            Clear
+          </button>
+        </div>
+      )}
     </>
   );
 }
