@@ -804,14 +804,20 @@ export function FormSettingsPanel({
           checked={state.anonymous}
           onChange={(v) => set({ anonymous: v })}
         />
-        {state.kind === "QUICK_POLL" && (
-          <Toggle
-            id="f-hide"
-            label="Hide results until it closes"
-            checked={state.hideResultsUntilClosed}
-            onChange={(v) => set({ hideResultsUntilClosed: v })}
-          />
-        )}
+        {/* On every form, as the plan lists it. Only a quick poll shows its
+            results to the people who answer, so elsewhere the hint says so
+            rather than leaving a setting that seems to do nothing. */}
+        <Toggle
+          id="f-hide"
+          label="Hide results until it closes"
+          hint={
+            state.kind === "QUICK_POLL"
+              ? "People see the tally only once it closes."
+              : "Answers stay private either way; the tally shows to people only on a quick poll."
+          }
+          checked={state.hideResultsUntilClosed}
+          onChange={(v) => set({ hideResultsUntilClosed: v })}
+        />
         <Toggle
           id="f-review"
           label="Review responses"
