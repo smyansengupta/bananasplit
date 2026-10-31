@@ -15,6 +15,7 @@ import { MeetingsTabs } from "@/components/meetings/meetings-tabs";
 import { PastMeetingList } from "@/components/meetings/past-meeting-list";
 import { VideoConnections } from "@/components/meetings/video-connections";
 import { PageHeader } from "@/components/page-header";
+import { KIND_META } from "@/components/calendar/kinds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getUserIdentity } from "@/lib/auth/email-verification";
@@ -156,6 +157,7 @@ export default async function MeetingsPage({
           conferenceSyncState: true,
           conferenceSyncError: true,
           attendanceCount: true,
+          recordingUrl: true,
           // Not conferenceHostUrl: it starts the meeting as host, and nothing
           // on this list needs it. The meeting's page hands it to editors.
         },
@@ -270,10 +272,14 @@ export default async function MeetingsPage({
         : null;
   const shown = (e: MeetingRow) =>
     activeType === null ? true : activeType === NO_TYPE ? !typeName(e) : typeName(e) === activeType;
+  // Its type; a meeting with none shows its kind (Meeting, Event…) in the
+  // kind's colour, so every card and row says what it is.
   const typeOf = (e: MeetingRow) => {
     const name = typeName(e);
     const k = name ? kinds.get(name) : undefined;
-    return k?.color ? { name: k.name, color: k.color } : null;
+    if (k?.color) return { name: k.name, color: k.color };
+    const kind = KIND_META[e.kind];
+    return { name: name ?? kind.label, color: `var(${kind.token})` };
   };
 
   const upcoming = events.filter((e) => e.endsAt > now && shown(e));
@@ -508,10 +514,7 @@ export default async function MeetingsPage({
           {/* What already happened falls right under what's coming up, as a
               list: a record now, not something to act on. */}
           {past.length > 0 && (
-            <section aria-labelledby="past-heading" className="space-y-3">
-              <h2 id="past-heading" className="heading flex items-center gap-2 text-[17px]">
-                Past <Badge variant="secondary">{past.length}</Badge>
-              </h2>
+            <section aria-labelledby="past-heading">
               <PastMeetingList
                 meetings={past}
                 timeZone={timeZone}
@@ -522,6 +525,7 @@ export default async function MeetingsPage({
                   signedUp:
                     countOf(e.id, "GOING") ||
                     attendees.filter((a) => a.eventId === e.id && a.rsvp === "YES").length,
+                  invited: attendees.filter((a) => a.eventId === e.id).length,
                   notes: notes.filter((n) => n.eventId === e.id),
                   host: e.hostUserId
                     ? (members.find((m) => m.id === e.hostUserId)?.name ?? null)

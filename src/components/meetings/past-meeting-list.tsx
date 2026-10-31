@@ -31,6 +31,8 @@ export interface PastMeetingFacts {
   checkedIn: number;
   /** Sign-ups (GOING) or invitees who said yes, when nobody checked in. */
   signedUp: number;
+  /** Everyone invited (EventAttendee), the last fallback for "of N". */
+  invited?: number;
   /** The meeting's notes, newest first. */
   notes: { id: string; title?: string | null }[];
   /** Who hosted it, by name. */
@@ -63,6 +65,7 @@ export function PastMeetingList({
           .filter(Boolean)
           .join(" ")
           .toLowerCase(),
+        type: type?.name ?? null,
         node: (
           <PastRow
             key={e.id}
@@ -77,7 +80,16 @@ export function PastMeetingList({
       };
     }),
   }));
-  return <PastMeetingBrowser months={months} header={<ColumnHeads />} />;
+  return (
+    <PastMeetingBrowser
+      months={months}
+      total={meetings.length}
+      types={[...new Set(months.flatMap((m) => m.rows.map((r) => r.type)))].filter(
+        (t): t is string => Boolean(t),
+      )}
+      header={<ColumnHeads />}
+    />
+  );
 }
 
 /** The columns' names, above the rows on a wide screen. */
@@ -102,7 +114,7 @@ function ColumnHeads() {
 
 /** Date, Meeting, Type, Where, Came, After: one grid, rows and heads alike. */
 const COLUMNS =
-  "md:grid md:grid-cols-[3rem_minmax(0,1fr)_8.5rem_10rem_8.5rem_7.5rem] md:items-center md:gap-4";
+  "md:grid md:grid-cols-[3.5rem_minmax(0,1fr)_8.5rem_10rem_6.5rem_12rem] md:items-center md:gap-4";
 
 function PastRow({
   event: e,
@@ -119,18 +131,24 @@ function PastRow({
   type: MeetingType | null;
   facts: PastMeetingFacts;
 }) {
-  // Who came: check-ins against sign-ups ("34 of 40 came", with a small
-  // bar) when both are known, else whichever there is.
-  const ofSigned = facts.checkedIn > 0 && facts.signedUp > 0;
+  // Who came: check-ins out of the sign-ups, else the invitees who said
+  // yes, else everyone invited ("34 of 40", with a small bar). Nobody
+  // checked in: how many signed up.
+  const of = facts.signedUp || facts.invited || 0;
   const came =
     facts.checkedIn > 0
-      ? ofSigned
-        ? `${facts.checkedIn} of ${facts.signedUp} came`
-        : `${facts.checkedIn} came`
-      : facts.signedUp > 0
-        ? `${facts.signedUp} signed up`
-        : null;
-  const share = ofSigned ? Math.min(1, facts.checkedIn / facts.signedUp) : null;
+      ? of > 0
+        ? { n: facts.checkedIn, of }
+        : { n: facts.checkedIn, of: null }
+      : null;
+  const share = came?.of ? Math.min(1, came.n / came.of) : null;
+  const cameText = came
+    ? came.of
+      ? `${came.n} of ${came.of} came`
+      : `${came.n} came`
+    : facts.signedUp > 0
+      ? `${facts.signedUp} signed up`
+      : null;
   const typeName = type?.name ?? e.meetingType?.trim() ?? null;
   const notes = facts.notes;
   // After: the meeting's notes. A note called a recap is the Recap; the
@@ -163,12 +181,10 @@ function PastRow({
       <span className="min-w-0 break-words">{place}</span>
     </span>
   ) : null;
+  const afterClass =
+    "text-muted-foreground hover:text-foreground hover:bg-muted relative z-10 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-semibold transition-colors";
   const afterLink = (href: string, label: string, aria: string) => (
-    <Link
-      href={href}
-      className="text-muted-foreground hover:text-foreground hover:bg-muted relative z-10 inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-semibold transition-colors"
-      aria-label={aria}
-    >
+    <Link href={href} className={afterClass} aria-label={aria}>
       <NotebookText className="size-3.5" aria-hidden="true" />
       {label}
     </Link>
@@ -190,17 +206,18 @@ function PastRow({
           {e.title}
         </Link>
         <span className="text-muted-foreground block text-[13px]">
-          {timeLine(e.startsAt, e.endsAt, timeZone, e.allDay)}
-          {facts.host ? `, hosted by ${facts.host}` : ""}
+          {facts.host
+            ? `Hosted by ${facts.host}`
+            : timeLine(e.startsAt, e.endsAt, timeZone, e.allDay)}
         </span>
         {/* On a phone the other columns fold under the title. */}
         <span className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] md:hidden">
           {typeName && <TypePill name={typeName} />}
           {where}
-          {came && (
+          {cameText && (
             <span className="inline-flex items-center gap-1.5 tabular-nums">
               <Users className="size-3.5" aria-hidden="true" />
-              {came}
+              {cameText}
             </span>
           )}
         </span>
@@ -208,9 +225,16 @@ function PastRow({
       <span className="max-md:hidden">{typeName && <TypePill name={typeName} />}</span>
       <span className="text-muted-foreground min-w-0 text-[13px] max-md:hidden">{where}</span>
       <span className="text-muted-foreground text-[13px] tabular-nums max-md:hidden">
-        {came && (
+        {cameText && (
           <span className="flex flex-col gap-1">
-            {came}
+            {came?.of ? (
+              <span>
+                <span className="text-foreground font-semibold">{came.n}</span> of {came.of}
+                <span className="sr-only"> came</span>
+              </span>
+            ) : (
+              cameText
+            )}
             {share !== null && (
               <span
                 aria-hidden="true"
@@ -233,12 +257,25 @@ function PastRow({
             `Notes: ${e.title}`,
           )}
         {recap && afterLink(notesHref(recap.id), "Recap", `Recap: ${e.title}`)}
+        {e.recordingUrl && (
+          <a
+            href={e.recordingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={afterClass}
+            aria-label={`Recording: ${e.title}`}
+          >
+            <Video className="size-3.5" aria-hidden="true" />
+            Recording
+          </a>
+        )}
       </span>
     </li>
   );
 }
 
-const DAY = (timeZone: string) => new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone });
+const DAY = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone });
 const WEEKDAY = (timeZone: string) =>
   new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone });
 
@@ -248,9 +285,11 @@ function DayStamp({ startsAt, timeZone }: { startsAt: Date; timeZone: string }) 
     <span
       aria-hidden="true"
       style={{ background: "color-mix(in oklab, var(--kind) 13%, var(--card))" }}
-      className="rounded-tile flex w-11 shrink-0 flex-col items-center py-1.5 leading-none"
+      className="rounded-tile flex w-14 shrink-0 flex-col items-center py-1.5 leading-none"
     >
-      <span className="numeral text-[17px]">{DAY(timeZone).format(startsAt)}</span>
+      <span className="text-[13px] font-semibold whitespace-nowrap tabular-nums">
+        {DAY(timeZone).format(startsAt)}
+      </span>
       <span className="text-muted-foreground mt-0.5 text-[11px] font-medium">
         {WEEKDAY(timeZone).format(startsAt)}
       </span>

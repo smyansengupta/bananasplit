@@ -5,6 +5,7 @@ import { LinkedSection } from "@/components/links/linked-section";
 import { CreateMeetingNotes } from "@/components/meetings/create-meeting-notes";
 import { MeetingTasks, type MeetingTask } from "@/components/meetings/meeting-tasks";
 import { MeetingJoinCard } from "@/components/meetings/meeting-join-card";
+import { MeetingRecording } from "@/components/meetings/meeting-recording";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { CONFERENCE_LABELS, conferenceStatus } from "@/lib/meetings/conference-status";
@@ -154,6 +155,17 @@ export default async function MeetingPage({
       }
       tasks={
         <MeetingTasks orgId={org.id} orgSlug={orgSlug} eventId={event.id} initial={meetingTasks} />
+      }
+      recording={
+        // Once it has started there may be a recording to paste or watch.
+        event.startsAt <= new Date() ? (
+          <MeetingRecording
+            orgId={org.id}
+            eventId={event.id}
+            initial={event.recordingUrl}
+            canEdit={canEdit}
+          />
+        ) : null
       }
       askedRsvp={askedRsvp}
       section="meetings"

@@ -41,6 +41,7 @@ vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({ getEventById: mocks.get
 vi.mock("@/lib/app-url", () => ({ appUrl: (path: string) => `https://app.test${path}` }));
 vi.mock("@/components/calendar/event-detail-view", () => ({ EventDetailView: () => null }));
 vi.mock("@/components/meetings/meeting-join-card", () => ({ MeetingJoinCard: () => null }));
+vi.mock("@/components/meetings/meeting-recording", () => ({ MeetingRecording: () => null }));
 
 const { default: MeetingPage } = await import("./page");
 

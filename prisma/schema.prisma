@@ -1110,6 +1110,9 @@ model Event {
   capacityFull       Boolean            @default(false)
   featured           Boolean            @default(false)
   publicNote         String?
+  /// Where the recording is (a pasted link, http(s) only), for Past's
+  /// "Recording". Hosts paste it on the meeting page once it's up.
+  recordingUrl       String?
   // Public RSVP page (docs/features/rsvp.md): anyone with the link signs up
   // at /e/{rsvpSlug}, member or not. Owner/admin settings, like the rest of
   // the event.

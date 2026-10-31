@@ -104,14 +104,17 @@ export function EventDetailView({
   meetingTypes,
   linked = null,
   tasks = null,
+  recording = null,
   askedRsvp = null,
 }: {
   /** The answer an invite email's button asked for (?rsvp=): ready to confirm. */
   askedRsvp?: "YES" | "NO" | "MAYBE" | null;
-  /** The Linked panel (components/links), last in the side column. */
+  /** The Linked panel (components/links), first in the side column. */
   linked?: React.ReactNode;
   /** Tasks from this meeting (components/meetings/meeting-tasks), under the notes. */
   tasks?: React.ReactNode;
+  /** Its recording (components/meetings/meeting-recording), under the agenda. */
+  recording?: React.ReactNode;
   orgId: string;
   orgSlug: string;
   timeZone: string;
@@ -318,6 +321,7 @@ export function EventDetailView({
                 initial={event.description}
                 canEdit={canEdit}
               />
+              {recording}
 
               {(locationDetails || hostLabel || event.rsvpUrl || event.publicNote) && (
                 <dl className="grid gap-1">
