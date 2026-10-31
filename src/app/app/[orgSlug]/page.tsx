@@ -8,7 +8,7 @@ import { PersonalHome } from "@/components/personal/personal-home";
 import { CardControls, OpenLink } from "@/components/overview/bits";
 import { GettingStarted } from "@/components/overview/getting-started";
 import { RsvpGoalBlock } from "@/components/overview/goal-blocks";
-import { MyTasksCard } from "@/components/overview/my-tasks-card";
+import { MyTasksCard, type DueDay } from "@/components/overview/my-tasks-card";
 import { OverviewBoard } from "@/components/overview/overview-board";
 import { OverviewStats } from "@/components/overview/overview-stats";
 import { PinnedGrid } from "@/components/overview/pinned-grid";
@@ -21,9 +21,8 @@ import {
   PeopleList,
   PollList,
   RecentList,
-  WeekStrip,
-  type WeekDay,
 } from "@/components/overview/widget-bodies";
+import { WeekTimeline, type WeekDay } from "@/components/overview/week-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
@@ -39,6 +38,7 @@ import { overviewWidgetsFor, resolveOverview } from "@/lib/overview/widgets";
 import { DEFAULT_PULSE_DAY, DEFAULT_PULSE_HOUR } from "@/lib/pulse/settings";
 import {
   addDaysToKey,
+  dueDateKey,
   effectiveTimezone,
   fromDateKey,
   localDateKey,
@@ -79,6 +79,18 @@ const UPCOMING_DAYS = 14;
 const EVENTS_LIMIT = 6;
 const RECENT_LIMIT = 8;
 
+/** Minutes after midnight for `at`, in `timeZone`. */
+function minutesOfDay(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+    timeZone,
+  }).formatToParts(at);
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return part("hour") * 60 + part("minute");
+}
+
 function greeting(now: Date, timeZone: string): string {
   const hour = Number(
     new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone }).format(now),
@@ -94,8 +106,9 @@ function greeting(now: Date, timeZone: string): string {
  * arranged to answer "what needs me?". Always on top, whatever the board:
  * the greeting, the stat strip (due this week, overdue, coming up in two
  * weeks, as on the Personal home), Up next, and for owners and admins
- * "Get your club started" until every step is done or checked off. Then
- * the member's widgets. Nothing about the club's money is on it.
+ * "Get your organization started" until every step is done or checked
+ * off. Then the member's widgets. Nothing about the organization's money
+ * is on it.
  */
 export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
@@ -178,6 +191,14 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         today: await db.task.count({ where: { AND: [mine, { dueDate: today }] } }),
         overdue: await db.task.count({ where: { AND: [mine, { dueDate: { lt: today } }] } }),
       },
+      // My open tasks due each of the next seven days, for My tasks' strip.
+      dueByDay: await db.task.groupBy({
+        by: ["dueDate"],
+        where: {
+          AND: [mine, { dueDate: { gte: today, lte: fromDateKey(addDaysToKey(dayKey, 6)) } }],
+        },
+        _count: { _all: true },
+      }),
       events,
       meetings,
       weekEvents,
@@ -254,7 +275,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const goal = data.goal;
   const seats = goal && (!goal.hideCount || isAdmin) ? await rsvpSeatsTaken(org.id, goal.id) : null;
 
-  // "This week": the next seven days in the viewer's timezone.
+  // "This week": the next seven days in the viewer's timezone, each event
+  // placed at its time of day (an event running past midnight stops there).
   const weekdayFmt = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
   const week: WeekDay[] = Array.from({ length: 7 }, (_, i) => {
     const key = addDaysToKey(todayKey, i);
@@ -266,13 +288,35 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       isToday: i === 0,
       events: data.weekEvents
         .filter((e) => localDateKey(e.startsAt, e.allDay ? orgZone : timeZone) === key)
-        .map((e) => ({
-          id: e.id,
-          title: e.title,
-          time: e.allDay ? "All day" : timeWord(e.startsAt, timeZone),
-        })),
+        .map((e) => {
+          const start = e.allDay ? 0 : minutesOfDay(e.startsAt, timeZone);
+          const sameDay = localDateKey(e.endsAt, timeZone) === key;
+          return {
+            id: e.id,
+            title: e.title,
+            kind: e.kind,
+            allDay: e.allDay,
+            time: e.allDay ? "All day" : timeWord(e.startsAt, timeZone),
+            start,
+            end: e.allDay ? 24 * 60 : sameDay ? minutesOfDay(e.endsAt, timeZone) : 24 * 60,
+          };
+        }),
     };
   });
+
+  // My tasks' strip: what's late, then today and the six days after it.
+  const dueCounts = new Map(
+    data.dueByDay.flatMap((g) => (g.dueDate ? [[dueDateKey(g.dueDate), g._count._all]] : [])),
+  );
+  const dueStrip: DueDay[] = [
+    { key: "late", label: "Late", count: data.stats.overdue, tone: "late" },
+    ...week.map((d, i) => ({
+      key: d.key,
+      label: i === 0 ? "Today" : d.weekday,
+      count: dueCounts.get(d.key) ?? 0,
+      tone: (i === 0 ? "today" : "day") as DueDay["tone"],
+    })),
+  ];
 
   const upcomingUntil = new Date(now.getTime() + UPCOMING_DAYS * 24 * 60 * 60 * 1000);
   const stats = (
@@ -331,6 +375,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         tasks={data.myTasks.tasks}
         extras={data.taskExtras}
         todayKey={todayKey}
+        strip={dueStrip}
       />
     ),
     recent: <RecentList items={data.recent} now={now} />,
@@ -375,7 +420,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         createHref={canAddEvents ? `${base}/meetings` : null}
       />
     ),
-    week: <WeekStrip orgSlug={orgSlug} days={week} />,
+    week: <WeekTimeline orgSlug={orgSlug} days={week} nowMinutes={minutesOfDay(now, timeZone)} />,
     polls: <PollList orgSlug={orgSlug} forms={data.openForms} now={now} timeZone={timeZone} />,
     "weekly-pulse": (
       <WeeklyPulseCard

@@ -496,10 +496,12 @@ export function WidgetBoard({
             <button
               type="button"
               onClick={() => setAdding(true)}
-              aria-label="Add a widget"
-              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 border-border focus-glow rounded-card grid min-h-24 place-items-center border-[1.5px] border-dashed transition-colors outline-none max-md:hidden"
+              className="group/add text-muted-foreground hover:text-foreground hover:bg-muted/40 border-border focus-glow rounded-card flex min-h-24 items-center justify-center gap-2.5 border-[1.5px] border-dashed text-sm font-semibold transition-colors outline-none max-md:hidden"
             >
-              <Plus className="size-5" aria-hidden="true" />
+              <span className="bg-muted group-hover/add:bg-foreground group-hover/add:text-background grid size-8 place-items-center rounded-full transition-colors">
+                <Plus className="size-4" aria-hidden="true" />
+              </span>
+              Add a widget
             </button>
           )}
         </div>
