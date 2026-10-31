@@ -51,12 +51,6 @@ export const TASK_LAYOUTS = [
 
 export type TaskLayout = (typeof TASK_LAYOUTS)[number]["value"];
 
-/**
- * The layouts a phone leaves out: the board's columns and the table's
- * columns don't fit one. A phone asking for one gets the List.
- */
-export const PHONE_HIDDEN_LAYOUTS: readonly TaskLayout[] = ["board", "table"];
-
 /** Not a layout: the weekly update is a piece of work you go and do. */
 export const TASK_DESTINATIONS = ["updates"] as const;
 export type TaskDestination = (typeof TASK_DESTINATIONS)[number];

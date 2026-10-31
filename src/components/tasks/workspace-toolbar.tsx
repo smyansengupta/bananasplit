@@ -21,7 +21,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
-import { PHONE_HIDDEN_LAYOUTS, type TaskLayout } from "@/app/app/[orgSlug]/tasks/views";
+import type { TaskLayout } from "@/app/app/[orgSlug]/tasks/views";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserAvatar } from "@/components/user-avatar";
 import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
@@ -159,7 +159,18 @@ export function WorkspaceToolbar() {
           {members.length > 1 && <PersonFilter />}
           <EpicFilter />
           {labels.length > 0 && <TagFilter />}
-          <StatusFilter />
+          {/*
+            Status as buttons, one click each, once the bar has the room;
+            the chip beside them keeps the rest (needs a look, who can see
+            it). A tighter bar folds status back into the chip.
+          */}
+          <StatusButtons className="hidden @[76rem]/toolbar:flex" />
+          <div className="@[76rem]/toolbar:hidden">
+            <StatusFilter />
+          </div>
+          <div className="hidden @[76rem]/toolbar:block">
+            <StatusFilter withStatus={false} />
+          </div>
 
           <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
             {/* The board's lanes: one per epic, or none. */}
@@ -267,14 +278,13 @@ export function WorkspaceToolbar() {
 
 /**
  * The toolbar below md, the phone's one list toolbar (PhoneToolbar, as on
- * Files and People): whose work as icons you flip between (Mine, My team,
- * Everyone; their names are on them for screen readers and show from sm
- * up), the layout picker, Filters (a FilterSheet: person, epic, tag,
- * status, visibility, each under its name, with a count on the button),
- * and a search icon that opens the search box over the row.
- *
- * The layouts are the ones a phone has (not the Board or Table: the page
- * and the effect below see to it).
+ * Files and People): whose work, named (Mine, My team, Everyone), Filters
+ * (a FilterSheet: person, epic, tag, status, visibility, each under its
+ * name, with a count on the button), and a search icon that opens the
+ * search box over the row. The layouts get a row of their own under it, as
+ * icons (their names on them for screen readers), so nothing overlaps at
+ * 390px. Every layout is here: the Board's columns and the Table scroll
+ * sideways.
  *
  * The sheet's contents mount only while it is open, so its person filter
  * doesn't add a second `p` shortcut behind the desktop one.
@@ -288,25 +298,14 @@ function MobileToolbar({
 }) {
   const { members, labels } = useTasks();
   const ws = useWorkspace();
-  const router = useRouter();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const pinnedPerson = ws.query.ownerId ?? ws.query.assigneeId;
   const count = ws.filterCount + (ws.query.epicId ? 1 : 0);
 
-  // A phone the page didn't recognise (a narrow desktop window, say) still
-  // leaves the Board and Table. replace, and no cookie: the desktop keeps
-  // its layout.
-  const { view } = ws.query;
-  const { hrefWith } = ws;
-  useEffect(() => {
-    if (!(PHONE_HIDDEN_LAYOUTS as readonly string[]).includes(view)) return;
-    if (!window.matchMedia("(max-width: 767px)").matches) return;
-    router.replace(hrefWith({ view: "list" }), { scroll: false });
-  }, [view, hrefWith, router]);
   // The List first: it is a phone's main layout.
-  const layouts = ws.layouts
-    .filter((l) => !PHONE_HIDDEN_LAYOUTS.includes(l.value))
-    .sort((a, b) => Number(b.value === "list") - Number(a.value === "list"));
+  const layouts = [...ws.layouts].sort(
+    (a, b) => Number(b.value === "list") - Number(a.value === "list"),
+  );
 
   return (
     <>
@@ -321,6 +320,8 @@ function MobileToolbar({
               options={layouts.map((l) => ({
                 value: l.value,
                 label: l.label,
+                icon: LAYOUT_ICONS[l.value],
+                compact: true,
                 title: l.label,
               }))}
               className="w-full min-w-0 [&>button]:flex-1 [&>button]:justify-center"
@@ -339,6 +340,8 @@ function MobileToolbar({
               compact: true,
               title: scope.label,
             }))}
+            // Named on a phone too: three icons alone don't say whose work.
+            labelsFrom=""
             className="[&>button]:px-2.5"
           />
         }
@@ -737,61 +740,102 @@ function FilterPill({
   );
 }
 
+const STATUS_CHOICES = [
+  { value: "open", label: "Open" },
+  ...Object.values(TaskStatus).map((s) => ({ value: s, label: STATUS_LABELS[s] })),
+];
+
+/** Status right in the bar: a button each; the pressed one again clears it. */
+function StatusButtons({ className }: { className?: string }) {
+  const ws = useWorkspace();
+  const status = ws.query.status ?? "";
+  return (
+    <div role="group" aria-label="Status" className={cn("items-center gap-1.5", className)}>
+      {STATUS_CHOICES.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={status === o.value}
+          onClick={() =>
+            ws.setFilters({
+              status: (status === o.value ? undefined : o.value) as TaskStatus | "open" | undefined,
+            })
+          }
+          className={chipClass(status === o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Status, who can see it, and the tasks that need a look (overdue, flagged,
- * no owner): one chip, a panel of buttons, each choice one click.
+ * no owner): one chip, a panel of buttons, each choice one click. Without
+ * `withStatus` (the bar shows status as buttons) it holds the other two.
  */
-function StatusFilter() {
+function StatusFilter({ withStatus = true }: { withStatus?: boolean }) {
   const ws = useWorkspace();
   const [open, setOpen] = useState(false);
   const q = ws.query;
-  const active = Boolean(q.status || q.visibility || q.flagged || q.unowned || q.overdue);
-  const label = q.status
-    ? q.status === "open"
-      ? "Open"
-      : STATUS_LABELS[q.status]
-    : q.overdue
-      ? "Overdue"
-      : q.flagged
-        ? "Flagged"
-        : q.unowned
-          ? "No owner"
-          : q.visibility === TaskVisibility.PRIVATE
-            ? "Private"
-            : "Status";
+  const active = Boolean(
+    (withStatus && q.status) || q.visibility || q.flagged || q.unowned || q.overdue,
+  );
+  const label =
+    withStatus && q.status
+      ? q.status === "open"
+        ? "Open"
+        : STATUS_LABELS[q.status]
+      : q.overdue
+        ? "Overdue"
+        : q.flagged
+          ? "Flagged"
+          : q.unowned
+            ? "No owner"
+            : q.visibility === TaskVisibility.PRIVATE
+              ? "Private"
+              : withStatus
+                ? "Status"
+                : "More";
   const row = "w-full [&>button]:h-7 [&>button]:flex-auto [&>button]:justify-center";
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger aria-label="Filter by status" className={chipClass(active)}>
+      <PopoverTrigger
+        aria-label={withStatus ? "Filter by status" : "More filters"}
+        className={chipClass(active)}
+      >
         <ListFilter className="size-3.5" aria-hidden="true" />
         <span>{label}</span>
         <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent align="start" className="grid w-[22rem] gap-3 p-3">
-        <div className="grid gap-1.5">
-          <span className="text-muted-foreground text-[13px] font-medium">Status</span>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { value: "", label: "Any" },
-              { value: "open", label: "Open" },
-              ...Object.values(TaskStatus).map((s) => ({ value: s, label: STATUS_LABELS[s] })),
-            ].map((o) => (
-              <button
-                key={o.value || "any"}
-                type="button"
-                aria-pressed={(q.status ?? "") === o.value}
-                onClick={() =>
-                  ws.setFilters({
-                    status: (o.value || undefined) as TaskStatus | "open" | undefined,
-                  })
-                }
-                className={cn(chipClass((q.status ?? "") === o.value), "h-8 px-3 text-[13px]")}
-              >
-                {o.label}
-              </button>
-            ))}
+        {withStatus && (
+          <div className="grid gap-1.5">
+            <span className="text-muted-foreground text-[13px] font-medium">Status</span>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { value: "", label: "Any" },
+                { value: "open", label: "Open" },
+                ...Object.values(TaskStatus).map((s) => ({ value: s, label: STATUS_LABELS[s] })),
+              ].map((o) => (
+                <button
+                  key={o.value || "any"}
+                  type="button"
+                  aria-pressed={(q.status ?? "") === o.value}
+                  onClick={() =>
+                    ws.setFilters({
+                      status: (o.value || undefined) as TaskStatus | "open" | undefined,
+                    })
+                  }
+                  className={cn(chipClass((q.status ?? "") === o.value), "h-8 px-3 text-[13px]")}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <div className="grid gap-1.5">
           <span className="text-muted-foreground text-[13px] font-medium">Needs a look</span>
           <div className="flex flex-wrap gap-1.5">
