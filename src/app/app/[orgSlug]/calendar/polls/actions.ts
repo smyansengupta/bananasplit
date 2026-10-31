@@ -4,12 +4,13 @@ import { z } from "zod";
 
 import { ConferenceProvider } from "@/generated/prisma/enums";
 
-import { EventVisibility, PollAvailability } from "@/generated/prisma/client";
+import { EventVisibility, NotificationType, PollAvailability } from "@/generated/prisma/client";
 import { can, requirePermission } from "@/lib/auth/permissions";
 import { isValidTimeZone } from "@/lib/calendar/dates";
 import { pollSlots } from "@/lib/calendar/poll-slots";
 import { withOrgAction } from "@/server/db/context";
 import * as events from "@/server/events/service";
+import { notifyUsers } from "@/server/notifications";
 
 import { actionError } from "../action-result";
 
@@ -39,6 +40,8 @@ const createPollSchema = z.object({
     .min(15)
     .max(24 * 60),
   closesAt: z.string().nullable().optional(),
+  /** Members to ask: each gets a notification with the poll's link. */
+  askUserIds: z.array(z.string().min(1).max(64)).max(200).optional(),
 });
 
 interface ActionResult {
@@ -76,6 +79,31 @@ const createPollTx = withOrgAction(async (ctx, input: unknown): Promise<ActionRe
   await ctx.db.pollSlot.createMany({
     data: slots.map((s) => ({ ...s, organizationId: ctx.organizationId, pollId: poll.id })),
   });
+  // Ask: tell the chosen members (current members only, never yourself).
+  const asked = (data.askUserIds ?? []).filter((id) => id !== ctx.userId);
+  if (asked.length > 0) {
+    const [org, members] = await Promise.all([
+      ctx.db.organization.findUnique({ where: { id: ctx.organizationId }, select: { slug: true } }),
+      ctx.db.membership.findMany({
+        where: { organizationId: ctx.organizationId, userId: { in: asked } },
+        select: { userId: true },
+      }),
+    ]);
+    if (org && members.length > 0) {
+      await notifyUsers(
+        ctx.db,
+        ctx.organizationId,
+        members.map((m) => m.userId),
+        {
+          type: NotificationType.EVENT_INVITE,
+          title: `When are you free? ${data.title}`,
+          body: "Mark the times that work.",
+          linkUrl: `/app/${org.slug}/calendar/find-a-time/${poll.id}`,
+          actorId: ctx.userId,
+        },
+      );
+    }
+  }
   return { pollId: poll.id };
 });
 

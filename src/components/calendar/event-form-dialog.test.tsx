@@ -28,6 +28,7 @@ const ZOOM_CONNECTED = [
   { provider: "MICROSOFT_TEAMS", connected: false },
 ];
 
+vi.mock("@/app/app/[orgSlug]/calendar/polls/actions", () => ({ createPoll: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: mocks.refresh, push: mocks.push }),
   useParams: () => ({ orgSlug: "acme" }),
