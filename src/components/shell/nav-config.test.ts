@@ -255,6 +255,7 @@ describe("the create menu", () => {
       ["note", undefined],
       ["poll", "/app/me/forms/new?poll=1"],
       ["form", "/app/me/forms/new"],
+      ["expense", "/app/me/finance/my-reimbursements?new=1"],
       ["find-a-time", "/app/me/calendar/find-a-time/new"],
     ]);
     // Members who can't create events don't get New event.
@@ -279,7 +280,7 @@ describe("the create menu", () => {
       createActions(sections(club("SOCIETY"), toConfig(groups)), { canCreateEvents: true }).map(
         (a) => a.id,
       ),
-    ).toEqual(["task", "event", "meeting", "find-a-time"]);
+    ).toEqual(["task", "event", "meeting", "expense", "find-a-time"]);
   });
 
   describe("New meeting", () => {

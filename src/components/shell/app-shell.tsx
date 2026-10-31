@@ -20,6 +20,7 @@ import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
 import { Toaster } from "@/components/ui/toaster";
 import { ContextActionsHost } from "@/components/context-actions";
+import { PendingLinkWatcher } from "@/components/links/pending-link";
 import type { Role } from "@/generated/prisma/enums";
 import { serializeSidebarCookie, type SidebarMode } from "@/lib/sidebar-mode";
 import { cn } from "@/lib/utils";
@@ -228,6 +229,7 @@ export function AppShell({
         </div>
 
         <VisitTracker orgId={orgId} />
+        <PendingLinkWatcher orgId={orgId} orgSlug={orgSlug} />
         <KeyboardShortcuts
           orgSlug={orgSlug}
           links={shortcutLinks}

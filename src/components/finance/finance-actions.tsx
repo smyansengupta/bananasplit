@@ -40,10 +40,15 @@ export function FinanceActions({
   categories: { id: string; name: string; budgetPeriodId: string }[];
 }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState<Create | null>(null);
   const base = `/app/${orgSlug}/finance`;
   const primary: Create =
     !isFinance || pathname === `${base}/my-reimbursements` ? "request" : "transaction";
+  // New › New expense (and Ctrl K) land here with ?new=1: the form is open.
+  const [open, setOpen] = useState<Create | null>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1"
+      ? primary
+      : null,
+  );
   const other: Create = primary === "request" ? "transaction" : "request";
   const PrimaryIcon = CREATE[primary].icon;
   const OtherIcon = CREATE[other].icon;
