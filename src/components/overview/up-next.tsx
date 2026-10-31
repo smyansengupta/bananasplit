@@ -54,6 +54,7 @@ export function UpNext({
   onDone,
   /** Going / Can't go on an invitation card, bound to the space like onHide. */
   onRsvp,
+  onVote,
   /** How many cards this member has hidden, so they can be put back. */
   hiddenCount = 0,
 }: {
@@ -64,6 +65,8 @@ export function UpNext({
   onShowAll?: () => Promise<unknown>;
   onDone?: (taskId: string, status: TaskStatus) => Promise<unknown>;
   onRsvp?: (eventId: string, rsvp: RSVPStatus) => Promise<unknown>;
+  /** Votes on a one-choice poll from its card ([] takes the vote back). */
+  onVote?: (pollId: string, optionIds: string[]) => Promise<unknown>;
   hiddenCount?: number;
 }) {
   const router = useRouter();
@@ -143,6 +146,30 @@ export function UpNext({
       });
     });
 
+  const vote = (item: UpNextBlock, optionId: string) =>
+    start(async () => {
+      if (!onVote) return;
+      setBusy(item.id);
+      const failed = errorOf(await onVote(item.id, [optionId]));
+      setBusy(null);
+      if (failed) {
+        toast({ title: failed, tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({
+        title: "Voted",
+        action: {
+          label: "Undo",
+          run: async () => {
+            const undone = errorOf(await onVote(item.id, []));
+            if (undone) return undone;
+            router.refresh();
+          },
+        },
+      });
+    });
+
   /** The card's own job, right on it. */
   const actionsOf = (item: UpNextBlock) => {
     const working = pending && busy === item.id;
@@ -175,6 +202,23 @@ export function UpNext({
           >
             Can&apos;t go
           </button>
+        </div>
+      );
+    }
+    if (item.kind === "poll" && onVote && item.choices?.length) {
+      return (
+        <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+          {item.choices.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              disabled={working}
+              onClick={() => vote(item, c.id)}
+              className={ACT}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       );
     }

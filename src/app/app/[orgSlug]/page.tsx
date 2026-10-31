@@ -1,3 +1,4 @@
+import { voteOnQuestionPoll } from "@/app/app/[orgSlug]/calendar/polls/question-actions";
 import { Users } from "@/components/icons";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -498,6 +499,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
               onShowAll={showHiddenUpNextCards.bind(null, org.id)}
               onDone={setTaskStatus.bind(null, org.id)}
               onRsvp={rsvpToEvent.bind(null, org.id)}
+              onVote={voteOnQuestionPoll.bind(null, org.id)}
               hiddenCount={data.hiddenUpNext.length}
             />
             {started}
