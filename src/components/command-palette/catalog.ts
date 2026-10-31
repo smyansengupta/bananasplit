@@ -295,7 +295,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Mail",
     keywords: ["resend", "domain", "mail", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/claude",
@@ -303,7 +303,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "KeyRound",
     keywords: ["ai", "anthropic", "api key", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/ai-model",
@@ -311,7 +311,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Settings2",
     keywords: ["claude", "model", "ai", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/google-calendar",
@@ -319,7 +319,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "CalendarSync",
     keywords: ["gcal", "sync", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/website",
@@ -327,7 +327,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Globe",
     keywords: ["build hook", "public events", "site", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/data-source",
@@ -335,7 +335,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "DatabaseZap",
     keywords: ["supabase", "sync", "attendance", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
 ];
 

@@ -33,7 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { buildCatalog, type PaletteSection } from "./catalog";
-import { paletteGroups, type PaletteItem } from "./palette-groups";
+import { CREATE_KEYS, paletteGroups, type PaletteItem } from "./palette-groups";
 import { useModKey } from "./use-mod-key";
 import { useWorkspaceSearch, type Searcher } from "./use-workspace-search";
 
@@ -267,6 +267,16 @@ export function CommandPalette({
       event.preventDefault();
       changeScope("all");
       return;
+    }
+    // Alt P / Alt T: make the quick poll or the task from what's typed.
+    if (event.altKey && !event.ctrlKey && !event.metaKey) {
+      const wanted = Object.entries(CREATE_KEYS).find(([, k]) => k === event.key.toLowerCase());
+      const item = wanted && items.find((i) => i.key === wanted[0]);
+      if (item) {
+        event.preventDefault();
+        run(item);
+        return;
+      }
     }
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();

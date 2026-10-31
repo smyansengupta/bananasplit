@@ -125,7 +125,7 @@ describe("paletteGroups", () => {
     expect(groups[2].items[0].title).toBe("Home");
   });
 
-  it("puts the group with the best match first and ends a group with its full-list link", () => {
+  it("lists every match in one Jump to group, best first, each tagged with what it is", () => {
     const groups = paletteGroups({
       q: parseQuery("budget"),
       scope: "all",
@@ -139,13 +139,12 @@ describe("paletteGroups", () => {
         },
       ]),
     });
-    expect(groups[0].id).toBe("notes");
-    expect(groups[0].items.at(-1)).toMatchObject({
-      more: true,
-      title: "Search all notes for “budget”",
-    });
+    expect(groups[0].heading).toBe("Jump to");
+    expect(groups[0].items[0]).toMatchObject({ title: "Budget", meta: "Note" });
+    // No per-group "Search all" links in the merged list.
+    expect(groups[0].items.some((i) => i.more)).toBe(false);
     // A member doesn't get the treasurer's Budget page; the Finance section mentions budgets.
-    const pages = groups.find((g) => g.id === "pages")!.items.map((i) => i.title);
+    const pages = groups[0].items.filter((i) => i.meta === "Page").map((i) => i.title);
     expect(pages).toContain("Finance");
     expect(pages).not.toContain("Budget");
   });
@@ -198,9 +197,10 @@ describe("the Create group", () => {
     const group = createGroup(catalog, "fall social")!;
     expect(group.heading).toBe("Create");
     const byKey = Object.fromEntries(group.items.map((i) => [i.key, i]));
-    expect(byKey["create:task"]!.title).toBe("New task: fall social");
+    expect(group.items[0]!.key).toBe("create:poll");
+    expect(byKey["create:task"]!.title).toBe('New task "fall social"');
     expect(byKey["create:task"]!.command).toEqual({ type: "create-task", text: "fall social" });
-    expect(byKey["create:poll"]!.title).toBe("Quick poll: fall social");
+    expect(byKey["create:poll"]!.title).toBe('New quick poll "fall social"');
     expect(byKey["create:poll"]!.command).toEqual({
       type: "href",
       href: "/app/cbc/forms/new?poll=1&question=fall%20social",

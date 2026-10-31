@@ -26,7 +26,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/toaster";
@@ -99,9 +98,6 @@ export function CreateMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children({ pending, icon })}</DropdownMenuTrigger>
       <DropdownMenuContent side={side} align={align} sideOffset={10} className="w-56">
-        <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-          Create
-        </DropdownMenuLabel>
         {actions.map((action) => {
           const Icon = ICONS[action.icon] ?? Plus;
           const content = (

@@ -17,7 +17,6 @@ import {
   NotebookText,
   Pin,
   Plug,
-  Plus,
   Ticket,
   Users,
   Video,
@@ -273,26 +272,11 @@ function PinnedList({
         over && "bg-sidebar-accent/60 ring-sidebar-ring ring-1",
       )}
     >
-      <GroupGap>
-        {pinsCtx && (
-          <button
-            type="button"
-            onClick={() => pinsCtx.openPicker()}
-            aria-label="Pin something"
-            title="Pin something"
-            tabIndex={rail ? -1 : undefined}
-            aria-hidden={rail || undefined}
-            className={cn(
-              "focus-glow grid size-[22px] place-items-center rounded-full outline-none",
-              "transition-opacity duration-200 motion-reduce:transition-none",
-              tone.hover,
-              rail && "pointer-events-none opacity-0",
-            )}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-          </button>
-        )}
-      </GroupGap>
+      {/* The plan draws pins under a thin line, with nothing when there are
+          none; pinning itself is the pin on each page and Ctrl K. A drop
+          zone stays, so a page can still be dragged here. */}
+      {(pins.length > 0 || over) && <GroupGap />}
+      {pins.length === 0 && !over && <div aria-hidden="true" className="h-3" />}
       <Fold open={!rail}>
         {pins.length === 0 ? (
           over ? (

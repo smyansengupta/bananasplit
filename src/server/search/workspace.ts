@@ -89,7 +89,7 @@ interface Ctx {
 
 function join(...parts: (string | null | undefined | false)[]): string | null {
   const kept = parts.filter((p): p is string => Boolean(p && p.trim()));
-  return kept.length ? kept.join(" · ") : null;
+  return kept.length ? kept.join(", ") : null;
 }
 
 function hit(kind: SearchKind, id: string, fields: Omit<SearchHit, "key" | "kind">): SearchHit {
@@ -745,7 +745,7 @@ async function searchRoles(ctx: Ctx): Promise<SearchGroup> {
   const hits = rows
     .map((p) => {
       const holder = p.user?.name ?? p.personName ?? null;
-      const duties = [...p.responsibilities, ...p.decidesAlone].join(" · ");
+      const duties = [...p.responsibilities, ...p.decidesAlone].join(", ");
       const score = ctx.browsing
         ? 1
         : scoreFields(

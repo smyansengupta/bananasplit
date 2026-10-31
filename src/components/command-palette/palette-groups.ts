@@ -30,6 +30,8 @@ export interface PaletteItem {
   highlight: boolean;
   /** A "Search all … for" link at the end of a group. */
   more?: boolean;
+  /** What it is, as a word ("Form", "Meeting"): the tag on the right in Jump to. */
+  kind?: string;
 }
 
 export interface PaletteGroup {
@@ -46,24 +48,56 @@ const HOME_ACTIONS = [
   "action:pin",
 ];
 
-/** What the typed text makes, for the Create group (catalog keys "create:"). */
+/** The tag on the right of a Jump to row: what the thing is, in a word. */
+export const KIND_WORDS: Record<string, string> = {
+  page: "Page",
+  action: "Action",
+  note: "Note",
+  folder: "Folder",
+  file: "File",
+  task: "Task",
+  epic: "Epic",
+  label: "Tag",
+  event: "Meeting",
+  poll: "Poll",
+  form: "Form",
+  budget: "Budget",
+  person: "Person",
+  position: "Position",
+  database: "Database",
+  transaction: "Finance",
+  sponsor: "Sponsor",
+};
+
+/** The keys that make a poll or a task from the typed text without leaving the box. */
+export const CREATE_KEYS = { "create:poll": "p", "create:task": "t" } as const;
+
+/**
+ * What the typed text makes, for the Create group (catalog keys "create:"),
+ * as the workspace plan words it: New quick poll "…" (Alt P) first, then
+ * New task "…" (Alt T), then a meeting, form, note or expense.
+ */
 export function createGroup(catalog: readonly CatalogEntry[], text: string): PaletteGroup | null {
   const typed = text.trim();
+  const order = (key: string) => (key === "create:poll" ? 0 : key === "create:task" ? 1 : 2);
   const items = catalog
     .filter((e) => e.key.startsWith("create:"))
+    .sort((a, b) => order(a.key) - order(b.key))
     .map((e): PaletteItem => {
       const base = fromEntry(e, 0, false);
       if (e.key === "create:task") {
         return {
           ...base,
-          title: `New task: ${typed}`,
+          title: `New task "${typed}"`,
+          meta: "Alt T",
           command: { type: "create-task", text: typed },
         };
       }
       if (e.key === "create:poll" && e.command.type === "href") {
         return {
           ...base,
-          title: `Quick poll: ${typed}`,
+          title: `New quick poll "${typed}"`,
+          meta: "Alt P",
           command: {
             type: "href",
             href: `${e.command.href}&question=${encodeURIComponent(typed)}`,
@@ -77,6 +111,7 @@ export function createGroup(catalog: readonly CatalogEntry[], text: string): Pal
 
 function fromEntry(entry: CatalogEntry, score: number, highlight: boolean): PaletteItem {
   return {
+    kind: entry.group === "actions" ? "Action" : "Page",
     key: entry.key,
     title: entry.title,
     detail: entry.detail,
@@ -89,6 +124,7 @@ function fromEntry(entry: CatalogEntry, score: number, highlight: boolean): Pale
 
 function fromServer(group: SearchGroup, highlight: boolean): PaletteGroup {
   const items: PaletteItem[] = group.hits.map((h) => ({
+    kind: KIND_WORDS[h.kind] ?? undefined,
     key: h.key,
     title: h.title,
     detail: h.detail,
@@ -201,13 +237,32 @@ export function paletteGroups({
   }
   for (const g of server) groups.push(fromServer(g, true));
 
-  // The group holding the best match leads; ties keep their usual order.
-  const sorted = groups
-    .map((group, i) => ({ group, i, best: best(group) }))
-    .sort((a, b) => b.best - a.best || a.i - b.i)
-    .map(({ group }) => group);
+  // Everything: one Jump to list, best match first, each with what it is as
+  // a tag on the right (the workspace plan's palette). A filter keeps its
+  // groups, since there every row is the same kind.
+  const sorted =
+    scope === "all"
+      ? jumpTo(groups)
+      : groups
+          .map((group, i) => ({ group, i, best: best(group) }))
+          .sort((a, b) => b.best - a.best || a.i - b.i)
+          .map(({ group }) => group);
   // Then Create: make something from what was typed (a task titled with it,
   // a quick poll asking it), or start a meeting, form, note or expense.
   const create = withClient ? createGroup(catalog, q.text) : null;
   return create ? [...sorted, create] : sorted;
+}
+
+/** Every hit as one "Jump to" list, best first, with its kind as the tag. */
+function jumpTo(groups: readonly PaletteGroup[]): PaletteGroup[] {
+  const items = groups
+    .flatMap((g) => g.items.filter((i) => !i.more))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 14)
+    .map((i) => ({
+      ...i,
+      detail: [i.detail, i.meta].filter(Boolean).join(", ") || null,
+      meta: i.kind ?? null,
+    }));
+  return items.length ? [{ id: "jump", heading: "Jump to", items }] : [];
 }
