@@ -490,24 +490,28 @@ export function EventCalendar({
         </div>
         <div className="ms-auto">
           <FiltersMenu
-            count={range.kinds.length + (range.visibility ? 1 : 0) + (tasksLayer && !range.tasks ? 1 : 0)}
+            count={
+              range.kinds.length + (range.visibility ? 1 : 0) + (tasksLayer && !range.tasks ? 1 : 0)
+            }
             items={[
               ...(tasksLayer
                 ? [
                     {
                       name: "Show",
                       node: (
-                        <button
-                          type="button"
-                          className="cal-filter"
-                          data-task="open"
-                          style={{ ["--kind" as string]: "var(--primary)" }}
-                          aria-pressed={range.tasks}
-                          onClick={() => navigate({ ...range, tasks: !range.tasks })}
-                        >
-                          <span aria-hidden className="cal-chip__dot" />
-                          Task due dates
-                        </button>
+                        <div className="flex justify-start!">
+                          <button
+                            type="button"
+                            className="cal-filter"
+                            data-task="open"
+                            style={{ ["--kind" as string]: "var(--primary)" }}
+                            aria-pressed={range.tasks}
+                            onClick={() => navigate({ ...range, tasks: !range.tasks })}
+                          >
+                            <span aria-hidden className="cal-chip__dot" />
+                            Task due dates
+                          </button>
+                        </div>
                       ),
                     },
                   ]
@@ -515,7 +519,11 @@ export function EventCalendar({
               {
                 name: "Type",
                 node: (
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by type">
+                  <div
+                    className="flex flex-wrap justify-start! gap-1.5"
+                    role="group"
+                    aria-label="Filter by type"
+                  >
                     {KIND_ORDER.map((kind) => (
                       <button
                         key={kind}
@@ -536,7 +544,7 @@ export function EventCalendar({
                 name: "Who can see it",
                 node: (
                   /* Two chips, not a menu: either narrows to it; again (or neither) is both. */
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap justify-start! gap-1.5">
                     {(["PUBLIC", "INTERNAL"] as const).map((v) => {
                       const active = range.visibility === v;
                       return (
