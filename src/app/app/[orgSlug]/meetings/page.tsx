@@ -396,8 +396,9 @@ export default async function MeetingsPage({
     return qs ? `/app/${orgSlug}/meetings?${qs}` : `/app/${orgSlug}/meetings`;
   };
 
-  // The filter row (meetings-type-filter.tsx): All, each type, then the
-  // untyped, each with its count. Only once there is a type to tell apart.
+  // The bar's Filters chip (meetings-type-filter.tsx): All, each type, then
+  // the untyped, each with its count, and the order. Only once there is a
+  // type to tell apart.
   const chips = [
     ...kindList,
     ...(untyped > 0 ? [{ name: NO_TYPE, color: null, count: untyped }] : []),
@@ -444,11 +445,15 @@ export default async function MeetingsPage({
         }
       />
 
-      <MeetingsTabs
-        orgSlug={orgSlug}
-        current="upcoming"
-        counts={{ upcoming: upcoming.length, find: findOpen }}
-      />
+      {/* One bar, as on Tasks: the views, then Filters (type and order) at the right. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <MeetingsTabs
+          orgSlug={orgSlug}
+          current="upcoming"
+          counts={{ upcoming: upcoming.length, find: findOpen }}
+        />
+        {filterBar && <div className="ms-auto">{filterBar}</div>}
+      </div>
 
       {canManage && (
         <VideoConnections
@@ -489,7 +494,6 @@ export default async function MeetingsPage({
         )
       ) : upcoming.length === 0 && past.length === 0 && activeType !== null ? (
         <>
-          {filterBar}
           <EmptyState
             icon={Video}
             title={
@@ -499,7 +503,6 @@ export default async function MeetingsPage({
         </>
       ) : canManage ? (
         <>
-          {filterBar}
           {upcoming.length > 0 ? (
             <section aria-label={personal ? "Your meetings" : "Coming up"}>
               {listOf(upcoming, true)}
@@ -533,7 +536,6 @@ export default async function MeetingsPage({
         </>
       ) : (
         <>
-          {filterBar}
           <section aria-label="Coming up">{listOf(upcoming, true)}</section>
         </>
       )}

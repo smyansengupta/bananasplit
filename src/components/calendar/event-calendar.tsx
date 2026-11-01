@@ -12,6 +12,7 @@ import { toast } from "@/components/ui/toaster";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
+import { FiltersMenu } from "@/components/ui/toolbar-chips";
 import type { EventKind, EventVisibility } from "@/generated/prisma/enums";
 import { addDaysToKey } from "@/lib/calendar/dates";
 import {
@@ -443,40 +444,37 @@ export function EventCalendar({
 
   return (
     <div className="cal space-y-4">
-      <div className="cal-head">
-        <div className="cal-head__label">
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => step(-1)}
-              aria-label={prevLabel(range.view)}
-            >
-              <ChevronLeft aria-hidden className="size-5" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => step(1)}
-              aria-label={nextLabel(range.view)}
-            >
-              <ChevronRight aria-hidden className="size-5" />
-            </Button>
-          </div>
-          <div className="min-w-0">
-            <h2 className="cal-head__month">{rangeLabel(range, monthKey, dayCount)}</h2>
-            {isPending && <p className="cal-head__count opacity-70">Loading…</p>}
-          </div>
-        </div>
-
-        {/*
-          Today and the view switcher sit at the right, where New event used
-          to be (it's in the page header now, beside Google Calendar sync).
-          On a phone it is the switcher alone, spanning the width, its names
-          centred: the arrows step back and forth, and Today is a computer
-          thing.
-        */}
-        <div className="flex w-full flex-wrap items-center gap-2 md:ml-auto md:w-auto">
+      {/*
+        One bar, as on Tasks: the view first, then the arrows, Today and
+        where you are, and one Filters chip (task due dates, the kinds of
+        event, public or internal) at the right. On a phone the view switch
+        spans the width under the rest, and Today is a computer thing.
+      */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented
+          label="Calendar view"
+          className="order-last w-full md:order-none md:w-auto [&>*]:flex-1 max-md:[&>*]:justify-center md:[&>*]:flex-none"
+          value={range.view}
+          onSelect={(v) => setView(v as CalendarView)}
+          options={VIEW_LABELS.map(({ view, label }) => ({ value: view, label }))}
+        />
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => step(-1)}
+            aria-label={prevLabel(range.view)}
+          >
+            <ChevronLeft aria-hidden className="size-5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => step(1)}
+            aria-label={nextLabel(range.view)}
+          >
+            <ChevronRight aria-hidden className="size-5" />
+          </Button>
           <Button
             variant="outline"
             className="max-md:hidden"
@@ -485,76 +483,84 @@ export function EventCalendar({
           >
             Today
           </Button>
-
-          <Segmented
-            label="Calendar view"
-            className="order-last w-full md:order-none md:w-auto [&>*]:flex-1 max-md:[&>*]:justify-center md:[&>*]:flex-none"
-            value={range.view}
-            onSelect={(v) => setView(v as CalendarView)}
-            options={VIEW_LABELS.map(({ view, label }) => ({ value: view, label }))}
-          />
         </div>
-      </div>
-
-      <div className="-mx-1 [scrollbar-width:none] overflow-x-auto px-1 pb-0.5 [&::-webkit-scrollbar]:hidden">
-        <div className="cal-filters">
-          {tasksLayer && (
-            <>
-              <button
-                type="button"
-                className="cal-filter"
-                data-task="open"
-                style={{ ["--kind" as string]: "var(--primary)" }}
-                aria-pressed={range.tasks}
-                title={range.tasks ? "Hide tasks' due dates" : "Show tasks' due dates"}
-                onClick={() => navigate({ ...range, tasks: !range.tasks })}
-              >
-                <span aria-hidden className="cal-chip__dot" />
-                Tasks
-              </button>
-              <span aria-hidden className="bg-border mx-1 h-5 w-px shrink-0" />
-            </>
-          )}
-          <span className="sr-only" id="cal-kind-filter-label">
-            Filter by type
-          </span>
-          {KIND_ORDER.map((kind) => {
-            const active = range.kinds.includes(kind);
-            return (
-              <button
-                key={kind}
-                type="button"
-                className="cal-filter"
-                style={kindStyle(kind)}
-                aria-pressed={active}
-                aria-describedby="cal-kind-filter-label"
-                onClick={() => toggleKind(kind)}
-              >
-                <span aria-hidden className="cal-filter__dot" />
-                {KIND_META[kind].label}
-              </button>
-            );
-          })}
-          {/* Two chips, not a menu: either narrows to it; again (or neither) is both. */}
-          {(["PUBLIC", "INTERNAL"] as const).map((v) => {
-            const active = range.visibility === v;
-            return (
-              <button
-                key={v}
-                type="button"
-                className="cal-filter"
-                aria-pressed={active}
-                onClick={() => navigate({ ...range, visibility: active ? null : v })}
-              >
-                {v === "PUBLIC" ? (
-                  <Globe aria-hidden className="size-3.5" />
-                ) : (
-                  <Lock aria-hidden className="size-3.5" />
-                )}
-                {VISIBILITY_META[v].label}
-              </button>
-            );
-          })}
+        <div className="min-w-0 px-1">
+          <h2 className="cal-head__month">{rangeLabel(range, monthKey, dayCount)}</h2>
+          {isPending && <p className="cal-head__count opacity-70">Loading…</p>}
+        </div>
+        <div className="ms-auto">
+          <FiltersMenu
+            count={range.kinds.length + (range.visibility ? 1 : 0) + (tasksLayer && !range.tasks ? 1 : 0)}
+            items={[
+              ...(tasksLayer
+                ? [
+                    {
+                      name: "Show",
+                      node: (
+                        <button
+                          type="button"
+                          className="cal-filter"
+                          data-task="open"
+                          style={{ ["--kind" as string]: "var(--primary)" }}
+                          aria-pressed={range.tasks}
+                          onClick={() => navigate({ ...range, tasks: !range.tasks })}
+                        >
+                          <span aria-hidden className="cal-chip__dot" />
+                          Task due dates
+                        </button>
+                      ),
+                    },
+                  ]
+                : []),
+              {
+                name: "Type",
+                node: (
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by type">
+                    {KIND_ORDER.map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        className="cal-filter"
+                        style={kindStyle(kind)}
+                        aria-pressed={range.kinds.includes(kind)}
+                        onClick={() => toggleKind(kind)}
+                      >
+                        <span aria-hidden className="cal-filter__dot" />
+                        {KIND_META[kind].label}
+                      </button>
+                    ))}
+                  </div>
+                ),
+              },
+              {
+                name: "Who can see it",
+                node: (
+                  /* Two chips, not a menu: either narrows to it; again (or neither) is both. */
+                  <div className="flex flex-wrap gap-1.5">
+                    {(["PUBLIC", "INTERNAL"] as const).map((v) => {
+                      const active = range.visibility === v;
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          className="cal-filter"
+                          aria-pressed={active}
+                          onClick={() => navigate({ ...range, visibility: active ? null : v })}
+                        >
+                          {v === "PUBLIC" ? (
+                            <Globe aria-hidden className="size-3.5" />
+                          ) : (
+                            <Lock aria-hidden className="size-3.5" />
+                          )}
+                          {VISIBILITY_META[v].label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
 

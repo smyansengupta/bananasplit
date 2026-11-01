@@ -27,21 +27,6 @@
 
 /* ---------------------------------------------------------------- header */
 
-.cal-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem 1rem;
-}
-
-.cal-head__label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-}
-
 .cal-head__month {
   font-family: var(--font-heading);
   font-size: 1.5rem;
@@ -61,20 +46,9 @@
 
 /* --------------------------------------------------------------- filters */
 
-/* One line that scrolls sideways rather than three rows of chips pushing
-   the grid off a phone screen. A chip row is the one place a horizontal
-   scroll is right: it is a short list of equals, not a data grid. */
-.cal-filters {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.375rem;
-  width: max-content;
-  min-width: 100%;
-}
-
-/* A filter pill (chipClass in ui/segmented): 32px, outlined, filled with
-   the primary when on. The kind dot keeps its colour either way. */
+/* A filter pill in the bar's Filters panel (like chipClass in ui/segmented):
+   32px, outlined, filled with the primary when on. The kind dot keeps its
+   colour either way. */
 .cal-filter {
   display: inline-flex;
   align-items: center;

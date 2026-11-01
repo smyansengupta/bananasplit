@@ -181,7 +181,7 @@ export function FormResponses({
   const views = [
     { value: "table", label: "Table", href: hrefOf.table },
     ...(review
-      ? [{ value: "review", label: fresh > 0 ? `Review ${fresh}` : "Review", href: hrefOf.review }]
+      ? [{ value: "review", label: "Review", count: fresh, href: hrefOf.review }]
       : []),
     { value: "summary", label: "Summary", href: hrefOf.summary },
     { value: "ask", label: "Ask Claude", href: hrefOf.ask },

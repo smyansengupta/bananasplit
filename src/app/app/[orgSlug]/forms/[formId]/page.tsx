@@ -111,7 +111,8 @@ export default async function FormPage({
                 { href: href("share"), label: "Share", active: tab === "share" },
                 {
                   href: href("responses"),
-                  label: rows.length > 0 ? `Responses ${rows.length}` : "Responses",
+                  label: "Responses",
+                  count: rows.length,
                   active: tab === "responses",
                 },
               ]}

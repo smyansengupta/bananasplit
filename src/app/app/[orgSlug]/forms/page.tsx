@@ -144,7 +144,8 @@ export default async function FormsPage({
                 { href: `${base}/forms`, label: "All", active: show === "all" },
                 {
                   href: `${base}/forms?show=open`,
-                  label: openCount > 0 ? `Open ${openCount}` : "Open",
+                  label: "Open",
+                  count: openCount,
                   active: show === "open",
                 },
                 { href: `${base}/forms?show=closed`, label: "Closed", active: show === "closed" },

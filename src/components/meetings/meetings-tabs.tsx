@@ -20,20 +20,20 @@ export function MeetingsTabs({
   counts?: Partial<Record<MeetingsView, number>>;
 }) {
   const base = `/app/${orgSlug}`;
-  const label = (text: string, view: MeetingsView) =>
-    counts?.[view] ? `${text} ${counts[view]}` : text;
   return (
     <PageTabs
       label="Meetings"
       tabs={[
         {
           href: `${base}/meetings`,
-          label: label("Meetings", "upcoming"),
+          label: "Meetings",
+          count: counts?.upcoming,
           active: current === "upcoming",
         },
         {
           href: `${base}/calendar/find-a-time`,
-          label: label("Find a time", "find"),
+          label: "Find a time",
+          count: counts?.find,
           active: current === "find",
         },
       ]}
