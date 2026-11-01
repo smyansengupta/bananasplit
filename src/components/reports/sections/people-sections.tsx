@@ -32,7 +32,6 @@ export async function RetentionSection({ ctx }: { ctx: ReportViewContext }) {
     <ReportCard
       id="retention"
       title="Retention"
-      description="New and returning attendees, regulars, and people who stopped coming."
       viewHref={reportLinks.firstVisits(ctx.slug, ctx.link)}
       viewLabel="View first visits"
       computedAt={result.computedAt}
@@ -61,7 +60,7 @@ export async function RetentionSection({ ctx }: { ctx: ReportViewContext }) {
         <Stat
           label="Stopped showing up"
           value={formatCount(r.lapsedTotal)}
-          detail={`Missed the last ${r.lapsedAfterSessions} sessions · ${formatCount(r.lapsedInRange)} in this range`}
+          detail={`Missed the last ${r.lapsedAfterSessions} sessions, ${formatCount(r.lapsedInRange)} in this range`}
           href={reportLinks.lapsed(ctx.slug)}
         />
       </StatRow>
@@ -114,7 +113,6 @@ export async function SignupsSection({ ctx }: { ctx: ReportViewContext }) {
     <ReportCard
       id="signups"
       title="Signups"
-      description="New signups per week, and how many have come to a session since."
       viewHref={reportLinks.signups(ctx.slug, ctx.link)}
       viewLabel="View signups"
       computedAt={result.computedAt}
@@ -200,7 +198,7 @@ export async function StampsSection({ ctx }: { ctx: ReportViewContext }) {
     <ReportCard
       id="stamps"
       title="Stamp-card progress"
-      description="Stamp cards that reached each reward milestone in the range. Cards reset every term."
+      description="Cards reset every term."
       viewHref={reportLinks.stampCards(ctx.slug, ctx.link)}
       viewLabel="View stamp cards"
       computedAt={result.computedAt}

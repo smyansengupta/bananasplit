@@ -26,11 +26,11 @@ export function SectionTitle({
 }
 
 /**
- * A section's opening: a small label, the headline and a line of
- * description, centred (Notion's sections) or on the left.
+ * A section's opening: the headline and a line of description, centred
+ * (Notion's sections) or on the left. `label` is kept for callers but not
+ * drawn: nothing sits above a headline as a small label (a house rule).
  */
 export function SectionIntro({
-  label,
   title,
   children,
   align = "center",
@@ -50,7 +50,6 @@ export function SectionIntro({
         className,
       )}
     >
-      {label && <span className="text-foreground/70 text-[14px] font-semibold">{label}</span>}
       <SectionTitle className="text-balance">{title}</SectionTitle>
       {children && (
         <p className="text-foreground/80 max-w-[620px] text-[17px] leading-[1.55] text-pretty sm:text-[18px]">

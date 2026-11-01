@@ -662,7 +662,7 @@ describe("invalid_grant", () => {
     expect(first).toMatchObject({ status: "CANCELLED" });
     expect(store.integrations[0]).toMatchObject({ status: "NEEDS_REAUTH" });
     expect(store.notifications.map((n) => n.userId).sort()).toEqual(["u_admin", "u_owner"]);
-    expect(store.notifications[0]).toMatchObject({ type: "INTEGRATION_ERROR", linkUrl: "/app/claude-builders-club/settings/integrations" });
+    expect(store.notifications[0]).toMatchObject({ type: "INTEGRATION_ERROR", linkUrl: "/app/claude-builders-club/integrations/google-calendar" });
     expect(store.jobs.filter((j) => j.kind === "notify-email")).toHaveLength(2);
     expect(ev("e1")).toMatchObject({ googleSyncState: "FAILED" });
 

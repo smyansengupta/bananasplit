@@ -83,7 +83,7 @@ export function CalendarFeedCard({ activeSince }: { activeSince: string | null }
   return (
     <SettingsCard
       title="Calendar feed"
-      description="Subscribe from Google Calendar, Apple Calendar or Outlook to see the events you're invited to. Those apps refresh on their own schedule, often hours apart, so treat it as a mirror rather than a live view."
+      description="Subscribe in Google, Apple or Outlook. Updates every few hours."
       status={
         <p aria-live="polite">
           {message && (

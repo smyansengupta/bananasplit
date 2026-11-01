@@ -74,14 +74,14 @@
     "link": "/invite/…",
     "title": "You've been invited to join Robotics Club on Bananasplit",
     "targets": ["public/og/invite.png"],
-    "alt": "You're invited to join a club's workspace on Bananasplit."
+    "alt": "You're invited to join an organization's workspace on Bananasplit."
   },
   "join": {
     "group": "A club's links",
     "link": "/join/RPKA-YWSF",
     "title": "You've been invited to join Robotics Club on Bananasplit",
     "targets": ["src/app/onboarding/join/opengraph-image.png", "public/og/join.png"],
-    "alt": "Join your club on Bananasplit: an eight-box invite code."
+    "alt": "Join your organization on Bananasplit: an eight-box invite code."
   },
   "poll": {
     "group": "A club's links",

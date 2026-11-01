@@ -22,9 +22,19 @@ const mocks = vi.hoisted(() => ({
   latestSentPulse: vi.fn(),
   weeklyDoneTrend: vi.fn(),
   nextRsvpGoalEvent: vi.fn(),
+  listForms: vi.fn(),
+  listWebsitePolls: vi.fn(),
 }));
 
-vi.mock("@/server/overview/queries", () => ({
+// The Forms list's own reads; whether each is open is the real rule.
+vi.mock("@/server/forms/forms", async (actual) => ({
+  ...(await actual<typeof import("@/server/forms/forms")>()),
+  listForms: mocks.listForms,
+  listWebsitePolls: mocks.listWebsitePolls,
+}));
+vi.mock("@/server/overview/queries", async (actual) => ({
+  // Home's Open forms is the real merge of what the Forms list shows.
+  loadOpenForms: (await actual<typeof import("@/server/overview/queries")>()).loadOpenForms,
   loadTaskExtras: vi.fn(async () => new Map()),
   loadEventGoing: vi.fn(async () => new Map()),
   loadPollStats: vi.fn(
@@ -44,12 +54,14 @@ vi.mock("@/server/pulse/queries", () => ({
 
 const db = {
   user: { findUnique: vi.fn() },
-  task: { count: vi.fn() },
+  task: { count: vi.fn(), groupBy: vi.fn(async () => []) },
   event: { count: vi.fn() },
   availabilityPoll: { findMany: vi.fn() },
   poll: { findMany: vi.fn() },
+  formResponse: { findMany: vi.fn(async () => []) },
   membership: { findMany: vi.fn(), count: vi.fn() },
   budgetPeriod: { count: vi.fn() },
+  orgChartVersion: { count: vi.fn(async () => 0) },
   note: { count: vi.fn() },
   databaseDefinition: { count: vi.fn() },
   // Cards the viewer hid from their own Up next; nobody has hidden any here.
@@ -58,6 +70,8 @@ const db = {
 
 vi.mock("@/app/app/[orgSlug]/getting-started-actions", () => ({
   setStartedStepSkipped: vi.fn(),
+  hideGettingStarted: vi.fn(),
+  restoreStartedSkipped: vi.fn(),
 }));
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.getOrgContextBySlug,
@@ -85,6 +99,9 @@ vi.mock("@/app/app/[orgSlug]/notes/queries", () => ({
 }));
 vi.mock("@/server/notes/files", () => ({ listNoteFiles: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/server/boards", () => ({ loadSavedBoard: mocks.loadSavedBoard }));
+vi.mock("@/server/presence", () => ({
+  onlineNow: vi.fn().mockResolvedValue({ count: 3, faces: [], ids: ["u_a", "u_b"] }),
+}));
 vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({ saveBoardAction: vi.fn() }));
 vi.mock("@/app/app/[orgSlug]/_shell/pin-actions", () => ({
   pinPathAction: vi.fn(),
@@ -145,6 +162,8 @@ beforeEach(() => {
   mocks.listPins.mockResolvedValue([]);
   mocks.listRecent.mockResolvedValue([]);
   mocks.loadSavedBoard.mockResolvedValue(null);
+  mocks.listForms.mockResolvedValue([]);
+  mocks.listWebsitePolls.mockResolvedValue([]);
   db.availabilityPoll.findMany.mockResolvedValue([]);
   db.poll.findMany.mockResolvedValue([]);
   db.membership.findMany.mockResolvedValue([]);
@@ -209,7 +228,7 @@ describe("org overview", () => {
     ]);
     const html = await render();
     expect(html).toContain("This week");
-    expect(html).toContain("Open polls");
+    expect(html).toContain("Open forms");
     expect(html).toContain("height:240px");
     // Not on this member's board.
     expect(html).not.toContain(">Meetings<");
@@ -258,7 +277,7 @@ describe("org overview", () => {
     expect(html).toContain('href="/app/cbc/tasks/t_stuck"');
     expect(html).toContain("8 open");
     expect(html).toContain("1 overdue");
-    expect(html).toContain("Overdue · Thu, Oct 1");
+    expect(html).toContain("Overdue, Thu, Oct 1");
     expect(html).toContain("Blocked");
     expect(html).toContain("Part of Fall kickoff logistics");
     expect(html).toContain('aria-label="Private task"');
@@ -315,14 +334,67 @@ describe("org overview", () => {
     expect(html).toContain("2 hours ago");
   });
 
-  it("lists open polls of both kinds, newest first", async () => {
+  it("lists what the Forms list shows as open, newest first, linking where Forms does", async () => {
     mocks.loadSavedBoard.mockResolvedValue([{ id: "polls", type: "polls", w: 1, h: null }]);
-    db.availabilityPoll.findMany.mockResolvedValue([
+    const form = (id: string, title: string, at: string, extra: object = {}) => ({
+      id,
+      title,
+      kind: "FORM",
+      access: "PUBLIC",
+      publishedAt: new Date(at),
+      closedAt: null,
+      closesAt: null,
+      responseCap: null,
+      deletedAt: null,
+      createdAt: new Date(at),
+      ...extra,
+    });
+    mocks.listForms.mockResolvedValue([
       {
-        id: "ap_1",
-        title: "Exec sync time",
+        form: form("f_app", "Organization application", "2026-10-03T12:00:00Z"),
+        responses: 7,
+        toReview: 2,
+        databaseKey: "form-app",
+        members: null,
+      },
+      {
+        form: form("f_quick", "Snack pick", "2026-10-02T12:00:00Z", {
+          kind: "QUICK_POLL",
+          access: "MEMBERS",
+        }),
+        responses: 3,
+        toReview: 0,
+        databaseKey: "form-snack",
+        members: 12,
+      },
+      // A draft and a closed form stay out, as in the Forms list's Open tab.
+      {
+        form: form("f_draft", "Draft survey", "2026-10-04T12:00:00Z", { publishedAt: null }),
+        responses: 0,
+        toReview: 0,
+        databaseKey: "form-draft",
+        members: null,
+      },
+      {
+        form: form("f_closed", "Old signup", "2026-09-01T12:00:00Z", {
+          closedAt: new Date("2026-09-10T12:00:00Z"),
+        }),
+        responses: 4,
+        toReview: 0,
+        databaseKey: "form-old",
+        members: null,
+      },
+    ]);
+    mocks.listWebsitePolls.mockResolvedValue([
+      {
+        id: "bd_1",
+        slug: "fall-vote",
+        title: "Fall social vote",
+        opensAt: new Date("2026-10-01T12:00:00Z"),
         closesAt: null,
-        createdAt: new Date("2026-10-01T12:00:00Z"),
+        createdAt: new Date("2026-09-30T12:00:00Z"),
+        responses: 41,
+        databaseKey: "ballots",
       },
     ]);
     db.poll.findMany.mockResolvedValue([
@@ -335,24 +407,31 @@ describe("org overview", () => {
     ]);
 
     const html = await render();
-    expect(db.poll.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ organizationId: "org_cbc", closedAt: null }),
-      }),
-    );
-    // In the polls widget (Up next above it lists them by urgency instead).
-    const widget = html.slice(html.lastIndexOf("Open polls"));
-    expect(widget.indexOf("Pizza or tacos?")).toBeLessThan(widget.indexOf("Exec sync time"));
-    expect(html).toContain('href="/app/cbc/calendar/polls/qp_1"');
-    expect(html).toContain('href="/app/cbc/calendar/find-a-time/ap_1"');
-    expect(html).toContain("Question · Open");
-    expect(html).toContain("Find a time · Open");
+    // In the Open forms widget (Up next above it lists polls by urgency instead).
+    const widget = html.slice(html.lastIndexOf("Open forms"));
+    const order = ["Pizza or tacos?", "Organization application", "Snack pick", "Fall social vote"];
+    for (let i = 1; i < order.length; i++)
+      expect(widget.indexOf(order[i - 1])).toBeLessThan(widget.indexOf(order[i]));
+    expect(widget).not.toContain("Draft survey");
+    expect(widget).not.toContain("Old signup");
+    expect(widget).toContain('href="/app/cbc/forms/f_app"');
+    expect(widget).toContain('href="/app/cbc/forms/f_quick"');
+    expect(widget).toContain('href="/app/cbc/forms/polls/qp_1"');
+    expect(widget).toContain('href="/app/cbc/databases/ballots?f=poll%3Aeq%3Afall-vote"');
+    // Each is a bar of its responses: to who can answer when that's known.
+    expect(widget).toContain("Form, open");
+    expect(widget).toContain('aria-label="7 responses"');
+    expect(widget).toContain("Quick poll, open");
+    expect(widget).toContain('aria-label="3 of 12 answered"');
+    expect(widget).toContain("Member poll, open");
+    expect(widget).toContain("Website poll, open");
+    expect(widget).toContain('aria-label="41 responses"');
   });
 
   it("shows a next step when there is nothing pinned or coming up", async () => {
     const html = await render();
     expect(html).toContain("Nothing pinned yet");
-    expect(html).toContain("Nothing needs you this week");
+    expect(html).toContain("Nothing this week.");
     mocks.loadSavedBoard.mockResolvedValue([
       { id: "meetings", type: "meetings", w: 2, h: null },
       { id: "events", type: "events", w: 2, h: null },
@@ -370,6 +449,12 @@ describe("the Moonstone Overview", () => {
     expect(html).not.toContain('class="eyebrow');
   });
 
+  it("says beside the date how many members are online, opening People on its Online filter", async () => {
+    const html = await render();
+    expect(html).toContain("3 members online");
+    expect(html).toContain("/people?online=1");
+  });
+
   it("heads every board with the stat strip, then Up next", async () => {
     mocks.getUpcomingEvents.mockImplementation(
       async (_db: unknown, _org: string, _now: Date, _n: number, only?: string) =>
@@ -383,10 +468,10 @@ describe("the Moonstone Overview", () => {
     const html = await render();
     expect(html).toContain("Due this week");
     expect(html).toContain("All clear");
-    expect(html).toContain("Coming up in 14 days");
+    expect(html).toContain("Next 14 days");
     expect(html).not.toContain("Open tasks");
     expect(html.indexOf("Due this week")).toBeLessThan(html.indexOf('id="up-next-heading"'));
-    expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open polls"));
+    expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open forms"));
   });
 
   it("shows owners the organization's first steps until each is done or checked off", async () => {
@@ -403,7 +488,8 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain("Set up your budgets");
     expect(html).toContain("Create a task or an epic");
     expect(html).not.toContain("sections");
-    expect(html).toContain("Checked off as not needed.");
+    expect(html).not.toContain("Name the organization");
+    expect(html).toContain("Hide");
 
     // Everything done or checked off: the card is gone.
     db.membership.count.mockResolvedValue(5);
@@ -414,7 +500,7 @@ describe("the Moonstone Overview", () => {
       user: viewer,
       organization: { ...org, logo: { key: "k" } },
       role: "OWNER",
-      settings: { startedSkipped: ["database"] },
+      settings: { startedSkipped: ["database", "teams"], eventTypes: [] },
     });
     expect(await render()).not.toContain("Get your organization started");
   });
@@ -429,7 +515,8 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain('id="up-next-heading"');
     expect(html).toContain('aria-label="Weekly pulse"');
     // The RSVP waiting on the viewer is an answer block.
-    expect(html).toContain("Your RSVP · Today · 7:00 PM");
+    expect(html).toContain("Today, 7:00 PM");
+    expect(html).toContain("Can&#x27;t go");
     expect(html.indexOf('id="up-next-heading"')).toBeLessThan(
       html.indexOf('aria-label="My tasks"'),
     );

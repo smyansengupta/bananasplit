@@ -47,8 +47,8 @@ describe("personal ICS feed (0A Fix 7)", () => {
   it("reads only the orgs the user is still a member of, each with its own timezone", async () => {
     store.userByTokenHash.mockResolvedValue({ id: "u1", name: "U" });
     store.orgsOf.mockResolvedValue([
-      { id: "org_ny", name: "NY club", timezone: "America/New_York", deletedAt: null },
-      { id: "org_tokyo", name: "Tokyo club", timezone: "Asia/Tokyo", deletedAt: null },
+      { id: "org_ny", name: "NY organization", timezone: "America/New_York", deletedAt: null },
+      { id: "org_tokyo", name: "Tokyo organization", timezone: "Asia/Tokyo", deletedAt: null },
     ]);
     store.eventsIn.mockImplementation(async (_u: string, org: { id: string; timezone: string }) => [
       {

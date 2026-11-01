@@ -1,4 +1,4 @@
-import { Ticket, Video } from "@/components/icons";
+import { Plus, Ticket, Video } from "@/components/icons";
 import { meetingTypeColor, parseMeetingTypes } from "@/lib/meetings/meeting-types";
 import Link from "next/link";
 
@@ -11,12 +11,16 @@ import {
   type MeetingRow,
 } from "@/components/meetings/meeting-card";
 import { NewMeetingButton } from "@/components/meetings/new-meeting-button";
+import { MeetingsTabs } from "@/components/meetings/meetings-tabs";
+import { PastMeetingList } from "@/components/meetings/past-meeting-list";
 import { VideoConnections } from "@/components/meetings/video-connections";
 import { PageHeader } from "@/components/page-header";
+import { KIND_META } from "@/components/calendar/kinds";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { isPlatformAdmin } from "@/lib/auth/org-creation";
+import { spaceIncludes } from "@/lib/billing/space";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { NEW_EVENT_PARAM } from "@/lib/calendar/range";
@@ -26,6 +30,7 @@ import { newMeetingAsk } from "@/lib/meetings/shape";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker, userPublicSelect } from "@/server/members";
+import { meetingsWhere } from "@/server/meetings/where";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { loadMeetingConnections } from "@/server/conference/connections";
 import {
@@ -33,6 +38,7 @@ import {
   type ConferenceCallbackError,
 } from "@/server/conference/connect";
 
+import { getMeetingTypeDefaults } from "../calendar/queries";
 import { MeetingsTypeFilter } from "./meetings-type-filter";
 
 /** Outcomes the connect routes add that are not callback errors. */
@@ -81,6 +87,7 @@ export default async function MeetingsPage({
   // view can be shared.
   const typeParam = first(sp.type) || null;
   const byType = first(sp.sort) === "type";
+  // Coming up (the cards) or Past (the list); Find a time is its own page.
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org, user } = ctx;
   const personal = org.kind === "PERSONAL";
@@ -88,7 +95,7 @@ export default async function MeetingsPage({
   // ?new= opens New meeting on arrival (and only for someone who can make one).
   const askedNew = canManage ? newMeetingAsk(first(sp[NEW_EVENT_PARAM])) : null;
   // A new meeting starts with the organization's reminders (Settings > General).
-  const meetingTypes = parseMeetingTypes(ctx.settings?.eventTypes);
+  const typeList = parseMeetingTypes(ctx.settings?.eventTypes);
   const defaultReminderMinutes = ctx.settings?.meetingReminderMinutes ?? [
     ...DEFAULT_REMINDER_MINUTES,
   ];
@@ -101,23 +108,15 @@ export default async function MeetingsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const [{ events, counts, attendees }, registrations, connections, members] = await Promise.all([
+  const [
+    { events, counts, attendees, notes, meetingTypes, findOpen },
+    registrations,
+    connections,
+    members,
+  ] = await Promise.all([
     withOrgTx(org.id, async ({ db }) => {
       const rows: MeetingRow[] = await db.event.findMany({
-        where: {
-          organizationId: org.id,
-          deletedAt: null,
-          mergedIntoId: null,
-          // Hosts work from the whole list. Everyone else sees what they can
-          // act on: something to join, or a page open for sign-ups, still to
-          // come. Row policies have already limited this to what they may see.
-          ...(canManage
-            ? {}
-            : {
-                endsAt: { gt: now },
-                OR: [{ rsvpEnabled: true }, { conferenceUrl: { not: null } }],
-              }),
-        },
+        where: meetingsWhere(org.id, user.id, canManage, now),
         orderBy: { startsAt: "asc" },
         select: {
           id: true,
@@ -140,6 +139,8 @@ export default async function MeetingsPage({
           conferenceUrl: true,
           conferenceSyncState: true,
           conferenceSyncError: true,
+          attendanceCount: true,
+          recordingUrl: true,
           // Not conferenceHostUrl: it starts the meeting as host, and nothing
           // on this list needs it. The meeting's page hands it to editors.
         },
@@ -167,7 +168,29 @@ export default async function MeetingsPage({
         where: { organizationId: org.id, eventId: { in: events.map((e) => e.id) } },
         select: { eventId: true, rsvp: true, user: { select: userPublicSelect } },
       });
-      return { events, counts, attendees };
+      // The past list's notes link: each finished meeting's notes, newest first.
+      const pastIds = events.filter((e) => e.endsAt <= now).map((e) => e.id);
+      const notes =
+        pastIds.length > 0
+          ? await db.note.findMany({
+              where: { organizationId: org.id, eventId: { in: pastIds }, deletedAt: null },
+              orderBy: { updatedAt: "desc" },
+              select: { id: true, eventId: true, title: true },
+            })
+          : [];
+      // A new meeting of a type starts where the last one was.
+      const meetingTypes = canManage
+        ? await getMeetingTypeDefaults(db, org.id, typeList)
+        : typeList;
+      // Find a time polls still taking answers, for the tab's count.
+      const findOpen = await db.availabilityPoll.count({
+        where: {
+          organizationId: org.id,
+          finalizedEventId: null,
+          OR: [{ closesAt: null }, { closesAt: { gte: now } }],
+        },
+      });
+      return { events, counts, attendees, notes, meetingTypes, findOpen };
     }),
     myRsvpRegistrations(user.id, MY_TICKETS),
     canManage ? loadMeetingConnections(org.id) : Promise.resolve([]),
@@ -232,10 +255,14 @@ export default async function MeetingsPage({
         : null;
   const shown = (e: MeetingRow) =>
     activeType === null ? true : activeType === NO_TYPE ? !typeName(e) : typeName(e) === activeType;
+  // Its type; a meeting with none shows its kind (Meeting, Event…) in the
+  // kind's colour, so every card and row says what it is.
   const typeOf = (e: MeetingRow) => {
     const name = typeName(e);
     const k = name ? kinds.get(name) : undefined;
-    return k?.color ? { name: k.name, color: k.color } : null;
+    if (k?.color) return { name: k.name, color: k.color };
+    const kind = KIND_META[e.kind];
+    return { name: name ?? kind.label, color: `var(${kind.token})` };
   };
 
   const upcoming = events.filter((e) => e.endsAt > now && shown(e));
@@ -278,6 +305,7 @@ export default async function MeetingsPage({
   const card = (e: MeetingRow, featured = false, leads = false, ended = false) => (
     <MeetingCard
       key={e.id}
+      orgId={org.id}
       event={e}
       canManage={canManage}
       status={conferenceStatus(e, canManage)}
@@ -368,8 +396,9 @@ export default async function MeetingsPage({
     return qs ? `/app/${orgSlug}/meetings?${qs}` : `/app/${orgSlug}/meetings`;
   };
 
-  // The filter row (meetings-type-filter.tsx): All, each type, then the
-  // untyped, each with its count. Only once there is a type to tell apart.
+  // The bar's Filters chip (meetings-type-filter.tsx): All, each type, then
+  // the untyped, each with its count, and the order. Only once there is a
+  // type to tell apart.
   const chips = [
     ...kindList,
     ...(untyped > 0 ? [{ name: NO_TYPE, color: null, count: untyped }] : []),
@@ -398,17 +427,33 @@ export default async function MeetingsPage({
     <div className="space-y-7.5">
       <PageHeader
         title={sectionLabel(ctx.settings?.sidebar, "meetings")}
-        description={
-          // The live line once there is something to count; until then, what this is.
-          summary ||
-          (personal
-            ? "Calls, meet-ups and event pages anyone can RSVP to, plus everything you've signed up for."
-            : canManage
-              ? "Set up a call, an in-person meeting, or an event with a sign-up page."
-              : "What's coming up that you can join or sign up for.")
+        // The live line once there is something to count; nothing until then.
+        description={summary || undefined}
+        // The plan's header: Find a time beside New meeting.
+        actions={
+          <>
+            {spaceIncludes(org, "polls") && (
+              <Button variant="outline" asChild>
+                <Link href={`/app/${orgSlug}/calendar/find-a-time/new`}>
+                  <Plus aria-hidden="true" />
+                  Find a time
+                </Link>
+              </Button>
+            )}
+            {newMeeting("create", true)}
+          </>
         }
-        actions={newMeeting("create", true)}
       />
+
+      {/* One bar, as on Tasks: the views, then Filters (type and order) at the right. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <MeetingsTabs
+          orgSlug={orgSlug}
+          current="upcoming"
+          counts={{ upcoming: upcoming.length, find: findOpen }}
+        />
+        {filterBar && <div className="ms-auto">{filterBar}</div>}
+      </div>
 
       {canManage && (
         <VideoConnections
@@ -443,76 +488,55 @@ export default async function MeetingsPage({
 
       {events.length === 0 ? (
         canManage ? (
-          <EmptyState
-            icon={Video}
-            title="No meetings yet"
-            description={
-              <>
-                Set one up and pick its shape: an online call, somewhere to be in person, or an
-                event with a sign-up page. Connect Google Meet, Zoom or Teams and the join link is
-                made for you.
-              </>
-            }
-            action={newMeeting("secondary")}
-          />
+          <EmptyState icon={Video} title="No meetings yet" action={newMeeting("secondary")} />
         ) : (
-          <EmptyState
-            icon={Ticket}
-            title="Nothing coming up"
-            description="Meetings you can join, and events taking sign-ups, show here."
-          />
+          <EmptyState icon={Ticket} title="Nothing coming up" />
         )
       ) : upcoming.length === 0 && past.length === 0 && activeType !== null ? (
         <>
-          {filterBar}
           <EmptyState
             icon={Video}
             title={
               activeType === NO_TYPE ? "No meetings without a type" : `No ${activeType} meetings`
             }
-            description="Nothing of this type is coming up or has happened yet."
-            action={
-              <Button variant="secondary" asChild>
-                <Link href={hrefWith({ type: null })} scroll={false}>
-                  Show all meetings
-                </Link>
-              </Button>
-            }
           />
         </>
       ) : canManage ? (
         <>
-          {filterBar}
-          {upcoming.length > 0 && (
-            <section className="space-y-3" aria-labelledby="upcoming-heading">
-              <h2 id="upcoming-heading" className="heading flex items-center gap-2 text-[17px]">
-                {personal ? "Your meetings" : "Coming up"}
-                <Badge variant="secondary">{upcoming.length}</Badge>
-              </h2>
+          {upcoming.length > 0 ? (
+            <section aria-label={personal ? "Your meetings" : "Coming up"}>
               {listOf(upcoming, true)}
             </section>
+          ) : (
+            <EmptyState icon={Video} title="Nothing coming up" action={newMeeting("secondary")} />
           )}
+          {/* What already happened falls right under what's coming up, as a
+              list: a record now, not something to act on. */}
           {past.length > 0 && (
-            <section className="space-y-3" aria-labelledby="past-heading">
-              <h2
-                id="past-heading"
-                className="heading text-muted-foreground flex items-center gap-2 text-[17px]"
-              >
-                Past <Badge variant="secondary">{past.length}</Badge>
-              </h2>
-              {listOf(past, false, true)}
+            <section aria-labelledby="past-heading">
+              <PastMeetingList
+                meetings={past}
+                timeZone={timeZone}
+                orgSlug={orgSlug}
+                typeOf={typeOf}
+                facts={(e) => ({
+                  checkedIn: e.attendanceCount ?? 0,
+                  signedUp:
+                    countOf(e.id, "GOING") ||
+                    attendees.filter((a) => a.eventId === e.id && a.rsvp === "YES").length,
+                  invited: attendees.filter((a) => a.eventId === e.id).length,
+                  notes: notes.filter((n) => n.eventId === e.id),
+                  host: e.hostUserId
+                    ? (members.find((m) => m.id === e.hostUserId)?.name ?? null)
+                    : null,
+                })}
+              />
             </section>
           )}
         </>
       ) : (
         <>
-          {filterBar}
-          <section className="space-y-3" aria-labelledby="open-heading">
-            <h2 id="open-heading" className="heading flex items-center gap-2 text-[17px]">
-              Taking RSVPs <Badge variant="secondary">{upcoming.length}</Badge>
-            </h2>
-            {listOf(upcoming, true)}
-          </section>
+          <section aria-label="Coming up">{listOf(upcoming, true)}</section>
         </>
       )}
     </div>

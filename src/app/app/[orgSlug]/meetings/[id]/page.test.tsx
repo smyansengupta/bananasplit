@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   members: vi.fn(),
 }));
 
+vi.mock("@/components/meetings/meeting-tasks", () => ({ MeetingTasks: () => null }));
+vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
+vi.mock("@/components/meetings/create-meeting-notes", () => ({ CreateMeetingNotes: () => null }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -25,13 +28,20 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/server/db/context", () => ({
   getOrgContextBySlug: mocks.context,
   withOrgTx: async (_orgId: string, fn: (ctx: unknown) => unknown) =>
-    fn({ db: { eventRegistration: { groupBy: mocks.groupBy } } }),
+    fn({
+      db: {
+        eventRegistration: { groupBy: mocks.groupBy },
+        itemLink: { findMany: async () => [] },
+        task: { findMany: async () => [] },
+      },
+    }),
 }));
 vi.mock("@/server/members", () => ({ getOrgMembersForPicker: mocks.members }));
 vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({ getEventById: mocks.getEventById }));
 vi.mock("@/lib/app-url", () => ({ appUrl: (path: string) => `https://app.test${path}` }));
 vi.mock("@/components/calendar/event-detail-view", () => ({ EventDetailView: () => null }));
 vi.mock("@/components/meetings/meeting-join-card", () => ({ MeetingJoinCard: () => null }));
+vi.mock("@/components/meetings/meeting-recording", () => ({ MeetingRecording: () => null }));
 
 const { default: MeetingPage } = await import("./page");
 

@@ -67,7 +67,7 @@ describe("extractHashTags", () => {
 });
 
 describe("canCreateTags", () => {
-  it("follows the club's switch, which admins always pass", () => {
+  it("follows the organization's switch, which admins always pass", () => {
     expect(canCreateTags({ isAdmin: false, membersCanCreate: true })).toBe(true);
     expect(canCreateTags({ isAdmin: false, membersCanCreate: false })).toBe(false);
     expect(canCreateTags({ isAdmin: true, membersCanCreate: false })).toBe(true);

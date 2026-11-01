@@ -593,7 +593,7 @@ describe("the stored secret", () => {
     fakeZoom({
       createStatus: 400,
       createBody: {
-        message: `Invalid access token ${jwt} for user host@club.example.org`,
+        message: `Invalid access token ${jwt} for user host@organization.example.org`,
       },
     });
     const eventId = await makeEvent();

@@ -56,11 +56,11 @@ export interface FallbackCard {
 export const FALLBACK_CARDS = {
   invite: {
     url: "/og/invite.png",
-    alt: "You're invited to join a club's workspace on Bananasplit.",
+    alt: "You're invited to join an organization's workspace on Bananasplit.",
   },
   join: {
     url: "/og/join.png",
-    alt: "Join your club on Bananasplit: an eight-box invite code.",
+    alt: "Join your organization on Bananasplit: an eight-box invite code.",
   },
   poll: {
     url: "/og/poll.png",
@@ -152,7 +152,7 @@ export function shareMetadata({
   card?: FallbackCard;
 }): Metadata {
   return {
-    title: `${title} · ${SITE_NAME}`,
+    title: `${title}, ${SITE_NAME}`,
     description,
     ...(noIndex ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
@@ -188,7 +188,7 @@ export function mainShare({
   noIndex?: boolean;
 }): Metadata {
   return {
-    title: `${title} · ${SITE_NAME}`,
+    title: `${title}, ${SITE_NAME}`,
     description,
     ...(noIndex ? { robots: { index: false, follow: false } } : {}),
   };
@@ -232,7 +232,7 @@ export function clubShare({
 }): Metadata {
   const variants = club ? orgLogoVariants(club.logo) : null;
   return {
-    title: `${title} · ${SITE_NAME}`,
+    title: `${title}, ${SITE_NAME}`,
     description,
     ...(noIndex ? { robots: { index: false, follow: false } } : {}),
     ...(variants ? { icons: clubIcons(club?.logo) } : {}),

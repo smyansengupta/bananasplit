@@ -75,7 +75,7 @@ export function ConnectionPicker({
         <p className="text-muted-foreground mt-0.5 text-xs">
           An owner or admin can connect Claude, OpenAI, Gemini or another model in{" "}
           <Link
-            href={`/app/${orgSlug}/settings/integrations`}
+            href={`/app/${orgSlug}/integrations`}
             className="text-foreground font-medium underline underline-offset-4"
           >
             Admin panel › Integrations
@@ -107,7 +107,7 @@ export function ConnectionPicker({
           <span>
             <span className="text-muted-foreground">Read with </span>
             <span className="font-medium">{selected?.label}</span>
-            <span className="text-muted-foreground"> · {selected?.detail}</span>
+            <span className="text-muted-foreground">, {selected?.detail}</span>
           </span>
         )}
       </div>

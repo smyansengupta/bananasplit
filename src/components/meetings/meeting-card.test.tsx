@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConferenceStatus } from "@/lib/meetings/conference-status";
 import { FORMAT_LABEL } from "@/lib/meetings/shape";
 
+vi.mock("@/app/app/[orgSlug]/calendar/actions", () => ({ rsvpToEvent: vi.fn(async () => ({})) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
+
 /**
  * One meeting on the Meetings list (docs/features/meetings.md): its shape, its
  * one-click join and copy, and the single link to its page.
@@ -351,14 +354,14 @@ describe("MeetingCard: sign-ups", () => {
   it("tells a member they are signed up", () => {
     card({ event: row({ rsvpEnabled: true, rsvpSlug: "exec" }), mine: "GOING" });
 
-    expect(screen.getByText("You're signed up")).toBeTruthy();
+    expect(screen.getByText("Signed up")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "RSVP" })).toBeNull();
   });
 
   it("tells a member they are waitlisted", () => {
     card({ event: row({ rsvpEnabled: true, rsvpSlug: "exec" }), mine: "WAITLIST" });
 
-    expect(screen.getByText("On the waitlist")).toBeTruthy();
+    expect(screen.getByText("Waitlisted")).toBeTruthy();
   });
 
   it("invites a member who has not signed up to RSVP", () => {
@@ -462,7 +465,7 @@ describe("MeetingCard: who is coming", () => {
 
     expect(screen.getByText("AL")).toBeTruthy();
     expect(screen.getByText("GH")).toBeTruthy();
-    expect(screen.getByText("2 going, 1 maybe, 1 yet to answer")).toBeTruthy();
+    expect(screen.getByText("2 going, 1 maybe, 1 no reply")).toBeTruthy();
   });
 
   it("says how many were asked before anyone has said yes", () => {
@@ -482,27 +485,40 @@ describe("MeetingCard: your part in it", () => {
   it("says you're hosting", () => {
     card({ hosting: true, myRsvp: "YES" });
 
-    expect(screen.getByText("You're hosting")).toBeTruthy();
-    expect(screen.queryByText(/^Invited/)).toBeNull();
+    expect(screen.getByText("Hosting")).toBeTruthy();
+    expect(screen.queryByText(/^Going$/)).toBeNull();
   });
 
-  it("asks for a reply to an invite you haven't answered", () => {
-    card({ myRsvp: "PENDING" });
+  it("asks for a reply to an invite you haven't answered, with the answers on the card", () => {
+    card({ myRsvp: "PENDING", orgId: "org_1" });
 
-    expect(screen.getByText("Invited, reply needed")).toBeTruthy();
+    expect(screen.getByText("Reply needed")).toBeTruthy();
+    const group = screen.getByRole("radiogroup", { name: /Your answer/ });
+    expect(
+      within(group)
+        .getAllByRole("radio")
+        .map((b) => b.textContent),
+    ).toEqual(["Going", "Maybe", "No"]);
+    expect(within(group).queryByRole("radio", { checked: true })).toBeNull();
+  });
+
+  it("shows your answer as the chosen button", () => {
+    card({ myRsvp: "MAYBE", orgId: "org_1" });
+
+    expect(screen.getByRole("radio", { name: "Maybe", checked: true })).toBeTruthy();
   });
 
   it("only says you were invited once the meeting is over", () => {
     card({ myRsvp: "PENDING", past: true });
 
-    expect(screen.getByText("You were invited")).toBeTruthy();
-    expect(screen.queryByText("Invited, reply needed")).toBeNull();
+    expect(screen.getByText("Invited")).toBeTruthy();
+    expect(screen.queryByText("Reply needed")).toBeNull();
   });
 
   it.each([
-    ["YES", "Invited, you're going"],
-    ["MAYBE", "Invited, you said maybe"],
-    ["NO", "Invited, you declined"],
+    ["YES", "Going"],
+    ["MAYBE", "Maybe"],
+    ["NO", "Declined"],
   ] as const)("says what you answered (%s)", (myRsvp, text) => {
     card({ myRsvp });
 

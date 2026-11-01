@@ -102,6 +102,8 @@ model User {
   availability           UserAvailability?
   reminderSends          EventReminderSend[]
   upNextDismissals       UpNextDismissal[]
+  inboxItemStates        InboxItemState[]
+  memberPresence         MemberPresence[]
   pins                   Pin[]
   recentVisits           RecentVisit[]
   memberPrefs            MemberPrefs[]
@@ -113,6 +115,7 @@ model User {
   noteComments           NoteComment[]        @relation("NoteCommentAuthor")
   noteCommentsResolved   NoteComment[]        @relation("NoteCommentResolvedBy")
   noteVersions           NoteVersion[]        @relation("NoteVersionCreatedBy")
+  itemLinksMade          ItemLink[]
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -320,7 +323,7 @@ model PasswordResetToken {
 /// when mail fails; it is also emailed (DEMO_REQUEST_INBOX). Platform data:
 /// written by app_auth (insert only), read by the owner role (Supabase).
 model DemoRequest {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   name         String
   email        String
   organization String
@@ -328,7 +331,7 @@ model DemoRequest {
   message      String?
   /// When the email to the inbox went out; null if it didn't.
   emailedAt    DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([createdAt])
 }
@@ -399,6 +402,8 @@ model Organization {
   events            Event[]
   availabilityPolls AvailabilityPoll[]
   polls             Poll[]
+  forms             Form[]
+  formResponses     FormResponse[]
   budgetPeriods     BudgetPeriod[]
   budgetCategories  BudgetCategory[]
   transactions      Transaction[]
@@ -412,6 +417,8 @@ model Organization {
   secrets           OrgSecret[]
   settings          OrgSettings?
   upNextDismissals  UpNextDismissal[]
+  inboxItemStates   InboxItemState[]
+  memberPresence    MemberPresence[]
   integrations      OrgIntegration[]
   slugHistory       OrgSlugHistory[]
   exports           OrgExport[]
@@ -430,6 +437,7 @@ model Organization {
   noteFolders       NoteFolder[]
   pulseIssues       PulseIssue[]
   connectorGrants   ConnectorGrant[]
+  itemLinks         ItemLink[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -479,6 +487,8 @@ enum NotificationType {
   WEEKLY_PULSE
   // A meeting's reminder to a member going (src/server/rsvp/jobs.ts)
   EVENT_REMINDER
+  // A new answer to a form you made (src/server/forms/public.ts)
+  FORM_RESPONSE
 }
 
 model Notification {
@@ -1062,6 +1072,8 @@ model Event {
   kind               EventKind          @default(OTHER)
   /// One of the org's meeting types (OrgSettings.eventTypes), by name; the calendar draws it in that type's colour.
   meetingType        String?
+  /// A repeating meeting's series: every week is its own Event sharing this id (src/lib/meetings/series.ts).
+  seriesId           String?
   visibility         EventVisibility    @default(INTERNAL)
   hostUserId         String?
   /// Free-text host when the host is not a member (guest speaker).
@@ -1102,6 +1114,9 @@ model Event {
   capacityFull       Boolean            @default(false)
   featured           Boolean            @default(false)
   publicNote         String?
+  /// Where the recording is (a pasted link, http(s) only), for Past's
+  /// "Recording". Hosts paste it on the meeting page once it's up.
+  recordingUrl       String?
   // Public RSVP page (docs/features/rsvp.md): anyone with the link signs up
   // at /e/{rsvpSlug}, member or not. Owner/admin settings, like the rest of
   // the event.
@@ -1196,6 +1211,7 @@ model Event {
   @@index([organizationId, deletedAt, kind, startsAt])
   @@index([organizationId, visibility, deletedAt, startsAt])
   @@index([organizationId, term, startsAt])
+  @@index([organizationId, seriesId, startsAt])
   @@index([googleSyncState])
   @@index([conferenceSyncState])
 }
@@ -1408,6 +1424,39 @@ model UpNextDismissal {
   @@index([organizationId, userId])
 }
 
+/// The Inbox's memory, per member: an item put off until later (snoozedUntil)
+/// or finished with (doneAt). itemKey is "<kind>:<id>" (invite, task,
+/// request, review, update). Own rows only (RLS pins userId).
+model InboxItemState {
+  organizationId String
+  userId         String
+  itemKey        String
+  snoozedUntil   DateTime?
+  doneAt         DateTime?
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, organizationId, itemKey])
+  @@index([organizationId, userId])
+}
+
+/// Who's online (Overview and People): the open app marks its member here
+/// about once a minute; a recent lastSeenAt is "online". Members of the org
+/// read every row; each writes only their own (RLS pins userId).
+model MemberPresence {
+  organizationId String
+  userId         String
+  lastSeenAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@index([organizationId, lastSeenAt])
+}
+
 /// organizationId is denormalized from Event (Phase 7) and kept equal by the
 /// composite FK.
 model EventAttendee {
@@ -1514,6 +1563,8 @@ model Poll {
   /// Voters see only their own choice until it closes (the creator and admins see counts).
   hideResultsUntilClosed Boolean   @default(false)
   closesAt               DateTime?
+  /// The form it was moved into (Forms); its page opens the form.
+  formId                 String?
   /// Set when someone closes it by hand; cleared on reopen.
   closedAt               DateTime?
   createdById            String
@@ -1569,6 +1620,112 @@ model PollVote {
   @@index([organizationId, pollId])
 }
 
+/// What a form is: a full form (questions, a database behind it) or a quick
+/// poll made from Forms (one choice question anyone with the link answers).
+/// Members-only question polls with live counts stay on Poll.
+enum FormKind {
+  FORM
+  QUICK_POLL
+}
+
+/// Who may answer a form.
+enum FormAccess {
+  /// Anyone with the link, no sign-in.
+  ANYONE
+  /// Members of the organization, signed in.
+  MEMBERS
+  /// Anyone signed in to Bananasplit, one answer each.
+  SIGNED_IN
+}
+
+/// Where a response stands in review (applications).
+enum FormResponseStatus {
+  NEW
+  ACCEPTED
+  WAITLISTED
+  DECLINED
+}
+
+/// A form: its questions (JSON, src/lib/forms/questions.ts) and settings.
+/// Every form writes into its own club database (databaseId): each question
+/// with an answer is a DatabaseField, each response a DatabaseRecord. People
+/// answer at /f/{slug}, signed in or not (access). Owners and admins make
+/// and change forms; the public submit runs on the service path after the
+/// app checks the form is open and the person may answer.
+model Form {
+  id                     String     @id @default(cuid())
+  organizationId         String
+  databaseId             String
+  kind                   FormKind   @default(FORM)
+  title                  String
+  description            String?
+  /// The public link: /f/{slug}.
+  slug                   String     @unique
+  questions              Json       @default("[]")
+  access                 FormAccess @default(ANYONE)
+  /// Signed-in people answer once (always true for SIGNED_IN).
+  onePerPerson           Boolean    @default(false)
+  /// Don't record who answered.
+  anonymous              Boolean    @default(false)
+  /// Quick polls: respondents see the results after answering, unless this.
+  hideResultsUntilClosed Boolean    @default(false)
+  /// Stops taking answers after this many.
+  responseCap            Int?
+  closesAt               DateTime?
+  /// Closed by hand; cleared on reopen.
+  closedAt               DateTime?
+  /// Tell the creator about each response.
+  notifyOwner            Boolean    @default(true)
+  /// Responses get a review status, a rating and notes (applications).
+  review                 Boolean    @default(false)
+  /// The Files folder uploads go into.
+  folderId               String?
+  /// When it went live; null while it's a draft (nobody can answer a draft).
+  publishedAt            DateTime?
+  /// How the answer page looks: {accent, cover, button, thanks} (lib/forms/design.ts).
+  design                 Json       @default("{}")
+  /// Email the person a copy of their answers when they gave an email.
+  receipt                Boolean    @default(false)
+  createdById            String
+  deletedAt              DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  database     DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
+  responses    FormResponse[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deletedAt, createdAt])
+}
+
+/// One response's review: the record holds the answers; this holds who
+/// answered (unless the form is anonymous) and the officers' status, rating
+/// and private notes. Owners and admins only.
+model FormResponse {
+  id             String             @id @default(cuid())
+  organizationId String
+  formId         String
+  recordId       String
+  userId         String?
+  email          String?
+  status         FormResponseStatus @default(NEW)
+  rating         Int?
+  notes          String?
+  reviewedById   String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  form         Form           @relation(fields: [organizationId, formId], references: [organizationId, id], onDelete: Cascade)
+  record       DatabaseRecord @relation(fields: [organizationId, recordId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, recordId])
+  @@index([organizationId, formId, status, createdAt])
+  @@index([formId, userId])
+}
+
 // --- Finance ---
 // Amounts are always integer cents. There is no stored balance column anywhere;
 // balance is always derived from Transaction (spec section 5.7).
@@ -1580,6 +1737,10 @@ model BudgetPeriod {
   startsOn       DateTime @db.Date
   endsOn         DateTime @db.Date
   isActive       Boolean  @default(false)
+  /// The balance it opened with, carried over from the period it replaced
+  /// (signed cents). Counted in the balance like a starting-balance row, but
+  /// kept on the period so a period made by mistake can still be deleted.
+  carriedInCents Int      @default(0)
   createdAt      DateTime @default(now())
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -2346,9 +2507,10 @@ model DatabaseRecord {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  database  DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
-  createdBy User?              @relation("DatabaseRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedBy User?              @relation("DatabaseRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  database     DatabaseDefinition @relation(fields: [organizationId, databaseId], references: [organizationId, id], onDelete: Cascade)
+  createdBy    User?              @relation("DatabaseRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy    User?              @relation("DatabaseRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  formResponse FormResponse?
 
   @@unique([organizationId, id])
   @@index([organizationId, databaseId, deletedAt, createdAt])
@@ -2407,6 +2569,7 @@ model DatabaseDefinition {
   createdBy    User?            @relation("DatabaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   fields       DatabaseField[]
   records      DatabaseRecord[]
+  forms        Form[]
 
   @@unique([organizationId, key])
   @@unique([organizationId, id])
@@ -2773,4 +2936,26 @@ model ConnectorGrant {
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, clientId])
+}
+
+/// A link between any two things in a space (a meeting and its sign-up
+/// form, a task and the notes it came from), shown in the Linked panel on
+/// both ends. It holds only the two references: titles and links are looked
+/// up as the viewer each time, so a private note linked from a meeting never
+/// shows its title to someone who can't open it.
+model ItemLink {
+  id             String   @id @default(cuid())
+  organizationId String
+  fromKind       String
+  fromId         String
+  toKind         String
+  toId           String
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, fromKind, fromId, toKind, toId])
+  @@index([organizationId, toKind, toId])
 }

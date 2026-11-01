@@ -11,6 +11,7 @@ import { exportDownloadPath, signExportDownload } from "@/server/export/signing"
 
 import { SettingsCard } from "../../../settings-card";
 import { SettingsNoAccess } from "../../../settings-no-access";
+import { ExportAgain, RefreshWhilePreparing } from "./export-again";
 
 const fmt = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
 
@@ -45,10 +46,12 @@ export default async function ExportLandingPage({
     <div className="max-w-2xl space-y-7.5">
       <div className="space-y-4">
         <BackLink href={`/app/${orgSlug}/settings/danger`} label="Danger zone" />
-        <PageHeader
-          title="Data export"
-          description={`Requested ${fmt.format(row.createdAt)}${row.expiresAt ? ` · available until ${fmt.format(row.expiresAt)}` : ""}${row.downloadCount ? ` · downloaded ${row.downloadCount}×` : ""}`}
-        />
+        <PageHeader title="Data export" />
+        <p className="text-muted-foreground -mt-2 text-sm">
+          Requested {fmt.format(row.createdAt)}
+          {row.expiresAt ? `, available until ${fmt.format(row.expiresAt)}` : ""}
+          {row.downloadCount ? `, downloaded ${row.downloadCount}×` : ""}
+        </p>
       </div>
       <SettingsCard
         title={
@@ -60,16 +63,22 @@ export default async function ExportLandingPage({
                 ? "This export has expired"
                 : "Still preparing"
         }
-        description="Each download is recorded in the audit log. The link works only for you, while you are signed in as an owner, for 24 hours."
+        description={href ? "Link works for you only, for 24 hours." : undefined}
         footer={
-          href && (
+          href ? (
             <Button asChild>
               <a href={href}>
                 <Download data-icon="inline-start" aria-hidden="true" />
                 Download zip
               </a>
             </Button>
-          )
+          ) : row.status === "FAILED" || row.status === "EXPIRED" ? (
+            <ExportAgain
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              retryOf={row.status === "FAILED" ? row.id : undefined}
+            />
+          ) : null
         }
       >
         {!href && (
@@ -80,11 +89,16 @@ export default async function ExportLandingPage({
                 : "bg-muted/60 rounded-tile p-3 text-sm"
             }
           >
-            {row.status === "FAILED"
-              ? "Request a new one from the Danger zone."
-              : row.status === "EXPIRED"
-                ? "Its file was deleted. Request a new one from the Danger zone."
-                : "This export is still being prepared. Refresh this page in a minute."}
+            {row.status === "FAILED" ? (
+              "Something went wrong preparing it."
+            ) : row.status === "EXPIRED" ? (
+              "Its file was deleted."
+            ) : (
+              <>
+                Preparing. This page updates by itself.
+                <RefreshWhilePreparing />
+              </>
+            )}
           </p>
         )}
       </SettingsCard>

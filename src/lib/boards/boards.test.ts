@@ -38,7 +38,7 @@ describe("boards", () => {
 });
 
 describe("overview widgets", () => {
-  it("never offers anything about the club's money", () => {
+  it("never offers anything about the organization's money", () => {
     const text = OVERVIEW_WIDGETS.map((w) => `${w.type} ${w.title} ${w.description}`)
       .join(" ")
       .toLowerCase();

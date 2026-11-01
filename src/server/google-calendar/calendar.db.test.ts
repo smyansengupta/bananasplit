@@ -254,7 +254,7 @@ describe.skipIf(!seeded)("calendar against the local database (seeded CBC)", () 
       vi.unstubAllGlobals();
     }
     expect(calls).toEqual([
-      `DELETE /calendar/v3/calendars/club@group.calendar.google.com/events/${mirrored.googleEventId}`,
+      `DELETE /calendar/v3/calendars/organization@group.calendar.google.com/events/${mirrored.googleEventId}`,
     ]);
     const rows = await withSystemOrgTx(s.cbcId, ({ db }) =>
       db.event.findMany({

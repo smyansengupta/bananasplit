@@ -11,7 +11,6 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { MeetingConnection } from "@/server/conference/connections";
 import { cn } from "@/lib/utils";
 
-
 /**
  * Video calls: one bar across the top of Meetings
  * (docs/features/meetings.md).
@@ -65,6 +64,10 @@ export function VideoConnections({
   const offerable = connections.filter((c) => c.connected || c.needsReauth || c.available);
   const unavailable = connections.filter((c) => !c.connected && !c.needsReauth && !c.available);
   const shown = result ?? notice;
+  // Everything connected and nothing to say: one quiet line, opened on Manage.
+  const [expanded, setExpanded] = useState(false);
+  const allSet =
+    offerable.length > 0 && offerable.every((c) => c.connected && !c.needsReauth) && !shown;
 
   async function disconnect(c: MeetingConnection) {
     const confirmed = await confirm({
@@ -98,9 +101,35 @@ export function VideoConnections({
           {platformAdmin
             ? `Google Meet, Zoom and Teams need an app with each provider before any organization can connect them. Add ${unavailable
                 .flatMap((c) => c.missingEnv.slice(0, 1))
-                .join(", ")} and their secrets to this deployment (docs/setup/meeting-providers.md has the steps).`
+                .join(
+                  ", ",
+                )} and their secrets to this deployment (docs/setup/meeting-providers.md has the steps).`
             : "Joining links for Google Meet, Zoom and Teams aren't switched on for Bananasplit yet. You can still paste a link into any meeting."}
         </span>
+      </section>
+    );
+  }
+
+  if (allSet && !expanded) {
+    return (
+      <section
+        className={cn(
+          "text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]",
+          className,
+        )}
+        aria-label="Video calls"
+      >
+        <span className="text-foreground font-medium">Video calls</span>
+        {offerable.map((c) => (
+          <span key={c.provider} className="inline-flex items-center gap-1.5">
+            <MeetingLogo provider={c.provider} className="size-4 shrink-0" />
+            {c.label}
+            <Check className="text-success size-3.5 shrink-0" aria-hidden="true" />
+          </span>
+        ))}
+        <Button variant="ghost" size="sm" onClick={() => setExpanded(true)}>
+          Manage
+        </Button>
       </section>
     );
   }
@@ -132,7 +161,7 @@ export function VideoConnections({
               <span className="text-foreground">{shown.text}</span>
             </span>
           ) : live.length === 0 ? (
-            "Connect an account and every online meeting gets a join link automatically."
+            "Connect one and online meetings get a link automatically."
           ) : (
             `Online meetings are created in ${live.map((c) => c.accountEmail ?? c.label).join(", ")}.`
           )}
@@ -152,9 +181,7 @@ export function VideoConnections({
                 type="submit"
                 disabled={!canConnect}
                 title={
-                  c.connected
-                    ? `Connect a different ${c.label} account`
-                    : `Connect ${c.label}`
+                  c.connected ? `Connect a different ${c.label} account` : `Connect ${c.label}`
                 }
                 className={cn(
                   "focus-glow inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium outline-none",

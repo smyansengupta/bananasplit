@@ -27,7 +27,15 @@ export default async function DraftPage({
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "orgchart.write")) notFound();
 
-  const detail = await withOrgTx(organization.id, (ctx) => loadVersion(ctx, versionId));
+  const [detail, live] = await Promise.all([
+    withOrgTx(organization.id, (ctx) => loadVersion(ctx, versionId)),
+    withOrgTx(organization.id, ({ db }) =>
+      db.orgChartVersion.findFirst({
+        where: { organizationId: organization.id, status: "PUBLISHED" },
+        select: { id: true },
+      }),
+    ),
+  ]);
   if (!detail) notFound();
   const { version } = detail;
   const base = `/app/${orgSlug}/org-chart`;
@@ -53,7 +61,7 @@ export default async function DraftPage({
             . Check every position before publishing.
           </>
         ) : (
-          "Type the chart or edit positions. Drafts save as you go; publish when it's right."
+          "Drafts save as you go."
         )}
       </p>
     </div>
@@ -145,6 +153,7 @@ export default async function DraftPage({
           positions={positions}
           canInvite={can({ role }, "members.invite")}
           canSetTitles={can({ role }, "members.setTitle")}
+          publishedVersionId={live?.id ?? null}
           members={members.map((m) => ({
             id: m.id,
             name: m.name,

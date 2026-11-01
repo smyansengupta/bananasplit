@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   search: { current: "" },
 }));
 
+vi.mock("@/app/app/[orgSlug]/calendar/polls/actions", () => ({ createPoll: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh, replace: mocks.replace }),
   useParams: () => ({ orgSlug: "acme" }),
@@ -72,7 +73,8 @@ const chosen = () =>
   ["Online", "In person", "Event"].map(
     (name) => shape(name).getAttribute("aria-checked") === "true",
   );
-const dialogOpen = () => screen.findByRole("dialog");
+// The form is loaded on first open (next/dynamic), date picker included.
+const dialogOpen = () => screen.findByRole("dialog", undefined, { timeout: 5000 });
 
 beforeEach(() => {
   mocks.push.mockReset();
@@ -175,7 +177,7 @@ describe("NewMeetingButton", () => {
     render(button({ startOpen: true, initialShape: "online" }));
     await dialogOpen();
     expect(chosen()).toEqual([true, false, false]);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     fireEvent.click(screen.getByRole("button", { name: "New meeting" }));

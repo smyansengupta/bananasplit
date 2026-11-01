@@ -21,15 +21,10 @@ export const dynamic = "force-dynamic";
  * whatever unfurls it is redirected before reading any of this.
  */
 export const metadata = shareMetadata({
-  title: "Join your club",
+  title: "Join your organization",
   description: "Enter the invite code whoever invited you sent, and join their workspace.",
   noIndex: true,
 });
-
-const WHERE = [
-  "Check the invite email from your organization.",
-  "Or ask any admin. It's on their organization settings page.",
-] as const;
 
 /**
  * Join a club (design: App screens, 03): the club's code in eight boxes, or
@@ -64,20 +59,12 @@ export default async function JoinPage({ searchParams }: PageProps<"/onboarding/
           <p className="font-heading m-0 text-[46px] leading-[1.02] tracking-[-0.035em]">
             Where&apos;s my code?
           </p>
-          <ul className="m-0 flex list-none flex-col gap-3 p-0 text-[15px] leading-[1.45]">
-            {WHERE.map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <ArrowRight className="mt-[3px]" />
-                <span>{line}</span>
-              </li>
-            ))}
-            <li className="flex items-start gap-2.5">
-              <ArrowRight className="mt-[3px]" />
-              <span>
-                Codes are 8 letters and numbers, like <b>RPKA-YWSF</b>.
-              </span>
-            </li>
-          </ul>
+          <p className="m-0 flex items-start gap-2.5 text-[15px] leading-[1.45]">
+            <ArrowRight className="mt-[3px]" />
+            <span>
+              In your invite email, or ask an admin. It looks like <b>RPKA-YWSF</b>.
+            </span>
+          </p>
         </div>
       }
     >

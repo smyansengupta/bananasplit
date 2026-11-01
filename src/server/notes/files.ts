@@ -358,6 +358,28 @@ export async function removeNoteFile(
   return count > 0 ? row.storageKey : null;
 }
 
+/**
+ * Renames an uploaded file or changes who can see it, from its own page.
+ * The uploader or an admin (RLS: app_user_update); anyone else changes
+ * nothing and gets false. The extension stays whatever the person typed.
+ */
+export async function updateNoteFile(
+  db: TxClient,
+  orgId: string,
+  fileId: string,
+  patch: { name?: string; visibility?: "PRIVATE" | "ORGANIZATION" },
+): Promise<boolean> {
+  const data: { name?: string; visibility?: "PRIVATE" | "ORGANIZATION" } = {};
+  if (patch.name !== undefined) data.name = cleanName(patch.name);
+  if (patch.visibility !== undefined) data.visibility = patch.visibility;
+  if (Object.keys(data).length === 0) return true;
+  const { count } = await db.orgFile.updateMany({
+    where: { id: fileId, organizationId: orgId, deletedAt: null },
+    data,
+  });
+  return count > 0;
+}
+
 /** Brings a file back from "Recently deleted" (within NOTE_TRASH_DAYS). */
 export async function restoreNoteFile(
   db: TxClient,

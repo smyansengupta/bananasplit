@@ -6,12 +6,10 @@ import {
   FileText,
   FileUp,
   FolderPlus,
-  Globe,
   LayoutTemplate,
   ListChecks,
   Loader2,
   Lock,
-  NotebookPen,
   Target,
   Upload,
   Users,
@@ -23,6 +21,7 @@ import { useRef, useState, useTransition } from "react";
 import { importNote } from "@/app/app/[orgSlug]/notes/actions";
 import { DocumentPreview } from "@/components/notes/file-preview";
 import { NewFolderForm } from "@/components/notes/new-folder-form";
+import { pickFiles } from "@/components/notes/upload-queue";
 import { Button } from "@/components/ui/button";
 import { CreateSplitButton } from "@/components/ui/create-split-button";
 import {
@@ -43,14 +42,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { FieldSelect } from "@/components/ui/field-select";
-import { formatStorage } from "@/lib/billing/storage";
-import { NOTE_FILE_ACCEPT } from "@/lib/files/types";
 import { uploadNoteFile } from "@/lib/files/upload";
 import { noteSchemaExtensions } from "@/lib/notes/schema-extensions";
 import { NOTE_TEMPLATES } from "@/lib/notes/templates";
 import { cn } from "@/lib/utils";
 
-type Dialogs = "word" | "google" | "upload" | "folder" | null;
+type Dialogs = "import" | "folder" | null;
 type Visibility = "ORGANIZATION" | "PRIVATE";
 
 const TEMPLATE_ICONS: Record<string, IconComponent> = { Users, CalendarDays, Target, ListChecks };
@@ -78,8 +75,8 @@ function VisibilityPicker({
     <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Who can see it">
       {(
         [
-          ["ORGANIZATION", Users, "Everyone in the organization"],
-          ["PRIVATE", Lock, "Only me"],
+          ["ORGANIZATION", Users, "Everyone"],
+          ["PRIVATE", Lock, "Private"],
         ] as const
       ).map(([v, Icon, label]) => (
         <button
@@ -132,25 +129,25 @@ function FolderSelect({
 }
 
 /**
- * Files › New: a blank note or one from a template, an uploaded file, a
- * Word document or Google Doc turned into a note (with a preview first, so
- * you see what came across before it's made), or a folder. Everything lands
- * in the folder you're looking at unless you pick another. In Personal
- * there's no one to share with, so nothing asks who can see it: it's yours.
+ * Files › New: a blank note (the button itself) or one from a template,
+ * Upload (straight to the file picker, several at once, through the page's
+ * uploader), Import a doc (a .docx or a Google Doc link, previewed before
+ * it's made), or a folder. Everything lands in the folder you're looking at
+ * unless you pick another. A club's new notes start shared with the club;
+ * in Personal there's no one to share with, so nothing asks.
  */
 export function NotesNewMenu({
   orgId,
   orgSlug,
   folders,
   currentFolderId,
-  maxFileBytes,
   personal = false,
 }: {
   orgId: string;
   orgSlug: string;
   folders: { id: string; name: string }[];
   currentFolderId: string | null;
-  /** The plan's largest file (PLAN_LIMITS), for the upload dialog's copy. */
+  /** The plan's largest file (PLAN_LIMITS). The page's uploader shows it now. */
   maxFileBytes?: number;
   /** A Personal space: everything is private to its owner. */
   personal?: boolean;
@@ -166,7 +163,6 @@ export function NotesNewMenu({
   const [keepOriginal, setKeepOriginal] = useState(true);
   const [pending, start] = useTransition();
   const wordInput = useRef<HTMLInputElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   function show(which: Dialogs) {
     setError(null);
@@ -179,7 +175,7 @@ export function NotesNewMenu({
   async function createFromHtml(
     title: string,
     html: string,
-    vis: Visibility,
+    vis: Visibility | undefined,
     folder: string | null,
   ) {
     const extensions = noteSchemaExtensions();
@@ -204,7 +200,7 @@ export function NotesNewMenu({
       const result = await createFromHtml(
         template ? template.title : "Untitled note",
         template ? template.html(today) : "<p></p>",
-        "PRIVATE",
+        undefined,
         currentFolderId,
       );
       if (result.noteId) router.push(`/app/${orgSlug}/notes/${result.noteId}`);
@@ -240,7 +236,7 @@ export function NotesNewMenu({
     }
   }
 
-  async function importGoogle() {
+  async function importGoogle(url = googleUrl) {
     setBusy(true);
     setError(null);
     try {
@@ -248,7 +244,7 @@ export function NotesNewMenu({
         await fetch(`/api/orgs/${encodeURIComponent(orgId)}/notes/import`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ googleUrl }),
+          body: JSON.stringify({ googleUrl: url }),
         }),
         null,
       );
@@ -286,22 +282,6 @@ export function NotesNewMenu({
       if (draft.file && keepOriginal) await uploadFile(draft.file, visibility, folderId);
       setOpen(null);
       router.push(`/app/${orgSlug}/notes/${result.noteId}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function upload(file: File) {
-    setBusy(true);
-    setError(null);
-    try {
-      const id = await uploadFile(file, visibility, folderId);
-      if (!id) return;
-      setOpen(null);
-      router.push(`/app/${orgSlug}/notes/files/${id}`);
-      router.refresh();
-    } catch {
-      setError("The upload failed. Check your connection.");
     } finally {
       setBusy(false);
     }
@@ -345,17 +325,10 @@ export function NotesNewMenu({
               onChange={(e) => setKeepOriginal(e.target.checked)}
               className="accent-primary mt-0.5 size-4"
             />
-            <span>
-              Keep the original .docx as well
-              <span className="text-muted-foreground block text-xs">
-                So it can be downloaded as it was.
-              </span>
-            </span>
+            <span>Keep the .docx</span>
           </label>
         )}
-        <p className="text-muted-foreground text-xs">
-          Headings, lists, tables, links and formatting come across. Pictures are left out.
-        </p>
+        <p className="text-muted-foreground text-xs">Pictures are left out.</p>
       </div>
     </div>
   );
@@ -386,7 +359,7 @@ export function NotesNewMenu({
           variant="outline"
           size="sm"
           className="md:hidden"
-          onClick={() => show("upload")}
+          onClick={() => pickFiles(currentFolderId)}
         >
           <Upload className="size-4" aria-hidden="true" />
           Upload
@@ -398,14 +371,10 @@ export function NotesNewMenu({
           onClick={() => fromTemplate(null)}
           menuLabel="More ways to add notes and files"
         >
-          <DropdownMenuItem onSelect={() => fromTemplate(null)}>
-            <NotebookPen className="size-4" aria-hidden="true" />
-            New note
-          </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <LayoutTemplate className="size-4" aria-hidden="true" />
-              Note from a template
+              From a template
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-64">
               {NOTE_TEMPLATES.map((t) => {
@@ -423,17 +392,13 @@ export function NotesNewMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => show("upload")}>
+          <DropdownMenuItem onSelect={() => pickFiles(currentFolderId)}>
             <Upload className="size-4" aria-hidden="true" />
-            Upload a file
+            Upload files
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => show("word")}>
+          <DropdownMenuItem onSelect={() => show("import")}>
             <FileText className="size-4" aria-hidden="true" />
-            Import a Word document
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => show("google")}>
-            <Globe className="size-4" aria-hidden="true" />
-            Import a Google Doc
+            Import a doc
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => show("folder")}>
@@ -447,61 +412,90 @@ export function NotesNewMenu({
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>New folder</DialogTitle>
-            <DialogDescription>
-              {personal
-                ? "Drag notes and files onto a folder to file them."
-                : "Folders are shared with the organization; private notes stay private inside them. Drag notes and files onto a folder to file them."}
-            </DialogDescription>
+            <DialogDescription className="sr-only">Name the folder.</DialogDescription>
           </DialogHeader>
           <NewFolderForm
             orgId={orgId}
             autoFocus
             onCreated={(folder) => {
               setOpen(null);
-              toast({ title: `Folder “${folder.name}” created`, tone: "success", duration: 4_000 });
+              toast({ title: "Folder created", tone: "success", duration: 3_000 });
               router.push(`/app/${orgSlug}/notes?folder=${encodeURIComponent(folder.id)}`);
             }}
           />
         </DialogContent>
       </Dialog>
 
-      <Dialog open={open === "word"} onOpenChange={(o) => !busy && setOpen(o ? "word" : null)}>
+      {/* One import for both: drop or choose a .docx, or paste a Google Doc link. */}
+      <Dialog open={open === "import"} onOpenChange={(o) => !busy && setOpen(o ? "import" : null)}>
         <DialogContent
           className={cn("max-h-[92vh] overflow-y-auto", draft ? "sm:max-w-4xl" : "sm:max-w-md")}
         >
           <DialogHeader>
-            <DialogTitle>
-              {draft ? "Here's how it came across" : "Import a Word document"}
-            </DialogTitle>
-            <DialogDescription>
-              {draft
-                ? "Check the text, pick a title and folder, then create the note."
-                : "You'll see a preview before anything is created."}
+            <DialogTitle>{draft ? "Preview" : "Import a doc"}</DialogTitle>
+            <DialogDescription className={cn(draft && "sr-only")}>
+              {draft ? "Check the title and folder." : "A Word file or a Google Doc link."}
             </DialogDescription>
           </DialogHeader>
           {draft ? (
             preview
           ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => wordInput.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const file = e.dataTransfer.files?.[0];
-                if (file) void importWord(file);
-              }}
-              className="hover:bg-muted/50 flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-sm"
-            >
-              {busy ? (
-                <Loader2 className="text-muted-foreground size-6 animate-spin" aria-hidden="true" />
-              ) : (
-                <FileUp className="text-muted-foreground size-6" aria-hidden="true" />
-              )}
-              {busy ? "Reading it…" : "Choose a .docx file, or drop it here"}
-              <span className="text-muted-foreground text-xs">Up to 4 MB</span>
-            </button>
+            <div className="space-y-4">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => wordInput.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) void importWord(file);
+                }}
+                className="hover:bg-muted/50 focus-glow flex w-full flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-sm"
+              >
+                {busy ? (
+                  <Loader2
+                    className="text-muted-foreground size-6 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <FileUp className="text-muted-foreground size-6" aria-hidden="true" />
+                )}
+                {busy ? "Reading it" : "Choose a .docx, or drop it here"}
+                <span className="text-muted-foreground text-xs">Up to 4 MB</span>
+              </button>
+              <form
+                className="grid gap-1.5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (googleUrl.trim()) void importGoogle();
+                }}
+              >
+                <label htmlFor="import-google-url" className="text-sm font-medium">
+                  Or paste a Google Doc link
+                </label>
+                <Input
+                  id="import-google-url"
+                  type="url"
+                  value={googleUrl}
+                  disabled={busy}
+                  onChange={(e) => setGoogleUrl(e.target.value)}
+                  // A pasted link previews straight away; Enter does the same.
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData("text").trim();
+                    if (!/^https?:\/\//.test(text)) return;
+                    e.preventDefault();
+                    setGoogleUrl(text);
+                    void importGoogle(text);
+                  }}
+                  placeholder="https://docs.google.com/document/d/…"
+                />
+                <span className="text-muted-foreground text-xs">
+                  Shared as Anyone with the link.
+                </span>
+              </form>
+            </div>
           )}
           <input
             ref={wordInput}
@@ -518,98 +512,6 @@ export function NotesNewMenu({
           />
           {errorLine}
           {previewFooter}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={open === "google"} onOpenChange={(o) => !busy && setOpen(o ? "google" : null)}>
-        <DialogContent
-          className={cn("max-h-[92vh] overflow-y-auto", draft ? "sm:max-w-4xl" : "sm:max-w-md")}
-        >
-          <DialogHeader>
-            <DialogTitle>{draft ? "Here's how it came across" : "Import a Google Doc"}</DialogTitle>
-            <DialogDescription>
-              {draft
-                ? "Check the text, pick a title and folder, then create the note."
-                : "Paste the doc's link. It needs to be shared as “Anyone with the link can view”; if it can't be, use File › Download › Microsoft Word and import that instead."}
-            </DialogDescription>
-          </DialogHeader>
-          {draft ? (
-            preview
-          ) : (
-            <form
-              className="space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void importGoogle();
-              }}
-            >
-              <Input
-                autoFocus
-                type="url"
-                value={googleUrl}
-                onChange={(e) => setGoogleUrl(e.target.value)}
-                placeholder="https://docs.google.com/document/d/…"
-                aria-label="Google Docs link"
-              />
-              {errorLine}
-              <DialogFooter>
-                <Button type="submit" disabled={busy || !googleUrl.trim()}>
-                  {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {busy ? "Reading it…" : "Preview"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-          {draft && errorLine}
-          {previewFooter}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={open === "upload"} onOpenChange={(o) => !busy && setOpen(o ? "upload" : null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Upload a file</DialogTitle>
-            <DialogDescription>
-              PDFs, Word, PowerPoint, Excel, images, text and CSV
-              {maxFileBytes ? `, up to ${formatStorage(maxFileBytes)} each` : ""}. It opens right
-              here in the app.
-            </DialogDescription>
-          </DialogHeader>
-          {!personal && <VisibilityPicker value={visibility} onChange={setVisibility} />}
-          <FolderSelect folders={folders} value={folderId} onChange={setFolderId} />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileInput.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const file = e.dataTransfer.files?.[0];
-              if (file) void upload(file);
-            }}
-            className="hover:bg-muted/50 flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-sm"
-          >
-            {busy ? (
-              <Loader2 className="text-muted-foreground size-6 animate-spin" aria-hidden="true" />
-            ) : (
-              <Upload className="text-muted-foreground size-6" aria-hidden="true" />
-            )}
-            {busy ? "Uploading…" : "Choose a file, or drop it here"}
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept={NOTE_FILE_ACCEPT}
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden="true"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) void upload(file);
-            }}
-          />
-          {errorLine}
         </DialogContent>
       </Dialog>
     </>

@@ -17,11 +17,7 @@ const COLUMNS = [
   },
   {
     title: "Works with",
-    links: [
-      { label: "Integrations", href: "/#integrations" },
-      { label: "Claude and ChatGPT", href: "/#integrations" },
-      { label: "Granola and Wispr Flow", href: "/#integrations" },
-    ],
+    links: [{ label: "Integrations", href: "/#integrations" }],
   },
   {
     title: "Plans",

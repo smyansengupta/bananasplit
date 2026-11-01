@@ -7,11 +7,12 @@
  */
 
 export const STARTED_STEP_KEYS = [
-  "name",
   "picture",
   "members",
   "event",
+  "types",
   "task",
+  "teams",
   "budget",
   "database",
 ] as const;
@@ -32,30 +33,34 @@ export interface StartedStep {
   recommended?: boolean;
 }
 
+/**
+ * Paths starting "/onboarding/" are whole (a setup page that returns to the
+ * Overview when it's done); the rest are under /app/{slug}.
+ */
 export const STARTED_STEPS: readonly StartedStep[] = [
   {
-    key: "name",
-    label: "Name the organization",
-    hint: "The name members and guests see everywhere.",
-    path: "/settings/general",
-  },
-  {
     key: "picture",
-    label: "Add an organization picture",
-    hint: "Your logo on the sidebar, invites and RSVP pages.",
-    path: "/settings/general",
+    label: "Add a picture",
+    hint: "Your logo on the sidebar, invites and sign-up pages.",
+    path: "/onboarding/organization/{slug}/picture",
   },
   {
     key: "members",
     label: "Invite your members",
-    hint: "Share a join code or link.",
+    hint: "Share the link, or send emails.",
     path: "/settings/members",
   },
   {
     key: "event",
     label: "Put your first meeting on the calendar",
     hint: "Members get it in their calendar and Up next.",
-    path: "/calendar",
+    path: "/meetings?new=1",
+  },
+  {
+    key: "types",
+    label: "Pick your event types",
+    hint: "Meetings, socials, workshops, in your colours.",
+    path: "/onboarding/organization/{slug}/events",
   },
   {
     key: "task",
@@ -64,19 +69,38 @@ export const STARTED_STEPS: readonly StartedStep[] = [
     path: "/tasks?new=1",
   },
   {
+    key: "teams",
+    label: "Add your teams",
+    hint: "They become your org chart.",
+    path: "/onboarding/organization/{slug}/teams",
+  },
+  {
     key: "budget",
     label: "Set up your budgets",
-    hint: "What you can spend this term, line by line.",
+    hint: "What you can spend this term.",
     path: "/finance/budget",
   },
   {
     key: "database",
     label: "Set up a database",
-    hint: "Track attendance, sign-ups or anything else.",
+    hint: "Attendance, sign-ups or anything else.",
     path: "/databases",
     recommended: true,
   },
 ];
+
+/** More setup that never "finishes": links under the steps, not steps. */
+export const STARTED_EXTRAS: readonly { label: string; path: string }[] = [
+  { label: "Import from another app", path: "/onboarding/organization/{slug}/import" },
+  { label: "Task tags", path: "/onboarding/organization/{slug}/labels" },
+  { label: "Emails", path: "/onboarding/organization/{slug}/emails" },
+  { label: "Connect your tools", path: "/setup" },
+];
+
+/** A step's or extra's link for the organization `slug`. */
+export function startedHref(slug: string, path: string): string {
+  return path.startsWith("/onboarding/") ? path.replace("{slug}", slug) : `/app/${slug}${path}`;
+}
 
 export function isStartedStep(value: unknown): value is StartedStepKey {
   return (STARTED_STEP_KEYS as readonly string[]).includes(value as string);

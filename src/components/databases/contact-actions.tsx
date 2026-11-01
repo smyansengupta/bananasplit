@@ -129,9 +129,7 @@ export function ContactActions({
       </div>
       {contact.emails.length > 1 && (
         <div className="space-y-1">
-          <p className="text-muted-foreground text-[13px]">
-            Split an address off into its own person (unmerge):
-          </p>
+          <p className="text-muted-foreground text-[13px]">Split off an address:</p>
           {contact.emails.map((e) => (
             <div key={e.id} className="flex items-center justify-between gap-2">
               <span className="font-mono text-xs break-all">

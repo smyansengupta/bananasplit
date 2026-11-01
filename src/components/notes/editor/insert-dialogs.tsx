@@ -213,7 +213,7 @@ function EmbedPickerBody({
                 className="hover:bg-muted flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm"
               >
                 <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{t.title}</span>
+                <span className="min-w-0 break-words">{t.title}</span>
               </button>
             </li>
           ))

@@ -58,7 +58,7 @@ export function AvailabilityPollActions({
       run: async () => (await deletePoll(orgId, pollId)).error,
     });
     if (!deleted) return;
-    toast({ title: "Poll deleted", description: title });
+    toast({ title: "Deleted" });
     router.push(`/app/${orgSlug}/calendar/find-a-time`);
   }
 
@@ -115,17 +115,19 @@ export function AvailabilityPollActions({
           <span className="max-sm:sr-only">Delete</span>
         </Button>
       )}
-      <ItemMenu
-        label="Poll actions"
-        items={[
-          { label: "Copy member link", icon: Link2, onSelect: () => copyPollLink(href) },
-          isOpen && {
-            label: "Open guest view",
-            icon: ExternalLink,
-            onSelect: () => window.open(`/poll/${pollId}`, "_blank", "noopener,noreferrer"),
-          },
-        ]}
-      />
+      {/* Both links on the bar, not in a menu: members need theirs as often as guests do. */}
+      <Button type="button" variant="outline" size="sm" onClick={() => copyPollLink(href)}>
+        <Link2 aria-hidden className="size-4" />
+        Copy member link
+      </Button>
+      {isOpen && (
+        <Button type="button" variant="ghost" size="sm" asChild>
+          <a href={`/poll/${pollId}`} target="_blank" rel="noopener noreferrer">
+            <ExternalLink aria-hidden className="size-4" />
+            Guest view
+          </a>
+        </Button>
+      )}
     </>
   );
 }

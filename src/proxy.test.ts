@@ -47,6 +47,7 @@ describe("proxy — per-request nonce CSP (0A Fix 13)", () => {
       "/app/:path*",
       "/poll/:path*",
       "/e/:path*",
+      "/f/:path*",
       "/invite/:path*",
       "/join/:path*",
       "/sign-in",

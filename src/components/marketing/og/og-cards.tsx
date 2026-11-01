@@ -645,7 +645,7 @@ export const OG_CARDS: Record<string, ReactNode> = {
           set up for you.
         </>
       }
-      line="A walkthrough of Bananasplit with your own club's calendar, budget and people in it."
+      line="A walkthrough of Bananasplit with your own organization's calendar, budget and people in it."
     >
       <DemoSlots />
     </Split>
@@ -742,11 +742,11 @@ export const OG_CARDS: Record<string, ReactNode> = {
   invite: (
     <Centred
       headline="You're invited."
-      line="Open the link to join your club's workspace on Bananasplit."
+      line="Open the link to join your organization's workspace on Bananasplit."
     />
   ),
   join: (
-    <Centred headline="Join your club." line="Enter the code whoever invited you sent.">
+    <Centred headline="Join your organization." line="Enter the code whoever invited you sent.">
       <span className="flex items-center gap-[10px] pt-[16px]">
         {"RPKA".split("").map((character, index) => (
           <CodeBox key={`a${index}`} character={character} />

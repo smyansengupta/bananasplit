@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/toaster";
 import {
   Select,
   SelectContent,
@@ -68,9 +69,23 @@ export function TeamsEditor({
     setName("");
   }
 
+  /** Deletes a team (its positions go back to no team), with Undo. */
   function remove(id: string) {
+    const before = teams;
+    const members = positions.filter((p) => p.teamId === id).map((p) => p.id);
+    const name = teams.find((t) => t.id === id)?.name ?? "Team";
     onTeams(teams.filter((t) => t.id !== id));
-    for (const p of positions) if (p.teamId === id) onAssign(p.id, null);
+    for (const pid of members) onAssign(pid, null);
+    toast({
+      title: `${name} deleted`,
+      action: {
+        label: "Undo",
+        run: () => {
+          onTeams(before);
+          for (const pid of members) onAssign(pid, id);
+        },
+      },
+    });
   }
 
   const count = (id: string) => positions.filter((p) => p.teamId === id).length;
@@ -150,10 +165,10 @@ export function TeamsEditor({
           {positions.map((p) => (
             <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2">
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">
+                <span className="block text-sm font-medium break-words">
                   {p.title || "Untitled position"}
                 </span>
-                <span className="text-muted-foreground block truncate text-[12px]">
+                <span className="text-muted-foreground block text-[12px] break-words">
                   {p.isOpen
                     ? "Open role"
                     : ((p.userId ? nameOf.get(p.userId) : null) ?? p.personName ?? "Nobody yet")}

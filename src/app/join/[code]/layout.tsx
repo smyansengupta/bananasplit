@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: LayoutProps<"/join/[code]">):
   const club = await clubForCode(code);
   if (!club) {
     return shareMetadata({
-      title: "Join your club",
-      description: "Open the link to join your club's workspace on Bananasplit.",
+      title: "Join your organization",
+      description: "Open the link to join your organization's workspace on Bananasplit.",
       noIndex: true,
       card: FALLBACK_CARDS.join,
     });

@@ -93,6 +93,8 @@ describe("task email templates", () => {
       url,
     });
     expect(reminder.subject).toBe("Due tomorrow: Rooms");
+    // A Mark done link to the task page (which asks once; links change nothing).
+    expect(reminder.text).toContain(`Mark done: ${url}?done=1`);
     const overdue = taskReminderEmail({
       orgName: "CBC",
       when: "yesterday (overdue)",
@@ -120,6 +122,9 @@ describe("task email templates", () => {
     expect(digest.html).toContain("Overdue (1)");
     expect(digest.html).toContain("Late &lt;one&gt;");
     expect(digest.html).not.toContain("Due today");
-    expect(digest.text).toContain("- Stuck - waiting on rooms");
+    expect(digest.text).toContain("- Stuck, waiting on rooms: ");
+    // Every task in the digest links straight to it, with no middle dots.
+    expect(digest.html).toContain(`href="${url}"`);
+    expect(digest.html).not.toContain("&middot;");
   });
 });

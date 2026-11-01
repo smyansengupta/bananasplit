@@ -1,14 +1,18 @@
 /**
  * The people directory's state in the URL (?q, team, role, year, free,
- * sort, view, person), so a filtered list or an open profile is a link.
+ * online, sort, view, person), so a filtered list or an open profile is a link.
  * Pure and client-safe; the page parses it on the server for the first
  * render and the directory writes it back with history.replaceState.
  */
 
-export const DIRECTORY_SORTS = ["team", "name", "new"] as const;
+export const DIRECTORY_SORTS = ["team", "name", "new", "active"] as const;
 export type DirectorySort = (typeof DIRECTORY_SORTS)[number];
-/** The dense list is the default: the directory is mostly a list of names. */
-export const DIRECTORY_VIEWS = ["list", "grid"] as const;
+/**
+ * The dense list is the default: the directory is mostly a list of names.
+ * "chart" is the published org chart. The old "table" falls back to the
+ * list (the roster is Admin > Members now).
+ */
+export const DIRECTORY_VIEWS = ["list", "grid", "chart"] as const;
 export type DirectoryView = (typeof DIRECTORY_VIEWS)[number];
 export const DIRECTORY_ROLES = ["OWNER", "ADMIN", "TREASURER", "MEMBER"] as const;
 export type DirectoryRole = (typeof DIRECTORY_ROLES)[number];
@@ -22,6 +26,8 @@ export interface DirectoryQuery {
   role: DirectoryRole | null;
   year: number | null;
   free: boolean;
+  /** Only who's in the app now. */
+  online: boolean;
   sort: DirectorySort;
   view: DirectoryView;
   /** The member whose profile sheet is open. */
@@ -34,6 +40,7 @@ export const EMPTY_QUERY: DirectoryQuery = {
   role: null,
   year: null,
   free: false,
+  online: false,
   sort: "team",
   view: "list",
   person: null,
@@ -60,11 +67,18 @@ export function parseDirectoryQuery(raw: Raw): DirectoryQuery {
   return {
     q,
     team: team && ID.test(team) ? team : null,
-    role: (DIRECTORY_ROLES as readonly string[]).includes(role ?? "") ? (role as DirectoryRole) : null,
+    role: (DIRECTORY_ROLES as readonly string[]).includes(role ?? "")
+      ? (role as DirectoryRole)
+      : null,
     year: Number.isFinite(year) && year >= 1900 && year <= 2200 ? year : null,
     free: get(raw, "free") === "1",
-    sort: (DIRECTORY_SORTS as readonly string[]).includes(sort ?? "") ? (sort as DirectorySort) : "team",
-    view: (DIRECTORY_VIEWS as readonly string[]).includes(view ?? "") ? (view as DirectoryView) : "list",
+    online: get(raw, "online") === "1",
+    sort: (DIRECTORY_SORTS as readonly string[]).includes(sort ?? "")
+      ? (sort as DirectorySort)
+      : "team",
+    view: (DIRECTORY_VIEWS as readonly string[]).includes(view ?? "")
+      ? (view as DirectoryView)
+      : "list",
     person: person && ID.test(person) ? person : null,
   };
 }
@@ -77,6 +91,7 @@ export function directorySearch(state: DirectoryQuery): string {
   if (state.role) p.set("role", state.role.toLowerCase());
   if (state.year) p.set("year", String(state.year));
   if (state.free) p.set("free", "1");
+  if (state.online) p.set("online", "1");
   if (state.sort !== "team") p.set("sort", state.sort);
   if (state.view !== "list") p.set("view", state.view);
   if (state.person) p.set("person", state.person);

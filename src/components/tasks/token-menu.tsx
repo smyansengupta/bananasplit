@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Paperclip } from "@/components/icons";
+import { FileText, Link2, Paperclip } from "@/components/icons";
 
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { PopoverContent } from "@/components/ui/popover";
@@ -30,7 +30,7 @@ export function TokenMenu({
       ? "Link a file"
       : audience
         ? "Mention someone on this task"
-        : "Mention a member";
+        : "Mention or link";
 
   return (
     <PopoverContent
@@ -51,7 +51,19 @@ export function TokenMenu({
                 onSelect={() => menu.pick(option)}
                 onMouseEnter={() => menu.setHighlight(i)}
               >
-                {option.kind === "member" && option.member ? (
+                {option.kind === "item" && option.item ? (
+                  <>
+                    <Link2 className="size-4 shrink-0 opacity-70" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block break-words">{option.label}</span>
+                      {option.item.detail && (
+                        <span className="text-muted-foreground block truncate text-xs">
+                          {option.item.detail}
+                        </span>
+                      )}
+                    </span>
+                  </>
+                ) : option.kind === "member" && option.member ? (
                   <>
                     <UserAvatar user={option.member} size="xs" />
                     <span className="truncate">{option.label}</span>
@@ -82,7 +94,7 @@ export function TokenMenu({
         )}
         {menu.kind === "file" && (
           <p className="text-muted-foreground border-t px-3 py-2 text-xs">
-            A note or an upload from the club&apos;s Files. The task shows it as a link.
+            A note or an upload from the organization&apos;s Files. The task shows it as a link.
           </p>
         )}
       </Command>

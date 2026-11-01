@@ -56,9 +56,7 @@ export function EventsStep(props: SetupStepProps & { initial: EventType[] }) {
 
   return (
     <SetupCard>
-      <StepIntro title="What kinds of meetings do you have?">
-        Name them right on your calendar. Click a dot to change its colour.
-      </StepIntro>
+      <StepIntro title="What kinds of meetings do you have?"></StepIntro>
       <StepBody>
         <TagListEditor
           rows={rows}

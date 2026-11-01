@@ -55,6 +55,11 @@ export const setStartingBalance = financeAction(
     const period = await ensureActivePeriod(ctx.db, organizationId);
     const existing = await findStartingBalance(ctx.db, organizationId, period.id);
     const now = new Date();
+    // Typing a starting balance replaces the one carried over from the last period.
+    await ctx.db.budgetPeriod.updateMany({
+      where: { id: period.id, carriedInCents: { not: 0 } },
+      data: { carriedInCents: 0 },
+    });
 
     if (cents === 0) {
       if (!existing) return { transactionId: null };
@@ -134,7 +139,11 @@ const linesSchema = z
  * transaction uses them (one that's in use is kept, and counted).
  */
 export const saveBudgetLines = financeAction(
-  async (ctx, periodId: string, input: unknown): Promise<{ error?: string; kept?: number }> => {
+  async (
+    ctx,
+    periodId: string | null,
+    input: unknown,
+  ): Promise<{ error?: string; kept?: number }> => {
     if (!can(ctx, "finance.manage")) return NOT_FINANCE;
     const parsed = linesSchema.safeParse(input);
     if (!parsed.success)
@@ -143,10 +152,13 @@ export const saveBudgetLines = financeAction(
     if (new Set(names).size !== names.length)
       return { error: "Two budget lines have the same name." };
     const organizationId = ctx.organizationId;
-    const period = await ctx.db.budgetPeriod.findFirst({
-      where: { id: periodId, organizationId },
-      select: { id: true },
-    });
+    // No period yet (first setup): the budget year starts now.
+    const period = periodId
+      ? await ctx.db.budgetPeriod.findFirst({
+          where: { id: periodId, organizationId },
+          select: { id: true },
+        })
+      : await ensureActivePeriod(ctx.db, organizationId);
     if (!period) return { error: "Budget period not found." };
 
     const current = await ctx.db.budgetCategory.findMany({

@@ -67,6 +67,63 @@ export function ItemMenu({
   useEffect(() => setRow(rowOf(button.current) as HTMLElement | null), []);
   useContextActions(row, items, { heading: heading ?? label.replace(/^Actions for /, "") });
   if (entries.length === 0) return null;
+  // One or two actions, each with an icon: show them as buttons. A menu
+  // that hides one thing behind "…" is a click for nothing.
+  if (entries.length <= 2 && entries.every((e) => e.icon)) {
+    const what = label.replace(/^Actions for /, "");
+    return (
+      <span className={cn("flex shrink-0 items-center gap-0.5", className)}>
+        {entries.map((item, i) => {
+          const Icon = item.icon!;
+          const named = `${item.label}${what && what !== label ? `: ${what}` : ""}`;
+          const cls = cn(
+            "focus-glow grid shrink-0 place-items-center rounded-full border border-transparent transition-[background-color,transform] outline-none active:scale-[0.94] disabled:opacity-50",
+            item.destructive
+              ? "text-muted-foreground hover:text-tint-danger-foreground hover:bg-tint-danger"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted",
+            size === "sm" ? "size-8" : "size-7",
+          );
+          const glyph = (
+            <Icon className={size === "sm" ? "size-4" : "size-3.5"} aria-hidden="true" />
+          );
+          const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+          return item.href ? (
+            <Link
+              key={`${item.label}-${i}`}
+              ref={i === 0 ? (button as unknown as React.Ref<HTMLAnchorElement>) : undefined}
+              href={item.href}
+              aria-label={named}
+              title={item.label}
+              onClick={stop}
+              onPointerDown={stop}
+              className={cls}
+            >
+              {glyph}
+            </Link>
+          ) : (
+            <button
+              key={`${item.label}-${i}`}
+              ref={i === 0 ? button : undefined}
+              type="button"
+              aria-label={named}
+              title={item.label}
+              disabled={item.disabled}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                item.onSelect?.();
+              }}
+              onPointerDown={stop}
+              onKeyDown={stop}
+              className={cls}
+            >
+              {glyph}
+            </button>
+          );
+        })}
+      </span>
+    );
+  }
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>

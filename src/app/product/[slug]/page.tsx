@@ -5,7 +5,13 @@ import { notFound } from "next/navigation";
 import { ArrowRight } from "@/components/brand/arrows";
 import { ProductArt } from "@/components/marketing/feature-art";
 import { FinalCta } from "@/components/marketing/final-cta";
-import { DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref } from "@/components/marketing/links";
+import {
+  DEMO_HREF,
+  PRIMARY_CTA,
+  SECONDARY_CTA,
+  startHref,
+  startLabel,
+} from "@/components/marketing/links";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { PRODUCT_PAGES, productPage } from "@/components/marketing/product-pages";
 import { CONTAINER, SectionTitle } from "@/components/marketing/section-title";
@@ -50,7 +56,6 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
         )}
       >
         <div className="flex flex-col items-start gap-6">
-          <span className="text-foreground/60 text-[14px] font-semibold">{page.label}</span>
           <SectionTitle
             as="h1"
             className="text-[clamp(42px,5.6vw,72px)] leading-[0.98] text-balance"
@@ -67,7 +72,7 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
               data-cta="get_started"
               data-cta-location={`product_${page.slug}`}
             >
-              Get started free <ArrowRight />
+              {startLabel(signedIn)} <ArrowRight />
             </Link>
             <SiteLink
               href={DEMO_HREF}
@@ -129,7 +134,6 @@ export default async function ProductPage({ params }: PageProps<"/product/[slug]
                 href={`/product/${other.slug}`}
                 className="group border-border hover:bg-muted/50 flex h-full flex-col gap-2 rounded-[20px] border p-6 transition-colors"
               >
-                <span className="text-foreground/60 text-[13px] font-semibold">{other.label}</span>
                 <span className="flex items-start justify-between gap-3">
                   <span className="text-[18px] leading-[1.25] font-semibold tracking-[-0.01em]">
                     {other.cardTitle}

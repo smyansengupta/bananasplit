@@ -110,9 +110,19 @@ export function KeyboardShortcuts({
         gPressedAt.current = Date.now();
         return;
       }
-      if (key === TASK_KEYS.newTask && tasksHref && pathname !== tasksHref) {
-        event.preventDefault();
-        router.push(`${tasksHref}?${NEW_TASK_PARAM}=1`);
+      if (key === TASK_KEYS.newTask && pathname !== tasksHref) {
+        // "c" opens New right here, over the page (the sidebar's New menu);
+        // without a visible sidebar (a phone), it goes to Tasks' new task.
+        const newButton = document.querySelector<HTMLButtonElement>("[data-new-button]");
+        if (newButton && newButton.offsetParent !== null) {
+          event.preventDefault();
+          newButton.click();
+          return;
+        }
+        if (tasksHref) {
+          event.preventDefault();
+          router.push(`${tasksHref}?${NEW_TASK_PARAM}=1`);
+        }
       }
     }
     const openSheet = () => setOpen(true);

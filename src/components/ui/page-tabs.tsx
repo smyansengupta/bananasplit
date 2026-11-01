@@ -1,17 +1,10 @@
 "use client";
 
-import { Check, Menu, type IconComponent } from "@/components/icons";
+import { type IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
+import { SegmentCount, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,12 +14,11 @@ import { cn } from "@/lib/utils";
  * A tab is active on its own URL, or on anything below it unless `exact`;
  * pass `active` to decide yourself.
  *
- * On a phone the bar spans the width and the tabs share it. More than three
- * (Finance's five) don't fit, so there it shows the one you're on, with a
- * menu button beside it that drops down the others.
+ * On a phone the bar spans the width and the tabs share it. When there are
+ * too many to fit (Finance's five), the bar scrolls sideways instead of
+ * hiding the rest behind a menu: every tab stays one tap away, and the one
+ * you're on is scrolled into view.
  */
-/** More than this many tabs fold into the current one and a menu on a phone. */
-const PHONE_MAX_TABS = 3;
 
 export interface PageTab {
   href: string;
@@ -34,6 +26,8 @@ export interface PageTab {
   icon?: IconComponent;
   exact?: boolean;
   active?: boolean;
+  /** How many are waiting there (a badge after the label; none at 0). */
+  count?: number;
 }
 
 export function PageTabs({
@@ -61,70 +55,13 @@ export function PageTabs({
     );
   };
 
-  const many = tabs.length > PHONE_MAX_TABS;
-  // On a page none of the tabs is (Finance › Import), the pill names the section.
-  const current = tabs.find(isActive);
-  const CurrentIcon = current?.icon;
-
   return (
     <>
-      {many && (
-        <nav aria-label={label} className={cn("flex items-center gap-2 md:hidden", className)}>
-          <span className={cn(segmentedTrack, "min-w-0 flex-1")}>
-            {current ? (
-              <Link
-                href={current.href}
-                aria-current="page"
-                className={cn(segmentedItem(true), "w-full min-w-0 justify-center")}
-              >
-                {CurrentIcon && <CurrentIcon aria-hidden="true" />}
-                <span className="truncate">{current.label}</span>
-              </Link>
-            ) : (
-              <span className={cn(segmentedItem(false), "w-full min-w-0 justify-center")}>
-                <span className="truncate">{label}</span>
-              </span>
-            )}
-          </span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                aria-label={`${label}: other pages`}
-              >
-                <Menu className="size-[18px]" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const active = tab === current;
-                return (
-                  <DropdownMenuItem key={tab.href} asChild>
-                    <Link href={tab.href} aria-current={active ? "page" : undefined}>
-                      {Icon && <Icon className="size-4" aria-hidden="true" />}
-                      {tab.label}
-                      {active && <Check className="ms-auto size-4" aria-hidden="true" />}
-                    </Link>
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </nav>
-      )}
       <nav
         aria-label={label}
-        className={cn("max-w-full overflow-x-auto", many && "max-md:hidden", className)}
+        className={cn("max-w-full [scrollbar-width:none] overflow-x-auto", className)}
       >
-        <ul
-          className={cn(
-            segmentedTrack,
-            "min-w-max max-md:flex max-md:h-auto max-md:w-full max-md:min-w-0 max-md:flex-wrap max-md:rounded-[22px]",
-          )}
-        >
+        <ul className={cn(segmentedTrack, "min-w-max max-md:flex max-md:w-max max-md:min-w-full")}>
           {tabs.map((tab) => {
             const active = isActive(tab);
             const Icon = tab.icon;
@@ -133,10 +70,16 @@ export function PageTabs({
                 <Link
                   href={tab.href}
                   aria-current={active ? "page" : undefined}
+                  ref={
+                    active
+                      ? (el) => el?.scrollIntoView({ block: "nearest", inline: "nearest" })
+                      : undefined
+                  }
                   className={cn(segmentedItem(active), "max-md:w-full max-md:justify-center")}
                 >
                   {Icon && <Icon aria-hidden="true" />}
                   {tab.label}
+                  {tab.count ? <SegmentCount n={tab.count} active={active} /> : null}
                 </Link>
               </li>
             );

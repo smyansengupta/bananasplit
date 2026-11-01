@@ -94,6 +94,12 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // Question-poll votes without who cast them, so an anonymous poll stays
   // anonymous in the export too (the counts per option are still there).
   { model: "PollVote", key: ID, omit: ["userId"] },
+  // Forms: the questions and settings; the answers are in the form's own
+  // database (DatabaseRecord, exported with the rest). A response's review
+  // (status, rating, officers' notes) and who sent it, as the suite shows
+  // them to owners.
+  { model: "Form", key: ID },
+  { model: "FormResponse", key: ID },
   { model: "BudgetPeriod", key: ID },
   { model: "BudgetCategory", key: ID },
   { model: "Transaction", key: ID },
@@ -117,6 +123,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "Ballot", key: ID, ballotRows: true },
   { model: "BallotChoice", key: ID, ballotRows: true },
   { model: "DataSourceSyncState", key: ID },
+  // Links between things (the Linked panel): org data, both ends are ids.
+  { model: "ItemLink", key: ID },
 ];
 
 /** Org tables that are deliberately not exported, and why. */
@@ -126,6 +134,10 @@ export const EXPORT_EXCLUDED: Readonly<Record<string, string>> = {
     "Each member's own inbox: personal, not organization data, and only its recipient can read it.",
   UpNextDismissal:
     "Cards each member hid from their own Overview: a personal preference, not organization data.",
+  InboxItemState:
+    "What each member snoozed or finished in their own Inbox: personal, not organization data.",
+  MemberPresence:
+    "When each member last had the app open (who's online): live status, not organization data.",
   OrgJoinCode:
     "The live invite code is a credential for joining the org; an export must not carry it.",
   Job: "Background job bookkeeping (ids and sanitized errors), not org data.",

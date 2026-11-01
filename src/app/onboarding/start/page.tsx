@@ -13,7 +13,7 @@ import { StartScreen } from "./start-screen";
 export const metadata: Metadata = {
   ...mainShare({
     title: "Get started",
-    description: "Join a club with its code, start one, or set up just yourself.",
+    description: "Join an organization with its code, start one, or set up just yourself.",
     noIndex: true,
   }),
 };
@@ -37,6 +37,7 @@ export default async function StartPage() {
     <StartScreen
       first={first}
       invites={invites}
+      joinHere={profile.emailVerified}
       exit={
         <SignOutButton className="text-muted-foreground hover:text-foreground h-auto p-0 text-[14px] font-semibold hover:bg-transparent" />
       }

@@ -187,7 +187,7 @@ export function MeetingJoinCard({
                   <li key={`${entry.number}-${i}`} className="tabular-nums">
                     {[entry.country, entry.number, entry.pin ? `PIN ${entry.pin}` : null]
                       .filter(Boolean)
-                      .join(" · ")}
+                      .join(", ")}
                   </li>
                 ))}
               </ul>

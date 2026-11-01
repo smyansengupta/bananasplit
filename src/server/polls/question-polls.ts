@@ -409,7 +409,8 @@ export async function listQuestionPolls(
   organizationId: string,
 ): Promise<QuestionPollSummary[]> {
   const polls = await db.poll.findMany({
-    where: { organizationId },
+    // A poll moved into Forms is listed as its form.
+    where: { organizationId, formId: null },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: {
       id: true,

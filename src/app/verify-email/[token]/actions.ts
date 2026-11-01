@@ -1,8 +1,10 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { signInPath } from "@/lib/auth/callback-url";
+import { AFTER_VERIFY_COOKIE } from "@/lib/auth/after-verify";
+import { safeCallbackUrl, signInPath } from "@/lib/auth/callback-url";
 import { getSession } from "@/lib/auth/session";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { authDb } from "@/server/db/clients";
@@ -17,14 +19,29 @@ function resultUrl(token: string, result: string): string {
 
 /**
  * Confirms the address behind `token` for the signed-in account (single
- * use), then shows the outcome. Signed out, it asks for a log-in first and
- * comes back here.
+ * use). Confirmed, it goes straight back to whatever was waiting on it (a
+ * join link, an invite, creating a club: the page that showed "Check your
+ * email" remembered itself in AFTER_VERIFY_COOKIE), or into the app; no
+ * "Email confirmed" stop in between. Otherwise it shows what went wrong.
+ * Signed out, it asks for a log-in first and comes back here.
  */
 export async function confirmEmailAction(token: string): Promise<void> {
   const session = await getSession();
   if (!session) redirect(signInPath(`/verify-email/${encodeURIComponent(token)}`));
   const outcome = await consumeVerificationToken(token, session.user.id);
-  redirect(resultUrl(token, outcome.ok ? "ok" : outcome.reason));
+  if (!outcome.ok) redirect(resultUrl(token, outcome.reason));
+  const jar = await cookies();
+  const raw = jar.get(AFTER_VERIFY_COOKIE)?.value ?? "";
+  let remembered: string | null = raw;
+  try {
+    // Written encoded; read back as written whichever way the jar hands it over.
+    remembered = raw.startsWith("%2F") ? decodeURIComponent(raw) : raw;
+  } catch {
+    remembered = null;
+  }
+  const after = safeCallbackUrl(remembered);
+  jar.delete(AFTER_VERIFY_COOKIE);
+  redirect(after ?? "/app");
 }
 
 /** Sends the signed-in user a new confirmation link. */

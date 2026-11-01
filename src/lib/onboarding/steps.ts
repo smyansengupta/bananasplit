@@ -11,9 +11,9 @@ import { profileDetailsSchema, profileLinkSchema } from "@/lib/profile/schema";
  *             "What brings you here?" (/onboarding/start).
  *   Join      the invite code (or an emailed invite), then your profile,
  *             one screen (/onboarding/join/<org>/profile).
- *   Create    organization basics (/onboarding/organization), setting it up
- *             (ORG_STEPS: importing first, since switching is the hard
- *             part), and your profile last.
+ *   Create    the organization's name (/onboarding/organization), then
+ *             Invite and (sometimes) Bring: ORG_FLOW. The rest is in
+ *             "Get your organization started" on its Overview.
  *   Personal  "Just me": PERSONAL_STEPS, your profile last.
  *
  * Pure and client-safe: the pages, forms and actions share these.
@@ -39,30 +39,34 @@ export const START_HREF = "/onboarding/start";
 // ---------------------------------------------------------------- Setting up
 
 /**
- * Setting up an organization once it's made. Creating it lands on Import,
- * first because moving off another app is what decides whether anyone
- * switches; "basics" (name and time zone again) is only before it so Back
- * from Import edits the organization instead of starting another. Your
- * profile comes last. Every step but the profile can be skipped.
+ * Setting up an organization once it's made: three screens end to end.
+ * Creating it (its name) lands on Invite, then Bring (only when the
+ * creator has Personal things to bring), then the organization itself.
+ * "basics" is before Invite so Back edits the organization instead of
+ * starting another. Everything else a club sets up (a picture, task tags,
+ * event types, teams, emails, importing from another app, your profile)
+ * is a page of its own, opened from "Get your organization started" on
+ * the Overview; finishing one goes back there.
  */
 export const ORG_STEPS = [
   "basics",
+  "invite",
+  "bring",
   "import",
   "picture",
   "labels",
   "events",
   "teams",
   "emails",
-  "imessage",
-  "tools",
-  "invite",
-  "bring",
   "profile",
 ] as const;
 export type OrgStep = (typeof ORG_STEPS)[number];
 
+/** The steps a new organization walks through, in order (the rest stand alone). */
+export const ORG_FLOW: readonly OrgStep[] = ["basics", "invite", "bring"];
+
 /** "Just me": setting up the personal workspace, your profile last. */
-export const PERSONAL_STEPS = ["import", "labels", "emails", "imessage", "profile"] as const;
+export const PERSONAL_STEPS = ["import", "labels", "emails", "profile"] as const;
 export type PersonalStep = (typeof PERSONAL_STEPS)[number];
 
 export type SetupFlow = "org" | "personal";
@@ -91,15 +95,21 @@ export function orgStepHref(orgSlug: string, step: OrgStep): string {
   return setupStepHref("org", orgSlug, step);
 }
 
-/** The step after `step`, or null after the last. */
-export function nextSetupStep(flow: SetupFlow, step: SetupStep): SetupStep | null {
-  const steps = stepsOf(flow);
-  return steps[(steps as readonly string[]).indexOf(step) + 1] ?? null;
+/** The steps walked in order: an organization's ORG_FLOW, or every Personal step. */
+function walkOf(flow: SetupFlow): readonly SetupStep[] {
+  return flow === "org" ? ORG_FLOW : PERSONAL_STEPS;
 }
 
-/** The step before `step`, or null before the first. */
+/** The step after `step`, or null after the last (or for a step that stands alone). */
+export function nextSetupStep(flow: SetupFlow, step: SetupStep): SetupStep | null {
+  const steps = walkOf(flow);
+  const i = (steps as readonly string[]).indexOf(step);
+  return i < 0 ? null : (steps[i + 1] ?? null);
+}
+
+/** The step before `step`, or null before the first (or for a step that stands alone). */
 export function previousSetupStep(flow: SetupFlow, step: SetupStep): SetupStep | null {
-  const steps = stepsOf(flow);
+  const steps = walkOf(flow);
   const i = (steps as readonly string[]).indexOf(step);
   return i > 0 ? steps[i - 1]! : null;
 }

@@ -20,9 +20,9 @@ const PEEK_DELAY_MS = 350;
 export const SIDEBAR_ID = "app-sidebar";
 
 /**
- * The platform's signature under the club's own nav: the Bananasplit mark
- * and wordmark (Young Serif, the logo's fixed colours), and the way back to
- * the home page. On the rail it tucks away and leaves the toggle.
+ * The platform's signature under the organization's own nav: the
+ * Bananasplit mark and wordmark, and the way back to the home page. On the
+ * rail it tucks away and leaves the toggle.
  */
 function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => void }) {
   return (
@@ -33,9 +33,9 @@ function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => v
       tabIndex={rail ? -1 : undefined}
       aria-hidden={rail || undefined}
       className={cn(
-        "focus-glow flex h-10 min-w-0 items-center overflow-hidden rounded-full px-1.5 whitespace-nowrap outline-none",
-        "transition-[max-width,opacity] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
-        rail ? "max-w-0 flex-none px-0 opacity-0" : "max-w-[170px] flex-1 opacity-100 delay-75",
+        "focus-glow flex h-8 min-w-0 items-center overflow-hidden rounded-[10px] px-1.5 whitespace-nowrap outline-none",
+        "transition-[max-width,opacity,padding] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+        rail ? "max-w-0 flex-none px-0 opacity-0" : "max-w-[180px] flex-1 opacity-100 delay-75",
       )}
     >
       <Logo size={22} textSize={17} className="gap-2" />
@@ -44,34 +44,48 @@ function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => v
 }
 
 /**
- * The sidebar's insides, the same in every face: the club menu, the nav,
- * and the footer (logo, and the panel's collapse button when given).
+ * The sidebar's insides, the same in every face: the organization menu
+ * (switching spaces, the Admin panel) at the top with you (your picture,
+ * opening your menu) beside it, the nav, then, always last, the
+ * Bananasplit logo with the panel's collapse button when given. On the
+ * rail everything is 40px down the middle: the organization's square tile,
+ * then circles for you, New, Search, the pages, and the button at the foot.
  */
 export function SidebarBody({
   clubMenu,
+  profile,
   children,
   toggle,
   rail = false,
-  chrome = false,
   onNavigate,
 }: {
   clubMenu: React.ReactNode;
+  /** You: the user menu beside the organization menu (UserMenu variant="corner"). */
+  profile?: React.ReactNode;
   children: React.ReactNode;
   toggle?: React.ReactNode;
   rail?: boolean;
   chrome?: boolean;
   onNavigate?: () => void;
 }) {
-  const tone = surfaceTone(chrome);
   return (
     <>
-      <div className="shrink-0 pb-3">{clubMenu}</div>
-      {children}
+      {/* The organization you're in, the way to switch, and you, at the top. */}
       <div
         className={cn(
-          "mt-2.5 flex shrink-0 items-center border-t pt-3 transition-colors duration-300",
-          tone.border,
-          rail ? "gap-0" : "gap-2.5",
+          "flex shrink-0 pb-4",
+          rail ? "flex-col items-center gap-3" : "items-center gap-1",
+        )}
+      >
+        <div className={cn("min-w-0", rail ? "w-10 flex-none" : "flex-1")}>{clubMenu}</div>
+        {profile && <div className="grid shrink-0 place-items-center">{profile}</div>}
+      </div>
+      {children}
+      {/* The Bananasplit mark, always last, with the collapse button at the right. */}
+      <div
+        className={cn(
+          "mt-1 flex shrink-0 items-center pt-1",
+          rail ? "justify-center gap-0" : "gap-2",
         )}
       >
         <SidebarLogo rail={rail} onNavigate={onNavigate} />
@@ -84,7 +98,7 @@ export function SidebarBody({
 /**
  * The desktop sidebar, in three faces (src/components/shell/sidebar-mode-context.tsx):
  *
- * - docked (the default): 248px down the window's edge on the sidebar
+ * - docked (the default): 264px down the window's edge on the sidebar
  *   colour, with a hairline on its right;
  * - rail: lifted 14px off the edges into a 68px glass pill of 40px round
  *   icons; group names become hairlines, the pins fold into one Pin item,
@@ -104,12 +118,14 @@ export function SidebarPanel({
   setMode,
   onToggle,
   clubMenu,
+  profile,
   children,
 }: {
   mode: SidebarState;
   setMode: React.Dispatch<React.SetStateAction<SidebarState>>;
   onToggle: () => void;
   clubMenu: React.ReactNode;
+  profile?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const mod = useModKey();
@@ -165,7 +181,7 @@ export function SidebarPanel({
         <div
           aria-hidden="true"
           className={cn(
-            "bg-sidebar border-sidebar-border pointer-events-none absolute inset-y-0 left-0 w-[248px] border-r",
+            "bg-sidebar border-sidebar-border pointer-events-none absolute inset-y-0 left-0 w-[264px] border-r",
             "[transition:opacity_350ms,translate_500ms_var(--ease-ink)] motion-reduce:[transition:none]",
             chrome && "-translate-x-[70px] opacity-0",
           )}
@@ -209,7 +225,7 @@ export function SidebarPanel({
               "[transition:width_500ms_var(--ease-ink),height_500ms_var(--ease-ink),margin_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),border-radius_500ms_var(--ease-ink),background-color_350ms,box-shadow_350ms,color_350ms]",
               "motion-reduce:[transition:none]",
               mode === "docked" &&
-                "text-sidebar-foreground m-0 h-svh w-[248px] rounded-none px-3.5 py-4",
+                "text-sidebar-foreground m-0 h-svh w-[264px] rounded-none px-3.5 py-4",
               mode === "rail" && "glass m-3.5 h-[calc(100svh-28px)] w-[68px] rounded-[36px] p-3.5",
               mode === "peek" &&
                 "glass m-3.5 h-[calc(100svh-28px)] w-64 rounded-[28px] p-3.5 [--glass-strength:93%]",
@@ -217,6 +233,7 @@ export function SidebarPanel({
           >
             <SidebarBody
               clubMenu={clubMenu}
+              profile={profile}
               rail={rail}
               chrome={chrome}
               toggle={
@@ -233,15 +250,17 @@ export function SidebarPanel({
                   aria-keyshortcuts="Meta+Backslash Control+Backslash"
                   title={`${label} (${mod === "⌘" ? "⌘\\" : "Ctrl \\"})`}
                   className={cn(
-                    "focus-glow grid size-10 shrink-0 place-items-center rounded-full border outline-none",
-                    "transition-[background-color,border-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
-                    tone.border,
+                    "focus-glow grid shrink-0 place-items-center outline-none",
+                    "transition-[background-color,scale,width,height,border-radius] duration-200 active:scale-[0.94] motion-reduce:transition-none",
+                    rail ? "size-10 rounded-full" : "ml-auto size-8 rounded-[10px]",
+                    tone.text,
                     tone.hover,
                   )}
                 >
                   <PanelLeft
                     className={cn(
-                      "size-5 transition-transform duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+                      "transition-transform duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+                      rail ? "size-[18px]" : "size-4",
                       chrome && "-scale-x-100",
                     )}
                     strokeWidth={1.75}

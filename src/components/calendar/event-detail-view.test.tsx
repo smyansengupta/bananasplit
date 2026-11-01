@@ -32,9 +32,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/app/[orgSlug]/calendar/actions", () => ({
   deleteEvent: mocks.deleteEvent,
   updateEvent: mocks.updateEvent,
+  extendSeries: vi.fn(async () => ({ added: 4 })),
   rsvpToEvent: vi.fn(),
 }));
 vi.mock("@/app/app/[orgSlug]/notes/actions", () => ({ createNote: vi.fn() }));
+vi.mock("@/components/meetings/meeting-agenda", () => ({
+  MeetingAgenda: ({ initial }: { initial: string | null }) => <p>{initial ?? "No agenda yet."}</p>,
+}));
 vi.mock("@/components/ui/confirm-dialog", () => ({
   useConfirm: () => [null, mocks.confirm],
 }));
@@ -129,8 +133,8 @@ describe("EventDetailView: the Calendar's page, unchanged", () => {
     view();
 
     expect(screen.getByRole("link", { name: /join meeting/i }).getAttribute("href")).toBe(JOIN);
-    expect(screen.getByRole("link", { name: /download \.ics/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /add to google calendar/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /apple \/ outlook/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /^google calendar$/i })).toBeTruthy();
   });
 
   it("shows the place as plain text, with no map link or directions", () => {
@@ -139,16 +143,6 @@ describe("EventDetailView: the Calendar's page, unchanged", () => {
     expect(screen.getByText("Curry 342")).toBeTruthy();
     expect(screen.queryByRole("link", { name: /open in maps/i })).toBeNull();
     expect(screen.queryByText("How to find it")).toBeNull();
-  });
-
-  it("sends Delete back to the Calendar", async () => {
-    mocks.confirm.mockResolvedValue(true);
-    mocks.deleteEvent.mockResolvedValue({});
-    view({ canEdit: true });
-
-    fireEvent.click(screen.getByRole("button", { name: /delete event/i }));
-
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/app/club/calendar"));
   });
 
   it("sends a delete from the edit form back to the Calendar", () => {
@@ -170,17 +164,6 @@ describe("EventDetailView: a meeting's page", () => {
     expect(screen.queryByRole("link", { name: "Calendar" })).toBeNull();
   });
 
-  it("sends Delete back to Meetings", async () => {
-    mocks.confirm.mockResolvedValue(true);
-    mocks.deleteEvent.mockResolvedValue({});
-    view({ canEdit: true, section: "meetings" });
-
-    fireEvent.click(screen.getByRole("button", { name: /delete event/i }));
-
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/app/club/meetings"));
-    expect(mocks.push).not.toHaveBeenCalledWith("/app/club/calendar");
-  });
-
   it("sends a delete from the edit form back to Meetings", () => {
     view({ canEdit: true, section: "meetings" });
 
@@ -195,8 +178,8 @@ describe("EventDetailView: a meeting's page", () => {
     expect(screen.getByTestId("join-card")).toBeTruthy();
     expect(screen.queryByRole("link", { name: /join meeting/i })).toBeNull();
     // The calendar buttons beside it stay.
-    expect(screen.getByRole("link", { name: /download \.ics/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /add to google calendar/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /apple \/ outlook/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /^google calendar$/i })).toBeTruthy();
   });
 
   it("shows the join card even before there is a link to join", () => {
@@ -251,12 +234,11 @@ describe("EventDetailView: managing sign-ups", () => {
   const sections = ["calendar", "meetings"] as const;
   const live = { enabled: true, url: "https://app.test/e/abc12345", going: 3, waitlist: 1 };
 
-  it("offers the meeting's sign-up screen to set up a page, as 'Set up an RSVP page' on the Calendar", () => {
+  it("offers the meeting's sign-up screen as 'Add a sign-up page' on the Calendar too", () => {
     view({ canEdit: true, section: "calendar" });
 
-    const set = screen.getByRole("link", { name: /Set up an RSVP page/ });
+    const set = screen.getByRole("link", { name: /Add a sign-up page/ });
     expect(set.getAttribute("href")).toBe("/app/club/meetings/evt_1/rsvp");
-    expect(screen.queryByRole("link", { name: /Add a sign-up page/ })).toBeNull();
   });
 
   it("calls it 'Add a sign-up page' under Meetings, to the same screen", () => {
@@ -264,24 +246,23 @@ describe("EventDetailView: managing sign-ups", () => {
 
     const set = screen.getByRole("link", { name: /Add a sign-up page/ });
     expect(set.getAttribute("href")).toBe("/app/club/meetings/evt_1/rsvp");
-    expect(screen.queryByRole("link", { name: /Set up an RSVP page/ })).toBeNull();
   });
 
-  it("keeps 'Manage guests and page' for a page that is already on, in both sections", () => {
+  it("keeps 'Guests and page' for a page that is already on, in both sections", () => {
     view({
       canEdit: true,
       section: "meetings",
       rsvp: { ...live, capacity: null },
     });
 
-    expect(screen.getByRole("link", { name: /Manage guests and page/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Guests and page/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Add a sign-up page/ })).toBeNull();
   });
 
   it.each(sections)("sends the guest-list button to the meeting's sign-ups (%s)", (section) => {
     view({ canEdit: true, section, rsvp: { ...live, capacity: null } });
 
-    const manage = screen.getByRole("link", { name: /Manage guests and page/ });
+    const manage = screen.getByRole("link", { name: /Guests and page/ });
     expect(manage.getAttribute("href")).toBe("/app/club/meetings/evt_1/rsvp");
   });
 
@@ -295,11 +276,11 @@ describe("EventDetailView: managing sign-ups", () => {
 });
 
 describe("EventDetailView: a meeting's reminders", () => {
-  it("lists them, latest first, on a meeting's page", () => {
+  it("lists them, latest first, to someone who can't change them", () => {
     view({ section: "meetings" }, { reminderMinutes: [1440, 60] });
 
     expect(screen.getByText("Reminders")).toBeTruthy();
-    expect(screen.getByText("1 day before · 1 hour before")).toBeTruthy();
+    expect(screen.getByText("1 day before, 1 hour before")).toBeTruthy();
   });
 
   it("says so when there are none", () => {
@@ -312,90 +293,42 @@ describe("EventDetailView: a meeting's reminders", () => {
     view({ canEdit: true }, { reminderMinutes: [1440, 60] });
 
     expect(screen.queryByText("Reminders")).toBeNull();
-    expect(screen.queryByText("1 day before · 1 hour before")).toBeNull();
   });
 
-  it("offers no Edit to someone who cannot edit the meeting", () => {
-    view({ section: "meetings", canEdit: false });
-
-    expect(screen.queryByRole("button", { name: "Edit reminders" })).toBeNull();
-  });
-
-  it("swaps in the picker on Edit, starting from the meeting's own reminders", () => {
+  it("shows an editor the chips, chosen as the meeting has them", () => {
     view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 45] });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
 
     expect(screen.getByRole("button", { name: "1 day before" }).getAttribute("aria-pressed")).toBe(
       "true",
     );
-    expect(screen.getByRole("button", { name: "45 minutes before" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "45 minutes before" }).getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(screen.getByRole("button", { name: "1 hour before" }).getAttribute("aria-pressed")).toBe(
       "false",
     );
-    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Edit reminders" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
 
-  it("saves the new list for this meeting alone, then refreshes", async () => {
+  it("saves each tap for this meeting alone, then refreshes", async () => {
     mocks.updateEvent.mockResolvedValue({ eventId: "evt_1" });
     view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 60] });
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
-    fireEvent.click(screen.getByRole("button", { name: "1 week before" }));
     fireEvent.click(screen.getByRole("button", { name: "1 hour before" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
     expect(mocks.updateEvent).toHaveBeenCalledExactlyOnceWith("org_1", "evt_1", {
-      reminderMinutes: [10080, 1440],
-    });
-    // Back to the read-only list.
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Edit reminders" })).toBeTruthy();
-  });
-
-  it("can save no reminders at all", async () => {
-    mocks.updateEvent.mockResolvedValue({ eventId: "evt_1" });
-    view({ section: "meetings", canEdit: true }, { reminderMinutes: [60] });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
-    fireEvent.click(screen.getByRole("button", { name: "1 hour before" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
-    expect(mocks.updateEvent).toHaveBeenCalledExactlyOnceWith("org_1", "evt_1", {
-      reminderMinutes: [],
+      reminderMinutes: [1440],
     });
   });
 
-  it("shows the error inline and keeps the picker open when saving fails", async () => {
+  it("puts the chip back and says why when saving fails", async () => {
     mocks.updateEvent.mockResolvedValue({ error: "Use at most 8 reminders." });
     view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 60] });
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 week before" }));
 
     expect((await screen.findByRole("alert")).textContent).toBe("Use at most 8 reminders.");
-    expect(mocks.refresh).not.toHaveBeenCalled();
-    // Still editing, and free to try again once the save has settled.
-    expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
-  });
-
-  it("drops the change on Cancel, and starts over from the saved list next time", () => {
-    view({ section: "meetings", canEdit: true }, { reminderMinutes: [1440, 60] });
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
-    fireEvent.click(screen.getByRole("button", { name: "1 week before" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(mocks.updateEvent).not.toHaveBeenCalled();
-    expect(screen.getByText("1 day before · 1 hour before")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit reminders" }));
     expect(screen.getByRole("button", { name: "1 week before" }).getAttribute("aria-pressed")).toBe(
       "false",
     );
@@ -431,7 +364,7 @@ describe("EventDetailView: adding a call to an in-person meeting", () => {
   it("is the same form 'Edit event' opens", () => {
     view({ section: "meetings", canEdit: true }, NO_CALL);
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit event" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
     expect(mocks.formProps.current?.open).toBe(true);
     expect(mocks.formProps.current?.event?.id).toBe("evt_1");

@@ -64,3 +64,21 @@ export const showHiddenUpNextCards = withOrgAction(
   },
   { onRefused: "return" },
 );
+
+/** Undo for hideUpNextCard: puts one card back. */
+export const unhideUpNextCard = withOrgAction(
+  async (ctx, kind: unknown, refId: unknown): Promise<{ ok: boolean; error?: string }> => {
+    const parsed = parse(kind, refId);
+    if (!parsed) return { ok: false, error: "That isn't a card we can put back." };
+    await ctx.db.upNextDismissal.deleteMany({
+      where: {
+        userId: ctx.userId,
+        organizationId: ctx.organizationId,
+        kind: parsed.kind,
+        refId: parsed.refId,
+      },
+    });
+    return { ok: true };
+  },
+  { onRefused: "return" },
+);

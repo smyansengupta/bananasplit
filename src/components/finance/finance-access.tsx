@@ -12,8 +12,8 @@ import { can } from "@/lib/auth/permissions";
  * they can do from here. An admin can make another member treasurer; an
  * owner can give anyone access; anyone can ask to be paid back. Shown in
  * place of the treasurer pages, never as an error: a calm card with
- * Finance's wallet and one way on (My reimbursements). The compact version
- * is a one-line tile over My reimbursements.
+ * Finance's wallet and one way on (My requests). The compact version shows
+ * over My requests only when an admin can fix something (no treasurer).
  */
 
 export interface FinancePeople {
@@ -50,51 +50,27 @@ export function FinanceAccessNotice({
   ]
     .filter(Boolean)
     .join(" and ");
-  const advice =
-    role === Role.ADMIN ? (
-      <>
-        As an admin you can make another member treasurer in{" "}
-        <Link
-          href={membersHref}
-          className="text-foreground focus-glow rounded-sm font-medium underline underline-offset-3"
-        >
-          Admin panel › Members
-        </Link>
-        . Only an owner can give you access to the organization&apos;s money
-        {people.owners.length ? `: ask ${list(people.owners)}` : ""}.
-      </>
-    ) : (
-      `To help with the organization's money, ask ${people.owners.length ? list(people.owners) : "an owner"} to make you treasurer.`
-    );
-  const body = (
-    <>
-      {who ? `That's ${who}. ` : ""}
-      {people.treasurers.length === 0 ? "There's no treasurer yet. " : ""}
-      {advice} You can still ask to be paid back for anything you bought for the organization.
-    </>
-  );
+  const body = who
+    ? `${who} ${people.owners.length + people.treasurers.length === 1 ? "manages" : "manage"} the money. You can still ask to be paid back.`
+    : "You can still ask to be paid back.";
 
+  // Over a member's own requests: nothing to say unless they can fix it
+  // (an admin, and nobody is treasurer yet).
   if (compact) {
+    if (!canAppoint || people.treasurers.length > 0) return null;
     return (
       <section
-        aria-labelledby="finance-access-title"
-        className="bg-muted/60 rounded-tile flex flex-wrap items-start gap-3 p-4"
+        aria-label="No treasurer yet"
+        className="bg-muted/60 rounded-tile flex flex-wrap items-center gap-3 p-3 ps-4"
       >
-        <Wallet className="text-muted-foreground mt-0.5 size-5 shrink-0" aria-hidden="true" />
-        <div className="min-w-0 flex-1 space-y-1">
-          <h2 id="finance-access-title" className="heading text-sm">
-            The organization&apos;s money is managed by its owners, admins and treasurers
-          </h2>
-          <p className="text-muted-foreground text-sm">{body}</p>
-        </div>
-        {canAppoint && (
-          <Button asChild size="sm" variant="outline" className="self-center">
-            <Link href={membersHref}>
-              <UserCog aria-hidden="true" />
-              Choose a treasurer
-            </Link>
-          </Button>
-        )}
+        <Wallet className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-sm font-medium">No treasurer yet</p>
+        <Button asChild size="sm" variant="outline">
+          <Link href={membersHref}>
+            <UserCog aria-hidden="true" />
+            Choose a treasurer
+          </Link>
+        </Button>
       </section>
     );
   }
@@ -110,16 +86,26 @@ export function FinanceAccessNotice({
       </span>
       <div className="max-w-prose space-y-2">
         <h2 id="finance-access-title" className="heading text-[17px]">
-          Only owners, admins and treasurers see the organization&apos;s money
+          Only treasurers see the money
         </h2>
         <p className="text-muted-foreground text-sm">{body}</p>
       </div>
-      <Button asChild>
-        <Link href={`/app/${orgSlug}/finance/my-reimbursements`}>
-          <Receipt aria-hidden="true" />
-          My reimbursements
-        </Link>
-      </Button>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button asChild>
+          <Link href={`/app/${orgSlug}/finance/my-reimbursements`}>
+            <Receipt aria-hidden="true" />
+            My requests
+          </Link>
+        </Button>
+        {canAppoint && people.treasurers.length === 0 && (
+          <Button asChild variant="outline">
+            <Link href={membersHref}>
+              <UserCog aria-hidden="true" />
+              Choose a treasurer
+            </Link>
+          </Button>
+        )}
+      </div>
     </Card>
   );
 }

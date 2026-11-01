@@ -1,14 +1,29 @@
 import { TRIAL_DAYS } from "@/lib/billing/space";
 
 /**
- * Where "Get started free" goes: straight to setup when signed in, else
- * sign-up first (Google or email), coming back to setup. Every primary
- * button on the marketing pages uses it.
+ * The marketing pages' primary button. Signed out it's "Get started free":
+ * sign-up first (Google or email), coming back to setting up a club.
+ * Signed in it's "Open Bananasplit", into the app: someone who already has
+ * an account clicking "Get started" wants their workspace, not a second
+ * club. (Making another club is still one click from the club menu.)
  */
 export function startHref(signedIn: boolean): string {
-  return signedIn
-    ? "/onboarding/organization"
-    : "/sign-up?callbackUrl=%2Fonboarding%2Forganization";
+  return signedIn ? "/app" : "/sign-up?callbackUrl=%2Fonboarding%2Forganization";
+}
+
+/** The primary button's words, matching startHref. */
+export function startLabel(signedIn: boolean): string {
+  return signedIn ? "Open Bananasplit" : "Get started free";
+}
+
+/**
+ * A plan card's button: making a new organization on that plan, signed in
+ * or after signing up. `plan` (a paid team plan's checkout key) rides along
+ * through sign-up into setup, which keeps it as the plan after the trial.
+ */
+export function createHref(signedIn: boolean, plan?: "club" | "society"): string {
+  const create = plan ? `/onboarding/organization?plan=${plan}` : "/onboarding/organization";
+  return signedIn ? create : `/sign-up?callbackUrl=${encodeURIComponent(create)}`;
 }
 
 /** The secondary, sales action ("Request a demo"): the /demo form, which emails DEMO_REQUEST_INBOX. */

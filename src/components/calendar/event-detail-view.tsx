@@ -4,6 +4,7 @@ import { meetingTypeColor, type MeetingType } from "@/lib/meetings/meeting-types
 import { TagChip } from "@/components/ui/chip";
 import {
   AlertTriangle,
+  DoorOpen,
   CalendarPlus,
   ExternalLink,
   MapPin,
@@ -12,19 +13,19 @@ import {
   Pencil,
   Settings2,
   Ticket,
-  Trash2,
+  Repeat,
   Video,
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
-import { deleteEvent, rsvpToEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
+import { extendSeries, rsvpToEvent, updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
+import { MeetingAgenda } from "@/components/meetings/meeting-agenda";
 import { ReminderPicker } from "@/components/meetings/reminder-picker";
-import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { BlockCard } from "@/components/ui/block-card";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,6 @@ import { StatusDot } from "@/components/ui/chip";
 import { Fact } from "@/components/ui/fact";
 import { Gauge } from "@/components/ui/meters";
 import { IconChip } from "@/components/ui/stat";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import type { CalendarSyncState, RSVPStatus } from "@/generated/prisma/enums";
@@ -42,10 +42,11 @@ import { reminderLabel } from "@/lib/meetings/reminders";
 import { cn } from "@/lib/utils";
 
 import { KindBadge, SyncBadge, VisibilityBadge } from "./event-badges";
+import { KIND_META } from "./kinds";
 import { EventFormDialog, type EventFormEvent } from "./event-form-dialog";
 import { useViewerTimeZone } from "./hooks";
 import { RSVP_META } from "./kinds";
-import type { CalendarMember } from "./member-picker";
+import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 
 /**
  * One event, in full.
@@ -101,7 +102,19 @@ export function EventDetailView({
   showMapLink = false,
   defaultReminderMinutes,
   meetingTypes,
+  linked = null,
+  tasks = null,
+  recording = null,
+  askedRsvp = null,
 }: {
+  /** The answer an invite email's button asked for (?rsvp=): ready to confirm. */
+  askedRsvp?: "YES" | "NO" | "MAYBE" | null;
+  /** The Linked panel (components/links), first in the side column. */
+  linked?: React.ReactNode;
+  /** Tasks from this meeting (components/meetings/meeting-tasks), under the notes. */
+  tasks?: React.ReactNode;
+  /** Its recording (components/meetings/meeting-recording), under the agenda. */
+  recording?: React.ReactNode;
   orgId: string;
   orgSlug: string;
   timeZone: string;
@@ -137,7 +150,6 @@ export function EventDetailView({
   const sectionHref = `/app/${orgSlug}/${section}`;
   const [editOpen, setEditOpen] = useState(canEdit && startInEdit);
   const [isPending, startTransition] = useTransition();
-  const [confirmEl, confirm] = useConfirm();
   const [error, setError] = useState<string | null>(null);
 
   const myAttendance = event.attendees.find((a) => a.userId === currentUserId);
@@ -151,17 +163,20 @@ export function EventDetailView({
     });
   }
 
-  async function handleDelete() {
-    const ok = await confirm({
-      title: `Delete “${event.title}”?`,
-      description:
-        "Invited members are told it was cancelled. It's removed from synced calendars and the public site too.",
-      confirmLabel: "Delete event",
-      run: async () => (await deleteEvent(orgId, event.id)).error,
+  /**
+   * "Again next week" (the plan's wording): the same meeting a week later, as
+   * a linked series. A meeting already in a series adds four more weeks.
+   */
+  function handleRepeat() {
+    startTransition(async () => {
+      const result = await extendSeries(orgId, event.id, event.seriesId ? 4 : 1);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      toast({ title: result.added === 1 ? "Added 1 week" : `Added ${result.added ?? 0} weeks` });
+      router.refresh();
     });
-    if (!ok) return;
-    toast({ title: "Event deleted", description: event.title });
-    router.push(sectionHref);
   }
 
   function handleCreateMeetingNotes() {
@@ -178,57 +193,100 @@ export function EventDetailView({
   const zone = useViewerTimeZone(timeZone);
   const going = event.attendees.filter((a) => a.rsvp === "YES");
   const capacityPct = rsvp.capacity ? (rsvp.going / rsvp.capacity) * 100 : 0;
+  // Who's coming, at a glance in the header: sign-ups when the meeting takes
+  // them, else invitees who said yes.
+  const goingCount = rsvp.enabled ? rsvp.going : going.length;
+  // Its type's colour: the organization's meeting type, else its kind's.
+  const typeColor =
+    (event.meetingType ? meetingTypeColor(meetingTypes ?? [], event.meetingType) : null) ??
+    `var(${KIND_META[event.kind].token})`;
+  // On the meeting's own day, the door list is one click from the header.
+  const dayKey = (d: Date) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+  const doorToday =
+    section === "meetings" &&
+    canEdit &&
+    rsvp.enabled &&
+    dayKey(event.startsAt) === dayKey(new Date());
   // A meeting with no call (stored as In person), on its own page, for those who can edit it.
   const canAddCall = section === "meetings" && canEdit && event.conferenceProvider === "NONE";
 
   return (
     <div className="mx-auto max-w-5xl space-y-7">
-      {confirmEl}
       <BackLink href={sectionHref} label={section === "meetings" ? "Meetings" : "Calendar"} />
 
-      <PageHeader
-        title={<span className="break-words">{event.title}</span>}
-        description={
-          <span className="text-foreground font-medium">
+      {/* The plan's meeting header: a date tile beside the title, one line of
+          when and where, and the chips that matter (its type, your part, who's
+          coming). */}
+      <header className="flex flex-wrap items-start gap-4">
+        <DateTile startsAt={event.startsAt} timeZone={zone} color={typeColor} />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <h1 className="page-title break-words">{event.title}</h1>
+          <p className="text-foreground text-[15px] font-medium">
             {formatEventWhen(event, { viewer: zone, org: timeZone }, new Date())}
-          </span>
-        }
-        actions={
-          canEdit ? (
+            {event.location && (
+              <>
+                , <span>{event.location}</span>
+              </>
+            )}
+            {event.location && showMapLink && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open in Maps"
+                className="text-muted-foreground hover:text-foreground ms-2 inline-flex items-center gap-1 text-[13px] font-normal underline-offset-4 hover:underline"
+              >
+                <ExternalLink aria-hidden className="size-3.5" />
+                Map
+              </a>
+            )}
+          </p>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {event.meetingType ? (
+              <TagChip color={typeColor}>{event.meetingType}</TagChip>
+            ) : (
+              <KindBadge kind={event.kind} />
+            )}
+            {event.host?.id === currentUserId && <Badge variant="info">You&apos;re hosting</Badge>}
+            {goingCount > 0 && <Badge variant="success">{goingCount} going</Badge>}
+            {event.visibility === "PUBLIC" && <VisibilityBadge visibility={event.visibility} />}
+            {canEdit && event.googleSyncState !== "NOT_APPLICABLE" && (
+              <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />
+            )}
+            {event.capacityFull && <Badge variant="destructive">Full</Badge>}
+            {event.featured && <Badge variant="accent">Featured</Badge>}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit ? (
             <>
+              {doorToday && (
+                <Button asChild>
+                  <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp/door`}>
+                    <DoorOpen aria-hidden className="size-4" />
+                    Door
+                  </Link>
+                </Button>
+              )}
+              {/* Delete is in the form, with Undo; one place, not two. */}
+              <Button variant="outline" onClick={handleRepeat} disabled={isPending}>
+                <Repeat aria-hidden className="size-4" />
+                {event.seriesId ? "Add 4 weeks" : "Again next week"}
+              </Button>
               <Button variant="outline" onClick={() => setEditOpen(true)}>
                 <Pencil aria-hidden className="size-4" />
-                Edit event
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => void handleDelete()}
-                disabled={isPending}
-              >
-                <Trash2 aria-hidden className="size-4" />
-                Delete event
+                Edit
               </Button>
             </>
-          ) : null
-        }
-      />
-
-      <div className="-mt-3 flex flex-wrap gap-1.5">
-        {event.meetingType && (
-          <TagChip
-            color={
-              meetingTypeColor(meetingTypes ?? [], event.meetingType) ?? "var(--muted-foreground)"
-            }
-          >
-            {event.meetingType}
-          </TagChip>
-        )}
-        <KindBadge kind={event.kind} />
-        <VisibilityBadge visibility={event.visibility} />
-        {canEdit && <SyncBadge state={event.googleSyncState} href={event.googleHtmlLink} />}
-        {event.capacityFull && <Badge variant="destructive">Full</Badge>}
-        {event.featured && <Badge variant="accent">Featured</Badge>}
-      </div>
+          ) : null}
+        </div>
+      </header>
 
       {event.needsReview && canEdit && (
         <p
@@ -252,40 +310,26 @@ export function EventDetailView({
         </p>
       )}
 
-      <div className="grid gap-[18px] lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-[18px]">
+      {/* On a phone the two columns fold into one list (display: contents),
+          with the Linked panel first, right under the header, as the plan has it. */}
+      <div className="flex flex-col gap-[18px] lg:grid lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="max-lg:contents lg:space-y-[18px]">
           <Card>
             <CardContent className="space-y-5">
-              {event.description ? (
-                <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                  {event.description}
-                </p>
-              ) : (
-                <p className="text-muted-foreground text-sm">No description yet.</p>
-              )}
+              <MeetingAgenda
+                orgId={orgId}
+                orgSlug={orgSlug}
+                eventId={event.id}
+                initial={event.description}
+                canEdit={canEdit}
+              />
+              {recording}
 
-              {(event.location || hostLabel || event.rsvpUrl || event.publicNote) && (
+              {(locationDetails || hostLabel || event.rsvpUrl || event.publicNote) && (
                 <dl className="grid gap-1">
-                  {event.location && (
-                    <Fact icon={MapPin} label="Where">
-                      {event.location}
-                      {locationDetails && (
-                        <span className="mt-1 block text-[13px] font-normal">
-                          <span className="text-muted-foreground block">How to find it</span>
-                          <span className="block whitespace-pre-wrap">{locationDetails}</span>
-                        </span>
-                      )}
-                      {showMapLink && (
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1 text-[13px] font-normal underline-offset-4 hover:underline"
-                        >
-                          <ExternalLink aria-hidden className="size-3.5" />
-                          Open in Maps
-                        </a>
-                      )}
+                  {event.location && locationDetails && (
+                    <Fact icon={MapPin} label="How to find it">
+                      <span className="block whitespace-pre-wrap">{locationDetails}</span>
                     </Fact>
                   )}
                   {hostLabel && (
@@ -333,13 +377,13 @@ export function EventDetailView({
                 <Button variant="outline" asChild>
                   <a href={`/api/calendar/${event.id}/ics`} download>
                     <CalendarPlus className="size-4" />
-                    Download .ics
+                    Apple / Outlook
                   </a>
                 </Button>
                 <Button variant="outline" asChild>
                   <a href={buildGoogleCalendarUrl(event)} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="size-4" />
-                    Add to Google Calendar
+                    Google Calendar
                   </a>
                 </Button>
               </div>
@@ -355,50 +399,51 @@ export function EventDetailView({
             />
           )}
 
-          <Card>
-            <CardHeader className="flex flex-wrap items-center gap-2">
-              <CardTitle>Linked notes</CardTitle>
-              {event.notes.length > 0 && <Badge variant="secondary">{event.notes.length}</Badge>}
-              <span className="flex-1" />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCreateMeetingNotes}
-                disabled={isPending}
-              >
-                <NotebookText className="size-4" />
-                Create meeting notes
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {event.notes.length > 0 ? (
-                <ul className="-mx-2">
-                  {event.notes.map((note) => (
-                    <li key={note.id}>
-                      <Link
-                        href={`/app/${orgSlug}/notes/${note.id}`}
-                        className="hover:bg-muted rounded-tile flex items-center gap-3 px-2 py-2 text-sm font-medium transition-colors"
-                      >
-                        <IconChip icon={NotebookText} />
-                        {note.title || "Untitled note"}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  Nothing yet. Meeting notes made here stay linked to this event.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          {!linked && (
+            <Card>
+              <CardHeader className="flex flex-wrap items-center gap-2">
+                <CardTitle>Linked notes</CardTitle>
+                {event.notes.length > 0 && <Badge variant="secondary">{event.notes.length}</Badge>}
+                <span className="flex-1" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCreateMeetingNotes}
+                  disabled={isPending}
+                >
+                  <NotebookText className="size-4" />
+                  Create meeting notes
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {event.notes.length > 0 ? (
+                  <ul className="-mx-2">
+                    {event.notes.map((note) => (
+                      <li key={note.id}>
+                        <Link
+                          href={`/app/${orgSlug}/notes/${note.id}`}
+                          className="hover:bg-muted rounded-tile flex items-center gap-3 px-2 py-2 text-sm font-medium transition-colors"
+                        >
+                          <IconChip icon={NotebookText} />
+                          {note.title || "Untitled note"}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No notes yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          {tasks}
         </div>
 
-        <aside className="space-y-[18px]">
+        <aside className="max-lg:contents lg:space-y-[18px]">
+          {linked && <div className="max-lg:order-first">{linked}</div>}
           {myAttendance && (
             <BlockCard
               tone="answer"
-              kicker={myAttendance.rsvp === "PENDING" ? "Waiting on your answer" : "Your answer"}
               title={
                 myAttendance.rsvp === "PENDING"
                   ? "Are you going?"
@@ -406,6 +451,18 @@ export function EventDetailView({
               }
               className="min-h-0"
             >
+              {/* From the invite email's Going / Can't go: one click to say so. */}
+              {askedRsvp && myAttendance.rsvp !== askedRsvp && (
+                <button
+                  type="button"
+                  autoFocus
+                  disabled={isPending}
+                  onClick={() => handleRsvp(askedRsvp)}
+                  className="bg-block-answer-foreground text-block-answer relative z-10 mt-3 h-10 w-full rounded-full text-sm font-semibold transition-transform active:scale-[0.98] disabled:opacity-60"
+                >
+                  Confirm: {RSVP_META[askedRsvp].label}
+                </button>
+              )}
               <div className="relative z-10 mt-4 flex gap-1.5" role="group" aria-label="Your RSVP">
                 {(["YES", "MAYBE", "NO"] as const).map((status) => {
                   const on = myAttendance.rsvp === status;
@@ -436,18 +493,17 @@ export function EventDetailView({
             (rsvp.enabled && canEdit && rsvp.capacity ? (
               <BlockCard
                 tone="goal"
-                kicker="RSVP page · Live"
                 title="Sign-ups"
                 href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}
                 figure={rsvp.going}
-                figureLabel={`of ${rsvp.capacity} spots${rsvp.waitlist > 0 ? ` · ${rsvp.waitlist} waitlisted` : ""}`}
+                figureLabel={`of ${rsvp.capacity} spots${rsvp.waitlist > 0 ? `, ${rsvp.waitlist} waitlisted` : ""}`}
                 aside={<Gauge value={capacityPct} size={132} />}
                 className="min-h-0"
               />
             ) : (
               <Card>
                 <CardHeader className="flex items-center gap-2">
-                  <CardTitle>RSVP page</CardTitle>
+                  <CardTitle>Sign-ups</CardTitle>
                   <span className="flex-1" />
                   {rsvp.enabled ? (
                     <StatusDot color="var(--success)">Live</StatusDot>
@@ -464,8 +520,7 @@ export function EventDetailView({
                           <span className="text-muted-foreground">going</span>
                           {rsvp.waitlist > 0 && (
                             <span className="text-muted-foreground">
-                              {" "}
-                              · {rsvp.waitlist} waitlisted
+                              , {rsvp.waitlist} waitlisted
                             </span>
                           )}
                         </p>
@@ -475,16 +530,15 @@ export function EventDetailView({
                           href={rsvp.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground block truncate text-sm underline-offset-4 hover:underline"
+                          className="text-muted-foreground hover:text-foreground block text-sm break-all underline-offset-4 hover:underline"
                         >
                           {rsvp.url.replace(/^https?:\/\//, "")}
                         </a>
                       )}
                     </>
                   ) : (
-                    <p className="text-muted-foreground text-sm leading-relaxed">
-                      A public page where anyone with the link signs up, with a waitlist, a map and
-                      reminders.
+                    <p className="text-muted-foreground text-sm">
+                      Anyone with the link can sign up.
                     </p>
                   )}
                   {canEdit && (
@@ -495,11 +549,7 @@ export function EventDetailView({
                     >
                       <Link href={`/app/${orgSlug}/meetings/${event.id}/rsvp`}>
                         {rsvp.enabled ? <Settings2 aria-hidden /> : <Ticket aria-hidden />}
-                        {rsvp.enabled
-                          ? "Manage guests and page"
-                          : section === "meetings"
-                            ? "Add a sign-up page"
-                            : "Set up an RSVP page"}
+                        {rsvp.enabled ? "Guests and page" : "Add a sign-up page"}
                       </Link>
                     </Button>
                   )}
@@ -512,14 +562,32 @@ export function EventDetailView({
               <CardTitle>Invited</CardTitle>
               <Badge variant="secondary">{event.attendees.length}</Badge>
               <span className="flex-1" />
-              {going.length > 0 && <FaceStack people={going.map((a) => a.user)} />}
+              {!canEdit && going.length > 0 && <FaceStack people={going.map((a) => a.user)} />}
             </CardHeader>
             <CardContent>
+              {canEdit && (
+                // The picker shows who's invited itself, so it gets the card's
+                // full width rather than a corner of the header.
+                <div className="mb-3">
+                  <InviteButton
+                    orgId={orgId}
+                    eventId={event.id}
+                    members={members}
+                    invited={event.attendees.map((a) => a.userId)}
+                  />
+                </div>
+              )}
               {event.attendees.length > 0 ? (
                 <>
                   <p className="text-muted-foreground mb-3 text-[13px] tabular-nums">
-                    {count("YES")} going · {count("MAYBE")} maybe · {count("NO")} not going ·{" "}
-                    {count("PENDING")} no answer
+                    {[
+                      count("YES") > 0 && `${count("YES")} going`,
+                      count("MAYBE") > 0 && `${count("MAYBE")} maybe`,
+                      count("NO") > 0 && `${count("NO")} not going`,
+                      count("PENDING") > 0 && `${count("PENDING")} no answer`,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
                   </p>
                   <ul className="space-y-2">
                     {event.attendees.map((a) => (
@@ -529,7 +597,7 @@ export function EventDetailView({
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <UserAvatar user={a.user} size="md" />
-                          <span className="truncate font-medium">{a.user.name ?? "Member"}</span>
+                          <span className="font-medium break-words">{a.user.name ?? "Member"}</span>
                         </span>
                         <Badge variant={RSVP_BADGE_VARIANT[a.rsvp]}>
                           {RSVP_META[a.rsvp].short}
@@ -539,13 +607,7 @@ export function EventDetailView({
                   </ul>
                 </>
               ) : (
-                <EmptyState
-                  size="compact"
-                  title="Nobody is invited yet"
-                  description={
-                    canEdit ? "Add members under More details when you edit." : undefined
-                  }
-                />
+                <EmptyState size="compact" title="Nobody is invited yet" />
               )}
             </CardContent>
           </Card>
@@ -593,74 +655,91 @@ function RemindersCard({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<number[]>(minutes);
+  const [value, setValue] = useState<number[]>(minutes);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function startEditing() {
-    setDraft(minutes);
-    setError(null);
-    setEditing(true);
-  }
-
-  function save() {
+  // A chip saves as it's tapped; there is no Edit, Save or Cancel.
+  function change(next: number[]) {
+    const before = value;
+    setValue(next);
     setError(null);
     startTransition(async () => {
-      const result = await updateEvent(orgId, eventId, { reminderMinutes: draft });
+      const result = await updateEvent(orgId, eventId, { reminderMinutes: next });
       if (result?.error) {
+        setValue(before);
         setError(result.error);
         return;
       }
-      setEditing(false);
       router.refresh();
     });
   }
 
-  const labels = [...minutes].sort((a, b) => b - a).map(reminderLabel);
+  const labels = [...value].sort((a, b) => b - a).map(reminderLabel);
 
   return (
     <Card>
       <CardHeader className="flex items-center gap-2">
         <CardTitle>Reminders</CardTitle>
-        <span className="flex-1" />
-        {canEdit && !editing && (
-          <Button variant="outline" size="sm" aria-label="Edit reminders" onClick={startEditing}>
-            <Pencil aria-hidden className="size-4" />
-            Edit
-          </Button>
-        )}
       </CardHeader>
       <CardContent className="space-y-3">
-        {editing ? (
+        {canEdit ? (
           <>
-            <ReminderPicker value={draft} onChange={setDraft} disabled={isPending} />
+            <ReminderPicker value={value} onChange={change} />
             {error && (
               <p className="text-destructive text-sm" role="alert">
                 {error}
               </p>
             )}
-            <div className="flex gap-2">
-              <Button size="sm" onClick={save} disabled={isPending}>
-                {isPending ? "Saving…" : "Save"}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setEditing(false)}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-            </div>
           </>
         ) : labels.length > 0 ? (
-          <p className="text-sm">{labels.join(" · ")}</p>
+          <p className="text-sm">{labels.join(", ")}</p>
         ) : (
           <p className="text-muted-foreground text-sm">No reminders</p>
         )}
+        {isPending && <span className="sr-only">Saving</span>}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Invite members straight from the Invited card: the picker saves as you
+ * pick (only the invite list is sent), instead of opening the whole form.
+ */
+function InviteButton({
+  orgId,
+  eventId,
+  members,
+  invited,
+}: {
+  orgId: string;
+  eventId: string;
+  members: CalendarMember[];
+  invited: string[];
+}) {
+  const router = useRouter();
+  const [ids, setIds] = useState<string[]>(invited);
+  const [, startTransition] = useTransition();
+  return (
+    <MemberMultiPicker
+      members={members}
+      selectedIds={ids}
+      placeholder="Invite"
+      onChange={(next) => {
+        const before = ids;
+        setIds(next);
+        startTransition(async () => {
+          const result = await updateEvent(orgId, eventId, { attendeeIds: next });
+          if (result?.error) {
+            setIds(before);
+            toast({ title: result.error, tone: "error" });
+            return;
+          }
+          router.refresh();
+        });
+      }}
+    />
   );
 }
 
@@ -695,4 +774,37 @@ function buildGoogleCalendarUrl(event: EventDetail): string {
   if (event.description) params.set("details", event.description);
   if (event.location) params.set("location", event.location);
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+const TILE_MONTH = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-US", { month: "short", timeZone });
+const TILE_DAY = (timeZone: string) =>
+  new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone });
+
+/** The plan's date tile: the month over the day, on a wash of the meeting type's colour. */
+function DateTile({
+  startsAt,
+  timeZone,
+  color,
+}: {
+  startsAt: Date;
+  timeZone: string;
+  color: string;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        ["--kind" as string]: color,
+        background: "color-mix(in oklab, var(--kind) 14%, var(--card))",
+        color: "color-mix(in oklab, var(--kind) 70%, var(--foreground))",
+      }}
+      className="rounded-tile grid w-16 shrink-0 place-items-center py-2 leading-none"
+    >
+      <span className="text-[11px] font-bold tracking-wide uppercase">
+        {TILE_MONTH(timeZone).format(startsAt)}
+      </span>
+      <span className="font-heading mt-1 text-[28px]">{TILE_DAY(timeZone).format(startsAt)}</span>
+    </span>
+  );
 }

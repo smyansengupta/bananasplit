@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "@/components/icons";
+import { Check, Link2 } from "@/components/icons";
 import type { CSSProperties } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -262,7 +262,10 @@ export function BestTimes({
   selectedStartId,
   onSelect,
   onSchedule,
+  onCopyLink,
 }: {
+  /** Copies the poll's link: offered while nobody has answered yet. */
+  onCopyLink?: () => void;
   windows: RankedSlot[];
   total: number;
   timeZone: string;
@@ -282,11 +285,17 @@ export function BestTimes({
         </p>
       </div>
       {windows.length === 0 ? (
-        <p className="text-muted-foreground bg-muted hatch rounded-tile p-3.5 text-sm">
-          {total === 0
-            ? "No answers yet. The best times show up here as people respond."
-            : "No time works for anyone yet."}
-        </p>
+        <div className="bg-muted hatch rounded-tile flex flex-wrap items-center justify-between gap-2 p-3.5 text-sm">
+          <span className="text-muted-foreground">
+            {total === 0 ? "No answers yet." : "No time works for anyone yet."}
+          </span>
+          {total === 0 && onCopyLink && (
+            <Button type="button" size="sm" variant="outline" onClick={onCopyLink}>
+              <Link2 className="size-4" aria-hidden="true" />
+              Copy link
+            </Button>
+          )}
+        </div>
       ) : (
         <ol className="space-y-2">
           {windows.map((w, index) => {
@@ -379,8 +388,8 @@ export function RespondentList({
           {named.map((r) => (
             <li key={r.key}>
               <Badge variant="outline" className="h-6 max-w-48 gap-1 font-normal">
-                <span className="truncate">{r.name}</span>
-                {r.isGuest && <span className="text-muted-foreground">· guest</span>}
+                <span className="break-words">{r.name}</span>
+                {r.isGuest && <span className="text-muted-foreground">, guest</span>}
               </Badge>
             </li>
           ))}

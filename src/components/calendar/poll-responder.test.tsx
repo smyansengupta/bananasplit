@@ -17,6 +17,9 @@ const { submitMock, finalizeMock, pushMock, refreshMock } = vi.hoisted(() => ({
   refreshMock: vi.fn(),
 }));
 
+vi.mock("@/app/app/[orgSlug]/meetings/actions", () => ({
+  meetingConnectionsAction: vi.fn(async () => []),
+}));
 vi.mock("@/app/poll/[pollId]/actions", () => ({ submitPollResponse: submitMock }));
 vi.mock("@/app/app/[orgSlug]/calendar/polls/actions", () => ({ finalizePoll: finalizeMock }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
@@ -200,8 +203,12 @@ describe("PollResponder: everyone", () => {
     await act(async () => {
       fireEvent.click(within(dialog).getByRole("button", { name: "Schedule" }));
     });
-    expect(finalizeMock).toHaveBeenCalledWith("org_1", "poll_1", "d1a");
-    expect(pushMock).toHaveBeenCalledWith("/app/rc/calendar/evt_1");
+    expect(finalizeMock).toHaveBeenCalledWith("org_1", "poll_1", "d1a", {
+      conferenceProvider: "NONE",
+      conferenceUrl: null,
+      location: null,
+    });
+    expect(pushMock).toHaveBeenCalledWith("/app/rc/meetings/evt_1");
   });
 
   it("offers no painting once the poll has closed", () => {

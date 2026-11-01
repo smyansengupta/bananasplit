@@ -15,6 +15,7 @@ import { listDeletedNoteFiles, listNoteFiles } from "@/server/notes/files";
 import { folderPeeks, listFolders } from "@/server/notes/folders";
 import { countNoteShares } from "@/server/notes/sharing";
 import { noteVisibleWhere } from "@/server/notes/visibility";
+import { clubsUserRuns } from "@/server/personal/move";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 import { canManageStorage, readStorageUsed } from "@/server/storage/quota";
@@ -33,8 +34,8 @@ import {
 export const metadata: Metadata = { title: "Files" };
 
 /**
- * Files (at /notes): the club's notes and uploaded files in one list, filed
- * in shared folders. "New" starts a blank note or a template, turns a Word
+ * Files (at /notes): the organization's notes and uploaded files in one
+ * list, filed in shared folders, with All, Notes and Uploads as its tabs. "New" starts a blank note or a template, turns a Word
  * document or Google Doc into a note (previewed first), uploads a file, or
  * makes a folder. In Personal they're all its owner's, with no sharing.
  */
@@ -51,6 +52,8 @@ export default async function NotesPage({
   const kind = query.tab === "files" || query.tab === "notes" ? query.tab : "all";
   const isAdmin = can({ role }, "settings.view");
   const personal = isPersonalSpace(org);
+  // In Personal, each card's menu can move it to an organization you run.
+  const moveTargets = personal ? await clubsUserRuns(user.id) : [];
 
   const str = (v: unknown) => (typeof v === "string" && v !== "all" ? v : undefined);
   const visibility = str(query.visibility) as "PRIVATE" | "ORGANIZATION" | "SHARED" | undefined;
@@ -166,7 +169,7 @@ export default async function NotesPage({
               maxFileBytes={storage.maxFileBytes}
               parts={storageParts}
               personal={personal}
-              href={storage.canManage ? `/app/${orgSlug}/settings/plan/storage` : null}
+              href={storage.canManage ? `/app/${orgSlug}/settings/plan` : null}
             />
             <NotesNewMenu
               orgId={org.id}
@@ -180,16 +183,11 @@ export default async function NotesPage({
         }
       />
       <SpaceStorageBanner orgSlug={orgSlug} />
-      {/* Notes-only view and the trash take no uploads. */}
-      {kind !== "notes" && !inTrash && (
-        <FilesDropZone
-          orgId={org.id}
-          folderId={uploadFolder}
-          storage={storage}
-          personal={personal}
-        />
-      )}
+      {/* The page's uploader: the whole page takes dropped files (in the
+          trash too, where they land in no folder rather than in the trash). */}
+      <FilesDropZone orgId={org.id} folderId={uploadFolder} storage={storage} personal={personal} />
       <NotesLibrary
+        moveTargets={moveTargets}
         orgId={org.id}
         orgSlug={orgSlug}
         kind={kind}
@@ -247,6 +245,7 @@ export default async function NotesPage({
         filters={<NotesListFilters members={members} personal={personal} />}
         sheetFilters={<NotesFilterChoices members={members} personal={personal} />}
         personal={personal}
+        canEmptyTrash={storage.canManage}
       />
     </div>
   );

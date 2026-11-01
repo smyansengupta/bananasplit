@@ -204,7 +204,7 @@ afterAll(async () => {
 });
 
 describe("loadPersonalHome against the local database", () => {
-  it("gathers Maya's clubs and Personal, and nothing from a club she isn't in", async () => {
+  it("gathers Maya's organizations and Personal, and nothing from an organization she isn't in", async () => {
     if (!reachable) return;
     requireUserMock.mockResolvedValue({ id: maya.id, email: maya.email, name: "Maya Patel" });
     const data = await loadPersonalHome(maya.id);

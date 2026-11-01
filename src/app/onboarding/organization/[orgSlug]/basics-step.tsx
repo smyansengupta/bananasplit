@@ -45,7 +45,7 @@ export function OrgBasicsStep(
 
   return (
     <SetupCard>
-      <StepIntro title="Your organization.">Fix anything, then keep going.</StepIntro>
+      <StepIntro title="Your organization." />
       <form
         noValidate
         onSubmit={(e) => {

@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { UserAvatar } from "@/components/user-avatar";
 import { parseNotificationPreferences } from "@/lib/notifications/preferences";
 import { personHref, type ProfileSection } from "@/lib/profile/href";
 import { effectiveTimezone } from "@/lib/profile/timezone";
@@ -44,8 +43,7 @@ function roleLabel(role: string): string {
 /**
  * The signed-in user's own profile (Phase 2). One profile across every org
  * the user belongs to; titles are per org and set by that org's admins.
- * Sections: details, picture, links, notifications, calendar feed (the old
- * settings/notifications and settings/calendar pages redirect here), and
+ * Sections: details, picture, links, notifications, calendar feed, and
  * the AI apps the user connected while AI connectors are on.
  */
 export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/profile">) {
@@ -71,28 +69,33 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
     `${titledOrgs.length} organization${titledOrgs.length === 1 ? "" : "s"}`,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-7.5">
       <div className="space-y-5">
         <header className="flex flex-wrap items-center gap-x-5 gap-y-4">
-          <UserAvatar user={profile} size="xl" className="shrink-0" />
+          <AvatarEditor
+            button
+            user={{
+              name: profile.name,
+              email: profile.email,
+              image: profile.image,
+              avatar: profile.avatar,
+            }}
+          />
           <div className="min-w-0 flex-1 basis-56">
             <h1 className="page-title">Your profile</h1>
             <p className="text-muted-foreground mt-2 text-[15px]">{summary}</p>
           </div>
           <Button asChild variant="outline">
             <Link href={personHref(orgSlug, profile.id)}>
-              View as others see it
+              Preview
               <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
             </Link>
           </Button>
         </header>
-        <p className="text-muted-foreground max-w-prose text-sm">
-          Members of your organizations see your name, picture, pronouns, major, bio and links. Your
-          email is not shown on people pages.
-        </p>
+        <p className="text-muted-foreground max-w-prose text-sm">Your email stays private.</p>
 
         <nav aria-label="Profile sections" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           {/* Wrapping on a phone too, so every section is in view without scrolling. */}
@@ -119,10 +122,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
               timezone: profile.timezone,
             }}
           />
-          <SettingsCard
-            title="Your titles"
-            description="Each organization's admins set your title there, separately from your role."
-          >
+          <SettingsCard title="Your titles" description="Set by each organization's admins.">
             <ul className="divide-border/70 divide-y">
               {titledOrgs.map((m) => (
                 <li
@@ -144,11 +144,7 @@ export default async function ProfilePage({ params }: PageProps<"/app/[orgSlug]/
           </SettingsCard>
         </section>
 
-        <SettingsCard
-          id="photo"
-          title="Profile picture"
-          description="Shown in the org chart, on tasks, in database rows and on your people page."
-        >
+        <SettingsCard id="photo" title="Picture">
           <AvatarEditor
             user={{
               name: profile.name,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "@/components/icons";
+import { Plus, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -18,110 +18,180 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldSelect } from "@/components/ui/field-select";
+import { toast } from "@/components/ui/toaster";
 
 import { ContactSearch, type ContactOption } from "./contact-search";
 import { notice } from "./styles";
 
-/** Manual check-in (ADMIN+): a suite-native row that can later be edited or deleted. */
+type Arrival = { key: string; contact?: ContactOption; name?: string; email?: string };
+
+/**
+ * Late check-ins (ADMIN+): suite-native rows that can later be edited or
+ * deleted. Several people at once: pick them from who's on file, or type
+ * a new name, and add them all in one go. From a session's drawer the
+ * session is already chosen, so it isn't asked again; every one counts as
+ * a manual check-in.
+ */
 export function AddAttendanceDialog({
   organizationId,
   sessions,
+  sessionId,
+  trigger,
 }: {
   organizationId: string;
   sessions: { id: string; label: string }[];
+  /** Set from a session's drawer: that session, with no picker. */
+  sessionId?: string;
+  trigger?: React.ReactNode;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [person, setPerson] = useState<ContactOption | null>(null);
+  const [people, setPeople] = useState<Arrival[]>([]);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [eventId, setEventId] = useState(sessionId ?? sessions[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const submit = (form: FormData) => {
-    const get = (k: string) => String(form.get(k) ?? "").trim();
+  function addNew() {
+    const name = newName.trim();
+    if (!name) return;
+    setPeople((list) => [
+      ...list,
+      { key: `new-${Date.now()}`, name, email: newEmail.trim() || undefined },
+    ]);
+    setNewName("");
+    setNewEmail("");
+  }
+
+  function submit() {
+    // A name still in the box counts too.
+    const all = newName.trim()
+      ? [...people, { key: "typed", name: newName.trim(), email: newEmail.trim() || undefined }]
+      : people;
+    if (all.length === 0 || !eventId) return;
     setError(null);
     start(async () => {
-      const r = await addAttendanceAction(organizationId, {
-        eventId: get("eventId"),
-        contactId: person?.id,
-        name: person ? undefined : get("name") || undefined,
-        email: person ? undefined : get("email") || undefined,
-        method: get("method") as "MANUAL" | "FORM" | "QR",
-      });
-      if (r.error) return setError(r.error);
-      setOpen(false);
-      setPerson(null);
-      router.refresh();
+      let done = 0;
+      for (const p of all) {
+        const r = await addAttendanceAction(organizationId, {
+          eventId,
+          contactId: p.contact?.id,
+          name: p.contact ? undefined : p.name,
+          email: p.contact ? undefined : p.email,
+          method: "MANUAL",
+        });
+        if (r.error) {
+          setError(r.error);
+          break;
+        }
+        done += 1;
+      }
+      if (done > 0) {
+        toast({ title: done === 1 ? "Checked in" : `${done} checked in`, tone: "success" });
+        router.refresh();
+      }
+      if (done === all.length) {
+        setOpen(false);
+        setPeople([]);
+        setNewName("");
+        setNewEmail("");
+      } else {
+        setPeople(all.slice(done));
+      }
     });
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="create">
-          <Plus aria-hidden="true" />
-          Add check-in
-        </Button>
+        {trigger ?? (
+          <Button variant="create">
+            <Plus aria-hidden="true" />
+            Add check-in
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add a check-in</DialogTitle>
-          <DialogDescription>
-            For someone who attended but did not check in on the website.
+          <DialogTitle>Add check-ins</DialogTitle>
+          <DialogDescription className="sr-only">
+            Add people who came but didn&apos;t check in.
           </DialogDescription>
         </DialogHeader>
-        <form action={submit} className="grid gap-4">
-          <div className="grid gap-1.5">
-            <Label htmlFor="att-session">Session</Label>
-            <FieldSelect id="att-session" name="eventId" required className="w-full">
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </FieldSelect>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Person</Label>
-            {person ? (
-              <div className="bg-muted/60 rounded-field flex h-10 items-center justify-between gap-2 ps-3.5 pe-1 text-sm">
-                <span>
-                  {person.displayName ?? "Unnamed"}{" "}
-                  <span className="text-muted-foreground">{person.emailMasked}</span>
-                </span>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setPerson(null)}>
-                  Change
-                </Button>
-              </div>
-            ) : (
-              <>
-                <ContactSearch
-                  organizationId={organizationId}
-                  onPick={setPerson}
-                  placeholder="Find someone already on file…"
-                />
-                <p className="text-muted-foreground text-[13px]">…or add someone new:</p>
-                <Input
-                  name="name"
-                  placeholder="Name"
-                  maxLength={120}
-                  aria-label="New person's name"
-                />
-                <Input
-                  name="email"
-                  type="email"
-                  placeholder="Email (optional)"
-                  aria-label="New person's email"
-                />
-              </>
+        <div className="grid gap-4">
+          {!sessionId && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="att-session">Session</Label>
+              <FieldSelect
+                id="att-session"
+                value={eventId}
+                onChange={(e) => setEventId(e.target.value)}
+                className="w-full"
+              >
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </FieldSelect>
+            </div>
+          )}
+          <div className="grid gap-2">
+            <Label>People</Label>
+            {people.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5">
+                {people.map((p) => (
+                  <li
+                    key={p.key}
+                    className="bg-muted inline-flex items-center gap-1 rounded-full py-1 ps-3 pe-1 text-sm"
+                  >
+                    {p.contact?.displayName ?? p.name ?? "Unnamed"}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${p.contact?.displayName ?? p.name ?? "person"}`}
+                      onClick={() => setPeople((list) => list.filter((x) => x.key !== p.key))}
+                      className="hover:bg-muted-strong grid size-6 place-items-center rounded-full"
+                    >
+                      <X className="size-3.5" aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="att-method">Method</Label>
-            <FieldSelect id="att-method" name="method" defaultValue="MANUAL" className="w-full">
-              <option value="MANUAL">Manual</option>
-              <option value="FORM">Form</option>
-              <option value="QR">QR</option>
-            </FieldSelect>
+            <ContactSearch
+              organizationId={organizationId}
+              onPick={(c) =>
+                setPeople((list) =>
+                  list.some((x) => x.contact?.id === c.id)
+                    ? list
+                    : [...list, { key: c.id, contact: c }],
+                )
+              }
+              placeholder="Find someone on file"
+            />
+            <div className="flex gap-2">
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addNew();
+                  }
+                }}
+                placeholder="Or a new name"
+                maxLength={120}
+                aria-label="New person's name"
+              />
+              <Input
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                type="email"
+                placeholder="Email (optional)"
+                aria-label="New person's email"
+              />
+            </div>
           </div>
           {error && (
             <p role="alert" className={notice.error}>
@@ -129,14 +199,19 @@ export function AddAttendanceDialog({
             </p>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending || sessions.length === 0}>
-              {pending ? "Adding…" : "Add check-in"}
+            <Button
+              type="button"
+              onClick={submit}
+              disabled={pending || !eventId || (people.length === 0 && !newName.trim())}
+            >
+              {pending
+                ? "Adding"
+                : people.length + (newName.trim() ? 1 : 0) > 1
+                  ? `Check in ${people.length + (newName.trim() ? 1 : 0)}`
+                  : "Check in"}
             </Button>
           </DialogFooter>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -181,9 +256,7 @@ export function AddSignupDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add a signup</DialogTitle>
-          <DialogDescription>
-            For interest collected in person. The term comes from today&apos;s date.
-          </DialogDescription>
+          <DialogDescription>The term comes from today&apos;s date.</DialogDescription>
         </DialogHeader>
         <form action={submit} className="grid gap-4">
           <div className="grid gap-1.5">
@@ -211,11 +284,8 @@ export function AddSignupDialog({
             </p>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Adding…" : "Add signup"}
+              {pending ? "Adding" : "Add signup"}
             </Button>
           </DialogFooter>
         </form>

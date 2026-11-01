@@ -3,6 +3,8 @@
 import {
   Check,
   File,
+  Pencil,
+  Trash2,
   FileImage,
   FileSpreadsheet,
   FileText,
@@ -11,13 +13,10 @@ import {
   Presentation,
   type IconComponent,
 } from "@/components/icons";
+import { useState } from "react";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  TAG_COLOR_NAMES,
-  tagColorOf,
-  tagVar,
-  type TagColor,
-} from "@/lib/tag-colors";
+import { TAG_COLOR_NAMES, tagColorOf, tagVar, type TagColor } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +25,11 @@ import { cn } from "@/lib/utils";
  * above the front like papers half pulled out; the newest stands in the
  * middle with its name, the next two lean either side. They spread a little
  * on hover, and further while a file is dragged over (the "drop it here" cue).
+ *
+ * Whoever may edit it gets two buttons in its corner on hover (always shown
+ * on touch): Rename, which edits the name right on the folder, and Delete,
+ * which the library undoes from its toast. The name wraps; it is never cut
+ * off.
  *
  * Every folder is the same quiet grey, taken from the theme's own surfaces.
  * Its colour is one short line on the tab. A folder nobody has coloured takes the
@@ -64,6 +68,10 @@ export interface FolderCardProps {
   onOpen: () => void;
   /** Set to let this viewer recolour the folder. */
   onColor?: (color: string | null) => void;
+  /** Set to let this viewer rename it (on the folder itself). */
+  onRename?: (name: string) => void;
+  /** Set to let this viewer delete it (the library offers Undo). */
+  onDelete?: () => void;
   /** Spread onto the folder: the library's drag-over / drop handlers. */
   dropProps?: React.HTMLAttributes<HTMLDivElement>;
 }
@@ -148,8 +156,11 @@ export function FolderCard({
   dropping = false,
   onOpen,
   onColor,
+  onRename,
+  onDelete,
   dropProps,
 }: FolderCardProps) {
+  const [editing, setEditing] = useState<string | null>(null);
   const summary = contents(noteCount, fileCount);
   const items = peek.slice(0, 3);
   const fan = FAN[items.length] ?? [];
@@ -217,7 +228,9 @@ export function FolderCard({
               <span className="flex items-center gap-1.5">
                 <Glyph className="size-3 shrink-0" strokeWidth={2} />
                 {i === 0 && (
-                  <span className="text-foreground/80 truncate font-medium">{item.title}</span>
+                  <span className="text-foreground/80 line-clamp-2 font-medium break-words">
+                    {item.title}
+                  </span>
                 )}
               </span>
               <Lines widths={i === 0 ? [92, 78, 86] : [70, 88, 60]} />
@@ -228,7 +241,7 @@ export function FolderCard({
         {/* The front of the folder, with the name on it. */}
         <span
           className={cn(
-            "border-border/60 absolute inset-x-0 bottom-0 z-10 flex h-[4.6rem] flex-col justify-end gap-1 rounded-[14px] border px-3.5 pb-3",
+            "border-border/60 absolute inset-x-0 bottom-0 z-10 flex min-h-[4.6rem] flex-col justify-end gap-1 rounded-[14px] border px-3.5 pb-3",
             "shadow-[0_-8px_16px_-10px_color-mix(in_oklab,var(--foreground)_28%,transparent),inset_0_1px_0_color-mix(in_oklab,var(--card)_70%,transparent)]",
             "transition-[box-shadow]",
             EASE,
@@ -236,9 +249,9 @@ export function FolderCard({
           )}
           style={{ backgroundColor: "var(--folder-front)" }}
         >
-          <span className="truncate text-sm leading-tight font-medium">{name}</span>
+          <span className="text-sm leading-tight font-medium break-words">{name}</span>
           <span className="text-muted-foreground flex items-baseline justify-between gap-2 text-[12px] leading-tight">
-            <span className="truncate">{dropping ? "Drop to move it here" : summary}</span>
+            <span className="min-w-0 break-words">{dropping ? "Drop it here" : summary}</span>
             {!dropping && items[0] && (
               <span className="shrink-0 tabular-nums" suppressHydrationWarning>
                 {when(items[0].at)}
@@ -247,6 +260,58 @@ export function FolderCard({
           </span>
         </span>
       </span>
+
+      {editing !== null && onRename && (
+        <form
+          className="absolute inset-x-2 bottom-2.5 z-40"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const next = editing.trim();
+            setEditing(null);
+            if (next && next !== name) onRename(next);
+          }}
+        >
+          <input
+            autoFocus
+            value={editing}
+            maxLength={80}
+            aria-label="Folder name"
+            onChange={(e) => setEditing(e.target.value)}
+            onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setEditing(null);
+            }}
+            className="border-input bg-card focus-glow w-full rounded-lg border px-2.5 py-1.5 text-sm font-medium outline-none"
+          />
+        </form>
+      )}
+
+      {(onRename || onDelete) && editing === null && (
+        <span className="absolute top-[26px] right-2 z-40 flex gap-0.5 opacity-0 transition-opacity group-focus-within/folder:opacity-100 group-hover/folder:opacity-100 pointer-coarse:opacity-100">
+          {onRename && (
+            <button
+              type="button"
+              aria-label={`Rename ${name}`}
+              title="Rename"
+              onClick={() => setEditing(name)}
+              className="bg-card/90 text-muted-foreground hover:text-foreground focus-glow grid size-7 place-items-center rounded-full outline-none"
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              aria-label={`Delete ${name}`}
+              title="Delete"
+              onClick={onDelete}
+              className="bg-card/90 text-muted-foreground hover:text-tint-danger-foreground hover:bg-tint-danger focus-glow grid size-7 place-items-center rounded-full outline-none"
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </span>
+      )}
 
       {/* The colour line on the tab: a button for whoever may recolour it. */}
       {onColor ? (

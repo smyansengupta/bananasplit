@@ -103,7 +103,7 @@ export default async function VersionsPage({
                 <TableCell className="font-medium">
                   v{v.number}
                   {v.sourceFilename && (
-                    <span className="text-muted-foreground block max-w-48 truncate text-xs font-normal">
+                    <span className="text-muted-foreground block max-w-48 text-xs font-normal break-words">
                       {v.sourceFilename}
                     </span>
                   )}

@@ -36,6 +36,7 @@ const {
   transferOwnership,
   leaveOrg,
   inviteMember,
+  inviteMembers,
   resendInvitation,
   revokeInvitation,
 } = actions;
@@ -389,11 +390,41 @@ describe("invitations", () => {
     fake.db.membership.findFirst.mockResolvedValueOnce({ id: "m" });
     expect(
       (await inviteMember("org_1", { email: "a@example.edu", role: Role.MEMBER })).error,
-    ).toMatch(/already a member/);
+    ).toMatch(/already a member/i);
     fake.db.invitation.findFirst.mockResolvedValueOnce({ id: "inv" });
     expect(
       (await inviteMember("org_1", { email: "a@example.edu", role: Role.MEMBER })).error,
-    ).toMatch(/pending invite/);
+    ).toMatch(/already invited/i);
+  });
+
+  it("invites a pasted list with one role, reporting each address that couldn't be invited", async () => {
+    // The second address is already a member; the third isn't an address.
+    fake.db.membership.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "m" })
+      .mockResolvedValue(null);
+    const result = await inviteMembers("org_1", {
+      emails: "maya@school.edu, Sam@School.edu\nnot-an-email; maya@school.edu",
+      role: Role.TREASURER,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.results).toEqual([
+      { email: "maya@school.edu" },
+      { email: "sam@school.edu", error: "Already a member." },
+      { email: "not-an-email", error: "Not an email address." },
+    ]);
+    expect(fake.db.invitation.create).toHaveBeenCalledOnce();
+    expect(fake.db.invitation.create.mock.calls[0][0].data.role).toBe(Role.TREASURER);
+  });
+
+  it("refuses an empty paste and an OWNER role for the list", async () => {
+    expect((await inviteMembers("org_1", { emails: "  ", role: Role.MEMBER })).error).toMatch(
+      /at least one/,
+    );
+    expect(
+      (await inviteMembers("org_1", { emails: "a@example.edu", role: Role.OWNER })).error,
+    ).toBeTruthy();
+    expect(fake.db.invitation.create).not.toHaveBeenCalled();
   });
 
   it("resend restarts the expiry and queues a fresh link; accepted invites are refused", async () => {

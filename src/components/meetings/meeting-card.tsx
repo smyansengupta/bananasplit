@@ -5,6 +5,7 @@ import { KIND_INK, kindStyle } from "@/components/calendar/kinds";
 import { MapPin, Ticket, TriangleAlert, Video } from "@/components/icons";
 import { hasMeetingLogo, MeetingLogo } from "@/components/meeting-logos";
 import { CopyLinkButton } from "@/components/meetings/copy-link-button";
+import { RsvpButtons } from "@/components/meetings/rsvp-buttons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TickMeter } from "@/components/ui/meters";
@@ -51,6 +52,10 @@ export interface MeetingRow {
   conferenceUrl: string | null;
   conferenceSyncState: CalendarSyncState;
   conferenceSyncError: string | null;
+  /** Check-ins (maintained by the rollups); the past list's "came". */
+  attendanceCount?: number;
+  /** The recording link a host pasted; the past list's "Recording". */
+  recordingUrl?: string | null;
 }
 
 /**
@@ -103,6 +108,7 @@ const JOIN_EARLY_MS = 15 * 60_000;
  * Its server-rendered shell has one client child, the copy button.
  */
 export function MeetingCard({
+  orgId,
   event: e,
   canManage,
   status,
@@ -120,6 +126,8 @@ export function MeetingCard({
   myRsvp,
   crowd,
 }: {
+  /** For answering an invitation on the card. */
+  orgId?: string;
   event: MeetingRow;
   /** Hosts see the head count; everyone else sees their own sign-up. */
   canManage: boolean;
@@ -156,6 +164,8 @@ export function MeetingCard({
   const joinable = Boolean(e.conferenceUrl) && !past;
   const joinNow = joinable && e.startsAt.getTime() - now.getTime() <= JOIN_EARLY_MS;
   const rsvp = !canManage && e.rsvpEnabled && e.rsvpSlug && !mine && !past;
+  // An invitee answers right on the card, until it's over.
+  const answerable = Boolean(orgId) && myRsvp !== null && !past && !hosting;
   const counts = signups();
   const part = yourPart();
 
@@ -165,18 +175,14 @@ export function MeetingCard({
    * to says nothing. An invite you haven't answered is the one to act on.
    */
   function yourPart() {
-    if (hosting) return <Badge variant="info">You&apos;re hosting</Badge>;
-    if (myRsvp === "PENDING")
-      return past ? (
-        <Badge variant="secondary">You were invited</Badge>
-      ) : (
-        <Badge variant="accent" title="You were invited and haven't answered yet">
-          Invited, reply needed
-        </Badge>
-      );
-    if (myRsvp === "YES") return <Badge variant="success">Invited, you&apos;re going</Badge>;
-    if (myRsvp === "MAYBE") return <Badge variant="outline">Invited, you said maybe</Badge>;
-    if (myRsvp === "NO") return <Badge variant="secondary">Invited, you declined</Badge>;
+    if (hosting) return <Badge variant="info">Hosting</Badge>;
+    // Before it happens, the answer buttons in the footer say it; after, a word.
+    if (answerable)
+      return myRsvp === "PENDING" ? <Badge variant="accent">Reply needed</Badge> : null;
+    if (myRsvp === "PENDING") return <Badge variant="secondary">Invited</Badge>;
+    if (myRsvp === "YES") return <Badge variant="success">Going</Badge>;
+    if (myRsvp === "MAYBE") return <Badge variant="outline">Maybe</Badge>;
+    if (myRsvp === "NO") return <Badge variant="secondary">Declined</Badge>;
     return null;
   }
 
@@ -367,23 +373,30 @@ export function MeetingCard({
             {shapeLine()}
             {mine && (
               <Badge variant={mine === "WAITLIST" ? "accent" : "success"}>
-                {mine === "WAITLIST" ? "On the waitlist" : "You're signed up"}
+                {mine === "WAITLIST" ? "Waitlisted" : "Signed up"}
               </Badge>
             )}
             {canManage && e.rsvpSlug && !e.rsvpEnabled && (
-              <Badge variant="secondary" title="Its sign-up page is turned off">
-                Sign-ups off
-              </Badge>
+              <Badge variant="secondary">Sign-ups off</Badge>
             )}
           </div>
 
-          {(crowd || counts || actions) && (
+          {(crowd || counts || actions || answerable) && (
             <div className="border-border/70 mt-auto flex flex-col gap-3 border-t pt-4">
               {(crowd || actions) && (
                 <div className="flex min-h-8 flex-wrap items-center justify-between gap-3">
                   {crowd ? <Crowd {...crowd} /> : <span />}
                   {actions}
                 </div>
+              )}
+              {answerable && (
+                <RsvpButtons
+                  orgId={orgId!}
+                  eventId={e.id}
+                  title={e.title}
+                  value={myRsvp === "PENDING" ? null : myRsvp}
+                  className="self-start"
+                />
               )}
               {counts}
             </div>
@@ -466,8 +479,8 @@ function DatePanel({
   );
 }
 
-/** The meeting's type: its name on a wash of its colour, with a dot. */
-function TypePill({ name }: { name: string }) {
+/** The meeting's type: its name on a wash of its colour, with a dot. Needs `--kind` set by a parent. */
+export function TypePill({ name }: { name: string }) {
   return (
     <span
       style={{ background: KIND_WASH }}
@@ -489,7 +502,7 @@ function Crowd({ faces, going, maybe, awaited, invited }: MeetingCrowd) {
   const line = [
     going > 0 ? `${going} going` : `${invited} invited`,
     maybe > 0 && `${maybe} maybe`,
-    going > 0 && awaited > 0 && `${awaited} yet to answer`,
+    going > 0 && awaited > 0 && `${awaited} no reply`,
   ]
     .filter(Boolean)
     .join(", ");

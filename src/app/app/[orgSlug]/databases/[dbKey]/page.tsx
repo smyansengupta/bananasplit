@@ -21,6 +21,7 @@ import {
   type PanelContext,
 } from "@/components/databases/detail-panels";
 import { RowDrawer } from "@/components/databases/row-drawer";
+import { LinkedSection } from "@/components/links/linked-section";
 import {
   SessionFormDialog,
   type SessionFormInitial,
@@ -102,7 +103,7 @@ const VISIBILITY_NOTE: Record<string, string | undefined> = {
 };
 
 type Drawer =
-  | { kind: "session"; title: string; description?: string; node: ReactNode }
+  | { kind: "session"; title: string; description?: string; node: ReactNode; eventId?: string }
   | { kind: "other"; title: string; description?: string; node: ReactNode };
 
 function localInput(date: Date, timezone: string): string {
@@ -192,6 +193,21 @@ export default async function DatabaseViewPage({
   const kind = database.kind;
   const restricted = VISIBILITY_NOTE[database.memberVisibility];
   const anonymous = kind === "BALLOTS" && !rowAccess;
+  // Possible duplicate sessions, counted on the page so it shows without
+  // opening a menu.
+  const duplicates =
+    admin && kind === "SESSIONS"
+      ? await withOrgTx(organization.id, ({ db }) =>
+          db.event.count({
+            where: {
+              organizationId: organization.id,
+              deletedAt: null,
+              mergedIntoId: null,
+              needsReview: true,
+            },
+          }),
+        )
+      : 0;
 
   // The one primary action: adding a row, for admins where rows can be added
   // here. Setup pages and the export are in the "…" menu.
@@ -249,7 +265,6 @@ export default async function DatabaseViewPage({
             summary || restricted ? (
               <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
                 {summary && <span className="tabular-nums">{summary}</span>}
-                {summary && restricted && <span aria-hidden="true">·</span>}
                 {restricted && (
                   <span className="inline-flex items-center gap-1.5">
                     <Lock className="size-3.5" aria-hidden="true" />
@@ -274,6 +289,15 @@ export default async function DatabaseViewPage({
                   ]}
                 />
               )}
+              {duplicates > 0 && (
+                <Button variant="outline" asChild>
+                  <Link href={`${base}/duplicates`}>
+                    {duplicates === 1
+                      ? "1 possible duplicate"
+                      : `${duplicates} possible duplicates`}
+                  </Link>
+                </Button>
+              )}
               {addRow}
               <DatabaseMenu
                 name={database.name}
@@ -289,7 +313,6 @@ export default async function DatabaseViewPage({
                     ? `${base}/import`
                     : undefined
                 }
-                duplicatesHref={admin && kind === "SESSIONS" ? `${base}/duplicates` : undefined}
                 definitionsHref={admin && kind === "BALLOTS" ? `${base}/definitions` : undefined}
               />
             </>
@@ -300,8 +323,7 @@ export default async function DatabaseViewPage({
       {anonymous && (
         <p className={cn(notice.info, "flex items-start gap-2")}>
           <EyeOff className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          Votes are anonymous. You see totals; individual ballots are visible only as Admin panel ›
-          Privacy allows.
+          Votes are anonymous; you see totals.
         </p>
       )}
 
@@ -315,8 +337,8 @@ export default async function DatabaseViewPage({
               title="No polls yet"
               description={
                 admin
-                  ? "Import a poll definition to see its results here."
-                  : "Results show up here once your organization runs a poll."
+                  ? "Import a poll definition to see its results."
+                  : "Results show here once a poll runs."
               }
               action={
                 admin ? (
@@ -349,6 +371,13 @@ export default async function DatabaseViewPage({
       {drawer && (
         <RowDrawer title={drawer.title} description={drawer.description}>
           {drawer.node}
+          {drawer.kind === "session" && drawer.eventId && (
+            <LinkedSection
+              orgId={organization.id}
+              orgSlug={orgSlug}
+              at={{ kind: "event", id: drawer.eventId }}
+            />
+          )}
         </RowDrawer>
       )}
     </div>
@@ -468,6 +497,7 @@ async function loadPage(
           : [];
         drawer = {
           kind: "session",
+          eventId: e.id,
           title: e.title,
           description: fmtDate(e.startsAt, vctx.timezone),
           node: (
@@ -477,7 +507,7 @@ async function loadPage(
               formInitial={initial}
               mergeCandidates={nearby.map((n) => ({
                 id: n.id,
-                label: `${n.title} · ${fmtDate(n.startsAt, vctx.timezone)}`,
+                label: `${n.title}, ${fmtDate(n.startsAt, vctx.timezone)}`,
               }))}
             />
           ),
@@ -556,7 +586,7 @@ async function loadPage(
       members,
       sessions: sessions.map((s) => ({
         id: s.id,
-        label: `${s.title} · ${fmtDate(s.startsAt, vctx.timezone)}`,
+        label: `${s.title}, ${fmtDate(s.startsAt, vctx.timezone)}`,
       })),
     };
   }

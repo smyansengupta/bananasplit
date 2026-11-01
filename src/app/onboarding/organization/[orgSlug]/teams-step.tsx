@@ -66,9 +66,7 @@ export function TeamsStep({
 
   return (
     <SetupCard>
-      <StepIntro title="What teams do you have?">
-        They become your org chart. The first one sits at the top.
-      </StepIntro>
+      <StepIntro title="What teams do you have?">The first sits at the top.</StepIntro>
 
       <StepBody className="gap-2">
         {state.hasPublishedChart && (

@@ -16,9 +16,18 @@ import { cn } from "@/lib/utils";
  */
 
 const MAX_BYTES = 4 * 1024 * 1024;
-const ACCEPT = ".pdf,.docx,.md,.markdown,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain";
+const ACCEPT =
+  ".pdf,.docx,.md,.markdown,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain";
 
-export function DropZone({ orgId, orgSlug, disabled }: { orgId: string; orgSlug: string; disabled?: boolean }) {
+export function DropZone({
+  orgId,
+  orgSlug,
+  disabled,
+}: {
+  orgId: string;
+  orgSlug: string;
+  disabled?: boolean;
+}) {
   const router = useRouter();
   const inputId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -40,7 +49,10 @@ export function DropZone({ orgId, orgSlug, disabled }: { orgId: string; orgSlug:
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/org-chart/imports`, { method: "POST", body: form });
+      const res = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/org-chart/imports`, {
+        method: "POST",
+        body: form,
+      });
       const body = (await res.json().catch(() => ({}))) as { versionId?: string; error?: string };
       if (!res.ok || !body.versionId) {
         setError(body.error ?? "The upload failed. Try again.");
@@ -67,6 +79,12 @@ export function DropZone({ orgId, orgSlug, disabled }: { orgId: string; orgSlug:
           setOver(true);
         }}
         onDragLeave={() => setOver(false)}
+        // Anywhere in the zone opens the file picker, not just its button.
+        // (The input's own click bubbles here too: leave that one alone.)
+        onClick={(e) => {
+          if (inactive || e.target === input.current) return;
+          input.current?.click();
+        }}
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
@@ -77,7 +95,7 @@ export function DropZone({ orgId, orgSlug, disabled }: { orgId: string; orgSlug:
         className={cn(
           "flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
           over ? "border-primary bg-primary/5" : "border-border",
-          inactive && "opacity-60",
+          inactive ? "opacity-60" : "hover:bg-muted/40 cursor-pointer",
         )}
       >
         {busy ? (
@@ -93,7 +111,7 @@ export function DropZone({ orgId, orgSlug, disabled }: { orgId: string; orgSlug:
             <div className="space-y-1">
               <p className="text-sm font-medium">Drop your org chart document here</p>
               <p className="text-muted-foreground text-xs">
-                Word (.docx), Google Doc export, Markdown, text or PDF, up to 4 MB. No API key needed.
+                Word, Markdown, text or PDF, up to 4 MB.
               </p>
             </div>
             <input
@@ -108,7 +126,16 @@ export function DropZone({ orgId, orgSlug, disabled }: { orgId: string; orgSlug:
                 if (file) void upload(file);
               }}
             />
-            <Button type="button" variant="outline" size="sm" disabled={inactive} onClick={() => input.current?.click()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={inactive}
+              onClick={(e) => {
+                e.stopPropagation();
+                input.current?.click();
+              }}
+            >
               Choose a file
             </Button>
           </>

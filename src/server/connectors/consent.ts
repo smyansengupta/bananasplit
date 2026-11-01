@@ -67,7 +67,7 @@ export function consentOptions(spaces: readonly ConsentSpace[]): ConsentOption[]
           : [
               { group: "All spaces", choices: [all] },
               ...(personal.length > 0 ? [{ group: "Personal", choices: personal }] : []),
-              { group: "Clubs", choices: clubs },
+              { group: "Organizations", choices: clubs },
             ],
     },
     {

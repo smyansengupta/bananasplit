@@ -268,7 +268,7 @@ async function openAiStructured<S extends z.ZodObject>(
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
 
-  const vendor = creds.label.split(" · ")[0];
+  const vendor = creds.label.split(", ")[0];
   let res: Response;
   try {
     res = await send("schema");

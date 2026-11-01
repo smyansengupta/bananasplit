@@ -93,9 +93,7 @@ export function PersonalHome({
             {greeting(now, data.timeZone)}
             {data.firstName ? `, ${data.firstName}` : ""}
           </h1>
-          <p className="text-muted-foreground mt-2 text-[15px]">
-            {dateLine} · Your organizations, plans and to-dos. Only you can see Personal.
-          </p>
+          <p className="text-muted-foreground mt-2 text-[15px]">{dateLine}</p>
         </div>
         <PersonalShortcuts base={base} />
       </header>
@@ -108,6 +106,8 @@ export function PersonalHome({
           upcoming={data.upcoming.length}
           upcomingDays={UPCOMING_DAYS}
           rsvps={data.rsvps.length}
+          tasksHref={`${base}/tasks`}
+          calendarHref={`${base}/calendar`}
         />
       </div>
 
@@ -229,7 +229,7 @@ function SpaceTag({ name }: { name: string }) {
   return (
     <span className="text-muted-foreground inline-flex max-w-40 min-w-0 items-center gap-1.5 text-xs">
       <span className="bg-primary/60 size-1.5 shrink-0 rounded-full" aria-hidden="true" />
-      <span className="truncate">{name}</span>
+      <span className="break-words">{name}</span>
     </span>
   );
 }
@@ -253,10 +253,7 @@ function FinishProfileCard({ href, gaps }: { href: string; gaps: ProfileGap[] })
           <UserRound className="text-primary size-4" aria-hidden="true" />
           Finish your profile
         </CardTitle>
-        <CardDescription>
-          Add your {list}. Organizations you join see your profile, and admins plan meetings around
-          when you&apos;re free. A minute or two; skip anything you like.
-        </CardDescription>
+        <CardDescription>Add your {list}.</CardDescription>
         <CardAction>
           <Button asChild size="sm">
             <Link href={href}>
@@ -302,7 +299,7 @@ function ClubsSection({ data, now }: { data: PersonalHomeData; now: Date }) {
 
 function roleLine(club: PersonalHomeClub): string {
   const role = club.role.charAt(0) + club.role.slice(1).toLowerCase();
-  return club.title ? `${club.title} · ${role}` : role;
+  return club.title ? `${club.title}, ${role}` : role;
 }
 
 function ClubRow({
@@ -325,15 +322,15 @@ function ClubRow({
       )}
       <span className="min-w-0 flex-1 space-y-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-[15px] font-semibold">{club.name}</span>
+          <span className="text-[15px] font-semibold break-words">{club.name}</span>
         </span>
-        <span className="text-muted-foreground block truncate text-[13px]">{roleLine(club)}</span>
+        <span className="text-muted-foreground block text-[13px]">{roleLine(club)}</span>
         <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[13px]">
           <CalendarDays className="size-3.5 shrink-0" aria-hidden="true" />
           {club.nextMeeting ? (
-            <span className="truncate">
+            <span className="min-w-0">
               <span className="text-foreground">{club.nextMeeting.title}</span>
-              {" · "}
+              {", "}
               {formatEventWhen(club.nextMeeting, { viewer: viewerZone, org: club.timeZone }, now)}
             </span>
           ) : (
@@ -391,7 +388,6 @@ function JoinOrStart({ prominent }: { prominent: boolean }) {
           </Button>
         </form>
         <span className="inline-flex items-center gap-2">
-          <span className="text-muted-foreground px-1 text-sm">or</span>
           <Button asChild size="sm" variant="ghost">
             <Link href="/onboarding/organization">
               <Plus aria-hidden="true" />
@@ -401,8 +397,7 @@ function JoinOrStart({ prominent }: { prominent: boolean }) {
         </span>
       </div>
       <p id="join-code-hint" className="text-muted-foreground text-xs">
-        You&apos;ll see the organization before you join, and joining is free. An organization you
-        start gets 14 days of Team Advanced free, no card.
+        Joining is free.
       </p>
     </div>
   );
@@ -423,11 +418,6 @@ function UpcomingSection({ data, now, base }: { data: PersonalHomeData; now: Dat
           size="compact"
           className="py-0"
           title={`Nothing in the next ${UPCOMING_DAYS} days`}
-          description={
-            data.clubs.length > 0
-              ? "Meetings and events from your organizations and your own calendar show here, soonest first."
-              : "Your own plans and, once you join an organization, its meetings and events show here."
-          }
           action={
             <Button asChild size="sm" variant="outline">
               <Link href={`${base}/calendar`}>Add something to your calendar</Link>
@@ -448,15 +438,17 @@ function UpcomingSection({ data, now, base }: { data: PersonalHomeData; now: Dat
                   className="hover:bg-accent/50 -mx-2 flex items-center gap-4 rounded-md px-2 py-2.5 transition-colors"
                 >
                   <span className="bg-muted grid w-11 shrink-0 place-items-center rounded-lg py-1.5 text-center">
-                    <span className="eyebrow text-muted-foreground">{tile.month}</span>
+                    <span className="text-muted-foreground text-[11px] font-semibold">
+                      {tile.month}
+                    </span>
                     <span className="numeral text-xl">{tile.day}</span>
                   </span>
                   <span className="min-w-0 flex-1 space-y-0.5">
                     <span className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{event.title}</span>
+                      <span className="text-sm font-medium break-words">{event.title}</span>
                       {event.rsvp && (
                         <span className="text-muted-foreground shrink-0 text-xs">
-                          · {RSVP_META[event.rsvp].short}
+                          {RSVP_META[event.rsvp].short}
                         </span>
                       )}
                     </span>
@@ -467,17 +459,14 @@ function UpcomingSection({ data, now, base }: { data: PersonalHomeData; now: Dat
                         now,
                       )}
                     </span>
-                    <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+                    <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                       {/* On a phone the space goes here, leaving the title its row. */}
-                      <span className="max-w-32 shrink-0 truncate sm:hidden">
-                        {event.space.name} ·
-                      </span>
+                      <span className="shrink-0 sm:hidden">{event.space.name}</span>
                       <span className="shrink-0">{KIND_META[event.kind].label}</span>
                       {event.location && (
                         <>
-                          <span aria-hidden="true">·</span>
                           <MapPin className="size-3 shrink-0" aria-hidden="true" />
-                          <span className="truncate">{event.location}</span>
+                          <span className="min-w-0 break-words">{event.location}</span>
                         </>
                       )}
                     </span>
@@ -517,7 +506,6 @@ function DueSoonSection({ data, base }: { data: PersonalHomeData; base: string }
           size="compact"
           className="py-0"
           title="Nothing due this week"
-          description="Your own tasks and the ones you're on in your organizations show here when they're due within a week, or overdue."
           action={
             <Button asChild size="sm" variant="outline">
               <Link href={`${base}/tasks`}>
@@ -536,7 +524,9 @@ function DueSoonSection({ data, base }: { data: PersonalHomeData; base: string }
               <div key={key}>
                 <h3
                   className={
-                    key === "overdue" ? "eyebrow text-destructive" : "eyebrow text-muted-foreground"
+                    key === "overdue"
+                      ? "text-destructive text-[13px] font-semibold"
+                      : "text-muted-foreground text-[13px] font-semibold"
                   }
                 >
                   {label}
@@ -601,7 +591,7 @@ function YourWeekCard({ data, base }: { data: PersonalHomeData; base: string }) 
             {bySpace.slice(0, 4).map((s, i) => (
               <li key={s.space.id} className="space-y-1.5">
                 <span className="flex items-baseline justify-between gap-3 text-[13px]">
-                  <span className="truncate font-medium">{s.space.name}</span>
+                  <span className="font-medium break-words">{s.space.name}</span>
                   <span className="font-semibold tabular-nums">{s.done}</span>
                 </span>
                 <span className="bg-muted block h-2 overflow-hidden rounded-full">
@@ -683,7 +673,6 @@ function RsvpsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
             size="compact"
             className="py-0"
             title="No RSVPs yet"
-            description="Events you sign up for show here with your ticket. Hosting something? Make an event page anyone can RSVP to, no account needed."
             action={
               <Button asChild size="sm" variant="outline">
                 <Link href={`${base}/meetings`}>Set up a meeting</Link>
@@ -694,14 +683,14 @@ function RsvpsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
           <>
             {data.rsvps.length > 0 && (
               <div>
-                <h3 className="eyebrow text-muted-foreground">Going</h3>
+                <h3 className="text-muted-foreground text-[13px] font-semibold">Going</h3>
                 <ul className="divide-y">
                   {data.rsvps.map((r) => (
                     <li key={r.registrationId} className="flex items-start gap-3 py-2">
                       <span className="min-w-0 flex-1">
                         <Link
                           href={r.pageHref}
-                          className="block truncate text-sm font-medium hover:underline"
+                          className="block text-sm font-medium break-words hover:underline"
                         >
                           {r.title}
                         </Link>
@@ -730,7 +719,9 @@ function RsvpsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
             )}
             {data.hosting.length > 0 && (
               <div>
-                <h3 className="eyebrow text-muted-foreground">You&apos;re hosting</h3>
+                <h3 className="text-muted-foreground text-[13px] font-semibold">
+                  You&apos;re hosting
+                </h3>
                 <ul className="divide-y">
                   {data.hosting.map((page) => (
                     <li key={page.id}>
@@ -739,7 +730,9 @@ function RsvpsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
                         className="hover:bg-accent/50 -mx-2 flex items-start gap-3 rounded-md px-2 py-2"
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{page.title}</span>
+                          <span className="block text-sm font-medium break-words">
+                            {page.title}
+                          </span>
                           <span className="text-muted-foreground block text-xs">
                             {formatEventWhen(
                               page,
@@ -802,17 +795,12 @@ function PollsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
     >
       <div className="space-y-4">
         {empty ? (
-          <EmptyState
-            size="compact"
-            className="py-0"
-            title="No polls waiting"
-            description="Polls in your organizations that need your answer show here. To find a time with anyone, send a find-a-time poll: they answer from a link, no account needed."
-          />
+          <EmptyState size="compact" className="py-0" title="No polls waiting" />
         ) : (
           <>
             {data.pollsWaiting.length > 0 && (
               <div>
-                <h3 className="eyebrow text-muted-foreground">Waiting on you</h3>
+                <h3 className="text-muted-foreground text-[13px] font-semibold">Waiting on you</h3>
                 <ul className="divide-y">
                   {data.pollsWaiting.map((p) => {
                     const Icon = p.kind === "question" ? Vote : CalendarRange;
@@ -827,9 +815,9 @@ function PollsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
                             aria-hidden="true"
                           />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">{p.title}</span>
+                            <span className="block text-sm font-medium break-words">{p.title}</span>
                             <span className="text-muted-foreground block text-xs">
-                              {p.kind === "question" ? "Vote" : "Mark when you're free"} ·{" "}
+                              {p.kind === "question" ? "Vote" : "Mark when you're free"},{" "}
                               {closesLine(p.closesAt, now)}
                             </span>
                           </span>
@@ -843,7 +831,7 @@ function PollsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
             )}
             {data.ownPolls.length > 0 && (
               <div>
-                <h3 className="eyebrow text-muted-foreground">
+                <h3 className="text-muted-foreground text-[13px] font-semibold">
                   <Link href={`${base}/calendar/find-a-time`} className="hover:underline">
                     Your find-a-time polls
                   </Link>
@@ -860,9 +848,9 @@ function PollsCard({ data, now, base }: { data: PersonalHomeData; now: Date; bas
                           aria-hidden="true"
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{p.title}</span>
+                          <span className="block text-sm font-medium break-words">{p.title}</span>
                           <span className="text-muted-foreground block text-xs">
-                            {p.respondents === 0 ? "No answers yet" : `${p.respondents} answered`} ·{" "}
+                            {p.respondents === 0 ? "No answers yet" : `${p.respondents} answered`},{" "}
                             {closesLine(p.closesAt, now)}
                           </span>
                         </span>

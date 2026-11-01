@@ -4,15 +4,19 @@ import { ExternalLink, Link2, PanelRightOpen, Trash2 } from "@/components/icons"
 
 import { deleteTask, restoreTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { ItemMenu } from "@/components/item-menu";
+import { moveToEntries } from "@/components/personal/move-to-organization";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { toast } from "@/components/ui/toaster";
+
+import { useRouter } from "next/navigation";
 
 import { useTasks } from "./tasks-context";
 
 /**
  * The "…" on a task row or board card: open it, open its page, copy its
- * link, delete it (asked first, with Undo). Deleting needs the same right
- * as editing; the action checks again.
+ * link, delete it (asked first, with Undo), and in Personal, move it to an
+ * organization you run. Deleting needs the same right as editing; the
+ * action checks again.
  */
 export function TaskItemMenu({
   task,
@@ -25,7 +29,8 @@ export function TaskItemMenu({
   onOpen: () => void;
   className?: string;
 }) {
-  const { org } = useTasks();
+  const { org, moveTargets } = useTasks();
+  const router = useRouter();
   const [confirmEl, confirm] = useConfirm();
   const href = `/app/${org.slug}/tasks/${task.id}`;
 
@@ -65,6 +70,9 @@ export function TaskItemMenu({
                 .then(() => toast({ title: "Link copied", tone: "success", duration: 3_000 }))
                 .catch(() => toast({ title: "Couldn't copy the link", tone: "error" })),
           },
+          ...(editable
+            ? moveToEntries(moveTargets, { kind: "task", id: task.id }, () => router.refresh())
+            : []),
           editable && {
             label: "Delete",
             icon: Trash2,

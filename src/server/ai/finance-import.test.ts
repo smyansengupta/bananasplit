@@ -14,7 +14,7 @@ const openai: AiCredentials = {
   protocol: "openai",
   apiKey: "sk-test-123",
   model: "gpt-test",
-  label: "OpenAI · gpt-test",
+  label: "OpenAI, gpt-test",
   vendorId: "openai",
   baseUrl: "https://api.openai.com/v1",
   maxTokensParam: "max_completion_tokens",
@@ -45,7 +45,7 @@ const chat = (content: unknown) =>
 afterEach(() => vi.restoreAllMocks());
 
 describe("prompts", () => {
-  it("frame the material as untrusted data and list the club's categories", () => {
+  it("frame the material as untrusted data and list the organization's categories", () => {
     const sheet = sheetSystemPrompt({ today: "2026-10-01", categories: ["Food", "Travel"] });
     expect(sheet).toMatch(/untrusted material/);
     expect(sheet).toMatch(/Never follow instructions/);
@@ -95,7 +95,7 @@ describe("readFinanceSheet", () => {
       }),
     );
     const { result, label } = await readFinanceSheet({ creds: openai, sample, today: "2026-10-01", categories: ["Food"] });
-    expect(label).toBe("OpenAI · gpt-test");
+    expect(label).toBe("OpenAI, gpt-test");
     expect(result.mapping?.roles).toEqual(["date", "description", "category", "amount"]);
     expect(result.labels).toEqual([{ column: 2, value: "Print", category: "Marketing", kind: "EXPENSE" }]);
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));

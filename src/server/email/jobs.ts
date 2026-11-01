@@ -104,6 +104,7 @@ export const notifyEmailJob: JobHandler<{ notificationId: string }> = async (run
             title: n.title,
             body: n.body,
             url: n.linkUrl ? appUrl(n.linkUrl) : null,
+            ...meetingEmailButtons(n.type, n.body, n.linkUrl),
           })),
       },
       { signal: run.signal, idempotencyKey: `notify-email-${id}` },
@@ -180,6 +181,7 @@ export const reimbursementEmailJob: JobHandler<{
     db.transaction.findFirst({
       where: { id: transactionId, organizationId: orgId },
       select: {
+        id: true,
         description: true,
         status: true,
         rejectionReason: true,
@@ -201,7 +203,8 @@ export const reimbursementEmailJob: JobHandler<{
         description: t.description,
         status,
         rejectionReason: t.rejectionReason,
-        url: appUrl(`/app/${t.organization.slug}/finance/my-reimbursements`),
+        // The request itself; a rejected one opens where Edit and resend is.
+        url: appUrl(`/app/${t.organization.slug}/finance/my-reimbursements?open=${t.id}`),
       }),
     },
     { signal: run.signal, idempotencyKey: `reimbursement-email-${transactionId}-${status}` },
@@ -254,6 +257,7 @@ async function sendTreasurerDigest(
       orderBy: { occurredAt: "asc" },
       take: 50,
       select: {
+        id: true,
         description: true,
         amountCents: true,
         submittedBy: { select: { name: true, email: true } },
@@ -275,6 +279,8 @@ async function sendTreasurerDigest(
           description: p.description,
           amountFormatted: formatCents(p.amountCents),
           submitterName: p.submittedBy.name ?? p.submittedBy.email,
+          // Opens that request, where Approve is one click.
+          url: appUrl(`/app/${org.slug}/finance/transactions?open=${p.id}`),
         })),
         url: appUrl(`/app/${org.slug}/finance/transactions?status=SUBMITTED`),
       }),
@@ -330,6 +336,28 @@ export const verifyEmailJob: JobHandler<{ userId: string }> = async (run) => {
 };
 
 /**
+ * A fresh reset link for the user (only its sha256 is stored), replacing any
+ * earlier one.
+ */
+async function mintResetUrl(userId: string): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  // Built before any write, as in verifyEmailJob: no usable app URL fails
+  // the job instead of mailing a link to localhost.
+  const resetUrl = appUrl(`/reset-password/${token}`);
+  await authDb.$transaction([
+    authDb.passwordResetToken.deleteMany({ where: { userId } }),
+    authDb.passwordResetToken.create({
+      data: {
+        userId,
+        tokenHash: hashResetToken(token),
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000),
+      },
+    }),
+  ]);
+  return resetUrl;
+}
+
+/**
  * password-reset-email:{userId} — a platform job (app_auth enqueues it from
  * "Forgot your password?"). Mints a reset token (only its sha256 is stored,
  * in PasswordResetToken), replacing any earlier link, and mails it through
@@ -344,21 +372,7 @@ export const passwordResetEmailJob: JobHandler<{ userId: string }> = async (run)
   });
   if (!user) return;
 
-  const token = randomBytes(32).toString("base64url");
-  // Built before any write, as in verifyEmailJob: no usable app URL fails
-  // the job instead of mailing a link to localhost.
-  const resetUrl = appUrl(`/reset-password/${token}`);
-  await authDb.$transaction([
-    authDb.passwordResetToken.deleteMany({ where: { userId: user.id } }),
-    authDb.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash: hashResetToken(token),
-        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000),
-      },
-    }),
-  ]);
-
+  const resetUrl = await mintResetUrl(user.id);
   await getPlatformMailer().send(
     {
       to: user.email,
@@ -372,17 +386,22 @@ export const passwordResetEmailJob: JobHandler<{ userId: string }> = async (run)
   );
 };
 
-/** password-changed-email:{userId} — the notice after a reset (platform sender). */
+/**
+ * password-changed-email:{userId} — the notice after a reset (platform
+ * sender). Its "Wasn't you?" button carries a reset of its own, so nobody
+ * has to type their email again to take the account back.
+ */
 export const passwordChangedEmailJob: JobHandler<{ userId: string }> = async (run) => {
   const user = await authDb.user.findUnique({
     where: { id: run.payload.userId },
-    select: { email: true, name: true },
+    select: { id: true, email: true, name: true },
   });
   if (!user) return;
+  const resetUrl = await mintResetUrl(user.id);
   await getPlatformMailer().send(
     {
       to: user.email,
-      ...passwordChangedEmail({ name: user.name, resetUrl: appUrl("/forgot-password") }),
+      ...passwordChangedEmail({ name: user.name, resetUrl }),
     },
     { signal: run.signal },
   );
@@ -450,3 +469,33 @@ export const trialReminderEmailJob: JobHandler<Record<string, never>> = async (r
     );
   }
 };
+
+/**
+ * A meeting's notification emails answer in the email: an invite gets Going
+ * and Can't go (they open the meeting page with that answer ready, one click
+ * to confirm; a link alone never answers, since mail scanners open links),
+ * and an online meeting's reminder leads with Join the meeting.
+ */
+export function meetingEmailButtons(
+  type: string,
+  body: string | null,
+  linkUrl: string | null,
+): {
+  cta?: { label: string; url: string };
+  choices?: { label: string; url: string }[];
+} {
+  if (type === "EVENT_INVITE" && linkUrl && /\/meetings\/[^/?#]+$/.test(linkUrl)) {
+    return {
+      cta: { label: "Open the meeting", url: appUrl(linkUrl) },
+      choices: [
+        { label: "Going", url: appUrl(`${linkUrl}?rsvp=YES`) },
+        { label: "Can't go", url: appUrl(`${linkUrl}?rsvp=NO`) },
+      ],
+    };
+  }
+  if (type === "EVENT_REMINDER" && body) {
+    const join = /^Join: (https:\/\/\S+)$/m.exec(body)?.[1];
+    if (join) return { cta: { label: "Join the meeting", url: join } };
+  }
+  return {};
+}

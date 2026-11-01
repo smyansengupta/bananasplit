@@ -76,29 +76,36 @@ export function PulseIssueView({
   return (
     <article className="bg-card edge ring-foreground/6 rounded-card overflow-hidden ring-1">
       <header className="bg-chrome text-chrome-foreground glow-corner space-y-1.5 px-6 py-6 sm:px-8">
-        <p className="text-[13px] font-medium opacity-75">
-          Weekly pulse · {clubName} · {status}
-        </p>
         <h2 className="display-title text-[28px] sm:text-[32px]">{pulseTitle(data.range)}</h2>
         <p className="text-[14px] opacity-80">{pulseHeadline(data)}</p>
+        <p className="text-[13px] font-medium opacity-75">
+          {clubName}, {status.charAt(0).toLowerCase() + status.slice(1)}
+        </p>
       </header>
       <div className="space-y-5 px-6 py-6 sm:px-8">
         {data.summary && (
           <p className="flex gap-2.5 text-[15px] leading-relaxed">
-            <Sparkles className="text-muted-foreground mt-1 size-4 shrink-0" aria-label="Summary by Claude" />
+            <Sparkles
+              className="text-muted-foreground mt-1 size-4 shrink-0"
+              aria-label="Summary by Claude"
+            />
             {data.summary}
           </p>
         )}
         {noteSlot ??
           (note && (
             <div className="bg-muted/60 rounded-tile px-4 py-3.5">
-              <p className="text-muted-foreground text-[13px] font-medium">A note from the officers</p>
-              <p className="mt-1 text-[15px] whitespace-pre-line">{note}</p>
+              <p className="text-[15px] whitespace-pre-line">{note}</p>
             </div>
           ))}
         <ul className="divide-border/70 divide-y">
           {rows.map((r) => (
-            <Row key={`${r.icon}:${r.title}`} icon={ICONS[r.icon]} title={r.title} detail={r.detail} />
+            <Row
+              key={`${r.icon}:${r.title}`}
+              icon={ICONS[r.icon]}
+              title={r.title}
+              detail={r.detail}
+            />
           ))}
           {finance && (
             <Row

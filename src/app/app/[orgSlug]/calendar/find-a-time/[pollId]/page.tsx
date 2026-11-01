@@ -18,8 +18,12 @@ import { AvailabilityPollActions } from "./poll-actions";
  */
 export default async function FindATimePollPage({
   params,
+  searchParams,
 }: PageProps<"/app/[orgSlug]/calendar/find-a-time/[pollId]">) {
   const { orgSlug, pollId } = await params;
+  // From a card's "Book best time".
+  const { book } = await searchParams;
+  const bookBest = (Array.isArray(book) ? book[0] : book) === "1";
   const planLock = await planGate(orgSlug, "polls");
   if (planLock) return planLock;
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
@@ -64,6 +68,7 @@ export default async function FindATimePollPage({
         orgId={org.id}
         orgSlug={orgSlug}
         canFinalize={canFinalize}
+        bookBest={bookBest}
         actions={
           <AvailabilityPollActions
             orgId={org.id}

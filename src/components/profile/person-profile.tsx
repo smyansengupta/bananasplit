@@ -80,7 +80,7 @@ export function PersonProfile({
   const first = name.split(" ")[0];
   const isSelf = person.id === viewerId;
   const Heading = headingLevel;
-  const subtitle = [person.pronouns, person.title].filter(Boolean).join(" · ");
+  const subtitle = [person.pronouns, person.title].filter(Boolean).join(", ");
   const studies = majorAndYear(person.major, person.gradYear);
 
   const refLink = (ref: SheetPositionRef) => {
@@ -125,7 +125,7 @@ export function PersonProfile({
               decorative={false}
               className="ring-raised size-[72px] text-[22px] ring-4"
             />
-            {person.freeNow && (
+            {person.online && (
               <span
                 aria-hidden="true"
                 className="bg-success ring-raised absolute right-0.5 bottom-0.5 size-4 rounded-full ring-[3px]"
@@ -147,12 +147,21 @@ export function PersonProfile({
             {person.team && (
               <TagChip color={teamColor(person.team.slot)}>{person.team.name}</TagChip>
             )}
-            {person.freeNow && <Badge variant="success">Free now</Badge>}
+            {/* In the app now, or when they last were; and free by their shared hours. */}
+            {person.online ? (
+              <span className="text-success ms-1 text-xs font-medium">Online now</span>
+            ) : (
+              person.seenAgo && (
+                <span className="text-muted-foreground ms-1 text-xs">
+                  Active {person.seenAgo}
+                </span>
+              )
+            )}
+            {person.freeNow && <span className="text-success ms-1 text-xs font-medium">Free now</span>}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {person.email && <CopyEmailButton email={person.email} name={first} />}
           {!isSelf && (
             <Button asChild variant="secondary" size="sm">
               <Link
@@ -180,29 +189,28 @@ export function PersonProfile({
           {extraActions}
         </div>
 
-        <Section title="About">
-          {person.bio ? (
-            <p className="text-sm leading-relaxed whitespace-pre-line">{person.bio}</p>
-          ) : isSelf ? (
-            <p className="text-muted-foreground text-sm">
-              You haven&apos;t written a bio yet.{" "}
-              <Link
-                href={profileHref(orgSlug, "details")}
-                className="text-foreground underline underline-offset-4"
-              >
-                Add one
-              </Link>
-              .
-            </p>
-          ) : (
-            <p className="text-muted-foreground text-sm">No bio yet.</p>
-          )}
-        </Section>
+        {/* A section with nothing in it is left out (your own page keeps them, with the way to fill them). */}
+        {(person.bio || isSelf) && (
+          <Section title="About">
+            {person.bio ? (
+              <p className="text-sm leading-relaxed whitespace-pre-line">{person.bio}</p>
+            ) : isSelf ? (
+              <p className="text-muted-foreground text-sm">
+                You haven&apos;t written a bio yet.{" "}
+                <Link
+                  href={profileHref(orgSlug, "details")}
+                  className="text-foreground underline underline-offset-4"
+                >
+                  Add one
+                </Link>
+                .
+              </p>
+            ) : null}
+          </Section>
+        )}
 
-        <Section title="On the org chart">
-          {person.positions.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Not on the org chart yet.</p>
-          ) : (
+        {person.positions.length > 0 && (
+          <Section title="On the org chart">
             <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 text-sm">
               <dt className="text-muted-foreground">Position</dt>
               <dd className="min-w-0 break-words">
@@ -212,14 +220,14 @@ export function PersonProfile({
               </dd>
               <dt className="text-muted-foreground">Reports to</dt>
               <dd className="flex min-w-0 flex-col items-start gap-0.5">
-                {person.reportsTo.length
-                  ? person.reportsTo.map(refLink)
-                  : "No one, top of the chart"}
+                {person.reportsTo.length ? person.reportsTo.map(refLink) : "Top of the chart"}
               </dd>
               {person.alsoReportsTo.length > 0 && (
                 <>
                   <dt className="text-muted-foreground">Also reports to</dt>
-                  <dd className="flex min-w-0 flex-col items-start gap-0.5">{person.alsoReportsTo.map(refLink)}</dd>
+                  <dd className="flex min-w-0 flex-col items-start gap-0.5">
+                    {person.alsoReportsTo.map(refLink)}
+                  </dd>
                 </>
               )}
               <dt className="text-muted-foreground">Leads</dt>
@@ -227,101 +235,97 @@ export function PersonProfile({
                 {person.leads.length ? person.leads.map(refLink) : "No one"}
               </dd>
             </dl>
-          )}
-        </Section>
+          </Section>
+        )}
 
-        <Section title="This week">
-          {person.busy && person.availabilityShared === false ? (
-            <p className="text-muted-foreground text-sm">
-              {isSelf ? (
-                <>
-                  You haven&apos;t shared when you&apos;re free.{" "}
-                  <Link
-                    href={profileHref(orgSlug, "availability")}
-                    className="text-foreground underline underline-offset-4"
-                  >
-                    Add it
-                  </Link>
-                </>
-              ) : (
-                `${first} hasn't shared when they're free yet.`
-              )}
-            </p>
-          ) : person.busy ? (
-            <>
-              <WeekStrip busy={person.busy} />
-              <p className="text-muted-foreground text-xs">
+        {(person.busy || isSelf) && (
+          <Section title="This week">
+            {person.busy && person.availabilityShared === false ? (
+              <p className="text-muted-foreground text-sm">
                 {isSelf ? (
                   <>
-                    Others see only busy or free.{" "}
+                    You haven&apos;t shared when you&apos;re free.{" "}
                     <Link
                       href={profileHref(orgSlug, "availability")}
                       className="text-foreground underline underline-offset-4"
                     >
-                      Edit
+                      Add it
                     </Link>
                   </>
                 ) : (
-                  `Shaded when ${first} can't meet, in their time zone (${person.timezone.replace(/_/g, " ")}).`
+                  `${first} hasn't shared when they're free yet.`
                 )}
               </p>
-            </>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              This organization doesn&apos;t share members&apos; busy times.
-            </p>
-          )}
-        </Section>
-
-        <Section title="Open tasks" count={person.taskCount}>
-          {person.tasks.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Nothing open.</p>
-          ) : (
-            <ul className="flex flex-col">
-              {person.tasks.map((t) => {
-                const due = t.dueKey ? dueText(t.dueKey, person.todayKey) : null;
-                return (
-                  <li key={t.id} className="flex items-center gap-2.5 py-1.5 text-sm">
-                    <span
-                      aria-hidden="true"
-                      className="border-muted-foreground/50 size-[18px] shrink-0 rounded-full border-[1.5px]"
-                    />
-                    <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                    {due && (
-                      <span
-                        className={cn(
-                          "shrink-0 text-xs",
-                          due.tone === "danger" && "text-tint-danger-foreground",
-                          due.tone === "bold" && "font-semibold",
-                          due.tone === "muted" && "text-muted-foreground",
-                        )}
+            ) : person.busy ? (
+              <>
+                <WeekStrip busy={person.busy} />
+                <p className="text-muted-foreground text-xs">
+                  {isSelf ? (
+                    <>
+                      Others see only busy or free.{" "}
+                      <Link
+                        href={profileHref(orgSlug, "availability")}
+                        className="text-foreground underline underline-offset-4"
                       >
-                        {due.text}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-              {person.taskCount > person.tasks.length && (
-                <li className="pt-1 text-sm">
-                  <Link
-                    href={personTasksHref(orgSlug, person.id)}
-                    className="underline underline-offset-4"
-                  >
-                    See all {person.taskCount}
-                  </Link>
-                </li>
-              )}
-            </ul>
-          )}
-        </Section>
+                        Edit
+                      </Link>
+                    </>
+                  ) : (
+                    `Shaded when ${first} can't meet.`
+                  )}
+                </p>
+              </>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                This organization doesn&apos;t share members&apos; busy times.
+              </p>
+            )}
+          </Section>
+        )}
+
+        {person.tasks.length > 0 && (
+          <Section title="Open tasks" count={person.taskCount}>
+            {person.tasks.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Nothing open.</p>
+            ) : (
+              <ul className="flex flex-col">
+                {person.tasks.map((t) => {
+                  const due = t.dueKey ? dueText(t.dueKey, person.todayKey) : null;
+                  return (
+                    <li key={t.id} className="flex items-center gap-2.5 py-1.5 text-sm">
+                      <span
+                        aria-hidden="true"
+                        className="border-muted-foreground/50 size-[18px] shrink-0 rounded-full border-[1.5px]"
+                      />
+                      <span className="min-w-0 flex-1 break-words">{t.title}</span>
+                      {due && (
+                        <span
+                          className={cn(
+                            "shrink-0 text-xs",
+                            due.tone === "danger" && "text-tint-danger-foreground",
+                            due.tone === "bold" && "font-semibold",
+                            due.tone === "muted" && "text-muted-foreground",
+                          )}
+                        >
+                          {due.text}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Section>
+        )}
 
         <Section title="Contact and links">
           <dl className="grid grid-cols-[90px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 text-sm">
             <dt className="text-muted-foreground">Email</dt>
             <dd className="min-w-0 break-words">
-              {person.email ?? (
-                <span className="text-muted-foreground">Only admins see emails here</span>
+              {person.email ? (
+                <CopyEmailButton email={person.email} name={first} inline />
+              ) : (
+                <span className="text-muted-foreground">Hidden</span>
               )}
             </dd>
             {studies && (

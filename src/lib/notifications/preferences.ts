@@ -227,6 +227,7 @@ export const NOTIFICATION_TYPE_META: Record<
   EVENT_REMINDER: { label: "A reminder before a meeting I'm going to", group: "events" },
   INVITE_ACCEPTED: { label: "Someone accepts an invite I sent", group: "org" },
   NOTE_SHARED: { label: "Someone shares a note with me", group: "org" },
+  FORM_RESPONSE: { label: "Someone answers a form I made", group: "org" },
   WEEKLY_PULSE: { label: "My organization's weekly pulse", group: "org" },
   INTEGRATION_ERROR: {
     label: "An integration stops working",

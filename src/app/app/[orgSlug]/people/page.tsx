@@ -1,24 +1,28 @@
 import { UserPlus } from "@/components/icons";
-import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
 import { parseDirectoryQuery } from "@/components/profile/directory-query";
 import { PeopleDirectory } from "@/components/profile/people-directory";
 import { Button } from "@/components/ui/button";
+import { absoluteAppUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { sectionLabel } from "@/lib/nav/sidebar";
-import { getOrgContextBySlug } from "@/server/db/context";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import { getPersonSheet, loadDirectory } from "@/server/profiles/directory";
 import { planGate } from "@/server/billing/plan-gate";
 
-import { PeopleTabs } from "./people-tabs";
+import { InviteDialog } from "../settings/members/invite-dialog";
+import { loadOrgChartSection } from "../org-chart/chart-section";
 
 /**
- * The people directory (Moonstone 12.1): every current member of this org
- * with their team from the org chart and whether they're free now, searched
- * as you type and filtered on the client, and the profile sheet beside the
- * list (?person=). The first of People's two tabs (the org chart is the
- * other). Members only (getOrgContextBySlug answers 404 to anyone else).
+ * People (Moonstone 12.1): every current member of this org with their
+ * team from the org chart, who's online and whether they're free now,
+ * searched as you type and filtered on the client, and the profile sheet
+ * over the list (?person=). Grid, List and Org chart are its three views
+ * (?view=chart is the published chart; /org-chart redirects here). The
+ * roster (roles, titles, invites) is Admin > Members. Invite people opens
+ * right here. Members only (getOrgContextBySlug answers 404 to anyone else).
  */
 export default async function PeoplePage({
   params,
@@ -27,13 +31,27 @@ export default async function PeoplePage({
   const { orgSlug } = await params;
   const planLock = await planGate(orgSlug, "people");
   if (planLock) return planLock;
-  const query = parseDirectoryQuery(await searchParams);
+  const raw = await searchParams;
+  const query = parseDirectoryQuery(raw);
   const { organization, user, role, settings } = await getOrgContextBySlug(orgSlug);
+  const orgId = organization.id;
+  const canInvite = can({ role }, "members.invite");
 
-  const directory = await loadDirectory(organization.id, organization.timezone);
+  const [directory, joinCode, chart] = await Promise.all([
+    loadDirectory(orgId, organization.timezone),
+    canInvite
+      ? withOrgTx(orgId, ({ db }) => getOrCreateJoinCode(db, orgId, user.id))
+      : Promise.resolve(null),
+    loadOrgChartSection({
+      orgSlug,
+      organization,
+      role,
+      selectedKey: typeof raw.position === "string" ? raw.position : null,
+    }),
+  ]);
   const initialSheet = query.person
     ? await getPersonSheet(
-        organization.id,
+        orgId,
         query.person,
         { id: user.id, role, membersSeeEmails: settings?.showMemberEmailsToMembers === true },
         organization.timezone,
@@ -42,34 +60,37 @@ export default async function PeoplePage({
   const initial = initialSheet || !query.person ? query : { ...query, person: null };
 
   const { total, teams, people } = directory;
-  const free = people.filter((p) => p.freeNow).length;
-  const summary = [
-    `${total} ${total === 1 ? "member" : "members"}`,
-    teams.length > 0 && `${teams.length} ${teams.length === 1 ? "team" : "teams"}`,
-    free > 0 && `${free} free now`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const link = joinCode
+    ? {
+        code: joinCode.code,
+        enabled: joinCode.enabled,
+        url: absoluteAppUrl(`/join/${joinCode.code}`),
+      }
+    : null;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={sectionLabel(settings?.sidebar, "people")}
-        description={summary}
         actions={
-          can({ role }, "members.invite") && (
-            <Button asChild variant="create">
-              <Link href={`/app/${orgSlug}/settings/members`}>
-                <UserPlus aria-hidden="true" />
-                Invite people
-              </Link>
-            </Button>
+          canInvite && (
+            <InviteDialog
+              orgId={orgId}
+              orgSlug={orgSlug}
+              link={link}
+              defaultOpen={raw.invite === "1"}
+              trigger={
+                <Button variant="create">
+                  <UserPlus aria-hidden="true" />
+                  Invite
+                </Button>
+              }
+            />
           )
         }
-        tabs={<PeopleTabs orgSlug={orgSlug} />}
       />
       <PeopleDirectory
-        orgId={organization.id}
+        orgId={orgId}
         orgSlug={orgSlug}
         orgTimezone={organization.timezone}
         viewerId={user.id}
@@ -78,6 +99,7 @@ export default async function PeoplePage({
         total={total}
         initial={initial}
         initialSheet={initialSheet}
+        chart={chart}
       />
     </div>
   );

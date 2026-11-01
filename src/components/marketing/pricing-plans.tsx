@@ -15,7 +15,7 @@ import { formatStorage } from "@/lib/billing/storage";
 import { TRIAL_DAYS } from "@/lib/billing/space";
 import { cn } from "@/lib/utils";
 
-import { DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref } from "./links";
+import { createHref, DEMO_HREF, PRIMARY_CTA, SECONDARY_CTA, startHref, startLabel } from "./links";
 import { type PriceMode, PriceModeSwitch } from "./price-mode";
 import { CONTAINER, SectionTitle } from "./section-title";
 import { SiteLink } from "./site-link";
@@ -54,7 +54,7 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
         "Member directory",
         `${TEAM_FREE_STORAGE_GB} GB of files`,
       ],
-      cta: { label: "Get started free", href: start },
+      cta: { label: startLabel(signedIn), href: start },
     },
     {
       name: TEAM.name,
@@ -71,7 +71,7 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
         "Integrations: Google Calendar, Gmail, Zoom, Granola and Supabase",
         `${formatStorage(PLAN_LIMITS.CLUB.storageBytes)} of files`,
       ],
-      cta: { label: `Start with ${TEAM.name}`, href: start },
+      cta: { label: `Start with ${TEAM.name}`, href: createHref(signedIn, "club") },
     },
     {
       name: ADVANCED.name,
@@ -92,7 +92,7 @@ function teamCards(mode: PriceMode, signedIn: boolean): readonly Card[] {
         "Website sync, audit log and themes",
         `${formatStorage(PLAN_LIMITS.SOCIETY.storageBytes)} of files`,
       ],
-      cta: { label: "Start free trial", href: start },
+      cta: { label: "Start free trial", href: createHref(signedIn, "society") },
     },
     {
       name: "Custom",
@@ -212,10 +212,7 @@ function StudentNote() {
     >
       <span className="font-semibold">How student pricing works</span>
       <span className="text-muted-foreground">
-        The organization&apos;s owner verifies a school email once, and the flat price applies for
-        the academic year, August to May, with no summer bills. At the officer handover the new
-        owner verifies and the price carries over. Teams that leave school keep everything and move
-        to the standard price.{" "}
+        Verify a school email once. One flat price, August to May. It carries over at handover.{" "}
         <Link
           href="#custom"
           className="text-foreground font-semibold underline-offset-4 hover:underline"

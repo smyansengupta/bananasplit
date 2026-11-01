@@ -64,7 +64,7 @@ describe("keyboard shortcuts", () => {
   it("leaves out what the plan doesn't have", () => {
     const sections = [{ id: "tasks", label: "Tasks" }];
     const free = shortcutGroups({ mod: "⌘", sections, isAdmin: true, taskViews: false });
-    expect(rows(free, "Tasks page")).not.toContain("Board, Week, List, Table, Roadmap or Dashboard");
+    expect(rows(free, "Tasks page")).not.toContain("Dashboard, Board, List, Table or Epics");
     expect(rows(free, "Tasks page")).not.toContain("Weekly update");
     const club = shortcutGroups({
       mod: "⌘",
@@ -75,13 +75,22 @@ describe("keyboard shortcuts", () => {
     });
     expect(rows(club, "Tasks page")).toEqual(
       expect.arrayContaining([
-        "Board, Week, List, Table, Roadmap or Dashboard",
+        "Dashboard, Board, List, Table or Epics",
         "Filter by person",
         "Weekly update",
       ]),
     );
     const noTasks = shortcutGroups({ mod: "⌘", sections: [], isAdmin: false });
     expect(noTasks.map((g) => g.title)).toEqual(["Anywhere", "Go to"]);
+  });
+
+  it("numbers exactly the layouts the switcher has, in its order", () => {
+    const sections = [{ id: "tasks", label: "Tasks" }];
+    const club = shortcutGroups({ mod: "⌘", sections, isAdmin: true, taskViews: true });
+    const row = club
+      .find((g) => g.title === "Tasks page")!
+      .rows.find((r) => r.label === "Dashboard, Board, List, Table or Epics")!;
+    expect(row.keys).toEqual([["1"], ["2"], ["3"], ["4"], ["5"]]);
   });
 
   it("collapses the sidebar with ⌘\\ or Ctrl \\, and lists it under Anywhere", () => {

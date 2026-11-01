@@ -47,6 +47,20 @@ const GRANTS = {
   // Cards a member hid from their own "Up next". Own row only; hiding is an
   // insert and un-hiding a delete, so there is no UPDATE.
   UpNextDismissal: ["SID", "SD", ""],
+  // Who's online: each member marks only themselves here (lastSeenAt is
+  // app_user's only UPDATE column); the service path reads and prunes.
+  MemberPresence: ["SIu", "SD", ""],
+  // Inbox: what each member snoozed or finished, own rows only
+  // (snoozedUntil, doneAt and updatedAt are app_user's UPDATE columns).
+  InboxItemState: ["SIuD", "SD", ""],
+  // Links between things: members link and unlink; the service path reads
+  // and clears links when an item goes away.
+  ItemLink: ["SID", "SD", ""],
+  // Forms: every member reads them, owners and admins make and review them
+  // (row policy); the public page reads on the service path, and answers
+  // arrive there. Nobody writes an answer directly.
+  Form: ["SIUD", "SU", ""],
+  FormResponse: ["SUD", "SI", ""],
   EventLinkLog: ["SI", "SI", ""],
   FinanceAuditLog: ["S", "S", ""],
   Invitation: ["SIUD", "SIUD", ""],
@@ -79,7 +93,8 @@ const GRANTS = {
   // trashed (Empty trash for the uploader or an admin; the nightly purge).
   // Demo requests from /demo: app_auth inserts, nothing reads them in the app.
   DemoRequest: ["", "", "I"],
-  OrgFile: ["SIUD", "SD", ""],
+  // The service path also stores a file answered on a public form.
+  OrgFile: ["SIUD", "SID", ""],
   OrgIntegration: ["SIUD", "SIUD", ""],
   // Onboarding invite code: admins manage it, no DELETE (rotate or turn off).
   OrgJoinCode: ["SIU", "SU", ""],
@@ -191,6 +206,11 @@ const NEW_TENANT_TABLES = [
   "EventRegistration",
   "EventReminderSend",
   "UpNextDismissal",
+  "MemberPresence",
+  "InboxItemState",
+  "ItemLink",
+  "Form",
+  "FormResponse",
   "DatabaseField",
   "DatabaseRecord",
   "RsvpItem",
@@ -414,6 +434,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "WEEKLY_PULSE",
           // A meeting's reminder to a member going (20261026120000_event_reminders).
           "EVENT_REMINDER",
+          // A new answer on a form (20261031160000_forms).
+          "FORM_RESPONSE",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         indexes: [

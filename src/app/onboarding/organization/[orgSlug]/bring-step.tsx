@@ -91,10 +91,7 @@ export function BringStep({
 
   return (
     <SetupCard>
-      <StepIntro title="Bring anything in?">
-        Move what&apos;s in your personal workspace into {clubName}. Links keep working, and notes
-        and files stay private until you share them.
-      </StepIntro>
+      <StepIntro title="Bring anything in?">Private items stay private.</StepIntro>
 
       <StepBody className="gap-6">
         {moved.length > 0 && (

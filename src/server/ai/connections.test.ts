@@ -52,8 +52,8 @@ beforeEach(() => {
   getSecret.mockReset();
 });
 
-describe("which models a club can use", () => {
-  it("offers nothing to Personal, a Club plan or a paused club", async () => {
+describe("which models an organization can use", () => {
+  it("offers nothing to Personal, a Organization plan or a paused organization", async () => {
     rows.value = [claudeRow];
     for (const p of ["FREE", "CLUB", "PAUSED"]) {
       plan.value = p;
@@ -65,7 +65,7 @@ describe("which models a club can use", () => {
     expect(getSecret).not.toHaveBeenCalled();
   });
 
-  it("lists the club's own keys first, then the platform's, by label only", async () => {
+  it("lists the organization's own keys first, then the platform's, by label only", async () => {
     rows.value = [otherRow, claudeRow];
     const list = await listAiConnections("org_1", { ANTHROPIC_API_KEY: "sk-ant-platform" });
     expect(list.map((c) => c.id)).toEqual(["claude", "ai-model", "platform"]);
@@ -73,7 +73,7 @@ describe("which models a club can use", () => {
       label: "Claude Sonnet 5",
       detail: "Your organization's Claude key",
     });
-    expect(list[1].label).toBe("OpenAI · gpt-4.1-mini");
+    expect(list[1].label).toBe("OpenAI, gpt-4.1-mini");
     expect(JSON.stringify(list)).not.toMatch(/sk-|fp1|fp2/);
     expect(getSecret).not.toHaveBeenCalled();
   });

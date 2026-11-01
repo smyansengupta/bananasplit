@@ -11,7 +11,7 @@ import { getOrgContextBySlug } from "@/server/db/context";
 import { isBringId } from "@/server/personal/bring-cookie";
 import { clubsUserRuns } from "@/server/personal/move";
 
-export const metadata = { title: "Move to an organization · Bananasplit" };
+export const metadata = { title: "Move to an organization" };
 
 function initials(name: string): string {
   return name
@@ -53,13 +53,12 @@ export default async function MoveToClubPage({
           title="Move to an organization"
           description={
             clubs.length > 0
-              ? `${clubs.length} organization${clubs.length === 1 ? "" : "s"} you run${itemId ? " · 1 item picked" : ""}`
+              ? `${clubs.length} organization${clubs.length === 1 ? "" : "s"} you run`
               : "You don't run an organization yet"
           }
         />
         <p className="text-muted-foreground max-w-prose text-sm">
-          Events, polls, tasks, notes and files move one way, with their links, RSVPs, tickets and
-          responses. Notes and files arrive private to you.
+          Moves with its links and replies. Notes arrive private.
         </p>
       </div>
 
@@ -70,7 +69,6 @@ export default async function MoveToClubPage({
               <CardTitle>
                 <h2>Organizations you run</h2>
               </CardTitle>
-              <CardDescription>Pick one, then choose what to bring.</CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="divide-border/70 -mx-2 divide-y">
@@ -83,7 +81,7 @@ export default async function MoveToClubPage({
                       <span className="bg-muted grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold">
                         {initials(club.name)}
                       </span>
-                      <span className="min-w-0 flex-1 truncate">{club.name}</span>
+                      <span className="min-w-0 flex-1 break-words">{club.name}</span>
                       <ChevronRight
                         className="text-muted-foreground size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
                         aria-hidden="true"
@@ -102,11 +100,7 @@ export default async function MoveToClubPage({
               <CardTitle>
                 <h2>{clubs.length ? "Or start a new organization" : "Start an organization"}</h2>
               </CardTitle>
-              <CardDescription>
-                A new organization gets 14 days of Team Advanced free, no card. At the end of setup,
-                you choose what to bring in
-                {itemId ? ", with this one already picked" : ""}.
-              </CardDescription>
+              <CardDescription>14 days of Team Advanced free.</CardDescription>
             </CardHeader>
             <CardContent className="flex justify-end">
               <Button type="submit" variant={clubs.length ? "outline" : "default"}>

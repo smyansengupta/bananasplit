@@ -5,7 +5,7 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import { TasksProvider } from "@/components/tasks/tasks-context";
 import { WorkspaceProvider } from "@/components/tasks/workspace-context";
 import { can } from "@/lib/auth/permissions";
-import { spaceIncludes } from "@/lib/billing/space";
+import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import {
   effectiveTimezone,
@@ -20,9 +20,8 @@ import {
 } from "@/lib/tasks/dates";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
+import { clubsUserRuns } from "@/server/personal/move";
 import { listFileRefOptions } from "@/server/notes/files";
-import { chartPalette } from "@/server/tasks/catalog";
-import { LABEL_COLOR_PALETTE } from "@/lib/label-colors";
 import { buildViewerChart, getChartForPage } from "@/server/tasks/assignment-policy";
 import { getTaskDashboard } from "@/server/tasks/dashboard";
 import {
@@ -32,7 +31,6 @@ import {
   getBoardTasks,
   getOrgLabels,
   getOrgParents,
-  getEpicsOverview,
   getRoadmapEpics,
   getTableTasks,
   getTaskStats,
@@ -54,7 +52,6 @@ import { WeeklyUpdateStrip, type WeeklyStatus } from "./updates/weekly-update-st
 import { WorkspaceHeader } from "./workspace-header";
 import { ListView } from "./list/list-view";
 import { RoadmapView } from "./roadmap/roadmap-view";
-import { EpicsView } from "./epics/epics-view";
 import {
   DEFAULT_TASK_LAYOUT,
   isDestination,
@@ -203,8 +200,11 @@ export default async function TasksPage({
     weekly,
   });
 
+  // In Personal, a task's menu can move it to an organization you run.
+  const moveTargets = isPersonalSpace(org) ? await clubsUserRuns(user.id) : [];
   return (
     <TasksProvider
+      moveTargets={moveTargets}
       org={{
         id: org.id,
         slug: org.slug,
@@ -278,46 +278,13 @@ async function renderView(input: {
     }
 
     case "roadmap": {
-      // The epics section: where the big pieces are planned and where they
-      // stand. The timeline answers "when", the cards under it answer "what"
-      // and let you make, rename and close an epic without leaving.
-      const [epics, overview] = await Promise.all([
-        withOrgTx(org.id, ({ db }) => getRoadmapEpics(db, org.id, filters, today)),
-        withOrgTx(org.id, async ({ db }) => ({
-          epics: await getEpicsOverview(db, org.id, today),
-          palette: await chartPalette(db, org.id),
-        })),
-      ]);
-      const colors = [...new Set([...overview.palette, ...LABEL_COLOR_PALETTE.slice(4)])];
-      const dateKey = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
-      return (
-        <div className="space-y-6">
-          <RoadmapView epics={epics} />
-          <EpicsView
-            embedded
-            org={{ id: org.id, slug: org.slug }}
-            viewerId={userId}
-            todayKey={todayKey}
-            members={members}
-            colors={colors}
-            epics={overview.epics.map((e) => ({
-              id: e.id,
-              title: e.title,
-              description: e.description,
-              color: e.color,
-              status: e.status,
-              ownerId: e.ownerId,
-              owner: e.owner,
-              startDate: dateKey(e.startDate),
-              dueDate: dateKey(e.dueDate),
-              stories: e.stories,
-              open: e.open,
-              done: e.done,
-              overdue: e.overdue,
-            }))}
-          />
-        </div>
+      // The epics section: each epic once, on a week timeline, with its
+      // owner, how much is open and late, and a circle to finish it. Click
+      // one to open it; New epic is in the header's New task menu.
+      const epics = await withOrgTx(org.id, ({ db }) =>
+        getRoadmapEpics(db, org.id, filters, today),
       );
+      return <RoadmapView epics={epics} />;
     }
     case "table": {
       const page = Math.max(1, Number.parseInt(param(query.page) ?? "1", 10) || 1);

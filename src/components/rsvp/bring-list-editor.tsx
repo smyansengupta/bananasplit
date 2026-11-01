@@ -2,7 +2,7 @@
 
 import { Plus, Trash2 } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { saveBringList } from "@/app/app/[orgSlug]/calendar/[eventId]/rsvp/actions";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,13 @@ export function BringListEditor({
   const router = useRouter();
   const [lines, setLines] = useState<BringLine[]>(initial);
   const [pending, start] = useTransition();
+  // After a save the page reloads the list (new lines get their ids); take
+  // it, so a saved list isn't sent again.
+  const [seen, setSeen] = useState(initial);
+  if (seen !== initial) {
+    setSeen(initial);
+    setLines(initial);
+  }
   const dirty = JSON.stringify(lines) !== JSON.stringify(initial);
   const dropped = initial.filter(
     (i) => i.id && (i.taken ?? 0) > 0 && !lines.some((l) => l.id === i.id),
@@ -53,13 +60,21 @@ export function BringListEditor({
     start(async () => {
       const result = await saveBringList(orgId, eventId, cleaned);
       if (result.error) {
-        toast({ title: "Couldn't save the bring list", description: result.error });
+        toast({ title: result.error, tone: "error" });
         return;
       }
-      toast({ title: "Bring list saved" });
       router.refresh();
     });
   }
+
+  // Saves itself a moment after the last change. Removing a line someone
+  // claimed clears their claim, so that one waits for a click.
+  useEffect(() => {
+    if (!dirty || dropped.length > 0) return;
+    const timer = setTimeout(save, 900);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines]);
 
   return (
     <div className="space-y-3">
@@ -125,16 +140,15 @@ export function BringListEditor({
               + {idea}
             </button>
           ))}
-        {dirty && (
-          <Button size="sm" className="ms-auto" disabled={pending} onClick={save}>
-            {pending ? "Saving…" : "Save bring list"}
-          </Button>
-        )}
+        {pending && <span className="text-muted-foreground ms-auto text-xs">Saving…</span>}
       </div>
       {dirty && dropped.length > 0 && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
           Removing {dropped.map((d) => `“${d.label}”`).join(", ")} also clears who said they&apos;d
           bring it.
+          <Button size="sm" variant="outline" disabled={pending} onClick={save}>
+            Remove
+          </Button>
         </p>
       )}
     </div>

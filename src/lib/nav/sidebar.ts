@@ -12,14 +12,15 @@ import type { PlanFeature } from "@/lib/billing/features";
 
 export const SECTION_IDS = [
   "overview",
+  "inbox",
+  "people",
   "tasks",
   "calendar",
-  "find-a-time",
   "meetings",
-  "notes",
-  "people",
-  "polls",
+  "forms",
   "databases",
+  "notes",
+  "integrations",
   "finance",
 ] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
@@ -27,13 +28,23 @@ export type SectionId = (typeof SECTION_IDS)[number];
 /**
  * Sections that used to be separate and still appear in saved sidebars:
  * accepted when reading a saved config, then dropped. The org chart is part
- * of People now, and RSVPs became Meetings (see RENAMED_FROM, which carries a
- * saved sidebar's choice across the rename).
+ * of People now, RSVPs became Meetings, Polls became Forms, and Find a time
+ * lives inside Meetings (see RENAMED_FROM, which carries a saved sidebar's
+ * choice across a rename).
  */
-const RETIRED_SECTION_IDS = ["org-chart", "rsvps"] as const;
+const RETIRED_SECTION_IDS = ["org-chart", "rsvps", "polls", "find-a-time"] as const;
 
-export const GROUP_IDS = ["main", "club", "data"] as const;
+/**
+ * The sidebar's groups, in the order people reach for them. The sidebar
+ * names them (SECTION_NAMES, src/components/shell/sidebar-nav.tsx): the
+ * first has no name, then Planning, Data, and Files & apps. "money" is
+ * empty by default (Finance is part of Data) and stays for saved sidebars
+ * that put things there.
+ */
+export const GROUP_IDS = ["main", "plan", "collect", "workspace", "money"] as const;
 export type GroupId = (typeof GROUP_IDS)[number];
+/** Group ids older saved sidebars used; read, then ignored (each section goes to its own group). */
+const LEGACY_GROUP_IDS = ["club", "data"] as const;
 
 export interface SectionDef {
   id: SectionId;
@@ -51,13 +62,15 @@ export interface SectionDef {
   description: string;
 }
 
-// Main is the everyday three; Club is the people things (RSVPs among them);
-// Data opens with Files, the club's documents.
+// Home, Inbox and People first (yours and who's here); then planning
+// (Tasks, Calendar, Meetings); then the organization's data (Forms,
+// Databases, Finance); then where files live and apps connect (Files,
+// Integrations).
 export const SECTIONS: readonly SectionDef[] = [
   {
     id: "overview",
-    label: "Overview",
-    icon: "LayoutDashboard",
+    label: "Home",
+    icon: "House",
     path: "",
     exact: true,
     group: "main",
@@ -65,20 +78,13 @@ export const SECTIONS: readonly SectionDef[] = [
     description: "Each member's home page.",
   },
   {
-    id: "tasks",
-    label: "Tasks",
-    icon: "CheckSquare",
-    path: "/tasks",
+    id: "inbox",
+    label: "Inbox",
+    icon: "Inbox",
+    path: "/inbox",
     group: "main",
-    description: "Who's doing what, and by when.",
-  },
-  {
-    id: "calendar",
-    label: "Calendar",
-    icon: "CalendarDays",
-    path: "/calendar",
-    group: "main",
-    description: "Meetings and events.",
+    locked: true,
+    description: "Everything waiting on you.",
   },
   {
     id: "people",
@@ -86,56 +92,74 @@ export const SECTIONS: readonly SectionDef[] = [
     icon: "Users",
     path: "/people",
     also: ["/org-chart"],
-    group: "club",
+    group: "main",
     description: "The member directory and the org chart.",
   },
   {
-    id: "polls",
-    label: "Polls",
-    icon: "CalendarCheck",
-    path: "/calendar/polls",
-    group: "club",
-    description: "Ask the organization a question and let people vote.",
+    id: "tasks",
+    label: "Tasks",
+    icon: "CheckSquare",
+    path: "/tasks",
+    group: "plan",
+    description: "Who's doing what, and by when.",
   },
   {
-    id: "find-a-time",
-    label: "Find a time",
-    icon: "CalendarClock",
-    path: "/calendar/find-a-time",
-    group: "club",
-    description: "Offer some times and see when everyone's free.",
+    id: "calendar",
+    label: "Calendar",
+    icon: "CalendarDays",
+    path: "/calendar",
+    group: "plan",
+    description: "Meetings and events.",
   },
   {
     id: "meetings",
     label: "Meetings",
     icon: "Video",
     path: "/meetings",
-    also: ["/calendar/rsvp"],
-    group: "club",
-    description: "Set up a call, an in-person meeting or an event with a sign-up page.",
+    also: ["/calendar/rsvp", "/calendar/find-a-time"],
+    group: "plan",
+    description: "Calls, meet-ups, sign-up pages and finding a time.",
   },
   {
-    id: "notes",
-    label: "Files",
-    icon: "FolderOpen",
-    path: "/notes",
-    group: "data",
-    description: "Notes, documents and uploads.",
+    id: "forms",
+    label: "Forms",
+    icon: "ClipboardList",
+    path: "/forms",
+    also: ["/calendar/polls"],
+    group: "collect",
+    description: "Quick polls, applications and sign-ups.",
   },
   {
     id: "databases",
     label: "Databases",
     icon: "Database",
     path: "/databases",
-    group: "data",
+    group: "collect",
     description: "Attendance, sign-ups, votes and reports.",
+  },
+  {
+    id: "notes",
+    label: "Files",
+    icon: "FolderOpen",
+    path: "/notes",
+    group: "workspace",
+    description: "Notes, documents and uploads.",
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    icon: "Plug",
+    path: "/integrations",
+    also: ["/settings/integrations", "/setup"],
+    group: "workspace",
+    description: "The apps your organization connects.",
   },
   {
     id: "finance",
     label: "Finance",
     icon: "Wallet",
     path: "/finance",
-    group: "data",
+    group: "collect",
     description: "Budget, transactions and reimbursements.",
   },
 ];
@@ -143,40 +167,43 @@ export const SECTIONS: readonly SectionDef[] = [
 /** The plan feature behind each section (src/lib/billing/features.ts). */
 export const SECTION_FEATURES: Record<SectionId, PlanFeature> = {
   overview: "overview",
+  inbox: "overview",
+  people: "people",
   tasks: "tasks",
   calendar: "rsvp",
-  "find-a-time": "polls",
   meetings: "rsvp",
-  notes: "files",
-  people: "people",
-  polls: "polls",
+  forms: "polls",
   databases: "databases",
+  notes: "files",
+  integrations: "integrations",
   finance: "finance",
 };
 
 /**
  * Sections split out of an older one: a saved sidebar that hid the older
- * one hides these too (Find a time was part of Polls; RSVP pages were a
- * button on the Calendar).
+ * one hides these too (RSVP pages were a button on the Calendar).
  */
 const ADDED_FROM: Partial<Record<SectionId, SectionId>> = {
-  "find-a-time": "polls",
   meetings: "calendar",
 };
 
 /**
  * A section that was renamed: a saved sidebar naming the old id means the new
- * one, so a club that hid RSVPs still has Meetings hidden, in the same group
- * and under its own name if they gave it one.
+ * one, so a club that hid RSVPs still has Meetings hidden, under its own name
+ * if they gave it one, and a club that hid Polls has Forms hidden.
  */
 const RENAMED_FROM: Partial<Record<SectionId, (typeof RETIRED_SECTION_IDS)[number]>> = {
   meetings: "rsvps",
+  forms: "polls",
 };
 
+/** Groups have no names any more; kept so saved configs and callers still line up. */
 export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = {
   main: null,
-  club: "Organization",
-  data: "Data",
+  plan: null,
+  collect: null,
+  workspace: null,
+  money: null,
 };
 
 const label = z
@@ -188,13 +215,15 @@ const label = z
 
 export const sidebarConfigSchema = z
   .object({
-    groups: z.array(z.object({ id: z.enum(GROUP_IDS), label }).strict()).max(GROUP_IDS.length),
+    groups: z
+      .array(z.object({ id: z.enum([...GROUP_IDS, ...LEGACY_GROUP_IDS]), label }).strict())
+      .max(GROUP_IDS.length + LEGACY_GROUP_IDS.length),
     items: z
       .array(
         z
           .object({
             id: z.enum([...SECTION_IDS, ...RETIRED_SECTION_IDS]),
-            group: z.enum(GROUP_IDS),
+            group: z.enum([...GROUP_IDS, ...LEGACY_GROUP_IDS]),
             hidden: z.boolean(),
             label,
           })
@@ -226,11 +255,15 @@ export interface ResolvedGroup {
   items: ResolvedItem[];
 }
 
+/** A saved group, if it is one of today's (older ones are dropped). */
+function groupOf(id: string | undefined): GroupId | undefined {
+  return (GROUP_IDS as readonly string[]).includes(id ?? "") ? (id as GroupId) : undefined;
+}
+
 /** The full sidebar (hidden sections included, flagged), in the org's order. */
 export function resolveSidebar(raw: unknown): ResolvedGroup[] {
   const parsed = raw ? sidebarConfigSchema.safeParse(raw) : null;
   const config = parsed?.success ? parsed.data : null;
-  const groupLabel = new Map(config?.groups.map((g) => [g.id, g.label]) ?? []);
   const saved = new Map<string, NonNullable<typeof config>["items"][number] & { index: number }>(
     config?.items.map((i, index) => [i.id, { ...i, index }]) ?? [],
   );
@@ -259,7 +292,7 @@ export function resolveSidebar(raw: unknown): ResolvedGroup[] {
       exact: def.exact ?? false,
       hidden: def.locked ? false : (s?.hidden ?? fromSaved?.hidden ?? false),
       locked: def.locked ?? false,
-      group: def.locked ? "main" : (s?.group ?? before?.group ?? def.group),
+      group: def.locked ? "main" : (groupOf(s?.group) ?? before?.group ?? def.group),
       description: def.description,
       order: s ? s.index : before ? before.order + 0.01 : 100 + i,
     });
@@ -268,7 +301,7 @@ export function resolveSidebar(raw: unknown): ResolvedGroup[] {
   items.sort((a, b) => (a.id === "overview" ? -1 : b.id === "overview" ? 1 : a.order - b.order));
   return GROUP_IDS.map((id) => ({
     id,
-    label: groupLabel.has(id) ? (groupLabel.get(id) ?? null) : DEFAULT_GROUP_LABELS[id],
+    label: null,
     items: items.filter((i) => i.group === id).map(({ order: _o, ...rest }) => rest),
   }));
 }
@@ -280,12 +313,18 @@ export function visibleSidebar(raw: unknown): ResolvedGroup[] {
     .filter((g) => g.items.length > 0);
 }
 
-/** A section's name in the club's sidebar, for its page title (Files may be "Docs"). */
-export function sectionLabel(raw: unknown, id: SectionId): string {
+/**
+ * A section's name in the club's sidebar, for its page title (Files may be
+ * "Docs"). Find a time (inside Meetings now) keeps its own name; Polls'
+ * old pages take the Forms section's.
+ */
+export function sectionLabel(raw: unknown, id: SectionId | "find-a-time" | "polls"): string {
+  if (id === "find-a-time") return "Find a time";
+  const key: SectionId = id === "polls" ? "forms" : id;
   const item = resolveSidebar(raw)
     .flatMap((g) => g.items)
-    .find((i) => i.id === id);
-  return item?.label ?? SECTIONS.find((s) => s.id === id)!.label;
+    .find((i) => i.id === key);
+  return item?.label ?? SECTIONS.find((s) => s.id === key)!.label;
 }
 
 export function hiddenSectionPaths(raw: unknown): string[] {
@@ -298,7 +337,7 @@ export function hiddenSectionPaths(raw: unknown): string[] {
 /** The config that reproduces `groups` (what Settings › Sidebar saves). */
 export function toConfig(groups: readonly ResolvedGroup[]): SidebarConfig {
   return {
-    groups: groups.map((g) => ({ id: g.id, label: g.label })),
+    groups: groups.map((g) => ({ id: g.id, label: null })),
     items: groups.flatMap((g) =>
       g.items.map((i) => ({
         id: i.id,

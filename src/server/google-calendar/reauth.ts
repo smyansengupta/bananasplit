@@ -64,7 +64,7 @@ export async function markNeedsReauth(
         body:
           "Google stopped accepting the organization's calendar connection, so event changes are not reaching Google Calendar. " +
           "An owner or admin can reconnect it in Admin panel › Integrations; changes made meanwhile sync after you press Sync now.",
-        linkUrl: org ? `/app/${org.slug}/settings/integrations` : null,
+        linkUrl: org ? `/app/${org.slug}/integrations/google-calendar` : null,
       },
     );
     await writeOrgAuditLog(db, {

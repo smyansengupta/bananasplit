@@ -19,7 +19,7 @@ describe("which period a date lands in", () => {
     expect(coveringPeriod([year], "2026-07-31")).toBeNull();
   });
 
-  it("matches the club's own way of splitting the year", () => {
+  it("matches the organization's own way of splitting the year", () => {
     expect(periodStyle([])).toBe("school-year");
     expect(periodStyle([period("f", "2026-08-01", "2026-12-31")])).toBe("semester");
     expect(periodStyle([period("y", "2026-01-01", "2026-12-31")])).toBe("calendar-year");

@@ -63,7 +63,7 @@ const listOutput = z.object({
 });
 
 function sectionOf(kind: "question" | "availability") {
-  return kind === "question" ? "polls" : "find-a-time";
+  return kind === "question" ? "forms" : "meetings";
 }
 
 /** Who has answered each poll, and whether this member has. */
@@ -106,7 +106,7 @@ export async function listOpenPollsTool(
   const list = listFingerprint("list_open_polls", { space: args.space });
   const position = decodeCursor(args.cursor, list);
   return inSpace(session, args.space, POLLS, async (ctx, space) => {
-    if (!space.opens("polls") && !space.opens("find-a-time")) space.requireSection("polls");
+    if (!space.opens("forms") && !space.opens("meetings")) space.requireSection("forms");
     const open = (await listOpenPolls(ctx.db, space.id, now, MAX_OPEN)).filter((p) =>
       space.opens(sectionOf(p.kind)),
     );
@@ -139,7 +139,7 @@ export async function listOpenPollsTool(
 async function questionText(ctx: OrgContext, space: ToolSpace, pollId: string, now: Date) {
   const source = await loadQuestionPollSource(ctx.db, space.id, pollId, ctx.userId);
   if (!source) return null;
-  space.requireSection("polls");
+  space.requireSection("forms");
   const view = buildQuestionPollView(
     source,
     {
@@ -188,7 +188,7 @@ const slotFormat = (zone: string) =>
 async function availabilityText(ctx: OrgContext, space: ToolSpace, pollId: string, now: Date) {
   const poll = await getPollSource(ctx.db, space.id, pollId, now);
   if (!poll) return null;
-  space.requireSection("find-a-time");
+  space.requireSection("meetings");
   const memberNames = await getPollMemberNames(ctx.db, space.id, poll);
   const view = buildPollView(poll, { kind: "member", userId: ctx.userId }, { memberNames });
   const when = slotFormat(space.zone);

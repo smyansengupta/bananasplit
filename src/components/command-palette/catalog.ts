@@ -17,6 +17,8 @@ import { scoreFields, type ParsedQuery } from "@/lib/search/text";
 
 export type PaletteCommand =
   | { type: "href"; href: string }
+  /** Makes a task from the typed text, right there (the Create group). */
+  | { type: "create-task"; text: string }
   | { type: "pin" }
   | { type: "new-note" }
   | { type: "shortcuts" }
@@ -227,7 +229,7 @@ const PAGES: readonly PageDef[] = [
   },
   {
     path: "/finance/my-reimbursements",
-    title: "My reimbursements",
+    title: "My requests",
     section: "finance",
     icon: "Receipt",
     keywords: ["expense", "receipt", "pay me back", "reimburse", "money owed"],
@@ -293,7 +295,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Mail",
     keywords: ["resend", "domain", "mail", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/claude",
@@ -301,7 +303,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "KeyRound",
     keywords: ["ai", "anthropic", "api key", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/ai-model",
@@ -309,7 +311,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Settings2",
     keywords: ["claude", "model", "ai", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/google-calendar",
@@ -317,7 +319,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "CalendarSync",
     keywords: ["gcal", "sync", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/website",
@@ -325,7 +327,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "Globe",
     keywords: ["build hook", "public events", "site", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
   {
     path: "/settings/integrations/data-source",
@@ -333,7 +335,7 @@ const PAGES: readonly PageDef[] = [
     permission: "integrations.view",
     icon: "DatabaseZap",
     keywords: ["supabase", "sync", "attendance", "integrations"],
-    detail: "Admin panel · Integrations",
+    detail: "Integrations",
   },
 ];
 
@@ -395,7 +397,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       key: `page:/settings/${s.segment}`,
       group: "pages",
       title: s.label,
-      detail: `Admin panel · ${s.description}`,
+      detail: `Admin panel, ${s.description}`,
       keywords: SETTINGS_KEYWORDS[s.segment] ?? [],
       icon: s.icon,
       command: { type: "href", href: `${base}/settings/${s.segment}` },
@@ -406,6 +408,30 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
   const action = (entry: Omit<CatalogEntry, "group">, section?: SectionId) => {
     if (sectionVisible(input, section)) entries.push({ ...entry, group: "actions" });
   };
+  // The Create group: shown under what you type, made from it (a task's
+  // title, a quick poll's question), as the workspace plan has it: only these
+  // two. paletteGroups fills in the text; keys start "create:".
+  const create = (entry: Omit<CatalogEntry, "group" | "keywords">, section: SectionId) => {
+    if (sectionVisible(input, section)) entries.push({ ...entry, keywords: [], group: "actions" });
+  };
+  create(
+    {
+      key: "create:task",
+      title: "New task",
+      icon: "CheckSquare",
+      command: { type: "create-task", text: "" },
+    },
+    "tasks",
+  );
+  create(
+    {
+      key: "create:poll",
+      title: "Quick poll",
+      icon: "Vote",
+      command: { type: "href", href: `${base}/forms/new?poll=1` },
+    },
+    "forms",
+  );
   action(
     {
       key: "action:new-task",
@@ -444,7 +470,7 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       icon: "CalendarPlus",
       command: { type: "href", href: `${base}/calendar/find-a-time/new` },
     },
-    "find-a-time",
+    "meetings",
   );
   action(
     {
@@ -453,9 +479,9 @@ export function buildCatalog(input: CatalogInput): CatalogEntry[] {
       detail: "A quick vote",
       keywords: ["new poll", "create poll", "vote", "survey", "question"],
       icon: "MessageCircleQuestion",
-      command: { type: "href", href: `${base}/calendar/polls/ask` },
+      command: { type: "href", href: `${base}/forms/new?poll=1` },
     },
-    "polls",
+    "forms",
   );
   action(
     {
@@ -533,6 +559,7 @@ export interface CatalogHit {
 export function matchCatalog(entries: readonly CatalogEntry[], q: ParsedQuery): CatalogHit[] {
   if (!q.folded.length) return [];
   return entries
+    .filter((entry) => !entry.key.startsWith("create:"))
     .map((entry, i) => ({
       entry,
       i,

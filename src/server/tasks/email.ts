@@ -151,7 +151,8 @@ export async function renderTaskNotificationEmail(
           next: summary.next.length,
           blocked: summary.blocked.length,
         },
-        url: appUrl(`/app/${org.slug}/tasks?view=updates`),
+        // That week's draft itself, even when it's opened after the week ends.
+        url: appUrl(`/app/${org.slug}/tasks?view=updates&week=${weekStart}`),
       });
     }
 

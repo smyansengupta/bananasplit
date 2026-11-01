@@ -16,8 +16,13 @@ import {
 
 export default async function MyReimbursementsPage({
   params,
+  searchParams,
 }: PageProps<"/app/[orgSlug]/finance/my-reimbursements">) {
   const { orgSlug } = await params;
+  // ?open=<id>: an email's link straight to one request (approved, paid, or
+  // rejected and waiting to be edited and resent).
+  const openParam = (await searchParams).open;
+  const openId = typeof openParam === "string" ? openParam : undefined;
   const planLock = await planGate(orgSlug, "finance");
   if (planLock) return planLock;
   const { organization: org, user, role } = await getOrgContextBySlug(orgSlug);
@@ -58,10 +63,6 @@ export default async function MyReimbursementsPage({
         requests={transactions.length}
         waiting={pending}
       />
-      <p className="text-muted-foreground -mt-2 max-w-prose text-sm">
-        Your own expense submissions and where each one is: hatched while it waits for approval or
-        payment, green once you&apos;re paid back.
-      </p>
       <TransactionTable
         orgId={org.id}
         transactions={transactions}
@@ -69,7 +70,8 @@ export default async function MyReimbursementsPage({
         categories={categories}
         isFinance={isFinance}
         currentUserId={user.id}
-        emptyDescription="Nothing yet. Use “Request a reimbursement” to be paid back for something you bought for the organization."
+        emptyDescription="No requests yet"
+        initialOpenId={openId && transactions.some((t) => t.id === openId) ? openId : undefined}
       />
     </div>
   );

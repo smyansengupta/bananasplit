@@ -359,7 +359,7 @@ export async function renderNoteDocx(input: NoteDocxInput): Promise<Buffer> {
             children: [
               new Paragraph({
                 children: [
-                  new TextRun({ text: `${title} · ${input.orgName}`, size: 16, color: "888888" }),
+                  new TextRun({ text: `${title}, ${input.orgName}`, size: 16, color: "888888" }),
                 ],
               }),
             ],

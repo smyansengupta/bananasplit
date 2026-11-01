@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "@/components/icons";
+import { Eye, EyeOff } from "@/components/icons";
 import { useState } from "react";
 
 import { PASSWORD_MIN_LENGTH } from "@/lib/auth/password-policy";
@@ -64,10 +64,10 @@ function StrengthRing({ strength }: { strength: PasswordStrength }) {
 }
 
 /**
- * A new password (sign-up, password reset), typed twice: the field with
- * its strength ring on the right, then Confirm password, which says when
- * the two don't match (and ticks when they do). The server checks the
- * match too. Posts as `password` and `confirmPassword`.
+ * A new password (sign-up, password reset), typed once: the field with its
+ * strength ring, and an eye button that shows what was typed. Seeing it
+ * does the job a second "Confirm password" field used to, in one field
+ * instead of two. Posts as `password`.
  */
 export function NewPasswordField({
   label = "Password",
@@ -79,60 +79,37 @@ export function NewPasswordField({
   inputClassName?: string;
 }) {
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [shown, setShown] = useState(false);
   const strength = passwordStrength(password);
-  const mismatch = confirm.length > 0 && confirm !== password;
-  const matches = confirm.length > 0 && confirm === password;
+  const Toggle = shown ? EyeOff : Eye;
   return (
-    <>
-      <BrandField id="password" label={label}>
-        <div className="relative">
-          <BrandInput
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={PASSWORD_MIN_LENGTH}
-            autoComplete="new-password"
-            autoFocus={autoFocus}
-            placeholder={label}
-            className={cn("pr-11", inputClassName)}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-describedby="password-strength"
-          />
-          <StrengthRing strength={strength} />
-        </div>
-      </BrandField>
-      <BrandField id="confirmPassword" label="Confirm password">
-        <div className="relative">
-          <BrandInput
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            required
-            autoComplete="new-password"
-            placeholder="Confirm password"
-            className={cn("pr-11", inputClassName)}
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            aria-invalid={mismatch || undefined}
-            aria-describedby={mismatch ? "password-match" : undefined}
-          />
-          {matches && (
-            <Check
-              className="absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-(--tag-forest)"
-              strokeWidth={3}
-              aria-label="Passwords match"
-            />
-          )}
-        </div>
-        {mismatch && (
-          <span id="password-match" className="text-destructive text-[13px]">
-            Doesn&apos;t match.
-          </span>
-        )}
-      </BrandField>
-    </>
+    <BrandField id="password" label={label}>
+      <div className="relative">
+        <BrandInput
+          id="password"
+          name="password"
+          type={shown ? "text" : "password"}
+          required
+          minLength={PASSWORD_MIN_LENGTH}
+          autoComplete="new-password"
+          autoFocus={autoFocus}
+          placeholder={label}
+          className={cn("pr-20", inputClassName)}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          aria-describedby="password-strength"
+        />
+        <button
+          type="button"
+          onClick={() => setShown((v) => !v)}
+          aria-label={shown ? "Hide password" : "Show password"}
+          aria-pressed={shown}
+          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-10 grid size-8 -translate-y-1/2 place-items-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-current"
+        >
+          <Toggle className="size-4" aria-hidden="true" />
+        </button>
+        <StrengthRing strength={strength} />
+      </div>
+    </BrandField>
   );
 }

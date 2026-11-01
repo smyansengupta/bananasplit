@@ -353,7 +353,7 @@ export function BringList({
                   {item.mine
                     ? "You're bringing this"
                     : item.names.length > 0
-                      ? `${item.names.join(", ")}${full ? "" : ` · ${item.slots - item.taken} more needed`}`
+                      ? `${item.names.join(", ")}${full ? "" : `, ${item.slots - item.taken} more needed`}`
                       : full
                         ? "Covered"
                         : item.slots > 1

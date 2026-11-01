@@ -93,7 +93,7 @@ afterAll(async () => {
 });
 
 describe("You're in <org>", () => {
-  it("shows the new member the club they joined, and nobody else", async () => {
+  it("shows the new member the organization they joined, and nobody else", async () => {
     if (!reachable) return;
     expect(await getJoinedClub(joiner.id, org.slug)).toMatchObject({
       organizationId: org.id,

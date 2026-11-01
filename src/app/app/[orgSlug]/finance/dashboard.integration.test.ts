@@ -282,7 +282,7 @@ describe.skipIf(!dbAvailable)("getDashboardData — matches independent raw SQL 
     expect(burnOutTotal).toBe(Number(outTotal ?? 0));
   });
 
-  it("average spend per meeting divides the spending by club events held, board meetings left out", async () => {
+  it("average spend per meeting divides the spending by organization events held, board meetings left out", async () => {
     const data = await dashboard();
 
     const [{ spent }] = await sql(

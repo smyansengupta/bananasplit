@@ -43,7 +43,7 @@ import { dayOf, zonedIso } from "./text";
  * with its comments and activity, so nothing here filters for it.
  */
 
-const TASKS = { feature: "tasks", section: "tasks" } as const;
+export const TASKS = { feature: "tasks", section: "tasks" } as const;
 
 const STATUS_OUT: Record<TaskStatus, "not_started" | "in_progress" | "blocked" | "done"> = {
   NOT_STARTED: "not_started",
@@ -80,7 +80,7 @@ const partOf = z
   .nullable()
   .describe("The epic or story it's part of.");
 
-const taskSummary = z.object({
+export const taskSummary = z.object({
   id: z.string().describe("The task's id, for get_task and fetch."),
   title: z.string(),
   type: z.enum(["epic", "story", "task"]),
@@ -170,6 +170,19 @@ function summaryOf(space: ToolSpace, t: SummaryRow): TaskSummary {
     tags: t.labels.map((l) => l.label.name),
     url: space.url(`/tasks/${t.id}`),
   };
+}
+
+/** One task as list_tasks shows it; null when it isn't there or the member can't see it. */
+export async function findTaskSummary(
+  ctx: OrgContext,
+  space: ToolSpace,
+  taskId: string,
+): Promise<TaskSummary | null> {
+  const row = await ctx.db.task.findFirst({
+    where: { id: taskId, organizationId: space.id, deletedAt: null },
+    select: summarySelect,
+  });
+  return row ? summaryOf(space, row) : null;
 }
 
 // ---------------------------------------------------------------- list_tasks

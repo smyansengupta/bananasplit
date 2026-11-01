@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { announceCreated } from "@/components/links/pending-link";
 import {
   Select,
   SelectContent,
@@ -203,6 +204,8 @@ function NewTaskForm({
             return;
           }
           toast({ title: `Created: ${finalTitle}`, tone: "success" });
+          if ("taskId" in result && result.taskId)
+            announceCreated({ kind: "task", id: result.taskId });
           if ("droppedMentions" in result && result.droppedMentions?.length) {
             announce(`Not mentioned (can't see this task): ${result.droppedMentions.join(", ")}`);
           }
@@ -431,7 +434,7 @@ function NewTaskForm({
           <div className="flex flex-col gap-4 px-6 pb-5">
             <div className="grid content-start gap-1.5">
               <Label htmlFor="task-description">Description</Label>
-              {/* @ mentions a member, / links a club file, markdown works. */}
+              {/* @ mentions a member, / links an organization file, markdown works. */}
               <MentionTextarea
                 id="task-description"
                 value={description}

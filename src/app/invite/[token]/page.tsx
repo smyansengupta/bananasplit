@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { ClubPreview } from "@/app/onboarding/join/club-preview";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { SignOutLink } from "@/components/auth/sign-out-link";
 import { VerifyEmailNotice } from "@/components/auth/verify-email-notice";
 import { Button } from "@/components/ui/button";
 import { signInPath } from "@/lib/auth/callback-url";
@@ -58,24 +59,46 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   const here = `/invite/${token}`;
 
   const invitation = await findInvitationByRawToken(token);
+  const session = await getSession();
+  // Every dead end has a way on: into the app when signed in, else home.
+  const onward = (
+    <Button asChild className="w-full">
+      <Link href={session ? "/app" : "/"}>Go to Bananasplit</Link>
+    </Button>
+  );
   if (!invitation) {
-    return <InviteCard title="Invite not found" description="This invite link isn't valid." />;
+    return (
+      <InviteCard title="Invite not found" description="Ask whoever sent it for a new link.">
+        {onward}
+      </InviteCard>
+    );
   }
   if (invitation.acceptedAt) {
-    return <InviteCard title="Already used" description="This invite has already been accepted." />;
+    // Accepted by this very account: straight in.
+    if (session && sameEmail(session.user.email, invitation.email)) {
+      redirect(`/app/${invitation.orgSlug}`);
+    }
+    return (
+      <InviteCard title="Already used" description="This invite has been accepted.">
+        {onward}
+      </InviteCard>
+    );
   }
   if (invitation.expiresAt < new Date()) {
-    return <InviteCard title="Invite expired" description="Ask for a new invite to join." />;
+    return (
+      <InviteCard title="Invite expired" description="Ask for a new invite to join.">
+        {onward}
+      </InviteCard>
+    );
   }
 
-  const session = await getSession();
   const signUpHref = `/sign-up?callbackUrl=${encodeURIComponent(here)}`;
 
   if (!session) {
     return (
       <InviteCard
         title={`Join ${invitation.orgName}`}
-        description={`Sign in as ${invitation.email} to accept this invite.`}
+        description={`Log in as ${invitation.email} to accept.`}
       >
         {googleSignInEnabled() ? (
           <>
@@ -86,7 +109,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
                 href={signInPath(here)}
                 className="text-foreground font-medium underline underline-offset-4"
               >
-                sign in
+                log in
               </Link>{" "}
               or{" "}
               <Link
@@ -95,14 +118,14 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
               >
                 create an account
               </Link>{" "}
-              with {invitation.email}. You&apos;ll come back here.
+              with {invitation.email}.
             </p>
           </>
         ) : (
           <>
             {/* Without a Google client configured, email and password only. */}
             <Button asChild className="w-full">
-              <Link href={signInPath(here)}>Sign in</Link>
+              <Link href={signInPath(here)}>Log in</Link>
             </Button>
             <p className="text-muted-foreground mt-3 text-center text-sm leading-[1.5]">
               New here?{" "}
@@ -112,7 +135,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
               >
                 Create an account
               </Link>{" "}
-              with {invitation.email}. You&apos;ll come back here.
+              with {invitation.email}.
             </p>
           </>
         )}
@@ -128,8 +151,15 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
     return (
       <InviteCard
         title="Wrong account"
-        description={`This invite was sent to ${invitation.email}, but you're signed in as ${identity?.email ?? session.user.email}.`}
-      />
+        description={`This invite is for ${invitation.email}. You're signed in as ${identity?.email ?? session.user.email}.`}
+      >
+        <SignOutLink
+          redirectTo={signInPath(here)}
+          className="bg-primary text-primary-foreground inline-flex h-10 w-full cursor-pointer items-center justify-center rounded-full px-4 text-sm font-semibold"
+        >
+          Switch account
+        </SignOutLink>
+      </InviteCard>
     );
   }
 
@@ -143,10 +173,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   // forwarded, so opening it doesn't prove the invited mailbox is yours.
   if (!identity.emailVerified) {
     return (
-      <InviteCard
-        title={`Join ${invitation.orgName}`}
-        description="Verify your email address to accept this invite."
-      >
+      <InviteCard title={`Join ${invitation.orgName}`} description="Confirm your email first.">
         <VerifyEmailNotice email={identity.email} action="accept this invite" />
       </InviteCard>
     );
@@ -159,11 +186,7 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
       description={`You're invited to join as ${roleName(invitation.role)}.`}
     >
       <div className="flex flex-col gap-4">
-        <ClubPreview
-          name={invitation.orgName}
-          logoUrl={orgLogoUrl(club?.logo, 64)}
-          detail={`Invite for ${invitation.email}`}
-        />
+        <ClubPreview name={invitation.orgName} logoUrl={orgLogoUrl(club?.logo, 64)} />
         <JoinButton token={token} orgName={invitation.orgName} />
       </div>
     </InviteCard>

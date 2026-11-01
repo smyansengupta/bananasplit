@@ -35,7 +35,7 @@ const props = (code: string) =>
   ({ params: Promise.resolve({ code }) }) as unknown as LayoutProps<"/join/[code]">;
 
 describe("a texted invite code's preview", () => {
-  it("says the club's name and shows its logo", async () => {
+  it("says the organization's name and shows its logo", async () => {
     mocks.getPublicOrgTheme.mockResolvedValue({ name: "Claude Builder Club", logo: LOGO });
     const meta = await generateMetadata(props("rpka-ywsf"));
     expect(meta.openGraph?.title).toBe(
@@ -47,10 +47,10 @@ describe("a texted invite code's preview", () => {
     expect(JSON.stringify(meta)).not.toContain("RPKA");
   });
 
-  it("names no club for a code that opens nothing", async () => {
+  it("names no organization for a code that opens nothing", async () => {
     mocks.getPublicOrgTheme.mockResolvedValue(null);
     const meta = await generateMetadata(props("AAAA-AAAA"));
-    expect(meta.openGraph?.title).toBe("Join your club");
+    expect(meta.openGraph?.title).toBe("Join your organization");
     expect(meta.openGraph).toMatchObject({ images: [{ url: "/og/join.png" }] });
     expect(meta).not.toHaveProperty("icons");
   });
@@ -63,10 +63,10 @@ describe("a texted invite code's preview", () => {
     expect(mocks.orgIdForJoinCode).not.toHaveBeenCalled();
   });
 
-  it("names no club once the client is over the lookup cap", async () => {
+  it("names no organization once the client is over the lookup cap", async () => {
     mocks.getPublicOrgTheme.mockResolvedValue({ name: "Claude Builder Club", logo: LOGO });
     mocks.checkRateLimit.mockResolvedValueOnce({ allowed: false });
     const meta = await generateMetadata(props("RPKA-YWSF"));
-    expect(meta.openGraph?.title).toBe("Join your club");
+    expect(meta.openGraph?.title).toBe("Join your organization");
   });
 });

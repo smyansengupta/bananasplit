@@ -326,7 +326,7 @@ export function OutlineEditor({
     unknown.length > 0 && `${unknown.length} to invite`,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -411,9 +411,9 @@ export function OutlineEditor({
                     )}
                   >
                     <UserAvatar user={m} size="sm" />
-                    <span className="min-w-0 flex-1 truncate font-medium">{m.name}</span>
+                    <span className="min-w-0 flex-1 font-medium break-words">{m.name}</span>
                     {m.title && (
-                      <span className="text-muted-foreground truncate text-xs">{m.title}</span>
+                      <span className="text-muted-foreground text-xs break-words">{m.title}</span>
                     )}
                   </button>
                 ))
@@ -446,7 +446,7 @@ export function OutlineEditor({
                   <b className="font-semibold">{u.name}</b>
                   <span className="text-muted-foreground">
                     {" "}
-                    · for {u.title}. Use a title or a full name from the chart.
+                    , for {u.title}. Use a title or a full name from the chart.
                   </span>
                 </li>
               ))}
@@ -473,7 +473,7 @@ export function OutlineEditor({
                   <li key={p.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="min-w-0">
                       <b className="font-semibold">{p.personName}</b>
-                      <span className="text-muted-foreground"> · {p.title}</span>
+                      <span className="text-muted-foreground">, {p.title}</span>
                     </span>
                     {suggestion && (
                       <Button
@@ -488,7 +488,7 @@ export function OutlineEditor({
                     )}
                     {canInvite && (
                       <Button asChild variant="ghost" size="sm" className="h-7">
-                        <Link href={`/app/${orgSlug}/settings/members`}>
+                        <Link href={`/app/${orgSlug}/people?invite=1`}>
                           <UserPlus aria-hidden="true" />
                           Invite
                         </Link>

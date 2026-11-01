@@ -3,14 +3,12 @@ import { notFound, redirect } from "next/navigation";
 
 import { ProfileForm } from "@/app/onboarding/profile/profile-form";
 
-import { BrandMark } from "@/components/marketing/brand-mark";
-import { BRANDS, type BrandGroup } from "@/components/marketing/brands";
 import { exitClass, SetupCard, SetupShell, StepIntro } from "@/components/onboarding/setup-shell";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { bringSections } from "@/lib/onboarding/bring";
 import { setupEmailSwitches } from "@/lib/onboarding/emails";
-import { isOrgStep, previousSetupStep, setupStepHref } from "@/lib/onboarding/steps";
+import { isOrgStep, ORG_FLOW, previousSetupStep, setupStepHref } from "@/lib/onboarding/steps";
 import { orgLogoUrl } from "@/lib/org-logo";
 import { getOrgContextBySlug, withOrgTx, withUserTx } from "@/server/db/context";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
@@ -23,30 +21,21 @@ import { OrgBasicsStep } from "../basics-step";
 import { BringStep } from "../bring-step";
 import { EmailsStep } from "../emails-step";
 import { EventsStep } from "../events-step";
-import { IMessageStep } from "../imessage-step";
 import { ImportStep } from "../import-step";
 import { InviteStep } from "../invite-step";
 import { LabelsStep } from "../labels-step";
 import { PictureStep } from "../picture-step";
 import { TeamsStep } from "../teams-step";
-import { ToolsStep, type ToolTile } from "../tools-step";
 
 export const dynamic = "force-dynamic";
-
-/** What each kind of app does once connected (Connect tools). */
-const TOOL_DOES: Record<BrandGroup, string> = {
-  notes: "Meeting notes file themselves",
-  meetings: "Calls booked from the calendar",
-  ai: "Ask and add work from your AI",
-  inbox: "Email and calendars, as tasks",
-  data: "Your database, kept in sync",
-};
 
 /**
  * Setting up an organization (ORG_STEPS), for an OWNER/ADMIN of it, after
  * its basics, your profile last. One step per page under the
  * organization's URL, so the flow survives a refresh and can be picked up
  * later; "Save and exit" goes in, since each step saves as it continues.
+ * ORG_FLOW walks basics, invite, bring; the other steps open on their own
+ * from "Get your organization started" and return there.
  */
 export default async function OrgSetupStepPage({
   params,
@@ -60,14 +49,16 @@ export default async function OrgSetupStepPage({
   const stepHref = (s: typeof step) => setupStepHref("org", organization.slug, s);
   const previous = previousSetupStep("org", step);
   // Basics, the first, has no Back: the organization is made, and the start
-  // screen would only offer to make another.
-  const backHref = previous ? stepHref(previous) : null;
+  // screen would only offer to make another. A step opened from "Get your
+  // organization started" goes back to the Overview.
+  const inFlow = ORG_FLOW.includes(step);
+  const backHref = previous ? stepHref(previous) : inFlow ? null : `/app/${organization.slug}`;
 
   const shell = (body: React.ReactNode) => (
     <SetupShell
       subject={organization.name}
       exit={
-        <Link href={`/app/${organization.slug}?welcome=1`} className={exitClass}>
+        <Link href={`/app/${organization.slug}`} className={exitClass}>
           Save and exit
         </Link>
       }
@@ -151,17 +142,6 @@ export default async function OrgSetupStepPage({
         />,
       );
     }
-    case "imessage":
-      return shell(<IMessageStep {...base} />);
-    case "tools": {
-      const tools: ToolTile[] = BRANDS.map((brand) => ({
-        slug: brand.slug,
-        name: brand.name,
-        does: TOOL_DOES[brand.group],
-        logo: <BrandMark brand={brand} size={34} />,
-      }));
-      return shell(<ToolsStep {...base} tools={tools} />);
-    }
     case "invite": {
       const canInvite = can({ role }, "members.invite");
       const { code, invites } = await withOrgTx(organization.id, async ({ db }) => ({
@@ -208,7 +188,7 @@ export default async function OrgSetupStepPage({
             bio: profile.bio,
             links: profile.links,
           }}
-          next={`/app/${organization.slug}?welcome=1`}
+          next={`/app/${organization.slug}`}
           back={backHref ?? undefined}
           continueLabel={`Go to ${organization.name}`}
         />,
@@ -220,7 +200,7 @@ export default async function OrgSetupStepPage({
       // "Start a club with this"); only one of the user's own items counts.
       const query = await searchParams;
       const fromMove = query.from === "move";
-      const done = fromMove ? `/app/${organization.slug}` : stepHref("profile");
+      const done = `/app/${organization.slug}`;
       const bringable = await loadBringable(user.id);
       if (!bringable || bringable.total === 0) redirect(done);
       const wanted = (typeof query.bring === "string" ? query.bring : null) ?? (await readBring());

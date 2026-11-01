@@ -181,7 +181,7 @@ describe("testSupabaseSource", () => {
     expect(clientCtor).not.toHaveBeenCalled();
   });
 
-  it("explains each driver failure in the club's terms", async () => {
+  it("explains each driver failure in the organization's terms", async () => {
     const cases: [Error, RegExp][] = [
       [
         Object.assign(new Error("password authentication failed"), { code: "28P01" }),

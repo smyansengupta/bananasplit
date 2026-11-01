@@ -440,7 +440,7 @@ export function OwnerField({
           })}
         </div>
         <p className="text-muted-foreground mt-1 border-t px-2 pt-1.5 text-[11px]">
-          Enter picks · Backspace clears · Esc closes
+          Enter picks, Backspace clears, Esc closes
         </p>
       </PopoverContent>
     </Popover>
@@ -572,7 +572,7 @@ export function PeopleField({
           })}
         </div>
         <p className="text-muted-foreground mt-1 border-t px-2 pt-1.5 text-[11px]">
-          Enter adds · Backspace removes · Esc closes
+          Enter adds, Backspace removes, Esc closes
         </p>
       </PopoverContent>
     </Popover>

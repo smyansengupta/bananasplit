@@ -14,6 +14,11 @@ import { escapeHtml, safeHref, subjectLine } from "./escape";
  * the one action. The logo is the standard lockup, exactly as it is
  * (public/brand/bananasplit-logo.svg, served as a PNG because Gmail and
  * Outlook don't show SVG images).
+ *
+ * House rules: nothing sits above the message as a small label (the
+ * organization's name goes in the footer line instead), and the action is
+ * one button: its link isn't repeated as raw text in the HTML. The plain-
+ * text part, which has no buttons, still carries every link.
  */
 
 /** Moonstone light (globals.css :root), as literals for mail clients. */
@@ -50,7 +55,7 @@ export interface RenderedEmail {
 
 export interface LayoutInput {
   subject: string;
-  /** Small line above the body, e.g. the org name. */
+  /** Who it's from, e.g. the org name: shown in the footer line, never above the message. */
   eyebrow?: string;
   /** Pre-escaped HTML paragraphs. */
   bodyHtml: string;
@@ -64,13 +69,10 @@ const PRODUCT = "Bananasplit";
 
 export function layout(input: LayoutInput): RenderedEmail {
   const subject = subjectLine(input.subject);
-  const footer = input.footer ?? `You're receiving this because of your account on ${PRODUCT}.`;
+  const base = input.footer ?? `You're receiving this because of your account on ${PRODUCT}.`;
+  const footer = input.eyebrow ? `From ${input.eyebrow} on ${PRODUCT}. ${base}` : base;
   const cta = input.cta
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 18px"><tr><td style="border-radius:999px;background:${C.ink}"><a href="${safeHref(input.cta.url)}" style="display:inline-block;padding:12px 22px;border-radius:999px;background:${C.ink};color:${C.onInk};font-size:15px;font-weight:600;line-height:1.2;text-decoration:none">${escapeHtml(input.cta.label)}</a></td></tr></table>
-<p style="margin:0;font-size:13px;line-height:1.5;color:${C.muted}">Or paste this link into your browser:<br><span style="word-break:break-all;color:${C.ink}">${escapeHtml(input.cta.url)}</span></p>`
-    : "";
-  const eyebrow = input.eyebrow
-    ? `<p style="margin:0 0 14px;font-size:13px;font-weight:500;line-height:1.4;color:${C.muted}">${escapeHtml(input.eyebrow)}</p>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:26px 0 4px"><tr><td style="border-radius:999px;background:${C.ink}"><a href="${safeHref(input.cta.url)}" style="display:inline-block;padding:12px 22px;border-radius:999px;background:${C.ink};color:${C.onInk};font-size:15px;font-weight:600;line-height:1.2;text-decoration:none">${escapeHtml(input.cta.label)}</a></td></tr></table>`
     : "";
   const origin = logoOrigin();
   const logo = origin
@@ -83,7 +85,7 @@ export function layout(input: LayoutInput): RenderedEmail {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:32px 12px 40px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
 ${logo}<tr><td style="background:${C.card};border:1px solid ${C.line};border-radius:24px;padding:32px 30px 30px">
-${eyebrow}${input.bodyHtml}${cta}
+${input.bodyHtml}${cta}
 </td></tr>
 <tr><td style="padding:18px 4px 0;font-size:12px;line-height:1.5;color:${C.muted}">${escapeHtml(footer)}</td></tr>
 </table>
@@ -91,7 +93,6 @@ ${eyebrow}${input.bodyHtml}${cta}
 </body></html>`;
 
   const textParts = [
-    input.eyebrow,
     input.bodyText,
     input.cta ? `${input.cta.label}: ${input.cta.url}` : undefined,
     footer,
@@ -103,19 +104,36 @@ export function paragraph(text: string): string {
   return `<p style="margin:0 0 14px">${escapeHtml(text)}</p>`;
 }
 
-/** The email copy of an in-app notification. */
+/**
+ * The email copy of an in-app notification. `cta` replaces the usual "Open
+ * in Bananasplit" (an online meeting's reminder leads with Join the
+ * meeting); `choices` are answers as buttons (an invite's Going and Can't
+ * go), each opening the app where the answer is one click.
+ */
 export function notificationEmail(input: {
   orgName: string;
   title: string;
   body?: string | null;
   url?: string | null;
+  cta?: { label: string; url: string };
+  choices?: { label: string; url: string }[];
 }): RenderedEmail {
+  const choices = input.choices?.length
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 0"><tr>${input.choices
+        .map(
+          (c) =>
+            `<td style="padding:0 8px 0 0"><a href="${safeHref(c.url)}" style="display:inline-block;padding:10px 18px;border-radius:999px;border:1px solid ${C.ink};color:${C.ink};font-size:14px;font-weight:600;line-height:1.2;text-decoration:none">${escapeHtml(c.label)}</a></td>`,
+        )
+        .join("")}</tr></table>`
+    : "";
   return layout({
     subject: input.title,
     eyebrow: input.orgName,
-    bodyHtml: `<p style="margin:0 0 10px;font-size:18px;font-weight:600;line-height:1.35">${escapeHtml(input.title)}</p>${input.body ? paragraph(input.body) : ""}`,
-    bodyText: [input.title, input.body].filter(Boolean).join("\n\n"),
-    cta: input.url ? { label: "Open in Bananasplit", url: input.url } : undefined,
+    bodyHtml: `<p style="margin:0 0 10px;font-size:18px;font-weight:600;line-height:1.35">${escapeHtml(input.title)}</p>${input.body ? paragraph(input.body) : ""}${choices}`,
+    bodyText: [input.title, input.body, ...(input.choices ?? []).map((c) => `${c.label}: ${c.url}`)]
+      .filter(Boolean)
+      .join("\n\n"),
+    cta: input.cta ?? (input.url ? { label: "Open in Bananasplit", url: input.url } : undefined),
     footer: "Change which notifications email you on your profile.",
   });
 }
@@ -128,7 +146,11 @@ export function invitationEmail(input: {
   expiresAt: Date;
 }): RenderedEmail {
   const role = input.role.toLowerCase();
-  const expires = input.expiresAt.toUTCString().replace(/ GMT$/, " UTC");
+  const expires = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(input.expiresAt);
   return layout({
     subject: `${input.inviterName} invited you to ${input.orgName} on ${PRODUCT}`,
     eyebrow: input.orgName,
@@ -166,30 +188,36 @@ export function reimbursementStatusEmail(input: {
       `<p style="margin:0 0 14px">Your expense <strong>${escapeHtml(input.description)}</strong> ${escapeHtml(summary)}.</p>` +
       (reason ? paragraph(`Reason: ${reason}`) : ""),
     bodyText: `Your expense "${input.description}" ${summary}.${reason ? `\n\nReason: ${reason}` : ""}`,
-    cta: { label: "View your reimbursements", url: input.url },
+    cta: {
+      label: input.status === "REJECTED" ? "Fix and resend" : "View expense",
+      url: input.url,
+    },
   });
 }
 
 export function treasurerDigestEmail(input: {
   orgName: string;
-  pending: { description: string; amountFormatted: string; submitterName: string }[];
+  pending: { description: string; amountFormatted: string; submitterName: string; url?: string }[];
   url: string;
 }): RenderedEmail {
   const n = input.pending.length;
   const items = input.pending
     .map(
       (p) =>
-        `<li style="margin:0 0 6px">${escapeHtml(p.description)} &mdash; ${escapeHtml(p.amountFormatted)} <span style="color:${C.muted}">(${escapeHtml(p.submitterName)})</span></li>`,
+        `<li style="margin:0 0 6px">${escapeHtml(p.description)}, ${escapeHtml(p.amountFormatted)} <span style="color:${C.muted}">(${escapeHtml(p.submitterName)})</span>${p.url ? ` <a href="${safeHref(p.url)}" style="color:${C.ink};font-weight:600">Approve</a>` : ""}</li>`,
     )
     .join("");
   return layout({
     subject: `${n} expense${n === 1 ? "" : "s"} awaiting your review in ${input.orgName}`,
     eyebrow: input.orgName,
     bodyHtml:
-      paragraph(`These expenses are waiting on an owner, admin or treasurer in ${input.orgName}:`) +
+      paragraph("Waiting on your review:") +
       `<ul style="margin:0 0 14px;padding-left:20px">${items}</ul>`,
     bodyText: `These expenses are waiting on an owner, admin or treasurer in ${input.orgName}:\n\n${input.pending
-      .map((p) => `- ${p.description} — ${p.amountFormatted} (${p.submitterName})`)
+      .map(
+        (p) =>
+          `- ${p.description}, ${p.amountFormatted} (${p.submitterName})${p.url ? `\n  Approve: ${p.url}` : ""}`,
+      )
       .join("\n")}`,
     cta: { label: "Review expenses", url: input.url },
   });
@@ -222,7 +250,7 @@ export function passwordResetEmail(input: {
   expiresMinutes: number;
 }): RenderedEmail {
   const greeting = input.name ? `Hi ${input.name},` : "Hi,";
-  const body = `Someone asked to reset the password for your ${PRODUCT} account. The link works once and expires in ${input.expiresMinutes} minutes.`;
+  const body = `Here's the link to set a new password. It works once, for ${input.expiresMinutes} minutes.`;
   return layout({
     subject: `Reset your ${PRODUCT} password`,
     bodyHtml: paragraph(greeting) + paragraph(body),
@@ -240,9 +268,8 @@ export function passwordChangedEmail(input: {
   resetUrl: string;
 }): RenderedEmail {
   const greeting = input.name ? `Hi ${input.name},` : "Hi,";
-  const body = `The password for your ${PRODUCT} account was just changed, and every device that was signed in has been signed out.`;
-  const notYou =
-    "If you didn't do this, reset your password now and tell your organization's admins.";
+  const body = `Your ${PRODUCT} password was just changed, and every device was signed out.`;
+  const notYou = "Wasn't you? Reset it now and tell your organization's admins.";
   return layout({
     subject: `Your ${PRODUCT} password was changed`,
     bodyHtml: paragraph(greeting) + paragraph(body) + paragraph(notYou),
@@ -281,10 +308,12 @@ export function trialEndingEmail(input: {
   const after = input.picked
     ? `After that, ${input.orgName ?? "your space"} moves to ${input.freePlan}, the plan you picked. Nothing is deleted.`
     : input.orgName
-      ? `After that, ${input.orgName} moves to ${input.freePlan}. Nothing is deleted, and you won't be charged: we never asked for a card. Pick Team or Team Advanced to keep finance, reports, the org chart and AI.`
-      : `After that, you move to ${input.freePlan}. Nothing is deleted, and you won't be charged: we never asked for a card. Pick ${input.trialPlan} to keep themes, integrations and AI.`;
+      ? `After that, ${input.orgName} moves to ${input.freePlan}. Nothing is deleted. Pick Team or Team Advanced to keep finance, reports, the org chart and AI.`
+      : `After that, you move to ${input.freePlan}. Nothing is deleted. Pick ${input.trialPlan} to keep themes, integrations and AI.`;
   return layout({
-    subject: "Your free trial is almost up",
+    subject: input.orgName
+      ? `${input.orgName}'s free trial ends in ${days}`
+      : `Your free trial ends in ${days}`,
     eyebrow: input.orgName ?? undefined,
     bodyHtml: paragraph(greeting) + paragraph(intro) + paragraph(after),
     bodyText: `${greeting}
@@ -302,9 +331,7 @@ export function testEmail(input: { orgName: string; senderLabel: string }): Rend
   return layout({
     subject: `Test email from ${input.orgName}`,
     eyebrow: input.orgName,
-    bodyHtml: paragraph(
-      `This is a test email from ${input.orgName} on ${PRODUCT}, sent through ${input.senderLabel}. If you received it, the sender works.`,
-    ),
-    bodyText: `This is a test email from ${input.orgName} on ${PRODUCT}, sent through ${input.senderLabel}. If you received it, the sender works.`,
+    bodyHtml: paragraph(`It works. Sent through ${input.senderLabel}.`),
+    bodyText: `It works. Sent through ${input.senderLabel}.`,
   });
 }

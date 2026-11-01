@@ -7,8 +7,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * The block card (Moonstone): a solid card that points at something that
- * needs you. Each tone means exactly one thing, and the kicker says it in
- * words too, so colour is never the only signal:
+ * needs you. Each tone means exactly one thing, and the `when` line says it
+ * in words too, so colour is never the only signal. That line sits UNDER
+ * the title, never above it as a small label (a house rule); a card with
+ * no title shows it as its main line instead.
  *
  * - quiet:  coming up (meetings, events, deadlines that need nothing yet)
  * - alert:  act now (due today, overdue, urgent, blocked on you)
@@ -78,8 +80,8 @@ export function BlockCard({
    * on the other tones, whose colour is what they mean.
    */
   accent?: string | null;
-  /** The line that says what kind of block this is: "Due today", "Tomorrow · 7:00 PM". */
-  kicker: ReactNode;
+  /** The line that says what kind of block this is: "Due today", "Tomorrow, 7:00 PM". Shown under the title. */
+  kicker?: ReactNode;
   title?: ReactNode;
   subtitle?: ReactNode;
   /** The big number in the footer ("2 of 3", "8"). */
@@ -131,16 +133,22 @@ export function BlockCard({
         "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:bg-[radial-gradient(280px_200px_at_var(--mx,50%)_var(--my,0%),var(--glare),transparent_65%)] after:opacity-0 after:transition-opacity after:duration-300 hover:after:opacity-100",
         // An accented card paints itself from the style above; it still
         // wants the quiet tone's inset ring.
-        accented ? "ring-1 ring-inset ring-black/10 dark:ring-white/10" : TONES[tone],
+        accented ? "ring-1 ring-black/10 ring-inset dark:ring-white/10" : TONES[tone],
         className,
       )}
     >
-      <div className="relative flex items-center justify-between gap-2">
-        <span className="text-[13px] font-medium text-(--meta)">{kicker}</span>
-        {action && <div className="relative z-10 flex items-center gap-1.5">{action}</div>}
-      </div>
+      {(action || (!title && kicker)) && (
+        <div className="relative flex items-center justify-between gap-2">
+          {!title && kicker ? (
+            <span className="text-[13px] font-medium text-(--meta)">{kicker}</span>
+          ) : (
+            <span />
+          )}
+          {action && <div className="relative z-10 flex items-center gap-1.5">{action}</div>}
+        </div>
+      )}
       {title && (
-        <h3 className="display-title mt-3.5 mb-1.5 text-[23px]">
+        <h3 className={cn("display-title mb-1.5 text-[23px]", action && "mt-2")}>
           {href ? (
             <Link
               href={href}
@@ -153,6 +161,7 @@ export function BlockCard({
           )}
         </h3>
       )}
+      {title && kicker && <p className="text-[13px] font-medium text-(--meta)">{kicker}</p>}
       {subtitle && <p className="text-sm text-(--meta)">{subtitle}</p>}
       {children}
       {(figure !== undefined || aside) && (

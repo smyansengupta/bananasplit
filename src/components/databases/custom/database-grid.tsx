@@ -1,5 +1,6 @@
 "use client";
 
+import { LinkedLoader } from "@/components/links/linked-loader";
 import { TZDate } from "@date-fns/tz";
 import { format } from "date-fns";
 import {
@@ -7,6 +8,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpAZ,
+  ChevronDown,
   Check,
   CircleAlert,
   Database,
@@ -21,6 +23,7 @@ import {
   Shapes,
   Trash2,
 } from "@/components/icons";
+import Link from "next/link";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -34,6 +37,7 @@ import {
   restoreRecordsAction,
   trashRecordsAction,
   updateCellAction,
+  updateDatabaseSettingsAction,
   updateFieldAction,
 } from "@/app/app/[orgSlug]/databases/custom-actions";
 import { BackLink } from "@/components/back-link";
@@ -76,6 +80,7 @@ import {
   FIELD_TYPE_META,
   FIELD_TYPES,
   hasChoices,
+  parseCell,
   type Choice,
   type FieldDef,
   type FieldType,
@@ -86,7 +91,7 @@ import type { CustomDatabase, CustomRecord } from "@/server/databases/custom";
 
 import { TableFrame } from "../table-frame";
 import { CellEditor, type Member } from "./cell-editor";
-import { ChoicesDialog, FieldNameDialog, NewFieldPopover } from "./field-dialogs";
+import { ChoicesDialog, NewFieldPopover } from "./field-dialogs";
 import { FieldIcon } from "./field-icon";
 import { DatabaseSettingsDialog } from "./settings-dialog";
 
@@ -183,6 +188,8 @@ function sortRows(
 /** What a row can ask of the grid. Stable, so a row only re-renders when its own data changes. */
 interface RowActions {
   save: (recordId: string, fieldId: string, value: StoredValue | null) => void;
+  /** Enter in a cell: the same field one row down, or a new row from the last. */
+  down: (recordId: string, fieldIndex: number) => void;
   addChoice: (fieldId: string, label: string) => Promise<Choice | null>;
   select: (recordId: string, selected: boolean) => void;
   expand: (recordId: string) => void;
@@ -225,10 +232,17 @@ export function DatabaseGrid({
   const [exporting, setExporting] = useState(false);
   const [sort, setSort] = useState<Sort>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // ?row= (a link to one row, as the Linked panel makes) opens it.
+  const [expanded, setExpanded] = useState<string | null>(() =>
+    new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get("row"),
+  );
   const [renaming, setRenaming] = useState<FieldDef | null>(null);
   const [editingChoices, setEditingChoices] = useState<FieldDef | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dbName, setDbName] = useState(database.name);
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [dragField, setDragField] = useState<string | null>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   /** Bumped by every new list (a search, a reload): an older answer is dropped. */
   const listSeq = useRef(0);
@@ -387,19 +401,116 @@ export function DatabaseGrid({
     setTotal(page.total);
   }
 
-  async function addRow() {
+  /** The text box of a row's cell (by column), if that cell has one. */
+  function cellInput(recordId: string, fieldIndex: number) {
+    return tableRef.current?.querySelector<HTMLElement>(
+      `[data-row="${recordId}"] > td:nth-child(${fieldIndex + 1}) [data-cell-input]`,
+    );
+  }
+
+  async function addRow(focusField = 0) {
     const row = await track(createRecordAction(orgId, database.id, {}));
     if (!row) return;
     setRecords((rs) => [...rs, row]);
     setTotal((n) => n + 1);
     setSort(null);
     requestAnimationFrame(() => {
-      const cell = tableRef.current?.querySelector<HTMLElement>(
-        `[data-row="${row.id}"] [data-primary] [data-cell-input]`,
-      );
+      const cell = cellInput(row.id, focusField);
       cell?.focus();
       cell?.scrollIntoView({ block: "nearest" });
     });
+  }
+
+  /** Enter in a cell goes down a row, the way a spreadsheet does; from the last row it adds one. */
+  function down(recordId: string, fieldIndex: number) {
+    const i = shown.findIndex((r) => r.id === recordId);
+    const below = shown[i + 1];
+    if (below) {
+      cellInput(below.id, fieldIndex)?.focus();
+      return;
+    }
+    if (canEdit && next === null) void addRow(fieldIndex);
+  }
+
+  /**
+   * Rows pasted from a spreadsheet (tab-separated lines) become new rows,
+   * their columns filling the fields from the one you're in. A value that
+   * doesn't fit its field is left empty rather than failing the row.
+   */
+  async function pasteRows(text: string, fromField: number) {
+    const lines = text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+    const targets = fields.slice(fromField);
+    let skipped = 0;
+    let added = 0;
+    for (const line of lines.slice(0, 500)) {
+      const cells = line.split("\t");
+      const values: Record<string, unknown> = {};
+      cells.forEach((cell, k) => {
+        const field = targets[k];
+        if (!field || cell.trim() === "") return;
+        const parsed = parseCell(field, cell.trim());
+        if (parsed.ok) values[field.id] = cell.trim();
+        else skipped += 1;
+      });
+      if (Object.keys(values).length === 0) continue;
+      const row = await track(createRecordAction(orgId, database.id, values));
+      if (!row) break;
+      added += 1;
+      setRecords((rs) => [...rs, row]);
+      setTotal((n) => n + 1);
+    }
+    if (added > 0) {
+      setSort(null);
+      toast({
+        title: added === 1 ? "1 row added" : `${formatCount(added)} rows added`,
+        description:
+          skipped > 0
+            ? `${formatCount(skipped)} values didn't fit and were left empty.`
+            : undefined,
+        tone: "success",
+      });
+    }
+  }
+
+  /** Moves a field to another column, one step at a time (how the server moves them). */
+  async function moveTo(fieldId: string, target: number) {
+    const from = fields.findIndex((f) => f.id === fieldId);
+    if (from < 1 || target < 1 || target === from || target >= fields.length) return;
+    const order = [...fields];
+    const [field] = order.splice(from, 1);
+    order.splice(target, 0, field!);
+    setFields(order);
+    const step = target > from ? 1 : -1;
+    for (let k = 0; k < Math.abs(target - from); k++) {
+      await track(moveFieldAction(orgId, fieldId, step));
+    }
+  }
+
+  async function renameField(field: FieldDef, name: string) {
+    setRenaming(null);
+    const clean = name.trim();
+    if (!clean || clean === field.name) return;
+    const updated = await track(updateFieldAction(orgId, field.id, { name: clean }));
+    if (updated) setFields((fs) => fs.map((f) => (f.id === updated.field.id ? updated.field : f)));
+  }
+
+  /** The database's own name, edited on its title (the rest of its settings stay as they are). */
+  async function renameDatabase(name: string) {
+    setTitleDraft(null);
+    const clean = name.trim();
+    if (!clean || clean === dbName) return;
+    const before = dbName;
+    setDbName(clean);
+    const result = await updateDatabaseSettingsAction(orgId, database.id, {
+      name: clean,
+      description: database.description || null,
+      memberVisibility: database.memberVisibility,
+      memberCanEdit: database.memberCanEdit,
+    });
+    if (result.error) {
+      setDbName(before);
+      toast({ title: "Not saved", description: result.error, tone: "error" });
+    }
   }
 
   async function changeType(field: FieldDef, type: FieldType) {
@@ -482,7 +593,7 @@ export function DatabaseGrid({
     setTrashCount((n) => n + done);
     setSelected(new Set());
     toast({
-      title: ids.length === 1 ? "Row deleted" : `${formatCount(ids.length)} rows deleted`,
+      title: ids.length === 1 ? "Deleted" : `${formatCount(ids.length)} deleted`,
       action: {
         label: "Undo",
         run: async () => {
@@ -507,7 +618,7 @@ export function DatabaseGrid({
     setTotal((n) => Math.max(0, n - done));
     setTrashCount((n) => Math.max(0, n - done));
     toast({
-      title: ids.length === 1 ? "Row restored" : `${formatCount(ids.length)} rows restored`,
+      title: ids.length === 1 ? "Restored" : `${formatCount(ids.length)} restored`,
     });
   }
 
@@ -578,10 +689,11 @@ export function DatabaseGrid({
   // Rows get these through stable wrappers that call the latest render's
   // functions, so a save re-renders the row it changed and not every row.
   const latest =
-    useRef<Pick<RowActions, "save" | "addChoice" | "trash" | "restore" | "purge">>(null);
+    useRef<Pick<RowActions, "save" | "down" | "addChoice" | "trash" | "restore" | "purge">>(null);
   useEffect(() => {
     latest.current = {
       save: (recordId, fieldId, value) => void saveCell(recordId, fieldId, value),
+      down,
       addChoice,
       trash: (recordId) => void trashRows([recordId]),
       restore: (recordId) => void restore([recordId]),
@@ -591,6 +703,7 @@ export function DatabaseGrid({
   const actions = useMemo<RowActions>(
     () => ({
       save: (recordId, fieldId, value) => latest.current?.save(recordId, fieldId, value),
+      down: (recordId, fieldIndex) => latest.current?.down(recordId, fieldIndex),
       addChoice: async (fieldId, label) =>
         (await latest.current?.addChoice(fieldId, label)) ?? null,
       select: (recordId, on) =>
@@ -628,20 +741,57 @@ export function DatabaseGrid({
         role="status"
       >
         <Check className="size-3.5" aria-hidden="true" />
-        All changes saved
+        Saved
       </span>
     );
+
+  // More rows load as the bottom of the grid scrolls into view.
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el || next === null || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && loading === null) void loadMore();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [next, loading]);
 
   const noun = (n: number) =>
     searchedFor ? (n === 1 ? "match" : "matches") : n === 1 ? "row" : "rows";
   const allShownSelected = shown.length > 0 && shown.every((r) => selected.has(r.id));
   const expandedRecord = records.find((r) => r.id === expanded) ?? null;
 
-  // The live summary under the title: how big the database is.
-  const summary = [
-    `${formatCount(total)} ${total === 1 ? "row" : "rows"}`,
-    `${fields.length} ${fields.length === 1 ? "field" : "fields"}`,
-  ].join(" · ");
+  // Managers rename the database on its title (a hidden one through Settings).
+  const canRename = database.canManage && !trash && database.memberVisibility !== "HIDDEN";
+  const title = trash ? (
+    "Recently deleted"
+  ) : titleDraft !== null ? (
+    <input
+      autoFocus
+      value={titleDraft}
+      maxLength={80}
+      aria-label="Database name"
+      onChange={(e) => setTitleDraft(e.target.value)}
+      onBlur={() => void renameDatabase(titleDraft)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") void renameDatabase(titleDraft);
+        if (e.key === "Escape") setTitleDraft(null);
+      }}
+      className="border-input bg-card focus-glow w-full max-w-xl rounded-lg border px-2 outline-none"
+    />
+  ) : canRename ? (
+    <button
+      type="button"
+      title="Rename"
+      onClick={() => setTitleDraft(dbName)}
+      className="hover:bg-muted -mx-1 rounded-md px-1 text-left"
+    >
+      {dbName}
+    </button>
+  ) : (
+    dbName
+  );
 
   return (
     <div className="space-y-7.5">
@@ -649,26 +799,14 @@ export function DatabaseGrid({
       <div className="space-y-3">
         <BackLink
           href={trash ? base : `/app/${orgSlug}/databases`}
-          label={trash ? database.name : "Databases"}
+          label={trash ? dbName : "Databases"}
         />
         <PageHeader
-          title={trash ? "Recently deleted" : database.name}
-          description={
-            trash
-              ? "Deleted rows. Restore them, or delete them for good."
-              : database.description
-                ? `${summary} · ${database.description}`
-                : summary
-          }
+          title={title}
+          description={!trash && database.description ? database.description : undefined}
           actions={
             <>
               {!trash && status}
-              {!trash && canEdit && (
-                <Button variant="create" onClick={() => void addRow()}>
-                  <Plus aria-hidden="true" />
-                  New row
-                </Button>
-              )}
               {trash && database.canManage && records.length > 0 && (
                 <Button variant="destructive" onClick={() => void purge("all")}>
                   <Trash2 aria-hidden="true" />
@@ -676,28 +814,39 @@ export function DatabaseGrid({
                 </Button>
               )}
               {!trash && (
-                <ItemMenu
-                  label={`More actions for ${database.name}`}
-                  className="border-input"
-                  items={[
-                    {
-                      label: exporting ? "Exporting…" : "Export CSV",
-                      icon: Download,
-                      onSelect: () => void exportCsv(),
-                    },
-                    {
-                      label: `Recently deleted${trashCount ? ` (${formatCount(trashCount)})` : ""}`,
-                      icon: Trash2,
-                      href: `${base}?trash=1`,
-                    },
-                    database.canManage && {
-                      label: "Settings",
-                      icon: Settings2,
-                      onSelect: () => setSettingsOpen(true),
-                      separated: true,
-                    },
-                  ]}
-                />
+                <>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`${base}?trash=1`}>
+                      <Trash2 aria-hidden="true" />
+                      Recently deleted{trashCount ? ` ${formatCount(trashCount)}` : ""}
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Export CSV"
+                    title="Export CSV"
+                    disabled={exporting}
+                    onClick={() => void exportCsv()}
+                  >
+                    {exporting ? (
+                      <Loader2 className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Download aria-hidden="true" />
+                    )}
+                  </Button>
+                  {database.canManage && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="Settings"
+                      title="Settings"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      <Settings2 aria-hidden="true" />
+                    </Button>
+                  )}
+                </>
               )}
             </>
           }
@@ -721,14 +870,10 @@ export function DatabaseGrid({
               : `${formatCount(records.length)} of ${formatCount(total)} ${noun(total)} loaded`}
           </span>
           {sort && next !== null && (
-            <span className="text-muted-foreground text-[13px]">
-              · Sorting the loaded rows; load the rest to sort them all.
-            </span>
+            <span className="text-muted-foreground text-[13px]">Sorted loaded rows only</span>
           )}
           {!database.canEdit && !trash && (
-            <span className="text-muted-foreground text-[13px]">
-              · You can view this database; its owners and admins edit it.
-            </span>
+            <span className="text-muted-foreground text-[13px]">View only</span>
           )}
           {selected.size > 0 && canEdit && (
             <span className="bg-muted ms-auto flex h-10 items-center gap-3 rounded-full ps-4 pe-1">
@@ -750,7 +895,19 @@ export function DatabaseGrid({
             "[&_thead_th[data-primary]]:z-20",
           )}
         >
-          <Table ref={tableRef} className="w-max min-w-full">
+          <Table
+            ref={tableRef}
+            className="w-max min-w-full"
+            onPaste={(e) => {
+              if (!canEdit) return;
+              const text = e.clipboardData.getData("text/plain");
+              // One value pastes into its cell as usual; rows (tabs or lines) become rows.
+              if (!text.includes("\t") && !text.replace(/\r?\n$/, "").includes("\n")) return;
+              e.preventDefault();
+              const cell = (e.target as HTMLElement).closest("td");
+              void pasteRows(text, cell ? cell.cellIndex : 0);
+            }}
+          >
             <TableHeader>
               <TableRow>
                 {fields.map((f, i) => (
@@ -758,11 +915,32 @@ export function DatabaseGrid({
                     key={f.id}
                     scope="col"
                     data-primary={f.isPrimary || undefined}
+                    draggable={
+                      database.canManage && !trash && !f.isPrimary && renaming?.id !== f.id
+                    }
+                    onDragStart={(e) => {
+                      setDragField(f.id);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("application/x-bananasplit-field", f.id);
+                    }}
+                    onDragEnd={() => setDragField(null)}
+                    onDragOver={(e) => {
+                      if (dragField && !f.isPrimary) e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragField) void moveTo(dragField, i);
+                      setDragField(null);
+                    }}
                     style={{
                       width: WIDTH[f.type] + (f.isPrimary && canEdit ? 36 : 0),
                       minWidth: WIDTH[f.type] + (f.isPrimary && canEdit ? 36 : 0),
                     }}
-                    className={cn("px-1", f.isPrimary && "left-0")}
+                    className={cn(
+                      "px-1",
+                      f.isPrimary && "left-0",
+                      dragField === f.id && "opacity-50",
+                    )}
                   >
                     {f.isPrimary && canEdit ? (
                       <div className="flex items-center">
@@ -783,7 +961,9 @@ export function DatabaseGrid({
                             sort={sort}
                             canManage={database.canManage && !trash}
                             onSort={(dir) => setSort(dir ? { fieldId: f.id, dir } : null)}
+                            renaming={renaming?.id === f.id}
                             onRename={() => setRenaming(f)}
+                            onRenamed={(name) => void renameField(f, name)}
                             onChoices={() => setEditingChoices(f)}
                             onType={(t) => void changeType(f, t)}
                             onMove={(d) => void move(f, d)}
@@ -799,7 +979,9 @@ export function DatabaseGrid({
                         sort={sort}
                         canManage={database.canManage && !trash}
                         onSort={(dir) => setSort(dir ? { fieldId: f.id, dir } : null)}
+                        renaming={renaming?.id === f.id}
                         onRename={() => setRenaming(f)}
+                        onRenamed={(name) => void renameField(f, name)}
                         onChoices={() => setEditingChoices(f)}
                         onType={(t) => void changeType(f, t)}
                         onMove={(d) => void move(f, d)}
@@ -851,25 +1033,17 @@ export function DatabaseGrid({
           </Table>
           {records.length === 0 ? (
             searchedFor ? (
-              <EmptyState
-                icon={SearchX}
-                title={`No rows match “${searchedFor}”`}
-                description="Try another word, or clear the search."
-              />
+              <EmptyState icon={SearchX} title={`No rows match “${searchedFor}”`} />
             ) : (
               <EmptyState
                 icon={trash ? Trash2 : Database}
                 title={trash ? "Nothing here" : "No rows yet"}
                 description={
-                  trash
-                    ? "Rows you delete show up here."
-                    : canEdit
-                      ? "Add the first row. Everything you type is saved automatically."
-                      : "Nothing has been added yet."
+                  canEdit && !trash ? "Paste rows from a spreadsheet, or add one." : undefined
                 }
                 action={
-                  canEdit ? (
-                    <Button variant="outline" onClick={() => void addRow()}>
+                  canEdit && !trash ? (
+                    <Button variant="secondary" onClick={() => void addRow()}>
                       <Plus aria-hidden="true" />
                       New row
                     </Button>
@@ -878,14 +1052,23 @@ export function DatabaseGrid({
               />
             )
           ) : null}
+          {/* One New row, at the bottom where the next row goes (Enter on
+              the last row adds one too). */}
+          {!trash && canEdit && next === null && records.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void addRow()}
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-field flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-sm font-medium transition-colors"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              New row
+            </button>
+          )}
           {next !== null && (
-            <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 pt-3 pb-1">
-              <span className="text-muted-foreground text-[13px] tabular-nums">
-                Showing {formatCount(records.length)} of {formatCount(total)} {noun(total)}.
-              </span>
+            <div ref={moreRef} className="flex justify-center px-3.5 pt-3 pb-1">
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 disabled={loading !== null}
                 onClick={() => void loadMore()}
               >
@@ -893,16 +1076,6 @@ export function DatabaseGrid({
                 Load more
               </Button>
             </div>
-          )}
-          {canEdit && records.length > 0 && (
-            <button
-              type="button"
-              onClick={() => void addRow()}
-              className="text-muted-foreground hover:bg-muted/60 hover:text-foreground rounded-field focus-visible:outline-foreground mt-1 flex h-10 w-full items-center gap-2 px-3.5 text-sm font-medium transition-colors outline-none focus-visible:outline-2"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              New row
-            </button>
           )}
         </TableFrame>
       </div>
@@ -916,10 +1089,10 @@ export function DatabaseGrid({
                   {displayText(primary!, expandedRecord.values[primary!.id], memberNames) ||
                     "Untitled row"}
                 </SheetTitle>
-                <SheetDescription>
+                <SheetDescription className={cn(!expandedRecord.updatedByName && "sr-only")}>
                   {expandedRecord.updatedByName
                     ? `Last edited by ${expandedRecord.updatedByName}`
-                    : "Every change saves as you make it."}
+                    : "Row details"}
                 </SheetDescription>
               </SheetHeader>
               <dl className="space-y-4 px-6 pb-8">
@@ -944,24 +1117,18 @@ export function DatabaseGrid({
                   </div>
                 ))}
               </dl>
+              <div className="px-6 pb-8">
+                <LinkedLoader
+                  orgId={orgId}
+                  orgSlug={orgSlug}
+                  at={{ kind: "record", id: expandedRecord.id }}
+                />
+              </div>
             </>
           )}
         </SheetContent>
       </Sheet>
 
-      {renaming && (
-        <FieldNameDialog
-          field={renaming}
-          onClose={() => setRenaming(null)}
-          onSave={async (name) => {
-            const updated = await track(updateFieldAction(orgId, renaming.id, { name }));
-            if (updated) {
-              setFields((fs) => fs.map((f) => (f.id === updated.field.id ? updated.field : f)));
-            }
-            return Boolean(updated);
-          }}
-        />
-      )}
       {editingChoices && (
         <ChoicesDialog
           field={editingChoices}
@@ -1030,6 +1197,7 @@ const GridRow = memo(function GridRow({
             label={`${f.name} for ${name || "this row"}`}
             onSave={(v) => actions.save(r.id, f.id, v)}
             onAddChoice={(label) => actions.addChoice(f.id, label)}
+            onEnter={() => actions.down(r.id, fields.indexOf(f))}
           />
         );
         return (
@@ -1053,6 +1221,12 @@ const GridRow = memo(function GridRow({
                   />
                 </span>
                 <div className="min-w-0 flex-1">{cell}</div>
+                <OpenRow onOpen={() => actions.expand(r.id)} name={name} />
+              </div>
+            ) : f.isPrimary ? (
+              <div className="flex items-center">
+                <div className="min-w-0 flex-1">{cell}</div>
+                <OpenRow onOpen={() => actions.expand(r.id)} name={name} />
               </div>
             ) : (
               cell
@@ -1091,12 +1265,10 @@ const GridRow = memo(function GridRow({
             label="Row actions"
             className={ROW_MENU}
             items={[
-              { label: "Expand row", icon: Maximize2, onSelect: () => actions.expand(r.id) },
               canEdit && {
                 label: "Delete row",
                 icon: Trash2,
                 destructive: true,
-                separated: true,
                 onSelect: () => actions.trash(r.id),
               },
             ]}
@@ -1107,14 +1279,36 @@ const GridRow = memo(function GridRow({
   );
 });
 
+/** The open-row button on a row's first cell (shown on hover, always on touch). */
+function OpenRow({ onOpen, name }: { onOpen: () => void; name: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Open ${name || "row"}`}
+      title="Open"
+      onClick={onOpen}
+      className="text-muted-foreground hover:text-foreground hover:bg-muted focus-glow grid size-7 shrink-0 place-items-center rounded-full opacity-0 outline-none group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+    >
+      <Maximize2 className="size-3.5" aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * A column's header: click the name to sort (A to Z, Z to A, then off),
+ * double-click it to rename (managers), drag the header to move the column,
+ * and the chevron opens the rest (choices, type, move, delete).
+ */
 function FieldHeader({
   field,
   index,
   count,
   sort,
   canManage,
+  renaming,
   onSort,
   onRename,
+  onRenamed,
   onChoices,
   onType,
   onMove,
@@ -1125,50 +1319,71 @@ function FieldHeader({
   count: number;
   sort: Sort;
   canManage: boolean;
+  renaming: boolean;
   onSort: (dir: 1 | -1 | null) => void;
   onRename: () => void;
+  onRenamed: (name: string) => void;
   onChoices: () => void;
   onType: (type: FieldType) => void;
   onMove: (direction: -1 | 1) => void;
   onDelete: () => void;
 }) {
+  const [draft, setDraft] = useState(field.name);
   const sorted = sort?.fieldId === field.id ? sort.dir : null;
   // Numbers and money sit right-aligned, their header too.
   const numeric = field.type === "NUMBER" || field.type === "CURRENCY";
+  if (renaming) {
+    return (
+      <input
+        autoFocus
+        defaultValue={field.name}
+        maxLength={60}
+        aria-label={`Rename ${field.name}`}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => onRenamed(draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onRenamed(draft);
+          if (e.key === "Escape") onRenamed(field.name);
+        }}
+        className="border-input bg-card focus-glow h-8 w-full rounded-lg border px-2 text-[12.5px] font-semibold outline-none"
+      />
+    );
+  }
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "hover:text-foreground hover:bg-muted-strong/60 data-[state=open]:bg-muted-strong/60 data-[state=open]:text-foreground rounded-field focus-visible:outline-foreground flex h-8 w-full items-center gap-1.5 px-2.5 text-left text-[12.5px] font-semibold transition-colors outline-none focus-visible:outline-2",
-            numeric && "flex-row-reverse text-right",
-            sorted && "text-foreground",
-          )}
-          aria-label={`${field.name} (${FIELD_TYPE_META[field.type].label}) options`}
-        >
-          <FieldIcon type={field.type} />
-          <span className="truncate">{field.name}</span>
-          {sorted &&
-            (sorted === 1 ? (
-              <ArrowDownAZ className="ms-auto size-3.5" aria-hidden="true" />
-            ) : (
-              <ArrowUpAZ className="ms-auto size-3.5" aria-hidden="true" />
-            ))}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuItem onSelect={() => onSort(sorted === 1 ? null : 1)}>
-          <ArrowDownAZ aria-hidden="true" />
-          {sorted === 1 ? "Clear sort" : "Sort A → Z"}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onSort(sorted === -1 ? null : -1)}>
-          <ArrowUpAZ aria-hidden="true" />
-          {sorted === -1 ? "Clear sort" : "Sort Z → A"}
-        </DropdownMenuItem>
-        {canManage && (
-          <>
-            <DropdownMenuSeparator />
+    <div className={cn("flex items-center", numeric && "flex-row-reverse")}>
+      <button
+        type="button"
+        onClick={() => onSort(sorted === 1 ? -1 : sorted === -1 ? null : 1)}
+        onDoubleClick={canManage ? onRename : undefined}
+        title={canManage ? "Click to sort, double-click to rename" : "Click to sort"}
+        aria-label={`Sort by ${field.name}${sorted === 1 ? ", sorted A to Z" : sorted === -1 ? ", sorted Z to A" : ""}`}
+        className={cn(
+          "hover:text-foreground hover:bg-muted-strong/60 rounded-field focus-visible:outline-foreground flex h-8 min-w-0 flex-1 items-center gap-1.5 px-2.5 text-left text-[12.5px] font-semibold transition-colors outline-none focus-visible:outline-2",
+          numeric && "flex-row-reverse text-right",
+          sorted && "text-foreground",
+        )}
+      >
+        <FieldIcon type={field.type} />
+        <span className="min-w-0 break-words">{field.name}</span>
+        {sorted &&
+          (sorted === 1 ? (
+            <ArrowDownAZ className="ms-auto size-3.5 shrink-0" aria-hidden="true" />
+          ) : (
+            <ArrowUpAZ className="ms-auto size-3.5 shrink-0" aria-hidden="true" />
+          ))}
+      </button>
+      {canManage && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${field.name} options`}
+              className="text-muted-foreground hover:text-foreground hover:bg-muted-strong/60 data-[state=open]:bg-muted-strong/60 grid size-7 shrink-0 place-items-center rounded-full outline-none focus-visible:outline-2"
+            >
+              <ChevronDown className="size-3.5" aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuItem onSelect={onRename}>
               <Pencil aria-hidden="true" />
               Rename
@@ -1217,9 +1432,9 @@ function FieldHeader({
                 </DropdownMenuItem>
               </>
             )}
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
   );
 }

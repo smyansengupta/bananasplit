@@ -9,7 +9,10 @@ import { requireUser } from "@/lib/auth/session";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
 import { ACCEPT_ERROR_MESSAGES } from "@/lib/invitations";
 import { clubRoleHref, orgStepHref, START_HREF } from "@/lib/onboarding/steps";
+import { isClubPlanId } from "@/lib/billing/plans";
 import { isValidTimeZone } from "@/lib/profile/timezone";
+import { changeOrgPlan } from "@/server/billing/change-plan";
+import { withOrgTx } from "@/server/db/context";
 import { getOnboardingProfile, markProfileSetupComplete } from "@/server/onboarding/profile";
 import { ensurePersonalSpace } from "@/server/personal/space";
 import { updateOwnProfile } from "@/server/profiles/service";
@@ -46,13 +49,21 @@ export async function createOrganizationAction(
   });
   if (!result.ok) return { error: result.error };
 
+  // The plan picked on Pricing: the trial still runs in full, then this plan.
+  const plan = field(formData, "plan");
+  if (isClubPlanId(plan)) {
+    await withOrgTx(result.orgId, ({ db }) =>
+      changeOrgPlan(db, result.orgId, plan === "club" ? "CLUB" : "SOCIETY"),
+    );
+  }
+
   await trackServer(FUNNEL_EVENTS.organizationCreated, {
     flow: field(formData, "flow") === "onboarding" ? "onboarding" : "app",
   });
   await setActiveOrgCookie(result.orgId);
-  // From onboarding, setting it up continues at Import (ORG_STEPS, the profile
-  // last); basics, before it, is only for going back.
-  if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, "import"));
+  // From onboarding, setting it up continues at Invite (ORG_FLOW); basics,
+  // before it, is only for going back.
+  if (field(formData, "flow") === "onboarding") redirect(orgStepHref(result.slug, "invite"));
   redirect(`/app/${result.slug}`);
 }
 

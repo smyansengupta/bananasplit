@@ -338,7 +338,7 @@ describe("messy documents", () => {
   it("gives up rather than inventing a chart out of prose", () => {
     const { parse, report } = parseOrgChartText(
       [
-        "Our club runs on trust and a shared calendar.",
+        "Our organization runs on trust and a shared calendar.",
         "Everyone pitches in on workshops, and we meet on Sunday evenings",
         "to talk about what went well and what did not.",
         "Ask in the Slack channel if you want to help with something.",

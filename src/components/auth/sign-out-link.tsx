@@ -6,14 +6,17 @@ import { useState } from "react";
 /**
  * Signs out from anywhere a plain button or link fits: the "Signed in as"
  * line, the already-signed-in screen, the RSVP and home page bars. Lands on
- * log in, ready for another account.
+ * log in, ready for another account (or `redirectTo`, e.g. log in coming
+ * back to an invite).
  */
 export function SignOutLink({
   className,
   children = "Sign out",
+  redirectTo = "/sign-in",
 }: {
   className?: string;
   children?: React.ReactNode;
+  redirectTo?: string;
 }) {
   const [pending, setPending] = useState(false);
   return (
@@ -26,7 +29,7 @@ export function SignOutLink({
       disabled={pending}
       onClick={() => {
         setPending(true);
-        signOut({ redirectTo: "/sign-in" }).catch(() => setPending(false));
+        signOut({ redirectTo }).catch(() => setPending(false));
       }}
     >
       {pending ? "Signing out…" : children}

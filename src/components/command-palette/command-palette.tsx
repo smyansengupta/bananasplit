@@ -6,7 +6,13 @@ import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 
+import { addLinkAction } from "@/app/app/[orgSlug]/links/actions";
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
+import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
+import { rememberLinkOrigin } from "@/components/links/pending-link";
+import { refFromPath } from "@/lib/links";
+import { parseQuickAdd } from "@/lib/tasks/quick-add";
+import { localDateKey } from "@/lib/tasks/dates";
 import { usePins } from "@/components/pins/pins-context";
 import { Button } from "@/components/ui/button";
 import { CommandDialog, CommandList } from "@/components/ui/command";
@@ -27,7 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { buildCatalog, type PaletteSection } from "./catalog";
-import { paletteGroups, type PaletteItem } from "./palette-groups";
+import { CREATE_KEYS, paletteGroups, type PaletteItem } from "./palette-groups";
 import { useModKey } from "./use-mod-key";
 import { useWorkspaceSearch, type Searcher } from "./use-workspace-search";
 
@@ -179,8 +185,10 @@ export function CommandPalette({
 
   async function newNote() {
     try {
+      const from = refFromPath(window.location.pathname);
       const res = await createNote(orgId);
       if (res.noteId) {
+        if (from) await addLinkAction(orgId, orgSlug, from, { kind: "note", id: res.noteId });
         router.push(`/app/${orgSlug}/notes/${res.noteId}`);
         return;
       }
@@ -194,8 +202,33 @@ export function CommandPalette({
     }
   }
 
+  /**
+   * "New task: Order bolts fri": made right here, yours, due when the text
+   * says, and linked to the page you're on when it's one thing (a meeting,
+   * a note). The toast opens it.
+   */
+  async function newTask(text: string) {
+    const from = refFromPath(window.location.pathname);
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const parsed = parseQuickAdd(text, localDateKey(new Date(), zone), []);
+    const result = await createTask(orgId, { title: parsed.title || text, dueDate: parsed.dueKey });
+    if (result.error || !("taskId" in result) || !result.taskId) {
+      toast({ title: result.error ?? "Couldn't add that task.", tone: "error" });
+      return;
+    }
+    const taskId = result.taskId;
+    if (from) await addLinkAction(orgId, orgSlug, from, { kind: "task", id: taskId });
+    toast({
+      title: from ? "Task added and linked" : "Task added",
+      action: { label: "Open", run: () => router.push(`/app/${orgSlug}/tasks/${taskId}`) },
+    });
+    router.refresh();
+  }
+
   function run(item: PaletteItem, newTab = false) {
     const command = item.command;
+    // Made from the Create group: link it to this page once it exists.
+    if (item.key.startsWith("create:") && !newTab) rememberLinkOrigin(item.key.slice(7));
     if (command.type === "href") {
       if (newTab) {
         window.open(command.href, "_blank", "noopener");
@@ -210,6 +243,7 @@ export function CommandPalette({
     if (command.type === "pin") pins?.openPicker();
     else if (command.type === "theme") setTheme(command.theme);
     else if (command.type === "shortcuts") window.dispatchEvent(new Event(OPEN_SHORTCUTS_EVENT));
+    else if (command.type === "create-task") void newTask(command.text);
     else void newNote();
   }
 
@@ -233,6 +267,16 @@ export function CommandPalette({
       event.preventDefault();
       changeScope("all");
       return;
+    }
+    // Alt P / Alt T: make the quick poll or the task from what's typed.
+    if (event.altKey && !event.ctrlKey && !event.metaKey) {
+      const wanted = Object.entries(CREATE_KEYS).find(([, k]) => k === event.key.toLowerCase());
+      const item = wanted && items.find((i) => i.key === wanted[0]);
+      if (item) {
+        event.preventDefault();
+        run(item);
+        return;
+      }
     }
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();

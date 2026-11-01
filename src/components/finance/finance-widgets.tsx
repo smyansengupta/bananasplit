@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Check,
   FileSpreadsheet,
-  ListChecks,
   PiggyBank,
   ReceiptText,
   Target,
@@ -21,10 +20,11 @@ import { TrendChart } from "@/components/reports/charts/trend-chart";
 import { Button } from "@/components/ui/button";
 import { BlockCard } from "@/components/ui/block-card";
 import { Gauge, MixBar, TickMeter } from "@/components/ui/meters";
+import { metaLine } from "@/components/ui/meta-list";
 import { IconChip } from "@/components/ui/stat";
 import type { DashboardData, DashboardTransaction } from "@/app/app/[orgSlug]/finance/queries";
 import { formatCents, formatDollars } from "@/lib/finance/money";
-import { SETUP_STEPS, stepDone, type FinanceSetupState } from "@/lib/finance/setup";
+import type { FinanceSetupState } from "@/lib/finance/setup";
 import type { WidgetTypeId } from "@/lib/finance/widgets";
 import { cn } from "@/lib/utils";
 
@@ -118,7 +118,7 @@ function TxList({ rows, orgSlug }: { rows: DashboardTransaction[]; orgSlug: stri
         const Icon = inbound ? ArrowDownLeft : ArrowUpRight;
         return (
           <li key={t.id}>
-            <Link href={`/app/${orgSlug}/finance/transactions`} className={rowClass}>
+            <Link href={`/app/${orgSlug}/finance/transactions?open=${t.id}`} className={rowClass}>
               <span
                 className={cn(
                   "grid size-8 shrink-0 place-items-center rounded-full",
@@ -128,10 +128,9 @@ function TxList({ rows, orgSlug }: { rows: DashboardTransaction[]; orgSlug: stri
                 <Icon className="size-4" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{t.description}</span>
+                <span className="block text-sm font-medium break-words">{t.description}</span>
                 <span className="text-muted-foreground block text-xs">
-                  {shortDate.format(new Date(t.occurredAt))}
-                  {t.categoryName ? ` · ${t.categoryName}` : ""}
+                  {metaLine([shortDate.format(new Date(t.occurredAt)), t.categoryName])}
                 </span>
               </span>
               <span className={cn("text-sm font-semibold tabular-nums", inbound && "text-success")}>
@@ -164,8 +163,8 @@ function Shortcut({
     >
       <IconChip icon={icon} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{label}</span>
-        <span className="text-muted-foreground block truncate text-xs">{detail}</span>
+        <span className="block text-sm font-semibold break-words">{label}</span>
+        <span className="text-muted-foreground block text-xs break-words">{detail}</span>
       </span>
       <ArrowRight
         className="text-muted-foreground size-4 shrink-0 transition-transform group-hover/sc:translate-x-0.5"
@@ -208,7 +207,7 @@ function BudgetWidget({ data, base }: { data: DashboardData; base: string }) {
       <div className="grid gap-5 @md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)] @md:items-start">
         <BlockCard
           tone="goal"
-          kicker={data.period ? `Budget · ${data.period.label}` : "Budget"}
+          kicker={data.period?.label}
           className="min-h-0 p-4.5"
           action={
             <Link
@@ -224,10 +223,10 @@ function BudgetWidget({ data, base }: { data: DashboardData; base: string }) {
             <Gauge value={pct} caption={spent > total ? "over" : "spent"} size={112} />
             <div className="min-w-0">
               <p className="display-title text-[19px]">
-                {money(spent)} of {money(total)}
+                {left >= 0 ? `${money(left)} left` : `${money(-left)} over`}
               </p>
               <p className="mt-1 text-[13px] text-(--meta)">
-                {left >= 0 ? `${money(left)} left to spend` : `${money(-left)} over budget`}
+                {money(spent)} of {money(total)} spent
               </p>
             </div>
           </div>
@@ -239,14 +238,18 @@ function BudgetWidget({ data, base }: { data: DashboardData; base: string }) {
             return (
               <div key={c.id} className="space-y-1.5">
                 <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="truncate font-medium">{c.name}</span>
+                  <span className="min-w-0 font-medium break-words">{c.name}</span>
                   <span
                     className={cn(
                       "shrink-0 text-[13px] tabular-nums",
                       over ? "text-destructive font-semibold" : "text-muted-foreground",
                     )}
                   >
-                    {money(c.spentCents)} of {money(c.allocatedCents)}
+                    {c.allocatedCents === 0
+                      ? money(c.spentCents)
+                      : over
+                        ? `${money(c.spentCents - c.allocatedCents)} over`
+                        : `${money(c.allocatedCents - c.spentCents)} left`}
                   </span>
                 </div>
                 {c.allocatedCents > 0 ? (
@@ -265,7 +268,7 @@ function BudgetWidget({ data, base }: { data: DashboardData; base: string }) {
               </div>
             );
           })}
-          <p className="text-muted-foreground pt-0.5 text-xs">One tick per {money(unit)}</p>
+          <p className="text-muted-foreground pt-0.5 text-xs">1 tick = {money(unit)}</p>
         </div>
       </div>
     </div>
@@ -276,12 +279,11 @@ export function WidgetBody({
   type,
   data,
   orgSlug,
-  setup,
 }: {
   type: WidgetTypeId;
   data: DashboardData;
   orgSlug: string;
-  /** Where finance setup stands (the setup widget). */
+  /** Kept for callers; setup has its own banner now, not a widget. */
   setup?: FinanceSetupState;
 }) {
   const base = `/app/${orgSlug}/finance`;
@@ -308,12 +310,7 @@ export function WidgetBody({
       );
     case "allocated": {
       const spent = data.categories.reduce((sum, c) => sum + c.spentCents, 0);
-      return (
-        <Big
-          value={money(data.totalAllocatedCents)}
-          sub={`${money(spent)} spent of it`}
-        />
-      );
+      return <Big value={money(data.totalAllocatedCents)} sub={`${money(spent)} spent of it`} />;
     }
     case "owed":
       return (
@@ -321,10 +318,10 @@ export function WidgetBody({
           value={money(data.outstandingReimbursementsCents)}
           sub={
             <Link
-              href={`/app/${orgSlug}/finance/transactions?kind=EXPENSE`}
+              href={`/app/${orgSlug}/finance/transactions?view=pay`}
               className="hover:text-foreground underline-offset-4 hover:underline"
             >
-              Expenses not yet paid back
+              Not paid back yet
             </Link>
           }
         />
@@ -336,7 +333,7 @@ export function WidgetBody({
           sub={
             data.pendingApproval.count > 0 ? (
               <Link
-                href={`/app/${orgSlug}/finance/transactions?status=SUBMITTED`}
+                href={`/app/${orgSlug}/finance/transactions?view=review`}
                 className="hover:text-foreground underline-offset-4 hover:underline"
               >
                 {money(data.pendingApproval.cents)} to review
@@ -420,7 +417,7 @@ export function WidgetBody({
             {rows.map((r) => (
               <li key={r.label} className="flex min-w-0 items-center gap-2">
                 <LegendSwatch shape="rect" color={r.color} />
-                <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                <span className="min-w-0 flex-1 break-words">{r.label}</span>
                 <b className="font-semibold tabular-nums">{money(r.cents)}</b>
               </li>
             ))}
@@ -482,10 +479,6 @@ export function WidgetBody({
               </span>
             </div>
           )}
-          <p className="text-muted-foreground text-xs">
-            Pledged money never counts toward the balance
-            {data.sponsorshipCreditsCents > 0 ? ", and credits never do" : ""}.
-          </p>
         </div>
       );
     }
@@ -555,11 +548,11 @@ export function WidgetBody({
         <ul className="divide-border/70 divide-y">
           {data.reimbursementQueue.map((t) => (
             <li key={t.id}>
-              <Link href={`${base}/transactions?status=${t.status}`} className={rowClass}>
+              <Link href={`${base}/transactions?open=${t.id}`} className={rowClass}>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{t.description}</span>
-                  <span className="text-muted-foreground block truncate text-xs">
-                    {t.submitter} · {shortDate.format(new Date(t.occurredAt))}
+                  <span className="block text-sm font-medium break-words">{t.description}</span>
+                  <span className="text-muted-foreground block text-xs">
+                    {metaLine([t.submitter, shortDate.format(new Date(t.occurredAt))])}
                   </span>
                 </span>
                 <TransactionStatusBadge status={t.status} label={STATUS_LABEL[t.status]} />
@@ -577,7 +570,7 @@ export function WidgetBody({
           <Shortcut
             href={`${base}/import`}
             icon={FileSpreadsheet}
-            label="Import a spreadsheet"
+            label="Import"
             detail="Bank exports, PDFs, an old sheet"
           />
           <Shortcut
@@ -587,7 +580,7 @@ export function WidgetBody({
             detail="What each category may spend"
           />
           <Shortcut
-            href={`${base}/transactions?status=SUBMITTED`}
+            href={`${base}/transactions?view=review`}
             icon={ReceiptText}
             label="Requests to review"
             detail={
@@ -596,49 +589,7 @@ export function WidgetBody({
                 : "Nothing waiting"
             }
           />
-          <Shortcut
-            href={`${base}/setup`}
-            icon={ListChecks}
-            label="Setup guide"
-            detail="Budget year, balance, treasurers"
-          />
         </div>
       );
-    case "setup": {
-      if (!setup)
-        return <ChartEmpty text="Open the setup guide to see what's left" icon={ListChecks} />;
-      return (
-        <ul className="space-y-0.5">
-          {SETUP_STEPS.map((step) => {
-            const ok = stepDone(setup, step.id);
-            return (
-              <li key={step.id}>
-                <Link href={`${base}/setup`} className={cn(rowClass, "py-2")}>
-                  <span
-                    className={cn(
-                      "grid size-[22px] shrink-0 place-items-center rounded-full",
-                      ok
-                        ? "bg-block-goal text-block-goal-foreground"
-                        : "ring-input ring-[1.5px] ring-inset",
-                    )}
-                  >
-                    {ok && <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />}
-                  </span>
-                  <span
-                    className={cn("min-w-0 flex-1 truncate text-sm", ok && "text-muted-foreground")}
-                  >
-                    {step.title}
-                    {ok && <span className="sr-only"> (done)</span>}
-                  </span>
-                  {!ok && !step.core && (
-                    <span className="text-muted-foreground text-xs">Optional</span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      );
-    }
   }
 }

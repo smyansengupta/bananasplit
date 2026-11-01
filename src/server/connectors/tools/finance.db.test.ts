@@ -136,7 +136,10 @@ describe("list_my_reimbursements", () => {
     await expect(listMyReimbursements(session, { space: personalId })).rejects.toBeInstanceOf(
       SpaceRefusedError,
     );
-    expect((await listMyReimbursements(session, { space: pausedId })).total).toBe(0);
+    // A trial that has ended is on Team Free, which has no Finance.
+    await expect(listMyReimbursements(session, { space: pausedId })).rejects.toBeInstanceOf(
+      SpaceRefusedError,
+    );
     await expect(listMyReimbursements(session, { space: other.id })).rejects.toBeInstanceOf(
       NotFoundError,
     );

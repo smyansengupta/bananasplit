@@ -1,5 +1,6 @@
 import { FinanceActions } from "@/components/finance/finance-actions";
 import { PageHeader } from "@/components/page-header";
+import { BarSlotProvider } from "@/components/ui/bar-slot";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { can } from "@/lib/auth/permissions";
@@ -7,14 +8,16 @@ import { spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
-import { countAwaitingApproval, getCategoryOptions, getOrgPeriods } from "./queries";
+import { getCategoryOptions, getOrgPeriods } from "./queries";
 
 /**
- * Every finance page's header: the title and a live line (the budget year,
- * and how many requests wait for review); Add transaction (Request a
- * reimbursement for a member) with Import and the setup guide in its "…"
- * menu; and, for owners, admins and treasurers, the pages they use day to day as
- * tabs. A member only has My reimbursements, so they get no tabs.
+ * Every finance page's header: the title and, for the treasurer, one short
+ * line (the budget year and how many requests wait); Add transaction
+ * (Request a reimbursement for a member) with the other entry, Import and
+ * Setup in its chevron; and, for owners, admins and treasurers, the pages as
+ * tabs. A member only has their own requests, so they get no tabs. The tabs
+ * are one bar with the page's own controls on its right (<InBar>: the
+ * dashboard's Customize, the transactions' Filters, search and Export).
  */
 export default async function FinanceLayout({
   params,
@@ -27,26 +30,19 @@ export default async function FinanceLayout({
   if (!spaceIncludes(org, "finance")) return children;
   const isFinance = can({ role }, "finance.manage");
   // For the header's new-entry dialog (which period, which category).
-  const { periods, categories, toReview } = await withOrgTx(org.id, async ({ db }) => {
+  const { periods, categories } = await withOrgTx(org.id, async ({ db }) => {
     const periods = await getOrgPeriods(db, org.id);
     return {
       periods,
       // Names only (no amounts): a member opens this layout too.
       categories: await getCategoryOptions(db, periods),
-      // The header's live line: requests waiting on an owner, admin or treasurer.
-      toReview: isFinance ? await countAwaitingApproval(db, org.id) : 0,
     };
   }).catch(handleAuthErrorInPage);
   const base = `/app/${orgSlug}/finance`;
   const active = periods.find((p) => p.isActive);
-  const summary = isFinance
-    ? [
-        active?.label ?? "No budget year yet",
-        toReview > 0
-          ? `${toReview} ${toReview === 1 ? "request" : "requests"} to review`
-          : "nothing to review",
-      ].join(" · ")
-    : "Your expenses, and what the organization owes you";
+  // The budget year, for the people who run the money. Requests waiting are
+  // counted on the sidebar and in the Inbox, not here as well.
+  const summary = isFinance ? active?.label : undefined;
 
   return (
     <div className="space-y-7.5">
@@ -70,7 +66,9 @@ export default async function FinanceLayout({
             }))}
           />
         }
-        tabs={
+      />
+      <BarSlotProvider
+        bar={
           isFinance ? (
             <PageTabs
               label="Finance"
@@ -81,13 +79,14 @@ export default async function FinanceLayout({
                 ...(spaceIncludes(org, "sponsorships")
                   ? [{ label: "Sponsorships", href: `${base}/sponsorships` }]
                   : []),
-                { label: "My reimbursements", href: `${base}/my-reimbursements` },
+                { label: "My requests", href: `${base}/my-reimbursements` },
               ]}
             />
-          ) : undefined
+          ) : null
         }
-      />
-      {children}
+      >
+        {children}
+      </BarSlotProvider>
     </div>
   );
 }

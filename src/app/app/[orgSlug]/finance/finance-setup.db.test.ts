@@ -24,7 +24,7 @@ import { withOrgTx, withSystemOrgTx } from "@/server/db/context";
 import { createBudgetPeriod, deleteBudgetPeriod, deleteCategory, startBudget } from "./periods-actions";
 import { getTransactions } from "./queries";
 import { createSponsor, createSponsorship, deleteSponsor, deleteSponsorship } from "./sponsorships-actions";
-import { createTransaction, deleteTransaction, restoreTransaction, submitExpense } from "./transactions-actions";
+import { createTransaction, deleteTransaction, restoreTransaction } from "./transactions-actions";
 
 interface Person {
   id: string;
@@ -84,7 +84,7 @@ describe("finance with nothing set up", () => {
     if (!reachable) return;
     as(people.member);
     const early = await createTransaction(orgId, expense("Pizza", 4_200));
-    expect(early.error).toMatch(/treasurer hasn't set up the budget/);
+    expect(early.error).toMatch(/Finance isn't set up yet/);
 
     as(people.treasurer);
     const first = await createTransaction(orgId, {
@@ -115,12 +115,13 @@ describe("finance with nothing set up", () => {
   it("delete hides a transaction everywhere and undo brings it back; members delete only their own open requests", async () => {
     if (!reachable) return;
     as(people.member);
+    // A request goes straight to the treasurer (SUBMITTED) when it's made.
     const mine = await createTransaction(orgId, expense("Poster printing", 1_500));
     expect(mine.error).toBeUndefined();
-    await submitExpense(orgId, mine.transactionId!);
 
+    // Another member can't even see it (members read only their own money rows).
     as(people.member2);
-    expect((await deleteTransaction(orgId, mine.transactionId!)).error).toMatch(/Only a treasurer/);
+    expect((await deleteTransaction(orgId, mine.transactionId!)).error).toMatch(/not found/);
 
     as(people.member);
     expect(await deleteTransaction(orgId, mine.transactionId!)).toEqual({ transactionId: mine.transactionId });

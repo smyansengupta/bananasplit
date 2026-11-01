@@ -1,8 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/back-link";
-import { Loader2, X } from "@/components/icons";
-import Link from "next/link";
+import { ChevronRight, Loader2, X } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 
@@ -11,19 +10,15 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { pollSlots } from "@/lib/calendar/poll-slots";
 
 import { useViewerTimeZone } from "./hooks";
 import { dayLabel, intervalParts, timeOfDayLabel, timeZoneDisplayName } from "./poll-format";
+import { MemberMultiPicker, type CalendarMember } from "./member-picker";
 import { TimeZoneCombobox } from "./time-zone-combobox";
 
 const MAX_SLOTS = 2000;
@@ -43,18 +38,27 @@ export function PollForm({
   orgId,
   orgSlug,
   defaultTimezone,
+  defaultTitle = "",
+  members = [],
+  defaultAskIds = [],
 }: {
   orgId: string;
   orgSlug: string;
+  /** Who can be asked (members of the space); none in Personal. */
+  members?: CalendarMember[];
+  /** From the meeting form: the people it was going to invite. */
+  defaultAskIds?: string[];
   /** The org's timezone; the viewer's own is the fallback. */
   defaultTimezone?: string;
+  /** From the meeting form's "Don't know yet, find a time": its title carries over. */
+  defaultTitle?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const deviceZone = useViewerTimeZone(defaultTimezone ?? "UTC");
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState("");
   const [dates, setDates] = useState<Date[]>([]);
   const [dailyStart, setDailyStart] = useState("09:00");
@@ -62,6 +66,8 @@ export function PollForm({
   const [granularity, setGranularity] = useState<15 | 30 | 60>(30);
   const [duration, setDuration] = useState(60);
   const [closesAt, setClosesAt] = useState("");
+  const [askIds, setAskIds] = useState<string[]>(defaultAskIds);
+  const [more, setMore] = useState(false);
   const [chosenZone, setChosenZone] = useState<string | null>(defaultTimezone ?? null);
   const timezone = chosenZone ?? deviceZone;
   const [today] = useState(() => {
@@ -148,6 +154,7 @@ export function PollForm({
         durationMinutes: duration,
         // datetime-local is the viewer's wall time; send the instant.
         closesAt: closesAt ? new Date(closesAt).toISOString() : null,
+        askUserIds: askIds,
       });
       if (result.error) {
         setError(result.error);
@@ -162,13 +169,10 @@ export function PollForm({
       <div className="space-y-3">
         <BackLink href={`/app/${orgSlug}/calendar/find-a-time`} label="Find a time" />
         {/* Named as the sidebar section and the command palette name it. */}
-        <PageHeader
-          title="Find a time"
-          description="Offer some days and hours; people mark when they're free, and an admin schedules the best time."
-        />
+        <PageHeader title="Find a time" />
       </div>
 
-      <Section title="What it's for">
+      <Section title="About">
         <div className="grid gap-1.5">
           <Label htmlFor="poll-title">Title</Label>
           <Input
@@ -182,9 +186,7 @@ export function PollForm({
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="poll-description">
-            Description <span className="text-muted-foreground font-normal">(optional)</span>
-          </Label>
+          <Label htmlFor="poll-description">Description</Label>
           <Textarea
             id="poll-description"
             value={description}
@@ -194,6 +196,24 @@ export function PollForm({
             placeholder="Anything people should know before they answer"
           />
         </div>
+        {members.length > 0 && (
+          <div className="grid gap-1.5">
+            <Label htmlFor="poll-ask">Ask</Label>
+            <MemberMultiPicker
+              id="poll-ask"
+              members={members}
+              selectedIds={askIds}
+              onChange={setAskIds}
+              placeholder="Anyone with the link"
+            />
+            {askIds.length > 0 && (
+              <p className="text-muted-foreground text-xs">
+                {askIds.length === 1 ? "They're" : `All ${askIds.length} are`} notified when you
+                create it.
+              </p>
+            )}
+          </div>
+        )}
       </Section>
 
       <Section title="Days and hours">
@@ -219,11 +239,7 @@ export function PollForm({
                 ? "No days picked yet"
                 : `${dateKeys.length} ${dateKeys.length === 1 ? "day" : "days"} picked`}
             </span>
-            {dateKeys.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Pick one or more days on the calendar.
-              </p>
-            ) : (
+            {dateKeys.length === 0 ? null : (
               <>
                 <ul className="flex flex-wrap gap-1.5" aria-label="Days picked">
                   {dateKeys.map((key) => (
@@ -284,92 +300,141 @@ export function PollForm({
               {windowError}
             </p>
           )}
-          <div className="grid gap-1.5 sm:col-span-2">
-            <Label htmlFor="poll-timezone">Time zone for these hours</Label>
-            <TimeZoneCombobox
-              id="poll-timezone"
-              value={timezone}
-              onChange={setChosenZone}
-              orgTimeZone={defaultTimezone}
-              deviceTimeZone={deviceZone}
-              aria-describedby="poll-timezone-help"
-            />
-            <p id="poll-timezone-help" className="text-muted-foreground text-xs">
-              {localEcho
-                ? `${timeOfDayLabel(dailyStart)} – ${timeOfDayLabel(dailyEnd)} in ${timeZoneDisplayName(timezone)} is ${localEcho} for you. Everyone sees the times in their own zone.`
-                : "Everyone sees the times in their own time zone."}
-            </p>
-          </div>
         </div>
       </Section>
 
       <Section title="Options">
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="poll-duration">Meeting length (minutes)</Label>
-            <Input
-              id="poll-duration"
-              type="number"
-              inputMode="numeric"
-              min={15}
-              max={1440}
-              step={15}
-              value={Number.isFinite(duration) ? duration : ""}
-              aria-invalid={durationError ? true : undefined}
-              aria-describedby="poll-duration-help"
-              onChange={(e) => setDuration(e.target.valueAsNumber)}
-            />
-            <p
-              id="poll-duration-help"
-              className={
-                durationError ? "text-destructive text-xs" : "text-muted-foreground text-xs"
-              }
-            >
-              {durationError ?? "The best times are windows this long."}
-            </p>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="poll-granularity">Time step</Label>
-            <Select
-              value={String(granularity)}
-              onValueChange={(v) => setGranularity(Number(v) as 15 | 30 | 60)}
-            >
-              <SelectTrigger
-                id="poll-granularity"
-                className="w-full"
-                aria-describedby="poll-granularity-help"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="15">Every 15 minutes</SelectItem>
-                <SelectItem value="30">Every 30 minutes</SelectItem>
-                <SelectItem value="60">Every hour</SelectItem>
-              </SelectContent>
-            </Select>
-            <p id="poll-granularity-help" className="text-muted-foreground text-xs">
-              How finely people mark their time.
-            </p>
-          </div>
           <div className="grid gap-1.5 sm:col-span-2">
-            <Label htmlFor="poll-closes">
-              Stop taking answers{" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
-            </Label>
-            <Input
-              id="poll-closes"
-              type="datetime-local"
-              value={closesAt}
-              onChange={(e) => setClosesAt(e.target.value)}
-              aria-describedby="poll-closes-help"
-              className="sm:max-w-xs"
-            />
-            <p id="poll-closes-help" className="text-muted-foreground text-xs">
-              In your time zone. Leave empty to keep it open until someone schedules a time.
-            </p>
+            <span id="poll-duration-label" className="text-sm leading-none font-medium">
+              Meeting length
+            </span>
+            {/* The usual lengths as one click each; anything else goes in the box. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                role="radiogroup"
+                aria-labelledby="poll-duration-label"
+                className={segmentedTrack}
+              >
+                {[30, 45, 60, 90].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="radio"
+                    aria-checked={duration === m}
+                    onClick={() => setDuration(m)}
+                    className={segmentedItem(duration === m)}
+                  >
+                    {m < 60 ? `${m} min` : m === 60 ? "1 hr" : "1.5 hr"}
+                  </button>
+                ))}
+              </div>
+              <Input
+                id="poll-duration"
+                type="number"
+                inputMode="numeric"
+                min={15}
+                max={1440}
+                step={15}
+                value={Number.isFinite(duration) ? duration : ""}
+                aria-label="Meeting length in minutes"
+                aria-invalid={durationError ? true : undefined}
+                aria-describedby={durationError ? "poll-duration-help" : undefined}
+                onChange={(e) => setDuration(e.target.valueAsNumber)}
+                className="h-9 w-24"
+              />
+              <span className="text-muted-foreground text-sm">min</span>
+            </div>
+            {durationError && (
+              <p id="poll-duration-help" className="text-destructive text-xs">
+                {durationError}
+              </p>
+            )}
           </div>
         </div>
       </Section>
+
+      {/* The rarely changed bits, folded behind More (the workspace plan):
+          the time step, the hours' time zone (the organization's, or yours)
+          and a closing time. */}
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setMore((v) => !v)}
+          aria-expanded={more}
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm font-medium transition-colors"
+        >
+          <ChevronRight
+            className={cn("size-4 transition-transform duration-150", more && "rotate-90")}
+            aria-hidden="true"
+          />
+          More
+          {!more && (
+            <span className="font-normal">
+              {granularity === 60 ? "1 hr" : `${granularity} min`} steps,{" "}
+              {timeZoneDisplayName(timezone)}
+              {closesAt ? ", closes on a date" : ""}
+            </span>
+          )}
+        </button>
+        {more && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:col-span-2">
+              <span id="poll-granularity-label" className="text-sm leading-none font-medium">
+                Time step
+              </span>
+              <div
+                role="radiogroup"
+                aria-labelledby="poll-granularity-label"
+                className={cn(segmentedTrack, "self-start")}
+              >
+                {([15, 30, 60] as const).map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    role="radio"
+                    aria-checked={granularity === g}
+                    onClick={() => setGranularity(g)}
+                    className={segmentedItem(granularity === g)}
+                  >
+                    {g === 60 ? "1 hr" : `${g} min`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor="poll-timezone">Time zone</Label>
+              <TimeZoneCombobox
+                id="poll-timezone"
+                value={timezone}
+                onChange={setChosenZone}
+                orgTimeZone={defaultTimezone}
+                deviceTimeZone={deviceZone}
+                aria-describedby="poll-timezone-help"
+              />
+              <p id="poll-timezone-help" className="text-muted-foreground text-xs">
+                {localEcho
+                  ? `${timeOfDayLabel(dailyStart)} – ${timeOfDayLabel(dailyEnd)} in ${timeZoneDisplayName(timezone)} is ${localEcho} for you. Everyone sees the times in their own zone.`
+                  : "Everyone sees the times in their own time zone."}
+              </p>
+            </div>
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor="poll-closes">Stop taking answers</Label>
+              <Input
+                id="poll-closes"
+                type="datetime-local"
+                value={closesAt}
+                onChange={(e) => setClosesAt(e.target.value)}
+                aria-describedby="poll-closes-help"
+                className="sm:max-w-xs"
+              />
+              <p id="poll-closes-help" className="text-muted-foreground text-xs">
+                Your time zone.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="space-y-3 border-t pt-4">
         <p
@@ -396,12 +461,9 @@ export function PollForm({
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" asChild>
-            <Link href={`/app/${orgSlug}/calendar/find-a-time`}>Cancel</Link>
-          </Button>
           <Button type="submit" disabled={isPending || !canSubmit}>
             {isPending && <Loader2 aria-hidden className="size-4 animate-spin" />}
-            Create poll
+            Create
           </Button>
         </div>
       </div>

@@ -93,11 +93,11 @@ export function TextingArt({ size = "md" }: { size?: ArtSize }) {
       </svg>
       <Chip className="top-[24%] right-[6%]">
         <Check className="size-4 text-(--tag-forest)" strokeWidth={3} />
-        Task · Book the venue
+        Task: Book the venue
       </Chip>
       <Chip className="right-[10%] bottom-[22%]">
         <Bell className="size-4" />
-        Reminder · Thu 9 AM
+        Reminder: Thu 9 AM
       </Chip>
       <span className="bg-card absolute right-[38%] bottom-4 grid size-10 place-items-center rounded-full shadow-[var(--elevation-1)]">
         <MessageCircle className="size-5" style={{ color: IMESSAGE.blue }} />

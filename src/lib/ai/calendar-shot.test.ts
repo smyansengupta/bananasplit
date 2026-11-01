@@ -18,7 +18,7 @@ const ev = (over: Partial<RawEvent>): RawEvent => ({
 });
 
 describe("normalizeShotEvents", () => {
-  it("keeps a timed event as read, in the club's zone when the image shows none", () => {
+  it("keeps a timed event as read, in the organization's zone when the image shows none", () => {
     const { events } = normalizeShotEvents({ events: [ev({})], notes: [] }, "America/New_York");
     expect(events[0]).toMatchObject({
       allDay: false,

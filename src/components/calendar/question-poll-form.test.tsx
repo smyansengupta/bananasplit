@@ -13,6 +13,10 @@ const { createMock, pushMock } = vi.hoisted(() => ({ createMock: vi.fn(), pushMo
 vi.mock("@/app/app/[orgSlug]/calendar/polls/question-actions", () => ({
   createQuestionPoll: createMock,
 }));
+vi.mock("@/app/app/[orgSlug]/forms/actions", () => ({
+  createFormAction: vi.fn(),
+  saveSettingsAction: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: vi.fn() }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -32,7 +36,8 @@ globalThis.ResizeObserver ??= class {
 const { QuestionPollForm } = await import("./question-poll-form");
 
 const option = (n: number) => screen.getByRole("textbox", { name: `Option ${n}` });
-const submit = () => screen.getByRole("button", { name: "Create poll" }) as HTMLButtonElement;
+const submit = () =>
+  screen.getByRole("button", { name: "Create and copy link" }) as HTMLButtonElement;
 
 beforeEach(() => {
   createMock.mockResolvedValue({ pollId: "qp_new" });
@@ -77,10 +82,12 @@ describe("QuestionPollForm", () => {
     fireEvent.change(screen.getByLabelText("Question"), { target: { value: "Where to?" } });
     fireEvent.change(option(1), { target: { value: "Park" } });
     fireEvent.change(option(2), { target: { value: "Bowling" } });
+    // The settings sit under Options.
+    fireEvent.click(screen.getByRole("button", { name: "Options" }));
     fireEvent.click(screen.getByRole("switch", { name: "Anonymous voting" }));
     fireEvent.click(screen.getByRole("switch", { name: "Allow more than one choice" }));
     fireEvent.click(screen.getByRole("radio", { name: "1 day" }));
-    expect(screen.getByText(/^Closes .+, your time\./)).toBeTruthy();
+    expect(screen.getByText(/^Closes .+/)).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(submit());
@@ -100,7 +107,7 @@ describe("QuestionPollForm", () => {
     );
     const closesAt = new Date(createMock.mock.calls[0][1].closesAt).getTime();
     expect(closesAt - Date.now()).toBeGreaterThan(23 * 3_600_000);
-    expect(pushMock).toHaveBeenCalledWith("/app/cbc/calendar/polls/qp_new");
+    expect(pushMock).toHaveBeenCalledWith("/app/cbc/forms/polls/qp_new");
   });
 
   it("shows the server's refusal", async () => {

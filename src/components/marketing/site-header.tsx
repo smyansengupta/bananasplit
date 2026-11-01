@@ -32,6 +32,13 @@ export function SiteHeader({ signedIn = false }: { signedIn?: boolean }) {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-1.5">
+          {/* The section links fold away below lg; Pricing stays, it's what people look for. */}
+          <Link
+            href="/pricing"
+            className="text-muted-foreground hover:text-foreground px-3 text-[14px] font-medium whitespace-nowrap transition-colors lg:hidden"
+          >
+            Pricing
+          </Link>
           {signedIn ? (
             <>
               <SignOutLink

@@ -10,7 +10,7 @@ import { getOnboardingProfile } from "@/server/onboarding/profile";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Your profile · Bananasplit" };
+export const metadata = { title: "Your profile, Bananasplit" };
 
 /**
  * Your profile in an organization you just joined (a code, a link or an

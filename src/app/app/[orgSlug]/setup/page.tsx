@@ -143,7 +143,7 @@ export default async function SetupPage({
 
   const progressLabel = `${state.connectedCount} of ${state.totalCount} connected${
     state.attention.length > 0
-      ? ` · ${state.attention.length} need${state.attention.length === 1 ? "s" : ""} attention`
+      ? `, ${state.attention.length} need${state.attention.length === 1 ? "s" : ""} attention`
       : ""
   }`;
   // The live summary under the title: what is connected, and what is left
@@ -154,7 +154,7 @@ export default async function SetupPage({
   const headerSummary =
     minutesLeft === 0
       ? `All ${state.totalCount} connected and tested`
-      : `${progressLabel} · about ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"} left`;
+      : `${progressLabel}, about ${minutesLeft} minute${minutesLeft === 1 ? "" : "s"} left`;
 
   return (
     <div className="space-y-7.5">
@@ -165,7 +165,7 @@ export default async function SetupPage({
           description={headerSummary}
           actions={
             <Button asChild variant="outline">
-              <Link href={`/app/${orgSlug}/setup/status`}>Connection status</Link>
+              <Link href={`/app/${orgSlug}/integrations`}>Integrations</Link>
             </Button>
           }
         />

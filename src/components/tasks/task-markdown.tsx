@@ -48,6 +48,14 @@ const components: Components = {
         />
       );
     }
+    // A link @ made to something in the space stays in this tab.
+    if (href?.startsWith("/app/")) {
+      return (
+        <a href={href} {...props}>
+          {children}
+        </a>
+      );
+    }
     return (
       <a href={href} target="_blank" rel="noopener noreferrer nofollow" {...props}>
         {children}

@@ -1,9 +1,7 @@
 import {
   CalendarDays,
-  ChevronRight,
   ClipboardCheck,
   Database,
-  FileSpreadsheet,
   Globe,
   Handshake,
   Lightbulb,
@@ -11,7 +9,6 @@ import {
   Package,
   Plus,
   Sheet,
-  ShieldCheck,
   Shirt,
   Table2,
   Upload,
@@ -23,6 +20,7 @@ import {
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
+import { DatabaseFileImport } from "@/components/databases/custom/database-file-import";
 import { NewDatabaseDialog } from "@/components/databases/custom/new-database-dialog";
 import { SyncPanel } from "@/components/databases/sync-panel";
 import { PageHeader } from "@/components/page-header";
@@ -59,15 +57,6 @@ const ICONS: Record<string, IconComponent> = {
   Shirt,
   Handshake,
   Lightbulb,
-};
-
-const DESCRIPTIONS: Record<string, string> = {
-  SESSIONS: "Your meetings and events: the same ones as the calendar.",
-  ATTENDANCE: "Every check-in: who came to which session, and their total for the term.",
-  SIGNUPS: "Your interest or sign-up form: who signed up and whether they came.",
-  BALLOTS: "Poll results, and individual votes where your role may see them.",
-  PEOPLE: "One row per person per term: how often they came, and who stopped coming.",
-  CUSTOM: "A database your organization made.",
 };
 
 /**
@@ -237,7 +226,7 @@ export default async function DatabasesPage({
                   {VISIBILITY_COPY[d.memberVisibility]}
                 </Badge>
               )}
-              {isAdmin && !personal && (
+              {isAdmin && !personal && sourceOf(d) === "Supabase" && (
                 <Badge variant="secondary" title={`Stored in ${sourceOf(d)}`}>
                   <span
                     aria-hidden="true"
@@ -253,7 +242,7 @@ export default async function DatabasesPage({
           </span>
           <span className="heading mt-4 text-[17px]">{d.name}</span>
           <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-            {d.description ?? DESCRIPTIONS[d.kind] ?? ""}
+            {d.description ?? ""}
           </span>
           <span className="mt-auto flex items-baseline gap-1.5 pt-4">
             {muted ? (
@@ -270,34 +259,12 @@ export default async function DatabasesPage({
     );
   };
 
-  // The live summary under the title: what's here, from the counts above.
-  // Polls aren't rows (a poll's rows are its ballots), so they're said apart.
-  const rowTotal = databases
-    .filter((d) => d.kind !== "BALLOTS")
-    .reduce((sum, d) => sum + (counts[d.key] ?? 0), 0);
-  const polls = databases
-    .filter((d) => d.kind === "BALLOTS")
-    .reduce((sum, d) => sum + (counts[d.key] ?? 0), 0);
-  const summary =
-    databases.length === 0
-      ? "None visible to you"
-      : [
-          `${databases.length.toLocaleString()} ${databases.length === 1 ? "database" : "databases"}`,
-          rowTotal === 0
-            ? "no rows yet"
-            : `${rowTotal.toLocaleString()} ${rowTotal === 1 ? "row" : "rows"}`,
-          polls > 0 && `${polls.toLocaleString()} ${polls === 1 ? "poll" : "polls"}`,
-        ]
-          .filter(Boolean)
-          .join(" · ");
-
   const setupRow = "flex flex-wrap items-center gap-x-6 gap-y-3 py-4 first:pt-0 last:pb-0";
 
   return (
     <div className="space-y-7.5">
       <PageHeader
         title={sectionLabel(settings?.sidebar, "databases")}
-        description={summary}
         actions={
           isAdmin && (
             <NewDatabaseDialog orgId={organization.id} orgSlug={orgSlug} personal={personal} />
@@ -310,35 +277,15 @@ export default async function DatabasesPage({
         <EmptyState
           icon={Database}
           title="No databases are visible to you"
-          description="Your organization's owners decide who sees which data, in Admin panel › Privacy."
+          description="Owners choose who sees each one."
         />
       ) : needsSetup && !isAdmin ? (
-        <EmptyState
-          icon={Database}
-          title="No data yet"
-          description="When your organization's admins make a database or import a spreadsheet, it shows up here."
-        />
+        <EmptyState icon={Database} title="No data yet" description="Admins add databases here." />
       ) : needsSetup ? (
         <section aria-labelledby="db-setup" className="space-y-4.5">
-          <div className="space-y-1.5">
-            <h2 id="db-setup" className="heading text-[17px]">
-              {personal ? "Make your first database" : <>Add your organization&apos;s data</>}
-            </h2>
-            <p className="text-muted-foreground flex items-start gap-2 text-sm">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              {personal ? (
-                <>
-                  Everything is stored in Bananasplit and saved as you type: there&apos;s no
-                  database to set up, and only you can see them.
-                </>
-              ) : (
-                <>
-                  Everything is stored in Bananasplit and saved as you type: there&apos;s no
-                  database to set up, and no other organization can see your data.
-                </>
-              )}
-            </p>
-          </div>
+          <h2 id="db-setup" className="heading text-[17px]">
+            {personal ? "Make your first database" : <>Add your organization&apos;s data</>}
+          </h2>
 
           <Card>
             <CardContent>
@@ -348,9 +295,7 @@ export default async function DatabasesPage({
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="font-semibold">Make a database</p>
                     <p className="text-muted-foreground text-sm">
-                      {personal
-                        ? "A reading list, your classes, job applications, anything you keep track of: start blank and add the fields you choose."
-                        : "A member roster, equipment, merch orders, sponsors: start from a template or from scratch, with the fields you choose."}
+                      From a template, a blank spreadsheet or a file you drop here.
                     </p>
                   </div>
                   <NewDatabaseDialog
@@ -365,67 +310,29 @@ export default async function DatabasesPage({
                     }
                   />
                 </li>
-                <li className={setupRow}>
-                  <IconChip icon={Sheet} />
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="font-semibold">Start a spreadsheet</p>
-                    <p className="text-muted-foreground text-sm">
-                      A blank grid of rows and columns to type straight into. Rename the columns, or
-                      turn one into numbers, dates or choices, whenever you like.
-                    </p>
-                  </div>
-                  <NewDatabaseDialog
-                    orgId={organization.id}
-                    orgSlug={orgSlug}
-                    personal={personal}
-                    defaultTemplateId="spreadsheet"
-                    trigger={
-                      <Button variant="outline">
-                        <Sheet aria-hidden="true" />
-                        New spreadsheet
-                      </Button>
-                    }
-                  />
-                </li>
-                <li className={setupRow}>
-                  <IconChip icon={Upload} />
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="font-semibold">Import a spreadsheet</p>
-                    <p className="text-muted-foreground text-sm">
-                      Bring in an Excel workbook (.xlsx), a CSV or a TSV, from Excel, Google Sheets
-                      or Numbers; it becomes a database with a field per column.{" "}
-                      {importable.length > 0 && (
-                        <>
-                          Sign-in sheets and interest forms can go straight into{" "}
-                          {importable.map((d, i) => (
-                            <span key={d.id}>
-                              {i > 0 && " or "}
-                              <Link
-                                href={`/app/${orgSlug}/databases/${d.key}/import`}
-                                className="hover:text-foreground underline underline-offset-2"
-                              >
-                                {d.name}
-                              </Link>
-                            </span>
-                          ))}
-                          .
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <NewDatabaseDialog
-                    orgId={organization.id}
-                    orgSlug={orgSlug}
-                    personal={personal}
-                    defaultMode="import"
-                    trigger={
-                      <Button variant="outline">
-                        <Upload aria-hidden="true" />
-                        Import a spreadsheet
-                      </Button>
-                    }
-                  />
-                </li>
+                {importable.length > 0 && (
+                  <li className={setupRow}>
+                    <IconChip icon={Upload} />
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="font-semibold">Import a sign-in sheet</p>
+                      <p className="text-muted-foreground text-sm">
+                        Straight into{" "}
+                        {importable.map((d, i) => (
+                          <span key={d.id}>
+                            {i > 0 && " or "}
+                            <Link
+                              href={`/app/${orgSlug}/databases/${d.key}/import`}
+                              className="hover:text-foreground underline underline-offset-2"
+                            >
+                              {d.name}
+                            </Link>
+                          </span>
+                        ))}
+                        .
+                      </p>
+                    </div>
+                  </li>
+                )}
                 {/* A club's built-in data: sessions from its calendar, and its website's. */}
                 {!personal && (
                   <>
@@ -434,8 +341,7 @@ export default async function DatabasesPage({
                       <div className="min-w-0 flex-1 space-y-0.5">
                         <p className="font-semibold">Start from the calendar</p>
                         <p className="text-muted-foreground text-sm">
-                          No website? Every event you add to the calendar becomes a session here,
-                          ready for check-ins.
+                          Every event becomes a session, ready for check-ins.
                         </p>
                       </div>
                       <Button asChild variant="outline">
@@ -445,13 +351,9 @@ export default async function DatabasesPage({
                     <li className={setupRow}>
                       <IconChip icon={Globe} />
                       <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="font-semibold">
-                          Already have a website database?{" "}
-                          <span className="text-muted-foreground font-normal">Optional</span>
-                        </p>
+                        <p className="font-semibold">Website database</p>
                         <p className="text-muted-foreground text-sm">
-                          If your site keeps check-ins, sign-ups and votes in Supabase, connect it
-                          and they sync in. You don&apos;t need one to use Databases.
+                          Sync check-ins, sign-ups and votes from Supabase.
                         </p>
                       </div>
                       <Button asChild variant={connecting ? "secondary" : "ghost"}>
@@ -496,7 +398,7 @@ export default async function DatabasesPage({
                 href={`/app/${orgSlug}/databases?all=1`}
                 className="underline underline-offset-2"
               >
-                Show the empty databases anyway
+                Show empty databases
               </Link>
             </p>
           )}
@@ -509,65 +411,26 @@ export default async function DatabasesPage({
             Supabase). Empty built-ins fold away under the list.
           */}
           <section aria-labelledby="db-all" className="space-y-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="db-all" className="sr-only">
-                Databases
-              </h2>
-              <span className="text-muted-foreground flex items-center gap-1.5 text-[13px]">
-                <ShieldCheck className="size-3.5" aria-hidden="true" />
-                Saved as you type. Only {personal ? "you" : "your organization"} can see them.
-              </span>
-            </div>
+            <h2 id="db-all" className="sr-only">
+              Databases
+            </h2>
             <ul className={GRID}>
               {custom.map((d) => card(d))}
               {withData.map((d) => card(d))}
-              {isAdmin && (
-                <li>
-                  <NewDatabaseDialog
-                    orgId={organization.id}
-                    orgSlug={orgSlug}
-                    personal={personal}
-                    trigger={
-                      <button
-                        type="button"
-                        className="text-muted-foreground hover:bg-muted/40 hover:text-foreground border-border rounded-card focus-visible:outline-foreground flex h-full min-h-44 w-full flex-col items-start justify-center gap-3 border-[1.5px] border-dashed p-6 text-left transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
-                      >
-                        <span className="border-input grid size-9 place-items-center rounded-full border-[1.5px] border-dashed">
-                          <Plus className="size-[18px]" aria-hidden="true" />
-                        </span>
-                        <span className="space-y-1">
-                          <span className="text-foreground heading block text-[15px]">
-                            New database
-                          </span>
-                          <span className="flex items-center gap-1.5 text-[13px]">
-                            <FileSpreadsheet className="size-3.5" aria-hidden="true" />
-                            From a template or a spreadsheet
-                          </span>
-                        </span>
-                      </button>
-                    }
-                  />
-                </li>
-              )}
             </ul>
-            {empty.length > 0 &&
-              (withData.length === 0 || showAll ? (
-                <ul className={GRID}>{empty.map((d) => card(d, true))}</ul>
-              ) : (
-                <details className="group">
-                  <summary className="text-muted-foreground hover:text-foreground bg-muted/60 rounded-tile focus-visible:outline-foreground flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm outline-none focus-visible:outline-2 [&::-webkit-details-marker]:hidden">
-                    <ChevronRight
-                      className="size-4 transition-transform group-open:rotate-90"
-                      aria-hidden="true"
-                    />
-                    {empty.length} empty database{empty.length === 1 ? "" : "s"}:{" "}
-                    {empty.map((d) => d.name).join(", ")}
-                  </summary>
-                  <ul className={cn(GRID, "pt-4.5")}>{empty.map((d) => card(d, true))}</ul>
-                </details>
-              ))}
+            {/* The empty ones, quieter, after the rest: one click to open, nothing to unfold. */}
+            {empty.length > 0 && <ul className={GRID}>{empty.map((d) => card(d, true))}</ul>}
           </section>
         </>
+      )}
+
+      {isAdmin && (
+        <DatabaseFileImport
+          orgId={organization.id}
+          orgSlug={orgSlug}
+          personal={personal}
+          fromFile={typeof sp.fromFile === "string" ? sp.fromFile : null}
+        />
       )}
 
       {isAdmin && sync && (
@@ -577,7 +440,7 @@ export default async function DatabasesPage({
           lastError={sync.lastError}
           endpoint={sync.endpoint}
           configError={sync.configError}
-          settingsHref={`/app/${orgSlug}/settings/integrations`}
+          settingsHref={`/app/${orgSlug}/integrations`}
           streams={sync.streams.map((s) => ({
             stream: s.stream,
             label: s.label,
@@ -591,14 +454,13 @@ export default async function DatabasesPage({
       {/* Admins only (databases.write and integrations.write); hidden while the connect panel below is open. */}
       {isAdmin && !sync && !needsSetup && canConnect && !(showAll && connecting && dataStep) && (
         <p className="text-muted-foreground text-sm">
-          Keep check-ins, sign-ups and votes in a website database?{" "}
+          Website database?{" "}
           <Link
             className="hover:text-foreground underline underline-offset-2"
             href={`/app/${orgSlug}/databases?connect=1&all=1#connect`}
           >
             Connect it
-          </Link>{" "}
-          and it syncs by itself.
+          </Link>
         </p>
       )}
       {showAll && connecting && dataStep && !needsSetup && (

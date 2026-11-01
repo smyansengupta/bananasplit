@@ -72,7 +72,7 @@ export function PageHeader({
           )}
         </div>
         {description && (
-          <p className="text-muted-foreground text-[15px] max-md:hidden">{description}</p>
+          <p className="text-muted-foreground text-[15px] max-md:text-[13px]">{description}</p>
         )}
       </div>
       {tabs}

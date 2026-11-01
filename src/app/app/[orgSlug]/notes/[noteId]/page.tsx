@@ -1,6 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 import { notFound } from "next/navigation";
 
+import { LinkedSection } from "@/components/links/linked-section";
 import { NoteEditorShell } from "@/components/notes/note-editor-shell";
 import { handleAuthErrorInPage } from "@/lib/auth/handle-auth-error";
 import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
@@ -85,6 +86,7 @@ export default async function NoteDetailPage({
     <NoteEditorShell
       orgId={org.id}
       orgSlug={orgSlug}
+      linked={<LinkedSection orgId={org.id} orgSlug={orgSlug} at={{ kind: "note", id: note.id }} />}
       canEdit={canEdit}
       events={events}
       collab={collab}

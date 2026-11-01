@@ -21,7 +21,7 @@ export function ReimbursementStats({
 }) {
   return (
     <StatStrip>
-      <Stat icon={HandCoins} value={owed} label="Money owed to you" />
+      <Stat icon={HandCoins} value={owed} label="Owed to you" />
       <Stat
         icon={ReceiptText}
         value={requests}

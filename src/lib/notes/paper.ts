@@ -60,7 +60,7 @@ export const MAX_BAND_TEXT = 200;
 export function bandHeader(note: { title: string; orgName: string; headerText?: string | null }) {
   const own = note.headerText?.trim();
   if (own) return own;
-  return [note.title.trim() || "Untitled note", note.orgName].filter(Boolean).join(" · ");
+  return [note.title.trim() || "Untitled note", note.orgName].filter(Boolean).join(", ");
 }
 
 /** The footer band's text beside the page number: the note's own, else its title. */

@@ -14,127 +14,93 @@ export interface SettingsNavItem {
   href: string;
   /** Icon name (@/components/icons). */
   icon: string;
-  group: SettingsGroup;
   /** Other paths under which this item is active (e.g. invitations under Members). */
   alsoActiveOn?: string[];
   /** Not on the club's plan: the page shows the upgrade screen. */
   locked?: boolean;
 }
 
-export const SETTINGS_GROUPS = [
-  "Organization",
-  "People & access",
-  "Connections",
-  "Records",
-] as const;
-export type SettingsGroup = (typeof SETTINGS_GROUPS)[number];
-
 export interface SettingsSection {
   label: string;
   segment: string;
-  /** One line for the Settings overview cards. */
+  /** One line for the command palette. */
   description: string;
   icon: string;
-  group: SettingsGroup;
   permission?: Permission;
   alsoActiveOn?: string[];
   /** The plan feature the page needs (src/lib/billing/features.ts); none: every plan. */
   feature?: PlanFeature;
   /** Also in a Personal space's settings (General and the danger zone only). */
   personal?: boolean;
-  /** The overview card's line in a Personal space, where it differs. */
-  personalDescription?: string;
 }
 
+/**
+ * One flat list, no group headings: the panel opens on General (the old
+ * tile overview repeated this list). Weekly pulse lives in General's
+ * Schedule card and Storage on the Plan page; their old URLs redirect.
+ */
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     label: "General",
     segment: "general",
-    description: "Organization picture, name, URL and timezone.",
+    description: "Picture, name, URL, timezone and schedule.",
     icon: "Building2",
-    group: "Organization",
     permission: "settings.view",
     personal: true,
+    alsoActiveOn: ["pulse"],
   },
   {
-    label: "Plan and storage",
+    label: "Plan",
     segment: "plan",
-    description: "Your organization's trial, Team or Team Advanced, and what your files use.",
-    personalDescription: "Personal Free or Personal Plus, and what your files use.",
+    description: "Plan and storage.",
     icon: "Gem",
-    group: "Organization",
     permission: "settings.view",
     personal: true,
   },
   {
     label: "Sidebar",
     segment: "sidebar",
-    description: "Which sections your organization uses, their order and names.",
+    description: "Sections, order and names.",
     icon: "PanelLeft",
-    group: "Organization",
     permission: "settings.view",
     feature: "sidebar",
   },
   {
     label: "Theme",
     segment: "theme",
-    description: "Colors, logo and the light or dark default.",
+    description: "Colors, logo and light or dark.",
     icon: "Palette",
-    group: "Organization",
     permission: "theme.write",
     feature: "themes",
   },
   {
-    label: "Weekly pulse",
-    segment: "pulse",
-    description: "When the organization's weekly recap goes out, to whom, and how.",
-    icon: "Activity",
-    group: "Organization",
-    permission: "settings.view",
-    feature: "overview",
-  },
-  {
     label: "Members",
     segment: "members",
-    description: "The roster, roles, titles and invitations.",
+    description: "Roles, titles and invites.",
     icon: "Users",
-    group: "People & access",
     alsoActiveOn: ["invitations"],
   },
   {
     label: "Privacy",
     segment: "privacy",
-    description: "Ballot privacy, member emails, database visibility and public events.",
+    description: "Ballots, emails, databases and the public feed.",
     icon: "ShieldCheck",
-    group: "People & access",
     permission: "privacy.write",
     feature: "privacy",
   },
   {
-    label: "Integrations",
-    segment: "integrations",
-    description: "Email sender, Claude, Google Calendar, website data and the build hook.",
-    icon: "Plug",
-    group: "Connections",
-    permission: "integrations.view",
-    feature: "integrations",
-  },
-  {
     label: "Audit log",
     segment: "audit",
-    description: "Every settings change: who made it and when.",
+    description: "Who changed what, and when.",
     icon: "ScrollText",
-    group: "Records",
     permission: "audit.view",
     feature: "auditLog",
   },
   {
     label: "Danger zone",
     segment: "danger",
-    description: "Export all data, or delete the organization.",
-    personalDescription: "Export your data, or delete your Personal space.",
+    description: "Export everything, or delete.",
     icon: "TriangleAlert",
-    group: "Records",
     permission: "org.delete",
     personal: true,
   },
@@ -170,7 +136,6 @@ export function settingsNavItems(
     label: s.label,
     href: `${base}/${s.segment}`,
     icon: s.icon,
-    group: s.group,
     alsoActiveOn: s.alsoActiveOn?.map((segment) => `${base}/${segment}`),
     ...(isSettingsSectionLocked(s, space) ? { locked: true } : {}),
   }));

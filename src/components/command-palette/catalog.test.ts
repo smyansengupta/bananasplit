@@ -50,7 +50,7 @@ describe("the page catalog", () => {
     expect(titles({ role: "ADMIN" }, "dark mode")).toEqual(
       expect.arrayContaining(["Theme", "Use dark theme"]),
     );
-    expect(titles({}, "pay me back")).toContain("My reimbursements");
+    expect(titles({}, "pay me back")).toContain("My requests");
     expect(titles({}, "trash")).toContain("Recently deleted");
   });
 
@@ -122,10 +122,10 @@ describe("paletteGroups", () => {
     });
     expect(groups.map((g) => g.heading)).toEqual(["Recent", "Actions", "Go to"]);
     expect(groups[1].items.map((i) => i.title)).toContain("New note");
-    expect(groups[2].items[0].title).toBe("Overview");
+    expect(groups[2].items[0].title).toBe("Home");
   });
 
-  it("puts the group with the best match first and ends a group with its full-list link", () => {
+  it("lists every match in one Jump to group, best first, each tagged with what it is", () => {
     const groups = paletteGroups({
       q: parseQuery("budget"),
       scope: "all",
@@ -139,13 +139,12 @@ describe("paletteGroups", () => {
         },
       ]),
     });
-    expect(groups[0].id).toBe("notes");
-    expect(groups[0].items.at(-1)).toMatchObject({
-      more: true,
-      title: "Search all notes for “budget”",
-    });
+    expect(groups[0].heading).toBe("Jump to");
+    expect(groups[0].items[0]).toMatchObject({ title: "Budget", meta: "Note" });
+    // No per-group "Search all" links in the merged list.
+    expect(groups[0].items.some((i) => i.more)).toBe(false);
     // A member doesn't get the treasurer's Budget page; the Finance section mentions budgets.
-    const pages = groups.find((g) => g.id === "pages")!.items.map((i) => i.title);
+    const pages = groups[0].items.filter((i) => i.meta === "Page").map((i) => i.title);
     expect(pages).toContain("Finance");
     expect(pages).not.toContain("Budget");
   });
@@ -187,5 +186,27 @@ describe("paletteGroups", () => {
     });
     expect(groups.map((g) => g.id)).toEqual(["actions", "pages"]);
     expect(groups[1].items.length).toBeGreaterThan(20);
+  });
+});
+
+describe("the Create group", () => {
+  it("makes only a quick poll and a task from the typed text", async () => {
+    const { createGroup } = await import("./palette-groups");
+    const { buildCatalog } = await import("./catalog");
+    const catalog = buildCatalog({ orgSlug: "cbc", role: "OWNER", sections: [] });
+    const group = createGroup(catalog, "fall social")!;
+    expect(group.heading).toBe("Create");
+    const byKey = Object.fromEntries(group.items.map((i) => [i.key, i]));
+    expect(group.items[0]!.key).toBe("create:poll");
+    expect(byKey["create:task"]!.title).toBe('New task "fall social"');
+    expect(byKey["create:task"]!.command).toEqual({ type: "create-task", text: "fall social" });
+    expect(byKey["create:poll"]!.title).toBe('New quick poll "fall social"');
+    expect(byKey["create:poll"]!.command).toEqual({
+      type: "href",
+      href: "/app/cbc/forms/new?poll=1&question=fall%20social",
+    });
+    // Meetings, forms, notes and expenses are under New, not here.
+    expect(group.items.map((i) => i.key)).toEqual(["create:poll", "create:task"]);
+    expect(createGroup(catalog, "   ")).toBeNull();
   });
 });

@@ -18,8 +18,12 @@ import { smsDelivery } from "@/server/sms";
  */
 export default async function MeetingRsvpPage({
   params,
+  searchParams,
 }: PageProps<"/app/[orgSlug]/meetings/[id]/rsvp">) {
   const { orgSlug, id } = await params;
+  // A page just made by the meeting form (?new=1) opens on its settings with the link copied.
+  const { new: fresh } = await searchParams;
+  const justCreated = (Array.isArray(fresh) ? fresh[0] : fresh) === "1";
   const ctx = await getOrgContextBySlug(orgSlug);
   // Members see the meeting itself (and its public link there).
   if (!can(ctx, "events.write")) redirect(`/app/${orgSlug}/meetings/${id}`);
@@ -33,6 +37,7 @@ export default async function MeetingRsvpPage({
   return (
     <RsvpManager
       {...data.props}
+      justCreated={justCreated}
       links={{
         back: { href: base, label: data.event.title },
         edit: `${base}?edit=1`,

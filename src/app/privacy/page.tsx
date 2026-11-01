@@ -169,8 +169,8 @@ function Policy() {
           that links to this Privacy Notice
         </li>
         <li>
-          Use bananasplit. Tasks, availability polls, RSVPs, notes, databases and the club budget in
-          one workspace. Replace the pile of apps your board juggles today.
+          Use bananasplit. Tasks, availability polls, RSVPs, notes, databases and the organization
+          budget in one workspace. Replace the pile of apps your board juggles today.
         </li>
         <li>Engage with us in other related ways, including any marketing or events</li>
       </ul>
@@ -183,16 +183,6 @@ function Policy() {
       </p>
 
       <H2 id="summary">Summary of key points</H2>
-      <p className="m-0">
-        <strong>
-          <em>
-            This summary provides key points from our Privacy Notice, but you can find out more
-            details about any of these topics by clicking the link following each key point or by
-            using our <a href="#toc">table of contents</a> below to find the section you are looking
-            for.
-          </em>
-        </strong>
-      </p>
       <p className="m-0">
         <strong>What personal information do we process?</strong> When you visit, use, or navigate
         our Services, we may process personal information depending on how you interact with us and

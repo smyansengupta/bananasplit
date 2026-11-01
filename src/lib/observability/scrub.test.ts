@@ -10,7 +10,7 @@ import {
 describe("scrubSentryEvent", () => {
   it("drops credentials, cookies and bodies and redacts what remains", () => {
     const event = scrubSentryEvent({
-      message: "sync failed for owner@club.org with Bearer abcdef123456",
+      message: "sync failed for owner@organization.org with Bearer abcdef123456",
       request: {
         url: "https://portal.example.org/invite/SECRET_TOKEN_123?x=1",
         headers: { Authorization: "Bearer t", Cookie: "session=1", "User-Agent": "Firefox" },

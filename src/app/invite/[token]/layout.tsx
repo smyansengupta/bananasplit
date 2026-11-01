@@ -31,7 +31,7 @@ export async function generateMetadata({
   const club = await invitingOrg(token);
   if (!club) {
     return {
-      title: "Invite · Bananasplit",
+      title: "Invite, Bananasplit",
       description: "This invite link isn't valid.",
       robots: { index: false, follow: false },
     };

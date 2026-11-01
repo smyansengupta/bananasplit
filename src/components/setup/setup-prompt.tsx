@@ -39,7 +39,7 @@ export function SetupPrompt({ orgSlug, state }: { orgSlug: string; state: SetupS
           </p>
         </div>
         <Button asChild variant="outline" size="sm" className="bg-card">
-          <Link href={`/app/${orgSlug}/setup/status`}>
+          <Link href={`/app/${orgSlug}/integrations`}>
             See what failed
             <ArrowRight data-icon="inline-end" aria-hidden="true" />
           </Link>

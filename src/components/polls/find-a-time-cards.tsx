@@ -2,6 +2,7 @@ import { ArrowUpRight, Users } from "@/components/icons";
 import Link from "next/link";
 
 import { intervalParts } from "@/components/calendar/poll-format";
+import { CopyPollLinkButton } from "@/components/polls/copy-poll-link-button";
 import { PollStatusBadge } from "@/components/polls/poll-status-badge";
 import type { PollListItem } from "@/components/polls/poll-list";
 import { TickMeter } from "@/components/ui/meters";
@@ -17,6 +18,8 @@ import { cn } from "@/lib/utils";
 
 export interface FindATimeCard {
   item: PollListItem;
+  /** An owner or admin: the card offers "Book best time" once there is one. */
+  canBook?: boolean;
   summary: PollSummary;
   timeZone: string;
   durationMinutes: number;
@@ -49,8 +52,10 @@ function Card({ card, featured }: { card: FindATimeCard; featured: boolean }) {
   const top = summary.best[0];
   const when = top ? intervalParts(top.slot.startsAt, top.endsAt, timeZone) : null;
   const others = summary.best.slice(1, featured ? 3 : 1);
+  // Still taking answers: its link is one click away on the card.
+  const open = item.status.tone === "open";
   return (
-    <li className={cn(featured && "sm:col-span-2")}>
+    <li className={cn("relative", featured && "sm:col-span-2")}>
       <Link
         href={item.href}
         className={cn(
@@ -72,7 +77,7 @@ function Card({ card, featured }: { card: FindATimeCard; featured: boolean }) {
               <span
                 className={cn(
                   "min-w-0 font-semibold break-words",
-                  featured ? "display-title text-2xl" : "line-clamp-2 text-[15px]",
+                  featured ? "display-title text-2xl" : "text-[15px]",
                 )}
               >
                 {item.title}
@@ -123,9 +128,7 @@ function Card({ card, featured }: { card: FindATimeCard; featured: boolean }) {
               )}
             </span>
           ) : (
-            <span className="text-muted-foreground text-[13px]">
-              No answers yet. Share the link and the best time shows here.
-            </span>
+            <span className="text-muted-foreground text-[13px]">No answers yet.</span>
           )}
 
           <span className="mt-auto flex items-end justify-between gap-3">
@@ -135,13 +138,38 @@ function Card({ card, featured }: { card: FindATimeCard; featured: boolean }) {
                 ? "1 person answered"
                 : `${summary.respondents} people answered`}
             </span>
-            <ArrowUpRight
-              className="text-muted-foreground group-hover:text-foreground size-4 flex-none transition-colors"
-              aria-hidden="true"
-            />
+            {/* Room for the copy button, which sits beside the link (not in it). */}
+            {open ? (
+              <span className="size-8 flex-none" aria-hidden="true" />
+            ) : (
+              <ArrowUpRight
+                className="text-muted-foreground group-hover:text-foreground size-4 flex-none transition-colors"
+                aria-hidden="true"
+              />
+            )}
           </span>
         </span>
       </Link>
+      {open && card.canBook && top && (
+        <Link
+          href={`${item.href}?book=1`}
+          className={cn(
+            "bg-primary text-primary-foreground hover:bg-primary/90 absolute inline-flex h-8 items-center rounded-full px-3 text-[12.5px] font-semibold",
+            featured ? "right-14 bottom-5" : "right-12 bottom-3.5",
+          )}
+        >
+          Book best time
+        </Link>
+      )}
+      {open && (
+        <CopyPollLinkButton
+          pollId={item.id}
+          href={item.href}
+          guests={Boolean(item.takesGuests)}
+          title={item.title}
+          className={cn("absolute", featured ? "right-5 bottom-5" : "right-3.5 bottom-3.5")}
+        />
+      )}
     </li>
   );
 }

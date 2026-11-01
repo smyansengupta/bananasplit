@@ -76,7 +76,9 @@ async function createAccount(_prevState: SignUpState, formData: FormData): Promi
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  if (formData.get("confirmPassword") !== parsed.data.password) {
+  // One field now (with Show password); an older form still sends two.
+  const confirm = formData.get("confirmPassword");
+  if (confirm !== null && confirm !== parsed.data.password) {
     return { error: "The passwords don't match." };
   }
 

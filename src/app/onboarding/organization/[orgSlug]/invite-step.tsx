@@ -18,15 +18,16 @@ import { Role } from "@/generated/prisma/enums";
 import { clearInvalid, highlightInvalid } from "@/lib/forms/highlight-invalid";
 import { cn } from "@/lib/utils";
 
+import { Segmented } from "@/components/ui/segmented";
+
 import { useGoNext } from "./step-flow";
-import { FieldSelect } from "@/components/ui/field-select";
 
 type InviteRole = typeof Role.ADMIN | typeof Role.TREASURER | typeof Role.MEMBER;
 
 const ROLES: { value: InviteRole; label: string }[] = [
-  { value: Role.ADMIN, label: "Admin" },
-  { value: Role.TREASURER, label: "Treasurer" },
   { value: Role.MEMBER, label: "Member" },
+  { value: Role.TREASURER, label: "Treasurer" },
+  { value: Role.ADMIN, label: "Admin" },
 ];
 
 const roleLabel = (role: string) =>
@@ -37,6 +38,10 @@ const roleLabel = (role: string) =>
  * member), and email invites (the same as Settings > Members, valid for 7
  * days). The box takes a whole list, pasted from a spreadsheet or another
  * app's member export, so a team moves over in one go.
+ *
+ * Continue sends whatever is still in the box before moving on: typing a
+ * list and pressing Continue used to throw it away, because only "Send
+ * invites" sent. There is no Skip; with nothing typed, Continue is it.
  */
 export function InviteStep({
   orgId,
@@ -64,9 +69,8 @@ export function InviteStep({
   const [inviting, startInvite] = useTransition();
   const [finishing, startFinish] = useTransition();
 
-  function invite(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
+  /** Sends every address in the box; true when none failed. */
+  async function sendTyped(): Promise<boolean> {
     // A list works too: commas, spaces, semicolons or new lines between them.
     const emails = [
       ...new Set(
@@ -76,20 +80,28 @@ export function InviteStep({
           .filter(Boolean),
       ),
     ];
+    if (emails.length === 0) return true;
+    const done: { email: string; role: string }[] = [];
+    const failed: string[] = [];
+    let firstError: string | null = null;
+    for (const address of emails) {
+      const result = preview ? null : await inviteMember(orgId, { email: address, role });
+      if (result?.error) {
+        failed.push(address);
+        firstError ??= `${address}: ${result.error}`;
+      } else done.push({ email: address, role });
+    }
+    setSent((prev) => [...done, ...prev]);
+    setEmail(failed.join(", "));
+    if (firstError) setError(firstError);
+    return failed.length === 0;
+  }
+
+  function invite(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
     startInvite(async () => {
-      const done: { email: string; role: string }[] = [];
-      const failed: string[] = [];
-      let firstError: string | null = null;
-      for (const address of emails) {
-        const result = preview ? null : await inviteMember(orgId, { email: address, role });
-        if (result?.error) {
-          failed.push(address);
-          firstError ??= `${address}: ${result.error}`;
-        } else done.push({ email: address, role });
-      }
-      setSent([...done, ...sent]);
-      setEmail(failed.join(", "));
-      if (firstError) setError(firstError);
+      await sendTyped();
     });
   }
 
@@ -104,7 +116,11 @@ export function InviteStep({
     }
   }
 
-  const finish = () => startFinish(goNext);
+  const finish = () =>
+    startFinish(async () => {
+      setError(null);
+      if (await sendTyped()) await goNext();
+    });
 
   return (
     <SetupCard>
@@ -171,28 +187,23 @@ export function InviteStep({
               autoComplete="off"
               className={cn(brandInputClass, "min-w-0 flex-[1_1_220px]")}
             />
-            <FieldSelect
-              aria-label="Role"
+            <Segmented
+              label="Role"
               value={role}
-              onChange={(e) => setRole(e.target.value as InviteRole)}
-              className={cn(brandInputClass, "w-auto flex-none cursor-pointer pr-3")}
-            >
-              {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </FieldSelect>
+              onSelect={(v) => setRole(v as InviteRole)}
+              options={ROLES.map((r) => ({ value: r.value, label: r.label }))}
+              className="flex-none"
+            />
             <button
               type="submit"
               disabled={inviting || !email.trim()}
               className={cn(pill({ size: "field" }), "flex-none")}
             >
-              {inviting ? "Sending…" : "Send invites"}
+              {inviting ? "Sending…" : "Send"}
             </button>
           </div>
           <span className="text-muted-foreground text-[13px]">
-            Paste one address or a whole list. Each link is valid for 7 days.
+            Paste a whole list. Links last 7 days.
           </span>
         </form>
 
@@ -201,14 +212,14 @@ export function InviteStep({
             {sent.map((invite) => (
               <li
                 key={invite.email}
-                className="bg-card border-foreground/10 rounded-field flex h-10 items-center gap-3 border px-4"
+                className="bg-card border-foreground/10 rounded-field flex min-h-10 items-center gap-3 border px-4 py-2"
               >
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">
+                <span className="min-w-0 flex-1 text-[15px] font-semibold break-all">
                   {invite.email}
                 </span>
                 <span className="text-muted-foreground text-[13px]">{roleLabel(invite.role)}</span>
                 <span className="bg-tint-success text-tint-success-foreground rounded-full px-2 py-0.5 text-[11px] font-bold">
-                  ✓ Invited
+                  Invited
                 </span>
               </li>
             ))}
@@ -217,16 +228,9 @@ export function InviteStep({
       </StepBody>
 
       <StepError message={error} />
-      <StepFooter
-        back={backHref ? { href: backHref } : undefined}
-        skip={
-          sent.length === 0
-            ? { onClick: finish, disabled: finishing, label: "Skip for now" }
-            : undefined
-        }
-      >
+      <StepFooter back={backHref ? { href: backHref } : undefined}>
         <ContinuePill pending={finishing} pendingLabel="One moment…" onClick={finish}>
-          Continue
+          {email.trim() ? "Send and continue" : "Continue"}
         </ContinuePill>
       </StepFooter>
     </SetupCard>

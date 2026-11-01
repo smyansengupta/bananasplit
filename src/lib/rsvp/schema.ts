@@ -3,9 +3,10 @@ import { z } from "zod";
 import { normalizeInstagram, normalizePhone } from "./format";
 
 /**
- * A sign-up on a public RSVP page: a name, an email and a phone number,
- * nothing else. Shared by the page's form and its Server Action. The phone
- * comes back normalized (E.164 when it parses).
+ * A sign-up on a public RSVP page: a name, an email and, if they give one,
+ * a phone number. Shared by the page's form and its Server Action. The
+ * phone comes back normalized (E.164 when it parses), or "" when left out:
+ * the reminder text is skipped for them, the email still goes.
  */
 export const registrationSchema = z.object({
   name: z.string().trim().min(1, "Enter your name.").max(100, "That name is too long."),
@@ -19,7 +20,10 @@ export const registrationSchema = z.object({
     .string()
     .trim()
     .max(32, "Enter a valid phone number.")
-    .transform((v, ctx) => {
+    .optional()
+    .transform((raw, ctx) => {
+      const v = raw ?? "";
+      if (v === "") return "";
       const phone = normalizePhone(v);
       if (!phone) {
         ctx.addIssue({ code: "custom", message: "Enter a valid phone number." });

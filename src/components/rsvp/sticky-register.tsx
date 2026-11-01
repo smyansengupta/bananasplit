@@ -15,7 +15,7 @@ export function StickyRegister({ label, detail }: { label: string; detail: strin
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    const targets = ["hero-cta", "register"]
+    const targets = ["register"]
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
     if (targets.length === 0) return;

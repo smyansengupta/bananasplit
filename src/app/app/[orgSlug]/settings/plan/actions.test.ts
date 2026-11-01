@@ -53,7 +53,7 @@ beforeEach(() => {
   resetFake({ role: "OWNER", db: makeDb() });
 });
 
-describe("Settings › Plan and storage: a club", () => {
+describe("Settings › Plan and storage: an organization", () => {
   it("only the OWNER switches plans", async () => {
     for (const role of ["ADMIN", "TREASURER", "MEMBER"]) {
       fake.role = role;
@@ -76,7 +76,7 @@ describe("Settings › Plan and storage: a club", () => {
     expect(values).toContain(JSON.stringify({ from: "TRIAL", to: "CLUB", source: "owner" }));
   });
 
-  it("does nothing for the plan the club is already on", async () => {
+  it("does nothing for the plan the organization is already on", async () => {
     plan = "SOCIETY";
     expect(await switchPlan("org_1", "SOCIETY")).toEqual({});
     expect(fake.db.organization.update).not.toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe("Settings › Plan and storage: a club", () => {
     expect(fake.db.organization.update).not.toHaveBeenCalled();
   });
 
-  it("warns the owners and admins once when a downgrade takes the club past 80%", async () => {
+  it("warns the owners and admins once when a downgrade takes the organization past 80%", async () => {
     plan = "SOCIETY";
     used = 42.5 * GB; // 42.5% of Team Advanced's 100 GB, 85% of Team's 50 GB
     expect(await switchPlan("org_1", "CLUB")).toEqual({});
@@ -98,10 +98,10 @@ describe("Settings › Plan and storage: a club", () => {
     const { data } = fake.db.notification.createMany.mock.calls[0][0];
     expect(data.map((n: { userId: string }) => n.userId)).toEqual(["owner_1", "admin_1"]);
     expect(data[0].title).toBe("Robotics is using 85% of its storage");
-    expect(data[0].linkUrl).toBe("/app/robotics/settings/plan/storage");
+    expect(data[0].linkUrl).toBe("/app/robotics/settings/plan");
   });
 
-  it("lets a downgrade leave the club over its storage (uploads pause; nothing is deleted)", async () => {
+  it("lets a downgrade leave the organization over its storage (uploads pause; nothing is deleted)", async () => {
     plan = "SOCIETY";
     used = 60 * GB;
     expect(await switchPlan("org_1", "CLUB")).toEqual({});
@@ -134,7 +134,7 @@ describe("Settings › Plan and storage: a Personal space", () => {
     expect(plan).toBe("FREE");
   });
 
-  it("refuses a club's plans and a trial", async () => {
+  it("refuses an organization's plans and a trial", async () => {
     for (const p of ["CLUB", "SOCIETY", "TRIAL", "plus"]) {
       expect((await switchPlan("org_1", p)).error).toBe("Choose Personal Free or Personal Plus.");
     }

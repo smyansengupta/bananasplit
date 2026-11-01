@@ -6,7 +6,7 @@ import { getSession } from "@/lib/auth/session";
 import { csvContentDisposition, toCsv } from "@/lib/csv";
 import { withOrgTx, withUserTx } from "@/server/db/context";
 
-import { getTransactions, type TransactionFilters } from "../../queries";
+import { filtersFromQuery, getTransactions } from "../../queries";
 
 /**
  * GET /app/{orgSlug}/finance/transactions/export: the filtered transaction
@@ -30,20 +30,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ orgS
 
   const url = new URL(request.url);
   const q = url.searchParams;
-  const filters: TransactionFilters = {
-    budgetPeriodId: q.get("period") ?? undefined,
-    categoryId: q.get("category") ?? undefined,
-    kind: (q.get("kind") as TransactionFilters["kind"]) ?? undefined,
-    status: (q.get("status") as TransactionFilters["status"]) ?? undefined,
-    submittedById: q.get("submitter") ?? undefined,
-    dateFrom: q.get("dateFrom") ?? undefined,
-    dateTo: q.get("dateTo") ?? undefined,
-    reconciled:
-      q.get("reconciled") === "yes" || q.get("reconciled") === "no"
-        ? (q.get("reconciled") as "yes" | "no")
-        : undefined,
-    deleted: q.get("deleted") === "show" ? "show" : undefined,
-  };
+  const { filters } = filtersFromQuery((key) => q.get(key));
 
   let transactions;
   try {

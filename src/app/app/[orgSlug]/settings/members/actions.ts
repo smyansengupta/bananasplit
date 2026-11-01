@@ -25,6 +25,8 @@ import {
   untieDepartingMember,
 } from "@/server/settings/members";
 
+import { MAX_BULK_INVITES } from "./invite-limits";
+
 /**
  * Settings > Members: the roster and the invitations, on app_user through
  * withOrgAction (RLS makes Membership and Invitation writes admin-only, and
@@ -82,6 +84,62 @@ function refreshMembers(ctx: OrgContext) {
 
 // ---------------------------------------------------------------- Invitations
 
+/**
+ * One invite, once the caller has checked the permission and the rate
+ * limit: refuses a member or a live invite for the same address, then
+ * stores it and queues the email (sent after commit).
+ */
+async function createInvite(ctx: OrgContext, email: string, role: Role): Promise<string | null> {
+  const existingMember = await ctx.db.membership.findFirst({
+    where: { organizationId: ctx.organizationId, user: { email } },
+    select: { id: true },
+  });
+  if (existingMember) return "Already a member.";
+
+  const existingInvite = await ctx.db.invitation.findFirst({
+    where: {
+      organizationId: ctx.organizationId,
+      email,
+      acceptedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true },
+  });
+  if (existingInvite) return "Already invited. Resend it instead.";
+
+  // The stored hash is a placeholder until the invite-email job mints the
+  // emailed link (only a hash is ever stored, so the link exists only
+  // where it is sent).
+  const { tokenHash } = generateInvitationToken();
+  const invitation = await ctx.db.invitation.create({
+    data: {
+      organizationId: ctx.organizationId,
+      email,
+      role,
+      token: tokenHash,
+      expiresAt: invitationExpiry(),
+      invitedById: ctx.userId,
+    },
+    select: { id: true },
+  });
+  // Outbox: sent after commit, never for a rolled-back invite.
+  await enqueueJob(ctx.db, {
+    orgId: ctx.organizationId,
+    kind: "invite-email",
+    key: invitation.id,
+    payload: { invitationId: invitation.id },
+  });
+  await writeOrgAuditLog(ctx.db, {
+    organizationId: ctx.organizationId,
+    action: "invitation.created",
+    targetType: "Invitation",
+    targetId: invitation.id,
+    diff: { role },
+  });
+  ctx.afterCommit(() => trackServer(FUNNEL_EVENTS.teammateInvited, { role }));
+  return null;
+}
+
 export const inviteMember = withOrgAction(
   async (ctx, input: { email: string; role: Role }): Promise<ActionResult> => {
     requirePermission(ctx, "members.invite");
@@ -92,55 +150,88 @@ export const inviteMember = withOrgAction(
     const limited = await inviteRateLimited(ctx.organizationId);
     if (limited) return { error: limited };
 
-    const existingMember = await ctx.db.membership.findFirst({
-      where: { organizationId: ctx.organizationId, user: { email } },
-      select: { id: true },
-    });
-    if (existingMember) return { error: "This person is already a member." };
+    const error = await createInvite(ctx, email, role);
+    return error ? { error } : {};
+  },
+);
 
-    const existingInvite = await ctx.db.invitation.findFirst({
+export interface BulkInviteResult {
+  error?: string;
+  /** One line per address, in the order given (deduplicated). */
+  results: { email: string; error?: string }[];
+}
+
+/**
+ * Invites a pasted list (commas, spaces or new lines between addresses),
+ * all with one role. The batch counts once against the invite rate limit;
+ * each address is checked on its own, so one bad line doesn't stop the
+ * rest, and each problem comes back beside its address.
+ */
+export const inviteMembers = withOrgAction(
+  async (ctx, input: { emails: string; role: Role }): Promise<BulkInviteResult> => {
+    requirePermission(ctx, "members.invite");
+    const role = inviteSchema.shape.role.safeParse(input.role);
+    if (!role.success) return { error: "Pick a role.", results: [] };
+    const emails = [
+      ...new Set(
+        String(input.emails ?? "")
+          .split(/[\s,;]+/)
+          .map((e) => e.trim().replace(/^<|>$/g, "").toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+    if (emails.length === 0) return { error: "Add at least one email.", results: [] };
+    if (emails.length > MAX_BULK_INVITES)
+      return { error: `Invite up to ${MAX_BULK_INVITES} at a time.`, results: [] };
+
+    const limited = await inviteRateLimited(ctx.organizationId);
+    if (limited) return { error: limited, results: [] };
+
+    const results: BulkInviteResult["results"] = [];
+    for (const raw of emails) {
+      const email = inviteSchema.shape.email.safeParse(raw);
+      if (!email.success) {
+        results.push({ email: raw, error: "Not an email address." });
+        continue;
+      }
+      const error = await createInvite(ctx, email.data, role.data);
+      results.push(error ? { email: email.data, error } : { email: email.data });
+    }
+    return { results };
+  },
+);
+
+/** Sends a fresh link to every expired invite at once (one count against the rate limit). */
+export const resendExpiredInvitations = withOrgAction(
+  async (ctx): Promise<ActionResult & { count?: number }> => {
+    requirePermission(ctx, "members.invite");
+    const limited = await inviteRateLimited(ctx.organizationId);
+    if (limited) return { error: limited };
+    const expired = await ctx.db.invitation.findMany({
       where: {
         organizationId: ctx.organizationId,
-        email,
         acceptedAt: null,
-        expiresAt: { gt: new Date() },
+        expiresAt: { lte: new Date() },
       },
       select: { id: true },
+      take: MAX_BULK_INVITES,
     });
-    if (existingInvite)
-      return { error: "There's already a pending invite for this email. Resend it instead." };
-
-    // The stored hash is a placeholder until the invite-email job mints the
-    // emailed link (only a hash is ever stored, so the link exists only
-    // where it is sent).
-    const { tokenHash } = generateInvitationToken();
-    const invitation = await ctx.db.invitation.create({
-      data: {
+    for (const { id } of expired) {
+      await ctx.db.invitation.update({ where: { id }, data: { expiresAt: invitationExpiry() } });
+      await enqueueJob(ctx.db, {
+        orgId: ctx.organizationId,
+        kind: "invite-email",
+        key: id,
+        payload: { invitationId: id },
+      });
+      await writeOrgAuditLog(ctx.db, {
         organizationId: ctx.organizationId,
-        email,
-        role,
-        token: tokenHash,
-        expiresAt: invitationExpiry(),
-        invitedById: ctx.userId,
-      },
-      select: { id: true },
-    });
-    // Outbox: sent after commit, never for a rolled-back invite.
-    await enqueueJob(ctx.db, {
-      orgId: ctx.organizationId,
-      kind: "invite-email",
-      key: invitation.id,
-      payload: { invitationId: invitation.id },
-    });
-    await writeOrgAuditLog(ctx.db, {
-      organizationId: ctx.organizationId,
-      action: "invitation.created",
-      targetType: "Invitation",
-      targetId: invitation.id,
-      diff: { role },
-    });
-    ctx.afterCommit(() => trackServer(FUNNEL_EVENTS.teammateInvited, { role }));
-    return {};
+        action: "invitation.resent",
+        targetType: "Invitation",
+        targetId: id,
+      });
+    }
+    return { count: expired.length };
   },
 );
 

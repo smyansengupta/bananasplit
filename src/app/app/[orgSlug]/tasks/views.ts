@@ -136,9 +136,7 @@ function str(value: string | string[] | undefined): string | undefined {
 
 type Query = Record<string, string | string[] | undefined>;
 
-export function parseWorkspaceQuery(
-  query: Query,
-): WorkspaceQuery {
+export function parseWorkspaceQuery(query: Query): WorkspaceQuery {
   const raw = str(query.view);
   const view = parseTaskView(raw) ?? DEFAULT_TASK_LAYOUT;
   const ownerId = str(query.owner);

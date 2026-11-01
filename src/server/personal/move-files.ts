@@ -199,7 +199,7 @@ export async function prepareFiles(
 export async function discardCopies(files: Pick<PreparedFiles, "copies">): Promise<void> {
   if (files.copies.length === 0) return;
   await deleteBlobs(files.copies.map((c) => c.to)).catch((error) =>
-    console.error("[move] could not delete the club's copies", error),
+    console.error("[move] could not delete the organization's copies", error),
   );
 }
 

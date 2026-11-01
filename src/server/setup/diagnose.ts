@@ -58,7 +58,7 @@ const RULES: Record<SetupStepId, Rule[]> = {
     },
     {
       match: /export is version/i,
-      fix: "Your website is on a different version of the export contract than this portal. Pull the latest supabase/suite-export.sql from the website repository and run it again.",
+      fix: "Your website is on a different version of the export contract than Bananasplit. Pull the latest supabase/suite-export.sql from the website repository and run it again.",
     },
     {
       match: /project ref is the 20|Pick the project's region|Fill in the project ref/i,
@@ -69,7 +69,7 @@ const RULES: Record<SetupStepId, Rule[]> = {
   calendar: [
     {
       match: /revoked or expired/i,
-      fix: "Someone removed this portal's access in the Google account's security settings, or the OAuth app is still in Testing mode, where refresh tokens die after a week. Press Connect again.",
+      fix: "Someone removed Bananasplit's access in the Google account's security settings, or the OAuth app is still in Testing mode, where refresh tokens die after a week. Press Connect again.",
     },
     {
       match: /Connect Google Calendar first/i,

@@ -65,7 +65,7 @@ export function UpcomingEventsCard({
                     className="hover:bg-muted/60 rounded-field -mx-3 block space-y-0.5 px-3 py-2.5"
                   >
                     <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[15px] font-medium">{event.title}</span>
+                      <span className="text-[15px] font-medium break-words">{event.title}</span>
                       {rsvp && RsvpIcon && (
                         <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-xs">
                           <RsvpIcon className="size-3.5" aria-hidden="true" />
@@ -76,13 +76,12 @@ export function UpcomingEventsCard({
                     <span className="text-muted-foreground block text-xs">
                       {formatEventWhen(event, zones, now)}
                     </span>
-                    <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+                    <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                       <span className="shrink-0">{KIND_META[event.kind].label}</span>
                       {event.location && (
                         <>
-                          <span aria-hidden="true">·</span>
                           <MapPin className="size-3 shrink-0" aria-hidden="true" />
-                          <span className="truncate">{event.location}</span>
+                          <span className="min-w-0 break-words">{event.location}</span>
                         </>
                       )}
                     </span>
@@ -92,7 +91,10 @@ export function UpcomingEventsCard({
             })}
           </ul>
         )}
-        <Link href={`/app/${orgSlug}/calendar`} className="text-muted-foreground hover:text-foreground block pt-2 text-[13px] font-medium">
+        <Link
+          href={`/app/${orgSlug}/calendar`}
+          className="text-muted-foreground hover:text-foreground block pt-2 text-[13px] font-medium"
+        >
           Open the calendar
         </Link>
       </div>
@@ -129,7 +131,7 @@ export function UpcomingEventsCard({
                     className="hover:bg-muted/60 rounded-field -mx-3 block space-y-0.5 px-3 py-2.5"
                   >
                     <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[15px] font-medium">{event.title}</span>
+                      <span className="text-[15px] font-medium break-words">{event.title}</span>
                       {rsvp && RsvpIcon && (
                         <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 text-xs">
                           <RsvpIcon className="size-3.5" aria-hidden="true" />
@@ -140,13 +142,12 @@ export function UpcomingEventsCard({
                     <span className="text-muted-foreground block text-xs">
                       {formatEventWhen(event, zones, now)}
                     </span>
-                    <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+                    <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                       <span className="shrink-0">{KIND_META[event.kind].label}</span>
                       {event.location && (
                         <>
-                          <span aria-hidden="true">·</span>
                           <MapPin className="size-3 shrink-0" aria-hidden="true" />
-                          <span className="truncate">{event.location}</span>
+                          <span className="min-w-0 break-words">{event.location}</span>
                         </>
                       )}
                     </span>

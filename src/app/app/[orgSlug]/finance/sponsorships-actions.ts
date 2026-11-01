@@ -10,7 +10,7 @@ import {
 } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { writeFinanceAuditLog } from "@/lib/finance/audit";
-import { withOrgAction } from "@/server/db/context";
+import { withOrgAction, type OrgContext } from "@/server/db/context";
 
 /** Every action here belongs to sponsorships (withOrgAction's space check). */
 const sponsorshipsAction: typeof withOrgAction = (handler, options) =>
@@ -71,14 +71,19 @@ const SPONSORSHIP_STATUS_VALUES = Object.values(SponsorshipStatus) as [
 ];
 
 const sponsorshipInputSchema = z.object({
-  sponsorId: z.string(),
+  /** An existing sponsor, or `sponsorName` to add one on the spot. */
+  sponsorId: z.string().optional(),
+  sponsorName: z.string().trim().max(200).optional(),
+  /** Where it starts (Prospect unless said); Received books the money at once. */
+  status: z.enum(SPONSORSHIP_STATUS_VALUES).optional(),
   budgetPeriodId: z.string(),
   type: z.enum([SponsorshipType.CASH, SponsorshipType.CREDITS]).default(SponsorshipType.CASH),
   amountCents: z.number().int().positive("Amount must be greater than zero."),
   tier: z.string().max(100).nullable().optional(),
   deliverables: z.string().max(2000).nullable().optional(),
   expectedOn: z.string().nullable().optional(),
-  ownerId: z.string(),
+  /** Left out: the person adding it. */
+  ownerId: z.string().optional(),
 });
 
 export const createSponsorship = sponsorshipsAction(
@@ -93,18 +98,33 @@ export const createSponsorship = sponsorshipsAction(
     const data = parsed.data;
 
     // Sequential: one transaction, one connection.
-    const sponsor = await ctx.db.sponsor.findFirst({
-      where: { id: data.sponsorId, organizationId },
-      select: { id: true },
-    });
-    if (!sponsor) return { error: "Sponsor not found." };
+    let sponsor: { id: string } | null = null;
+    if (data.sponsorId) {
+      sponsor = await ctx.db.sponsor.findFirst({
+        where: { id: data.sponsorId, organizationId },
+        select: { id: true },
+      });
+    } else if (data.sponsorName) {
+      // Typed a name: the sponsor it already is, or a new one.
+      sponsor =
+        (await ctx.db.sponsor.findFirst({
+          where: { organizationId, name: { equals: data.sponsorName, mode: "insensitive" } },
+          select: { id: true },
+        })) ??
+        (await ctx.db.sponsor.create({
+          data: { organizationId, name: data.sponsorName },
+          select: { id: true },
+        }));
+    }
+    if (!sponsor) return { error: "Pick a sponsor or type a new one." };
+    const ownerId = data.ownerId || ctx.userId;
     const period = await ctx.db.budgetPeriod.findFirst({
       where: { id: data.budgetPeriodId, organizationId },
       select: { id: true },
     });
     if (!period) return { error: "Budget period not found." };
     const owner = await ctx.db.membership.findUnique({
-      where: { userId_organizationId: { userId: data.ownerId, organizationId } },
+      where: { userId_organizationId: { userId: ownerId, organizationId } },
       select: { userId: true },
     });
     if (!owner) return { error: "Owner must be a member of this organization." };
@@ -112,14 +132,14 @@ export const createSponsorship = sponsorshipsAction(
     const created = await ctx.db.sponsorship.create({
       data: {
         organizationId,
-        sponsorId: data.sponsorId,
+        sponsorId: sponsor.id,
         budgetPeriodId: data.budgetPeriodId,
         type: data.type,
         amountCents: data.amountCents,
         tier: data.tier || null,
         deliverables: data.deliverables || null,
         expectedOn: data.expectedOn ? new Date(data.expectedOn) : null,
-        ownerId: data.ownerId,
+        ownerId,
       },
     });
     await writeFinanceAuditLog(ctx.db, {
@@ -128,8 +148,12 @@ export const createSponsorship = sponsorshipsAction(
       action: "SPONSORSHIP_CREATE",
       after: created,
     });
+    if (data.status && data.status !== SponsorshipStatus.PROSPECT) {
+      const moved = await setSponsorshipStatus(ctx, created.id, data.status);
+      if (moved.error) return moved;
+    }
 
-    return { sponsorshipId: created.id };
+    return { sponsorshipId: created.id, sponsorId: sponsor.id };
   },
 );
 
@@ -143,102 +167,188 @@ export const createSponsorship = sponsorshipsAction(
 export const updateSponsorshipStatus = sponsorshipsAction(
   async (ctx, sponsorshipId: string, status: string): Promise<ActionResult> => {
     requirePermission(ctx, "finance.manage");
+    return setSponsorshipStatus(ctx, sponsorshipId, status);
+  },
+);
+
+async function setSponsorshipStatus(
+  ctx: OrgContext,
+  sponsorshipId: string,
+  status: string,
+): Promise<ActionResult> {
+  const organizationId = ctx.organizationId;
+  const db = ctx.db;
+
+  const parsedStatus = z.enum(SPONSORSHIP_STATUS_VALUES).safeParse(status);
+  if (!parsedStatus.success) return { error: "Invalid status." };
+
+  const sponsorship = await db.sponsorship.findFirst({
+    where: { id: sponsorshipId, organizationId },
+    include: { sponsor: { select: { name: true } } },
+  });
+  if (!sponsorship) return { error: "Sponsorship not found." };
+
+  const nextStatus = parsedStatus.data;
+  if (nextStatus === sponsorship.status) return { sponsorshipId };
+
+  let transactionId = sponsorship.transactionId;
+  const isCash = sponsorship.type === SponsorshipType.CASH;
+
+  if (isCash && nextStatus === SponsorshipStatus.RECEIVED) {
+    const existing = transactionId
+      ? await db.transaction.findFirst({ where: { id: transactionId, organizationId } })
+      : null;
+
+    if (existing) {
+      // Re-entering RECEIVED after a prior void (e.g. RECEIVED -> COMMITTED
+      // -> RECEIVED): un-void the same transaction instead of creating a
+      // second one for the same pledge.
+      await db.transaction.update({
+        where: { id: existing.id },
+        data: { voidedAt: null, voidReason: null },
+      });
+      await writeFinanceAuditLog(db, {
+        organizationId,
+        transactionId: existing.id,
+        sponsorshipId,
+        action: "SPONSORSHIP_TRANSACTION_UNVOID",
+        before: { voidedAt: existing.voidedAt },
+        after: { voidedAt: null },
+      });
+    } else {
+      const transaction = await db.transaction.create({
+        data: {
+          organizationId,
+          budgetPeriodId: sponsorship.budgetPeriodId,
+          direction: TransactionDirection.IN,
+          kind: TransactionKind.SPONSORSHIP,
+          amountCents: sponsorship.amountCents,
+          // Named for the sponsor, so the ledger tells them apart.
+          description: `${sponsorship.sponsor.name} sponsorship`,
+          occurredAt: new Date(),
+          submittedById: ctx.userId,
+          status: "NOT_APPLICABLE",
+        },
+      });
+      transactionId = transaction.id;
+      await writeFinanceAuditLog(db, {
+        organizationId,
+        transactionId,
+        sponsorshipId,
+        action: "SPONSORSHIP_TRANSACTION_CREATE",
+        after: transaction,
+      });
+    }
+  } else if (isCash && sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
+    const existing = await db.transaction.findFirst({
+      where: { id: transactionId, organizationId },
+    });
+    if (existing && !existing.voidedAt) {
+      await db.transaction.update({
+        where: { id: transactionId },
+        data: {
+          voidedAt: new Date(),
+          voidReason: `Sponsorship moved from RECEIVED to ${nextStatus}`,
+        },
+      });
+      await writeFinanceAuditLog(db, {
+        organizationId,
+        transactionId,
+        sponsorshipId,
+        action: "SPONSORSHIP_TRANSACTION_VOID",
+        before: { voidedAt: null },
+        after: { voidedAt: new Date() },
+      });
+    }
+  }
+
+  const updated = await db.sponsorship.update({
+    where: { id: sponsorshipId },
+    data: { status: nextStatus, transactionId },
+  });
+  await writeFinanceAuditLog(db, {
+    organizationId,
+    sponsorshipId,
+    action: "SPONSORSHIP_STATUS_CHANGE",
+    before: { status: sponsorship.status },
+    after: { status: updated.status },
+  });
+
+  return { sponsorshipId };
+}
+
+const sponsorshipEditSchema = z.object({
+  amountCents: z.number().int().positive("Amount must be greater than zero.").optional(),
+  tier: z.string().max(100).nullable().optional(),
+  ownerId: z.string().optional(),
+  expectedOn: z.string().nullable().optional(),
+});
+
+/**
+ * Edits a sponsorship in place (it used to be delete and start over). A
+ * received cash sponsorship's money moves with it, unless that transaction
+ * is already reconciled against a statement.
+ */
+export const updateSponsorship = sponsorshipsAction(
+  async (ctx, sponsorshipId: string, input: unknown): Promise<ActionResult> => {
+    requirePermission(ctx, "finance.manage");
     const organizationId = ctx.organizationId;
-    const db = ctx.db;
-
-    const parsedStatus = z.enum(SPONSORSHIP_STATUS_VALUES).safeParse(status);
-    if (!parsedStatus.success) return { error: "Invalid status." };
-
-    const sponsorship = await db.sponsorship.findFirst({
+    const parsed = sponsorshipEditSchema.safeParse(input);
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    const data = parsed.data;
+    const existing = await ctx.db.sponsorship.findFirst({
       where: { id: sponsorshipId, organizationId },
     });
-    if (!sponsorship) return { error: "Sponsorship not found." };
-
-    const nextStatus = parsedStatus.data;
-    if (nextStatus === sponsorship.status) return { sponsorshipId };
-
-    let transactionId = sponsorship.transactionId;
-    const isCash = sponsorship.type === SponsorshipType.CASH;
-
-    if (isCash && nextStatus === SponsorshipStatus.RECEIVED) {
-      const existing = transactionId
-        ? await db.transaction.findFirst({ where: { id: transactionId, organizationId } })
-        : null;
-
-      if (existing) {
-        // Re-entering RECEIVED after a prior void (e.g. RECEIVED -> COMMITTED
-        // -> RECEIVED): un-void the same transaction instead of creating a
-        // second one for the same pledge.
-        await db.transaction.update({
-          where: { id: existing.id },
-          data: { voidedAt: null, voidReason: null },
-        });
-        await writeFinanceAuditLog(db, {
-          organizationId,
-          transactionId: existing.id,
-          sponsorshipId,
-          action: "SPONSORSHIP_TRANSACTION_UNVOID",
-          before: { voidedAt: existing.voidedAt },
-          after: { voidedAt: null },
-        });
-      } else {
-        const transaction = await db.transaction.create({
-          data: {
-            organizationId,
-            budgetPeriodId: sponsorship.budgetPeriodId,
-            direction: TransactionDirection.IN,
-            kind: TransactionKind.SPONSORSHIP,
-            amountCents: sponsorship.amountCents,
-            description: `Sponsorship received`,
-            occurredAt: new Date(),
-            submittedById: ctx.userId,
-            status: "NOT_APPLICABLE",
-          },
-        });
-        transactionId = transaction.id;
-        await writeFinanceAuditLog(db, {
-          organizationId,
-          transactionId,
-          sponsorshipId,
-          action: "SPONSORSHIP_TRANSACTION_CREATE",
-          after: transaction,
-        });
-      }
-    } else if (isCash && sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
-      const existing = await db.transaction.findFirst({
-        where: { id: transactionId, organizationId },
+    if (!existing) return { error: "Sponsorship not found." };
+    if (data.ownerId) {
+      const owner = await ctx.db.membership.findUnique({
+        where: { userId_organizationId: { userId: data.ownerId, organizationId } },
+        select: { userId: true },
       });
-      if (existing && !existing.voidedAt) {
-        await db.transaction.update({
-          where: { id: transactionId },
-          data: {
-            voidedAt: new Date(),
-            voidReason: `Sponsorship moved from RECEIVED to ${nextStatus}`,
-          },
-        });
-        await writeFinanceAuditLog(db, {
-          organizationId,
-          transactionId,
-          sponsorshipId,
-          action: "SPONSORSHIP_TRANSACTION_VOID",
-          before: { voidedAt: null },
-          after: { voidedAt: new Date() },
+      if (!owner) return { error: "Owner must be a member of this organization." };
+    }
+    if (
+      data.amountCents !== undefined &&
+      data.amountCents !== existing.amountCents &&
+      existing.transactionId
+    ) {
+      const money = await ctx.db.transaction.findFirst({
+        where: { id: existing.transactionId, organizationId },
+        select: { reconciledAt: true, voidedAt: true },
+      });
+      if (money && !money.voidedAt) {
+        if (money.reconciledAt) {
+          return {
+            error: "The money it booked is reconciled. Unlock it under Transactions first.",
+          };
+        }
+        await ctx.db.transaction.update({
+          where: { id: existing.transactionId },
+          data: { amountCents: data.amountCents },
         });
       }
     }
-
-    const updated = await db.sponsorship.update({
+    const updated = await ctx.db.sponsorship.update({
       where: { id: sponsorshipId },
-      data: { status: nextStatus, transactionId },
+      data: {
+        amountCents: data.amountCents,
+        tier: data.tier === undefined ? undefined : data.tier || null,
+        ownerId: data.ownerId,
+        expectedOn:
+          data.expectedOn === undefined
+            ? undefined
+            : data.expectedOn
+              ? new Date(data.expectedOn)
+              : null,
+      },
     });
-    await writeFinanceAuditLog(db, {
+    await writeFinanceAuditLog(ctx.db, {
       organizationId,
       sponsorshipId,
-      action: "SPONSORSHIP_STATUS_CHANGE",
-      before: { status: sponsorship.status },
-      after: { status: updated.status },
+      action: "SPONSORSHIP_UPDATE",
+      before: existing,
+      after: updated,
     });
-
     return { sponsorshipId };
   },
 );

@@ -106,11 +106,11 @@ describe("trialEndingEmail", () => {
     url: "https://app.example.com/app/robotics/settings/plan",
   };
 
-  it("tells an organization's owner the trial is almost up, and that no card was taken", () => {
+  it("tells an organization's owner the trial is almost up, naming the organization in the subject", () => {
     const email = trialEndingEmail({ ...base, orgName: "Robotics Club" });
-    expect(email.subject).toBe("Your free trial is almost up");
+    expect(email.subject).toBe("Robotics Club's free trial ends in 3 days");
     expect(email.text).toContain("Robotics Club's free trial of Team Advanced ends in 3 days");
-    expect(email.text).toContain("you won't be charged");
+    expect(email.text).toContain("Nothing is deleted.");
     expect(email.html).toContain("See plans");
   });
 
@@ -159,15 +159,16 @@ describe("layout (Moonstone light)", () => {
     });
     expect(email.text).toBe(
       [
-        "Riverside Robotics",
         "Venue booked\n\nMaya booked Engineering Hall 112.",
         "Open in Bananasplit: https://p.org/app/riverside",
-        "Change which notifications email you on your profile.",
+        "From Riverside Robotics on Bananasplit. Change which notifications email you on your profile.",
       ].join("\n\n"),
     );
     for (const line of ["Riverside Robotics", "Venue booked", "Open in Bananasplit"]) {
       expect(email.html).toContain(line);
     }
+    // One button, its link never spelled out again, and nothing above the message.
+    expect(email.html).not.toContain("Or paste this link");
   });
 
   it("leaves the logo out when there is no app URL, and still renders", () => {
@@ -176,7 +177,7 @@ describe("layout (Moonstone light)", () => {
     vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "");
     const email = testEmail({ orgName: "Riverside Robotics", senderLabel: "Resend" });
     expect(email.html).not.toContain("<img");
-    expect(email.text).toContain("If you received it, the sender works.");
+    expect(email.text).toContain("It works.");
   });
 });
 

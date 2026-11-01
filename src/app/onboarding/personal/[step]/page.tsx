@@ -2,19 +2,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { EmailsStep } from "@/app/onboarding/organization/[orgSlug]/emails-step";
-import { IMessageStep } from "@/app/onboarding/organization/[orgSlug]/imessage-step";
 import { ImportStep } from "@/app/onboarding/organization/[orgSlug]/import-step";
 import { LabelsStep } from "@/app/onboarding/organization/[orgSlug]/labels-step";
 import { ProfileForm } from "@/app/onboarding/profile/profile-form";
 import { exitClass, SetupShell } from "@/components/onboarding/setup-shell";
 import { requireUser } from "@/lib/auth/session";
 import { setupEmailSwitches } from "@/lib/onboarding/emails";
-import {
-  isSetupStep,
-  previousSetupStep,
-  setupStepHref,
-  START_HREF,
-} from "@/lib/onboarding/steps";
+import { isSetupStep, previousSetupStep, setupStepHref, START_HREF } from "@/lib/onboarding/steps";
 import { withOrgTx, withUserTx } from "@/server/db/context";
 import { loadTaskLabels } from "@/server/onboarding/org-setup";
 import { getOnboardingProfile } from "@/server/onboarding/profile";
@@ -84,8 +78,6 @@ export default async function PersonalSetupStepPage({
         />,
       );
     }
-    case "imessage":
-      return shell(<IMessageStep {...base} />);
     case "profile":
       return shell(
         <ProfileForm

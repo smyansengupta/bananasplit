@@ -128,10 +128,7 @@ export default async function VerifyEmailPage({
   // in first (and come back here).
   if (!session) {
     return (
-      <Shell
-        title="Log in to confirm."
-        description="Log in with the account you signed up with, and you'll come straight back here to confirm your email."
-      >
+      <Shell title="Log in to confirm." description="Use the account you signed up with.">
         <Link
           href={signInPath(`/verify-email/${encodeURIComponent(token)}`)}
           className={cn(pill(), "w-full")}
@@ -143,10 +140,7 @@ export default async function VerifyEmailPage({
   }
 
   return (
-    <Shell
-      title="Confirm your email."
-      description="Confirm this address to finish setting up your Bananasplit account."
-    >
+    <Shell title="Confirm your email." description="One tap and you're in.">
       <form action={confirmEmailAction.bind(null, token)}>
         <button type="submit" className={cn(pill(), "w-full")}>
           Confirm email
