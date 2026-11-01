@@ -69,6 +69,7 @@ import {
   type DirectorySort,
 } from "./directory-query";
 import { PersonProfile, ROLE_LABELS } from "./person-profile";
+import { majorAndYear } from "./profile-links";
 
 /**
  * The people directory (Moonstone 12.1 and 12.2), with the same toolbar as
@@ -889,8 +890,8 @@ function Presence({ person, size }: { person: DirectoryPerson; size: "lg" | "md"
 
 /**
  * A grid card: picture (with the online dot), name and pronouns, title,
- * then team, role and class as chips, their major, and a last line for
- * now: online, free, or when they were last here.
+ * then team and role as chips, their major and class, and a last line
+ * for now: online, free, or when they were last here.
  */
 function PersonCard({
   person,
@@ -909,6 +910,7 @@ function PersonCard({
   onSelect: (id: string) => void;
 }) {
   const name = person.name ?? "Unnamed member";
+  const studies = majorAndYear(person.major, person.gradYear);
   const status = person.online
     ? { text: "Online now", tone: "text-success font-medium" }
     : person.freeNow
@@ -951,15 +953,10 @@ function PersonCard({
           showNoTeam && <span className="text-muted-foreground text-xs">Not on the chart</span>
         )}
         {person.role !== "MEMBER" && <Badge variant="secondary">{ROLE_LABELS[person.role]}</Badge>}
-        {person.gradYear && (
-          <span className="text-muted-foreground figure text-xs">Class of {person.gradYear}</span>
-        )}
       </span>
-      {(person.major || status) && (
+      {(studies || status) && (
         <span className="mt-auto flex min-w-0 flex-col gap-0.5 text-xs">
-          {person.major && (
-            <span className="text-muted-foreground truncate">{person.major}</span>
-          )}
+          {studies && <span className="text-muted-foreground truncate">{studies}</span>}
           {status && <span className={status.tone}>{status.text}</span>}
         </span>
       )}

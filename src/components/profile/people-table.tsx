@@ -202,7 +202,7 @@ export function PeopleTable({
       </div>
 
       <div className="-mx-1 overflow-x-auto px-1">
-        <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[820px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr className="text-muted-foreground text-left text-[13px]">
               {access.canManage && (
@@ -349,7 +349,7 @@ function PersonLine({
               type="button"
               onClick={() => void copyText(email, "Email copied")}
               title="Copy"
-              className="text-muted-foreground hover:text-foreground focus-glow inline-flex max-w-full items-center gap-1.5 rounded-full text-left break-all outline-none"
+              className="text-muted-foreground hover:text-foreground focus-glow inline-flex max-w-full items-center gap-1.5 rounded-full text-left whitespace-nowrap outline-none"
             >
               {email}
               <Copy
