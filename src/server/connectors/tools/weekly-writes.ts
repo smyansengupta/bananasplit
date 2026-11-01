@@ -46,13 +46,13 @@ const postInput = z.object({
     .trim()
     .max(2000)
     .optional()
-    .describe("A note for the club, posted with the lists."),
+    .describe("A note for the organization, posted with the lists."),
 });
 
 const postOutput = z.object({
   space: spaceRef,
   weekStart: z.string().describe("The week's first day (yyyy-mm-dd)."),
-  weekEnd: z.string().describe("The week's last day, the club's update day."),
+  weekEnd: z.string().describe("The week's last day, the organization's update day."),
   done: z.array(z.string()).describe("What the post lists as finished."),
   next: z.array(z.string()),
   blocked: z.array(z.string()),
@@ -112,7 +112,7 @@ export const registerWeeklyWrites: ToolRegistrar = (server, session) => {
     {
       title: "Post a weekly update",
       description:
-        "Posts the member's own weekly update in a club, as get_weekly_summary drafts it: what they finished, what is next and what is blocked, with an optional note. Private tasks are left out. Posting a week again replaces that week's post.",
+        "Posts the member's own weekly update in an organization, as get_weekly_summary drafts it: what they finished, what is next and what is blocked, with an optional note. Private tasks are left out. Posting a week again replaces that week's post.",
       inputSchema: postInput,
       outputSchema: postOutput,
       annotations: POSTS,

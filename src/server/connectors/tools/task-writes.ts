@@ -70,7 +70,7 @@ const confirmArg = z
   .boolean()
   .optional()
   .describe(
-    "The member confirmed assigning someone above them in the club's org chart (the app asks first).",
+    "The member confirmed assigning someone above them in the organization's org chart (the app asks first).",
   );
 
 const taskOutput = z.object({ space: spaceRef, task: taskSummary });
@@ -177,8 +177,8 @@ const updateInput = z.object({
     .optional()
     .describe('A new owner: "me", or a member id from list_members; null for nobody.'),
   due: dayArg.nullable().optional().describe("A new due day (yyyy-mm-dd); null clears it."),
-  priority: priorityArg.optional(),
-  status: statusArg.optional(),
+  priority: priorityArg.optional().describe("A new priority."),
+  status: statusArg.optional().describe("A new status; blocked needs a blockedReason."),
   blockedReason: blockedReasonArg.optional(),
   confirmAboveLevel: confirmArg,
 });
@@ -287,7 +287,7 @@ export const registerTaskWrites: ToolRegistrar = (server, session) => {
     {
       title: "Create a task",
       description:
-        "Creates a task in one space, as the member: a title, and optionally a description, owner, due day, priority and status. The club's task rules apply, and the owner is notified, as in the app.",
+        "Creates a task in one space, as the member: a title, and optionally a description, owner, due day, priority and status. The space's task rules apply, and the owner is notified, as in the app.",
       inputSchema: createInput,
       outputSchema: taskOutput,
       annotations: ADDS,
