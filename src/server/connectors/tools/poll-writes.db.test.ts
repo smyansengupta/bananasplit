@@ -114,7 +114,7 @@ describe("vote_in_poll", () => {
           { label: "Saturday", votes: 1 },
         ],
         voters: 1,
-        url: `http://localhost:3000/app/${club.slug}/calendar/polls/${ids.night}`,
+        url: `http://localhost:3000/app/${club.slug}/forms/polls/${ids.night}`,
       },
     });
     // One after another: the owner client has a small pool.

@@ -129,7 +129,7 @@ describe("list_open_polls", () => {
       title: `Which night for the gala ${fx.tag}?`,
       answers: 2,
       youAnswered: true,
-      url: `http://localhost:3000/app/${club.slug}/calendar/polls/${ids.night}`,
+      url: `http://localhost:3000/app/${club.slug}/forms/polls/${ids.night}`,
     });
     expect(res.polls[0]).toMatchObject({
       kind: "availability",
