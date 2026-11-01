@@ -36,15 +36,20 @@ change is recorded in the org's audit log and emailed to all owners.
 | File storage | Optional. `BLOB_READ_WRITE_TOKEN` (private: receipts, exports, org-chart sources, Notes files), `BLOB_PUBLIC_READ_WRITE_TOKEN` (public: avatars, logos). Without them files are kept in Postgres (`StoredBlob`, reached only through `app.blob_*`, app_service); `FILE_STORAGE=database` forces that |
 | Previews | their own Blob stores, KEK and `CRON_SECRET`; no live mail; `PREVIEW_BLOB_STORE_ID`, `PREVIEW_PUBLIC_BLOB_STORE_ID`, `PREVIEW_KEK_FINGERPRINT`, `SECRETS_KEK_ENV=preview`; jobs drain only on a database marked `app.fixture_only = 'on'` |
 | Health | `GET /api/health` (details with the `CRON_SECRET` bearer); RUNBOOK step 7 |
+| AI connectors | Optional. `CONNECTORS_ENABLED`, `WORKOS_API_KEY`, `WORKOS_AUTHKIT_DOMAIN` (WorkOS AuthKit issues the tokens); `OPENAI_APPS_CHALLENGE` serves ChatGPT's domain check at `/.well-known/openai-apps-challenge`; RUNBOOK "AI connectors", `docs/features/ai-connectors-launch.md` |
 
 Rate limits (Postgres-backed, shared by every instance): sign-in 30 per 15
 minutes per IP and 10 per 15 minutes per email; sign-up 5 per hour per IP and
 3 per hour per email; invitations 20 per hour per org; poll responses 30 per
 minute per IP; receipt uploads 20 per hour per user; the ICS feed 60 per hour
 per link; org creation 3 per day per user; new confirmation links 3 per hour
-per user; AI connector requests 600 per hour per connected app, of which
-changes (the write tools) 120 per hour, and connecting an app (`/connect`'s Continue) 20 per hour per user
-(docs/features/ai-connectors.md). A daily maintenance job prunes old rate-limit buckets and finished
+per user; and AI connectors (docs/features/ai-connectors.md): every MCP
+request 600 per hour per connected app (`connector.call`, answered 429
+before any tool runs), of which changes through the write tools 120 per
+hour (`connector.write`, counted before the space opens, so a refused
+write counts too, and answered as a tool error), and connecting an app
+(`/connect`'s Continue) 20 per hour per user (`connector.connect`). Reads
+have no limit of their own beyond `connector.call`. A daily maintenance job prunes old rate-limit buckets and finished
 jobs, and deletes password sign-ups never verified within 72 hours (no
 Google account, no membership).
 
