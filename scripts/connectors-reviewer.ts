@@ -242,8 +242,12 @@ async function seed(tx: Tx, args: Args, passwordHash: string | null): Promise<vo
     });
   }
 
-  // ---- The organization: made fresh each run (deleting it cascades)
-  await tx.organization.deleteMany({ where: { slug: ORG.slug } });
+  // ---- The organization: made fresh each run (deleting it cascades). Only
+  // the reviewer's own is deleted: if anyone else's held the slug, the
+  // create below would fail and roll everything back.
+  await tx.organization.deleteMany({
+    where: { slug: ORG.slug, memberships: { some: { userId: me.id, role: Role.OWNER } } },
+  });
   const org = await tx.organization.create({
     data: { name: ORG.name, slug: ORG.slug, timezone: TZ, plan: OrgPlan.CLUB },
     select: { id: true },
@@ -664,6 +668,14 @@ async function main(): Promise<void> {
           `${args.email} already has an account that this script didn't make. Use another address.`,
         );
       }
+    }
+    // The reviewer organization's slug must be free, or the reviewer's own.
+    const holder = await prisma.organization.findUnique({
+      where: { slug: ORG.slug },
+      select: { memberships: { where: { role: Role.OWNER }, select: { userId: true } } },
+    });
+    if (holder && !holder.memberships.some((m) => m.userId === existing?.id)) {
+      fail(`/app/${ORG.slug} belongs to an organization this script didn't make.`);
     }
 
     // Only a new account gets a generated password; a re-run keeps the old one.
