@@ -3,11 +3,13 @@ import { can } from "@/lib/auth/permissions";
 import { chartTeams, parseNamedTeams, type ChartTeams } from "@/lib/org-chart/teams";
 import { parseStoredLinks, type ProfileLink } from "@/lib/profile/links";
 import { effectiveTimezone } from "@/lib/profile/timezone";
+import { ago } from "@/lib/relative-time";
 import { parseQuery } from "@/lib/search/text";
 import { dueDateKey, localDateKey } from "@/lib/tasks/dates";
 import { withOrgTx } from "@/server/db/context";
 import { userPublicSelect } from "@/server/members";
 import { getOpenTasks } from "@/server/org-chart/service";
+import { isOnline, lastSeenByUser } from "@/server/presence";
 
 import { isFreeNow } from "./presence";
 import { termTrigrams } from "./trigrams";
@@ -53,6 +55,10 @@ export interface DirectoryPerson {
   teamKey: string | null;
   /** null when the viewer may not see their busy hours, or they never shared any. */
   freeNow: boolean | null;
+  /** In the app now (src/server/presence.ts). */
+  online: boolean;
+  /** ISO timestamp of their last beat in this org, or null if never. */
+  lastSeenAt: string | null;
 }
 
 export interface DirectoryTeam {
@@ -173,8 +179,10 @@ export async function loadDirectory(
        WHERE m."organizationId" = ${organizationId}`;
     const busy = new Map(busyRows.map((r) => [r.id, r]));
     const chart = await loadChartForPeople(db, organizationId);
+    const seen = await lastSeenByUser(db, organizationId);
     const people: DirectoryPerson[] = rows.map(({ user, role, title, joinedAt }) => {
       const { timezone, ...rest } = user;
+      const lastSeen = seen.get(user.id) ?? null;
       return {
         ...rest,
         role,
@@ -186,6 +194,8 @@ export async function loadDirectory(
           effectiveTimezone({ timezone }, { timezone: orgTimezone }),
           now,
         ),
+        online: isOnline(lastSeen, now),
+        lastSeenAt: lastSeen?.toISOString() ?? null,
       };
     });
     const used = new Set(people.map((p) => p.teamKey));
@@ -330,6 +340,12 @@ export interface PersonSheet {
   /** Whether they ever shared their availability (null when the viewer may not see it). */
   availabilityShared: boolean | null;
   freeNow: boolean | null;
+  /** In the app now (src/server/presence.ts). */
+  online: boolean;
+  /** ISO timestamp of their last beat in this org, or null if never. */
+  lastSeenAt: string | null;
+  /** When they were last here, in words ("2 hours ago"), when not online now. */
+  seenAgo: string | null;
   /** Their effective time zone (busy hours are in it). */
   timezone: string;
   team: DirectoryTeam | null;
@@ -403,6 +419,10 @@ export async function getPersonSheet(
     const timezone = effectiveTimezone({ timezone: user.timezone }, { timezone: orgTimezone });
 
     const chart = await loadChartForPeople(db, organizationId);
+    const presence = await db.memberPresence.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: { lastSeenAt: true },
+    });
     const byId = new Map(chart.positions.map((p) => [p.id, p]));
     const ref = (p: (typeof chart.positions)[number]): SheetPositionRef => ({
       key: p.key,
@@ -451,6 +471,10 @@ export async function getPersonSheet(
       busy,
       availabilityShared,
       freeNow: isFreeNow({ busy, shared: availabilityShared }, timezone, now),
+      online: isOnline(presence?.lastSeenAt, now),
+      lastSeenAt: presence?.lastSeenAt.toISOString() ?? null,
+      seenAgo:
+        presence && !isOnline(presence.lastSeenAt, now) ? ago(presence.lastSeenAt, now) : null,
       timezone,
       team: team ? { key: team.key, name: team.name, slot: team.slot } : null,
       positions: mine.map((p) => ({ key: p.key, title: p.title, isAdvisor: p.isAdvisor })),

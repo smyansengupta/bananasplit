@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { presenceBeatAction } from "@/app/app/[orgSlug]/_shell/presence-actions";
+import { publishOnline } from "@/components/shell/presence-store";
 import { fadeLabel, surfaceTone, useSidebarMode } from "@/components/shell/sidebar-mode-context";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,8 @@ export interface SidebarPeopleData {
   count: number;
   /** A few of the others here now, most recently seen first. */
   faces: (UserAvatarUser & { id: string })[];
+  /** Every other member here now (passed on to People's dots). */
+  ids: string[];
 }
 
 /** How often the open app says you're here (as HEARTBEAT_MS, src/server/presence.ts). */
@@ -24,7 +27,8 @@ const BEAT_MS = 60_000;
  * opening People. While the
  * tab is open and visible it marks you here once a minute and refreshes the
  * list (src/server/presence.ts); a hidden tab stops, so you drop off after
- * a couple of minutes away. Folds away on the rail.
+ * a couple of minutes away. Each answer is also published for People
+ * (presence-store.ts), so its dots follow along. Folds away on the rail.
  */
 export function SidebarPeople({
   orgId,
@@ -50,7 +54,9 @@ export function SidebarPeople({
       if (document.visibilityState !== "visible") return;
       presenceBeatAction(orgId)
         .then((next) => {
-          if (live) setPeople(next);
+          if (!live) return;
+          setPeople(next);
+          publishOnline(orgId, next.ids);
         })
         .catch(() => {});
     };

@@ -1,6 +1,18 @@
 "use client";
 
-import { ArrowUpRight, ChevronDown, LayoutGrid, List, Search, Table2, X } from "@/components/icons";
+import {
+  ArrowUpDown,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  CircleDot,
+  Clock,
+  LayoutGrid,
+  List,
+  Search,
+  Table2,
+  Users,
+} from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -9,11 +21,14 @@ import { loadPersonSheetAction, searchPeopleAction } from "@/app/app/[orgSlug]/p
 import { EmptyState } from "@/components/empty-state";
 import { useMediaQuery } from "@/components/org-chart/use-media-query";
 import { PinToggle } from "@/components/pins/pins-context";
+import { useLiveOnline } from "@/components/shell/presence-store";
 import { Button } from "@/components/ui/button";
 import { TagChip } from "@/components/ui/chip";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -21,12 +36,14 @@ import {
 import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { SearchField } from "@/components/ui/search-field";
 import { Segmented, chipClass } from "@/components/ui/segmented";
+import { ExpandChip, FilterPill, FiltersMenu } from "@/components/ui/toolbar-chips";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { personHref } from "@/lib/profile/href";
+import { isTypingTarget } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import type {
   DirectoryPerson,
@@ -48,16 +65,21 @@ import {
   NO_TEAM_KEY,
   type DirectoryQuery,
   type DirectoryRole,
+  type DirectorySort,
 } from "./directory-query";
 import { PersonProfile, ROLE_LABELS } from "./person-profile";
 import { PeopleTable, type InvitedRow, type RosterAccess } from "./people-table";
 
 /**
- * The people directory (Moonstone 12.1 and 12.2): search as you type
- * (the database does the matching, typo-tolerant, with an instant local
- * preview while it answers), filter pills for team, role, year and Free
- * now, sort by team, name or newest, grid or dense list, and the profile
- * sheet beside the list (full screen on phones). ↑ ↓ move between people,
+ * The people directory (Moonstone 12.1 and 12.2), with the same toolbar as
+ * Tasks: the layout (grid, list, table), who to show (everyone, online
+ * now, free now), one Filters chip (team, role, year), the sort and the
+ * search at the right ("/" focuses it, the database does the matching,
+ * typo-tolerant, with an instant local preview while it answers), and
+ * what's narrowing the list underneath, each removable. A green dot is
+ * someone in the app now, kept live by the sidebar's heartbeat
+ * (presence-store.ts). The profile opens over the list (full screen on
+ * phones). ↑ ↓ move between people,
  * Esc closes the sheet, and the whole state lives in the URL (?person=).
  * Big clubs render in pages of RENDER_STEP as you scroll, with an A-Z rail
  * when sorted by name.
@@ -98,7 +120,7 @@ export function PeopleDirectory({
   orgSlug,
   orgTimezone,
   viewerId,
-  people,
+  people: rendered,
   teams,
   total,
   initial,
@@ -121,7 +143,19 @@ export function PeopleDirectory({
   );
   const listRef = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const latest = useRef("");
+
+  // Who's online follows the sidebar's heartbeat; you're always here.
+  const live = useLiveOnline(orgId);
+  const people = useMemo(
+    () =>
+      rendered.map((p) => {
+        const online = p.id === viewerId || (live ? live.has(p.id) : p.online);
+        return online === p.online ? p : { ...p, online };
+      }),
+    [rendered, live, viewerId],
+  );
 
   const teamsByKey = useMemo(() => new Map(teams.map((t) => [t.key, t])), [teams]);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
@@ -134,6 +168,20 @@ export function PeopleDirectory({
     [people],
   );
   const freeCount = useMemo(() => people.filter((p) => p.freeNow).length, [people]);
+  const onlineCount = useMemo(() => people.filter((p) => p.online).length, [people]);
+
+  // `/` focuses search from anywhere that is not already a field (as on Tasks).
+  useEffect(() => {
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.defaultPrevented || isTypingTarget(event)) return;
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const update = useCallback((patch: Partial<DirectoryQuery>) => {
     setQuery((q) => ({ ...q, ...patch }));
@@ -177,9 +225,9 @@ export function PeopleDirectory({
     return localMatch(people, term, teamsByKey);
   }, [term, answered, people, byId, teamsByKey]);
   const filtered = useMemo(() => applyFilters(matched, query), [matched, query]);
-  // A phone in a club with no org chart sorts by name: by team, everyone
-  // would sit under one "Not on the chart".
-  const sort = isPhone && teams.length === 0 && query.sort === "team" ? "name" : query.sort;
+  // With no org chart, Team sorts by name: by team, everyone would sit
+  // under one "Not on the chart".
+  const sort = teams.length === 0 && query.sort === "team" ? "name" : query.sort;
   const groups = useMemo(
     () => groupPeople(filtered, sort, teams, { ranked: Boolean(term) }),
     [filtered, sort, teams, term],
@@ -295,12 +343,27 @@ export function PeopleDirectory({
 
   // ---------------------------------------------------------- render
 
-  const activeFilters = Boolean(query.team || query.role || query.year || query.free);
+  const activeFilters = Boolean(
+    query.team || query.role || query.year || query.free || query.online,
+  );
+  const clearFilters = { team: null, role: null, year: null, free: false, online: false };
   const countText =
     filtered.length === total && !term && !activeFilters
       ? `${total} ${total === 1 ? "member" : "members"}`
       : `${filtered.length} of ${total} ${total === 1 ? "member" : "members"}`;
   const letters = sort === "name" ? groups.map((g) => g.label) : [];
+  const sorts = SORTS.filter((o) => o.value !== "team" || teams.length > 0);
+  const show = query.online ? "online" : query.free ? "free" : "";
+  const teamOptions = [
+    ...teams.map((t) => ({
+      value: t.key,
+      label: t.name,
+      color: `var(--chart-${((t.slot - 1) % 5) + 1})`,
+    })),
+    ...(people.some((p) => !p.teamKey) ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }] : []),
+  ];
+  const teamLabel = (key: string) =>
+    key === NO_TEAM_KEY ? "Not on the chart" : (teamsByKey.get(key)?.name ?? "Team");
 
   const jump = (letter: string) => {
     const index = rows.findIndex((r) => r.kind === "header" && r.group.label === letter);
@@ -336,37 +399,20 @@ export function PeopleDirectory({
     <SheetSkeleton />
   );
 
-  const layoutSwitch = (
-    <Segmented
-      label="Layout"
-      value={query.view}
-      onSelect={(view) => update({ view: view as DirectoryQuery["view"] })}
-      options={[
-        { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
-        { value: "list", label: "List", icon: List, compact: true, title: "List" },
-        { value: "table", label: "Table", icon: Table2, compact: true, title: "Table" },
-      ]}
-    />
-  );
-
   return (
     <div className="grid items-start gap-[18px]">
-      <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
+      <div className="space-y-3">
         {/* A phone: the one list toolbar (as on Tasks and Files), with the sort on its left (grid and list are one and the same there). */}
         <PhoneToolbar
           leading={
             <Segmented
               label="Sort people"
               value={sort}
-              onSelect={(v) => update({ sort: v as DirectoryQuery["sort"] })}
-              options={[
-                ...(teams.length > 0 ? [{ value: "team", label: "Team" }] : []),
-                { value: "name", label: "Name" },
-                { value: "new", label: "Newest" },
-              ]}
+              onSelect={(v) => update({ sort: v as DirectorySort })}
+              options={sorts.map((o) => ({ value: o.value, label: o.short }))}
             />
           }
-          filterCount={[query.team, query.role, query.year, query.free].filter(Boolean).length}
+          filterCount={[query.team, query.role, query.year, show].filter(Boolean).length}
           onFilters={() => setFiltersOpen(true)}
           searchLabel="Search people"
           searchActive={Boolean(query.q)}
@@ -391,19 +437,16 @@ export function PeopleDirectory({
           title="Filters"
           description="Narrow the list."
           canClear={activeFilters}
-          onClear={() => update({ team: null, role: null, year: null, free: false })}
+          onClear={() => update(clearFilters)}
         >
           <FilterChoices
-            title="Free now"
-            value={query.free ? "free" : ""}
-            onPick={(v) => update({ free: v === "free" })}
+            title="Show"
+            value={show}
+            onPick={(v) => update({ online: v === "online", free: v === "free" })}
             options={[
-              { value: "", label: "Anyone" },
-              {
-                value: "free",
-                label: `Free now${freeCount > 0 ? ` (${freeCount})` : ""}`,
-                color: "var(--success)",
-              },
+              { value: "", label: "Everyone" },
+              { value: "online", label: `Online now (${onlineCount})`, color: "var(--success)" },
+              { value: "free", label: `Free now${freeCount > 0 ? ` (${freeCount})` : ""}` },
             ]}
           />
           {teams.length > 0 && (
@@ -411,17 +454,7 @@ export function PeopleDirectory({
               title="Team"
               value={query.team ?? ""}
               onPick={(v) => update({ team: v || null })}
-              options={[
-                { value: "", label: "All teams" },
-                ...teams.map((t) => ({
-                  value: t.key,
-                  label: t.name,
-                  color: `var(--chart-${((t.slot - 1) % 5) + 1})`,
-                })),
-                ...(people.some((p) => !p.teamKey)
-                  ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }]
-                  : []),
-              ]}
+              options={[{ value: "", label: "All teams" }, ...teamOptions]}
             />
           )}
           {roles.length > 1 && (
@@ -448,116 +481,165 @@ export function PeopleDirectory({
           )}
         </FilterSheet>
 
-        <div className="flex flex-wrap items-center gap-2 max-md:hidden">
-          <SearchField
-            value={query.q}
-            onValueChange={(q) => update({ q: q.slice(0, 80) })}
-            onClear={() => update({ q: "" })}
-            placeholder="Search"
-            aria-label="Search people"
-            className="min-w-[220px] flex-1 sm:w-auto"
-            maxLength={80}
-            autoComplete="off"
-          />
-          <Segmented
-            label="Sort people"
-            value={query.sort}
-            onSelect={(sort) => update({ sort: sort as DirectoryQuery["sort"] })}
-            options={[
-              { value: "team", label: "Team" },
-              { value: "name", label: "Name" },
-              { value: "new", label: "Newest" },
-            ]}
-          />
-          {layoutSwitch}
-        </div>
-
-        <div
-          className="mt-3 flex flex-wrap items-center gap-2 max-md:hidden"
-          role="group"
-          aria-label="Filters"
-        >
-          <button
-            type="button"
-            aria-pressed={query.free}
-            onClick={() => update({ free: !query.free })}
-            className={chipClass(query.free)}
-          >
-            <span
-              aria-hidden="true"
-              className="bg-success size-2 rounded-full shadow-[0_0_0_3px_color-mix(in_oklab,var(--success)_24%,transparent)]"
-            />
-            Free now{freeCount > 0 && <span className="figure opacity-70">{freeCount}</span>}
-          </button>
-          {teams.length > 0 && (
-            <FilterMenu
-              label="Team"
-              value={query.team}
-              display={
-                query.team === NO_TEAM_KEY
-                  ? "Not on the chart"
-                  : query.team
-                    ? teamsByKey.get(query.team)?.name
-                    : null
-              }
-              allLabel="All teams"
+        {/* Wider: Tasks' bar, in Tasks' order (layout, who, Filters, then sort and search at the right). */}
+        <div className="@container/toolbar max-md:hidden">
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              label="Layout"
+              value={query.view}
+              onSelect={(view) => update({ view: view as DirectoryQuery["view"] })}
               options={[
-                ...teams.map((t) => ({
-                  value: t.key,
-                  label: t.name,
-                  color: `var(--chart-${((t.slot - 1) % 5) + 1})`,
-                })),
-                ...(people.some((p) => !p.teamKey)
-                  ? [{ value: NO_TEAM_KEY, label: "Not on the chart" }]
-                  : []),
+                { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
+                { value: "list", label: "List", icon: List, compact: true, title: "List" },
+                { value: "table", label: "Table", icon: Table2, compact: true, title: "Table" },
               ]}
-              onChange={(team) => update({ team })}
+              labelsFrom="sr-only @[48rem]/toolbar:not-sr-only"
+              className="shrink-0"
             />
-          )}
-          {roles.length > 1 &&
-            roles.map((r) => (
-              <button
-                key={r}
-                type="button"
-                aria-pressed={query.role === r}
-                onClick={() => update({ role: query.role === r ? null : r })}
-                className={chipClass(query.role === r)}
-              >
-                {ROLE_LABELS[r]}
-              </button>
-            ))}
-          {years.length > 0 && (
-            <FilterMenu
-              label="Year"
-              value={query.year ? String(query.year) : null}
-              display={query.year ? `Class of ${query.year}` : null}
-              allLabel="All years"
-              options={years.map((y) => ({ value: String(y), label: `Class of ${y}` }))}
-              onChange={(year) => update({ year: year ? Number(year) : null })}
-            />
-          )}
-          {activeFilters && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => update({ team: null, role: null, year: null, free: false })}
-            >
-              <X aria-hidden="true" />
-              Clear
-            </Button>
-          )}
-          <span
-            className="text-muted-foreground ml-auto text-[13px]"
-            role="status"
-            aria-live="polite"
-          >
-            {countText}
-            {close && ", close matches"}
-          </span>
+
+            {/* Who to show, as icons that say what they are on hover or focus (Tasks' Mine, My team, Everyone). */}
+            <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Who to show">
+              <ExpandChip
+                icon={Users}
+                label="Everyone"
+                active={!show}
+                onClick={() => update({ online: false, free: false })}
+              />
+              <ExpandChip
+                icon={CircleDot}
+                label={`Online now (${onlineCount})`}
+                active={show === "online"}
+                onClick={() => update({ online: true, free: false })}
+              />
+              <ExpandChip
+                icon={Clock}
+                label={`Free now (${freeCount})`}
+                active={show === "free"}
+                onClick={() => update({ free: true, online: false })}
+              />
+            </div>
+
+            {(teams.length > 0 || roles.length > 1 || years.length > 0) && (
+              <FiltersMenu
+                count={[query.team, query.role, query.year].filter(Boolean).length}
+                items={[
+                  ...(teams.length > 0
+                    ? [
+                        {
+                          name: "Team",
+                          node: (
+                            <FilterMenu
+                              value={query.team}
+                              display={query.team ? teamLabel(query.team) : null}
+                              allLabel="All teams"
+                              options={teamOptions}
+                              onChange={(team) => update({ team })}
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(roles.length > 1
+                    ? [
+                        {
+                          name: "Role",
+                          node: (
+                            <FilterMenu
+                              value={query.role}
+                              display={query.role ? ROLE_LABELS[query.role] : null}
+                              allLabel="All roles"
+                              options={roles.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+                              onChange={(role) => update({ role: role as DirectoryRole | null })}
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(years.length > 0
+                    ? [
+                        {
+                          name: "Year",
+                          node: (
+                            <FilterMenu
+                              value={query.year ? String(query.year) : null}
+                              display={query.year ? `Class of ${query.year}` : null}
+                              allLabel="All years"
+                              options={years.map((y) => ({
+                                value: String(y),
+                                label: `Class of ${y}`,
+                              }))}
+                              onChange={(year) => update({ year: year ? Number(year) : null })}
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            )}
+
+            <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
+              <SortMenu sort={sort} sorts={sorts} onSort={(v) => update({ sort: v })} />
+              <SearchField
+                ref={searchRef}
+                value={query.q}
+                onValueChange={(q) => update({ q: q.slice(0, 80) })}
+                onClear={() => update({ q: "" })}
+                hint="/"
+                placeholder="Search people"
+                aria-label="Search people"
+                className="sm:max-w-56"
+                maxLength={80}
+                autoComplete="off"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    update({ q: "" });
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="relative mt-2 flex gap-3">
+        {/* What is narrowing the list, each removable on its own (as on Tasks). */}
+        {(activeFilters || term) && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {query.online && (
+              <FilterPill label="Online now" onClear={() => update({ online: false })} />
+            )}
+            {query.free && <FilterPill label="Free now" onClear={() => update({ free: false })} />}
+            {query.team && (
+              <FilterPill label={teamLabel(query.team)} onClear={() => update({ team: null })} />
+            )}
+            {query.role && (
+              <FilterPill label={ROLE_LABELS[query.role]} onClear={() => update({ role: null })} />
+            )}
+            {query.year && (
+              <FilterPill label={`Class of ${query.year}`} onClear={() => update({ year: null })} />
+            )}
+            {term && <FilterPill label={`“${term}”`} onClear={() => update({ q: "" })} />}
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground ms-1 text-xs underline-offset-4 hover:underline"
+              onClick={() => update({ q: "", ...clearFilters })}
+            >
+              Clear all
+            </button>
+            <span className="text-muted-foreground ms-auto text-[13px]">
+              {countText}
+              {close && ", close matches"}
+            </span>
+          </div>
+        )}
+        <span className="sr-only" role="status" aria-live="polite">
+          {countText}
+          {close && ", close matches"}
+        </span>
+      </div>
+
+      <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
+        <div className="relative flex gap-3">
           <div ref={listRef} data-person-list onKeyDown={onListKey} className="min-w-0 flex-1">
             {people.length === 0 ? (
               <EmptyState title="No members yet" />
@@ -570,9 +652,7 @@ export function PeopleDirectory({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      update({ q: "", team: null, role: null, year: null, free: false })
-                    }
+                    onClick={() => update({ q: "", ...clearFilters })}
                   >
                     Clear all
                   </Button>
@@ -764,11 +844,12 @@ function PeopleRows({
   );
 }
 
+/** Their picture, with a green dot while they're in the app. */
 function Presence({ person, size }: { person: DirectoryPerson; size: "lg" | "md" }) {
   return (
     <span className="relative inline-flex shrink-0">
       <UserAvatar user={person} size={size} />
-      {person.freeNow && (
+      {person.online && (
         <span
           aria-hidden="true"
           className={cn(
@@ -815,7 +896,8 @@ function PersonCard({
         <span className="text-muted-foreground block text-[13px] break-words">
           {[person.title, team].filter(Boolean).join(", ")}
         </span>
-        <span className="sr-only">{person.freeNow ? ", free now" : ""}</span>
+        {person.freeNow && <FreeNow className="mt-0.5 block" />}
+        {person.online && <span className="sr-only">, online now</span>}
       </span>
     </button>
   );
@@ -855,6 +937,8 @@ function PersonRow({
           </span>
         )}
         {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
+        {person.freeNow && <FreeNow className="ml-2" />}
+        {person.online && <span className="sr-only">, online now</span>}
       </span>
       <span className="text-muted-foreground min-w-0 break-words">{person.title ?? ""}</span>
       <span className="hidden min-w-0 md:block">
@@ -872,15 +956,59 @@ function PersonRow({
   );
 }
 
+/** Free by their shared hours, now. */
+function FreeNow({ className }: { className?: string }) {
+  return <span className={cn("text-success text-xs font-medium", className)}>Free now</span>;
+}
+
+const SORTS: readonly { value: DirectorySort; label: string; short: string }[] = [
+  { value: "team", label: "Team", short: "Team" },
+  { value: "name", label: "Name", short: "Name" },
+  { value: "new", label: "Newest", short: "New" },
+  { value: "active", label: "Recently active", short: "Active" },
+];
+
+/** The sort, beside the search: its own menu (as Tasks' Group). */
+function SortMenu({
+  sort,
+  sorts,
+  onSort,
+}: {
+  sort: DirectorySort;
+  sorts: readonly (typeof SORTS)[number][];
+  onSort: (sort: DirectorySort) => void;
+}) {
+  const current = SORTS.find((o) => o.value === sort) ?? SORTS[0];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={chipClass(false)} aria-label={`Sort by ${current.label}`}>
+          <ArrowUpDown className="size-3.5" aria-hidden="true" />
+          {current.label}
+          <ChevronDown className="size-3.5 opacity-70" aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+        {sorts.map((o) => (
+          <DropdownMenuItem key={o.value} onSelect={() => onSort(o.value)}>
+            {o.label}
+            {o.value === sort && <Check className="ms-auto size-4" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** One filter in the Filters panel: its value (or "All …"), opening the choices. */
 function FilterMenu({
-  label,
   value,
   display,
   allLabel,
   options,
   onChange,
 }: {
-  label: string;
   value: string | null;
   display: string | null | undefined;
   allLabel: string;
@@ -891,7 +1019,7 @@ function FilterMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className={chipClass(Boolean(value))}>
-          {value && display ? `${label}: ${display}` : label}
+          <span className="truncate">{(value && display) || allLabel}</span>
           <ChevronDown aria-hidden="true" className="opacity-70" />
         </button>
       </DropdownMenuTrigger>

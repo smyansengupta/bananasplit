@@ -5,8 +5,9 @@ import { NO_TEAM_KEY, type DirectoryQuery } from "./directory-query";
 
 /**
  * The directory's pure list logic: the instant local match shown while
- * the server search is on its way, the filters, the three sorts and the
- * groups (teams, letters, or one "newest first" run). Client-safe.
+ * the server search is on its way, the filters, the four sorts and the
+ * groups (teams, letters, one "newest first" run, or online and then
+ * everyone else by when they were last here). Client-safe.
  */
 
 export const ROLE_WORDS = { OWNER: "owner", ADMIN: "admin", TREASURER: "treasurer", MEMBER: "member" } as const;
@@ -50,7 +51,8 @@ export function applyFilters(people: readonly DirectoryPerson[], query: Director
       (!query.team || (query.team === NO_TEAM_KEY ? p.teamKey === null : p.teamKey === query.team)) &&
       (!query.role || p.role === query.role) &&
       (!query.year || p.gradYear === query.year) &&
-      (!query.free || p.freeNow === true),
+      (!query.free || p.freeNow === true) &&
+      (!query.online || p.online),
   );
 }
 
@@ -84,6 +86,27 @@ export function groupPeople(
   if (sort === "new") {
     const list = [...people].sort((a, b) => (a.joinedAt < b.joinedAt ? 1 : a.joinedAt > b.joinedAt ? -1 : byName(a, b)));
     return list.length ? [{ key: "new", label: "Newest first", color: null, people: list }] : [];
+  }
+  if (sort === "active") {
+    // Online first by name, then everyone else by when they were last here.
+    const online = people.filter((p) => p.online).sort(byName);
+    const away = people
+      .filter((p) => !p.online)
+      .sort((a, b) =>
+        a.lastSeenAt === b.lastSeenAt
+          ? byName(a, b)
+          : !a.lastSeenAt
+            ? 1
+            : !b.lastSeenAt
+              ? -1
+              : a.lastSeenAt < b.lastSeenAt
+                ? 1
+                : -1,
+      );
+    return [
+      ...(online.length ? [{ key: "online", label: "Online now", color: "var(--success)", people: online }] : []),
+      ...(away.length ? [{ key: "away", label: "Not online", color: null, people: away }] : []),
+    ];
   }
   if (sort === "name") {
     const list = [...people].sort(byName);

@@ -125,7 +125,7 @@ export function PersonProfile({
               decorative={false}
               className="ring-raised size-[72px] text-[22px] ring-4"
             />
-            {person.freeNow && (
+            {person.online && (
               <span
                 aria-hidden="true"
                 className="bg-success ring-raised absolute right-0.5 bottom-0.5 size-4 rounded-full ring-[3px]"
@@ -147,6 +147,17 @@ export function PersonProfile({
             {person.team && (
               <TagChip color={teamColor(person.team.slot)}>{person.team.name}</TagChip>
             )}
+            {/* In the app now, or when they last were; and free by their shared hours. */}
+            {person.online ? (
+              <span className="text-success ms-1 text-xs font-medium">Online now</span>
+            ) : (
+              person.seenAgo && (
+                <span className="text-muted-foreground ms-1 text-xs">
+                  Active {person.seenAgo}
+                </span>
+              )
+            )}
+            {person.freeNow && <span className="text-success ms-1 text-xs font-medium">Free now</span>}
           </div>
         </div>
 
