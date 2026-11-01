@@ -167,6 +167,7 @@ describe("static policy for every other route", () => {
       "/api/public/cbc/events",
       "/api/mcp",
       "/.well-known/oauth-protected-resource/api/mcp",
+      "/.well-known/openai-apps-challenge",
     ]) {
       expect(regex.test(path), path).toBe(true);
       expect(isNonceRoute(path), path).toBe(false);
