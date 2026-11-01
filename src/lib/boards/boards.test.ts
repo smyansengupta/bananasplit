@@ -58,4 +58,51 @@ describe("overview widgets", () => {
     expect(offered).not.toContain("getting-started");
     expect(resolveOverview(null, false).map((w) => w.type)).toContain("pinned");
   });
+
+  it("starts everyone on the approved default, row by row", () => {
+    expect(resolveOverview(null, false).map((w) => `${w.type}:${w.w}`)).toEqual([
+      "recap:4",
+      "since-you-were-here:2",
+      "waiting-on-you:2",
+      "my-tasks:2",
+      "deadlines:1",
+      "here-now:1",
+      "week:4",
+      "meetings:2",
+      "events:2",
+      "decisions:2",
+      "who-owns-what:2",
+      "weekly-pulse:4",
+      "polls:1",
+      "votes:1",
+      "focus-time:1",
+      "quick-capture:1",
+      "recent:2",
+      "pinned:2",
+    ]);
+    // Every row fills the four columns.
+    expect(resolveOverview(null, false).reduce((n, w) => n + w.w, 0) % 4).toBe(0);
+  });
+
+  it("offers Waiting on others without placing it", () => {
+    expect(overviewWidgetsFor(false).map((w) => w.type)).toContain("waiting-on-others");
+    expect(resolveOverview(null, false).map((w) => w.type)).not.toContain("waiting-on-others");
+  });
+
+  it("drops the widgets that left Home from a saved board", () => {
+    const saved = [
+      { id: "rsvp-goal", type: "rsvp-goal", w: 1, h: null },
+      { id: "notes", type: "notes", w: 2, h: null },
+      { id: "files", type: "files", w: 2, h: null },
+      { id: "people", type: "people", w: 1, h: null },
+      { id: "recent", type: "recent", w: 2, h: null },
+    ];
+    expect(resolveOverview(saved, true)).toEqual([{ id: "recent", type: "recent", w: 2, h: null }]);
+    const offered = overviewWidgetsFor(true).map((w) => w.type);
+    for (const gone of ["rsvp-goal", "notes", "files", "people"])
+      expect(offered).not.toContain(gone);
+    expect(OVERVIEW_WIDGETS.find((w) => w.type === "recent")?.title).toBe(
+      "Pick up where you left off",
+    );
+  });
 });

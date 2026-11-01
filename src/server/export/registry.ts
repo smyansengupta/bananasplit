@@ -125,6 +125,13 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "DataSourceSyncState", key: ID },
   // Links between things (the Linked panel): org data, both ends are ids.
   { model: "ItemLink", key: ID },
+  // Announcements to the whole organization, removed ones included (as the
+  // database trash above), and who has seen each: every member reads those
+  // rows ("Seen by N of M").
+  { model: "Announcement", key: ID },
+  { model: "AnnouncementSeen", key: ["announcementId", "userId"] },
+  // Home's Decisions: what was raised, who owns it, what was decided.
+  { model: "Decision", key: ID },
 ];
 
 /** Org tables that are deliberately not exported, and why. */

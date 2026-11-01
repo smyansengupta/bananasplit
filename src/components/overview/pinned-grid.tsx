@@ -26,8 +26,11 @@ import {
  * The Overview's Pinned widget: shortcuts to what the member pinned, as
  * coloured tiles (one colour per kind, as in Recently visited). Drag a page
  * from the sidebar (or any link) onto it to pin it, drag pins to reorder
- * them, and unpin with the x. Empty, it shows three ghost tiles of what a
- * pin looks like, the way to pin something, and lights up as a drop target.
+ * them, and unpin with the x. Each tile says how its thing is doing where
+ * that's cheap to read (a form's responses and how many are new since you
+ * last opened it, a task's due date, an event's RSVPs, a database's rows).
+ * Empty, it shows three ghost tiles of what a pin looks like, the way to
+ * pin something, and lights up as a drop target.
  */
 
 const GHOSTS: { kind: PinKind; Icon: typeof Pin }[] = [
@@ -39,9 +42,12 @@ const GHOSTS: { kind: PinKind; Icon: typeof Pin }[] = [
 export function PinnedGrid({
   orgId,
   pins,
+  live,
 }: {
   orgId: string;
   pins: readonly { id: string; href: string; label: string; kind: PinKind }[];
+  /** A line of live state per pin id ("34 responses, 2 new since Thu"). */
+  live?: Readonly<Record<string, string>>;
 }) {
   const router = useRouter();
   const pinsCtx = usePins();
@@ -112,7 +118,7 @@ export function PinnedGrid({
                       {pin.label}
                     </span>
                     <span className="text-muted-foreground mt-1 block truncate text-[12.5px]">
-                      {PIN_KIND_LABELS[pin.kind]}
+                      {live?.[pin.id] ?? PIN_KIND_LABELS[pin.kind]}
                     </span>
                   </span>
                 </Link>

@@ -1,79 +1,24 @@
 import { CircleCheck } from "@/components/icons";
+import type { ReactNode } from "react";
 
 import { dueLabel } from "@/lib/overview/format";
 import { dueDateKey } from "@/lib/tasks/dates";
 import { epicColor, epicOf } from "@/lib/tasks/epic";
-import { cn } from "@/lib/utils";
-import type { TaskExtras } from "@/server/overview/queries";
+import type { LinkedChip, TaskExtras } from "@/server/overview/queries";
 import type { MyOpenTask } from "@/server/tasks/queries";
 
 import { TaskRows, type TaskRowData } from "./task-rows";
 
+/** At most this many chips under a task. */
+const ROW_CHIPS = 3;
+
 /**
- * The Overview's "My tasks" (redesign guide 9): first the shape of the
- * week, how many of the viewer's open tasks fall due each day with what's
- * late on the left, then the tasks themselves, soonest due first. The
- * board's card header holds the count chip and ↗ (see the page).
+ * The Overview's "My tasks" (redesign guide 9): one warning when your
+ * deadlines pile up in the same week as a big event, then the tasks
+ * themselves, soonest due first, each with chips for the event, meeting or
+ * note it's linked to. The board's card header holds the count chip and ↗
+ * (see the page).
  */
-
-export interface DueDay {
-  key: string;
-  /** "Late", "Today", "Sun". */
-  label: string;
-  count: number;
-  tone: "late" | "today" | "day";
-}
-
-const BAR_MAX = 44;
-
-/** Tasks due per day, as columns: late in the danger colour, today in the accent. */
-export function DueStrip({ days }: { days: readonly DueDay[] }) {
-  const most = Math.max(1, ...days.map((d) => d.count));
-  return (
-    <ol
-      aria-label={`Due: ${days.map((d) => `${d.label} ${d.count}`).join(", ")}`}
-      className="grid grid-cols-8 items-end gap-1.5"
-    >
-      {days.map((d) => {
-        const h = d.count === 0 ? 4 : Math.max(10, (d.count / most) * BAR_MAX);
-        return (
-          <li key={d.key} className="flex min-w-0 flex-col items-center gap-1.5" aria-hidden="true">
-            <span
-              className={cn(
-                "text-[13px] leading-none font-semibold tabular-nums",
-                d.count === 0 && "text-muted-foreground/60",
-                d.tone === "late" && d.count > 0 && "text-tint-danger-foreground",
-              )}
-            >
-              {d.count}
-            </span>
-            <span
-              className={cn(
-                "block w-full max-w-9 rounded-[5px] transition-[height] duration-500",
-                d.count === 0
-                  ? "bg-muted-strong"
-                  : d.tone === "late"
-                    ? "bg-tint-danger-foreground"
-                    : d.tone === "today"
-                      ? "bg-brand-accent"
-                      : "bg-(--chart-1)",
-              )}
-              style={{ height: h }}
-            />
-            <span
-              className={cn(
-                "truncate text-[11.5px]",
-                d.tone === "today" ? "text-foreground font-semibold" : "text-muted-foreground",
-              )}
-            >
-              {d.label}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 export function MyTasksCard({
   orgId,
@@ -81,15 +26,18 @@ export function MyTasksCard({
   tasks,
   extras,
   todayKey,
-  strip,
+  links,
+  insight,
 }: {
   orgId: string;
   orgSlug: string;
   tasks: readonly MyOpenTask[];
   extras: ReadonlyMap<string, TaskExtras>;
   todayKey: string;
-  /** Late, then today and the six days after it. */
-  strip: readonly DueDay[];
+  /** What each task is linked to, keyed "task:id". */
+  links?: ReadonlyMap<string, readonly LinkedChip[]>;
+  /** The one finding over the list (an Insight), when there is one. */
+  insight?: ReactNode;
 }) {
   if (tasks.length === 0) {
     return (
@@ -121,15 +69,15 @@ export function MyTasksCard({
       context: task.parentTask ? `Part of ${task.parentTask.title}` : null,
       due: task.dueDate ? dueLabel(dueDateKey(task.dueDate), todayKey) : null,
       high: extra?.priority === "HIGH",
+      chips: (links?.get(`task:${task.id}`) ?? [])
+        .filter((c) => !c.done)
+        .slice(0, ROW_CHIPS)
+        .map(({ kind, label, href }) => ({ kind, label, href })),
     };
   });
   return (
     <div className="space-y-4">
-      {strip.some((d) => d.count > 0) && (
-        <div className="bg-muted/45 rounded-tile px-4 pt-3.5 pb-3">
-          <DueStrip days={strip} />
-        </div>
-      )}
+      {insight}
       <TaskRows orgId={orgId} tasks={rows} />
     </div>
   );

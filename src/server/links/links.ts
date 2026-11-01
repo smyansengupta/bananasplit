@@ -1,11 +1,13 @@
 import {
   isLinkKind,
+  isMeeting,
   KIND_WORD,
   type LinkedItem,
   type LinkKind,
   type LinkRef,
   type ResolvedRef,
 } from "@/lib/links";
+import { pollHref } from "@/lib/polls/paths";
 import type { TxClient } from "@/server/db/context";
 
 export { isLinkKind, type LinkedItem, type LinkKind, type LinkRef, type ResolvedRef };
@@ -21,6 +23,85 @@ export { isLinkKind, type LinkedItem, type LinkKind, type LinkRef, type Resolved
  */
 
 const key = (r: LinkRef) => `${r.kind}:${r.id}`;
+
+/** One link seen from the end that was asked about. */
+export interface LinkEnd {
+  /** The end asked about, as "kind:id". */
+  at: string;
+  /** The far end. */
+  other: LinkRef;
+  /** The ItemLink row, for Remove. */
+  linkId: string;
+}
+
+/**
+ * The one reader of ItemLink rows: every link touching `refs`, either way
+ * round, as (asked-about end, far end) pairs. Only the rows: the far ends
+ * are looked up by the caller as the viewer (resolveRefs), so a thing they
+ * can't see never shows. A far end of a kind the app doesn't know is left
+ * out. A link between two of `refs` comes back once from each end.
+ *
+ * `otherKinds` keeps only far ends of those kinds; `order` is by when the
+ * link was made, newest first unless asked otherwise.
+ */
+export async function readLinks(
+  db: TxClient,
+  orgId: string,
+  refs: readonly LinkRef[],
+  {
+    otherKinds,
+    order = "desc",
+    take = 500,
+  }: { otherKinds?: readonly LinkKind[]; order?: "asc" | "desc"; take?: number } = {},
+): Promise<LinkEnd[]> {
+  const wanted = new Set(refs.map(key));
+  if (wanted.size === 0) return [];
+  const byKind = new Map<LinkKind, Set<string>>();
+  for (const r of refs) byKind.set(r.kind, (byKind.get(r.kind) ?? new Set()).add(r.id));
+  const far = otherKinds ? { in: [...otherKinds] } : undefined;
+  const rows = await db.itemLink.findMany({
+    where: {
+      organizationId: orgId,
+      OR: [...byKind].flatMap(([kind, ids]) => [
+        { fromKind: kind, fromId: { in: [...ids] }, ...(far ? { toKind: far } : {}) },
+        { toKind: kind, toId: { in: [...ids] }, ...(far ? { fromKind: far } : {}) },
+      ]),
+    },
+    select: { id: true, fromKind: true, fromId: true, toKind: true, toId: true },
+    orderBy: { createdAt: order },
+    take,
+  });
+  const keep = (kind: string): kind is LinkKind =>
+    isLinkKind(kind) && (!otherKinds || otherKinds.includes(kind));
+  const out: LinkEnd[] = [];
+  for (const r of rows) {
+    const from = `${r.fromKind}:${r.fromId}`;
+    const to = `${r.toKind}:${r.toId}`;
+    if (from === to) continue;
+    if (wanted.has(from) && keep(r.toKind))
+      out.push({ at: from, other: { kind: r.toKind, id: r.toId }, linkId: r.id });
+    if (wanted.has(to) && keep(r.fromKind))
+      out.push({ at: to, other: { kind: r.fromKind, id: r.fromId }, linkId: r.id });
+  }
+  return out;
+}
+
+/** How Home chips a kind when nothing about the thing itself changes it. */
+const CHIP: Record<LinkKind, ResolvedRef["chip"]> = {
+  task: "task",
+  event: "event",
+  note: "note",
+  file: "file",
+  person: "person",
+  database: "database",
+  transaction: "money",
+  form: "form",
+  budget: "money",
+  record: "database",
+  poll: "poll",
+  decision: "decision",
+  announcement: "announcement",
+};
 
 /**
  * Looks each reference up as the viewer; the ones they can't see (or that
@@ -45,6 +126,7 @@ export async function resolveRefs(
       title,
       href,
       detail: fact ? `${KIND_WORD[kind]}, ${fact}` : KIND_WORD[kind],
+      chip: CHIP[kind],
     });
 
   const day = (d: Date) =>
@@ -94,14 +176,16 @@ export async function resolveRefs(
         title: t.title,
         href: `${base}/tasks/${t.id}`,
         detail: fact ? `${word}, ${fact}` : word,
+        chip: "task",
+        done: t.status === "COMPLETED",
       });
     }
   }
   const eventIds = ids("event");
   if (eventIds.length) {
     const rows = await db.event.findMany({
-      where: { organizationId: orgId, id: { in: eventIds }, deletedAt: null },
-      select: { id: true, title: true, startsAt: true },
+      where: { organizationId: orgId, id: { in: eventIds }, deletedAt: null, mergedIntoId: null },
+      select: { id: true, title: true, startsAt: true, kind: true, meetingType: true },
     });
     const going = rows.length
       ? await db.eventAttendee.groupBy({
@@ -112,13 +196,19 @@ export async function resolveRefs(
       : [];
     for (const e of rows) {
       const n = going.find((g) => g.eventId === e.id)?._count._all ?? 0;
-      put(
-        "event",
-        e.id,
-        e.title,
-        `${base}/meetings/${e.id}`,
-        n > 0 ? `${day(e.startsAt)}, ${n} going` : day(e.startsAt),
-      );
+      const meeting = isMeeting(e);
+      const when = n > 0 ? `${day(e.startsAt)}, ${n} going` : day(e.startsAt);
+      // A meeting opens on its meeting page, anything else on the calendar.
+      out.set(key({ kind: "event", id: e.id }), {
+        kind: "event",
+        id: e.id,
+        title: e.title,
+        href: meeting ? `${base}/meetings/${e.id}` : `${base}/calendar/${e.id}`,
+        detail: `${meeting ? "Meeting" : "Event"}, ${when}`,
+        chip: meeting ? "meeting" : "event",
+        startsAt: e.startsAt,
+        going: n,
+      });
     }
   }
   const noteIds = ids("note");
@@ -294,7 +384,49 @@ export async function resolveRefs(
         title: f.title,
         href: `${base}/forms/${f.id}`,
         detail: `${poll ? "Quick poll" : "Form"}, ${plural(n, poll ? "vote" : "response")}`,
+        chip: poll ? "poll" : "form",
       });
+    }
+  }
+  const pollIds = ids("poll");
+  if (pollIds.length) {
+    const rows = await db.poll.findMany({
+      where: { organizationId: orgId, id: { in: pollIds } },
+      select: { id: true, question: true, closesAt: true, closedAt: true },
+    });
+    const now = new Date();
+    for (const p of rows) {
+      const open = !p.closedAt && (!p.closesAt || p.closesAt > now);
+      put(
+        "poll",
+        p.id,
+        p.question,
+        pollHref(base, "question", p.id),
+        !open ? "closed" : p.closesAt ? `closes ${day(p.closesAt)}` : "open",
+      );
+    }
+  }
+  // A decision has no page of its own: it lives in Home's Decisions.
+  const decisionIds = ids("decision");
+  if (decisionIds.length) {
+    const rows = await db.decision.findMany({
+      where: { organizationId: orgId, id: { in: decisionIds } },
+      select: { id: true, question: true, status: true },
+    });
+    for (const d of rows) {
+      const state = d.status === "OPEN" ? "open" : d.status === "DECIDED" ? "decided" : "dropped";
+      put("decision", d.id, d.question, base, state);
+    }
+  }
+  // Announcements are read in the Inbox.
+  const announcementIds = ids("announcement");
+  if (announcementIds.length) {
+    const rows = await db.announcement.findMany({
+      where: { organizationId: orgId, id: { in: announcementIds }, deletedAt: null },
+      select: { id: true, title: true, createdAt: true },
+    });
+    for (const a of rows) {
+      put("announcement", a.id, a.title, `${base}/inbox`, `posted ${day(a.createdAt)}`);
     }
   }
   return out;
@@ -311,23 +443,10 @@ export async function listLinked(
   ref: LinkRef,
   timeZone = "UTC",
 ): Promise<LinkedItem[]> {
-  const rows = await db.itemLink.findMany({
-    where: {
-      organizationId: orgId,
-      OR: [
-        { fromKind: ref.kind, fromId: ref.id },
-        { toKind: ref.kind, toId: ref.id },
-      ],
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
-  const others: (LinkRef & { linkId: string })[] = rows.flatMap((r) => {
-    const fromHere = r.fromKind === ref.kind && r.fromId === ref.id;
-    const kind = fromHere ? r.toKind : r.fromKind;
-    const id = fromHere ? r.toId : r.fromId;
-    return isLinkKind(kind) ? [{ kind, id, linkId: r.id }] : [];
-  });
+  const others = (await readLinks(db, orgId, [ref], { take: 100 })).map((l) => ({
+    ...l.other,
+    linkId: l.linkId,
+  }));
   const resolved = await resolveRefs(db, orgId, orgSlug, others, timeZone);
   return others.flatMap((o) => {
     const hit = resolved.get(key(o));

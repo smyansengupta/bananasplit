@@ -29,6 +29,7 @@ import { getVisibleReports } from "@/server/reports/visibility";
 import { planGate } from "@/server/billing/plan-gate";
 
 import { DatabasesTabs } from "../databases-tabs";
+import { PeopleSummarySection, RsvpAttendanceSection } from "./organization-sections";
 import { AutoRefresh } from "./refresh-controls";
 
 export const metadata = { title: "Reports" };
@@ -91,9 +92,12 @@ const ORDER: ReportId[] = [
 /**
  * Reports (Phase 5). Authorize, derive the tier, resolve the date range to
  * explicit org-local dates, decide which reports this tier may see, then
- * stream each report in its own Suspense boundary. Every number comes from
- * the cached aggregate loaders in src/server/reports; nothing here fetches
- * rows.
+ * stream each report in its own Suspense boundary. The reports' numbers come
+ * from the cached aggregate loaders in src/server/reports. Ahead of them,
+ * two uncached cards about the organization itself (organization-sections.tsx,
+ * moved here from the Overview): People, counts only besides the org chart's
+ * seats, and RSVPs against check-ins, which reads the range's latest events
+ * (120 at most) for their turnout.
  */
 export default async function ReportsPage({
   params,
@@ -131,6 +135,9 @@ export default async function ReportsPage({
   // Stamp cards are opt-in: an org with no milestones has no stamps to report.
   const usesStamps = (settings?.stampMilestones?.length ?? 0) > 0;
   const ids = ORDER.filter((id) => visible.has(id) && (id !== "stamps" || usesStamps));
+  const isAdmin = tier === "OWNER" || tier === "ADMIN";
+  // RSVPs against check-ins reads what "Attendance over time" reads.
+  const showAttendance = visible.has("attendance");
 
   return (
     <ReportsFrame>
@@ -152,6 +159,34 @@ export default async function ReportsPage({
           }
           tabs={<DatabasesTabs orgSlug={orgSlug} showReports />}
         />
+
+        <ReportsBody className="grid grid-cols-1 gap-4.5 lg:grid-cols-3">
+          <div
+            className={`flex min-w-0 flex-col ${showAttendance ? "lg:col-span-1" : "lg:col-span-3"}`}
+          >
+            <Suspense fallback={<ReportSkeleton title="People" stats={3} bodyHeight={120} />}>
+              <PeopleSummarySection orgId={organization.id} slug={orgSlug} tz={tz} />
+            </Suspense>
+          </div>
+          {showAttendance && (
+            <div className="flex min-w-0 flex-col lg:col-span-2">
+              <Suspense
+                fallback={<ReportSkeleton title="RSVPs and check-ins" stats={3} bodyHeight={180} />}
+              >
+                <RsvpAttendanceSection
+                  orgId={organization.id}
+                  slug={orgSlug}
+                  tz={tz}
+                  from={range.from}
+                  to={range.to}
+                  rangeLabel={range.label}
+                  isAdmin={isAdmin}
+                  showReturns={visible.has("retention")}
+                />
+              </Suspense>
+            </div>
+          )}
+        </ReportsBody>
 
         {ids.length === 0 ? (
           <EmptyState

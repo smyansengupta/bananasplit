@@ -2,48 +2,95 @@ import { parseBoard, type BoardWidget, type WidgetMeta } from "@/lib/boards";
 
 /**
  * The Overview's widgets. Every member builds their own Overview from these
- * (src/lib/boards). Nothing about the club's money is here: finance lives
- * on the Finance page, for finance roles. "admin" widgets are offered only
- * to owners and admins. "bare" widgets draw their own surface (block cards).
- * The stat strip, Up next and "Get your club started" aren't widgets: they
- * always head the page (src/app/app/[orgSlug]/page.tsx), so a saved board
- * that still lists them simply drops them.
+ * (src/lib/boards). Nothing about the organization's money is here: finance
+ * lives on the Finance page, for finance roles. "admin" widgets are offered
+ * only to owners and admins. "bare" widgets draw their own surface (block
+ * cards). The stat strip, Up next and "Get your organization started"
+ * aren't widgets: they always head the page (src/app/app/[orgSlug]/page.tsx),
+ * so a saved board that still lists them simply drops them. So does one that
+ * lists a widget that's gone (Next sign-up, Recent notes, Recent uploads,
+ * People: who's in the organization and who comes is on Databases > Reports).
  */
 
 type OverviewWidgetMeta = WidgetMeta & { admin?: boolean };
 
 export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
   {
-    type: "pinned",
-    title: "Pinned",
-    description: "Your pinned pages, notes, files and more.",
-    group: "You",
-    icon: "Pin",
+    type: "recap",
+    title: "The week, recapped",
+    description: "What the organization got done, decided and ran in the last seven days.",
+    group: "Organization",
+    icon: "Rocket",
     w: 4,
+    h: null,
+  },
+  {
+    type: "since-you-were-here",
+    title: "Since you were here",
+    description: "What changed while you were away: new tasks, replies, answers.",
+    group: "You",
+    icon: "Zap",
+    w: 2,
+    h: null,
+  },
+  {
+    type: "waiting-on-you",
+    title: "Waiting on you",
+    description: "Reviews, answers and replies other people need from you.",
+    group: "You",
+    icon: "Hourglass",
+    w: 2,
+    h: null,
+  },
+  {
+    type: "waiting-on-others",
+    title: "Waiting on others",
+    description: "What you asked for and haven't heard back on.",
+    group: "You",
+    icon: "ArrowLeftRight",
+    w: 2,
     h: null,
   },
   {
     type: "my-tasks",
     title: "My tasks",
-    description: "Open tasks that are yours, soonest first.",
+    description: "Open tasks that are yours, soonest first, with what each is for.",
     group: "You",
     icon: "CheckSquare",
     w: 2,
     h: null,
   },
   {
-    type: "recent",
-    title: "Recently visited",
-    description: "Jump back to what you had open.",
-    group: "You",
-    icon: "Clock",
-    w: 2,
+    type: "deadlines",
+    title: "Deadlines",
+    description: "The organization's next due dates, closest first.",
+    group: "Calendar",
+    icon: "Target",
+    w: 1,
+    h: null,
+  },
+  {
+    type: "here-now",
+    title: "Here now",
+    description: "Who's in the workspace right now, and what they're on.",
+    group: "Organization",
+    icon: "Users",
+    w: 1,
+    h: null,
+  },
+  {
+    type: "week",
+    title: "This week",
+    description: "The next seven days: events, your deadlines and the busy days.",
+    group: "Calendar",
+    icon: "CalendarRange",
+    w: 4,
     h: null,
   },
   {
     type: "meetings",
     title: "Meetings",
-    description: "Board and team meetings coming up.",
+    description: "Meetings coming up, with their agenda and open action items.",
     group: "Calendar",
     icon: "Users",
     w: 2,
@@ -52,38 +99,28 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
   {
     type: "events",
     title: "Events",
-    description: "Everything else coming up on the calendar.",
+    description: "Events coming up, with sign-ups against the room.",
     group: "Calendar",
     icon: "CalendarDays",
     w: 2,
     h: null,
   },
   {
-    type: "rsvp-goal",
-    title: "Next sign-up",
-    description: "Seats taken for the next event with a capacity.",
-    group: "Calendar",
-    icon: "Ticket",
-    w: 1,
-    h: null,
-    frame: "bare",
-  },
-  {
-    type: "week",
-    title: "This week",
-    description: "The next seven days, day by day.",
-    group: "Calendar",
-    icon: "CalendarRange",
-    w: 4,
+    type: "decisions",
+    title: "Decisions",
+    description: "What the organization decided lately, and where.",
+    group: "Organization",
+    icon: "ListChecks",
+    w: 2,
     h: null,
   },
   {
-    type: "polls",
-    title: "Open forms",
-    description: "Forms and quick polls still taking answers.",
-    group: "Calendar",
-    icon: "Vote",
-    w: 1,
+    type: "who-owns-what",
+    title: "Who owns what",
+    description: "Who's carrying which work, and who has room for more.",
+    group: "Organization",
+    icon: "Handshake",
+    w: 2,
     h: null,
   },
   {
@@ -96,30 +133,57 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     h: null,
   },
   {
-    type: "notes",
-    title: "Recent notes",
-    description: "Notes edited lately that you can read.",
-    group: "Files",
-    icon: "NotebookText",
-    w: 2,
-    h: null,
-  },
-  {
-    type: "files",
-    title: "Recent uploads",
-    description: "The latest uploads in Files.",
-    group: "Files",
-    icon: "FolderOpen",
-    w: 2,
-    h: null,
-  },
-  {
-    type: "people",
-    title: "People",
-    description: "Who's in the organization, newest first.",
-    group: "Organization",
-    icon: "Users",
+    type: "polls",
+    title: "Open forms",
+    description: "Forms and quick polls still taking answers.",
+    group: "Forms and votes",
+    icon: "Vote",
     w: 1,
+    h: null,
+  },
+  {
+    type: "votes",
+    title: "Votes",
+    description: "Member polls still open, and how the vote is going.",
+    group: "Forms and votes",
+    icon: "ChartBar",
+    w: 1,
+    h: null,
+  },
+  {
+    type: "focus-time",
+    title: "Focus time",
+    description: "Your free stretches this week, and what to do with them.",
+    group: "You",
+    icon: "Timer",
+    w: 1,
+    h: null,
+  },
+  {
+    type: "quick-capture",
+    title: "Quick capture",
+    description: "Jot a task or a note without leaving Home.",
+    group: "You",
+    icon: "NotebookText",
+    w: 1,
+    h: null,
+  },
+  {
+    type: "recent",
+    title: "Pick up where you left off",
+    description: "What you had open, and what changed since.",
+    group: "You",
+    icon: "Clock",
+    w: 2,
+    h: null,
+  },
+  {
+    type: "pinned",
+    title: "Pinned",
+    description: "Your pinned pages, notes, files and more, with how each is doing.",
+    group: "You",
+    icon: "Pin",
+    w: 2,
     h: null,
   },
 ];
@@ -131,27 +195,40 @@ export function overviewWidgetsFor(isAdmin: boolean): OverviewWidgetMeta[] {
 }
 
 /**
- * Up next always leads, under the stat strip, and isn't a widget (nor is
- * the stat strip or "Get your club started"; see page.tsx). Then rows that
- * each fill the four columns: your work and what's waiting on an answer
- * (my tasks, the next sign-up, open forms), the organization's next seven days,
- * the weekly pulse, and where you were beside what you pinned. Meetings and
- * Events feed Up next, so they're offered, not placed.
+ * The stat strip, Up next and the setup checklist always lead and aren't
+ * widgets (see page.tsx). Then rows that each fill the four columns: the
+ * week recapped; what changed and what's waiting on you; your tasks beside
+ * the next deadlines and who's here; the next seven days; meetings beside
+ * events; decisions beside who owns what; the weekly pulse; four small
+ * ones (open forms, votes, focus time, quick capture); and where you were
+ * beside what you pinned. Waiting on others is offered, not placed.
  */
 const DEFAULT_LAYOUT: readonly BoardWidget[] = [
+  { id: "recap", type: "recap", w: 4, h: null },
+  { id: "since-you-were-here", type: "since-you-were-here", w: 2, h: null },
+  { id: "waiting-on-you", type: "waiting-on-you", w: 2, h: null },
   { id: "my-tasks", type: "my-tasks", w: 2, h: null },
-  { id: "rsvp-goal", type: "rsvp-goal", w: 1, h: null },
-  { id: "polls", type: "polls", w: 1, h: null },
+  { id: "deadlines", type: "deadlines", w: 1, h: null },
+  { id: "here-now", type: "here-now", w: 1, h: null },
   { id: "week", type: "week", w: 4, h: null },
+  { id: "meetings", type: "meetings", w: 2, h: null },
+  { id: "events", type: "events", w: 2, h: null },
+  { id: "decisions", type: "decisions", w: 2, h: null },
+  { id: "who-owns-what", type: "who-owns-what", w: 2, h: null },
   { id: "weekly-pulse", type: "weekly-pulse", w: 4, h: null },
+  { id: "polls", type: "polls", w: 1, h: null },
+  { id: "votes", type: "votes", w: 1, h: null },
+  { id: "focus-time", type: "focus-time", w: 1, h: null },
+  { id: "quick-capture", type: "quick-capture", w: 1, h: null },
   { id: "recent", type: "recent", w: 2, h: null },
   { id: "pinned", type: "pinned", w: 2, h: null },
 ];
 
 /**
  * The member's saved Overview, or the default one. A saved board keeps its
- * own order: widgets added since (Weekly pulse) are offered in Add widget,
- * never pushed onto it.
+ * own order: widgets added since are offered in Add widget, never pushed
+ * onto it, and widgets that are gone drop out (parseBoard keeps only known
+ * types).
  */
 export function resolveOverview(saved: unknown, isAdmin: boolean): BoardWidget[] {
   const allowed = overviewWidgetsFor(isAdmin).map((w) => w.type);

@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
 
 import { FaceStack, OpenLink } from "./bits";
+import { LinkChip } from "./connections";
 
 /** An event kind's colour for its block card; nothing for anything else. */
 function accentOf(kind: EventKind | null | undefined): string | null {
@@ -31,7 +32,9 @@ function accentOf(kind: EventKind | null | undefined): string | null {
  *
  * Each card does its one job right there: a task has Done, an invitation
  * waiting on you has Going and Can't go. The x hides a card for you, with
- * Undo in the toast. Clicking the card itself still opens the thing.
+ * Undo in the toast. Clicking the card itself still opens the thing. Under
+ * the title, one line says why it matters, and chips open what it's linked
+ * to (the event a task is for, a meeting's notes).
  */
 /** A card's action button, on the card's own colours. */
 const ACT =
@@ -312,6 +315,18 @@ export function UpNext({
                   index > 0 && "max-md:hidden",
                 )}
               >
+                {/* The chips sit on the card's own colour, so they take its ink (currentColor), not their kind's. */}
+                {item.chips && item.chips.length > 0 && (
+                  <span className="relative z-10 mt-3 flex min-w-0 flex-wrap gap-1.5">
+                    {item.chips.map((chip) => (
+                      <LinkChip
+                        key={`${chip.kind}:${chip.href}:${chip.label}`}
+                        item={chip}
+                        className="border-current/20 bg-current/10 text-current hover:border-current/40 hover:text-current [&_svg]:text-current"
+                      />
+                    ))}
+                  </span>
+                )}
                 {actionsOf(item)}
               </BlockCard>
             </ContextActions>

@@ -38,11 +38,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Segmented, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { ExpandChip } from "@/components/ui/toolbar-chips";
-import { Textarea } from "@/components/ui/textarea";
 import { toast, undoable } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import type { RSVPStatus, TaskStatus } from "@/generated/prisma/enums";
@@ -56,7 +53,10 @@ import {
 } from "@/lib/inbox/items";
 import type { LinkKind } from "@/lib/links";
 import { addDaysToKey, mondayOfKey } from "@/lib/tasks/dates";
+import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
+
+import { DeclineButton, ReplyBox } from "./row-actions";
 
 export type InboxView = "needs" | "updates" | "snoozed";
 
@@ -235,7 +235,8 @@ export function InboxView({
     (row: InboxRow, choice: SnoozeChoice) => {
       hide(row.key);
       start(async () => {
-        const result = await snoozeInboxItem(orgId, keysOf(row), choice);
+        const result = await runAction(() => snoozeInboxItem(orgId, keysOf(row), choice));
+        if (!result) return show(row.key);
         if ("ok" in result && !result.ok) {
           show(row.key);
           toast({ title: result.error, tone: "error" });
@@ -263,7 +264,8 @@ export function InboxView({
     (row: InboxRow) => {
       hide(row.key);
       start(async () => {
-        const result = await unsnoozeInboxItem(orgId, keysOf(row));
+        const result = await runAction(() => unsnoozeInboxItem(orgId, keysOf(row)));
+        if (!result) return show(row.key);
         if ("ok" in result && !result.ok) {
           show(row.key);
           toast({ title: result.error, tone: "error" });
@@ -347,7 +349,8 @@ export function InboxView({
     (row: InboxRow, rsvp: RSVPStatus) => {
       hide(row.key);
       start(async () => {
-        const result = await rsvpToEvent(orgId, row.id, rsvp);
+        const result = await runAction(() => rsvpToEvent(orgId, row.id, rsvp));
+        if (!result) return show(row.key);
         if (result.error) {
           show(row.key);
           toast({ title: result.error, tone: "error" });
@@ -375,8 +378,9 @@ export function InboxView({
     (row: InboxRow) => {
       hide(row.key);
       start(async () => {
-        const result = await approveExpense(orgId, row.id);
-        if (result && "error" in result && result.error) {
+        const result = await runAction(() => approveExpense(orgId, row.id));
+        if (!result) return show(row.key);
+        if ("error" in result && result.error) {
           show(row.key);
           toast({ title: result.error, tone: "error" });
           return;
@@ -395,8 +399,9 @@ export function InboxView({
     (row: InboxRow, reason: string) => {
       hide(row.key);
       start(async () => {
-        const result = await rejectExpense(orgId, row.id, reason);
-        if (result && "error" in result && result.error) {
+        const result = await runAction(() => rejectExpense(orgId, row.id, reason));
+        if (!result) return show(row.key);
+        if ("error" in result && result.error) {
           show(row.key);
           toast({ title: result.error, tone: "error" });
           return;
@@ -901,88 +906,6 @@ function MoveMenu({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/** Decline asks why in a small box, since the requester sees the reason. */
-function DeclineButton({ title, onDecline }: { title: string; onDecline: (r: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" aria-label={`Decline ${title}`}>
-          Decline
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
-        <form
-          className="space-y-2.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!reason.trim()) return;
-            setOpen(false);
-            onDecline(reason.trim());
-          }}
-        >
-          <Input
-            autoFocus
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Why, for the requester"
-            aria-label="Reason"
-          />
-          <Button type="submit" size="sm" className="w-full" disabled={!reason.trim()}>
-            Decline
-          </Button>
-        </form>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function ReplyBox({
-  onSend,
-  onCancel,
-}: {
-  onSend: (body: string) => Promise<boolean>;
-  onCancel: () => void;
-}) {
-  const [body, setBody] = useState("");
-  const [pending, start] = useTransition();
-  const send = () => {
-    const text = body.trim();
-    if (!text || pending) return;
-    start(async () => {
-      if (await onSend(text)) setBody("");
-    });
-  };
-  return (
-    <div className="space-y-2">
-      <Textarea
-        autoFocus
-        rows={2}
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            send();
-          }
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="Reply"
-        aria-label="Reply"
-      />
-      <div className="flex gap-2">
-        <Button size="sm" onClick={send} disabled={!body.trim() || pending}>
-          Send
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </div>
   );
 }
 

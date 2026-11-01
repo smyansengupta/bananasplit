@@ -104,4 +104,70 @@ describe("what Up next shows", () => {
     const left = build({ polls, events, hidden: new Set(["poll:x"]) });
     expect(left.map((s) => s.item.kind)).toEqual(["event"]);
   });
+
+  it("says why each card matters and chips what it's linked to", () => {
+    const social = { ...event("social", ahead(2)), title: "Fall Social" };
+    const meeting = { ...event("sync", ahead(1)), title: "Exec sync" };
+    const tasks = [
+      {
+        id: "t1",
+        title: "Order pizza",
+        status: "NOT_STARTED" as const,
+        visibility: "ORG" as const,
+        dueDate: new Date("2026-10-27T00:00:00Z"),
+        blockedReason: null,
+        parentTask: null,
+      },
+    ];
+    const chip = (kind: "event" | "note", id: string, label: string) => ({
+      kind: kind === "event" ? ("event" as const) : ("note" as const),
+      label,
+      href: `/app/cbc/x/${id}`,
+      ref: { kind, id },
+    });
+    const slots = build({
+      tasks: tasks as never,
+      events: [social],
+      meetings: [meeting],
+      context: {
+        links: new Map([["task:t1", [chip("event", "social", "Fall Social")]]]),
+        details: new Map([
+          [
+            "sync",
+            {
+              id: "sync",
+              description: "- Budget\n- Room",
+              seriesId: "s",
+              rsvpEnabled: false,
+              capacity: null,
+              hideCount: false,
+              notes: [{ id: "n1", title: "Exec notes" }],
+            },
+          ],
+          [
+            "social",
+            {
+              id: "social",
+              description: null,
+              seriesId: null,
+              rsvpEnabled: true,
+              capacity: 120,
+              hideCount: false,
+              notes: [],
+            },
+          ],
+        ]),
+        lastActions: new Map([["sync", { open: 2, total: 6, href: "/app/cbc/meetings/last" }]]),
+        seats: new Map([["social", 58]]),
+      },
+    });
+    const card = (id: string) => slots.find((s) => s.item.id === id)!.item;
+    expect(card("t1").subtitle).toBe("For Fall Social, Tue, 12:00 PM.");
+    expect(card("t1").chips?.map((c) => c.label)).toEqual(["Fall Social"]);
+    expect(card("sync").subtitle).toBe(
+      "2 agenda items. 2 action items from last time are still open.",
+    );
+    expect(card("sync").chips?.map((c) => c.label)).toEqual(["Exec notes", "2 open actions"]);
+    expect(card("social").subtitle).toBe("58 of 120 seats taken.");
+  });
 });

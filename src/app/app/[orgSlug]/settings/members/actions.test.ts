@@ -76,6 +76,7 @@ function makeDb() {
     taskAssignee: { deleteMany: vi.fn() },
     eventAttendee: { deleteMany: vi.fn() },
     task: { updateMany: vi.fn() },
+    decision: { updateMany: vi.fn() },
     orgChartPosition: { updateMany: vi.fn() },
     organization: { findUnique: vi.fn(async () => ({ name: "Org One", slug: "org-one" })) },
     notification: { createMany: vi.fn() },
