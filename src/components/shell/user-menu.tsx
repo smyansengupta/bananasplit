@@ -85,7 +85,7 @@ export function UserMenu({
             type="button"
             title={rail ? displayName : undefined}
             className={cn(
-              "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[7px] px-1 text-left text-[13.5px] font-medium whitespace-nowrap outline-none",
+              "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[10px] px-1 text-left text-[13.5px] font-medium whitespace-nowrap outline-none",
               "[transition:width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
               rail ? "w-8" : "w-full",
               tone.text,

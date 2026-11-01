@@ -78,7 +78,7 @@ export function SidebarPeople({
       tabIndex={rail ? -1 : undefined}
       aria-hidden={rail || undefined}
       className={cn(
-        "focus-glow flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-[7px] px-2 text-xs whitespace-nowrap outline-none",
+        "focus-glow flex h-8 min-w-0 items-center gap-2 overflow-hidden rounded-[10px] px-2 text-xs whitespace-nowrap outline-none",
         "transition-[max-width,opacity,padding] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
         tone.text,
         tone.hover,

@@ -6,7 +6,6 @@ import { InboxView, type InboxRow, type InboxView as View } from "@/components/i
 import { ClearRead, MarkAllRead } from "@/components/inbox/inbox-actions";
 import { listWhen } from "@/components/meetings/meeting-card";
 import { PageHeader } from "@/components/page-header";
-import { PageTabs } from "@/components/ui/page-tabs";
 import { can } from "@/lib/auth/permissions";
 import { groupForDay, groupForPast, inboxKey, type InboxGroup } from "@/lib/inbox/items";
 import { sectionLabel } from "@/lib/nav/sidebar";
@@ -274,46 +273,37 @@ export default async function InboxPage({
             </div>
           ) : null
         }
-        tabs={
-          <PageTabs
-            label="Inbox"
-            tabs={[
-              {
-                href: `${base}/inbox`,
-                label: needsNow.length > 0 ? `Needs you ${needsNow.length}` : "Needs you",
-                active: view === "needs",
-              },
-              {
-                href: `${base}/inbox?view=updates`,
-                label: unread > 0 ? `Updates ${unread}` : "Updates",
-                active: view === "updates",
-              },
-              ...(snoozed.length > 0
-                ? [
-                    {
-                      href: `${base}/inbox?view=snoozed`,
-                      label: `Snoozed ${snoozed.length}`,
-                      active: view === "snoozed",
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        }
       />
 
-      {rows.length === 0 ? (
-        caughtUp
-      ) : (
-        <InboxView
-          key={view}
-          orgId={org.id}
-          orgSlug={orgSlug}
-          view={view}
-          rows={rows}
-          empty={caughtUp}
-        />
-      )}
+      <InboxView
+        key={view}
+        orgId={org.id}
+        orgSlug={orgSlug}
+        view={view}
+        views={[
+          {
+            value: "needs",
+            label: needsNow.length > 0 ? `Needs you ${needsNow.length}` : "Needs you",
+            href: `${base}/inbox`,
+          },
+          {
+            value: "updates",
+            label: unread > 0 ? `Updates ${unread}` : "Updates",
+            href: `${base}/inbox?view=updates`,
+          },
+          ...(snoozed.length > 0
+            ? [
+                {
+                  value: "snoozed" as const,
+                  label: `Snoozed ${snoozed.length}`,
+                  href: `${base}/inbox?view=snoozed`,
+                },
+              ]
+            : []),
+        ]}
+        rows={rows}
+        empty={caughtUp}
+      />
     </div>
   );
 }

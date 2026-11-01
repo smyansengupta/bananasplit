@@ -8,11 +8,12 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  type IconComponent,
+  Inbox,
   MessageSquare,
   ShieldAlert,
   UserPlus,
   Wallet,
-  type IconComponent,
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -39,7 +40,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { chipClass, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
+import { Segmented, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
+import { ExpandChip } from "@/components/ui/toolbar-chips";
 import { Textarea } from "@/components/ui/textarea";
 import { toast, undoable } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
@@ -154,8 +156,16 @@ function isTyping(target: EventTarget | null): boolean {
   );
 }
 
+/** One of the Inbox's views (Needs you, Updates, Snoozed), a link with its count. */
+export interface InboxViewLink {
+  value: InboxView;
+  label: string;
+  href: string;
+}
+
 /**
- * The Inbox list: chips that filter by kind, the rows in their groups, every
+ * The Inbox list: one bar as on Tasks (the view, then icons that filter by
+ * kind and say what they are on hover), the rows in their groups, every
  * row's action on the row, and the keyboard (j and k move, Enter opens
  * beside, o opens the page, e finishes, s snoozes until tomorrow).
  */
@@ -163,14 +173,16 @@ export function InboxView({
   orgId,
   orgSlug,
   view,
+  views,
   rows,
   empty,
 }: {
   orgId: string;
   orgSlug: string;
   view: InboxView;
+  views: InboxViewLink[];
   rows: InboxRow[];
-  /** Shown when the last row is dealt with. */
+  /** Shown when there's nothing here, or the last row is dealt with. */
   empty: React.ReactNode;
 }) {
   const router = useRouter();
@@ -461,7 +473,43 @@ export function InboxView({
     return () => window.removeEventListener("keydown", onKey);
   }, [active, finish, markRead, peek, router, shown, snooze, view]);
 
-  if (present.length === 0) return <>{empty}</>;
+  const bar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Segmented
+        label="Inbox"
+        value={view}
+        options={views.map((v) => ({ value: v.value, label: v.label, href: v.href }))}
+        className="shrink-0"
+      />
+      {categories.length > 1 && (
+        <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Show">
+          <ExpandChip
+            icon={Inbox}
+            label={`All (${present.length})`}
+            active={current === "all"}
+            onClick={() => setFilter("all")}
+          />
+          {categories.map((c) => (
+            <ExpandChip
+              key={c}
+              icon={LOOK[c].icon}
+              label={`${CATEGORY_LABEL[c]} (${counts.get(c) ?? 0})`}
+              active={current === c}
+              onClick={() => setFilter(current === c ? "all" : c)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  if (present.length === 0)
+    return (
+      <div className="space-y-6">
+        {bar}
+        {empty}
+      </div>
+    );
 
   // Snoozed is one list by when things come back; the others are grouped.
   const groups: { group: InboxGroup | null; rows: InboxRow[] }[] = [];
@@ -475,35 +523,7 @@ export function InboxView({
 
   return (
     <div className="space-y-6">
-      {categories.length > 1 && (
-        <div
-          role="group"
-          aria-label="Show"
-          className="flex [scrollbar-width:none] gap-2 max-sm:-mx-4 max-sm:overflow-x-auto max-sm:px-4 sm:flex-wrap"
-        >
-          <button
-            type="button"
-            aria-pressed={current === "all"}
-            onClick={() => setFilter("all")}
-            className={chipClass(current === "all")}
-          >
-            All
-            <Count n={present.length} on={current === "all"} />
-          </button>
-          {categories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              aria-pressed={current === c}
-              onClick={() => setFilter(current === c ? "all" : c)}
-              className={chipClass(current === c)}
-            >
-              {CATEGORY_LABEL[c]}
-              <Count n={counts.get(c) ?? 0} on={current === c} />
-            </button>
-          ))}
-        </div>
-      )}
+      {bar}
 
       {groups.map(({ group, rows: groupRows }) => (
         <section key={group ?? "all"} aria-label={group ? GROUP_LABEL[group] : "Snoozed"}>
@@ -592,19 +612,6 @@ export function InboxView({
         onClose={() => setPeek(null)}
       />
     </div>
-  );
-}
-
-function Count({ n, on }: { n: number; on: boolean }) {
-  return (
-    <span
-      className={cn(
-        "font-mono text-[12px] tabular-nums",
-        on ? "text-primary-foreground/80" : "text-muted-foreground",
-      )}
-    >
-      {n}
-    </span>
   );
 }
 

@@ -104,7 +104,7 @@ function EditRow({ link }: { link: NavLink }) {
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        "bg-background/70 border-border/70 relative flex h-8 items-center gap-2 rounded-[7px] border pr-1 text-[13.5px] font-medium",
+        "bg-background/70 border-border/70 relative flex h-8 items-center gap-2 rounded-[10px] border pr-1 text-[13.5px] font-medium",
         isDragging && "z-10 shadow-md",
         hidden && "opacity-50",
       )}

@@ -223,7 +223,7 @@ export function SidebarPanel({
                   aria-keyshortcuts="Meta+Backslash Control+Backslash"
                   title={`${label} (${mod === "⌘" ? "⌘\\" : "Ctrl \\"})`}
                   className={cn(
-                    "focus-glow grid size-8 shrink-0 place-items-center rounded-[7px] outline-none",
+                    "focus-glow grid size-8 shrink-0 place-items-center rounded-[10px] outline-none",
                     "transition-[background-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
                     tone.text,
                     tone.hover,

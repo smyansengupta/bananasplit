@@ -96,7 +96,7 @@ export function sidebarItemClass({
 }) {
   const tone = surfaceTone(chrome);
   return cn(
-    "focus-glow relative flex h-8 shrink-0 items-center gap-2.5 overflow-hidden rounded-[7px] px-2 text-[13.5px] whitespace-nowrap outline-none",
+    "focus-glow relative flex h-8 shrink-0 items-center gap-2.5 overflow-hidden rounded-[10px] px-2 text-[13.5px] whitespace-nowrap outline-none",
     "[&>svg:first-child]:opacity-70",
     "[transition:width_500ms_var(--ease-ink),background-color_200ms,color_200ms] motion-reduce:[transition:none]",
     rail ? "w-8" : "w-full",

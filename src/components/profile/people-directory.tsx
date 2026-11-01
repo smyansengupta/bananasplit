@@ -74,7 +74,7 @@ import { majorAndYear } from "./profile-links";
 /**
  * The people directory (Moonstone 12.1 and 12.2), with the same toolbar as
  * Tasks: the view (grid, list, or the published org chart), who to show (everyone, online
- * now, free now), one Filters chip (team, role, year), the sort and the
+ * now, free now), one Filters chip (the sort, team, role, year), and the
  * search at the right ("/" focuses it, the database does the matching,
  * typo-tolerant, with an instant local preview while it answers), and
  * what's narrowing the list underneath, each removable. A green dot is
@@ -499,7 +499,7 @@ export function PeopleDirectory({
           )}
         </FilterSheet>
 
-        {/* Wider: Tasks' bar, in Tasks' order (layout, who, Filters, then sort and search at the right). */}
+        {/* Wider: Tasks' bar, in Tasks' order (view, who, Filters with the sort, then search at the right). */}
         <div className="@container/toolbar max-md:hidden">
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
@@ -555,10 +555,13 @@ export function PeopleDirectory({
               />
             </div>
 
-            {(teams.length > 0 || roles.length > 1 || years.length > 0) && (
-              <FiltersMenu
+            <FiltersMenu
                 count={[query.team, query.role, query.year].filter(Boolean).length}
                 items={[
+                  {
+                    name: "Sort by",
+                    node: <SortMenu sort={sort} sorts={sorts} onSort={(v) => update({ sort: v })} />,
+                  },
                   ...(teams.length > 0
                     ? [
                         {
@@ -612,10 +615,8 @@ export function PeopleDirectory({
                     : []),
                 ]}
               />
-            )}
 
             <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
-              <SortMenu sort={sort} sorts={sorts} onSort={(v) => update({ sort: v })} />
               <SearchField
                 ref={searchRef}
                 value={query.q}
@@ -1029,7 +1030,7 @@ const SORTS: readonly { value: DirectorySort; label: string; short: string }[] =
   { value: "active", label: "Recently active", short: "Active" },
 ];
 
-/** The sort, beside the search: its own menu (as Tasks' Group). */
+/** The sort, the first thing in the Filters panel. */
 function SortMenu({
   sort,
   sorts,
@@ -1045,11 +1046,11 @@ function SortMenu({
       <DropdownMenuTrigger asChild>
         <button type="button" className={chipClass(false)} aria-label={`Sort by ${current.label}`}>
           <ArrowUpDown className="size-3.5" aria-hidden="true" />
-          {current.label}
+          <span className="truncate">{current.label}</span>
           <ChevronDown className="size-3.5 opacity-70" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="start" className="w-52">
         <DropdownMenuLabel>Sort by</DropdownMenuLabel>
         {sorts.map((o) => (
           <DropdownMenuItem key={o.value} onSelect={() => onSort(o.value)}>
