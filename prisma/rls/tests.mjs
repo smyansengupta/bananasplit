@@ -2126,6 +2126,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "explode_ballot",
         "finish_job",
         "folder_in_same_org",
+        // The public form page: which org a live form's slug opens, ids only.
+        "form_page",
         "ics_token_created_at",
         "invitation_by_token_hash",
         "issue_org_creation_code",
@@ -2290,6 +2292,14 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "EventAttendee:DELETE",
         "EventAttendee:INSERT",
         "EventAttendee:UPDATE",
+        // Inbox: what each member snoozed or finished, own rows only.
+        "InboxItemState:DELETE",
+        "InboxItemState:INSERT",
+        "InboxItemState:UPDATE",
+        // Links between things: any member links two things in their org
+        // (createdById pinned) and any member unlinks them.
+        "ItemLink:DELETE",
+        "ItemLink:INSERT",
         "MemberPrefs:INSERT",
         "MemberPrefs:UPDATE",
         // Who's online: each member marks only themselves here.
@@ -2427,6 +2437,7 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       purge_unverified_users: "a",
       rsvp_page: "s",
       rsvp_ticket: "s",
+      form_page: "s",
       my_rsvp_registrations: "u",
       rsvp_claim_same_event: "",
       rate_limit_hit: "sa",
