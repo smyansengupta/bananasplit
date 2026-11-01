@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 /**
  * The top of the sidebar under the organization menu: one full-width New
  * button that makes anything, and under it a "Search or jump" field that
- * opens the Ctrl K palette. On the rail both become round
- * icon buttons in the same places, so collapsing only changes the width.
+ * opens the Ctrl K palette. On the rail both become 40px round icon
+ * buttons in the same places, their labels running off to the right.
  * They live here, not in the top-right capsule: one place to search, one
  * place to create.
  */
@@ -52,10 +52,11 @@ export function SidebarTools({
               aria-busy={pending || undefined}
               className={cn(
                 // The plan's New: one dark, full-width button.
-                "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-lg px-2 text-[13.5px] font-semibold outline-none",
-                "[transition:width_500ms_var(--ease-ink),opacity_200ms] motion-reduce:[transition:none]",
+                "focus-glow flex shrink-0 items-center overflow-hidden text-[14.5px] font-semibold outline-none",
+                "[transition:width_500ms_var(--ease-ink),height_500ms_var(--ease-ink),border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),opacity_200ms] motion-reduce:[transition:none]",
                 "bg-primary text-primary-foreground hover:opacity-90",
-                rail ? "w-8 justify-center px-0" : "w-full",
+                // On the rail: a 40px circle, the plus at its centre.
+                rail ? "size-10 gap-0 rounded-[20px] px-3" : "h-8 w-full gap-2 rounded-lg px-2",
               )}
             >
               <span className="grid size-4 shrink-0 place-items-center">
@@ -81,12 +82,13 @@ export function SidebarTools({
         title={rail ? "Search or jump" : undefined}
         className={cn(
           // The plan's search field: bordered, on the card colour, quiet text.
-          "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-lg border px-2 text-[13px] outline-none",
-          "[transition:width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
+          "focus-glow flex shrink-0 items-center overflow-hidden border text-[14px] outline-none",
+          "[transition:width_500ms_var(--ease-ink),height_500ms_var(--ease-ink),border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
           chrome
             ? "border-chrome-foreground/15 bg-chrome-foreground/6 text-chrome-foreground/60 hover:bg-chrome-foreground/10"
             : "bg-card text-muted-foreground hover:text-foreground border-border",
-          rail ? "w-8 justify-center px-0" : "w-full",
+          // On the rail: a 40px circle, the glass inside the border at its centre.
+          rail ? "size-10 gap-0 rounded-[20px] px-[11px]" : "h-8 w-full gap-2 rounded-lg px-2",
         )}
       >
         <Search className="size-4 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
@@ -95,7 +97,7 @@ export function SidebarTools({
         </span>
         <kbd
           className={cn(
-            "rounded border px-1 font-mono text-[10.5px] leading-4",
+            "shrink-0 rounded border px-1 font-mono text-[11px] leading-4",
             chrome ? "border-chrome-foreground/15" : "border-border",
             fadeLabel(rail),
           )}

@@ -16,7 +16,7 @@ import { SidebarEditProvider, type SidebarEdit } from "@/components/shell/sideba
 import { type SidebarState } from "@/components/shell/sidebar-mode-context";
 import { SidebarNav, type SidebarPin } from "@/components/shell/sidebar-nav";
 import { SidebarPanel } from "@/components/shell/sidebar-panel";
-import { SidebarPeople, type SidebarPeopleData } from "@/components/shell/sidebar-people";
+import { PresenceBeat } from "@/components/shell/presence-beat";
 import { SidebarTools } from "@/components/shell/sidebar-tools";
 import { ToolCapsule } from "@/components/shell/tool-capsule";
 import type { OrgSummary, ShellUser } from "@/components/shell/types";
@@ -77,7 +77,7 @@ export function AppShell({
   sidebarCookie,
   mySidebar = EMPTY_MY_SIDEBAR,
   mySidebarCookie,
-  people = null,
+  presence = false,
   banner,
   children,
 }: {
@@ -117,8 +117,8 @@ export function AppShell({
   mySidebar?: MySidebar;
   /** Its cookie's name (mySidebarCookieName); without it, edits last until you leave. */
   mySidebarCookie?: string;
-  /** Who's here now, at the sidebar's foot (none in Personal). */
-  people?: SidebarPeopleData | null;
+  /** Mark you here once a minute (an organization, not Personal): Overview and People show who's online. */
+  presence?: boolean;
   /** Above every page: the club's trial or paused notice (SpaceBanner). */
   banner?: React.ReactNode;
   children: React.ReactNode;
@@ -259,9 +259,6 @@ export function AppShell({
             onToggle={toggleSidebar}
             clubMenu={clubMenu}
             profile={profile}
-            people={
-              people && <SidebarPeople orgId={orgId} orgSlug={orgSlug} you={user} people={people} />
-            }
           >
             {nav()}
           </SidebarPanel>
@@ -295,6 +292,7 @@ export function AppShell({
           </div>
 
           <VisitTracker orgId={orgId} />
+          {presence && <PresenceBeat orgId={orgId} />}
           <PendingLinkWatcher orgId={orgId} orgSlug={orgSlug} />
           <KeyboardShortcuts
             orgSlug={orgSlug}

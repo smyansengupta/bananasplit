@@ -70,6 +70,8 @@ import {
   weeklyDoneTrend,
 } from "@/server/pulse/queries";
 import { upcomingPulseSend } from "@/server/pulse/schedule";
+import { onlineNow } from "@/server/presence";
+import { OnlineNow } from "@/components/overview/online-now";
 import { loadPersonalHome } from "@/server/personal/home";
 import { getMyOpenTasks, getTaskStats, taskFilterWhere } from "@/server/tasks/queries";
 
@@ -135,7 +137,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const data = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({
       where: { id: user.id },
-      select: { timezone: true, name: true },
+      select: { timezone: true, name: true, image: true, avatar: true },
     });
     const tz = effectiveTimezone(me, org);
     const dayKey = localDateKey(now, tz);
@@ -163,6 +165,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       timeZone: tz,
       todayKey: dayKey,
       hiddenUpNext: dismissed.map((d) => `${d.kind}:${d.refId}`),
+      // Your face for "members online" when you're the only one here.
+      you: { id: user.id, name: me?.name ?? null, image: me?.image ?? null, avatar: me?.avatar },
       firstName: me?.name?.trim().split(/\s+/)[0] ?? null,
       myTasks,
       taskExtras: await loadTaskExtras(
@@ -516,6 +520,12 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ),
   };
 
+  // Who's here now, beside the date (the shell's heartbeat keeps it fresh).
+  // Its own transaction: if it fails, the line goes and the board stays.
+  const online = await withOrgTx(org.id, ({ db }) => onlineNow(db, org.id, user.id)).catch(
+    () => null,
+  );
+
   const greetingBlock = (
     <h1 className="page-title">
       {greeting(now, timeZone)}
@@ -533,7 +543,14 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         bodies={bodies}
         headerActions={headerActions}
         intro={greetingBlock}
-        introDescription={`${dateLine}, ${org.name}`}
+        introDescription={
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span>{`${dateLine}, ${org.name}`}</span>
+            {online && (
+              <OnlineNow orgId={org.id} orgSlug={org.slug} you={data.you} initial={online} />
+            )}
+          </span>
+        }
         stats={
           <div className="space-y-[30px]">
             {stats}

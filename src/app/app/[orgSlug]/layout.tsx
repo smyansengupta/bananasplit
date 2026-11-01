@@ -29,7 +29,6 @@ import { resolveTheme } from "@/lib/theme/resolve";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { sidebarCounts } from "@/server/inbox/counts";
 import { listPins } from "@/server/pins";
-import { onlineNow } from "@/server/presence";
 import { guestPollRedirect } from "@/server/polls/guest-redirect";
 import { getShellUser, getViewerPrefs } from "@/server/profiles/queries";
 import { findPendingDeletionOrg } from "@/server/settings/deletion";
@@ -175,14 +174,6 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
   const sidebarMode = await getSidebarMode(ctx.user.id);
   // Your own order and hidden rows, on top of the organization's sidebar.
   const mySidebar = await getMySidebar(ctx.user.id, ctx.organization.id);
-  // Who's here now, at the sidebar's foot (not in Personal); the open app
-  // keeps it fresh (src/server/presence.ts).
-  const people =
-    ctx.organization.kind === "PERSONAL"
-      ? null
-      : await withOrgTx(ctx.organization.id, ({ db }) =>
-          onlineNow(db, ctx.organization.id, ctx.user.id),
-        ).catch(() => null);
 
   return (
     <OrgThemeRoot key={ctx.organization.id} theme={theme}>
@@ -220,7 +211,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         sidebarCookie={sidebarCookieName(ctx.user.id)}
         mySidebar={mySidebar}
         mySidebarCookie={mySidebarCookieName(ctx.user.id, ctx.organization.id)}
-        people={people}
+        presence={ctx.organization.kind !== "PERSONAL"}
         taskViews={spaceIncludes(ctx.organization, "taskViews")}
         teamwork={spaceIncludes(ctx.organization, "teamwork")}
         banner={

@@ -54,12 +54,7 @@ import type {
   PersonSheet,
 } from "@/server/profiles/directory";
 
-import {
-  applyFilters,
-  groupPeople,
-  localMatch,
-  type PeopleGroup,
-} from "./directory-model";
+import { applyFilters, groupPeople, localMatch, type PeopleGroup } from "./directory-model";
 import {
   DIRECTORY_ROLES,
   directorySearch,
@@ -78,7 +73,7 @@ import { majorAndYear } from "./profile-links";
  * search at the right ("/" focuses it, the database does the matching,
  * typo-tolerant, with an instant local preview while it answers), and
  * what's narrowing the list underneath, each removable. A green dot is
- * someone in the app now, kept live by the sidebar's heartbeat
+ * someone in the app now, kept live by the shell's heartbeat
  * (presence-store.ts). The profile opens over the list (full screen on
  * phones). ↑ ↓ move between people,
  * Esc closes the sheet, and the whole state lives in the URL (?person=).
@@ -141,7 +136,7 @@ export function PeopleDirectory({
   const searchRef = useRef<HTMLInputElement>(null);
   const latest = useRef("");
 
-  // Who's online follows the sidebar's heartbeat; you're always here.
+  // Who's online follows the shell's heartbeat; you're always here.
   const live = useLiveOnline(orgId);
   const people = useMemo(
     () =>
@@ -421,26 +416,26 @@ export function PeopleDirectory({
             {chart?.actions}
           </div>
         ) : (
-        <PhoneToolbar
-          leading={phoneViews}
-          filterCount={[query.team, query.role, query.year, show].filter(Boolean).length}
-          onFilters={() => setFiltersOpen(true)}
-          searchLabel="Search people"
-          searchActive={Boolean(query.q)}
-          search={
-            <SearchField
-              value={query.q}
-              onValueChange={(q) => update({ q: q.slice(0, 80) })}
-              onClear={() => update({ q: "" })}
-              placeholder="Search"
-              aria-label="Search people"
-              maxLength={80}
-              autoComplete="off"
-              autoFocus
-            />
-          }
-          onCancelSearch={() => update({ q: "" })}
-        />
+          <PhoneToolbar
+            leading={phoneViews}
+            filterCount={[query.team, query.role, query.year, show].filter(Boolean).length}
+            onFilters={() => setFiltersOpen(true)}
+            searchLabel="Search people"
+            searchActive={Boolean(query.q)}
+            search={
+              <SearchField
+                value={query.q}
+                onValueChange={(q) => update({ q: q.slice(0, 80) })}
+                onClear={() => update({ q: "" })}
+                placeholder="Search"
+                aria-label="Search people"
+                maxLength={80}
+                autoComplete="off"
+                autoFocus
+              />
+            }
+            onCancelSearch={() => update({ q: "" })}
+          />
         )}
 
         <FilterSheet
@@ -532,110 +527,115 @@ export function PeopleDirectory({
               </>
             ) : (
               <>
+                {/* Who to show, as icons that say what they are on hover or focus (Tasks' Mine, My team, Everyone). */}
+                <div
+                  className="flex shrink-0 items-center gap-1"
+                  role="group"
+                  aria-label="Who to show"
+                >
+                  <ExpandChip
+                    icon={Users}
+                    label="Everyone"
+                    active={!show}
+                    onClick={() => update({ online: false, free: false })}
+                  />
+                  <ExpandChip
+                    icon={CircleDot}
+                    label={`Online now (${onlineCount})`}
+                    active={show === "online"}
+                    onClick={() => update({ online: true, free: false })}
+                  />
+                  <ExpandChip
+                    icon={Clock}
+                    label={`Free now (${freeCount})`}
+                    active={show === "free"}
+                    onClick={() => update({ free: true, online: false })}
+                  />
+                </div>
 
-            {/* Who to show, as icons that say what they are on hover or focus (Tasks' Mine, My team, Everyone). */}
-            <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Who to show">
-              <ExpandChip
-                icon={Users}
-                label="Everyone"
-                active={!show}
-                onClick={() => update({ online: false, free: false })}
-              />
-              <ExpandChip
-                icon={CircleDot}
-                label={`Online now (${onlineCount})`}
-                active={show === "online"}
-                onClick={() => update({ online: true, free: false })}
-              />
-              <ExpandChip
-                icon={Clock}
-                label={`Free now (${freeCount})`}
-                active={show === "free"}
-                onClick={() => update({ free: true, online: false })}
-              />
-            </div>
+                <FiltersMenu
+                  count={[query.team, query.role, query.year].filter(Boolean).length}
+                  items={[
+                    {
+                      name: "Sort by",
+                      node: (
+                        <SortMenu sort={sort} sorts={sorts} onSort={(v) => update({ sort: v })} />
+                      ),
+                    },
+                    ...(teams.length > 0
+                      ? [
+                          {
+                            name: "Team",
+                            node: (
+                              <FilterMenu
+                                value={query.team}
+                                display={query.team ? teamLabel(query.team) : null}
+                                allLabel="All teams"
+                                options={teamOptions}
+                                onChange={(team) => update({ team })}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(roles.length > 1
+                      ? [
+                          {
+                            name: "Role",
+                            node: (
+                              <FilterMenu
+                                value={query.role}
+                                display={query.role ? ROLE_LABELS[query.role] : null}
+                                allLabel="All roles"
+                                options={roles.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+                                onChange={(role) => update({ role: role as DirectoryRole | null })}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
+                    ...(years.length > 0
+                      ? [
+                          {
+                            name: "Year",
+                            node: (
+                              <FilterMenu
+                                value={query.year ? String(query.year) : null}
+                                display={query.year ? `Class of ${query.year}` : null}
+                                allLabel="All years"
+                                options={years.map((y) => ({
+                                  value: String(y),
+                                  label: `Class of ${y}`,
+                                }))}
+                                onChange={(year) => update({ year: year ? Number(year) : null })}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
 
-            <FiltersMenu
-                count={[query.team, query.role, query.year].filter(Boolean).length}
-                items={[
-                  {
-                    name: "Sort by",
-                    node: <SortMenu sort={sort} sorts={sorts} onSort={(v) => update({ sort: v })} />,
-                  },
-                  ...(teams.length > 0
-                    ? [
-                        {
-                          name: "Team",
-                          node: (
-                            <FilterMenu
-                              value={query.team}
-                              display={query.team ? teamLabel(query.team) : null}
-                              allLabel="All teams"
-                              options={teamOptions}
-                              onChange={(team) => update({ team })}
-                            />
-                          ),
-                        },
-                      ]
-                    : []),
-                  ...(roles.length > 1
-                    ? [
-                        {
-                          name: "Role",
-                          node: (
-                            <FilterMenu
-                              value={query.role}
-                              display={query.role ? ROLE_LABELS[query.role] : null}
-                              allLabel="All roles"
-                              options={roles.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
-                              onChange={(role) => update({ role: role as DirectoryRole | null })}
-                            />
-                          ),
-                        },
-                      ]
-                    : []),
-                  ...(years.length > 0
-                    ? [
-                        {
-                          name: "Year",
-                          node: (
-                            <FilterMenu
-                              value={query.year ? String(query.year) : null}
-                              display={query.year ? `Class of ${query.year}` : null}
-                              allLabel="All years"
-                              options={years.map((y) => ({
-                                value: String(y),
-                                label: `Class of ${y}`,
-                              }))}
-                              onChange={(year) => update({ year: year ? Number(year) : null })}
-                            />
-                          ),
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-
-            <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
-              <SearchField
-                ref={searchRef}
-                value={query.q}
-                onValueChange={(q) => update({ q: q.slice(0, 80) })}
-                onClear={() => update({ q: "" })}
-                hint="/"
-                placeholder="Search people"
-                aria-label="Search people"
-                className="sm:max-w-56"
-                maxLength={80}
-                autoComplete="off"
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    update({ q: "" });
-                    e.currentTarget.blur();
-                  }
-                }}
-              />
-            </div>
+                <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
+                  <SearchField
+                    ref={searchRef}
+                    value={query.q}
+                    onValueChange={(q) => update({ q: q.slice(0, 80) })}
+                    onClear={() => update({ q: "" })}
+                    hint="/"
+                    placeholder="Search people"
+                    aria-label="Search people"
+                    className="sm:max-w-56"
+                    maxLength={80}
+                    autoComplete="off"
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        update({ q: "" });
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </div>
               </>
             )}
           </div>
@@ -680,69 +680,70 @@ export function PeopleDirectory({
       {isChart ? (
         <div className="min-w-0">{chart?.body}</div>
       ) : (
-      <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
-        <div className="relative flex gap-3">
-          <div ref={listRef} data-person-list onKeyDown={onListKey} className="min-w-0 flex-1">
-            {people.length === 0 ? (
-              <EmptyState title="No members yet" />
-            ) : filtered.length === 0 ? (
-              <EmptyState
-                icon={Search}
-                title="No one matches that"
-                action={
+        <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
+          <div className="relative flex gap-3">
+            <div ref={listRef} data-person-list onKeyDown={onListKey} className="min-w-0 flex-1">
+              {people.length === 0 ? (
+                <EmptyState title="No members yet" />
+              ) : filtered.length === 0 ? (
+                <EmptyState
+                  icon={Search}
+                  title="No one matches that"
+                  action={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => update({ q: "", ...clearFilters })}
+                    >
+                      Clear all
+                    </Button>
+                  }
+                />
+              ) : (
+                <PeopleRows
+                  rows={visibleRows}
+                  view={isPhone ? "grid" : query.view === "grid" ? "grid" : "list"}
+                  selectedId={selectedId}
+                  viewerId={viewerId}
+                  teamsByKey={teamsByKey}
+                  hideNoTeam={isPhone && teams.length === 0}
+                  onSelect={select}
+                />
+              )}
+              {limit < rows.length && (
+                <div ref={sentinel} className="text-muted-foreground py-6 text-center text-sm">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => update({ q: "", ...clearFilters })}
+                    onClick={() => setLimit((n) => n + RENDER_STEP)}
                   >
-                    Clear all
+                    Show {ordered.length - visibleRows.filter((r) => r.kind === "person").length}{" "}
+                    more
                   </Button>
-                }
-              />
-            ) : (
-              <PeopleRows
-                rows={visibleRows}
-                view={isPhone ? "grid" : query.view === "grid" ? "grid" : "list"}
-                selectedId={selectedId}
-                viewerId={viewerId}
-                teamsByKey={teamsByKey}
-                hideNoTeam={isPhone && teams.length === 0}
-                onSelect={select}
-              />
-            )}
-            {limit < rows.length && (
-              <div ref={sentinel} className="text-muted-foreground py-6 text-center text-sm">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLimit((n) => n + RENDER_STEP)}
-                >
-                  Show {ordered.length - visibleRows.filter((r) => r.kind === "person").length} more
-                </Button>
-              </div>
+                </div>
+              )}
+            </div>
+            {letters.length > 4 && (
+              <nav
+                aria-label="Jump to a letter"
+                className="sticky top-4 hidden max-h-[70vh] flex-col self-start overflow-y-auto sm:flex"
+              >
+                {letters.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => jump(l)}
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted grid size-6 place-items-center rounded-full text-[11px] font-semibold"
+                  >
+                    {l}
+                  </button>
+                ))}
+              </nav>
             )}
           </div>
-          {letters.length > 4 && (
-            <nav
-              aria-label="Jump to a letter"
-              className="sticky top-4 hidden max-h-[70vh] flex-col self-start overflow-y-auto sm:flex"
-            >
-              {letters.map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => jump(l)}
-                  className="text-muted-foreground hover:text-foreground hover:bg-muted grid size-6 place-items-center rounded-full text-[11px] font-semibold"
-                >
-                  {l}
-                </button>
-              ))}
-            </nav>
-          )}
-        </div>
-      </section>
+        </section>
       )}
 
       {/*

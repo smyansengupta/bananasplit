@@ -3,7 +3,7 @@ import { userPublicSelect } from "@/server/members";
 
 /**
  * Who's online (MemberPresence): the open app marks its member here about
- * once a minute (src/components/shell/sidebar-people.tsx), and anyone seen
+ * once a minute (src/components/shell/presence-beat.tsx), and anyone seen
  * within ONLINE_WINDOW_MS counts as here now. Reads and writes go through
  * RLS: members read their organization's rows and write only their own.
  * People reads the same rows (lastSeenByUser) for its dots, the Online
@@ -17,7 +17,7 @@ export const HEARTBEAT_MS = 60_000;
 /** Seen this recently counts as online: two missed beats and you're gone. */
 export const ONLINE_WINDOW_MS = 150_000;
 
-/** How many faces the sidebar shows. */
+/** How many faces Overview's members online shows. */
 const FACES = 3;
 
 /** The most online members one beat names (People's live dots). */

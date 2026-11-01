@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { NOTE_FILE_ACCEPT } from "@/lib/files/types";
 import { formatStorage, storageLevel } from "@/lib/billing/storage";
 import { uploadNoteFile } from "@/lib/files/upload";
+import { PageDropFrame } from "@/components/ui/page-drop-frame";
 import { toast } from "@/components/ui/toaster";
 import { cn } from "@/lib/utils";
 
@@ -14,8 +15,9 @@ import { isFileDrag, registerUploader } from "./upload-queue";
 
 /**
  * The Files page's uploader. There is no drop box taking up the top of the
- * page any more: the whole page is the target. Drag files anywhere and it
- * says "Drop to upload"; drop them on a folder card or a folder in the
+ * page any more: the whole page is the target. Drag files anywhere and a
+ * frame around the page (beside the sidebar, never under it) says "Drop to
+ * upload"; drop them on a folder card or a folder in the
  * sidebar and they go into that folder (upload-queue.ts). New › Upload
  * opens the picker for several files at once. Each file gets a line with
  * its progress, and you never leave the page.
@@ -222,27 +224,23 @@ export function FilesDropZone({
         </p>
       )}
 
-      {/* The whole page, while files from the computer are over it: a frame
-          and a hint, light enough that the folder cards stay visible to drop on. */}
+      {/* The page, while files from the computer are over it. */}
       {pageDrag && (
-        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40">
-          <span className="border-foreground/30 rounded-shell absolute inset-3 border-2 border-dashed" />
-          <span className="bg-card edge shadow-e2 animate-in fade-in-0 slide-in-from-bottom-2 absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full py-2 pr-4 pl-2 text-[14px] font-medium duration-200 motion-reduce:animate-none">
-            <span className="bg-muted grid size-8 place-items-center rounded-full">
-              <CloudUpload className="size-4" aria-hidden="true" />
-            </span>
-            {full ? (
-              "Storage is full"
-            ) : (
-              <>
-                Drop to upload, or onto a folder
-                <span className="text-muted-foreground font-normal">
-                  up to {formatStorage(storage.maxFileBytes)} each
-                </span>
-              </>
-            )}
+        <PageDropFrame>
+          <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-full">
+            <CloudUpload className="size-4" aria-hidden="true" />
           </span>
-        </div>
+          {full ? (
+            "Storage is full"
+          ) : (
+            <span>
+              Drop to upload, or onto a folder{" "}
+              <span className="text-muted-foreground font-normal">
+                up to {formatStorage(storage.maxFileBytes)} each
+              </span>
+            </span>
+          )}
+        </PageDropFrame>
       )}
 
       {uploads.length > 0 && (

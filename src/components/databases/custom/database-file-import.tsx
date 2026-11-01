@@ -4,6 +4,7 @@ import { FileSpreadsheet } from "@/components/icons";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { PageDropFrame } from "@/components/ui/page-drop-frame";
 import { toast } from "@/components/ui/toaster";
 
 import { NewDatabaseDialog } from "./new-database-dialog";
@@ -114,15 +115,12 @@ export function DatabaseFileImport({
   return (
     <>
       {dragging && !open && (
-        <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-40">
-          <span className="border-foreground/30 rounded-shell absolute inset-3 border-2 border-dashed" />
-          <span className="bg-card edge shadow-e2 absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-2.5 rounded-full py-2 pr-4 pl-2 text-[14px] font-medium">
-            <span className="bg-muted grid size-8 place-items-center rounded-full">
-              <FileSpreadsheet className="size-4" aria-hidden="true" />
-            </span>
-            Drop a spreadsheet to make a database
+        <PageDropFrame>
+          <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-full">
+            <FileSpreadsheet className="size-4" aria-hidden="true" />
           </span>
-        </div>
+          Drop a spreadsheet to make a database
+        </PageDropFrame>
       )}
       <NewDatabaseDialog
         orgId={orgId}

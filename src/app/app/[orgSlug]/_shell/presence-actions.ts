@@ -4,7 +4,7 @@ import { withOrgAction } from "@/server/db/context";
 import { markHere, onlineNow, type OnlineNow } from "@/server/presence";
 
 /**
- * The open app's heartbeat (the sidebar's foot): marks you here in this
+ * The open app's heartbeat (PresenceBeat in the shell): marks you here in this
  * organization and answers who else is, in one round trip. Your own row
  * only (RLS); the organization comes from the action's context.
  */

@@ -70,8 +70,9 @@ export function UserMenu({
             type="button"
             title={displayName}
             className={cn(
-              "focus-glow grid size-7 shrink-0 place-items-center rounded-full outline-none",
-              "transition-[background-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
+              "focus-glow grid shrink-0 place-items-center rounded-full outline-none",
+              rail ? "size-10" : "size-7",
+              "transition-[background-color,scale,width,height] duration-200 active:scale-[0.94] motion-reduce:transition-none",
               tone.hover,
               chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15",
               className,
@@ -85,7 +86,7 @@ export function UserMenu({
             type="button"
             title={rail ? displayName : undefined}
             className={cn(
-              "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[10px] px-1 text-left text-[13.5px] font-medium whitespace-nowrap outline-none",
+              "focus-glow flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-[10px] px-1 text-left text-[14.5px] font-medium whitespace-nowrap outline-none",
               "[transition:width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
               rail ? "w-8" : "w-full",
               tone.text,

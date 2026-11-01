@@ -18,7 +18,10 @@ export function ToolCapsule({
   menuButton?: React.ReactNode;
 }) {
   return (
-    <div className="pointer-events-none sticky top-0 z-30 flex pt-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:hidden">
+    <div
+      data-tool-capsule=""
+      className="pointer-events-none sticky top-0 z-30 flex pt-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:hidden"
+    >
       <div
         role="toolbar"
         aria-label="Tools"

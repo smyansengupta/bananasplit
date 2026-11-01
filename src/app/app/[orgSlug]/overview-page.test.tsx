@@ -99,6 +99,9 @@ vi.mock("@/app/app/[orgSlug]/notes/queries", () => ({
 }));
 vi.mock("@/server/notes/files", () => ({ listNoteFiles: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/server/boards", () => ({ loadSavedBoard: mocks.loadSavedBoard }));
+vi.mock("@/server/presence", () => ({
+  onlineNow: vi.fn().mockResolvedValue({ count: 3, faces: [], ids: ["u_a", "u_b"] }),
+}));
 vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({ saveBoardAction: vi.fn() }));
 vi.mock("@/app/app/[orgSlug]/_shell/pin-actions", () => ({
   pinPathAction: vi.fn(),
@@ -444,6 +447,12 @@ describe("the Moonstone Overview", () => {
     const html = await render();
     expect(html).toContain("Monday, October 5, Claude Builders Club");
     expect(html).not.toContain('class="eyebrow');
+  });
+
+  it("says beside the date how many members are online, opening People on its Online filter", async () => {
+    const html = await render();
+    expect(html).toContain("3 members online");
+    expect(html).toContain("/people?online=1");
   });
 
   it("heads every board with the stat strip, then Up next", async () => {

@@ -122,9 +122,9 @@ export function OrgSwitcher({
         <button
           type="button"
           className={cn(
-            "focus-glow group/switch relative flex min-h-9 w-full min-w-0 shrink-0 items-center gap-2 overflow-hidden py-1.5 text-left outline-none",
-            "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
-            rail ? "rounded-full p-0" : "rounded-lg px-2",
+            "focus-glow group/switch relative flex min-w-0 shrink-0 items-center gap-2 overflow-hidden text-left outline-none",
+            "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
+            rail ? "size-10 rounded-full p-0" : "min-h-9 w-full rounded-lg px-2 py-1.5",
             !rail &&
               (chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15"),
             !rail && tone.hover,
@@ -136,7 +136,7 @@ export function OrgSwitcher({
             {(!personal && brand) || (
               <>
                 {mark(active, "size-[22px] rounded-[6px] text-[10px]")}
-                <span className="min-w-0 truncate text-[13.5px] leading-tight font-semibold">
+                <span className="min-w-0 truncate text-[14.5px] leading-tight font-semibold">
                   {nameOf(active)}
                 </span>
               </>
@@ -155,7 +155,7 @@ export function OrgSwitcher({
           <span
             aria-hidden="true"
             className={cn(
-              "ring-chrome-foreground/25 pointer-events-none absolute top-1 left-0 grid size-10 place-items-center overflow-hidden rounded-full ring-1",
+              "ring-chrome-foreground/25 pointer-events-none absolute inset-0 grid size-10 place-items-center overflow-hidden rounded-full ring-1 ring-inset",
               "transition-opacity duration-300 motion-reduce:transition-none",
               rail ? "opacity-100 delay-150" : "opacity-0",
             )}

@@ -1,8 +1,10 @@
 "use client";
 
 import { PanelLeft } from "@/components/icons";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
+import { Logo } from "@/components/brand/logo";
 import { useModKey } from "@/components/command-palette/use-mod-key";
 import {
   SidebarModeProvider,
@@ -18,25 +20,48 @@ const PEEK_DELAY_MS = 350;
 export const SIDEBAR_ID = "app-sidebar";
 
 /**
+ * The platform's signature under the organization's own nav: the
+ * Bananasplit mark and wordmark, and the way back to the home page. On the
+ * rail it tucks away and leaves the toggle.
+ */
+function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => void }) {
+  return (
+    <Link
+      href="/"
+      onClick={onNavigate}
+      title="Bananasplit home page"
+      tabIndex={rail ? -1 : undefined}
+      aria-hidden={rail || undefined}
+      className={cn(
+        "focus-glow flex h-8 min-w-0 items-center overflow-hidden rounded-[10px] px-1.5 whitespace-nowrap outline-none",
+        "transition-[max-width,opacity,padding] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+        rail ? "max-w-0 flex-none px-0 opacity-0" : "max-w-[180px] flex-1 opacity-100 delay-75",
+      )}
+    >
+      <Logo size={22} textSize={17} className="gap-2" />
+    </Link>
+  );
+}
+
+/**
  * The sidebar's insides, the same in every face: the organization menu
  * (switching spaces, the Admin panel) at the top with you (your picture,
- * opening your menu) beside it, the nav, then, last, who's online beside
- * the panel's collapse button. On the rail your picture sits under the
- * organization's circle and only the button stays at the foot.
+ * opening your menu) beside it, the nav, then, always last, the
+ * Bananasplit logo with the panel's collapse button when given. On the
+ * rail everything is a 40px circle down the middle: the organization, you
+ * under it, New, Search, the pages, and the button at the foot.
  */
 export function SidebarBody({
   clubMenu,
   profile,
-  people,
   children,
   toggle,
   rail = false,
+  onNavigate,
 }: {
   clubMenu: React.ReactNode;
   /** You: the user menu beside the organization menu (UserMenu variant="corner"). */
   profile?: React.ReactNode;
-  /** Who's online, at the foot (SidebarPeople). */
-  people?: React.ReactNode;
   children: React.ReactNode;
   toggle?: React.ReactNode;
   rail?: boolean;
@@ -49,16 +74,21 @@ export function SidebarBody({
       <div
         className={cn(
           "flex shrink-0 pb-4",
-          rail ? "flex-col items-start gap-3" : "items-center gap-1",
+          rail ? "flex-col items-center gap-3" : "items-center gap-1",
         )}
       >
-        <div className="min-w-0 flex-1">{clubMenu}</div>
-        {profile && <div className={cn("shrink-0", rail && "pl-0.5")}>{profile}</div>}
+        <div className={cn("min-w-0", rail ? "w-10 flex-none" : "flex-1")}>{clubMenu}</div>
+        {profile && <div className="grid shrink-0 place-items-center">{profile}</div>}
       </div>
       {children}
-      {/* Last: who's online, and the collapse button at the right. */}
-      <div className={cn("mt-1 flex shrink-0 items-center pt-1", rail ? "gap-0" : "gap-2")}>
-        {people ?? <span className="flex-1" />}
+      {/* The Bananasplit mark, always last, with the collapse button at the right. */}
+      <div
+        className={cn(
+          "mt-1 flex shrink-0 items-center pt-1",
+          rail ? "justify-center gap-0" : "gap-2",
+        )}
+      >
+        <SidebarLogo rail={rail} onNavigate={onNavigate} />
         {toggle}
       </div>
     </>
@@ -89,7 +119,6 @@ export function SidebarPanel({
   onToggle,
   clubMenu,
   profile,
-  people,
   children,
 }: {
   mode: SidebarState;
@@ -97,7 +126,6 @@ export function SidebarPanel({
   onToggle: () => void;
   clubMenu: React.ReactNode;
   profile?: React.ReactNode;
-  people?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const mod = useModKey();
@@ -206,7 +234,6 @@ export function SidebarPanel({
             <SidebarBody
               clubMenu={clubMenu}
               profile={profile}
-              people={people}
               rail={rail}
               chrome={chrome}
               toggle={
@@ -223,15 +250,17 @@ export function SidebarPanel({
                   aria-keyshortcuts="Meta+Backslash Control+Backslash"
                   title={`${label} (${mod === "⌘" ? "⌘\\" : "Ctrl \\"})`}
                   className={cn(
-                    "focus-glow grid size-8 shrink-0 place-items-center rounded-[10px] outline-none",
-                    "transition-[background-color,scale] duration-200 active:scale-[0.94] motion-reduce:transition-none",
+                    "focus-glow grid shrink-0 place-items-center outline-none",
+                    "transition-[background-color,scale,width,height,border-radius] duration-200 active:scale-[0.94] motion-reduce:transition-none",
+                    rail ? "size-10 rounded-full" : "ml-auto size-8 rounded-[10px]",
                     tone.text,
                     tone.hover,
                   )}
                 >
                   <PanelLeft
                     className={cn(
-                      "size-4 transition-transform duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+                      "transition-transform duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+                      rail ? "size-[18px]" : "size-4",
                       chrome && "-scale-x-100",
                     )}
                     strokeWidth={1.75}

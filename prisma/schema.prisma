@@ -1442,7 +1442,7 @@ model InboxItemState {
   @@index([organizationId, userId])
 }
 
-/// Who's online (the sidebar's foot): the open app marks its member here
+/// Who's online (Overview and People): the open app marks its member here
 /// about once a minute; a recent lastSeenAt is "online". Members of the org
 /// read every row; each writes only their own (RLS pins userId).
 model MemberPresence {

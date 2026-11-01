@@ -53,14 +53,14 @@ export function SidebarEditHeader() {
   return (
     <div className="flex shrink-0 flex-col gap-1 pb-2">
       <div className="flex items-center gap-1.5 pl-2">
-        <span className="flex-1 text-[13.5px] font-semibold">Edit sidebar</span>
+        <span className="flex-1 text-[14.5px] font-semibold">Edit sidebar</span>
         {changed && (
           <button
             type="button"
             onClick={edit.reset}
             title="Back to your organization's sidebar"
             className={cn(
-              "focus-glow flex h-7 items-center gap-1 rounded-[7px] px-2 text-xs font-medium outline-none",
+              "focus-glow flex h-7 items-center gap-1 rounded-[7px] px-2 text-[13px] font-medium outline-none",
               tone.text,
               tone.hover,
             )}
@@ -73,7 +73,7 @@ export function SidebarEditHeader() {
           type="button"
           onClick={edit.stopEditing}
           className={cn(
-            "focus-glow h-7 rounded-[7px] px-3 text-xs font-semibold outline-none active:scale-[0.97]",
+            "focus-glow h-7 rounded-[7px] px-3 text-[13px] font-semibold outline-none active:scale-[0.97]",
             chrome
               ? "bg-chrome-accent text-chrome-accent-foreground"
               : "bg-brand-accent text-brand-accent-foreground",
@@ -82,7 +82,7 @@ export function SidebarEditHeader() {
           Done
         </button>
       </div>
-      <p className={cn("px-2 text-xs", tone.quiet)}>
+      <p className={cn("px-2 text-[13px]", tone.quiet)}>
         Drag to reorder. Hidden pages stay in Search.
       </p>
     </div>
@@ -104,7 +104,7 @@ function EditRow({ link }: { link: NavLink }) {
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        "bg-background/70 border-border/70 relative flex h-8 items-center gap-2 rounded-[10px] border pr-1 text-[13.5px] font-medium",
+        "bg-background/70 border-border/70 relative flex h-8 items-center gap-2 rounded-[10px] border pr-1 text-[14.5px] font-medium",
         isDragging && "z-10 shadow-md",
         hidden && "opacity-50",
       )}

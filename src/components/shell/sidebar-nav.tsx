@@ -80,8 +80,9 @@ export const ICON_STROKE = 1.75;
 
 /**
  * One row of the sidebar, as the workspace plan draws it ("Option A,
- * revised"): a compact 32px row with a 16px icon 8px in, so collapsing to
- * the rail is only a change of width (a 32px square around the icon). The
+ * revised"): a compact 32px row with a 16px icon 8px in; on the rail it
+ * becomes a 40px circle with the icon at its centre, down the middle of
+ * the 68px pill like the organization's circle above it. The
  * page you're on is the whole row filled with the accent; a hover is a light
  * wash of the same accent. No outlines.
  */
@@ -96,13 +97,16 @@ export function sidebarItemClass({
 }) {
   const tone = surfaceTone(chrome);
   return cn(
-    "focus-glow relative flex h-8 shrink-0 items-center gap-2.5 overflow-hidden rounded-[10px] px-2 text-[13.5px] whitespace-nowrap outline-none",
-    "[&>svg:first-child]:opacity-70",
-    "[transition:width_500ms_var(--ease-ink),background-color_200ms,color_200ms] motion-reduce:[transition:none]",
-    rail ? "w-8" : "w-full",
+    "focus-glow relative flex shrink-0 items-center gap-2.5 overflow-hidden text-[14.5px] whitespace-nowrap outline-none",
+    // The icon a shade lighter than its label: a colour, not opacity, which
+    // Chrome paints as a dark square over the rail's glass.
+    "[&>svg:first-child]:text-current/70",
+    "[transition:width_500ms_var(--ease-ink),height_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),border-radius_500ms_var(--ease-ink),background-color_200ms,color_200ms] motion-reduce:[transition:none]",
+    // On the rail a 40px circle with the icon at its centre (12px in).
+    rail ? "size-10 rounded-[20px] px-3" : "h-8 w-full rounded-[10px] px-2",
     active
       ? cn(
-          "font-semibold [&>svg:first-child]:opacity-100",
+          "font-semibold [&>svg:first-child]:text-current",
           chrome
             ? "bg-chrome-accent text-chrome-accent-foreground"
             : "bg-brand-accent text-brand-accent-foreground",
@@ -111,9 +115,10 @@ export function sidebarItemClass({
   );
 }
 
-/** The count pill's colours: dark on a plain row, the accent's text colour on the lit one. */
+/** The count pill's colours: dark on a plain row (light on the glass), the accent's text colour on the lit one. */
 function countTone(active: boolean, chrome: boolean): string {
-  if (!active) return "bg-foreground text-background";
+  // On the dark glass a dark pill would vanish: it turns light there.
+  if (!active) return chrome ? "bg-chrome-foreground text-chrome" : "bg-foreground text-background";
   return chrome
     ? "bg-chrome-accent-foreground text-chrome-accent"
     : "bg-brand-accent-foreground text-brand-accent";
@@ -159,7 +164,7 @@ function NavItemLink({
             className={cn(
               // A small dark pill, so what waits on you stands out; on the
               // accent row it turns to the accent's own text colour.
-              "shrink-0 rounded-full px-1.5 font-mono text-[11px] leading-[18px] font-medium tabular-nums",
+              "shrink-0 rounded-full px-1.5 font-mono text-[11.5px] leading-[19px] font-medium tabular-nums",
               countTone(isActive, chrome),
               fadeLabel(rail),
             )}
@@ -171,7 +176,7 @@ function NavItemLink({
             <span
               aria-hidden="true"
               className={cn(
-                "absolute top-1.5 left-5 size-1.5 rounded-full",
+                "absolute top-2 left-6 size-2 rounded-full",
                 countTone(isActive, chrome),
               )}
             />
@@ -212,7 +217,7 @@ export function GroupLabel({ label, children }: { label: string; children?: Reac
   const tone = surfaceTone(chrome);
   if (rail) return <div aria-hidden="true" className="h-4 shrink-0" />;
   return (
-    <div className={cn(HEADING, "text-xs font-medium whitespace-nowrap", tone.quiet)}>
+    <div className={cn(HEADING, "text-[13px] font-medium whitespace-nowrap", tone.quiet)}>
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {children}
     </div>
@@ -252,7 +257,7 @@ function SectionHeader({
         aria-expanded={!collapsed}
         aria-controls={`sidebar-section-${id}`}
         className={cn(
-          "focus-glow -ml-1 flex h-6 min-w-0 items-center gap-1 rounded-md px-1 text-xs font-medium whitespace-nowrap outline-none",
+          "focus-glow -ml-1 flex h-6 min-w-0 items-center gap-1 rounded-md px-1 text-[13px] font-medium whitespace-nowrap outline-none",
           "transition-colors duration-150 motion-reduce:transition-none",
           tone.quiet,
           "hover:text-sidebar-foreground",
@@ -275,7 +280,7 @@ function SectionHeader({
       {collapsed && waiting > 0 && (
         <span
           className={cn(
-            "rounded-full px-1.5 font-mono text-[11px] leading-[18px] font-medium tabular-nums",
+            "rounded-full px-1.5 font-mono text-[11.5px] leading-[19px] font-medium tabular-nums",
             countTone(false, chrome),
           )}
         >
@@ -372,7 +377,7 @@ function PinnedList({
           // Nothing pinned yet: a row like the others that pins the page on
           // screen, or a quiet line where there's nothing to pin.
           over ? (
-            <p className={cn("flex h-8 items-center px-2 text-[13px]", tone.text)}>
+            <p className={cn("flex h-8 items-center px-2 text-[14px]", tone.text)}>
               Drop to pin it here
             </p>
           ) : target ? (
@@ -382,7 +387,7 @@ function PinnedList({
               className={cn(sidebarItemClass({ active: false, rail: false, chrome }), tone.quiet)}
             />
           ) : (
-            <p className={cn("flex h-8 items-center px-2 text-[13px]", tone.quiet)}>
+            <p className={cn("flex h-8 items-center px-2 text-[14px]", tone.quiet)}>
               Pinned pages show here
             </p>
           )
@@ -432,7 +437,7 @@ function PinnedList({
               );
             })}
             {over && (
-              <li className={cn("flex h-8 items-center px-2 text-[13px]", tone.text)}>
+              <li className={cn("flex h-8 items-center px-2 text-[14px]", tone.text)}>
                 Drop to pin it here
               </li>
             )}
@@ -451,7 +456,7 @@ function PinnedList({
           title="Pinned"
           className={sidebarItemClass({ active: onAPin, rail: true, chrome })}
         >
-          <Pin className="size-5 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
+          <Pin className="size-4 shrink-0" strokeWidth={ICON_STROKE} aria-hidden="true" />
         </button>
       </Fold>
       {error && <p className="text-destructive px-2 pt-1 text-xs">{error}</p>}
@@ -475,7 +480,7 @@ export function SidebarNav({
   counts?: Record<string, number>;
   /** Search and New, above the sections (SidebarTools). */
   tools?: React.ReactNode;
-  /** Kept for callers; the club switcher at the foot of the sidebar lists the spaces now. */
+  /** Kept for callers; the organization menu at the top of the sidebar lists the spaces now. */
   spaces?: React.ReactNode;
   onNavigate?: () => void;
 }) {
