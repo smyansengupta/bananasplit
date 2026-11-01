@@ -79,7 +79,15 @@ export function UserMenu({
             )}
             aria-label={`Open user menu for ${displayName}`}
           >
-            <UserAvatar user={user} size="md" className="size-7 text-xs" />
+            <UserAvatar
+              user={user}
+              size="md"
+              className={cn(
+                "transition-[width,height] duration-500 ease-(--ease-ink) motion-reduce:transition-none",
+                // On the rail, as big as the circles under it.
+                rail ? "size-10 text-sm" : "size-7 text-xs",
+              )}
+            />
           </button>
         ) : row ? (
           <button

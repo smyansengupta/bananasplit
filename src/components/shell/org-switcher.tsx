@@ -124,7 +124,9 @@ export function OrgSwitcher({
           className={cn(
             "focus-glow group/switch relative flex min-w-0 shrink-0 items-center gap-2 overflow-hidden text-left outline-none",
             "[transition:border-radius_500ms_var(--ease-ink),padding_500ms_var(--ease-ink),width_500ms_var(--ease-ink),background-color_200ms] motion-reduce:[transition:none]",
-            rail ? "size-10 rounded-full p-0" : "min-h-9 w-full rounded-lg px-2 py-1.5",
+            rail
+              ? cn("size-10 p-0", personal ? "rounded-full" : "rounded-[12px]")
+              : "min-h-9 w-full rounded-lg px-2 py-1.5",
             !rail &&
               (chrome ? "aria-expanded:bg-chrome-accent/20" : "aria-expanded:bg-brand-accent/15"),
             !rail && tone.hover,
@@ -151,11 +153,12 @@ export function OrgSwitcher({
             strokeWidth={2.25}
             aria-hidden="true"
           />
-          {/* On the rail, the club becomes a circle tile. */}
+          {/* On the rail, the organization becomes a square tile (Personal: your round picture). */}
           <span
             aria-hidden="true"
             className={cn(
-              "ring-chrome-foreground/25 pointer-events-none absolute inset-0 grid size-10 place-items-center overflow-hidden rounded-full ring-1 ring-inset",
+              "ring-chrome-foreground/25 pointer-events-none absolute inset-0 grid size-10 place-items-center overflow-hidden ring-1 ring-inset",
+              personal ? "rounded-full" : "rounded-[12px]",
               "transition-opacity duration-300 motion-reduce:transition-none",
               rail ? "opacity-100 delay-150" : "opacity-0",
             )}
@@ -163,7 +166,7 @@ export function OrgSwitcher({
             {personal && user ? (
               <UserAvatar user={user} size="lg" />
             ) : (
-              <OrgMark org={active} tone="primary" className="size-10 rounded-full text-xs" />
+              <OrgMark org={active} tone="primary" className="size-10 rounded-[12px] text-xs" />
             )}
           </span>
         </button>

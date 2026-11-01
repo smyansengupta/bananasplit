@@ -82,7 +82,7 @@ export const ICON_STROKE = 1.75;
  * One row of the sidebar, as the workspace plan draws it ("Option A,
  * revised"): a compact 32px row with a 16px icon 8px in; on the rail it
  * becomes a 40px circle with the icon at its centre, down the middle of
- * the 68px pill like the organization's circle above it. The
+ * the 68px pill under the organization's square tile. The
  * page you're on is the whole row filled with the accent; a hover is a light
  * wash of the same accent. No outlines.
  */

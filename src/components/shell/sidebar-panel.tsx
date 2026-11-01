@@ -48,8 +48,8 @@ function SidebarLogo({ rail, onNavigate }: { rail: boolean; onNavigate?: () => v
  * (switching spaces, the Admin panel) at the top with you (your picture,
  * opening your menu) beside it, the nav, then, always last, the
  * Bananasplit logo with the panel's collapse button when given. On the
- * rail everything is a 40px circle down the middle: the organization, you
- * under it, New, Search, the pages, and the button at the foot.
+ * rail everything is 40px down the middle: the organization's square tile,
+ * then circles for you, New, Search, the pages, and the button at the foot.
  */
 export function SidebarBody({
   clubMenu,
