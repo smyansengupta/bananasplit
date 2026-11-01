@@ -51,7 +51,7 @@ import { inSpace, type ToolSpace } from "./space";
  * view grammar (src/lib/databases/href.ts); club-made ones search only.
  */
 
-const DATABASES = { feature: "databases", section: "databases" } as const;
+export const DATABASES = { feature: "databases", section: "databases" } as const;
 
 const KIND_OUT: Record<DatabaseKind, string> = {
   ATTENDANCE: "attendance",
@@ -80,7 +80,13 @@ const listOutput = z.object({
   nextCursor,
 });
 
-const valueField = z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()]);
+export const valueField = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.string()),
+  z.null(),
+]);
 
 const columnField = z.object({
   key: z.string().describe("The column's key: in each row's values, and for filters and sort."),
@@ -103,7 +109,7 @@ const queryOutput = z.object({
 
 type DatabaseOutput = z.infer<typeof databaseSummary>;
 type Column = z.infer<typeof columnField>;
-type Value = z.infer<typeof valueField>;
+export type Value = z.infer<typeof valueField>;
 
 function summaryOf(space: ToolSpace, d: DatabaseSummary): DatabaseOutput {
   return {
@@ -326,7 +332,7 @@ async function builtInRows(
 }
 
 /** Field names as column keys, the second of a name as "Name (2)". */
-function fieldKeys(fields: readonly FieldDef[]): string[] {
+export function fieldKeys(fields: readonly FieldDef[]): string[] {
   const seen = new Map<string, number>();
   return fields.map((f) => {
     const n = (seen.get(f.name) ?? 0) + 1;
@@ -347,6 +353,20 @@ function customColumns(fields: readonly FieldDef[]): Column[] {
     ops: [],
     ...(f.options.choices ? { options: f.options.choices.map((c) => c.label) } : {}),
   }));
+}
+
+/** The club's members by id, for member cells (only read when there is a member field). */
+export async function memberNames(
+  ctx: OrgContext,
+  spaceId: string,
+  fields: readonly FieldDef[],
+): Promise<Map<string, string>> {
+  if (!fields.some((f) => f.type === "MEMBER")) return new Map();
+  const members = await ctx.db.membership.findMany({
+    where: { organizationId: spaceId },
+    select: { userId: true, user: { select: { name: true } } },
+  });
+  return new Map(members.map((m) => [m.userId, m.user.name ?? "Member"]));
 }
 
 async function customRows(
@@ -370,16 +390,7 @@ async function customRows(
     after: position.after ?? null,
     limit: args.limit,
   });
-  const names = fields.some((f) => f.type === "MEMBER")
-    ? new Map(
-        (
-          await ctx.db.membership.findMany({
-            where: { organizationId: space.id },
-            select: { userId: true, user: { select: { name: true } } },
-          })
-        ).map((m) => [m.userId, m.user.name ?? "Member"]),
-      )
-    : new Map<string, string>();
+  const names = await memberNames(ctx, space.id, fields);
   const keys = fieldKeys(fields);
   return {
     columns: customColumns(fields),

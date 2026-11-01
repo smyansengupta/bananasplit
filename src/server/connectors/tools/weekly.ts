@@ -35,7 +35,7 @@ import { inSpace, type ToolSpace } from "./space";
  * of it; their own private tasks are marked, as in their draft.
  */
 
-const WEEKLY = { feature: "teamwork", section: "tasks" } as const;
+export const WEEKLY = { feature: "teamwork", section: "tasks" } as const;
 
 const STATUS_OUT: Record<string, "not_started" | "in_progress" | "blocked" | "done"> = {
   NOT_STARTED: "not_started",

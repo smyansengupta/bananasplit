@@ -50,10 +50,19 @@ export interface ConnectorFixture {
   pausedId: string;
   /** Alice's Personal space. */
   personalId: string;
-  /** A tool session for `user`, as the route builds it, under a grant of `scope`. */
+  /**
+   * A tool session for `user`, as the route builds it, under a grant of
+   * `scope`. Every session of a file shares one grant id (and so one rate
+   * limit bucket) unless `grantId` names another.
+   */
   session(
     user: FixtureUser,
-    scope?: { organizationId?: string | null; access?: "READ" | "WRITE" },
+    scope?: {
+      organizationId?: string | null;
+      access?: "READ" | "WRITE";
+      grantId?: string;
+      clientName?: string | null;
+    },
   ): Promise<ConnectorSession>;
   /** Runs `fn` while `spaceId` hides these sections (Settings › Sidebar). */
   hiding<T>(spaceId: string, sections: SectionId[], fn: () => Promise<T>): Promise<T>;
@@ -198,10 +207,10 @@ export async function setUpConnectorFixture(label: string): Promise<ConnectorFix
           .setExpirationTime("5m")
           .sign(pair.privateKey);
         const grant: ResolvedGrant = {
-          id: `grant_${tag}`,
+          id: scope.grantId ?? `grant_${tag}`,
           access: scope.access ?? "READ",
           organizationId: scope.organizationId ?? null,
-          clientName: null,
+          clientName: scope.clientName ?? null,
         };
         return { connector: await verifyConnectorToken(token, CONFIG), grant };
       },

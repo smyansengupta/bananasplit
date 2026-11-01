@@ -14,6 +14,7 @@ import { conferenceUrlError, resolveTimes } from "@/lib/calendar/event-input";
 import { MAX_REMINDERS } from "@/lib/meetings/reminders";
 import { weeklyOccurrences, weeksAfterKey } from "@/lib/meetings/series";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
+import { setOwnRsvp } from "@/server/events/rsvp";
 import * as events from "@/server/events/service";
 import { notifyUsers } from "@/server/notifications";
 import { notifyEventCancelled, scheduleEventReminders } from "@/server/rsvp/service";
@@ -596,13 +597,7 @@ export async function extendSeries(
 const rsvpTx = withOrgAction(async (ctx, eventId: string, rsvp: unknown): Promise<ActionResult> => {
   const parsed = z.enum(RSVPStatus).safeParse(rsvp);
   if (!parsed.success) return { error: "Invalid RSVP value." };
-  // Only the caller's own invitation row.
-  const updated = await ctx.db.eventAttendee.updateMany({
-    where: { organizationId: ctx.organizationId, eventId, userId: ctx.userId },
-    data: { rsvp: parsed.data },
-  });
-  if (updated.count === 0) return { error: "You aren't invited to this event." };
-  return {};
+  return setOwnRsvp(ctx, eventId, parsed.data);
 });
 
 /** Any member answers their own invitation. */
