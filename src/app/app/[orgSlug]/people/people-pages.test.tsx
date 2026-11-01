@@ -30,6 +30,9 @@ vi.mock("@/server/db/context", () => ({
   withOrgAction: (fn: unknown) => fn,
 }));
 vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/org-chart/chart-section", () => ({
+  loadOrgChartSection: vi.fn(async () => ({ summary: null, actions: null, body: null })),
+}));
 vi.mock("@/components/pins/pins-context", () => ({ PinToggle: () => null }));
 vi.mock("@/components/links/linked-section", () => ({ LinkedSection: () => null }));
 vi.mock("next/navigation", async () => {

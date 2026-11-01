@@ -24,6 +24,7 @@ function person(id: string, extra: Partial<DirectoryPerson> = {}): DirectoryPers
     freeNow: null,
     online: false,
     lastSeenAt: null,
+    seenAgo: null,
     ...extra,
   };
 }

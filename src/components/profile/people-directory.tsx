@@ -10,7 +10,7 @@ import {
   LayoutGrid,
   List,
   Search,
-  Table2,
+  Network,
   Users,
 } from "@/components/icons";
 import Link from "next/link";
@@ -23,6 +23,7 @@ import { useMediaQuery } from "@/components/org-chart/use-media-query";
 import { PinToggle } from "@/components/pins/pins-context";
 import { useLiveOnline } from "@/components/shell/presence-store";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { TagChip } from "@/components/ui/chip";
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { personHref } from "@/lib/profile/href";
 import { isTypingTarget } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
+import type { OrgChartSection } from "@/app/app/[orgSlug]/org-chart/chart-section";
 import type {
   DirectoryPerson,
   DirectoryTeam,
@@ -56,7 +58,6 @@ import {
   applyFilters,
   groupPeople,
   localMatch,
-  teamName,
   type PeopleGroup,
 } from "./directory-model";
 import {
@@ -68,11 +69,10 @@ import {
   type DirectorySort,
 } from "./directory-query";
 import { PersonProfile, ROLE_LABELS } from "./person-profile";
-import { PeopleTable, type InvitedRow, type RosterAccess } from "./people-table";
 
 /**
  * The people directory (Moonstone 12.1 and 12.2), with the same toolbar as
- * Tasks: the layout (grid, list, table), who to show (everyone, online
+ * Tasks: the view (grid, list, or the published org chart), who to show (everyone, online
  * now, free now), one Filters chip (team, role, year), the sort and the
  * search at the right ("/" focuses it, the database does the matching,
  * typo-tolerant, with an instant local preview while it answers), and
@@ -100,12 +100,8 @@ export interface PeopleDirectoryProps {
   initialSheet: PersonSheet | null;
   search?: (orgId: string, q: string) => Promise<PeopleSearchResult>;
   loadSheet?: (orgId: string, userId: string) => Promise<PersonSheet | null>;
-  /** userId → email, only what the viewer may see (the Table layout's email column). */
-  emails?: Record<string, string>;
-  /** Invites not yet accepted (owners and admins), as "Invited" rows in the Table layout. */
-  invites?: InvitedRow[];
-  /** What the viewer may do in the Table layout; without it, the table is read-only. */
-  access?: RosterAccess;
+  /** The Org chart view (?view=chart), rendered on the server. */
+  chart?: OrgChartSection;
 }
 
 type Row = { kind: "header"; group: PeopleGroup } | { kind: "person"; person: DirectoryPerson };
@@ -127,9 +123,7 @@ export function PeopleDirectory({
   initialSheet,
   search = searchPeopleAction,
   loadSheet = loadPersonSheetAction,
-  emails = {},
-  invites = [],
-  access,
+  chart,
 }: PeopleDirectoryProps) {
   const pathname = usePathname();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
@@ -190,7 +184,10 @@ export function PeopleDirectory({
 
   // The URL follows the state (no navigation: history integrates with the router).
   useEffect(() => {
-    const qs = directorySearch(query);
+    const params = new URLSearchParams(directorySearch(query));
+    const position = new URLSearchParams(window.location.search).get("position");
+    if (query.view === "chart" && position) params.set("position", position);
+    const qs = params.toString();
     const next = qs ? `${pathname}?${qs}` : pathname;
     if (next !== `${window.location.pathname}${window.location.search}`)
       window.history.replaceState(null, "", next);
@@ -399,19 +396,32 @@ export function PeopleDirectory({
     <SheetSkeleton />
   );
 
+  const isChart = query.view === "chart";
+  const phoneViews = (
+    <Segmented
+      label="View"
+      value={isChart ? "chart" : "list"}
+      onSelect={(v) => update({ view: v === "chart" ? "chart" : "list" })}
+      options={[
+        { value: "list", label: "People", icon: List, compact: true, title: "People" },
+        { value: "chart", label: "Org chart", icon: Network, compact: true, title: "Org chart" },
+      ]}
+    />
+  );
+
   return (
     <div className="grid items-start gap-[18px]">
       <div className="space-y-3">
-        {/* A phone: the one list toolbar (as on Tasks and Files), with the sort on its left (grid and list are one and the same there). */}
+        {/* A phone: the one list toolbar (as on Tasks and Files), with the view on its left (grid and list are one and the same there); the sort is in Filters. */}
+        {isChart ? (
+          <div className="flex items-center gap-2 md:hidden">
+            {phoneViews}
+            <span className="flex-1" />
+            {chart?.actions}
+          </div>
+        ) : (
         <PhoneToolbar
-          leading={
-            <Segmented
-              label="Sort people"
-              value={sort}
-              onSelect={(v) => update({ sort: v as DirectorySort })}
-              options={sorts.map((o) => ({ value: o.value, label: o.short }))}
-            />
-          }
+          leading={phoneViews}
           filterCount={[query.team, query.role, query.year, show].filter(Boolean).length}
           onFilters={() => setFiltersOpen(true)}
           searchLabel="Search people"
@@ -430,6 +440,7 @@ export function PeopleDirectory({
           }
           onCancelSearch={() => update({ q: "" })}
         />
+        )}
 
         <FilterSheet
           open={filtersOpen}
@@ -439,6 +450,12 @@ export function PeopleDirectory({
           canClear={activeFilters}
           onClear={() => update(clearFilters)}
         >
+          <FilterChoices
+            title="Sort"
+            value={sort}
+            onPick={(v) => update({ sort: v as DirectorySort })}
+            options={sorts.map((o) => ({ value: o.value, label: o.label }))}
+          />
           <FilterChoices
             title="Show"
             value={show}
@@ -485,17 +502,35 @@ export function PeopleDirectory({
         <div className="@container/toolbar max-md:hidden">
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
-              label="Layout"
+              label="View"
               value={query.view}
               onSelect={(view) => update({ view: view as DirectoryQuery["view"] })}
               options={[
                 { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
                 { value: "list", label: "List", icon: List, compact: true, title: "List" },
-                { value: "table", label: "Table", icon: Table2, compact: true, title: "Table" },
+                {
+                  value: "chart",
+                  label: "Org chart",
+                  icon: Network,
+                  compact: true,
+                  title: "Org chart",
+                },
               ]}
               labelsFrom="sr-only @[48rem]/toolbar:not-sr-only"
               className="shrink-0"
             />
+
+            {isChart ? (
+              <>
+                {chart?.summary && (
+                  <span className="text-muted-foreground min-w-0 truncate text-[13px]">
+                    {chart.summary}
+                  </span>
+                )}
+                <div className="ms-auto flex shrink-0 items-center gap-2">{chart?.actions}</div>
+              </>
+            ) : (
+              <>
 
             {/* Who to show, as icons that say what they are on hover or focus (Tasks' Mine, My team, Everyone). */}
             <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Who to show">
@@ -599,11 +634,13 @@ export function PeopleDirectory({
                 }}
               />
             </div>
+              </>
+            )}
           </div>
         </div>
 
         {/* What is narrowing the list, each removable on its own (as on Tasks). */}
-        {(activeFilters || term) && (
+        {!isChart && (activeFilters || term) && (
           <div className="flex flex-wrap items-center gap-1.5">
             {query.online && (
               <FilterPill label="Online now" onClear={() => update({ online: false })} />
@@ -638,6 +675,9 @@ export function PeopleDirectory({
         </span>
       </div>
 
+      {isChart ? (
+        <div className="min-w-0">{chart?.body}</div>
+      ) : (
       <section aria-label="Members" className="bg-card edge rounded-card min-w-0 p-[18px] sm:p-6">
         <div className="relative flex gap-3">
           <div ref={listRef} data-person-list onKeyDown={onListKey} className="min-w-0 flex-1">
@@ -658,27 +698,10 @@ export function PeopleDirectory({
                   </Button>
                 }
               />
-            ) : !isPhone && query.view === "table" ? (
-              <PeopleTable
-                orgId={orgId}
-                viewerId={viewerId}
-                people={ordered.slice(0, limit)}
-                emails={emails}
-                invites={access?.canInvite ? invites : []}
-                access={
-                  access ?? {
-                    role: "MEMBER",
-                    canManage: false,
-                    canInvite: false,
-                    canTransfer: false,
-                  }
-                }
-                onSelect={select}
-              />
             ) : (
               <PeopleRows
                 rows={visibleRows}
-                view={isPhone || query.view === "table" ? "grid" : query.view}
+                view={isPhone ? "grid" : query.view === "grid" ? "grid" : "list"}
                 selectedId={selectedId}
                 viewerId={viewerId}
                 teamsByKey={teamsByKey}
@@ -718,6 +741,7 @@ export function PeopleDirectory({
           )}
         </div>
       </section>
+      )}
 
       {/*
         A centred dialog, like the task editor and New event, rather than a
@@ -810,12 +834,13 @@ function PeopleRows({
             </span>
           </h2>
           {view === "grid" ? (
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
               {people.map((p) => (
-                <li key={p.id} className="min-w-0">
+                <li key={p.id} className="flex min-w-0">
                   <PersonCard
                     person={p}
-                    team={hideNoTeam ? "" : teamName(p, teamsByKey)}
+                    team={p.teamKey ? teamsByKey.get(p.teamKey) : undefined}
+                    showNoTeam={!hideNoTeam}
                     selected={p.id === selectedId}
                     isSelf={p.id === viewerId}
                     onSelect={onSelect}
@@ -862,20 +887,35 @@ function Presence({ person, size }: { person: DirectoryPerson; size: "lg" | "md"
   );
 }
 
+/**
+ * A grid card: picture (with the online dot), name and pronouns, title,
+ * then team, role and class as chips, their major, and a last line for
+ * now: online, free, or when they were last here.
+ */
 function PersonCard({
   person,
   team,
+  showNoTeam,
   selected,
   isSelf,
   onSelect,
 }: {
   person: DirectoryPerson;
-  team: string;
+  team: DirectoryTeam | undefined;
+  /** "Not on the chart" when they have no team (not on a phone with no chart). */
+  showNoTeam: boolean;
   selected: boolean;
   isSelf: boolean;
   onSelect: (id: string) => void;
 }) {
   const name = person.name ?? "Unnamed member";
+  const status = person.online
+    ? { text: "Online now", tone: "text-success font-medium" }
+    : person.freeNow
+      ? { text: "Free now", tone: "text-success font-medium" }
+      : person.seenAgo
+        ? { text: `Active ${person.seenAgo}`, tone: "text-muted-foreground" }
+        : null;
   return (
     <button
       type="button"
@@ -883,22 +923,46 @@ function PersonCard({
       aria-pressed={selected}
       onClick={() => onSelect(person.id)}
       className={cn(
-        "bg-card text-card-foreground border-foreground/8 rounded-tile focus-glow hover:shadow-e1 flex w-full min-w-0 items-center gap-3 border p-3.5 text-left transition duration-200 ease-(--ease-ink) outline-none hover:-translate-y-px motion-reduce:transform-none",
+        "bg-card text-card-foreground border-foreground/8 rounded-tile focus-glow hover:shadow-e1 flex w-full min-w-0 flex-col gap-3 border p-4 text-left transition duration-200 ease-(--ease-ink) outline-none hover:-translate-y-px motion-reduce:transform-none",
         selected && "ring-brand-accent shadow-e1 ring-2",
       )}
     >
-      <Presence person={person} size="lg" />
-      <span className="min-w-0">
-        <span className="block text-sm leading-tight font-semibold break-words">
-          {name}
-          {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
+      <span className="flex min-w-0 items-start gap-3">
+        <Presence person={person} size="lg" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm leading-tight font-semibold break-words">
+            {name}
+            {isSelf && <span className="text-muted-foreground ml-1 font-normal">(you)</span>}
+          </span>
+          {person.pronouns && (
+            <span className="text-muted-foreground block text-xs">{person.pronouns}</span>
+          )}
+          {person.title && (
+            <span className="text-muted-foreground mt-0.5 block text-[13px] leading-snug break-words">
+              {person.title}
+            </span>
+          )}
         </span>
-        <span className="text-muted-foreground block text-[13px] break-words">
-          {[person.title, team].filter(Boolean).join(", ")}
-        </span>
-        {person.freeNow && <FreeNow className="mt-0.5 block" />}
-        {person.online && <span className="sr-only">, online now</span>}
       </span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        {team ? (
+          <TagChip color={`var(--chart-${((team.slot - 1) % 5) + 1})`}>{team.name}</TagChip>
+        ) : (
+          showNoTeam && <span className="text-muted-foreground text-xs">Not on the chart</span>
+        )}
+        {person.role !== "MEMBER" && <Badge variant="secondary">{ROLE_LABELS[person.role]}</Badge>}
+        {person.gradYear && (
+          <span className="text-muted-foreground figure text-xs">Class of {person.gradYear}</span>
+        )}
+      </span>
+      {(person.major || status) && (
+        <span className="mt-auto flex min-w-0 flex-col gap-0.5 text-xs">
+          {person.major && (
+            <span className="text-muted-foreground truncate">{person.major}</span>
+          )}
+          {status && <span className={status.tone}>{status.text}</span>}
+        </span>
+      )}
     </button>
   );
 }

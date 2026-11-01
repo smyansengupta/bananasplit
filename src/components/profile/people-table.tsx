@@ -62,7 +62,7 @@ async function copyText(text: string, done: string) {
 }
 
 /**
- * People's Table layout: the one roster. Everyone sees name, email (when
+ * The roster (Admin > Members): the one place membership is managed. Everyone sees name, email (when
  * the viewer may), title, role and when they joined; a click on a name
  * opens the profile, a click on an email copies it, and "Copy N emails"
  * copies everyone in view. Owners and admins edit roles and titles in

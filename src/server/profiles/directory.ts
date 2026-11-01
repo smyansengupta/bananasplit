@@ -59,6 +59,8 @@ export interface DirectoryPerson {
   online: boolean;
   /** ISO timestamp of their last beat in this org, or null if never. */
   lastSeenAt: string | null;
+  /** When they were last here, in words ("2 hours ago"), when not online now. */
+  seenAgo: string | null;
 }
 
 export interface DirectoryTeam {
@@ -196,6 +198,7 @@ export async function loadDirectory(
         ),
         online: isOnline(lastSeen, now),
         lastSeenAt: lastSeen?.toISOString() ?? null,
+        seenAgo: lastSeen && !isOnline(lastSeen, now) ? ago(lastSeen, now) : null,
       };
     });
     const used = new Set(people.map((p) => p.teamKey));

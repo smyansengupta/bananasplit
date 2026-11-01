@@ -7,8 +7,12 @@
 
 export const DIRECTORY_SORTS = ["team", "name", "new", "active"] as const;
 export type DirectorySort = (typeof DIRECTORY_SORTS)[number];
-/** The dense list is the default: the directory is mostly a list of names. */
-export const DIRECTORY_VIEWS = ["list", "grid", "table"] as const;
+/**
+ * The dense list is the default: the directory is mostly a list of names.
+ * "chart" is the published org chart. The old "table" falls back to the
+ * list (the roster is Admin > Members now).
+ */
+export const DIRECTORY_VIEWS = ["list", "grid", "chart"] as const;
 export type DirectoryView = (typeof DIRECTORY_VIEWS)[number];
 export const DIRECTORY_ROLES = ["OWNER", "ADMIN", "TREASURER", "MEMBER"] as const;
 export type DirectoryRole = (typeof DIRECTORY_ROLES)[number];

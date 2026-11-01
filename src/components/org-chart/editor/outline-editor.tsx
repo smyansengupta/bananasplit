@@ -488,7 +488,7 @@ export function OutlineEditor({
                     )}
                     {canInvite && (
                       <Button asChild variant="ghost" size="sm" className="h-7">
-                        <Link href={`/app/${orgSlug}/people?view=table&invite=1`}>
+                        <Link href={`/app/${orgSlug}/people?invite=1`}>
                           <UserPlus aria-hidden="true" />
                           Invite
                         </Link>

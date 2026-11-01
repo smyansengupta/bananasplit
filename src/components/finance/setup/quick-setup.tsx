@@ -230,7 +230,7 @@ export function QuickFinanceSetup({
         </Link>
         {state.treasurerCount === 0 && (
           <Link
-            href={`/app/${orgSlug}/people?view=table`}
+            href={`/app/${orgSlug}/settings/members#roster`}
             className="text-sm underline underline-offset-4"
           >
             Choose a treasurer
