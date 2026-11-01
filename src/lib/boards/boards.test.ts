@@ -56,32 +56,42 @@ describe("overview widgets", () => {
     const offered = overviewWidgetsFor(true).map((w) => w.type);
     expect(offered).not.toContain("up-next");
     expect(offered).not.toContain("getting-started");
-    expect(resolveOverview(null, false).map((w) => w.type)).toContain("pinned");
   });
 
-  it("starts everyone on the approved default, row by row", () => {
+  it("starts everyone on the slimmer default, row by row", () => {
     expect(resolveOverview(null, false).map((w) => `${w.type}:${w.w}`)).toEqual([
-      "recap:4",
       "since-you-were-here:2",
-      "waiting-on-you:2",
       "my-tasks:2",
-      "deadlines:1",
+      "deadlines:2",
       "here-now:1",
+      "focus-time:1",
       "week:4",
       "meetings:2",
       "events:2",
-      "decisions:2",
-      "who-owns-what:2",
       "weekly-pulse:4",
-      "polls:1",
-      "votes:1",
-      "focus-time:1",
-      "quick-capture:1",
-      "recent:2",
-      "pinned:2",
+      "polls:2",
+      "votes:2",
     ]);
     // Every row fills the four columns.
     expect(resolveOverview(null, false).reduce((n, w) => n + w.w, 0) % 4).toBe(0);
+  });
+
+  it("offers what left the default in Add widget, and the week's recap nowhere", () => {
+    const placed = resolveOverview(null, false).map((w) => w.type);
+    const offered = overviewWidgetsFor(false).map((w) => w.type);
+    for (const type of [
+      "pinned",
+      "recent",
+      "decisions",
+      "who-owns-what",
+      "quick-capture",
+      "waiting-on-you",
+    ]) {
+      expect(placed).not.toContain(type);
+      expect(offered).toContain(type);
+    }
+    expect(offered).not.toContain("recap");
+    expect(resolveOverview([{ id: "recap", type: "recap", w: 4, h: null }], true)).toEqual([]);
   });
 
   it("offers Waiting on others without placing it", () => {

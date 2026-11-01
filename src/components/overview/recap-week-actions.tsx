@@ -15,10 +15,20 @@ import { postRecapAnnouncement } from "@/server/announcements/actions";
  * any member would see it (no money, no counts only admins see), so nothing
  * private to the viewer goes out to everyone.
  */
-export function RecapWeekActions({ orgId, text }: { orgId: string; text: string }) {
+export function RecapWeekActions({
+  orgId,
+  text,
+  posted: postedBefore = false,
+}: {
+  orgId: string;
+  text: string;
+  /** It already went out (the page counted it). */
+  posted?: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [posted, setPosted] = useState(false);
+  const [postedHere, setPosted] = useState(false);
+  const posted = postedBefore || postedHere;
 
   const copy = async () => {
     try {

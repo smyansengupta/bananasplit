@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   loadLinkedChips: vi.fn(),
   loadDecisions: vi.fn(),
   loadVotes: vi.fn(),
+  sidebarCounts: vi.fn(),
 }));
 
 vi.mock("@/server/overview/queries", async (actual) => ({
@@ -44,8 +45,9 @@ vi.mock("@/server/overview/queries", async (actual) => ({
   loadFormResponsesSince: vi.fn(async () => new Map()),
   loadEventTurnout: vi.fn(async () => ({ seats: new Map(), rates: new Map() })),
 }));
+// The Inbox's Needs you, as the sidebar badge counts it (its own tests).
+vi.mock("@/server/inbox/counts", () => ({ sidebarCounts: mocks.sidebarCounts }));
 // The newer widgets' loaders: each has its own tests.
-vi.mock("@/server/overview/recap-week", () => ({ loadRecapWeek: vi.fn() }));
 vi.mock("@/server/overview/since-you-were-here", () => ({
   loadSinceYouWereHere: vi.fn(async () => ({
     rows: [],
@@ -114,7 +116,7 @@ vi.mock("@/server/pulse/queries", () => ({
 
 const db = {
   user: { findUnique: vi.fn() },
-  // findMany: my deadlines for This week and the stat strip's sentence.
+  // findMany: my deadlines for This week and the Today strip's lines.
   task: {
     count: vi.fn(),
     findMany: vi.fn(async (): Promise<{ id: string; title: string; dueDate: Date }[]> => []),
@@ -239,6 +241,12 @@ beforeEach(() => {
     timeZone: "America/Los_Angeles",
   });
   mocks.loadVotes.mockResolvedValue({ cards: [], insight: null, total: 0 });
+  mocks.sidebarCounts.mockResolvedValue({
+    inbox: 0,
+    forms: 0,
+    finance: 0,
+    needsYou: { invites: 0, tasks: 0, requests: 0, reviews: 0 },
+  });
   db.availabilityPoll.findMany.mockResolvedValue([]);
   db.poll.findMany.mockResolvedValue([]);
   db.membership.findMany.mockResolvedValue([]);
@@ -389,6 +397,10 @@ describe("org overview", () => {
   });
 
   it("lists the viewer's pins and the pages they opened recently", async () => {
+    mocks.loadSavedBoard.mockResolvedValue([
+      { id: "pinned", type: "pinned", w: 2, h: null },
+      { id: "recent", type: "recent", w: 2, h: null },
+    ]);
     mocks.listPins.mockResolvedValue([
       { id: "pin_1", href: "/app/cbc/notes/n_1", label: "E-board minutes", kind: "note" },
     ]);
@@ -560,7 +572,7 @@ describe("org overview", () => {
     errors.mockRestore();
   });
 
-  it("ties My tasks, This week and the stat strip to what's linked and due", async () => {
+  it("ties My tasks, This week and the Today strip to what's linked and due", async () => {
     const late = {
       id: "t_late",
       title: "Book the room",
@@ -607,8 +619,12 @@ describe("org overview", () => {
       ]),
     );
     const html = await render();
-    // The stat strip's sentence.
-    expect(html).toContain("is 4 days late");
+    // The Today strip: the late one and how late, as a danger cell opening my overdue tasks.
+    expect(html).toContain("Book the room, 4 days late");
+    expect(html).toContain('href="/app/cbc/tasks?scope=mine&amp;overdue=1"');
+    expect(html).toContain("bg-tint-danger");
+    // And no sentence under it any more.
+    expect(html).not.toContain("is 4 days late");
     // My tasks: the task's linked event as a chip, and the crowded week.
     expect(html).toContain('title="Event: Fall Social"');
     expect(html).toContain("3 of your tasks land in Fall Social week:");
@@ -623,10 +639,15 @@ describe("org overview", () => {
     expect(html).not.toContain("Recent notes");
     expect(html).not.toContain("Recent uploads");
     expect(html).not.toContain("Next sign-up");
-    expect(html).toContain("Pick up where you left off");
+    // The week's recap moved to the Inbox's Announcements.
+    expect(html).not.toContain("The week, recapped");
   });
 
   it("shows a next step when there is nothing pinned or coming up", async () => {
+    mocks.loadSavedBoard.mockResolvedValue([
+      { id: "pinned", type: "pinned", w: 2, h: null },
+      { id: "week", type: "week", w: 4, h: null },
+    ]);
     const html = await render();
     expect(html).toContain("Nothing pinned yet");
     expect(html).toContain("Nothing this week.");
@@ -653,7 +674,7 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain("/people?online=1");
   });
 
-  it("heads every board with the stat strip, then Up next", async () => {
+  it("heads every board with the Today strip, then Up next", async () => {
     mocks.getUpcomingEvents.mockImplementation(
       async (_db: unknown, _org: string, _now: Date, _n: number, only?: string) =>
         only === "meetings"
@@ -663,12 +684,28 @@ describe("the Moonstone Overview", () => {
     db.task.count.mockResolvedValue(0);
     // Even a saved board that never had them.
     mocks.loadSavedBoard.mockResolvedValue([{ id: "polls", type: "polls", w: 1, h: null }]);
+    mocks.sidebarCounts.mockResolvedValue({
+      inbox: 3,
+      forms: 4,
+      finance: 2,
+      needsYou: { invites: 0, tasks: 0, requests: 2, reviews: 1 },
+    });
     const html = await render();
+    expect(html).toContain('aria-label="Today"');
+    expect(html).toContain("Nothing late");
+    // Waiting on you is the sidebar's Inbox badge, read the same way.
+    expect(mocks.sidebarCounts).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ orgId: "org_cbc", userId: "u_viewer" }),
+    );
+    expect(html).toContain("2 approvals, 1 form to review");
+    expect(html).toContain('href="/app/cbc/inbox"');
     expect(html).toContain("Due this week");
-    expect(html).toContain("All clear");
-    expect(html).toContain("Next 14 days");
+    // The far event is past two weeks: one in the next 14 days, and it's next.
+    expect(html).toContain("Events, next 14 days");
+    expect(html).toContain("Next: Officer meeting, Today 7:00 PM");
     expect(html).not.toContain("Open tasks");
-    expect(html.indexOf("Due this week")).toBeLessThan(html.indexOf('id="up-next-heading"'));
+    expect(html.indexOf('aria-label="Today"')).toBeLessThan(html.indexOf('id="up-next-heading"'));
     expect(html.indexOf('id="up-next-heading"')).toBeLessThan(html.indexOf("Open forms"));
   });
 

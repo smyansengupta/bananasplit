@@ -3,14 +3,12 @@ import type { ReactNode } from "react";
 import type { Role } from "@/generated/prisma/enums";
 import type { OnlineNow } from "@/server/presence";
 import type { MainWidgets, OwnTxWidgets } from "@/server/overview/home-widgets";
-import type { RecapWeek as RecapWeekData } from "@/server/overview/recap-week-text";
 
 import { Decisions, DecisionsControls } from "./decisions";
 import { Deadlines } from "./deadlines";
 import { FocusTime, FocusTimeControls } from "./focus-time";
 import { HereNow, HereNowControls } from "./here-now";
 import { QuickCapture } from "./quick-capture";
-import { RecapWeek } from "./recap-week";
 import { SinceYouWereHere } from "./since-you-were-here";
 import { Votes } from "./votes";
 import { WaitingOnOthers } from "./waiting-on-others";
@@ -18,7 +16,6 @@ import { WaitingOnYou } from "./waiting-on-you";
 import { WhoOwnsWhat, WhoOwnsWhatControls } from "./who-owns-what";
 import {
   DeadlinesControls,
-  RecapWeekControls,
   SinceYouWereHereControls,
   VotesControls,
   WaitingOnOthersControls,
@@ -33,9 +30,7 @@ import {
  * until the board refreshes. Server component code.
  */
 
-export interface HomeWidgetData extends MainWidgets, OwnTxWidgets {
-  recap?: RecapWeekData;
-}
+export type HomeWidgetData = MainWidgets & OwnTxWidgets;
 
 /** What a card shows when its read failed (not when it's simply empty). */
 const FAILED = (
@@ -66,7 +61,6 @@ export function homeWidgetCards({
   const d = data;
   return {
     bodies: {
-      recap: body("recap", d.recap, (v) => <RecapWeek orgId={orgId} data={v} />),
       "since-you-were-here": body("since-you-were-here", d.since, (v) => (
         <SinceYouWereHere orgId={orgId} data={v} />
       )),
@@ -93,7 +87,6 @@ export function homeWidgetCards({
       )),
     },
     headers: {
-      recap: d.recap ? <RecapWeekControls orgSlug={orgSlug} range={d.recap.range} /> : null,
       "since-you-were-here": (
         <SinceYouWereHereControls orgSlug={orgSlug} sinceLabel={d.since?.sinceLabel ?? null} />
       ),

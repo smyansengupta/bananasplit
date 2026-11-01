@@ -9,21 +9,13 @@ import { parseBoard, type BoardWidget, type WidgetMeta } from "@/lib/boards";
  * aren't widgets: they always head the page (src/app/app/[orgSlug]/page.tsx),
  * so a saved board that still lists them simply drops them. So does one that
  * lists a widget that's gone (Next sign-up, Recent notes, Recent uploads,
- * People: who's in the organization and who comes is on Databases > Reports).
+ * People: who's in the organization and who comes is on Databases > Reports;
+ * The week, recapped: it's in the Inbox's Announcements now).
  */
 
 type OverviewWidgetMeta = WidgetMeta & { admin?: boolean };
 
 export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
-  {
-    type: "recap",
-    title: "The week, recapped",
-    description: "What the organization got done, decided and ran in the last seven days.",
-    group: "Organization",
-    icon: "Rocket",
-    w: 4,
-    h: null,
-  },
   {
     type: "since-you-were-here",
     title: "Since you were here",
@@ -195,33 +187,27 @@ export function overviewWidgetsFor(isAdmin: boolean): OverviewWidgetMeta[] {
 }
 
 /**
- * The stat strip, Up next and the setup checklist always lead and aren't
- * widgets (see page.tsx). Then rows that each fill the four columns: the
- * week recapped; what changed and what's waiting on you; your tasks beside
- * the next deadlines and who's here; the next seven days; meetings beside
- * events; decisions beside who owns what; the weekly pulse; four small
- * ones (open forms, votes, focus time, quick capture); and where you were
- * beside what you pinned. Waiting on others is offered, not placed.
+ * The Today strip, Up next and the setup checklist always lead and aren't
+ * widgets (see page.tsx). Then rows that each fill the four columns: what
+ * changed beside your tasks; the next deadlines (two columns wide here,
+ * one in Add widget) with who's here and your focus time; the next seven
+ * days; meetings beside events; the weekly pulse; open forms beside votes
+ * (each two wide). Waiting on you, Waiting on others, Decisions, Who owns
+ * what, Quick capture, Pick up where you left off and Pinned are offered
+ * in Add widget, not placed.
  */
 const DEFAULT_LAYOUT: readonly BoardWidget[] = [
-  { id: "recap", type: "recap", w: 4, h: null },
   { id: "since-you-were-here", type: "since-you-were-here", w: 2, h: null },
-  { id: "waiting-on-you", type: "waiting-on-you", w: 2, h: null },
   { id: "my-tasks", type: "my-tasks", w: 2, h: null },
-  { id: "deadlines", type: "deadlines", w: 1, h: null },
+  { id: "deadlines", type: "deadlines", w: 2, h: null },
   { id: "here-now", type: "here-now", w: 1, h: null },
+  { id: "focus-time", type: "focus-time", w: 1, h: null },
   { id: "week", type: "week", w: 4, h: null },
   { id: "meetings", type: "meetings", w: 2, h: null },
   { id: "events", type: "events", w: 2, h: null },
-  { id: "decisions", type: "decisions", w: 2, h: null },
-  { id: "who-owns-what", type: "who-owns-what", w: 2, h: null },
   { id: "weekly-pulse", type: "weekly-pulse", w: 4, h: null },
-  { id: "polls", type: "polls", w: 1, h: null },
-  { id: "votes", type: "votes", w: 1, h: null },
-  { id: "focus-time", type: "focus-time", w: 1, h: null },
-  { id: "quick-capture", type: "quick-capture", w: 1, h: null },
-  { id: "recent", type: "recent", w: 2, h: null },
-  { id: "pinned", type: "pinned", w: 2, h: null },
+  { id: "polls", type: "polls", w: 2, h: null },
+  { id: "votes", type: "votes", w: 2, h: null },
 ];
 
 /**

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  announcementsView,
   BODY_MAX,
   byline,
   canManageAnnouncement,
   canRestoreAnnouncement,
   cleanAnnouncement,
   postedWhen,
+  recapWindowStart,
   seenPercent,
   signupInsight,
   TITLE_MAX,
@@ -120,5 +122,50 @@ describe("postedWhen and byline", () => {
   it("names the author by first name", () => {
     expect(byline("Kristine Park", "Tue")).toBe("Kristine, Tue");
     expect(byline(null, "today")).toBe("A former member, today");
+  });
+});
+
+describe("announcementsView", () => {
+  it("is This week only for news=week, and the posts otherwise", () => {
+    expect(announcementsView("week")).toBe("week");
+    expect(announcementsView(["week", "posts"])).toBe("week");
+    expect(announcementsView(undefined)).toBe("posts");
+    expect(announcementsView("")).toBe("posts");
+    expect(announcementsView("Week")).toBe("posts");
+    expect(announcementsView("updates")).toBe("posts");
+    expect(announcementsView(["posts", "week"])).toBe("posts");
+  });
+});
+
+describe("recapWindowStart", () => {
+  const NY = "America/New_York";
+
+  it("opens at Friday midnight in the organization's time zone and stays open to Sunday", () => {
+    // Fri Oct 30 2026, 00:00 in New York is 04:00 UTC (daylight time).
+    const friday = new Date("2026-10-30T04:00:00Z");
+    expect(recapWindowStart(new Date("2026-10-30T04:00:00Z"), NY)).toEqual(friday);
+    expect(recapWindowStart(new Date("2026-10-31T15:00:00Z"), NY)).toEqual(friday);
+    // Sun Nov 1, 23:59 in New York (standard time from 2 AM that day).
+    expect(recapWindowStart(new Date("2026-11-02T04:59:00Z"), NY)).toEqual(friday);
+  });
+
+  it("is closed Monday to Thursday", () => {
+    // Mon Nov 2, 00:00 in New York.
+    expect(recapWindowStart(new Date("2026-11-02T05:00:00Z"), NY)).toBeNull();
+    expect(recapWindowStart(new Date("2026-11-04T17:00:00Z"), NY)).toBeNull();
+    // Thu Oct 29, 23:59 in New York.
+    expect(recapWindowStart(new Date("2026-10-30T03:59:00Z"), NY)).toBeNull();
+  });
+
+  it("goes by the given time zone's day, not UTC's", () => {
+    // 02:00 UTC Friday is still Thursday evening in New York, Friday in UTC.
+    const at = new Date("2026-10-30T02:00:00Z");
+    expect(recapWindowStart(at, NY)).toBeNull();
+    expect(recapWindowStart(at, "UTC")).toEqual(new Date("2026-10-30T00:00:00Z"));
+    // 22:00 UTC Sunday is already Monday in Tokyo.
+    expect(recapWindowStart(new Date("2026-11-01T22:00:00Z"), "Asia/Tokyo")).toBeNull();
+    expect(recapWindowStart(new Date("2026-11-01T22:00:00Z"), "UTC")).toEqual(
+      new Date("2026-10-30T00:00:00Z"),
+    );
   });
 });

@@ -2,7 +2,14 @@
 
 import { ChartLine, Megaphone } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { OpenLink } from "@/components/overview/bits";
 import { Insight, LinkChips, type ItemRef } from "@/components/overview/connections";
@@ -17,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import {
   Select,
   SelectContent,
@@ -29,7 +37,6 @@ import { toast } from "@/components/ui/toaster";
 import { UserAvatar, type UserAvatarUser } from "@/components/user-avatar";
 import { runAction } from "@/lib/run-action";
 import { tagVar } from "@/lib/tag-colors";
-import { cn } from "@/lib/utils";
 import {
   deleteAnnouncement,
   editAnnouncement,
@@ -37,7 +44,13 @@ import {
   postAnnouncement,
   restoreAnnouncement,
 } from "@/server/announcements/actions";
-import { BODY_MAX, seenPercent, TITLE_MAX, type SignupInsight } from "@/server/announcements/rules";
+import {
+  BODY_MAX,
+  seenPercent,
+  TITLE_MAX,
+  type AnnouncementsView,
+  type SignupInsight,
+} from "@/server/announcements/rules";
 
 /** One announcement as the Inbox draws it. */
 export interface InboxAnnouncement {
@@ -69,19 +82,31 @@ const RUST: CSSProperties = {
   background: `color-mix(in oklab, ${tagVar("rust")} 14%, transparent)`,
 };
 
-/** This week's recap, ready to post (title and text as Home's recap writes them). */
+/** This week's recap, ready to post (title and text as loadRecapWeek writes them). */
 export interface RecapDraft {
   title: string;
   text: string;
 }
 
+/** The This week view, drawn by the page: the recap's seven days and the recap itself. */
+export interface WeekRecap {
+  /** "Oct 25 to Oct 31", beside the title; null when the recap didn't load. */
+  range: string | null;
+  body: ReactNode;
+}
+
 /**
- * Announcements at the top of the Inbox, above its tabs: the latest few
- * posts, each with who posted it and when, how many members have seen it
- * and the event it's about; a post opens to its full text. One fact under
- * the list (sign-ups after a post), and the dashed row at the foot posts:
- * this week's recap when it's ready, else anything. ↗ opens every post.
- * Every post shown counts as seen.
+ * Announcements at the top of the Inbox, above its tabs, in two views
+ * switched in its header (the page's ?news= param):
+ *
+ * - Announcements: the latest few posts, each with who posted it and when,
+ *   how many members have seen it and the event it's about; a post opens to
+ *   its full text. One fact under the list (sign-ups after a post), and the
+ *   dashed row at the foot posts: this week's recap when it's ready (Friday
+ *   to Sunday, until it goes out), else anything. ↗ opens every post. Every
+ *   post shown counts as seen.
+ * - This week: the viewer's own recap of the last seven days, with Copy and
+ *   Post as an announcement at its foot. ↗ opens Pulse.
  */
 export function InboxAnnouncements({
   orgId,
@@ -90,6 +115,10 @@ export function InboxAnnouncements({
   total,
   seeAllHref,
   recap,
+  view,
+  viewHrefs,
+  week,
+  pulseHref,
 }: {
   orgId: string;
   items: InboxAnnouncement[];
@@ -98,37 +127,64 @@ export function InboxAnnouncements({
   total: number;
   seeAllHref: string;
   recap: RecapDraft | null;
+  view: AnnouncementsView;
+  /** Where each view's switch goes (the Inbox with its tab kept). */
+  viewHrefs: Record<AnnouncementsView, string>;
+  /** The This week view's content, when it's the one open. */
+  week: WeekRecap | null;
+  pulseHref: string;
 }) {
   const [open, setOpen] = useState<InboxAnnouncement | null>(null);
   const marked = useRef(new Set<string>());
+  const onPosts = view === "posts";
 
   // Shown is seen: mark the ones this member hasn't seen yet, once each.
   useEffect(() => {
+    if (!onPosts) return;
     const fresh = items.filter((a) => !a.seenByMe && !marked.current.has(a.id)).map((a) => a.id);
     if (fresh.length === 0) return;
     for (const id of fresh) marked.current.add(id);
     void markAnnouncementsSeen(orgId, fresh).catch(() => {});
-  }, [items, orgId]);
+  }, [items, onPosts, orgId]);
 
-  if (items.length === 0 && total === 0) {
-    return <Composer orgId={orgId} events={events} recap={recap} empty />;
-  }
   // One fact for the list, from the newest post that has one.
   const withInsight = items.find((a) => a.insight);
+  const none = items.length === 0 && total === 0;
 
   return (
     <section
       aria-labelledby="inbox-announcements"
       className="bg-card ring-foreground/6 edge rounded-card flex flex-col gap-1 p-5 ring-1"
     >
-      <div className="flex items-center gap-2">
+      {/* On a phone the switch drops to its own line under the title. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
         <h2 id="inbox-announcements" className="heading text-[17px] leading-snug">
           Announcements
         </h2>
+        {!onPosts && week?.range && (
+          <span className="text-muted-foreground text-[13px] whitespace-nowrap">{week.range}</span>
+        )}
         <span className="flex-1" />
-        <OpenLink href={seeAllHref} label="All announcements" />
+        <Segmented
+          label="Show"
+          value={view}
+          options={[
+            { value: "posts", label: "Announcements", href: viewHrefs.posts },
+            { value: "week", label: "This week", href: viewHrefs.week },
+          ]}
+          className="order-last sm:order-none"
+        />
+        {onPosts ? (
+          !none && <OpenLink href={seeAllHref} label="All announcements" />
+        ) : (
+          <OpenLink href={pulseHref} label="Pulse" />
+        )}
       </div>
-      {items.length > 0 ? (
+      {!onPosts ? (
+        <div className="pt-3">{week?.body}</div>
+      ) : none ? (
+        <Composer orgId={orgId} events={events} recap={recap} empty />
+      ) : items.length > 0 ? (
         <ul className="flex flex-col">
           {items.map((a) => (
             <AnnouncementRow key={a.id} item={a} onOpen={() => setOpen(a)} />
@@ -137,13 +193,13 @@ export function InboxAnnouncements({
       ) : (
         <p className="text-muted-foreground py-2 text-sm">Nothing posted in the last two weeks.</p>
       )}
-      {withInsight?.insight && (
+      {onPosts && withInsight?.insight && (
         <Insight icon={ChartLine} className="mt-1">
           <b>{withInsight.insight.count}</b>{" "}
           {withInsight.insight.rest.replace("this was posted", `“${withInsight.title}” was posted`)}
         </Insight>
       )}
-      <Composer orgId={orgId} events={events} recap={recap} />
+      {onPosts && !none && <Composer orgId={orgId} events={events} recap={recap} />}
       <FullText orgId={orgId} item={open} onClose={() => setOpen(null)} />
     </section>
   );
@@ -338,9 +394,10 @@ function FullText({
 
 /**
  * The dashed row at the foot: a button that opens a small composer (title,
- * message, and an event it's about). When this week's recap is ready the
- * row offers it, and Review and post opens the composer with the recap in
- * it to read over first. With nothing posted yet it is the whole section.
+ * message, and an event it's about). At the end of the week, while this
+ * week's recap hasn't gone out, the row offers it, and Review and post opens
+ * the composer with the recap in it to read over first. With nothing posted
+ * yet it is all the Announcements view shows.
  */
 function Composer({
   orgId,
@@ -388,12 +445,7 @@ function Composer({
 
   if (!writing) {
     return (
-      <div
-        className={cn(
-          "border-border rounded-tile flex items-center gap-3 border-[1.5px] border-dashed px-3.5 py-3",
-          !empty && "mt-2",
-        )}
-      >
+      <div className="border-border rounded-tile mt-2 flex items-center gap-3 border-[1.5px] border-dashed px-3.5 py-3">
         <span className="text-muted-foreground flex-1 text-[13.5px]">
           {recap ? (
             <>
@@ -433,10 +485,7 @@ function Composer({
   return (
     <form
       aria-label="New announcement"
-      className={cn(
-        "border-border rounded-tile grid gap-3 border-[1.5px] border-dashed p-3.5",
-        !empty && "mt-2",
-      )}
+      className="border-border rounded-tile mt-2 grid gap-3 border-[1.5px] border-dashed p-3.5"
       onSubmit={(e) => {
         e.preventDefault();
         post();

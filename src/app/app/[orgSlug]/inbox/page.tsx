@@ -6,9 +6,12 @@ import {
   InboxAnnouncements,
   type AnnouncementEventOption,
   type InboxAnnouncement,
+  type RecapDraft,
+  type WeekRecap,
 } from "@/components/inbox/announcements";
 import { InboxView, type InboxRow, type InboxView as View } from "@/components/inbox/inbox-view";
 import { ClearRead, MarkAllRead } from "@/components/inbox/inbox-actions";
+import { RecapWeek } from "@/components/overview/recap-week";
 import { listWhen } from "@/components/meetings/meeting-card";
 import { PageHeader } from "@/components/page-header";
 import { can } from "@/lib/auth/permissions";
@@ -28,12 +31,22 @@ import {
   listAnnouncements,
   signupInsights,
 } from "@/server/announcements/announcements";
-import { byline, INBOX_LIMIT, postedWhen, RECENT_DAYS } from "@/server/announcements/rules";
+import {
+  announcementsView,
+  byline,
+  INBOX_LIMIT,
+  NEWS_PARAM,
+  postedWhen,
+  recapWindowStart,
+  RECENT_DAYS,
+  type AnnouncementsView,
+} from "@/server/announcements/rules";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { loadInboxState } from "@/server/inbox/state";
 import { loadRecapWeek } from "@/server/overview/recap-week";
+import { RECAP_TITLE, type RecapWeek as RecapWeekData } from "@/server/overview/recap-week-text";
 import { getMyOpenTasks } from "@/server/tasks/queries";
 
 /** How far ahead a task counts as needing you now. */
@@ -63,8 +76,10 @@ const EVENT_CHOICES = 20;
  *
  * Above the tabs, in every view: Announcements, the organization's latest
  * posts (the last two weeks, a few at most; ?announcements=all for every
- * one), with a composer anyone can post from that offers this week's recap
- * while it hasn't gone out.
+ * one), with a composer anyone can post from. From Friday to Sunday (the
+ * organization's time) the composer offers this week's recap until one goes
+ * out. The card's other view, This week (?news=week), is the viewer's own
+ * recap of the last seven days, loaded only while it's open.
  */
 export default async function InboxPage({
   params,
@@ -80,7 +95,10 @@ export default async function InboxPage({
   const canReview = can(ctx, "finance.manage");
   const canManagePosts = can(ctx, "events.write");
   const allPosts = sp.announcements === "all";
+  const news = announcementsView(sp[NEWS_PARAM]);
   const now = new Date();
+  // The end of the week, when the composer offers the recap (null other days).
+  const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
 
   const data = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
@@ -157,32 +175,87 @@ export default async function InboxPage({
 
   const { tz, todayKey, state } = data;
 
-  // This week's recap, offered at the foot of Announcements until it's
-  // posted. Built as every member would see it (no money, no admin-only
-  // counts, no private notes), since it prefills a post to everyone. Its own
-  // transaction: a failure here leaves the Inbox standing.
-  const recap = await withOrgTx(org.id, async ({ db }) => {
-    const week = await loadRecapWeek(db, {
-      orgId: org.id,
-      orgSlug,
-      userId: user.id,
-      role: Role.MEMBER,
-      audience: "organization",
-      timeZone: tz,
-      now,
-    });
-    if (week.summary.length === 0 && week.stats.length === 0 && week.findings.length === 0) {
-      return null;
-    }
-    const posted = await db.announcement.findFirst({
-      where: { organizationId: org.id, deletedAt: null, title: week.title },
-      select: { id: true },
-    });
-    return posted ? null : { title: week.title, text: week.text };
-  }).catch((error: unknown) => {
+  // This week's recap, in its own transaction: a failure here leaves the
+  // Inbox standing. Two uses, one per view:
+  // - Announcements, Friday to Sunday: the composer's prefill until a recap
+  //   goes out, built as every member would see it (no money, no admin-only
+  //   counts, no private notes), since it's a post to everyone.
+  // - This week: the viewer's own recap, only they see it, so their numbers.
+  const recap = await withOrgTx(
+    org.id,
+    async ({
+      db,
+    }): Promise<{
+      draft: RecapDraft | null;
+      week: { data: RecapWeekData; posted: boolean } | null;
+    }> => {
+      // A recap posted since Friday is this week's.
+      const postedThisWeek = recapFrom
+        ? Boolean(
+            await db.announcement.findFirst({
+              where: {
+                organizationId: org.id,
+                deletedAt: null,
+                title: { startsWith: RECAP_TITLE },
+                createdAt: { gte: recapFrom },
+              },
+              select: { id: true },
+            }),
+          )
+        : false;
+      if (news === "week") {
+        const data = await loadRecapWeek(db, {
+          orgId: org.id,
+          orgSlug,
+          userId: user.id,
+          role: ctx.role,
+          timeZone: tz,
+          now,
+        });
+        const same =
+          postedThisWeek ||
+          Boolean(
+            await db.announcement.findFirst({
+              where: { organizationId: org.id, deletedAt: null, title: data.title },
+              select: { id: true },
+            }),
+          );
+        return { draft: null, week: { data, posted: same } };
+      }
+      if (!recapFrom || postedThisWeek) return { draft: null, week: null };
+      const draft = await loadRecapWeek(db, {
+        orgId: org.id,
+        orgSlug,
+        userId: user.id,
+        role: Role.MEMBER,
+        audience: "organization",
+        timeZone: tz,
+        now,
+      });
+      const quiet =
+        draft.summary.length === 0 && draft.stats.length === 0 && draft.findings.length === 0;
+      return { draft: quiet ? null : { title: draft.title, text: draft.text }, week: null };
+    },
+  ).catch((error: unknown) => {
     console.error("Inbox recap failed to load", error);
-    return null;
+    return { draft: null, week: null };
   });
+  const week: WeekRecap | null =
+    news !== "week"
+      ? null
+      : recap.week
+        ? {
+            range: recap.week.data.range,
+            body: <RecapWeek orgId={org.id} data={recap.week.data} posted={recap.week.posted} />,
+          }
+        : {
+            range: null,
+            body: (
+              <p className="text-muted-foreground py-2 text-sm">
+                Couldn&rsquo;t load this week&rsquo;s recap. Refresh to try again.
+              </p>
+            ),
+          };
   const weekEnd = addDaysToKey(todayKey, TASK_DAYS);
 
   const needs: InboxRow[] = [
@@ -299,8 +372,17 @@ export default async function InboxPage({
     id: e.id,
     label: `${e.title}, ${listWhen(e.startsAt, e.endsAt, tz, e.allDay)}`,
   }));
-  const viewQuery = asked === "needs" ? "" : `view=${asked}`;
-  const seeAllHref = `${base}/inbox?${[viewQuery, "announcements=all"].filter(Boolean).join("&")}`;
+  // Links keep the Inbox's tab (view) and the card's view (news) as they are.
+  const inboxHref = (to: { view?: View; all?: boolean; news?: AnnouncementsView } = {}): string => {
+    const tab = to.view ?? asked;
+    const query = [
+      tab === "needs" ? "" : `view=${tab}`,
+      to.all ? "announcements=all" : "",
+      (to.news ?? news) === "week" ? `${NEWS_PARAM}=week` : "",
+    ].filter(Boolean);
+    return query.length > 0 ? `${base}/inbox?${query.join("&")}` : `${base}/inbox`;
+  };
+  const seeAllHref = inboxHref({ all: true, news: "posts" });
 
   const next = data.nextEvent;
   const caughtUp = (
@@ -344,7 +426,14 @@ export default async function InboxPage({
         events={eventChoices}
         total={data.postCount}
         seeAllHref={seeAllHref}
-        recap={recap}
+        recap={recap.draft}
+        view={news}
+        viewHrefs={{
+          posts: inboxHref({ all: allPosts, news: "posts" }),
+          week: inboxHref({ all: allPosts, news: "week" }),
+        }}
+        week={week}
+        pulseHref={`${base}/pulse`}
       />
 
       <InboxView
@@ -357,13 +446,13 @@ export default async function InboxPage({
             value: "needs",
             label: "Needs you",
             count: needsNow.length,
-            href: `${base}/inbox`,
+            href: inboxHref({ view: "needs" }),
           },
           {
             value: "updates",
             label: "Updates",
             count: unread,
-            href: `${base}/inbox?view=updates`,
+            href: inboxHref({ view: "updates" }),
           },
           ...(snoozed.length > 0
             ? [
@@ -371,7 +460,7 @@ export default async function InboxPage({
                   value: "snoozed" as const,
                   label: "Snoozed",
                   count: snoozed.length,
-                  href: `${base}/inbox?view=snoozed`,
+                  href: inboxHref({ view: "snoozed" }),
                 },
               ]
             : []),

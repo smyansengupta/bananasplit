@@ -122,6 +122,9 @@ export interface RecapWeek {
 
 const RUN_SPACE: RecapRun = { text: " " };
 
+/** How every recap announcement's title starts ("The week, recapped: Oct 25 to Oct 31"). */
+export const RECAP_TITLE = "The week, recapped";
+
 /**
  * "The busiest week since Sep 14" when this week beat the weeks before it:
  * since the last week that did as well, or "in N weeks" when none did.
@@ -468,7 +471,7 @@ export function buildRecapWeek(f: RecapFacts): RecapWeek {
     findings,
     foot: recapFoot(f),
     text: lines.join("\n\n"),
-    title: `The week, recapped: ${range}`,
+    title: `${RECAP_TITLE}: ${range}`,
   };
 }
 

@@ -23,7 +23,8 @@ import { LinkChips } from "./connections";
 import { RecapWeekActions } from "./recap-week-actions";
 
 /**
- * The week, recapped (full width): a few written sentences about the last
+ * The week, recapped (the Inbox's Announcements, "This week"): a few
+ * written sentences about the last
  * seven days, five numbers with their change from the week before, up to
  * three findings (going well, at risk, stuck) linked to what they're
  * about, and a foot that says what it was written from, with Copy and
@@ -78,7 +79,16 @@ function StatTile({ stat }: { stat: RecapStat }) {
   );
 }
 
-export function RecapWeek({ orgId, data }: { orgId: string; data: RecapWeekData }) {
+export function RecapWeek({
+  orgId,
+  data,
+  posted = false,
+}: {
+  orgId: string;
+  data: RecapWeekData;
+  /** This recap already went out as an announcement: Post shows as done. */
+  posted?: boolean;
+}) {
   const empty = data.summary.length === 0 && data.stats.length === 0 && data.findings.length === 0;
   if (empty) {
     return (
@@ -98,7 +108,7 @@ export function RecapWeek({ orgId, data }: { orgId: string; data: RecapWeekData 
       )}
 
       {data.stats.length > 0 && (
-        <ul className="grid [grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))] gap-2.5">
+        <ul className="grid [grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))] gap-2.5">
           {data.stats.map((s) => (
             <li key={s.key} className="min-w-0">
               <StatTile stat={s} />
@@ -137,7 +147,7 @@ export function RecapWeek({ orgId, data }: { orgId: string; data: RecapWeekData 
             <span>{data.foot}</span>
           </p>
         )}
-        <RecapWeekActions orgId={orgId} text={data.text} />
+        <RecapWeekActions orgId={orgId} text={data.text} posted={posted} />
       </div>
     </div>
   );

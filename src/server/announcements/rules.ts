@@ -1,10 +1,12 @@
 import { can } from "@/lib/auth/permissions";
+import { addDaysToKey, localDateKey, zonedInstant } from "@/lib/tasks/dates";
 import type { Role } from "@/generated/prisma/enums";
 
 /**
  * Announcements' rules, free of the database so they can be tested on their
  * own: what a post may say, who may change or put back one, and the
- * one-line fact the Inbox shows under a post. The database enforces the
+ * one-line fact the Inbox shows under a post, which of the card's two views
+ * is open, and when it offers this week's recap. The database enforces the
  * same who-may rules (prisma/migrations/20261102100000_home_widgets).
  */
 
@@ -109,4 +111,31 @@ export function signupInsight(
 export interface SignupInsight {
   count: number;
   rest: string;
+}
+
+/**
+ * The Announcements card's two views: the posts, or this week's recap
+ * ("This week"). It's the Inbox's `?news=` param, so a refresh keeps it;
+ * anything but "week" is the posts.
+ */
+export type AnnouncementsView = "posts" | "week";
+export const NEWS_PARAM = "news";
+
+export function announcementsView(param: string | string[] | undefined): AnnouncementsView {
+  const value = Array.isArray(param) ? param[0] : param;
+  return value === "week" ? "week" : "posts";
+}
+
+/**
+ * The end of the week, when the Inbox offers to post this week's recap:
+ * Friday 00:00 through Sunday 23:59 in `timeZone` (the organization's).
+ * The instant this window opened (that Friday's midnight), or null on
+ * Monday to Thursday. A recap posted since then counts as this week's.
+ */
+export function recapWindowStart(now: Date, timeZone: string): Date | null {
+  const today = localDateKey(now, timeZone);
+  const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+  const sinceFriday = weekday === 5 ? 0 : weekday === 6 ? 1 : weekday === 0 ? 2 : null;
+  if (sinceFriday === null) return null;
+  return zonedInstant(addDaysToKey(today, -sinceFriday), 0, timeZone);
 }

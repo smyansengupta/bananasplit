@@ -4,7 +4,7 @@ import { listWords } from "./text";
 
 /**
  * The one-sentence findings on Home's kept widgets (My tasks, This week,
- * Events, the stat strip), worked out from what the page already read.
+ * Events, the Weekly pulse), worked out from what the page already read.
  * Pure, so the rules are unit-tested (insights.test.ts). Each returns null
  * when the data doesn't support a finding: a widget then shows none.
  */
@@ -125,56 +125,6 @@ export interface Finding {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-/**
- * The stat strip's sentence: what's late, what's due this week and what
- * waits on an answer, tied together. `overdue` and `dueThisWeek` are the
- * viewer's tasks (oldest first); the counts are the strip's own numbers.
- */
-export function todayFinding(input: {
-  overdue: readonly DueTask[];
-  overdueCount: number;
-  dueThisWeek: readonly DueTask[];
-  dueThisWeekCount: number;
-  /** Polls and RSVPs this week still waiting on the viewer. */
-  answers: number;
-  todayKey: string;
-}): Finding | null {
-  const answers =
-    input.answers > 0
-      ? ` ${plural(input.answers, "poll or RSVP", "polls and RSVPs")} ${input.answers === 1 ? "waits" : "wait"} on your answer.`
-      : "";
-  const oldest = input.overdue[0];
-  if (oldest && input.overdueCount > 0) {
-    const late = daysLate(oldest.dueKey, input.todayKey);
-    const more =
-      input.dueThisWeekCount > 0
-        ? `, and ${plural(input.dueThisWeekCount, "more task")} ${input.dueThisWeekCount === 1 ? "is" : "are"} due this week`
-        : "";
-    const others = input.overdueCount > 1 ? ` (${input.overdueCount} overdue in all)` : "";
-    return {
-      tone: "warn",
-      lead: oldest.title,
-      text: `is ${plural(late, "day")} late${others}${more}.${answers}`,
-    };
-  }
-  const first = input.dueThisWeek[0];
-  if (first && input.dueThisWeekCount > 0) {
-    return {
-      tone: "plain",
-      lead: `${plural(input.dueThisWeekCount, "task")} due this week.`,
-      text: `The first is ${first.title}.${answers}`,
-    };
-  }
-  if (input.answers > 0)
-    return { tone: "plain", text: `Nothing of yours is due this week.${answers}` };
-  return null;
-}
-
-function daysLate(dueKey: string, todayKey: string): number {
-  const ms = Date.parse(`${todayKey}T00:00:00Z`) - Date.parse(`${dueKey}T00:00:00Z`);
-  return Math.max(1, Math.round(ms / 86_400_000));
-}
 
 /** My tasks' warning: CROWDED_WEEK_TASKS or more of your deadlines in a big event's week. */
 export function myTasksFinding(crowded: ReturnType<typeof crowdedEventWeek>): Finding | null {

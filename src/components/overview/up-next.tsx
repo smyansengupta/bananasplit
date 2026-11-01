@@ -3,7 +3,7 @@
 import { ArrowUpRight, CalendarCheck2, Check, EyeOff, RotateCcw, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 import { ContextActions } from "@/components/context-actions";
 import { BlockCard } from "@/components/ui/block-card";
@@ -39,6 +39,41 @@ function accentOf(kind: EventKind | null | undefined): string | null {
 /** A card's action button, on the card's own colours. */
 const ACT =
   "relative z-10 inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold ring-1 ring-current/25 transition-[box-shadow,transform] hover:ring-current/60 active:scale-[0.97] disabled:opacity-60";
+
+/**
+ * A card's last row: its action buttons, then (right-aligned) its figure in
+ * words ("12 going", "2 of 3 subtasks done") and its avatars. Every kind
+ * uses it, so the cards keep one shape and stay short.
+ */
+function FootRow({
+  actions,
+  figure,
+  figureLabel,
+  people,
+  total,
+}: {
+  actions: ReactNode;
+  figure?: string;
+  figureLabel?: string;
+  people: UpNextBlock["faces"];
+  total: number;
+}) {
+  if (!actions && figure === undefined && people.length === 0 && total === 0) return null;
+  return (
+    <div className="relative z-10 mt-auto flex flex-wrap items-center gap-2 pt-3.5">
+      {actions}
+      <span className="ms-auto flex min-w-0 items-center gap-2.5">
+        {figure !== undefined && (
+          <span className="text-[13px] font-medium text-(--meta)">
+            <b className="text-current">{figure}</b>
+            {figureLabel ? ` ${figureLabel}` : ""}
+          </span>
+        )}
+        <FaceStack people={people} total={total} />
+      </span>
+    </div>
+  );
+}
 
 export function UpNext({
   slots,
@@ -178,17 +213,15 @@ export function UpNext({
     const working = pending && busy === item.id;
     if (item.kind === "task" && onDone) {
       return (
-        <div className="relative z-10 mt-3 flex">
-          <button type="button" disabled={working} onClick={() => done(item)} className={ACT}>
-            <Check className="size-3.5" aria-hidden="true" />
-            Done
-          </button>
-        </div>
+        <button type="button" disabled={working} onClick={() => done(item)} className={ACT}>
+          <Check className="size-3.5" aria-hidden="true" />
+          Done
+        </button>
       );
     }
     if (item.kind === "rsvp" && onRsvp) {
       return (
-        <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+        <>
           <button
             type="button"
             disabled={working}
@@ -205,25 +238,21 @@ export function UpNext({
           >
             Can&apos;t go
           </button>
-        </div>
+        </>
       );
     }
     if (item.kind === "poll" && onVote && item.choices?.length) {
-      return (
-        <div className="relative z-10 mt-3 flex flex-wrap gap-2">
-          {item.choices.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              disabled={working}
-              onClick={() => vote(item, c.id)}
-              className={ACT}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-      );
+      return item.choices.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          disabled={working}
+          onClick={() => vote(item, c.id)}
+          className={ACT}
+        >
+          {c.label}
+        </button>
+      ));
     }
     return null;
   };
@@ -284,9 +313,6 @@ export function UpNext({
                 title={item.title}
                 subtitle={item.subtitle}
                 href={item.href}
-                figure={moreAlerts > 0 ? `+${moreAlerts}` : item.figure}
-                figureLabel={moreAlerts > 0 ? `more due today or overdue` : item.figureLabel}
-                aside={<FaceStack people={item.faces} total={item.facesTotal} />}
                 action={
                   !onHide ? (
                     <Link
@@ -310,7 +336,7 @@ export function UpNext({
                   )
                 }
                 className={cn(
-                  "min-h-[13.75rem] w-[82%] shrink-0 snap-start max-sm:min-h-44 sm:w-auto",
+                  "min-h-0 w-[82%] shrink-0 snap-start sm:w-auto",
                   "max-md:w-full",
                   index > 0 && "max-md:hidden",
                 )}
@@ -327,7 +353,14 @@ export function UpNext({
                     ))}
                   </span>
                 )}
-                {actionsOf(item)}
+                {/* One row at the foot: the card's job on the left, its figure and who's on it on the right. */}
+                <FootRow
+                  actions={actionsOf(item)}
+                  figure={moreAlerts > 0 ? `+${moreAlerts}` : item.figure}
+                  figureLabel={moreAlerts > 0 ? "more due today or overdue" : item.figureLabel}
+                  people={item.faces}
+                  total={item.facesTotal}
+                />
               </BlockCard>
             </ContextActions>
           ))}

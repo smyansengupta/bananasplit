@@ -7,7 +7,6 @@ import {
   expectedHeadcount,
   myTasksFinding,
   pulseFinding,
-  todayFinding,
   weekFinding,
 } from "./insights";
 
@@ -87,33 +86,6 @@ describe("Home's findings", () => {
     expect(expectedHeadcount(41, 0.81)).toBe(33);
     expect(expectedHeadcount(41, null)).toBeNull();
     expect(expectedHeadcount(0, 0.81)).toBeNull();
-  });
-
-  it("ties the stat strip's numbers into one sentence", () => {
-    expect(
-      todayFinding({
-        overdue: [task("late", "2026-10-29")],
-        overdueCount: 1,
-        dueThisWeek: [task("x", "2026-11-02")],
-        dueThisWeekCount: 2,
-        answers: 1,
-        todayKey: "2026-10-31",
-      }),
-    ).toEqual({
-      tone: "warn",
-      lead: "Task late",
-      text: "is 2 days late, and 2 more tasks are due this week. 1 poll or RSVP waits on your answer.",
-    });
-    expect(
-      todayFinding({
-        overdue: [],
-        overdueCount: 0,
-        dueThisWeek: [],
-        dueThisWeekCount: 0,
-        answers: 0,
-        todayKey: "2026-10-31",
-      }),
-    ).toBeNull();
   });
 
   it("calls a record week, or a run under the average, and names the epic that moved", () => {

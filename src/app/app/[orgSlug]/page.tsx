@@ -10,8 +10,8 @@ import { Insight, LinkChip, type ItemRef } from "@/components/overview/connectio
 import { GettingStarted } from "@/components/overview/getting-started";
 import { MyTasksCard } from "@/components/overview/my-tasks-card";
 import { OverviewBoard } from "@/components/overview/overview-board";
-import { OverviewStats } from "@/components/overview/overview-stats";
 import { PinnedGrid } from "@/components/overview/pinned-grid";
+import { TodayStrip } from "@/components/overview/today-strip";
 import { UpNext } from "@/components/overview/up-next";
 import {
   EventsList,
@@ -38,12 +38,12 @@ import {
   myTasksFinding,
   percent,
   pulseFinding,
-  todayFinding,
   weekFinding,
   type DueTask,
   type Finding,
 } from "@/lib/overview/insights";
 import { startedProgress } from "@/lib/overview/getting-started";
+import { todayStrip } from "@/lib/overview/today-strip";
 import { overviewWidgetsFor, resolveOverview } from "@/lib/overview/widgets";
 import { DEFAULT_PULSE_DAY, DEFAULT_PULSE_HOUR } from "@/lib/pulse/settings";
 import {
@@ -52,21 +52,14 @@ import {
   effectiveTimezone,
   fromDateKey,
   localDateKey,
-  mondayOfKey,
-  zonedInstant,
 } from "@/lib/tasks/dates";
 import { loadSavedBoard } from "@/server/boards";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { homeWidgetCards } from "@/components/overview/home-widget-cards";
 import { HERE_NOW_RECENT } from "@/server/overview/here-now";
-import {
-  loadMainWidgets,
-  loadOwnTxWidgets,
-  readHomeShared,
-  readWidget,
-} from "@/server/overview/home-widgets";
-import { loadRecapWeek } from "@/server/overview/recap-week";
+import { loadMainWidgets, loadOwnTxWidgets, readHomeShared } from "@/server/overview/home-widgets";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
+import { sidebarCounts } from "@/server/inbox/counts";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
 import {
   loadEventDetails,
@@ -97,10 +90,10 @@ import { upcomingPulseSend } from "@/server/pulse/schedule";
 import { onlineNow } from "@/server/presence";
 import { OnlineNow } from "@/components/overview/online-now";
 import { loadPersonalHome } from "@/server/personal/home";
-import { getMyOpenTasks, getTaskStats, taskFilterWhere } from "@/server/tasks/queries";
+import { getMyOpenTasks, taskFilterWhere } from "@/server/tasks/queries";
 
 const MY_TASKS_LIMIT = 8;
-/** "Next 14 days" in the stat strip. */
+/** "Events, next 14 days" in the Today strip. */
 const UPCOMING_DAYS = 14;
 const EVENTS_LIMIT = 6;
 const RECENT_LIMIT = 8;
@@ -152,9 +145,8 @@ function greeting(now: Date, timeZone: string): string {
 /**
  * The Overview (redesign guide 9): each member's own board of widgets,
  * arranged to answer "what needs me?". Always on top, whatever the board:
- * the greeting, the stat strip (due this week, overdue, coming up in two
- * weeks, as on the Personal home) with one sentence tying its numbers
- * together, Up next, and for owners and admins
+ * the greeting, the Today strip (overdue, waiting on you, due this week,
+ * events in the next two weeks), Up next, and for owners and admins
  * "Get your organization started" until every step is done or checked
  * off. Then the member's widgets. Nothing about the organization's money
  * is on it.
@@ -199,7 +191,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     const weekEvents = await getUpcomingEvents(db, org.id, now, 100);
     const myTasks = await getMyOpenTasks(db, org.id, user.id, { limit: MY_TASKS_LIMIT, today });
     // My deadlines up to four weeks out, late ones first: This week's dashed
-    // boxes, the crowded-week warning and the stat strip's sentence.
+    // boxes, the crowded-week warning and the Today strip's lines.
     // Deadlines and Focus time read the same list.
     const myDue = await db.task.findMany({
       where: {
@@ -297,17 +289,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         org.id,
         myTasks.tasks.map((t) => t.id),
       ),
-      // Tasks' own stat strip numbers (no filters), for the phone's bar.
-      taskBar: await getTaskStats(
-        db,
-        org.id,
-        {},
-        {
-          today,
-          weekEnd: fromDateKey(addDaysToKey(mondayOfKey(dayKey), 6)),
-          weekStart: zonedInstant(mondayOfKey(dayKey), 0, tz),
-        },
-      ),
+      // The Today strip's task counts.
       stats: {
         // Due today through the sixth day from now: "this week".
         dueSoon: await db.task.count({
@@ -315,7 +297,6 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
             AND: [mine, { dueDate: { gte: today, lte: fromDateKey(addDaysToKey(dayKey, 6)) } }],
           },
         }),
-        today: await db.task.count({ where: { AND: [mine, { dueDate: today }] } }),
         overdue: await db.task.count({ where: { AND: [mine, { dueDate: { lt: today } }] } }),
       },
       events,
@@ -378,10 +359,12 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     };
     // Last on this transaction, each caught on its own: the cheap widgets,
     // who's here now (beside the date and in Here now; the shell's
-    // heartbeat keeps both fresh), and this visit, which becomes the last
+    // heartbeat keeps both fresh), this visit, which becomes the last
     // one (Since you were here counts from the one before; stamped whether
     // or not that widget is placed, so adding it later starts from a real
-    // visit). If one fails, it goes and the board stays.
+    // visit), and the Inbox's Needs you for the Today strip, read as the
+    // sidebar reads its badge so the two never disagree. If one fails, it
+    // goes and the board stays.
     const widgets = await loadMainWidgets(db, placed, viewer, {
       shared,
       upcoming: weekEvents,
@@ -389,7 +372,15 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     });
     const online = await onlineNow(db, org.id, user.id).catch(() => null);
     const since = await markHomeVisit(db, org.id, user.id, now).catch(() => null);
-    return { ...rest, widgets, online, since };
+    const needsYou = await sidebarCounts(db, {
+      orgId: org.id,
+      userId: user.id,
+      org,
+      canReviewFinance: can({ role }, "finance.manage"),
+      canReviewForms: can({ role }, "databases.write"),
+      now,
+    }).catch(() => null);
+    return { ...rest, widgets, online, since, needsYou };
   }).catch(handleAuthErrorInPage);
 
   const { timeZone, todayKey } = data;
@@ -487,34 +478,28 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     free: weekDays.filter((d) => d.load.freeEvening).length,
   };
 
+  // The Today strip: overdue, waiting on you, due this week, events ahead.
   const upcomingUntil = new Date(now.getTime() + UPCOMING_DAYS * DAY_MS);
-  const stats = (
-    <OverviewStats
-      dueSoon={data.stats.dueSoon}
-      dueToday={data.stats.today}
-      overdue={data.stats.overdue}
-      upcoming={data.weekEvents.filter((e) => e.startsAt < upcomingUntil).length}
-      upcomingDays={UPCOMING_DAYS}
-      taskBar={data.taskBar}
-      tasksHref={`${base}/tasks`}
-      calendarHref={calendarHref}
+  const ahead = data.weekEvents.filter((e) => e.startsAt < upcomingUntil);
+  const todayBar = (
+    <TodayStrip
+      cells={todayStrip({
+        base,
+        todayKey,
+        zones,
+        overdue: { count: data.stats.overdue, first: lateTasks[0] ?? null },
+        waiting: data.needsYou
+          ? { count: data.needsYou.inbox, parts: data.needsYou.needsYou }
+          : null,
+        dueThisWeek: { count: data.stats.dueSoon, titles: dueThisWeek.map((t) => t.title) },
+        events: {
+          count: ahead.length,
+          days: UPCOMING_DAYS,
+          next: ahead.find((e) => e.startsAt >= now) ?? ahead[0] ?? null,
+        },
+      })}
     />
   );
-  // One sentence tying the strip's numbers together.
-  const weekMs = 7 * DAY_MS;
-  const answers =
-    data.polls.filter((p) => !p.mine).length +
-    [...data.events, ...data.meetings].filter(
-      (e) => data.rsvps.get(e.id) === "PENDING" && e.startsAt.getTime() - now.getTime() <= weekMs,
-    ).length;
-  const todayInsight = todayFinding({
-    overdue: lateTasks,
-    overdueCount: data.stats.overdue,
-    dueThisWeek,
-    dueThisWeekCount: data.stats.dueSoon,
-    answers,
-    todayKey,
-  });
 
   const eventEmpty = (title: string, cta: string) => (
     <EmptyState
@@ -690,10 +675,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   );
 
   const { online, since, placed } = data;
-  // The rest of the newer widgets, each in its own transaction. The recap
-  // is loaded here as it always was.
-  const who = { orgId: org.id, orgSlug, userId: user.id, role, timeZone, now };
-  const recap = await readWidget(org.id, "recap", placed, (db) => loadRecapWeek(db, who));
+  // The rest of the newer widgets, each in its own transaction.
   const ownTx = await loadOwnTxWidgets(placed, data.viewer, {
     shared: data.shared,
     since,
@@ -708,7 +690,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     you: data.you,
     online,
     placed,
-    data: { ...data.widgets, ...ownTx, recap },
+    data: { ...data.widgets, ...ownTx },
   });
 
   // Open forms' chips, by form id.
@@ -885,10 +867,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         }
         stats={
           <div className="space-y-[30px]">
-            <div className="space-y-3">
-              {stats}
-              <FindingLine finding={todayInsight} />
-            </div>
+            {todayBar}
             <UpNext
               slots={upNext}
               calendarHref={calendarHref}

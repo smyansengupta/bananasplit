@@ -131,8 +131,8 @@ async function guarded<T>(
   }
 }
 
-/** The same, in a transaction of its own (exported for the recap, which the page loads itself). */
-export function readWidget<T>(
+/** The same, in a transaction of its own. */
+function readWidget<T>(
   orgId: string,
   type: string,
   placed: ReadonlySet<string>,
