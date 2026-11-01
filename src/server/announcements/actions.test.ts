@@ -34,10 +34,10 @@ vi.mock("@/server/overview/recap-week", () => ({ loadRecapWeek }));
 
 const {
   deleteAnnouncement,
+  draftRecapAnnouncement,
   editAnnouncement,
   markAnnouncementsSeen,
   postAnnouncement,
-  postRecapAnnouncement,
   restoreAnnouncement,
 } = await import("./actions");
 
@@ -188,46 +188,53 @@ describe("editing and removing", () => {
   });
 });
 
-describe("postRecapAnnouncement", () => {
+describe("draftRecapAnnouncement", () => {
   beforeEach(() => {
     db.organization.findUnique.mockResolvedValue({ slug: "cbc", timezone: "America/New_York" });
-    db.user.findUnique.mockResolvedValue({ timezone: null });
+    db.user.findUnique.mockResolvedValue({ timezone: "America/Chicago" });
     loadRecapWeek.mockResolvedValue({
       title: "The week, recapped: Oct 25 to Oct 31",
       text: "The team finished 12 tasks.",
     });
   });
 
-  it("writes the recap on the server, as a plain member sees it, and posts it", async () => {
-    ctx.role = "OWNER";
-    expect(await postRecapAnnouncement(ORG)).toEqual({ ok: true, id: "an_1" });
+  it("writes the recap as a plain member sees it, and posts nothing", async () => {
+    ctx.role = "ADMIN";
+    expect(await draftRecapAnnouncement(ORG)).toEqual({
+      ok: true,
+      title: "The week, recapped: Oct 25 to Oct 31",
+      body: "The team finished 12 tasks.",
+    });
     expect(loadRecapWeek).toHaveBeenCalledWith(db, {
       orgId: ORG,
       orgSlug: "cbc",
       userId: "u_me",
       role: "MEMBER",
-      timeZone: "America/New_York",
+      timeZone: "America/Chicago",
       now: expect.any(Date),
       audience: "organization",
     });
-    expect(db.announcement.create).toHaveBeenCalledWith({
-      data: {
-        organizationId: ORG,
-        authorId: "u_me",
-        title: "The week, recapped: Oct 25 to Oct 31",
-        body: "The team finished 12 tasks.",
-      },
-      select: { id: true },
+    expect(db.announcement.create).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("says so for a quiet week", async () => {
+    loadRecapWeek.mockResolvedValue({ title: "The week, recapped: Oct 25 to Oct 31", text: " \n" });
+    expect(await draftRecapAnnouncement(ORG)).toEqual({
+      ok: false,
+      error: "Nothing to recap this week.",
+      quiet: true,
     });
   });
 
-  it("posts nothing for a quiet week", async () => {
-    loadRecapWeek.mockResolvedValue({ title: "The week, recapped: Oct 25 to Oct 31", text: "" });
-    expect(await postRecapAnnouncement(ORG)).toEqual({
+  it("turns a failed load into a sentence", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    loadRecapWeek.mockRejectedValue(new Error("boom"));
+    expect(await draftRecapAnnouncement(ORG)).toEqual({
       ok: false,
-      error: "Nothing to recap this week.",
+      error: "Something went wrong. Try again.",
     });
-    expect(db.announcement.create).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
 

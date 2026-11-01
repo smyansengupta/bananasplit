@@ -6,12 +6,9 @@ import {
   InboxAnnouncements,
   type AnnouncementEventOption,
   type InboxAnnouncement,
-  type RecapDraft,
-  type WeekRecap,
 } from "@/components/inbox/announcements";
 import { InboxView, type InboxRow, type InboxView as View } from "@/components/inbox/inbox-view";
 import { ClearRead, MarkAllRead } from "@/components/inbox/inbox-actions";
-import { RecapWeek } from "@/components/overview/recap-week";
 import { listWhen } from "@/components/meetings/meeting-card";
 import { PageHeader } from "@/components/page-header";
 import { can } from "@/lib/auth/permissions";
@@ -25,28 +22,24 @@ import {
   fromDateKey,
   localDateKey,
 } from "@/lib/tasks/dates";
-import { Role, type NotificationType } from "@/generated/prisma/enums";
+import type { NotificationType } from "@/generated/prisma/enums";
 import {
   countAnnouncements,
   listAnnouncements,
   signupInsights,
 } from "@/server/announcements/announcements";
 import {
-  announcementsView,
   byline,
   INBOX_LIMIT,
-  NEWS_PARAM,
   postedWhen,
   recapWindowStart,
   RECENT_DAYS,
-  type AnnouncementsView,
 } from "@/server/announcements/rules";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { loadInboxState } from "@/server/inbox/state";
-import { loadRecapWeek } from "@/server/overview/recap-week";
-import { RECAP_TITLE, type RecapWeek as RecapWeekData } from "@/server/overview/recap-week-text";
+import { RECAP_TITLE } from "@/server/overview/recap-week-text";
 import { getMyOpenTasks } from "@/server/tasks/queries";
 
 /** How far ahead a task counts as needing you now. */
@@ -76,10 +69,9 @@ const EVENT_CHOICES = 20;
  *
  * Above the tabs, in every view: Announcements, the organization's latest
  * posts (the last two weeks, a few at most; ?announcements=all for every
- * one), with a composer anyone can post from. From Friday to Sunday (the
- * organization's time) the composer offers this week's recap until one goes
- * out. The card's other view, This week (?news=week), is the viewer's own
- * recap of the last seven days, loaded only while it's open.
+ * one), with a composer anyone can post from. The composer also drafts this
+ * week's recap on demand (the recap isn't loaded here); from Friday to Sunday
+ * (the organization's time) it nudges to post it until one goes out.
  */
 export default async function InboxPage({
   params,
@@ -95,9 +87,8 @@ export default async function InboxPage({
   const canReview = can(ctx, "finance.manage");
   const canManagePosts = can(ctx, "events.write");
   const allPosts = sp.announcements === "all";
-  const news = announcementsView(sp[NEWS_PARAM]);
   const now = new Date();
-  // The end of the week, when the composer offers the recap (null other days).
+  // The end of the week, when the composer nudges to post the recap (null other days).
   const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
 
   const data = await withOrgTx(org.id, async ({ db }) => {
@@ -145,6 +136,17 @@ export default async function InboxPage({
     const postCount = await countAnnouncements(db, org.id);
     // Sign-ups are for owners and admins to read, so only they get the fact.
     const insights = canManagePosts ? await signupInsights(db, org.id, posts, now) : new Map();
+    // Friday to Sunday: is this week's recap still to go out? (One posted since Friday is it.)
+    const recapDue = recapFrom
+      ? (await db.announcement.count({
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            title: { startsWith: RECAP_TITLE },
+            createdAt: { gte: recapFrom },
+          },
+        })) === 0
+      : false;
     const eventChoices = await db.event.findMany({
       where: {
         organizationId: org.id,
@@ -163,6 +165,7 @@ export default async function InboxPage({
       posts,
       postCount,
       insights,
+      recapDue,
       eventChoices,
       invites,
       tasks: open.tasks,
@@ -175,87 +178,6 @@ export default async function InboxPage({
 
   const { tz, todayKey, state } = data;
 
-  // This week's recap, in its own transaction: a failure here leaves the
-  // Inbox standing. Two uses, one per view:
-  // - Announcements, Friday to Sunday: the composer's prefill until a recap
-  //   goes out, built as every member would see it (no money, no admin-only
-  //   counts, no private notes), since it's a post to everyone.
-  // - This week: the viewer's own recap, only they see it, so their numbers.
-  const recap = await withOrgTx(
-    org.id,
-    async ({
-      db,
-    }): Promise<{
-      draft: RecapDraft | null;
-      week: { data: RecapWeekData; posted: boolean } | null;
-    }> => {
-      // A recap posted since Friday is this week's.
-      const postedThisWeek = recapFrom
-        ? Boolean(
-            await db.announcement.findFirst({
-              where: {
-                organizationId: org.id,
-                deletedAt: null,
-                title: { startsWith: RECAP_TITLE },
-                createdAt: { gte: recapFrom },
-              },
-              select: { id: true },
-            }),
-          )
-        : false;
-      if (news === "week") {
-        const data = await loadRecapWeek(db, {
-          orgId: org.id,
-          orgSlug,
-          userId: user.id,
-          role: ctx.role,
-          timeZone: tz,
-          now,
-        });
-        const same =
-          postedThisWeek ||
-          Boolean(
-            await db.announcement.findFirst({
-              where: { organizationId: org.id, deletedAt: null, title: data.title },
-              select: { id: true },
-            }),
-          );
-        return { draft: null, week: { data, posted: same } };
-      }
-      if (!recapFrom || postedThisWeek) return { draft: null, week: null };
-      const draft = await loadRecapWeek(db, {
-        orgId: org.id,
-        orgSlug,
-        userId: user.id,
-        role: Role.MEMBER,
-        audience: "organization",
-        timeZone: tz,
-        now,
-      });
-      const quiet =
-        draft.summary.length === 0 && draft.stats.length === 0 && draft.findings.length === 0;
-      return { draft: quiet ? null : { title: draft.title, text: draft.text }, week: null };
-    },
-  ).catch((error: unknown) => {
-    console.error("Inbox recap failed to load", error);
-    return { draft: null, week: null };
-  });
-  const week: WeekRecap | null =
-    news !== "week"
-      ? null
-      : recap.week
-        ? {
-            range: recap.week.data.range,
-            body: <RecapWeek orgId={org.id} data={recap.week.data} posted={recap.week.posted} />,
-          }
-        : {
-            range: null,
-            body: (
-              <p className="text-muted-foreground py-2 text-sm">
-                Couldn&rsquo;t load this week&rsquo;s recap. Refresh to try again.
-              </p>
-            ),
-          };
   const weekEnd = addDaysToKey(todayKey, TASK_DAYS);
 
   const needs: InboxRow[] = [
@@ -372,17 +294,15 @@ export default async function InboxPage({
     id: e.id,
     label: `${e.title}, ${listWhen(e.startsAt, e.endsAt, tz, e.allDay)}`,
   }));
-  // Links keep the Inbox's tab (view) and the card's view (news) as they are.
-  const inboxHref = (to: { view?: View; all?: boolean; news?: AnnouncementsView } = {}): string => {
+  // Links keep the Inbox's tab (view) as it is.
+  const inboxHref = (to: { view?: View; all?: boolean } = {}): string => {
     const tab = to.view ?? asked;
-    const query = [
-      tab === "needs" ? "" : `view=${tab}`,
-      to.all ? "announcements=all" : "",
-      (to.news ?? news) === "week" ? `${NEWS_PARAM}=week` : "",
-    ].filter(Boolean);
+    const query = [tab === "needs" ? "" : `view=${tab}`, to.all ? "announcements=all" : ""].filter(
+      Boolean,
+    );
     return query.length > 0 ? `${base}/inbox?${query.join("&")}` : `${base}/inbox`;
   };
-  const seeAllHref = inboxHref({ all: true, news: "posts" });
+  const seeAllHref = inboxHref({ all: true });
 
   const next = data.nextEvent;
   const caughtUp = (
@@ -426,14 +346,7 @@ export default async function InboxPage({
         events={eventChoices}
         total={data.postCount}
         seeAllHref={seeAllHref}
-        recap={recap.draft}
-        view={news}
-        viewHrefs={{
-          posts: inboxHref({ all: allPosts, news: "posts" }),
-          week: inboxHref({ all: allPosts, news: "week" }),
-        }}
-        week={week}
-        pulseHref={`${base}/pulse`}
+        recapDue={data.recapDue}
       />
 
       <InboxView

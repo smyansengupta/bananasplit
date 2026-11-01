@@ -114,20 +114,7 @@ export interface SignupInsight {
 }
 
 /**
- * The Announcements card's two views: the posts, or this week's recap
- * ("This week"). It's the Inbox's `?news=` param, so a refresh keeps it;
- * anything but "week" is the posts.
- */
-export type AnnouncementsView = "posts" | "week";
-export const NEWS_PARAM = "news";
-
-export function announcementsView(param: string | string[] | undefined): AnnouncementsView {
-  const value = Array.isArray(param) ? param[0] : param;
-  return value === "week" ? "week" : "posts";
-}
-
-/**
- * The end of the week, when the Inbox offers to post this week's recap:
+ * The end of the week, when the Inbox nudges to post this week's recap:
  * Friday 00:00 through Sunday 23:59 in `timeZone` (the organization's).
  * The instant this window opened (that Friday's midnight), or null on
  * Monday to Thursday. A recap posted since then counts as this week's.

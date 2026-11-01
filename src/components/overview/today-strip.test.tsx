@@ -45,9 +45,11 @@ describe("the Today strip", () => {
     expect(html).toContain('href="/app/cbc/inbox"');
     expect(html).toContain('href="/app/cbc/calendar"');
     // Only Overdue is tinted, and only while something is late.
-    expect(html.match(/bg-tint-danger /g)).toHaveLength(1);
+    // Late work gets a danger chip with how late; the rest stay quiet.
+    expect(cells[0]?.chip).toEqual({ text: "2 days late", tone: "destructive" });
     // A phone gets two by two.
-    expect(html).toContain("grid-cols-2 gap-1 lg:grid-cols-4");
+    // The app's stat strip: a 2×2 grid on a phone.
+    expect(html).toContain("grid-cols-2");
   });
 
   it("says so plainly when there's nothing, and doesn't guess an Inbox it couldn't read", () => {
@@ -64,9 +66,12 @@ describe("the Today strip", () => {
       "Nothing due in the next 7 days",
       "Nothing on the calendar",
     ]);
-    expect(cells[0]).toMatchObject({ danger: false, href: "/app/cbc/tasks?scope=mine" });
+    expect(cells[0]).toMatchObject({
+      chip: { text: "All clear", tone: "success" },
+      href: "/app/cbc/tasks?scope=mine",
+    });
     const html = renderToStaticMarkup(<TodayStrip cells={cells} />);
-    expect(html).not.toContain("bg-tint-danger");
+    expect(html).not.toContain("late</span>");
     expect(html).toContain("–");
   });
 });

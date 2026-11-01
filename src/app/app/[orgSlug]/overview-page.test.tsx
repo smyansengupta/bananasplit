@@ -97,7 +97,6 @@ vi.mock("@/app/app/[orgSlug]/finance/transactions-actions", () => ({
   rejectExpense: vi.fn(),
 }));
 vi.mock("@/app/onboarding/profile/actions", () => ({ saveAvailabilityStep: vi.fn() }));
-vi.mock("@/server/announcements/actions", () => ({ postRecapAnnouncement: vi.fn() }));
 vi.mock("@/server/decisions/actions", () => ({
   createDecision: vi.fn(),
   decide: vi.fn(),

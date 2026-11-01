@@ -17,15 +17,19 @@ import { canManageAnnouncement, canRestoreAnnouncement, cleanAnnouncement } from
  * owner or admin, edits and removes a post, and whoever removed it, or an
  * owner or admin, puts it back (the database holds the same rules,
  * app.announcement_guard). A post can link one event (ItemLink, fromKind
- * "announcement"). Home's recap posts through postRecapAnnouncement, which
- * writes the text itself. Refusals come back as { ok: false, error }; changes
- * refresh the page they were made on.
+ * "announcement"). The week's recap is written on the server:
+ * draftRecapAnnouncement for the Inbox composer to read over and post.
+ * Refusals come back as
+ * { ok: false, error }; changes refresh the page they were made on.
  *
  *   const result = await postAnnouncement(orgId, { title, body, eventId });
  *   if (!result.ok) toast({ title: result.error, tone: "error" });
  */
 
 export type AnnouncementResult = { ok: true; id?: string } | { ok: false; error: string };
+/** `quiet`: there was nothing to recap (not a failure). */
+export type RecapDraftResult =
+  { ok: true; title: string; body: string } | { ok: false; error: string; quiet?: true };
 
 const id = z.string().min(1).max(64);
 const GONE = "That announcement is gone.";
@@ -110,7 +114,7 @@ const postTx = withOrgAction((ctx, input: unknown): Promise<AnnouncementResult> 
  * notes shared with them alone), so the post is rebuilt as any member
  * would see it (loadRecapWeek's "organization" audience).
  */
-const recapTx = withOrgAction(async (ctx): Promise<AnnouncementResult> => {
+async function memberRecap(ctx: OrgContext): Promise<RecapDraftResult> {
   const org = await ctx.db.organization.findUnique({
     where: { id: ctx.organizationId },
     select: { slug: true, timezone: true },
@@ -129,9 +133,11 @@ const recapTx = withOrgAction(async (ctx): Promise<AnnouncementResult> => {
     now: new Date(),
     audience: "organization",
   });
-  if (!recap.text.trim()) return { ok: false, error: QUIET_WEEK };
-  return createPost(ctx, { title: recap.title, body: recap.text });
-});
+  if (!recap.text.trim()) return { ok: false, error: QUIET_WEEK, quiet: true };
+  return { ok: true, title: recap.title, body: recap.text };
+}
+
+const draftTx = withOrgAction((ctx): Promise<RecapDraftResult> => memberRecap(ctx));
 
 const editTx = withOrgAction(
   async (ctx, postId: unknown, input: unknown): Promise<AnnouncementResult> => {
@@ -185,10 +191,10 @@ const seenTx = withOrgAction(async (ctx, ids: unknown): Promise<AnnouncementResu
   return { ok: true };
 });
 
-function run(
-  fn: () => Promise<AnnouncementResult>,
+function run<T extends AnnouncementResult | RecapDraftResult>(
+  fn: () => Promise<T>,
   refreshAfter = true,
-): Promise<AnnouncementResult> {
+): Promise<T | { ok: false; error: string }> {
   return runResult(fn, { gone: GONE, label: "announcements", refreshAfter });
 }
 
@@ -201,13 +207,14 @@ export async function postAnnouncement(
 }
 
 /**
- * Posts the last week's recap (Home) to the whole organization. The text is
- * written on the server as any member would see it: no money, no sign-up
- * counts only admins see, only notes the organization can open. Nothing
- * from the page is trusted.
+ * This week's recap as a draft for the Inbox composer, to read over and edit
+ * before it goes out through postAnnouncement. Written on the server as any
+ * member would see it (no money, no counts only admins see, only notes the
+ * organization can open); a quiet week comes back as an error. Doesn't
+ * refresh: nothing changed.
  */
-export async function postRecapAnnouncement(orgId: string): Promise<AnnouncementResult> {
-  return run(() => recapTx(orgId));
+export async function draftRecapAnnouncement(orgId: string): Promise<RecapDraftResult> {
+  return run(() => draftTx(orgId), false);
 }
 
 /**

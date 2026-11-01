@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  announcementsView,
   BODY_MAX,
   byline,
   canManageAnnouncement,
@@ -122,18 +121,6 @@ describe("postedWhen and byline", () => {
   it("names the author by first name", () => {
     expect(byline("Kristine Park", "Tue")).toBe("Kristine, Tue");
     expect(byline(null, "today")).toBe("A former member, today");
-  });
-});
-
-describe("announcementsView", () => {
-  it("is This week only for news=week, and the posts otherwise", () => {
-    expect(announcementsView("week")).toBe("week");
-    expect(announcementsView(["week", "posts"])).toBe("week");
-    expect(announcementsView(undefined)).toBe("posts");
-    expect(announcementsView("")).toBe("posts");
-    expect(announcementsView("Week")).toBe("posts");
-    expect(announcementsView("updates")).toBe("posts");
-    expect(announcementsView(["posts", "week"])).toBe("posts");
   });
 });
 

@@ -17,8 +17,8 @@ export interface TodayCell {
   label: string;
   sub: string;
   href: string;
-  /** Overdue above 0: the cell is tinted danger. */
-  danger?: boolean;
+  /** A short chip beside the number ("3 days late", "All clear"), or none. */
+  chip?: { text: string; tone: "destructive" | "success" | "secondary" };
 }
 
 /** What the Inbox's Needs you is made of (sidebarCounts' needsYou). */
@@ -80,7 +80,10 @@ export function todayStrip(input: {
           ? `${overdue.first.title}, ${plural(late, "day")} late`
           : "Nothing late",
       href: overdue.count > 0 ? `${tasksHref}&overdue=1` : tasksHref,
-      danger: overdue.count > 0,
+      chip:
+        overdue.count > 0
+          ? { text: `${plural(late, "day")} late`, tone: "destructive" }
+          : { text: "All clear", tone: "success" },
     },
     {
       key: "waiting",
@@ -92,6 +95,10 @@ export function todayStrip(input: {
           ? "Nothing needs you"
           : needsYouLine(waiting.parts) || "What needs you, in your Inbox",
       href: `${base}/inbox`,
+      chip:
+        waiting && waiting.count > 0 && needsYouLine(waiting.parts)
+          ? { text: needsYouLine(waiting.parts).split(", ")[0]!, tone: "secondary" }
+          : undefined,
     },
     {
       key: "due",
@@ -109,6 +116,8 @@ export function todayStrip(input: {
       label: `Events, next ${events.days} days`,
       sub: next && nextWhen ? `Next: ${next.title}, ${nextWhen}` : "Nothing on the calendar",
       href: `${base}/calendar`,
+      // When the next one starts; the sub line names it.
+      chip: nextWhen ? { text: nextWhen, tone: "secondary" } : undefined,
     },
   ];
 }

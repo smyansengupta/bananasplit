@@ -2,14 +2,7 @@
 
 import { ChartLine, Megaphone } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useEffect, useRef, useState, useTransition, type CSSProperties } from "react";
 
 import { OpenLink } from "@/components/overview/bits";
 import { Insight, LinkChips, type ItemRef } from "@/components/overview/connections";
@@ -24,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Segmented } from "@/components/ui/segmented";
 import {
   Select,
   SelectContent,
@@ -39,18 +31,13 @@ import { runAction } from "@/lib/run-action";
 import { tagVar } from "@/lib/tag-colors";
 import {
   deleteAnnouncement,
+  draftRecapAnnouncement,
   editAnnouncement,
   markAnnouncementsSeen,
   postAnnouncement,
   restoreAnnouncement,
 } from "@/server/announcements/actions";
-import {
-  BODY_MAX,
-  seenPercent,
-  TITLE_MAX,
-  type AnnouncementsView,
-  type SignupInsight,
-} from "@/server/announcements/rules";
+import { BODY_MAX, seenPercent, TITLE_MAX, type SignupInsight } from "@/server/announcements/rules";
 
 /** One announcement as the Inbox draws it. */
 export interface InboxAnnouncement {
@@ -82,31 +69,15 @@ const RUST: CSSProperties = {
   background: `color-mix(in oklab, ${tagVar("rust")} 14%, transparent)`,
 };
 
-/** This week's recap, ready to post (title and text as loadRecapWeek writes them). */
-export interface RecapDraft {
-  title: string;
-  text: string;
-}
-
-/** The This week view, drawn by the page: the recap's seven days and the recap itself. */
-export interface WeekRecap {
-  /** "Oct 25 to Oct 31", beside the title; null when the recap didn't load. */
-  range: string | null;
-  body: ReactNode;
-}
-
 /**
- * Announcements at the top of the Inbox, above its tabs, in two views
- * switched in its header (the page's ?news= param):
- *
- * - Announcements: the latest few posts, each with who posted it and when,
- *   how many members have seen it and the event it's about; a post opens to
- *   its full text. One fact under the list (sign-ups after a post), and the
- *   dashed row at the foot posts: this week's recap when it's ready (Friday
- *   to Sunday, until it goes out), else anything. ↗ opens every post. Every
- *   post shown counts as seen.
- * - This week: the viewer's own recap of the last seven days, with Copy and
- *   Post as an announcement at its foot. ↗ opens Pulse.
+ * Announcements at the top of the Inbox, above its tabs: the latest few
+ * posts, each with who posted it and when, how many members have seen it and
+ * the event it's about; a post opens to its full text. One fact under the
+ * list (sign-ups after a post), and the dashed row at the foot posts: an
+ * announcement, or this week's recap, drafted on the server when asked for
+ * and read over before it goes out. Friday to Sunday, until the recap goes
+ * out, the row nudges to post it. ↗ opens every post. Every post shown
+ * counts as seen.
  */
 export function InboxAnnouncements({
   orgId,
@@ -114,11 +85,7 @@ export function InboxAnnouncements({
   events,
   total,
   seeAllHref,
-  recap,
-  view,
-  viewHrefs,
-  week,
-  pulseHref,
+  recapDue,
 }: {
   orgId: string;
   items: InboxAnnouncement[];
@@ -126,26 +93,19 @@ export function InboxAnnouncements({
   /** Every announcement the organization has (0: only the composer shows). */
   total: number;
   seeAllHref: string;
-  recap: RecapDraft | null;
-  view: AnnouncementsView;
-  /** Where each view's switch goes (the Inbox with its tab kept). */
-  viewHrefs: Record<AnnouncementsView, string>;
-  /** The This week view's content, when it's the one open. */
-  week: WeekRecap | null;
-  pulseHref: string;
+  /** Friday to Sunday, while this week's recap hasn't gone out: the foot nudges to post it. */
+  recapDue: boolean;
 }) {
   const [open, setOpen] = useState<InboxAnnouncement | null>(null);
   const marked = useRef(new Set<string>());
-  const onPosts = view === "posts";
 
   // Shown is seen: mark the ones this member hasn't seen yet, once each.
   useEffect(() => {
-    if (!onPosts) return;
     const fresh = items.filter((a) => !a.seenByMe && !marked.current.has(a.id)).map((a) => a.id);
     if (fresh.length === 0) return;
     for (const id of fresh) marked.current.add(id);
     void markAnnouncementsSeen(orgId, fresh).catch(() => {});
-  }, [items, onPosts, orgId]);
+  }, [items, orgId]);
 
   // One fact for the list, from the newest post that has one.
   const withInsight = items.find((a) => a.insight);
@@ -156,34 +116,14 @@ export function InboxAnnouncements({
       aria-labelledby="inbox-announcements"
       className="bg-card ring-foreground/6 edge rounded-card flex flex-col gap-1 p-5 ring-1"
     >
-      {/* On a phone the switch drops to its own line under the title. */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-        <h2 id="inbox-announcements" className="heading text-[17px] leading-snug">
+      <div className="flex items-center gap-2">
+        <h2 id="inbox-announcements" className="heading flex-1 text-[17px] leading-snug">
           Announcements
         </h2>
-        {!onPosts && week?.range && (
-          <span className="text-muted-foreground text-[13px] whitespace-nowrap">{week.range}</span>
-        )}
-        <span className="flex-1" />
-        <Segmented
-          label="Show"
-          value={view}
-          options={[
-            { value: "posts", label: "Announcements", href: viewHrefs.posts },
-            { value: "week", label: "This week", href: viewHrefs.week },
-          ]}
-          className="order-last sm:order-none"
-        />
-        {onPosts ? (
-          !none && <OpenLink href={seeAllHref} label="All announcements" />
-        ) : (
-          <OpenLink href={pulseHref} label="Pulse" />
-        )}
+        {!none && <OpenLink href={seeAllHref} label="All announcements" />}
       </div>
-      {!onPosts ? (
-        <div className="pt-3">{week?.body}</div>
-      ) : none ? (
-        <Composer orgId={orgId} events={events} recap={recap} empty />
+      {none ? (
+        <Composer orgId={orgId} events={events} recapDue={recapDue} empty />
       ) : items.length > 0 ? (
         <ul className="flex flex-col">
           {items.map((a) => (
@@ -193,13 +133,13 @@ export function InboxAnnouncements({
       ) : (
         <p className="text-muted-foreground py-2 text-sm">Nothing posted in the last two weeks.</p>
       )}
-      {onPosts && withInsight?.insight && (
+      {withInsight?.insight && (
         <Insight icon={ChartLine} className="mt-1">
           <b>{withInsight.insight.count}</b>{" "}
           {withInsight.insight.rest.replace("this was posted", `“${withInsight.title}” was posted`)}
         </Insight>
       )}
-      {onPosts && !none && <Composer orgId={orgId} events={events} recap={recap} />}
+      {!none && <Composer orgId={orgId} events={events} recapDue={recapDue} />}
       <FullText orgId={orgId} item={open} onClose={() => setOpen(null)} />
     </section>
   );
@@ -393,26 +333,28 @@ function FullText({
 }
 
 /**
- * The dashed row at the foot: a button that opens a small composer (title,
- * message, and an event it's about). At the end of the week, while this
- * week's recap hasn't gone out, the row offers it, and Review and post opens
- * the composer with the recap in it to read over first. With nothing posted
- * yet it is all the Announcements view shows.
+ * The dashed row at the foot: Post an announcement opens a small composer
+ * (title, message, and an event it's about), and Post this week's recap
+ * opens it with the recap in it, written on the server as any member would
+ * see it, to read over and edit first. Friday to Sunday, while this week's
+ * recap hasn't gone out, the recap is the row's main button. With nothing
+ * posted yet it is all the card shows.
  */
 function Composer({
   orgId,
   events,
-  recap,
+  recapDue,
   empty = false,
 }: {
   orgId: string;
   events: AnnouncementEventOption[];
-  recap: RecapDraft | null;
+  recapDue: boolean;
   empty?: boolean;
 }) {
   const router = useRouter();
   const [writing, setWriting] = useState(false);
   const [pending, start] = useTransition();
+  const [drafting, startDraft] = useTransition();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [eventId, setEventId] = useState(NO_EVENT);
@@ -443,11 +385,31 @@ function Composer({
       router.refresh();
     });
 
+  // The recap is written only when asked for, so the Inbox never loads it.
+  const draftRecap = () => {
+    if (drafting) return;
+    startDraft(async () => {
+      const result = await runAction(
+        () => draftRecapAnnouncement(orgId),
+        "Couldn't write the recap. Try again.",
+      );
+      if (!result) return;
+      if (!result.ok) {
+        toast(result.quiet ? { title: result.error } : { title: result.error, tone: "error" });
+        return;
+      }
+      setTitle(result.title);
+      setBody(result.body);
+      setEventId(NO_EVENT);
+      setWriting(true);
+    });
+  };
+
   if (!writing) {
     return (
-      <div className="border-border rounded-tile mt-2 flex items-center gap-3 border-[1.5px] border-dashed px-3.5 py-3">
-        <span className="text-muted-foreground flex-1 text-[13.5px]">
-          {recap ? (
+      <div className="border-border rounded-tile mt-2 flex flex-wrap items-center gap-3 border-[1.5px] border-dashed px-3.5 py-3">
+        <span className="text-muted-foreground min-w-48 flex-1 text-[13.5px]">
+          {recapDue ? (
             <>
               <b className="text-foreground font-semibold">Ready to post:</b> this week&rsquo;s
               recap
@@ -461,23 +423,26 @@ function Composer({
             "Tell everyone something."
           )}
         </span>
-        {recap ? (
+        <span className="flex flex-wrap gap-2">
           <Button
             size="sm"
-            onClick={() => {
-              setTitle(recap.title);
-              setBody(recap.text);
-              setWriting(true);
-            }}
+            variant={recapDue ? "outline" : "default"}
+            onClick={() => setWriting(true)}
           >
-            Review and post
-          </Button>
-        ) : (
-          <Button size="sm" onClick={() => setWriting(true)}>
             <Megaphone data-icon="inline-start" aria-hidden="true" />
             {empty ? "Post the first announcement" : "Post an announcement"}
           </Button>
-        )}
+          <Button
+            size="sm"
+            variant={recapDue ? "default" : "outline"}
+            onClick={draftRecap}
+            disabled={drafting}
+            aria-busy={drafting || undefined}
+          >
+            <ChartLine data-icon="inline-start" aria-hidden="true" />
+            {drafting ? "Writing the recap…" : "Post this week’s recap"}
+          </Button>
+        </span>
       </div>
     );
   }

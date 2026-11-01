@@ -10,15 +10,6 @@ function Muted({ children }: { children: string }) {
   return <span className="text-muted-foreground text-[13px] whitespace-nowrap">{children}</span>;
 }
 
-/** The week, recapped: the seven days, then ↗ to Pulse. */
-export function RecapWeekControls({ orgSlug, range }: { orgSlug: string; range: string }) {
-  return (
-    <CardControls chips={<Muted>{range}</Muted>}>
-      <OpenLink href={`/app/${orgSlug}/pulse`} label="Pulse" />
-    </CardControls>
-  );
-}
-
 /** Since you were here: when that was, then ↗ to the Inbox's updates. */
 export function SinceYouWereHereControls({
   orgSlug,

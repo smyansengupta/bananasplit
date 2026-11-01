@@ -1,47 +1,56 @@
+"use client";
+
+import {
+  CalendarDays,
+  CircleAlert,
+  Inbox,
+  SquareCheckBig,
+  type IconComponent,
+} from "@/components/icons";
 import Link from "next/link";
 
-import { CountUp } from "@/components/ui/stat";
+import { Badge } from "@/components/ui/badge";
+import { Stat, StatStrip } from "@/components/ui/stat";
 import type { TodayCell } from "@/lib/overview/today-strip";
-import { cn } from "@/lib/utils";
+
+const ICONS: Record<TodayCell["key"], IconComponent> = {
+  overdue: CircleAlert,
+  waiting: Inbox,
+  due: SquareCheckBig,
+  events: CalendarDays,
+};
 
 /**
  * The Today strip, under the greeting on an organization's Overview: your
  * overdue tasks, what waits on you in the Inbox (the sidebar badge's own
  * number), your tasks due this week and the events in the next two weeks.
- * Each count is a link with one line saying what's behind it; Overdue is
- * tinted danger while anything is late. Four across, a 2×2 grid on a phone.
- * The Personal home keeps its own stat strip (OverviewStats).
+ * It's the app's stat strip (no boxes: an icon chip, the number, a plain
+ * label and one short chip), each stat opening its list; the longer line
+ * behind each ("Khoury check-in, 3 days late") is its tooltip and accessible
+ * name. A client component so it can hand icon components to Stat. The
+ * Personal home keeps its own strip (OverviewStats).
  */
 export function TodayStrip({ cells }: { cells: readonly TodayCell[] }) {
   return (
-    <section
-      aria-label="Today"
-      className="bg-card text-card-foreground ring-foreground/6 edge rounded-card p-2 ring-1"
-    >
-      <div className="grid grid-cols-2 gap-1 lg:grid-cols-4">
+    <section aria-label="Today">
+      <StatStrip>
         {cells.map((c) => (
           <Link
             key={c.key}
             href={c.href}
-            className={cn(
-              "focus-glow rounded-block flex min-w-0 flex-col gap-1.5 px-4 py-3.5 transition-colors outline-none sm:px-4.5 sm:py-4",
-              c.danger
-                ? "bg-tint-danger text-tint-danger-foreground hover:bg-tint-danger/85"
-                : "hover:bg-muted/60",
-            )}
+            title={c.sub}
+            aria-label={`${c.value ?? "Unknown"} ${c.label.toLowerCase()}: ${c.sub}`}
+            className="focus-glow rounded-tile hover:bg-muted/60 -m-1.5 p-1.5 transition-colors outline-none"
           >
-            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="numeral text-[28px] leading-none sm:text-[34px]">
-                {c.value === null ? "–" : <CountUp value={c.value} />}
-              </span>
-              <span className="font-bold">{c.label}</span>
-            </span>
-            <span className={cn("line-clamp-2 text-[13px]", !c.danger && "text-muted-foreground")}>
-              {c.sub}
-            </span>
+            <Stat
+              icon={ICONS[c.key]}
+              value={c.value ?? "–"}
+              label={c.label}
+              chip={c.chip ? <Badge variant={c.chip.tone}>{c.chip.text}</Badge> : undefined}
+            />
           </Link>
         ))}
-      </div>
+      </StatStrip>
     </section>
   );
 }
