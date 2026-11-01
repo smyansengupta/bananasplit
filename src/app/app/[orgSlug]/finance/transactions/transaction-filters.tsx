@@ -1,9 +1,10 @@
 "use client";
 
-import { Banknote, Download, Inbox, List, Lock, SlidersHorizontal, X } from "@/components/icons";
+import { Download, SlidersHorizontal, X } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { InBar } from "@/components/ui/bar-slot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,16 +35,17 @@ const PANEL_KEYS = [
 ] as const;
 
 const VIEWS = [
-  { value: "all", label: "All", icon: List },
-  { value: "review", label: "To review", icon: Inbox },
-  { value: "pay", label: "To pay", icon: Banknote },
-  { value: "unreconciled", label: "Unreconciled", icon: Lock },
+  { value: "all", label: "Everything" },
+  { value: "review", label: "To review" },
+  { value: "pay", label: "To pay" },
+  { value: "unreconciled", label: "Unreconciled" },
 ] as const;
 
 /**
- * The transactions bar, shaped like the Tasks bar: the views on the left
- * (the four questions a treasurer opens this page with), one Filters chip
- * for everything else, then search and Export on the right.
+ * The transactions' controls, on Finance's tab bar (InBar): one Filters
+ * chip (Show first: everything, to review, to pay or unreconciled, the four
+ * questions a treasurer opens this page with; then period, category, kind,
+ * who, reconciled and dates), then search and Export.
  */
 export function TransactionFilters({
   periods,
@@ -73,26 +75,13 @@ export function TransactionFilters({
   const setParam = (key: string, value: string | null) => setParams({ [key]: value });
 
   const view = searchParams.get("view") ?? "all";
-  const count = PANEL_KEYS.filter((k) => searchParams.has(k)).length;
+  const count =
+    PANEL_KEYS.filter((k) => searchParams.has(k)).length + (view !== "all" ? 1 : 0);
   const [draft, setDraft] = useState(searchParams.get("q") ?? "");
 
   return (
-    <div className="@container/toolbar">
+    <InBar>
       <div className="flex flex-wrap items-center gap-2">
-        <Segmented
-          label="Show"
-          value={view}
-          onSelect={(v) => setParam("view", v)}
-          options={VIEWS.map((v) => ({
-            value: v.value,
-            label: v.label,
-            icon: v.icon,
-            compact: true,
-          }))}
-          labelsFrom="sr-only @[44rem]/toolbar:not-sr-only"
-          className="shrink-0"
-        />
-
         <Popover>
           <PopoverTrigger
             aria-label={count > 0 ? `Filters, ${count} on` : "Filters"}
@@ -102,7 +91,21 @@ export function TransactionFilters({
             Filters
             {count > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{count}</Badge>}
           </PopoverTrigger>
-          <PopoverContent align="start" className="grid w-80 gap-3 p-3">
+          <PopoverContent align="end" className="grid w-80 gap-3 p-3">
+            <PanelRow name="Show">
+              <Select value={view} onValueChange={(v) => setParam("view", v)}>
+                <SelectTrigger className="w-full" aria-label="Show">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VIEWS.map((v) => (
+                    <SelectItem key={v.value} value={v.value}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </PanelRow>
             <PanelRow name="Period">
               <Select
                 value={searchParams.get("period") ?? "all"}
@@ -227,7 +230,12 @@ export function TransactionFilters({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setParams(Object.fromEntries(PANEL_KEYS.map((k) => [k, null])))}
+                  onClick={() =>
+                    setParams({
+                      view: null,
+                      ...Object.fromEntries(PANEL_KEYS.map((k) => [k, null])),
+                    })
+                  }
                 >
                   <X aria-hidden="true" />
                   Clear
@@ -237,7 +245,7 @@ export function TransactionFilters({
           </PopoverContent>
         </Popover>
 
-        <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
+        <div className="flex items-center gap-2">
           <SearchField
             value={draft}
             onValueChange={setDraft}
@@ -247,7 +255,7 @@ export function TransactionFilters({
             }}
             placeholder="Search"
             aria-label="Search transactions"
-            className="sm:max-w-56"
+            className="w-52"
             onKeyDown={(e) => {
               if (e.key === "Enter") setParam("q", draft.trim() || null);
             }}
@@ -264,7 +272,7 @@ export function TransactionFilters({
           </Button>
         </div>
       </div>
-    </div>
+    </InBar>
   );
 }
 

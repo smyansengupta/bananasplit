@@ -42,6 +42,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { InBar } from "@/components/ui/bar-slot";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -285,6 +286,7 @@ export function WidgetBoard({
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">{intro}</div>
+          <InBar>
           <div className="flex items-center gap-2 max-md:hidden">
             {editing && <span className="text-muted-foreground text-sm">Only you see this.</span>}
             {editing && customized && (
@@ -303,6 +305,7 @@ export function WidgetBoard({
               Customize
             </Button>
           </div>
+          </InBar>
         </div>
         {introDescription && (
           <p className="text-muted-foreground text-[15px]">{introDescription}</p>

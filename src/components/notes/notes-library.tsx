@@ -15,6 +15,7 @@ import {
   List,
   Lock,
   NotebookText,
+  Upload,
   Trash2,
 } from "@/components/icons";
 import Link from "next/link";
@@ -52,9 +53,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { SearchField } from "@/components/ui/search-field";
-import { NOTE_SORT_OPTIONS } from "@/app/app/[orgSlug]/notes/notes-list-filters";
 import { FilterChoices, FilterSheet, PhoneToolbar } from "@/components/ui/phone-toolbar";
 import { Segmented } from "@/components/ui/segmented";
+import { ExpandChip } from "@/components/ui/toolbar-chips";
 import { toast, undoable } from "@/components/ui/toaster";
 import { familyOf, formatBytes } from "@/lib/files/types";
 import { NOTE_TRASH_DAYS } from "@/lib/notes/trash";
@@ -162,6 +163,13 @@ const LAYOUTS = [
   { value: "grid", label: "Grid", icon: LayoutGrid, compact: true, title: "Grid" },
   { value: "list", label: "List", icon: List, compact: true, title: "List" },
 ];
+
+/** What to show, as the bar's icon chips (`tab=files` keeps its old name for links). */
+const KINDS = [
+  { tab: null, label: "All", icon: Library },
+  { tab: "notes", label: "Notes", icon: NotebookText },
+  { tab: "files", label: "Uploads", icon: Upload },
+] as const;
 
 /**
  * The Files library: folders down the side (drag a note or file onto one to
@@ -854,7 +862,7 @@ export function NotesLibrary({
   const searchForm = (phone: boolean) => (
     <form
       role="search"
-      className={phone ? undefined : "min-w-[220px] flex-1"}
+      className={phone ? undefined : "w-full sm:max-w-56"}
       onSubmit={(e) => {
         e.preventDefault();
         go({ q: q.trim() || null });
@@ -891,36 +899,41 @@ export function NotesLibrary({
   return (
     <div className="space-y-4">
       {/*
-        The toolbar every list page has (People, Tasks): the search, the
-        order and the layout on one row, the filters as chips under it with
-        what they found at the end. The trash is a plain list, so none of it.
+        The bar every list page has (Tasks, People): the layout, what to
+        show (all, notes, uploads) as icons that say what they are on hover,
+        one Filters chip (the order, access, who added it), then the search
+        at the right. The trash is a plain list, so none of it.
       */}
       {!inTrash && (
-        <div className="space-y-3 max-md:hidden">
-          <div className="flex flex-wrap items-center gap-2">
-            {searchForm(false)}
-            <Segmented
-              label="Sort"
-              options={[...NOTE_SORT_OPTIONS]}
-              value={params.get("sort") ?? "edited"}
-              onSelect={(v) => go({ sort: v === "edited" ? null : v })}
-            />
-            {layoutSwitch}
+        <div className="@container/toolbar flex flex-wrap items-center gap-2 max-md:hidden">
+          <Segmented
+            label="Layout"
+            options={LAYOUTS}
+            value={view}
+            onSelect={(v) => go({ layout: v === "grid" ? null : v })}
+            labelsFrom="sr-only @[44rem]/toolbar:not-sr-only"
+            className="shrink-0"
+          />
+          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Show">
+            {KINDS.map((k) => (
+              <ExpandChip
+                key={k.label}
+                icon={k.icon}
+                label={k.label}
+                active={(kind === "all" ? null : kind) === k.tab}
+                onClick={() => go({ tab: k.tab })}
+              />
+            ))}
           </div>
-          {(!personal || searching) && (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
-              {filters}
-              {(searching || filtering) && (
-                <span
-                  className="text-muted-foreground ml-auto text-[13px]"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {entries.length} found
-                </span>
-              )}
-            </div>
-          )}
+          {filters}
+          <div className="ms-auto flex min-w-48 flex-1 items-center justify-end gap-2">
+            {(searching || filtering) && (
+              <span className="text-muted-foreground text-[13px]" role="status" aria-live="polite">
+                {entries.length} found
+              </span>
+            )}
+            {searchForm(false)}
+          </div>
         </div>
       )}
 
@@ -1058,10 +1071,18 @@ export function NotesLibrary({
             title="Filters"
             description=""
             canClear={Boolean(
-              folder || ["visibility", "author", "sort"].some((k) => params.get(k)),
+              folder || ["visibility", "author", "sort", "tab"].some((k) => params.get(k)),
             )}
-            onClear={() => go({ folder: null, visibility: null, author: null, sort: null })}
+            onClear={() =>
+              go({ folder: null, visibility: null, author: null, sort: null, tab: null })
+            }
           >
+            <FilterChoices
+              title="Show"
+              value={kind === "all" ? "" : kind}
+              onPick={(v) => go({ tab: v || null })}
+              options={KINDS.map((k) => ({ value: k.tab ?? "", label: k.label }))}
+            />
             <FilterChoices
               title="Folder"
               value={folder ?? ""}

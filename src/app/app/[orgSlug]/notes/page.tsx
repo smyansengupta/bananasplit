@@ -21,7 +21,6 @@ import { planGate } from "@/server/billing/plan-gate";
 import { canManageStorage, readStorageUsed } from "@/server/storage/quota";
 import { storageBreakdown } from "@/server/storage/usage";
 
-import { FilesTabs } from "./files-tabs";
 import { NotesFilterChoices, NotesListFilters } from "./notes-list-filters";
 import {
   countDeleted,
@@ -161,7 +160,6 @@ export default async function NotesPage({
     <div className="space-y-6">
       <PageHeader
         title={sectionLabel(settings?.sidebar, "notes")}
-        tabs={inTrash ? undefined : <FilesTabs />}
         actions={
           <>
             {/* The space's storage, split by what uses it, beside the create button. */}

@@ -4,7 +4,7 @@ import { type IconComponent } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { segmentedItem, segmentedTrack } from "@/components/ui/segmented";
+import { SegmentCount, segmentedItem, segmentedTrack } from "@/components/ui/segmented";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +26,8 @@ export interface PageTab {
   icon?: IconComponent;
   exact?: boolean;
   active?: boolean;
+  /** How many are waiting there (a badge after the label; none at 0). */
+  count?: number;
 }
 
 export function PageTabs({
@@ -77,6 +79,7 @@ export function PageTabs({
                 >
                   {Icon && <Icon aria-hidden="true" />}
                   {tab.label}
+                  {tab.count ? <SegmentCount n={tab.count} active={active} /> : null}
                 </Link>
               </li>
             );

@@ -20,6 +20,8 @@ export interface SegmentedOption {
   /** Hide the label below `sm`, keeping the icon (and the label for screen readers). */
   compact?: boolean;
   title?: string;
+  /** How many are waiting there, as a small badge after the label (none at 0). */
+  count?: number;
 }
 
 export const segmentedTrack =
@@ -38,6 +40,20 @@ export function segmentedItem(active: boolean, options: { thumb?: boolean } = {}
           !options.thumb && "bg-thumb shadow-[0_1px_2px_rgb(0_0_0/0.14),var(--edge-highlight)]",
         )
       : "text-muted-foreground hover:text-foreground font-medium",
+  );
+}
+
+/** An option's count: a small round badge, dark on the one you're on. */
+export function SegmentCount({ n, active }: { n: number; active: boolean }) {
+  return (
+    <span
+      className={cn(
+        "grid h-[18px] min-w-[18px] place-items-center rounded-full px-1.5 text-[11px] leading-none font-semibold tabular-nums",
+        active ? "bg-foreground text-background" : "bg-foreground/10 text-foreground/70",
+      )}
+    >
+      {n}
+    </span>
   );
 }
 
@@ -123,6 +139,7 @@ export function Segmented({
             <span className={cn(o.compact && Icon && (labelsFrom ?? "sr-only sm:not-sr-only"))}>
               {o.label}
             </span>
+            {o.count ? <SegmentCount n={o.count} active={active} /> : null}
           </>
         );
         const itemClass = segmentedItem(active, { thumb: thumb !== null });

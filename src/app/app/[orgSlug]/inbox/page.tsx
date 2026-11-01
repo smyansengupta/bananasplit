@@ -283,19 +283,22 @@ export default async function InboxPage({
         views={[
           {
             value: "needs",
-            label: needsNow.length > 0 ? `Needs you ${needsNow.length}` : "Needs you",
+            label: "Needs you",
+            count: needsNow.length,
             href: `${base}/inbox`,
           },
           {
             value: "updates",
-            label: unread > 0 ? `Updates ${unread}` : "Updates",
+            label: "Updates",
+            count: unread,
             href: `${base}/inbox?view=updates`,
           },
           ...(snoozed.length > 0
             ? [
                 {
                   value: "snoozed" as const,
-                  label: `Snoozed ${snoozed.length}`,
+                  label: "Snoozed",
+                  count: snoozed.length,
                   href: `${base}/inbox?view=snoozed`,
                 },
               ]

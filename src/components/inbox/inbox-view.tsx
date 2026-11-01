@@ -160,6 +160,8 @@ function isTyping(target: EventTarget | null): boolean {
 export interface InboxViewLink {
   value: InboxView;
   label: string;
+  /** What's waiting there, as the option's badge. */
+  count: number;
   href: string;
 }
 
@@ -478,7 +480,12 @@ export function InboxView({
       <Segmented
         label="Inbox"
         value={view}
-        options={views.map((v) => ({ value: v.value, label: v.label, href: v.href }))}
+        options={views.map((v) => ({
+          value: v.value,
+          label: v.label,
+          count: v.count,
+          href: v.href,
+        }))}
         className="shrink-0"
       />
       {categories.length > 1 && (

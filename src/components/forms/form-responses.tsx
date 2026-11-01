@@ -442,8 +442,8 @@ function Review({
               setSelectedId((next === "todo" ? todo : done)[0]?.id ?? null);
             }}
             options={[
-              { value: "todo", label: `To review ${todo.length}` },
-              { value: "done", label: `Done ${done.length}` },
+              { value: "todo", label: "To review", count: todo.length },
+              { value: "done", label: "Done", count: done.length },
             ]}
             className="w-full"
           />

@@ -1,9 +1,8 @@
 "use client";
 
-import { ChevronDown, X } from "@/components/icons";
+import { ChevronDown } from "@/components/icons";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +12,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FilterChoices } from "@/components/ui/phone-toolbar";
 import { chipClass } from "@/components/ui/segmented";
+import { FiltersMenu } from "@/components/ui/toolbar-chips";
 
-/** The order, beside the search (Files' toolbar) and in the phone's sheet. */
+/** The order, in the Filters panel and the phone's sheet. */
 export const NOTE_SORT_OPTIONS = [
   { value: "edited", label: "Edited" },
   { value: "created", label: "Newest" },
@@ -29,11 +29,10 @@ const AUDIENCES = [
 ] as const;
 
 /**
- * Files › the row of filter chips under the search, as People has: who can
- * see it and who added it, each a chip that opens its choices and reads
- * what's picked, and Clear once anything is. All of it lives in the URL, so
- * a filtered view can be linked and pinned. Personal has one person, so
- * none of it.
+ * Files' Filters chip (as on Tasks and People): one panel with the order,
+ * who can see it and who added it, each reading what's picked. All of it
+ * lives in the URL, so a filtered view can be linked and pinned. Personal
+ * has one person, so only the order.
  */
 export function NotesListFilters({
   members,
@@ -46,12 +45,10 @@ export function NotesListFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  if (personal) return null;
-
+  const sort = searchParams.get("sort") ?? "edited";
   const visibility = searchParams.get("visibility") ?? "all";
   const author = searchParams.get("author") ?? "all";
   const authorMember = members.find((m) => m.userId === author);
-  const audience = AUDIENCES.find(([value]) => value === visibility)?.[1];
 
   function setParams(patch: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -64,55 +61,71 @@ export function NotesListFilters({
   }
 
   return (
-    <>
-      <ChipMenu
-        label="Access"
-        on={visibility !== "all"}
-        display={audience}
-        value={visibility}
-        options={AUDIENCES.map(([value, label]) => ({ value, label }))}
-        onChange={(v) => setParams({ visibility: v })}
-      />
-      {members.length > 1 && (
-        <ChipMenu
-          label="Added by"
-          on={author !== "all"}
-          display={authorMember ? (authorMember.name ?? authorMember.email) : undefined}
-          value={author}
-          options={[
-            { value: "all", label: "Anyone" },
-            ...members.map((m) => ({ value: m.userId, label: m.name ?? m.email })),
-          ]}
-          onChange={(v) => setParams({ author: v })}
-        />
-      )}
-      {(visibility !== "all" || author !== "all") && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setParams({ visibility: null, author: null })}
-        >
-          <X aria-hidden="true" />
-          Clear
-        </Button>
-      )}
-    </>
+    <FiltersMenu
+      count={(visibility !== "all" ? 1 : 0) + (author !== "all" ? 1 : 0)}
+      items={[
+        {
+          name: "Sort by",
+          node: (
+            <ChipMenu
+              text={NOTE_SORT_OPTIONS.find((o) => o.value === sort)?.label ?? "Edited"}
+              on={false}
+              value={sort}
+              options={[...NOTE_SORT_OPTIONS]}
+              onChange={(v) => setParams({ sort: v === "edited" ? null : v })}
+            />
+          ),
+        },
+        ...(!personal
+          ? [
+              {
+                name: "Access",
+                node: (
+                  <ChipMenu
+                    text={AUDIENCES.find(([value]) => value === visibility)?.[1] ?? "Anyone"}
+                    on={visibility !== "all"}
+                    value={visibility}
+                    options={AUDIENCES.map(([value, label]) => ({ value, label }))}
+                    onChange={(v) => setParams({ visibility: v })}
+                  />
+                ),
+              },
+            ]
+          : []),
+        ...(!personal && members.length > 1
+          ? [
+              {
+                name: "Added by",
+                node: (
+                  <ChipMenu
+                    text={authorMember ? (authorMember.name ?? authorMember.email) : "Anyone"}
+                    on={author !== "all"}
+                    value={author}
+                    options={[
+                      { value: "all", label: "Anyone" },
+                      ...members.map((m) => ({ value: m.userId, label: m.name ?? m.email })),
+                    ]}
+                    onChange={(v) => setParams({ author: v })}
+                  />
+                ),
+              },
+            ]
+          : []),
+      ]}
+    />
   );
 }
 
-/** One filter chip: its name, or "Name: choice" once one is picked. */
+/** One filter in the panel: what's picked, opening the choices. */
 function ChipMenu({
-  label,
+  text,
   on,
-  display,
   value,
   options,
   onChange,
 }: {
-  label: string;
+  text: string;
   on: boolean;
-  display: string | undefined;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
@@ -121,7 +134,7 @@ function ChipMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className={chipClass(on)}>
-          {on && display ? `${label}: ${display}` : label}
+          <span className="truncate">{text}</span>
           <ChevronDown aria-hidden="true" className="opacity-70" />
         </button>
       </DropdownMenuTrigger>
@@ -140,8 +153,7 @@ function ChipMenu({
 
 /**
  * The same filters and order for the phone's filter sheet (the library adds
- * the folder; All, Notes and Uploads are the page's tabs): each one a named
- * row of chips.
+ * the folder and All, Notes or Uploads): each one a named row of chips.
  */
 export function NotesFilterChoices({
   members,
