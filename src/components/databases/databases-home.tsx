@@ -1,14 +1,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { AlarmClock, ChartColumn, ChartLine, Database, Lock } from "@/components/icons";
+import { AlarmClock, ClipboardList, Lock, ReceiptText } from "@/components/icons";
 import { ReportIcon } from "@/components/reports/saved/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Databases home (the Databases tab): one line of numbers that also says
- * what moved this week and leads to the reports and anything late, then
+ * Databases home (the Databases tab): a line of what needs someone (tasks
+ * past due, expenses waiting to be paid back, new form answers), each
+ * shown only when there is one and leading to it, then
  * the organization's own databases as cards across the whole width (how
  * many rows, how fast they're growing, the report on each or a way to make
  * one), then the built-in ones as a list. Data from the page
@@ -50,7 +51,7 @@ export interface HomeBuiltIn {
 /** One of the numbers along the top; a link when there's somewhere to go. */
 export interface HomeStat {
   key: string;
-  icon: "databases" | "growth" | "reports" | "late";
+  icon: "late" | "money" | "answers";
   value: string;
   label: string;
   href?: string;
@@ -58,10 +59,9 @@ export interface HomeStat {
 }
 
 const STAT_ICONS = {
-  databases: Database,
-  growth: ChartLine,
-  reports: ChartColumn,
   late: AlarmClock,
+  money: ReceiptText,
+  answers: ClipboardList,
 } as const;
 
 const TINTS = [
@@ -144,11 +144,13 @@ export function DatabasesHome({
 }) {
   return (
     <div className="space-y-7">
-      <section aria-label="At a glance" className="flex flex-wrap gap-x-11 gap-y-4">
-        {stats.map((s) => (
-          <Stat key={s.key} stat={s} />
-        ))}
-      </section>
+      {stats.length > 0 && (
+        <section aria-label="Needs someone" className="flex flex-wrap gap-x-11 gap-y-4">
+          {stats.map((s) => (
+            <Stat key={s.key} stat={s} />
+          ))}
+        </section>
+      )}
 
       {custom.length > 0 && (
         <section aria-labelledby="h-yours" className="space-y-3.5">

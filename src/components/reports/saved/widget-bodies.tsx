@@ -206,7 +206,7 @@ export function WidgetBody({
           <div className="flex items-end justify-between gap-3">
             <span className="text-muted-foreground text-xs">
               {d.previous !== null
-                ? `${formatValue(d.previous, d.format)} in ${d.previousLabel ?? "the span before"}`
+                ? `${formatValue(d.previous, d.format)} ${d.previousLabel ?? "the span before"}`
                 : d.unit}
             </span>
             <Spark values={d.spark} label="By week" />
@@ -223,7 +223,7 @@ export function WidgetBody({
             <span className="numeral text-[26px]">{formatValue(d.total, d.format)}</span>
             {d.previousTotal !== null && (
               <span className="text-muted-foreground text-xs">
-                against {formatValue(d.previousTotal, d.format)} in{" "}
+                against {formatValue(d.previousTotal, d.format)}{" "}
                 {d.previousLabel ?? "the span before"} (dashed)
               </span>
             )}

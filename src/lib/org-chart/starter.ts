@@ -20,7 +20,7 @@ const positions: OrgChartParse["positions"] = [
     reports_to: null,
     manages: [],
     responsibilities: [
-      "Sets the semester's goals and priorities",
+      "Sets the year's goals and priorities",
       "Runs the weekly board meeting",
       "Represents the organization to partners and the outside world",
     ],
@@ -48,7 +48,7 @@ const positions: OrgChartParse["positions"] = [
     reports_to: "president",
     manages: [],
     responsibilities: [
-      "Owns the semester calendar and the task board",
+      "Owns the calendar and the task board",
       "Collects updates from the leads and flags blockers",
       "Steps in for the President",
     ],
@@ -124,7 +124,7 @@ const positions: OrgChartParse["positions"] = [
 export const STARTER_PARSE: OrgChartParse = {
   positions,
   open_items: [
-    { who: "President", question: "Who holds each role this semester?" },
+    { who: "President", question: "Who holds each role right now?" },
     { who: "President", question: "Which roles are still open, and when do they get filled?" },
   ],
 };

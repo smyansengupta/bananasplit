@@ -9,7 +9,7 @@ anyone it's shared with can open it again, over whatever dates the pills pick.
 **Reports home** lists the organization's reports (yours and the shared
 ones), a one-click report for every database with rows and no report yet
 ("Make it", with the widgets that suit it), and the past copies people kept.
-The date pills (This term, 30 days, All time, custom) sit beside the
+The date pills (This quarter, This year, 30 days, All time, custom) sit beside the
 Databases and Reports tabs, as Tasks' do, and go with every report opened.
 
 **New report** is a walkthrough:
@@ -28,8 +28,8 @@ can see (the database's own visibility, RLS), so sharing a report never
 shares a row. Whoever made it edits, renames and archives it; an owner or
 admin can too on a shared one. Only its maker shares or un-shares it.
 
-**Keep a copy** freezes every widget's numbers and the insights as they read
-now, for Report history. A copy is never edited. The People and Events widgets
+**Keep a copy** (in the report's ••• menu) freezes every widget's numbers and
+the insights as they read now, listed at the bottom of the report. A copy is never edited. The People and Events widgets
 read the live built-in reports, so copies don't keep them.
 
 **Insights** is first on every report: the plain facts the widgets lead
@@ -81,8 +81,8 @@ others, a report's Overdue and stale), Push back moves its due date
 (tomorrow, three days, next Monday, a week) and Nudge comments on it
 mentioning its owner.
 
-**Report history** (History on Reports home) lists only the kept copies, by
-month: the reports themselves are live. Reports home's Ask box answers a question from every report's
+A report is always live; the copies kept of it (by hand from its ••• menu,
+or on its schedule) are listed at the bottom of that report. Reports home's Ask box answers a question from every report's
 numbers with the organization's model (nothing is kept).
 
 ## The built-in reports
@@ -124,11 +124,12 @@ Reports never show who voted for what, never show free-text answers, and
 never list people: the links do that, in Databases, under Databases' own
 visibility rules.
 
-**Date range.** One range applies to every card: This term (the default),
-Last 30 days, All time, or a custom first and last day. Terms split at July 1
-in the org timezone (January to June is spring, July to December is fall),
-the same rule the website uses. Bookmark or share the URL to keep a range
-(`?range=30d`, `?range=all`, `?from=2026-09-01&to=2026-09-30`).
+**Date range.** One range applies to every card: This quarter (the default),
+This year, Last 30 days, All time, or a custom first and last day, by the
+calendar in the organization's timezone. A quarter is compared with last
+quarter, a year with last year, anything else with as many days before it.
+Bookmark or share the URL to keep a range (`?range=year`, `?range=30d`,
+`?range=all`, `?from=2026-09-01&to=2026-09-30`).
 
 **Freshness.** Every card says when it was computed ("as of 6:42 PM"). A
 report is recomputed when data changes (the website sync, an event edit, an
@@ -241,7 +242,7 @@ date-filtered view; that is the only way a link and its card can differ.
   `tags.reports(orgId)` and `tags.reports(orgId, id)`, `revalidate` =
   reportsRefreshSeconds, and positional primitive arguments
   `(id, orgId, tier, from, to, tz, reportsDataVersion, OrgSettings.updatedAt)`.
-  So owner and member ballot results never share an entry, "this term" and
+  So owner and member ballot results never share an entry, "this quarter" and
   the same custom dates share one, and a data or settings change always
   changes the key. The computation opens its own `withSystemOrgTx(orgId)` and
   never reads the request's transaction, cookies or headers.

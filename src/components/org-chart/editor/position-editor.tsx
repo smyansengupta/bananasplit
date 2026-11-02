@@ -340,7 +340,7 @@ export function PositionEditor({
       <BulletListEditor
         label="Responsibilities"
         items={position.responsibilities}
-        placeholder="Owns the semester calendar"
+        placeholder="Owns the calendar and the task board"
         onChange={(responsibilities) => onChange({ ...position, responsibilities })}
       />
       <BulletListEditor

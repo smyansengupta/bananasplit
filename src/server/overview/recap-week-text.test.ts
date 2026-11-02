@@ -160,7 +160,7 @@ describe("recapStats", () => {
     );
   });
 
-  it("puts spending against the term's budget", () => {
+  it("puts spending against the budget period", () => {
     const [tile] = recapStats(
       facts({
         money: {
@@ -171,7 +171,7 @@ describe("recapStats", () => {
         },
       }),
     );
-    expect(tile).toMatchObject({ value: "$412", sub: "$2,140 of $3,500 this term" });
+    expect(tile).toMatchObject({ value: "$412", sub: "$2,140 of $3,500 this budget period" });
   });
 });
 

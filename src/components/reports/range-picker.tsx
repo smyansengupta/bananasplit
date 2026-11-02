@@ -13,10 +13,11 @@ import { cn } from "@/lib/utils";
 
 import { useReportsFrame } from "./reports-frame";
 
-export type RangePresetId = "term" | "30d" | "all" | "custom";
+export type RangePresetId = "quarter" | "year" | "30d" | "all" | "custom";
 
 const PRESETS: { id: Exclude<RangePresetId, "custom">; label: string }[] = [
-  { id: "term", label: "This term" },
+  { id: "quarter", label: "This quarter" },
+  { id: "year", label: "This year" },
   { id: "30d", label: "30 days" },
   { id: "all", label: "All time" },
 ];
@@ -73,7 +74,7 @@ export function RangePicker({
         label="Date range"
         options={PRESETS.map((p) => ({ value: p.id, label: p.label }))}
         value={preset === "custom" ? "" : preset}
-        onSelect={(id) => go(id === "term" ? {} : { range: id })}
+        onSelect={(id) => go(id === "quarter" ? {} : { range: id })}
         className={cn(pending && "opacity-80")}
       />
       <Popover

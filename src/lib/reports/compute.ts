@@ -58,7 +58,7 @@ export interface NumberPayload {
   spark: number[];
   format: ValueFormat;
   unit: string;
-  /** "Spring 2026", "Sep 4 to Oct 3". */
+  /** "last quarter", "last year", "the span before". */
   previousLabel: string | null;
 }
 
@@ -298,23 +298,43 @@ export function shortDay(date: string): string {
 }
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+function lastDayOfMonth(year: number, month: number): string {
+  return fromUtc(Date.UTC(year, month, 0));
+}
+
 /**
- * The span just before `span`: the term before a term (Fall against
- * Spring), otherwise as many days just before it; null for All time.
+ * The span just before `span`: the calendar year, quarter or month before
+ * one ("last year", "last quarter", "last month"), otherwise as many days
+ * just before it ("the span before"); null for All time.
  */
 export function previousSpan(span: Span): Span | null {
   if (!span.from || !span.to) return null;
-  const year = Number(span.from.slice(0, 4));
-  if (span.from === `${year}-07-01` && span.to === `${year}-12-31`) {
-    return { from: `${year}-01-01`, to: `${year}-06-30`, label: `Spring ${year}` };
-  }
-  if (span.from === `${year}-01-01` && span.to === `${year}-06-30`) {
-    return { from: `${year - 1}-07-01`, to: `${year - 1}-12-31`, label: `Fall ${year - 1}` };
+  const [y, m, d] = span.from.split("-").map(Number);
+  if (d === 1) {
+    if (m === 1 && span.to === `${y}-12-31`) {
+      return { from: `${y - 1}-01-01`, to: `${y - 1}-12-31`, label: "last year" };
+    }
+    const quarterEnd = m + 2 <= 12 ? lastDayOfMonth(y, m + 2) : null;
+    if ((m - 1) % 3 === 0 && span.to === quarterEnd) {
+      const pm = m - 3 < 1 ? m + 9 : m - 3;
+      const py = m - 3 < 1 ? y - 1 : y;
+      const from = `${py}-${String(pm).padStart(2, "0")}-01`;
+      return { from, to: lastDayOfMonth(py, pm + 2), label: "last quarter" };
+    }
+    if (span.to === lastDayOfMonth(y, m)) {
+      const pm = m === 1 ? 12 : m - 1;
+      const py = m === 1 ? y - 1 : y;
+      return {
+        from: `${py}-${String(pm).padStart(2, "0")}-01`,
+        to: lastDayOfMonth(py, pm),
+        label: "last month",
+      };
+    }
   }
   const days = daysFrom(span.from, span.to) + 1;
   const to = plusDays(span.from, -1);
   const from = plusDays(span.from, -days);
-  return { from, to, label: `${shortDay(from)} to ${shortDay(to)}` };
+  return { from, to, label: "the span before" };
 }
 
 function inSpan(date: string | null, span: Span): boolean {
@@ -972,16 +992,17 @@ export interface ComputedWidget {
   payload: WidgetPayload | null;
 }
 
-/** "in Fall 2026", "in the last 30 days", "in all". */
+/** "this quarter", "in the last 30 days", "in all". */
 export function spanPhrase(span: Span): string {
   if (!span.from && !span.to) return "in all";
-  return /^last /i.test(span.label) ? `in the ${span.label.toLowerCase()}` : `in ${span.label}`;
+  if (/^last /i.test(span.label)) return `in the ${span.label.toLowerCase()}`;
+  if (/^this /i.test(span.label)) return span.label.toLowerCase();
+  return `from ${span.label}`;
 }
 
 function change(deltaPct: number | null, before: string | null): string {
   if (deltaPct === null) return "";
-  // A term names the one before it; any other span is "the span before".
-  const when = before && /^(Spring|Fall) /.test(before) ? before : "the span before";
+  const when = before ?? "the span before";
   if (Math.abs(deltaPct) < 1) return `, about the same as ${when}`;
   return `, ${deltaPct > 0 ? "up" : "down"} ${Math.abs(Math.round(deltaPct))}% on ${when}`;
 }

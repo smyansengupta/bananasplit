@@ -220,7 +220,7 @@ describe("create_task", () => {
       owner: itemId("person", club.id, bob.id),
     };
     await expect(createTaskTool(session, args)).rejects.toThrow(
-      /above the member's place in the club's org chart.*Nothing was saved.*confirmAboveLevel/,
+      /above the member's place in the organization's org chart.*Nothing was saved.*confirmAboveLevel/,
     );
     expect(await ownerDb.task.count({ where: { title: `Sign the forms ${tag}` } })).toBe(0);
     const confirmed = await createTaskTool(session, { ...args, confirmAboveLevel: true });

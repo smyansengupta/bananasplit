@@ -89,7 +89,7 @@ async function customDatabase(
   const database = await getDatabase(ctx.db, space.id, ctx.role, key);
   if (database.kind !== "CUSTOM") {
     throw new ConnectorInputError(
-      "Only databases the club made take rows from here. The built-in ones (sessions, attendance, sign-ups, ballots, people) change on their own pages in Bananasplit.",
+      "Only databases the organization made take rows from here. The built-in ones (sessions, attendance, sign-ups, ballots, people) change on their own pages in Bananasplit.",
     );
   }
   const fields = await loadFields(ctx.db, space.id, database.id);
@@ -247,7 +247,7 @@ export const registerDatabaseWrites: ToolRegistrar = (server, session) => {
     {
       title: "Add a database row",
       description:
-        "Adds a row to a database the club made, with any cells given by column key. Each value must fit its column, as in the app; built-in databases can't be changed here.",
+        "Adds a row to a database the organization made, with any cells given by column key. Each value must fit its column, as in the app; built-in databases can't be changed here.",
       inputSchema: addInput,
       outputSchema: rowOutput,
       annotations: ADDS,
@@ -259,7 +259,7 @@ export const registerDatabaseWrites: ToolRegistrar = (server, session) => {
     {
       title: "Update a database row",
       description:
-        "Sets cells of one row in a database the club made, by column key; cells left out stay as they are, and null clears one. Built-in databases can't be changed here.",
+        "Sets cells of one row in a database the organization made, by column key; cells left out stay as they are, and null clears one. Built-in databases can't be changed here.",
       inputSchema: updateInput,
       outputSchema: rowOutput,
       annotations: OVERWRITES,

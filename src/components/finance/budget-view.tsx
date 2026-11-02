@@ -674,7 +674,7 @@ function PeriodForm({
           value={draft.label}
           maxLength={100}
           onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          placeholder="e.g. 2026–27 or Fall 2026"
+          placeholder="e.g. 2026 or Q3 2026"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">

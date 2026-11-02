@@ -126,7 +126,13 @@ export const reportSendJob: JobHandler<{ reportId: string; sendKey: string }> = 
       const report = await getReport(ctx.db, orgId, reportId);
       const result = await runReport(v, report, {});
       if (!result.source) return;
-      await takeSnapshot(v, report, result.source.name, result.range.label, result.computed);
+      await takeSnapshot(
+        v,
+        report,
+        result.source.name,
+        result.range.span ?? result.range.label,
+        result.computed,
+      );
     });
   } catch (error) {
     if (error instanceof NotFoundError) {

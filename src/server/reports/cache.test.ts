@@ -36,12 +36,12 @@ const TZ = "America/New_York";
 const NOW = new Date("2026-09-23T16:00:00Z");
 
 function keyFor(overrides: Partial<ReportKey> = {}): ReportKey {
-  const term = resolveReportRange({}, TZ, NOW);
+  const quarter = resolveReportRange({}, TZ, NOW);
   return {
     orgId: "org_a",
     tier: "MEMBER",
-    from: term.from,
-    to: term.to,
+    from: quarter.from,
+    to: quarter.to,
     tz: TZ,
     dataVersion: 4,
     settingsStamp: "2026-09-20T00:00:00.000Z",
@@ -73,7 +73,7 @@ describe("report cache keys", () => {
       "org_a",
       "MEMBER",
       "2026-07-01",
-      "2026-12-31",
+      "2026-09-30",
       TZ,
       4,
       "2026-09-20T00:00:00.000Z",
@@ -91,10 +91,10 @@ describe("report cache keys", () => {
     expect(await keyOf("ballots", keyFor({ tier: "ADMIN" }))).not.toBe(ownerKey);
   });
 
-  it("share one key between the 'this term' preset and the same explicit dates", async () => {
-    const preset = resolveReportRange({ range: "term" }, TZ, NOW);
-    const custom = resolveReportRange({ from: "2026-07-01", to: "2026-12-31" }, TZ, NOW);
-    expect(preset.preset).toBe("term");
+  it("share one key between the 'this quarter' preset and the same explicit dates", async () => {
+    const preset = resolveReportRange({}, TZ, NOW);
+    const custom = resolveReportRange({ from: "2026-07-01", to: "2026-09-30" }, TZ, NOW);
+    expect(preset.preset).toBe("quarter");
     expect(custom.preset).toBe("custom");
     const a = await keyOf("retention", keyFor({ from: preset.from, to: preset.to }));
     const b = await keyOf("retention", keyFor({ from: custom.from, to: custom.to }));

@@ -5,16 +5,16 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 
 import { createReportAction } from "@/app/app/[orgSlug]/databases/reports/report-actions";
-import { ShapeIcon } from "@/components/boards/shape-picker";
 import { WidgetBoard } from "@/components/boards/widget-board";
 import { Check, ChevronDown, Globe, Lock } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { shapeName, type BoardWidget } from "@/lib/boards";
 import {
   WIDGETS,
   boardTypes,
+  fillRows,
+  naturalSize,
   newWidget,
   suggestedWidgets,
   widgetTitle,
@@ -31,49 +31,6 @@ import { cn } from "@/lib/utils";
 import { ReportIcon } from "./icons";
 import { JoinPanel, ScheduleFields } from "./report-options";
 import { WidgetSettings } from "./widget-settings";
-
-const STEPS = ["Pick a database", "Pick widgets", "Arrange and share"] as const;
-
-function Stepper({ step, onStep }: { step: number; onStep: (n: number) => void }) {
-  return (
-    <ol className="flex flex-wrap items-center gap-2" aria-label="Steps">
-      {STEPS.map((label, i) => {
-        const done = i < step;
-        const on = i === step;
-        return (
-          <li key={label} className="flex items-center gap-2">
-            {i > 0 && <span aria-hidden="true" className="bg-border h-0.5 w-6 sm:w-10" />}
-            <button
-              type="button"
-              disabled={!done}
-              onClick={() => onStep(i)}
-              aria-current={on ? "step" : undefined}
-              className={cn(
-                "focus-glow flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-sm font-semibold outline-none",
-                on ? "text-foreground" : "text-muted-foreground",
-                done && "hover:text-foreground",
-              )}
-            >
-              <span
-                className={cn(
-                  "grid size-7 place-items-center rounded-full text-[13px]",
-                  on
-                    ? "bg-foreground text-background"
-                    : done
-                      ? "bg-tint-success text-tint-success-foreground"
-                      : "bg-muted",
-                )}
-              >
-                {done ? <Check className="size-3.5" aria-hidden="true" /> : i + 1}
-              </span>
-              {label}
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 function SourceCard({
   source,
@@ -181,6 +138,9 @@ export function ReportWizard({
       setOpen(null);
     }
   }
+
+  // The widgets at their catalog sizes, in full rows with no gaps.
+  const arranged = useMemo(() => fillRows(picked.map(naturalSize)), [picked]);
 
   const available = useMemo(() => (source ? widgetsFor(source, isAdmin) : []), [source, isAdmin]);
   const suggested = useMemo(
@@ -313,20 +273,15 @@ export function ReportWizard({
       <p className="text-sm font-semibold">
         {picked.length} widget{picked.length === 1 ? "" : "s"}
       </p>
-      <div className="grid grid-cols-4 gap-1.5">
-        {picked.map((w) => (
+      <div className="grid auto-rows-[3rem] grid-cols-4 gap-1.5">
+        {arranged.map((w) => (
           <div
             key={w.id}
-            className="bg-card text-muted-foreground flex min-h-10 flex-col justify-between gap-1 rounded-[10px] p-2 text-[11px] leading-tight shadow-sm"
-            style={{ gridColumn: `span ${w.w}`, minHeight: `${(w.h ?? 1) * 2.75}rem` }}
+            title={`${widgetTitle(w, source)}, ${shapeName(w.w, w.h)}`}
+            className="bg-card text-foreground flex min-w-0 items-start rounded-[10px] p-2 text-[11.5px] leading-tight font-semibold shadow-sm"
+            style={{ gridColumn: `span ${w.w}`, gridRow: `span ${w.h ?? 1}` }}
           >
-            <span className="text-foreground line-clamp-2 font-semibold">
-              {widgetTitle(w, source)}
-            </span>
-            <span className="flex items-center gap-1">
-              <ShapeIcon w={w.w} h={w.h} />
-              {shapeName(w.w, w.h)}
-            </span>
+            <span className="line-clamp-2 break-words">{widgetTitle(w, source)}</span>
           </div>
         ))}
       </div>
@@ -335,7 +290,14 @@ export function ReportWizard({
 
   return (
     <div className="space-y-6">
-      <Stepper step={step} onStep={go} />
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        maxLength={80}
+        aria-label="Report name"
+        placeholder="Name your report"
+        className="page-title placeholder:text-muted-foreground/60 -mx-1 w-full rounded-[10px] bg-transparent px-1 outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+      />
 
       {step === 0 && (
         <section className="space-y-5" aria-labelledby="pick-db">
@@ -445,7 +407,14 @@ export function ReportWizard({
             {preview}
           </div>
           {footer(
-            <Button type="button" disabled={picked.length === 0} onClick={() => go(2)}>
+            <Button
+              type="button"
+              disabled={picked.length === 0}
+              onClick={() => {
+                setPicked(arranged);
+                go(2);
+              }}
+            >
               Next: arrange and share
             </Button>,
             () => go(0),
@@ -492,15 +461,6 @@ export function ReportWizard({
             }}
           />
           <div className="bg-card ring-foreground/6 rounded-card edge grid gap-5 p-6 ring-1 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm">
-              <span className="font-semibold">Name</span>
-              <Input
-                value={title}
-                maxLength={80}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={source.name}
-              />
-            </label>
             <div className="grid gap-1.5 text-sm">
               <span className="font-semibold" id="who-sees">
                 Who can see it

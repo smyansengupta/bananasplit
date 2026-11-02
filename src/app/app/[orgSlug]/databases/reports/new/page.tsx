@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 
-import { PageHeader } from "@/components/page-header";
 import { ReportWizard } from "@/components/reports/saved/report-wizard";
 import { can } from "@/lib/auth/permissions";
 import { planGate } from "@/server/billing/plan-gate";
@@ -11,7 +10,7 @@ import { reportTier } from "@/server/reports/tier";
 
 export const metadata = { title: "New report" };
 
-/** New report: the three-step walkthrough (?source= starts on its widgets, from Reports home). */
+/** New report: the walkthrough, titled with the name being typed (?source= starts on its widgets). */
 export default async function NewReportPage({
   params,
   searchParams,
@@ -30,7 +29,6 @@ export default async function NewReportPage({
   const initial = typeof sp.source === "string" ? sp.source : null;
   return (
     <div className="space-y-7.5">
-      <PageHeader title="New report" />
       <ReportWizard
         orgId={organization.id}
         orgSlug={orgSlug}

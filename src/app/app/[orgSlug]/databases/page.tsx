@@ -199,6 +199,16 @@ export default async function DatabasesPage({
               total: await db.transaction.count({
                 where: { organizationId: organization.id, direction: "OUT", voidedAt: null },
               }),
+              waiting: await db.transaction.aggregate({
+                where: {
+                  organizationId: organization.id,
+                  direction: "OUT",
+                  voidedAt: null,
+                  status: { in: ["SUBMITTED", "APPROVED"] },
+                },
+                _count: true,
+                _sum: { amountCents: true },
+              }),
               spentCents:
                 (
                   await db.transaction.aggregate({
@@ -209,13 +219,17 @@ export default async function DatabasesPage({
             }
           : null;
       const reports = showReports ? await listReports(db, organization.id) : null;
+      const forms = await db.form.findMany({
+        where: { organizationId: organization.id },
+        select: { databaseId: true, title: true },
+      });
       return {
         databases: list,
         counts,
         sync,
         dataStep,
         pinned: new Set(pins.map((p) => p.href)),
-        home: { weekly, latest, tasks, expenses, reports },
+        home: { weekly, latest, tasks, expenses, reports, forms },
       };
     },
   );
@@ -261,56 +275,27 @@ export default async function DatabasesPage({
   };
   const newReport = (key: string) =>
     showReports ? `/app/${orgSlug}/databases/reports/new?source=${encodeURIComponent(key)}` : null;
-  const reportable = [
-    ...custom.map((d) => `custom:${d.id}`),
-    ...(home.tasks ? ["tasks"] : []),
-    ...(home.expenses ? ["expenses"] : []),
-  ];
-  const weekRows = [
-    ...databases.map((d) => ({
-      name: d.name,
-      key: d.key,
-      ...(home.weekly[d.key] ?? { weeks: [], thisWeek: 0 }),
-    })),
-    ...(home.tasks ? [{ name: "Tasks", key: "tasks", ...home.tasks.weekly }] : []),
-    ...(home.expenses ? [{ name: "Expenses", key: "expenses", ...home.expenses.weekly }] : []),
-  ];
   const hrefOf = (key: string) =>
     key === "tasks"
       ? `/app/${orgSlug}/tasks`
       : key === "expenses"
         ? `/app/${orgSlug}/finance/transactions`
         : `/app/${orgSlug}/databases/${key}`;
-  // The line of numbers: how much there is, what moved this week, the
-  // reports, and what's late (which leads to Tasks).
-  const added = weekRows.reduce((a, b) => a + b.thisWeek, 0);
-  const busiest = [...weekRows].sort((a, b) => b.thisWeek - a.thisWeek)[0];
-  const missing = reportable.filter((key) => !reportFor(key)).length;
+  const money = (cents: number) =>
+    (cents / 100).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    });
+  // The line along the top: only what needs someone, each when it isn't zero.
+  const formDbs = new Map(home.forms.map((f) => [f.databaseId, f.title]));
+  const answers = custom
+    .filter((d) => formDbs.has(d.id))
+    .map((d) => ({ d, n: home.weekly[d.key]?.thisWeek ?? 0 }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n);
+  const waiting = home.expenses?.waiting;
   const stats: HomeStat[] = [
-    { key: "databases", icon: "databases", value: String(databases.length), label: "Databases" },
-    {
-      key: "growth",
-      icon: "growth",
-      value: `+${added.toLocaleString("en-US")}`,
-      label:
-        added > 0 && busiest
-          ? `Added this week, most to ${busiest.name}`
-          : "Nothing added this week",
-      href: added > 0 && busiest ? hrefOf(busiest.key) : undefined,
-    },
-    ...(home.reports
-      ? [
-          {
-            key: "reports",
-            icon: "reports" as const,
-            value: String(home.reports.length),
-            label: missing
-              ? `Reports. ${missing} database${missing === 1 ? " has" : "s have"} none`
-              : "Reports",
-            href: `/app/${orgSlug}/databases/reports`,
-          },
-        ]
-      : []),
     ...(home.tasks && home.tasks.overdue > 0
       ? [
           {
@@ -323,13 +308,32 @@ export default async function DatabasesPage({
           },
         ]
       : []),
+    ...(waiting && waiting._count > 0
+      ? [
+          {
+            key: "waiting",
+            icon: "money" as const,
+            value: money(waiting._sum.amountCents ?? 0),
+            label: `${waiting._count} expense${waiting._count === 1 ? "" : "s"} waiting to be paid back`,
+            href: `/app/${orgSlug}/finance/transactions`,
+          },
+        ]
+      : []),
+    ...(answers.length > 0
+      ? [
+          {
+            key: "answers",
+            icon: "answers" as const,
+            value: `+${answers.reduce((a, b) => a + b.n, 0)}`,
+            label:
+              answers.length === 1
+                ? `New answers to ${formDbs.get(answers[0].d.id)} this week`
+                : `New form answers this week, most to ${formDbs.get(answers[0].d.id)}`,
+            href: `/app/${orgSlug}/databases/${answers[0].d.key}`,
+          },
+        ]
+      : []),
   ];
-  const money = (cents: number) =>
-    (cents / 100).toLocaleString("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    });
   const builtInRows = [
     ...(home.expenses
       ? [

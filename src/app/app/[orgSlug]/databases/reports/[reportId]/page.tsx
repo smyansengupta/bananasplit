@@ -88,7 +88,7 @@ export default async function SavedReportPage({
   const header = (
     <PageHeader
       title={report.title}
-      description={`${source?.name ?? "A database you can't see"}, ${range.label}. Times in ${tz}`}
+      description={source?.name ?? "A database you can't see"}
       actions={
         <ReportHeaderControls
           orgId={organization.id}
@@ -293,7 +293,7 @@ export default async function SavedReportPage({
         {snapshots.length > 0 && (
           <section aria-labelledby="copies" className="space-y-3">
             <h2 id="copies" className="heading text-[17px]">
-              History
+              Copies you kept
             </h2>
             <ul className="flex flex-wrap gap-2">
               {snapshots.map((s) => (

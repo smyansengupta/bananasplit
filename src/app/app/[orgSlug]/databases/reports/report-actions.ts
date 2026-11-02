@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth/session";
 import type { BoardWidget } from "@/lib/boards";
 import { readInsights as builtInInsights } from "@/lib/reports/compute";
 import {
+  fillRows,
   newWidget,
   suggestedWidgets,
   type ReportWidget,
@@ -96,7 +97,7 @@ export async function createSuggestedReport(
         title: source.name,
         source: source.key,
         access: "ORGANIZATION",
-        widgets,
+        widgets: fillRows(widgets),
       });
     })(organizationId);
     return { ok: true, id };
@@ -196,7 +197,13 @@ export async function takeSnapshotAction(
       const report = await getReport(ctx.db, organizationId, reportId);
       const run = await runReport(v, report, range);
       if (!run.source) throw new ReportInputError("You can't see this report's database any more.");
-      return takeSnapshot(v, report, run.source.name, run.range.label, run.computed);
+      return takeSnapshot(
+        v,
+        report,
+        run.source.name,
+        run.range.span ?? run.range.label,
+        run.computed,
+      );
     })(organizationId);
     refresh();
     return { ok: true, id };

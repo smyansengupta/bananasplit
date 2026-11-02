@@ -77,7 +77,7 @@ export const STARTED_STEPS: readonly StartedStep[] = [
   {
     key: "budget",
     label: "Set up your budgets",
-    hint: "What you can spend this term.",
+    hint: "What you can spend this budget period.",
     path: "/finance/budget",
   },
   {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CREATED,
+  fillRows,
   newWidget,
   readWidgets,
   suggestedWidgets,
@@ -103,7 +104,7 @@ const source: LoadedSource = {
 };
 
 const ctx: ComputeContext = {
-  span: { from: "2026-07-01", to: "2026-12-31", label: "Fall 2026" },
+  span: { from: "2026-07-01", to: "2026-12-31", label: "Jul 1 – Dec 31, 2026" },
   tz: "America/New_York",
   today: "2026-11-02",
 };
@@ -188,20 +189,31 @@ describe("the widget catalog", () => {
 });
 
 describe("widget numbers", () => {
-  it("compares a term with the term before, and other spans with as many days before", () => {
-    expect(previousSpan(ctx.span)).toEqual({
-      from: "2026-01-01",
-      to: "2026-06-30",
-      label: "Spring 2026",
+  it("compares a quarter, year or month with the one before, and other spans with as many days", () => {
+    expect(previousSpan({ from: "2026-10-01", to: "2026-12-31", label: "This quarter" })).toEqual({
+      from: "2026-07-01",
+      to: "2026-09-30",
+      label: "last quarter",
     });
-    expect(
-      previousSpan({ from: "2026-01-01", to: "2026-06-30", label: "Spring 2026" })?.label,
-    ).toBe("Fall 2025");
+    expect(previousSpan({ from: "2026-01-01", to: "2026-03-31", label: "This quarter" })).toEqual({
+      from: "2025-10-01",
+      to: "2025-12-31",
+      label: "last quarter",
+    });
+    expect(previousSpan({ from: "2026-01-01", to: "2026-12-31", label: "This year" })?.label).toBe(
+      "last year",
+    );
+    expect(previousSpan({ from: "2026-03-01", to: "2026-03-31", label: "Mar" })).toMatchObject({
+      from: "2026-02-01",
+      to: "2026-02-28",
+      label: "last month",
+    });
     expect(
       previousSpan({ from: "2026-10-04", to: "2026-11-02", label: "Last 30 days" }),
     ).toMatchObject({
       from: "2026-09-04",
       to: "2026-10-03",
+      label: "the span before",
     });
     expect(previousSpan({ from: null, to: null, label: "All time" })).toBeNull();
   });
@@ -290,7 +302,7 @@ describe("Insights", () => {
     const lines = readInsights(computed, ctx.span);
     expect(lines[0]).toMatchObject({ tone: "warn", widgetId: "overdue" });
     expect(lines[0].text).toContain("Figma, 6 days late (Lucas Silva)");
-    expect(lines[1].text).toBe("Total amount: $4,750 in Fall 2026.");
+    expect(lines[1].text).toBe("Total amount: $4,750 from Jul 1 – Dec 31, 2026.");
     const insights = computed.find((c) => c.widget.type === "insights");
     expect(insights?.payload).toMatchObject({ type: "insights", data: { byClaude: false } });
   });
@@ -302,5 +314,24 @@ describe("Insights", () => {
     };
     const computed = computeReport([widget("insights")], source, ctx, saved);
     expect(computed[0].payload).toMatchObject({ data: { byClaude: true, lines: saved.lines } });
+  });
+});
+
+describe("filling rows", () => {
+  it("widens each row's last widget to the edge and evens its heights", () => {
+    const rows = fillRows([
+      { id: "a", w: 1, h: 1 },
+      { id: "b", w: 2, h: 1 },
+      { id: "c", w: 2, h: 2 },
+      { id: "d", w: 4, h: null },
+      { id: "e", w: 1, h: 2 },
+    ]);
+    expect(rows.map((r) => [r.id, r.w, r.h])).toEqual([
+      ["a", 1, 1],
+      ["b", 3, 1],
+      ["c", 4, 2],
+      ["d", 4, null],
+      ["e", 4, 2],
+    ]);
   });
 });

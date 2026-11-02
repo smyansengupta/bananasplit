@@ -295,7 +295,7 @@ export function QuestionPollForm({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             maxLength={QUESTION_MAX}
-            placeholder="Where should we go for the end-of-term social?"
+            placeholder="Where should we go for the end-of-year party?"
             autoFocus
             required
             onKeyDown={(e) => {

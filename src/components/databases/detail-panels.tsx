@@ -121,7 +121,7 @@ export function StampStrip({
   timezone: string;
 }) {
   if (strip.length === 0)
-    return <p className="text-muted-foreground text-sm">No sessions this term yet.</p>;
+    return <p className="text-muted-foreground text-sm">No sessions yet.</p>;
   return (
     <ol className="flex flex-wrap gap-2" aria-label="Stamp card">
       {strip.map((s, i) => (

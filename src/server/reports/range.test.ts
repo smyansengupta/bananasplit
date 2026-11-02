@@ -15,50 +15,69 @@ import {
 const NY = "America/New_York";
 
 describe("resolveReportRange", () => {
-  it("defaults to the current term by the July-1 rule in the org timezone", () => {
+  it("defaults to this calendar quarter in the org timezone", () => {
     const r = resolveReportRange({}, NY, new Date("2026-09-23T16:00:00Z"));
     expect(r).toMatchObject({
-      preset: "term",
+      preset: "quarter",
       from: "2026-07-01",
-      to: "2026-12-31",
-      term: "fall-2026",
-      label: "Fall 2026",
-      span: "Jul 1 – Dec 31, 2026",
+      to: "2026-09-30",
+      label: "This quarter",
+      span: "Jul 1 – Sep 30, 2026",
     });
-    const spring = resolveReportRange({ range: "term" }, NY, new Date("2027-02-01T12:00:00Z"));
-    expect(spring).toMatchObject({ from: "2027-01-01", to: "2027-06-30", term: "spring-2027" });
+    const winter = resolveReportRange({}, NY, new Date("2027-02-01T12:00:00Z"));
+    expect(winter).toMatchObject({ from: "2027-01-01", to: "2027-03-31" });
   });
 
   it("uses the org's calendar date, not UTC's", () => {
-    // 2026-07-01 02:00 UTC is still June 30 in New York: spring.
-    const r = resolveReportRange({}, NY, new Date("2026-07-01T02:00:00Z"));
-    expect(r.term).toBe("spring-2026");
-    expect(resolveReportRange({}, "UTC", new Date("2026-07-01T02:00:00Z")).term).toBe("fall-2026");
+    // 2026-07-01 02:00 UTC is still June 30 in New York: the second quarter.
+    expect(resolveReportRange({}, NY, new Date("2026-07-01T02:00:00Z")).from).toBe("2026-04-01");
+    expect(resolveReportRange({}, "UTC", new Date("2026-07-01T02:00:00Z")).from).toBe("2026-07-01");
+  });
+
+  it("resolves this year", () => {
+    expect(
+      resolveReportRange({ range: "year" }, NY, new Date("2026-09-23T16:00:00Z")),
+    ).toMatchObject({
+      preset: "year",
+      from: "2026-01-01",
+      to: "2026-12-31",
+      label: "This year",
+    });
   });
 
   it("resolves the last 30 days, today included", () => {
     const r = resolveReportRange({ range: "30d" }, NY, new Date("2026-09-23T16:00:00Z"));
-    expect(r).toMatchObject({ preset: "30d", from: "2026-08-25", to: "2026-09-23", term: null, label: "Last 30 days" });
+    expect(r).toMatchObject({
+      preset: "30d",
+      from: "2026-08-25",
+      to: "2026-09-23",
+      label: "Last 30 days",
+    });
   });
 
   it("resolves all time to no bounds", () => {
-    expect(resolveReportRange({ range: "all" }, NY)).toMatchObject({ preset: "all", from: null, to: null, span: null });
+    expect(resolveReportRange({ range: "all" }, NY)).toMatchObject({
+      preset: "all",
+      from: null,
+      to: null,
+      span: null,
+    });
   });
 
-  it("accepts a custom range and names it after a term when it is one", () => {
+  it("accepts a custom range and names it by its dates, never a school term", () => {
     expect(resolveReportRange({ from: "2026-09-01", to: "2026-09-30" }, NY)).toMatchObject({
       preset: "custom",
-      term: null,
       label: "Sep 1 – Sep 30, 2026",
     });
-    expect(resolveReportRange({ from: "2026-07-01", to: "2026-12-31", range: "all" }, NY)).toMatchObject({
+    expect(
+      resolveReportRange({ from: "2026-07-01", to: "2026-12-31", range: "all" }, NY),
+    ).toMatchObject({
       preset: "custom",
-      term: "fall-2026",
-      label: "Fall 2026",
+      label: "Jul 1 – Dec 31, 2026",
     });
   });
 
-  it("falls back to the term for malformed, reversed or huge custom ranges", () => {
+  it("falls back to this quarter for malformed, reversed or huge custom ranges", () => {
     const now = new Date("2026-09-23T16:00:00Z");
     for (const params of [
       { from: "2026-02-30", to: "2026-03-01" },
@@ -67,13 +86,19 @@ describe("resolveReportRange", () => {
       { from: "1900-01-01", to: "2999-12-31" },
       { from: ["2026-09-01", "x"], to: "nope" },
     ]) {
-      expect(resolveReportRange(params, NY, now).preset).toBe("term");
+      expect(resolveReportRange(params, NY, now).preset).toBe("quarter");
     }
   });
 
   it("round-trips through rangeQuery", () => {
     const now = new Date("2026-09-23T16:00:00Z");
-    for (const params of [{}, { range: "30d" }, { range: "all" }, { from: "2026-09-01", to: "2026-09-15" }]) {
+    for (const params of [
+      {},
+      { range: "year" },
+      { range: "30d" },
+      { range: "all" },
+      { from: "2026-09-01", to: "2026-09-15" },
+    ]) {
       const r = resolveReportRange(params, NY, now);
       expect(resolveReportRange(rangeQuery(r), NY, now)).toEqual(r);
     }

@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/permissions";
 import type { BoardWidget } from "@/lib/boards";
 import {
   WIDGETS,
+  fillRows,
   newWidget,
   readWidgets,
   reportTitleSchema,
@@ -316,13 +317,16 @@ export async function saveReportLayout(
     )) {
       taken.push(newWidget(type, source, taken));
     }
-    next = taken;
+    next = fillRows(taken);
   } else {
     next = layout.map((b) => {
       const was = byId.get(b.id);
       if (was && was.type === b.type) return { ...was, w: b.w, h: b.h };
       return { ...newWidget(b.type as WidgetType, source, []), id: b.id, w: b.w, h: b.h };
     });
+    // A widget added or taken off: the rows close up, so no gap is left.
+    const before = new Set(report.widgets.map((w) => w.id));
+    if (next.length !== before.size || next.some((w) => !before.has(w.id))) next = fillRows(next);
   }
   const parsed = reportWidgetsSchema.safeParse(cleanWidgets(next, source, v.role));
   if (!parsed.success) throw new ReportInputError("That layout couldn't be saved.");

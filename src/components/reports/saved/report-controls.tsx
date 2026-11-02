@@ -193,84 +193,91 @@ export function ReportHeaderControls({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={pending}
-        onClick={() =>
-          run(() => takeSnapshotAction(orgId, reportId, range), "Kept in History")
-        }
-        title="Keep this report as it reads now"
-      >
-        <Camera aria-hidden="true" />
-        Keep a copy
-      </Button>
-      {canEdit && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" size="icon" variant="outline" aria-label="More">
-              <Ellipsis className="size-4" aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onSelect={() => {
-                setDraft(schedule ?? DEFAULT_SCHEDULE);
-                setScheduling(true);
-              }}
-            >
-              <CalendarClock aria-hidden="true" />
-              {schedule ? "Change the schedule" : "Send on a schedule"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setRenaming(true)}>
-              <Pencil aria-hidden="true" />
-              Rename
-            </DropdownMenuItem>
-            {isOwner && (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" size="icon" variant="outline" aria-label="More">
+            <Ellipsis className="size-4" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            disabled={pending}
+            onSelect={() =>
+              run(
+                () => takeSnapshotAction(orgId, reportId, range),
+                "Kept a copy. It's at the bottom of this report.",
+              )
+            }
+          >
+            <Camera aria-hidden="true" />
+            Keep a copy of today
+          </DropdownMenuItem>
+          {canEdit && (
+            <>
               <DropdownMenuItem
+                onSelect={() => {
+                  setDraft(schedule ?? DEFAULT_SCHEDULE);
+                  setScheduling(true);
+                }}
+              >
+                <CalendarClock aria-hidden="true" />
+                {schedule ? "Change the schedule" : "Send on a schedule"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setRenaming(true)}>
+                <Pencil aria-hidden="true" />
+                Rename
+              </DropdownMenuItem>
+              {isOwner && (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    run(
+                      () =>
+                        updateReportAction(orgId, reportId, {
+                          access: access === "PRIVATE" ? "ORGANIZATION" : "PRIVATE",
+                        }),
+                      access === "PRIVATE"
+                        ? "Everyone in the organization can open it"
+                        : "Only you can open it now",
+                    )
+                  }
+                >
+                  {access === "PRIVATE" ? (
+                    <Globe aria-hidden="true" />
+                  ) : (
+                    <Lock aria-hidden="true" />
+                  )}
+                  {access === "PRIVATE" ? "Share with everyone" : "Make it only yours"}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
                 onSelect={() =>
-                  run(
-                    () =>
-                      updateReportAction(orgId, reportId, {
-                        access: access === "PRIVATE" ? "ORGANIZATION" : "PRIVATE",
-                      }),
-                    access === "PRIVATE"
-                      ? "Everyone in the organization can open it"
-                      : "Only you can open it now",
-                  )
+                  start(async () => {
+                    const result = await archiveReportAction(orgId, reportId);
+                    if (!result.ok) {
+                      toast({ title: result.error });
+                      return;
+                    }
+                    toast({ title: `Archived ${title}` });
+                    router.push(`/app/${orgSlug}/databases/reports`);
+                  })
                 }
               >
-                {access === "PRIVATE" ? <Globe aria-hidden="true" /> : <Lock aria-hidden="true" />}
-                {access === "PRIVATE" ? "Share with everyone" : "Make it only yours"}
+                <Archive aria-hidden="true" />
+                Archive
               </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() =>
-                start(async () => {
-                  const result = await archiveReportAction(orgId, reportId);
-                  if (!result.ok) {
-                    toast({ title: result.error });
-                    return;
-                  }
-                  toast({ title: `Archived ${title}` });
-                  router.push(`/app/${orgSlug}/databases/reports`);
-                })
-              }
-            >
-              <Archive aria-hidden="true" />
-              Archive
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Dialog open={scheduling} onOpenChange={setScheduling}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Send on a schedule</DialogTitle>
             <DialogDescription>
-              Each person gets the report as they see it, and a copy is kept in History.
+              Each person gets the report as they see it, and a copy is kept at the bottom of the
+              report.
             </DialogDescription>
           </DialogHeader>
           <ScheduleFields schedule={draft} onChange={setDraft} shared={access === "ORGANIZATION"} />

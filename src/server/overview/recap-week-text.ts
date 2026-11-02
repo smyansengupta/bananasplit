@@ -383,7 +383,7 @@ export function recapStats(f: RecapFacts): RecapStat[] {
       asideTone: "plain",
       sub:
         m.period && m.period.allocatedCents > 0
-          ? `${dollars(m.period.spentCents)} of ${dollars(m.period.allocatedCents)} this term`
+          ? `${dollars(m.period.spentCents)} of ${dollars(m.period.allocatedCents)} this budget period`
           : `${dollars(m.beforeCents)} the week before`,
       href: `${f.base}/finance`,
     });

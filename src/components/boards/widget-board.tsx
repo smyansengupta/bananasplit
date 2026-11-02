@@ -333,6 +333,22 @@ export function WidgetBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, dragId]);
 
+  // The server can close up the rows after a widget is added or removed (a
+  // saved report): take its sizes when it still has the same widgets.
+  const incoming = JSON.stringify(initialLayout);
+  useEffect(() => {
+    if (dragId) return;
+    const next = JSON.parse(incoming) as BoardWidget[];
+    setLayout((now) => {
+      const same = now.length === next.length && now.every((w) => next.some((n) => n.id === w.id));
+      if (!same || JSON.stringify(now) === incoming) return now;
+      saved.current = incoming;
+      return now.map((w) => next.find((n) => n.id === w.id) ?? w);
+    });
+    // Only a new layout from the server matters here, not each drag.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming]);
+
   // Esc ends Customize, unless a menu or dialog is open to close first.
   useEffect(() => {
     if (!editing) return;

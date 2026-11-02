@@ -179,7 +179,7 @@ export function ScheduleFields({
           <span className="text-muted-foreground text-xs">
             {schedule
               ? `${describeSchedule(schedule)}, keeping a copy each time.`
-              : "An email of the report, as each person sees it, and a copy in History."}
+              : "An email of the report, as each person sees it, and a copy kept at the bottom of the report."}
           </span>
         </span>
       </label>

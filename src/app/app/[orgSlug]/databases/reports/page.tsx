@@ -1,4 +1,4 @@
-import { ChartNoAxesColumn, History, Plus, Sparkles } from "@/components/icons";
+import { ChartNoAxesColumn, Plus, Sparkles } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -126,8 +126,8 @@ function Trend({ values }: { values: number[] }) {
 
 /**
  * Reports home. Your reports are live: open one and it reads the data as it
- * is now, over the dates the pills pick. History (the button) is the copies
- * kept of them, each as it read on one day. Above the reports, what they
+ * is now, over the dates the pills pick (a copy kept of one lives at the
+ * bottom of that report). Above the reports, what they
  * say together, the slipping ones first, with a box to ask Claude about
  * them; below, a one-click report for each database that has rows and none.
  */
@@ -233,12 +233,6 @@ export default async function ReportsPage({
           title="Reports"
           actions={
             <>
-              <Button asChild variant="outline">
-                <Link href={`${base}/past`}>
-                  <History aria-hidden="true" />
-                  History
-                </Link>
-              </Button>
               <Button asChild variant="create">
                 <Link href={`${base}/new`}>
                   <Plus aria-hidden="true" />
@@ -270,7 +264,7 @@ export default async function ReportsPage({
               <div className="flex flex-col gap-3">
                 <span className="text-muted-foreground flex items-center gap-2 text-[13px] font-semibold">
                   <Sparkles className="size-4" aria-hidden="true" />
-                  <span id="h-insights">Insights, {range.label}</span>
+                  <span id="h-insights">Insights</span>
                 </span>
                 <p className="heading text-[22px] leading-snug tracking-tight">{lead}</p>
                 {aiReady && (
@@ -309,9 +303,6 @@ export default async function ReportsPage({
                 <h2 id="your-reports" className="heading text-[17px]">
                   Your reports
                 </h2>
-                <span className="text-muted-foreground text-[13.5px]">
-                  Live numbers, {range.label}
-                </span>
               </div>
               <ul className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
                 {cards.map(({ report: r, run, line, head }) => {
