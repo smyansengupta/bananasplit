@@ -85,3 +85,32 @@ export function scheduleTag(s: ReportSchedule): string {
 export function isSendDay(s: ReportSchedule, dateKey: string, weekday: number): boolean {
   return s.every === "week" ? weekday === s.day : Number(dateKey.slice(8, 10)) === s.day;
 }
+
+function dayIn(tz: string, now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+function shift(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * What a send covers: a weekly report the seven days up to the send, a
+ * monthly one the calendar month before it, in the organization's timezone.
+ */
+export function sendRange(
+  schedule: ReportSchedule,
+  tz: string,
+  now: Date = new Date(),
+): { from: string; to: string } {
+  const today = dayIn(tz, now);
+  if (schedule.every === "week") return { from: shift(today, -7), to: shift(today, -1) };
+  const lastMonthEnd = shift(`${today.slice(0, 7)}-01`, -1);
+  return { from: `${lastMonthEnd.slice(0, 7)}-01`, to: lastMonthEnd };
+}

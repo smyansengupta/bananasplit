@@ -246,6 +246,10 @@ async function checkJoin(v: SourceViewer, key: string, raw: unknown): Promise<Re
   return join;
 }
 
+/** Reports at most, per person and per organization (archived ones don't count). */
+const MAX_REPORTS_PER_PERSON = 50;
+const MAX_REPORTS_PER_ORG = 300;
+
 /** Scheduled reports at most, per organization and per person. */
 const MAX_SCHEDULED_PER_ORG = 20;
 const MAX_SCHEDULED_PER_PERSON = 5;
@@ -320,6 +324,20 @@ export async function createReport(v: SourceViewer, input: CreateReportInput): P
   if (schedule) await checkScheduleRoom(v, null);
   const widgets = cleanWidgets(parsed.data, source, v.role);
   if (widgets.length === 0) throw new ReportInputError("Pick at least one widget.");
+  const live = await v.db.report.findMany({
+    where: { organizationId: v.organizationId, archivedAt: null },
+    select: { createdById: true },
+  });
+  if (live.filter((r) => r.createdById === v.userId).length >= MAX_REPORTS_PER_PERSON) {
+    throw new ReportInputError(
+      `You have ${MAX_REPORTS_PER_PERSON} reports. Archive one to make another.`,
+    );
+  }
+  if (live.length >= MAX_REPORTS_PER_ORG) {
+    throw new ReportInputError(
+      `Your organization has ${MAX_REPORTS_PER_ORG} reports. Archive one to make another.`,
+    );
+  }
   const report = await v.db.report.create({
     data: {
       organizationId: v.organizationId,

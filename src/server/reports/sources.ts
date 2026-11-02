@@ -100,6 +100,20 @@ function expenseFields(categories: Choice[]): ReportField[] {
   ];
 }
 
+/**
+ * A category's choice id from its name: every budget period has its own copy
+ * of a category, so they're grouped by name. A hash, so "Food & Drink" and
+ * "Food + Drink", or two names in another script, never share one.
+ */
+function categoryId(name: string): string {
+  let h = 0x811c9dc5;
+  for (const ch of name) {
+    h ^= ch.codePointAt(0)!;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `c${h.toString(36)}`;
+}
+
 function localDate(d: Date | null, tz: string): string | undefined {
   if (!d) return undefined;
   return new Intl.DateTimeFormat("en-CA", {
@@ -122,7 +136,7 @@ async function categoryChoices(v: SourceViewer): Promise<Choice[]> {
     const key = r.name.trim().toLowerCase();
     if (!byName.has(key)) {
       byName.set(key, {
-        id: key.slice(0, 32).replace(/[^a-z0-9_-]/g, "-") || "category",
+        id: categoryId(key),
         label: r.name,
         color: CHOICE_COLORS[(byName.size + 6) % CHOICE_COLORS.length],
       });
@@ -340,14 +354,7 @@ export async function loadSource(
             where: { organizationId },
             select: { id: true, name: true },
           })
-        ).map((c) => [
-          c.id,
-          c.name
-            .trim()
-            .toLowerCase()
-            .slice(0, 32)
-            .replace(/[^a-z0-9_-]/g, "-") || "category",
-        ]),
+        ).map((c) => [c.id, categoryId(c.name.trim().toLowerCase())]),
       );
       const rows = await db.transaction.findMany({
         where: { organizationId, direction: "OUT", voidedAt: null },

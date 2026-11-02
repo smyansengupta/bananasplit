@@ -227,6 +227,11 @@ export function WidgetBody({
                 {d.previousLabel ?? "the period before"} (dashed)
               </span>
             )}
+            {d.clipped && (
+              <span className="text-muted-foreground text-xs">
+                The newest {d.points.length} {d.bucket}s
+              </span>
+            )}
           </div>
           <Columns points={d.points} format={d.format} label={`By ${d.bucket}`} />
         </div>
@@ -237,7 +242,10 @@ export function WidgetBody({
       if (d.rows.length === 0) return <Empty>Nothing in these dates.</Empty>;
       return (
         <div className="flex flex-col gap-3">
-          <div className="flex h-3 overflow-hidden rounded-full" aria-hidden="true">
+          <div
+            className={cn("flex h-3 overflow-hidden rounded-full", d.multi && "hidden")}
+            aria-hidden="true"
+          >
             {d.rows.map((r, i) => (
               <span
                 key={r.id}
@@ -736,11 +744,11 @@ export function WidgetBody({
     }
     case "reach": {
       const d = payload.data;
-      if (d.rows.length === 0) return <Empty>No signups with a class year yet.</Empty>;
+      if (d.rows.length === 0) return <Empty>No signups with a year on them yet.</Empty>;
       return (
         <div className="flex flex-col gap-3">
           <BarList
-            label="Who came, by class year"
+            label="Who came, by the year on their signup"
             items={d.rows.map((r) => ({
               key: r.label,
               label: r.label,

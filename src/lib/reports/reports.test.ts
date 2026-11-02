@@ -339,3 +339,58 @@ describe("filling rows", () => {
     ]);
   });
 });
+
+describe("adversarial cases", () => {
+  it("gives a multi-select's choices shares of the rows, not of each other", () => {
+    const tags: ReportField = {
+      id: "tags",
+      name: "Tags",
+      type: "MULTI_SELECT",
+      choices: [
+        { id: "a", label: "A", color: "blue" },
+        { id: "b", label: "B", color: "green" },
+      ],
+    };
+    const multi: LoadedSource = {
+      ...source,
+      fields: [tags],
+      records: Array.from({ length: 10 }, (_, i) =>
+        row(`m${i}`, { tags: ["a", "b"] }, "2026-08-01"),
+      ),
+    };
+    const r = computeWidget(widget("breakdown", { group: "tags" }), multi, ctx);
+    if (r?.type !== "breakdown") throw new Error("not a breakdown");
+    expect(r.data.total).toBe(10);
+    expect(r.data.rows.map((x) => x.share)).toEqual([100, 100]);
+  });
+
+  it("drops the comparison when the rows read don't reach the period before", () => {
+    const cut: LoadedSource = { ...source, truncated: true, records: source.records.slice(1) };
+    const r = computeWidget(
+      widget("number", { field: null, agg: "count", date: CREATED }),
+      cut,
+      ctx,
+    );
+    expect(r?.type === "number" && r.data.previous).toBeNull();
+  });
+
+  it("draws at most 60 points, and its total is theirs", () => {
+    const many: LoadedSource = {
+      ...source,
+      records: Array.from({ length: 150 }, (_, i) =>
+        row(`w${i}`, {}, plusDaysForTest("2023-01-02", i * 7)),
+      ),
+    };
+    const all = { ...ctx, span: { from: null, to: null, label: "All time" } };
+    const r = computeWidget(widget("over-time", { date: CREATED, bucket: "week" }), many, all);
+    if (r?.type !== "over-time") throw new Error("not over time");
+    expect(r.data.points.length).toBe(60);
+    expect(r.data.clipped).toBe(true);
+    expect(r.data.total).toBe(r.data.points.reduce((a, p) => a + p.value, 0));
+  });
+});
+
+function plusDaysForTest(date: string, n: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}

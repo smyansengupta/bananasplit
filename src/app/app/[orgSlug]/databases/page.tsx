@@ -39,6 +39,7 @@ import {
   weeklyTasks,
   type WeeklyRows,
 } from "@/server/databases/home";
+import { todayIn } from "@/server/reports/range";
 import { listReports } from "@/server/reports/saved";
 
 import { StepPanel } from "../setup/step-panel";
@@ -193,7 +194,10 @@ export default async function DatabasesPage({
                 deletedAt: null,
                 type: { not: "EPIC" },
                 status: { not: "COMPLETED" },
-                dueDate: { lt: new Date() },
+                // Due dates are stored as UTC midnight of the day: before today's.
+                dueDate: {
+                  lt: new Date(`${todayIn(organization.timezone || "UTC")}T00:00:00.000Z`),
+                },
               },
             }),
             total: await db.task.count({

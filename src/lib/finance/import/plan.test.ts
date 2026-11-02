@@ -52,12 +52,12 @@ describe("planPeriods", () => {
     expect(before && "draft" in before && before.draft).toMatchObject({
       startsOn: "2025-01-01",
       endsOn: "2025-09-30",
-      label: "2025",
+      label: "Jan–Sep 2025",
     });
     expect(after && "draft" in after && after.draft).toMatchObject({
       startsOn: "2025-11-01",
       endsOn: "2025-12-31",
-      label: "2025 (2)",
+      label: "Nov–Dec 2025",
     });
   });
 });

@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-import { BOARD_COLUMNS, MAX_ROWS, MAX_WIDGETS, type WidgetMeta } from "@/lib/boards";
+import { BOARD_COLUMNS, MAX_ROWS, MAX_WIDGETS, fillRows, type WidgetMeta } from "@/lib/boards";
+
+export { fillRows };
 import type { Choice, FieldType } from "@/lib/databases/fields";
 
 /**
@@ -187,8 +189,13 @@ const isChoice = (f: ReportField) => f.type === "SELECT";
 const STATUS = /status|stage|state|step|phase/i;
 const DUE = /due|deadline|return|expires|ends?\b|by\b|follow/i;
 
+/**
+ * The numbers a widget can add up: never a joined database's (one joined
+ * row's amount repeats on every row that matches it, so a sum would count
+ * it again and again).
+ */
 export function numberFields(s: Pick<SourceSummary, "fields">): ReportField[] {
-  return s.fields.filter(isNumber);
+  return s.fields.filter((f) => isNumber(f) && !f.id.startsWith("j."));
 }
 export function choiceFields(s: Pick<SourceSummary, "fields">): ReportField[] {
   return s.fields.filter(isChoice);
@@ -462,7 +469,7 @@ export const WIDGETS: Record<WidgetType, WidgetDef> = {
   },
   reach: {
     title: "Who you reach",
-    description: "Who comes by class year, against who signed up.",
+    description: "Who comes, by the year on their signup, against who signed up.",
     icon: "Users",
     w: 2,
     h: null,
@@ -614,38 +621,6 @@ export function widgetUses(
 
 export const REPORT_TITLE_MAX = 80;
 export const reportTitleSchema = z.string().trim().min(1, "Name the report.").max(REPORT_TITLE_MAX);
-
-/**
- * Widgets laid out in full rows with no gaps: each row takes widgets in
- * order until the next won't fit, its last widget widens to the edge, and
- * every widget in the row takes the row's height (fit when any of them
- * fits its content), so a report never has a hole in it. New reports, the
- * walkthrough's preview and adding or removing a widget lay out with it;
- * a person's own resizing afterwards is left as they made it.
- */
-export function fillRows<T extends { w: number; h: number | null }>(widgets: readonly T[]): T[] {
-  const out: T[] = [];
-  let row: T[] = [];
-  let used = 0;
-  const flush = () => {
-    if (row.length === 0) return;
-    const last = row.length - 1;
-    row[last] = { ...row[last], w: row[last].w + (BOARD_COLUMNS - used) };
-    const fit = row.some((r) => r.h === null);
-    const h = fit ? null : Math.max(...row.map((r) => r.h ?? 1));
-    out.push(...row.map((r) => ({ ...r, h })));
-    row = [];
-    used = 0;
-  };
-  for (const w of widgets) {
-    const width = Math.min(Math.max(1, w.w), BOARD_COLUMNS);
-    if (used + width > BOARD_COLUMNS) flush();
-    row.push({ ...w, w: width });
-    used += width;
-  }
-  flush();
-  return out;
-}
 
 /** A widget at its catalog size, before rows are filled. */
 export function naturalSize<T extends { type: WidgetType; w: number; h: number | null }>(w: T): T {

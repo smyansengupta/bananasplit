@@ -226,7 +226,8 @@ export default async function ReportsPage({
     .filter((c): c is typeof c & { line: InsightLine } => c.line !== null)
     .sort((a, b) => (a.line.tone === "warn" ? 0 : 1) - (b.line.tone === "warn" ? 0 : 1));
   const slipping = lines.filter((l) => l.line.tone === "warn").length;
-  const n = reports.length;
+  // Only the reports whose numbers were read count toward what the lead says.
+  const n = reports.filter((r) => r.run).length;
   const lead =
     slipping === 0
       ? `Nothing is slipping across your ${n} report${n === 1 ? "" : "s"}.`

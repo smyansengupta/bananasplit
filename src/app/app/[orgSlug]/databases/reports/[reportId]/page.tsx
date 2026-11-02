@@ -280,6 +280,7 @@ export default async function SavedReportPage({
             }
             resetLabel="Back to the suggested widgets"
             noun="this report"
+            fillGaps
             intro={
               <p className="text-muted-foreground text-sm">
                 {computed.length} widget{computed.length === 1 ? "" : "s"} on{" "}

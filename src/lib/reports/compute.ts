@@ -64,6 +64,8 @@ export interface NumberPayload {
 
 export interface OverTimePayload {
   bucket: "week" | "month";
+  /** Only the newest points fit; the total is theirs. */
+  clipped?: boolean;
   points: { key: string; label: string; value: number; previous: number | null }[];
   total: number;
   previousTotal: number | null;
@@ -75,6 +77,8 @@ export interface BreakdownPayload {
   rows: { id: string; label: string; color: ChoiceColor | null; value: number; share: number }[];
   total: number;
   format: ValueFormat;
+  /** A multi-select: shares are of rows and can add up past 100%. */
+  multi?: boolean;
 }
 
 export interface PipelinePayload {
@@ -351,6 +355,17 @@ function wholePreviousSpan(span: Span): Span | null {
   return { from, to, label: "the period before" };
 }
 
+/**
+ * The period before, or null when it can't be measured: a database bigger
+ * than a report reads keeps only its newest rows, so a period older than the
+ * oldest row read would look empty and every number would seem to soar.
+ */
+function comparable(s: LoadedSource, prev: Span | null, ctx: ComputeContext): Span | null {
+  if (!prev || !s.truncated || s.records.length === 0) return prev;
+  const oldest = localDay(s.records[0].createdAt, ctx.tz);
+  return prev.from && oldest > prev.from ? null : prev;
+}
+
 function inSpan(date: string | null, span: Span): boolean {
   if (!date) return false;
   return (!span.from || date >= span.from) && (!span.to || date <= span.to);
@@ -452,7 +467,7 @@ function computeNumber(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): N
   const agg = f ? (c.agg ?? "sum") : "count";
   const dated = s.records.map((r) => ({ r, d: rowDate(r, c.date, ctx.tz) }));
   const now = dated.filter((x) => inSpan(x.d, ctx.span)).map((x) => x.r);
-  const prevSpan = previousSpan(ctx.span, ctx.today);
+  const prevSpan = comparable(s, previousSpan(ctx.span, ctx.today), ctx);
   const before = prevSpan
     ? aggregate(
         dated.filter((x) => inSpan(x.d, prevSpan)).map((x) => x.r),
@@ -487,6 +502,15 @@ function computeNumber(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): N
   };
 }
 
+/** Points an Over time chart draws at most. */
+const MAX_POINTS = 60;
+
+/** The first of the month `n` months after the month starting `first`. */
+function addMonths(first: string, n: number): string {
+  const [y, m] = first.split("-").map(Number);
+  return fromUtc(Date.UTC(y, m - 1 + n, 1));
+}
+
 function nextMonth(first: string): string {
   const [y, m] = first.split("-").map(Number);
   return fromUtc(Date.UTC(y, m, 1));
@@ -506,26 +530,43 @@ function computeOverTime(w: ReportWidget, s: LoadedSource, ctx: ComputeContext):
     .filter((x): x is { r: ReportRow; d: string } => x.d !== null);
   const inNow = dated.filter((x) => inSpan(x.d, ctx.span));
   // The first and last bucket: the span's, or the data's for All time.
-  const first = ctx.span.from ?? inNow.map((x) => x.d).sort()[0] ?? ctx.today;
-  const lastDay = ctx.span.to && ctx.span.to < ctx.today ? ctx.span.to : ctx.today;
-  const keys: string[] = [];
+  const sorted = inNow.map((x) => x.d).sort();
+  const first = ctx.span.from ?? sorted[0] ?? ctx.today;
+  // Through today, or the last dated row when rows run later (due dates).
+  const latest = sorted[sorted.length - 1];
+  const end = latest && latest > ctx.today ? latest : ctx.today;
+  const lastDay = ctx.span.to && ctx.span.to < end ? ctx.span.to : end;
+  let keys: string[] = [];
   let k = bucketKey(first, bucket);
-  while (k <= lastDay && keys.length < 60) {
+  while (k <= lastDay) {
     keys.push(k);
     k = bucket === "month" ? nextMonth(k) : plusDays(k, 7);
   }
+  // At most 60 points: the newest, and the total is theirs, so the chart adds up.
+  const clipped = keys.length > MAX_POINTS;
+  if (clipped) keys = keys.slice(-MAX_POINTS);
+  const shown = new Set(keys);
   const byKey = new Map<string, ReportRow[]>();
   for (const x of inNow) {
     const key = bucketKey(x.d, bucket);
     byKey.set(key, [...(byKey.get(key) ?? []), x.r]);
   }
-  const prev = previousSpan(ctx.span, ctx.today);
+  const prev = comparable(s, previousSpan(ctx.span, ctx.today), ctx);
   const shift = prev && ctx.span.from ? daysFrom(prev.from!, ctx.span.from) : 0;
+  const months =
+    prev && ctx.span.from
+      ? (Number(ctx.span.from.slice(0, 4)) - Number(prev.from!.slice(0, 4))) * 12 +
+        Number(ctx.span.from.slice(5, 7)) -
+        Number(prev.from!.slice(5, 7))
+      : 0;
   const prevRows = prev ? dated.filter((x) => inSpan(x.d, prev)) : [];
   const prevByKey = new Map<string, ReportRow[]>();
   for (const x of prevRows) {
     // Lined up with the bucket the same day falls in this span.
-    const key = bucketKey(plusDays(x.d, shift), bucket);
+    const key =
+      bucket === "month"
+        ? addMonths(bucketKey(x.d, "month"), months)
+        : bucketKey(plusDays(x.d, shift), bucket);
     prevByKey.set(key, [...(prevByKey.get(key) ?? []), x.r]);
   }
   const points = keys.map((key) => ({
@@ -537,8 +578,9 @@ function computeOverTime(w: ReportWidget, s: LoadedSource, ctx: ComputeContext):
   return {
     bucket,
     points,
+    clipped,
     total: aggregate(
-      inNow.map((x) => x.r),
+      inNow.filter((x) => shown.has(bucketKey(x.d, bucket))).map((x) => x.r),
       f?.id,
       agg,
     ),
@@ -581,13 +623,17 @@ function computeBreakdown(w: ReportWidget, s: LoadedSource, ctx: ComputeContext)
     return { id, label, color: choice?.color ?? null, value: aggregate(rs, f?.id, agg) };
   });
   out.sort((a, b) => b.value - a.value);
-  const total = out.reduce((a, b) => a + b.value, 0);
+  // A row can carry several choices of a multi-select: each choice's share is
+  // of the rows (they add up past 100%), and the total is the rows themselves.
+  const multi = g?.type === "MULTI_SELECT" && agg === "count";
+  const total = multi ? rows.length : out.reduce((a, b) => a + b.value, 0);
   return {
     rows: out
       .slice(0, 12)
       .map((r) => ({ ...r, share: total ? round((r.value / total) * 100, 1) : 0 })),
     total: round(total),
     format: agg === "count" ? "number" : formatOf(f),
+    multi,
   };
 }
 
@@ -664,7 +710,7 @@ function computeGoal(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): Goa
 }
 
 function computeCompare(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): ComparePayload {
-  const prev = previousSpan(ctx.span, ctx.today);
+  const prev = comparable(s, previousSpan(ctx.span, ctx.today), ctx);
   const dated = s.records.map((r) => ({ r, d: rowDate(r, w.config.date, ctx.tz) }));
   const now = dated.filter((x) => inSpan(x.d, ctx.span)).map((x) => x.r);
   const before = prev ? dated.filter((x) => inSpan(x.d, prev)).map((x) => x.r) : [];
@@ -678,7 +724,7 @@ function computeCompare(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): 
     },
   ];
   for (const f of s.fields
-    .filter((x) => x.type === "NUMBER" || x.type === "CURRENCY")
+    .filter((x) => (x.type === "NUMBER" || x.type === "CURRENCY") && !x.id.startsWith("j."))
     .slice(0, 4)) {
     const a = aggregate(now, f.id, "sum");
     const b = aggregate(before, f.id, "sum");
@@ -1104,9 +1150,11 @@ export function readInsights(
           lines.push({
             tone: "info",
             widgetId: id,
-            text: fieldName(widget.config.field)
-              ? `${top.label} is ${Math.round(top.share)}% of the total ${lowerFirst(fieldName(widget.config.field)!)}.`
-              : `${top.label} is ${Math.round(top.share)}% of ${rowsNoun(source)}.`,
+            text: d.multi
+              ? `${top.label} is on ${Math.round(top.share)}% of ${rowsNoun(source)}.`
+              : fieldName(widget.config.field)
+                ? `${top.label} is ${Math.round(top.share)}% of the total ${lowerFirst(fieldName(widget.config.field)!)}.`
+                : `${top.label} is ${Math.round(top.share)}% of ${rowsNoun(source)}.`,
           });
         }
         break;

@@ -4,7 +4,7 @@ import { NotFoundError } from "@/lib/auth/errors";
 import { spaceIncludes } from "@/lib/billing/space";
 import { safeTimeZone } from "@/lib/calendar/dates";
 import { isEmailEnabled } from "@/lib/notification-prefs";
-import { isSendDay, readSchedule } from "@/lib/reports/schedule";
+import { isSendDay, readSchedule, sendRange } from "@/lib/reports/schedule";
 import { weekdayOfKey } from "@/lib/tasks/dates";
 import { withOrgTxAs, withSystemOrgTx } from "@/server/db/context";
 import { getOrgMailer } from "@/server/email/mailer";
@@ -101,8 +101,15 @@ export const reportSendJob: JobHandler<{ reportId: string; sendKey: string }> = 
     if (!report?.createdById) return null;
     const schedule = readSchedule(report.schedule);
     if (!schedule) return null;
+    const maker = await db.membership.findFirst({
+      where: { organizationId: orgId, userId: report.createdById },
+      select: { role: true },
+    });
+    if (!maker) return null;
+    // Sending to others is an owner's or admin's; checked again at every send.
+    const toOthers = maker.role === "OWNER" || maker.role === "ADMIN";
     let others: { userId: string }[] = [];
-    if (report.access === "ORGANIZATION" && schedule.to !== "me") {
+    if (report.access === "ORGANIZATION" && schedule.to !== "me" && toOthers) {
       others = await db.membership.findMany({
         where: {
           organizationId: orgId,
@@ -112,6 +119,7 @@ export const reportSendJob: JobHandler<{ reportId: string; sendKey: string }> = 
       });
     }
     return {
+      schedule,
       maker: report.createdById,
       recipients: [...new Set([report.createdById, ...others.map((m) => m.userId)])],
     };
@@ -124,7 +132,7 @@ export const reportSendJob: JobHandler<{ reportId: string; sendKey: string }> = 
     await withOrgTxAs(found.maker, orgId, async (ctx) => {
       const v = await reportViewer(ctx);
       const report = await getReport(ctx.db, orgId, reportId);
-      const result = await runReport(v, report, {});
+      const result = await runReport(v, report, sendRange(found.schedule, v.tz));
       if (!result.source) return;
       await takeSnapshot(
         v,
@@ -178,7 +186,11 @@ export const reportEmailJob: JobHandler<{ reportId: string; userId: string }> = 
     email = await withOrgTxAs(userId, orgId, async (ctx) => {
       const v = await reportViewer(ctx);
       const report = await getReport(ctx.db, orgId, reportId);
-      const result = await runReport(v, report, {});
+      const result = await runReport(
+        v,
+        report,
+        report.schedule ? sendRange(report.schedule, v.tz) : {},
+      );
       if (!result.source) return null;
       return reportEmail({
         orgName: member.organization.name,

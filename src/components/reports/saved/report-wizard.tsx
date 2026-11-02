@@ -442,6 +442,7 @@ export function ReportWizard({
             }
             refreshOnSave={false}
             noun="this report"
+            fillGaps
             editHint="Arrange it once; anyone who can edit it changes it later."
             intro={
               <h2 id="arrange" className="heading text-[22px]">

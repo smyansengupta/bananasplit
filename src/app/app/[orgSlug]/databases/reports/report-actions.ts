@@ -257,18 +257,6 @@ export async function askClaudeAction(
   reportId: string,
   range: RangeParams,
 ): Promise<ReportResult> {
-  const user = await requireUser();
-  for (const [key, limit] of [
-    [rateLimitKey("report-insights-member", organizationId, user.id), INSIGHTS_PER_MEMBER_PER_HOUR],
-    [rateLimitKey("report-insights-org", organizationId), INSIGHTS_PER_ORG_PER_HOUR],
-  ] as const) {
-    const hit = await checkRateLimit(key, limit, 60 * 60);
-    if (!hit.allowed)
-      return {
-        ok: false,
-        error: `Claude has read this a lot this hour. Try again ${retryAfterText(hit)}.`,
-      };
-  }
   let read;
   try {
     read = await reportsAction(async (ctx) => {
@@ -290,6 +278,19 @@ export async function askClaudeAction(
     })(organizationId);
   } catch (error) {
     return failure(error);
+  }
+  // Charged only once the member is known to be able to ask.
+  const user = await requireUser();
+  for (const [key, limit] of [
+    [rateLimitKey("report-insights-member", organizationId, user.id), INSIGHTS_PER_MEMBER_PER_HOUR],
+    [rateLimitKey("report-insights-org", organizationId), INSIGHTS_PER_ORG_PER_HOUR],
+  ] as const) {
+    const hit = await checkRateLimit(key, limit, 60 * 60);
+    if (!hit.allowed)
+      return {
+        ok: false,
+        error: `Claude has read this a lot this hour. Try again ${retryAfterText(hit)}.`,
+      };
   }
   const creds = await resolveAiCredentials(organizationId, null);
   if (!creds) {
@@ -360,6 +361,17 @@ export async function askReportsAction(
   const asked = question.trim().slice(0, 500);
   if (!asked) return { ok: false, error: "Ask a question first." };
   const user = await requireUser();
+  const orgHit = await checkRateLimit(
+    rateLimitKey("reports-ask-org", organizationId),
+    120,
+    60 * 60,
+  );
+  if (!orgHit.allowed) {
+    return {
+      ok: false,
+      error: `Your organization has asked a lot this hour. Try again ${retryAfterText(orgHit)}.`,
+    };
+  }
   const hit = await checkRateLimit(
     rateLimitKey("reports-ask", organizationId, user.id),
     ASK_PER_MEMBER_PER_HOUR,

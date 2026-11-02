@@ -104,5 +104,33 @@ function fitDraft(draft: PeriodDraft, periods: readonly PeriodLike[], date: stri
     else if (p.startsOn > date)
       endsOn = shiftDay(p.startsOn, -1) < endsOn ? shiftDay(p.startsOn, -1) : endsOn;
   }
-  return { ...draft, startsOn, endsOn };
+  if (startsOn === draft.startsOn && endsOn === draft.endsOn) return draft;
+  return { label: monthsLabel(startsOn, endsOn), startsOn, endsOn };
+}
+
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/** "Aug–Dec 2026", or "Nov 2025–Feb 2026" across a new year. */
+function monthsLabel(startsOn: string, endsOn: string): string {
+  const [y1, m1] = startsOn.split("-").map(Number);
+  const [y2, m2] = endsOn.split("-").map(Number);
+  if (y1 === y2) {
+    return m1 === m2
+      ? `${MONTH_NAMES[m1 - 1]} ${y1}`
+      : `${MONTH_NAMES[m1 - 1]}–${MONTH_NAMES[m2 - 1]} ${y1}`;
+  }
+  return `${MONTH_NAMES[m1 - 1]} ${y1}–${MONTH_NAMES[m2 - 1]} ${y2}`;
 }

@@ -89,6 +89,7 @@ import {
   BOARD_COLUMNS,
   MAX_ROWS,
   MAX_WIDGETS,
+  fillRows,
   newWidgetId,
   shapeName,
   type BoardWidget,
@@ -251,6 +252,7 @@ export function WidgetBoard({
   startEditing = false,
   refreshOnSave = true,
   noun = "your board",
+  fillGaps = false,
 }: {
   types: readonly WidgetMeta[];
   initialLayout: BoardWidget[];
@@ -298,6 +300,8 @@ export function WidgetBoard({
   refreshOnSave?: boolean;
   /** What the widgets are on, in its messages ("your board", "this report"). */
   noun?: string;
+  /** Close up the rows when a widget is added or removed (a saved report). */
+  fillGaps?: boolean;
 }) {
   const router = useRouter();
   const [layout, setLayout] = useState(initialLayout);
@@ -321,6 +325,9 @@ export function WidgetBoard({
     () => false,
   );
 
+  /** Set by a Reset: take the next layout the server sends. */
+  const takeNext = useRef(false);
+
   function persist(next: BoardWidget[] | null) {
     setError(null);
     start(async () => {
@@ -329,7 +336,8 @@ export function WidgetBoard({
         setError(result.error ?? "Couldn't save the layout. Check your connection and try again.");
         return;
       }
-      if (next === null) setLayout(initialLayout);
+      // Reset: the server's default arrives with the refresh; take it then.
+      if (next === null) takeNext.current = true;
       if (refreshOnSave) router.refresh();
     });
   }
@@ -350,21 +358,19 @@ export function WidgetBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, dragId]);
 
-  // The server can close up the rows after a widget is added or removed (a
-  // saved report): take its sizes when it still has the same widgets.
+  // After a Reset, the default the server sends back replaces the board (and
+  // counts as saved). Otherwise the board is the person's: a refresh never
+  // overwrites a change they've just made.
   const incoming = JSON.stringify(initialLayout);
   useEffect(() => {
-    if (dragId) return;
-    const next = JSON.parse(incoming) as BoardWidget[];
-    setLayout((now) => {
-      const same = now.length === next.length && now.every((w) => next.some((n) => n.id === w.id));
-      if (!same || JSON.stringify(now) === incoming) return now;
-      saved.current = incoming;
-      return now.map((w) => next.find((n) => n.id === w.id) ?? w);
-    });
-    // Only a new layout from the server matters here, not each drag.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!takeNext.current) return;
+    takeNext.current = false;
+    saved.current = incoming;
+    setLayout(JSON.parse(incoming) as BoardWidget[]);
   }, [incoming]);
+
+  /** A report closes its rows up as widgets come and go; Home leaves them as they are. */
+  const arrange = (next: BoardWidget[]) => (fillGaps ? fillRows(next) : next);
 
   // Esc ends Customize, unless a menu or dialog is open to close first.
   useEffect(() => {
@@ -391,15 +397,14 @@ export function WidgetBoard({
     const at = layout.findIndex((x) => x.id === id);
     const gone = layout[at];
     if (!gone) return;
-    setLayout((l) => l.filter((x) => x.id !== id));
+    const before = layout;
+    setLayout((l) => arrange(l.filter((x) => x.id !== id)));
     toast({
       title: `Removed ${titles?.[gone.id] ?? meta.get(gone.type)?.title ?? "the widget"}`,
       action: {
         label: "Undo",
-        run: () =>
-          setLayout((l) =>
-            l.some((x) => x.id === id) ? l : [...l.slice(0, at), gone, ...l.slice(at)],
-          ),
+        // Back exactly as it was, sizes included (closing up the rows may have changed some).
+        run: () => setLayout((l) => (l.some((x) => x.id === id) ? l : before)),
       },
     });
   }
@@ -473,7 +478,7 @@ export function WidgetBoard({
     const m = meta.get(type);
     if (!m) return;
     const id = newWidgetId(type, layout);
-    setLayout([...layout, { id, type, w: m.w, h: m.h }]);
+    setLayout(arrange([...layout, { id, type, w: m.w, h: m.h }]));
     setAdding(false);
     setFresh(id);
   };
