@@ -20,8 +20,8 @@ export interface CardLine extends Pick<InsightLine, "text" | "tone" | "bold" | "
 }
 
 const AMBER = {
-  background: "color-mix(in oklab, var(--chart-4) 22%, var(--card))",
-  color: "color-mix(in oklab, var(--chart-4) 70%, var(--foreground))",
+  background: "color-mix(in oklab, var(--chart-4) 30%, var(--card))",
+  color: "color-mix(in oklab, var(--chart-4) 62%, var(--foreground))",
 };
 
 /** The 22px marker: an arrow when a number moved, a dot for a plain fact, "!" for something to look at. */
