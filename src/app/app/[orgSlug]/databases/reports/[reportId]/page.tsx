@@ -213,9 +213,8 @@ export default async function SavedReportPage({
                       again={c.payload.data.byClaude}
                     />
                   ) : undefined,
-                  ask: aiReady ? (
-                    <AskReports orgId={organization.id} reportId={report.id} />
-                  ) : undefined,
+                  // Anyone who can open the report can ask about it.
+                  ask: <AskReports orgId={organization.id} reportId={report.id} />,
                 }
               : undefined
           }

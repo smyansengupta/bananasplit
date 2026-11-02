@@ -359,9 +359,15 @@ export async function askReportsAction(
   range: RangeParams,
   /** One report's own "Ask about this report"; else every report. */
   reportId?: string,
+  /** The questions this follows up on, oldest first (the last three are read). */
+  earlier: { question: string; answer: string }[] = [],
 ): Promise<ReportResult<{ answer: string }>> {
   const asked = question.trim().slice(0, 500);
   if (!asked) return { ok: false, error: "Ask a question first." };
+  const before = (Array.isArray(earlier) ? earlier : [])
+    .filter((t) => typeof t?.question === "string" && typeof t?.answer === "string")
+    .slice(-3)
+    .map((t) => ({ question: t.question.slice(0, 500), answer: t.answer.slice(0, 1200) }));
   const user = await requireUser();
   const orgHit = await checkRateLimit(
     rateLimitKey("reports-ask-org", organizationId),
@@ -412,7 +418,7 @@ export async function askReportsAction(
     };
   }
   try {
-    const answer = await answerAboutReports(creds, asked, reports);
+    const answer = await answerAboutReports(creds, asked, reports, before);
     return { ok: true, answer };
   } catch (error) {
     if (error instanceof AiImportError) return { ok: false, error: error.message };

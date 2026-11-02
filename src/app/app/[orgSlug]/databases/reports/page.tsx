@@ -21,7 +21,6 @@ import {
 } from "@/lib/reports/compute";
 import { scheduleTag } from "@/lib/reports/schedule";
 import { cn } from "@/lib/utils";
-import { listAiConnections } from "@/server/ai/connections";
 import { planGate } from "@/server/billing/plan-gate";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { rangeQuery, resolveReportRange } from "@/server/reports/range";
@@ -174,7 +173,6 @@ export default async function ReportsPage({
       }),
     };
   });
-  const aiReady = reports.length > 0 && (await listAiConnections(organization.id)).length > 0;
 
   // An Events report's cards are the built-in reports: read them for its line and headline.
   const events = new Map<string, { lines: InsightLine[]; headline: Headline | null }>();
@@ -264,7 +262,7 @@ export default async function ReportsPage({
         />
 
         <ReportsBody className="space-y-8">
-          {lines.length > 0 && (
+          {n > 0 && (
             <section aria-label="Insights">
               <InsightsCard
                 wide
@@ -276,7 +274,7 @@ export default async function ReportsPage({
                   href: withRange(`${base}/${report.id}`),
                 }))}
                 next={lines.find((l) => l.line.next)?.line.next ?? null}
-                ask={aiReady ? <AskReports orgId={organization.id} /> : undefined}
+                ask={<AskReports orgId={organization.id} />}
               />
             </section>
           )}

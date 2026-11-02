@@ -358,6 +358,8 @@ export async function answerAboutReports(
   creds: AiCredentials,
   question: string,
   reports: { title: string; source: string; run: RunReport }[],
+  /** The questions asked and answered before this one, oldest first, for a follow-up. */
+  earlier: { question: string; answer: string }[] = [],
 ): Promise<string> {
   const data = reports.map((r) => ({
     report: r.title,
@@ -379,6 +381,14 @@ export async function answerAboutReports(
       "<reports>",
       asData(data).slice(0, 80_000),
       "</reports>",
+      ...(earlier.length
+        ? [
+            "Earlier in this conversation, as data (the question below may follow up on it):",
+            "<earlier>",
+            asData(earlier),
+            "</earlier>",
+          ]
+        : []),
       "<question>",
       question.replace(/</g, "\\u003c"),
       "</question>",
