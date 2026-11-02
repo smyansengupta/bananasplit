@@ -324,12 +324,13 @@ describe("Admin panel navigation", () => {
       "Privacy",
       "Integrations",
       "Audit log",
+      "What's new",
       "Danger zone",
     ]);
     expect(labels("ADMIN")).not.toContain("Danger zone");
     expect(labels("ADMIN")).toContain("Audit log");
-    expect(labels("MEMBER")).toEqual(["Members"]);
-    expect(labels("TREASURER")).toEqual(["Members"]);
+    expect(labels("MEMBER")).toEqual(["Members", "What's new"]);
+    expect(labels("TREASURER")).toEqual(["Members", "What's new"]);
   });
 
   it("marks the sections a club's plan lacks as locked, and none without a space", () => {
@@ -347,6 +348,7 @@ describe("Admin panel navigation", () => {
     expect(settingsNavItems("me", "OWNER", PERSONAL).map((i) => i.label)).toEqual([
       "General",
       "Plan and storage",
+      "What's new",
       "Danger zone",
     ]);
   });
