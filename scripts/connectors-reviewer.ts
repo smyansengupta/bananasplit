@@ -675,7 +675,9 @@ async function main(): Promise<void> {
       select: { memberships: { where: { role: Role.OWNER }, select: { userId: true } } },
     });
     if (holder && !holder.memberships.some((m) => m.userId === existing?.id)) {
-      fail(`/app/${ORG.slug} belongs to an organization this script didn't make.`);
+      fail(
+        `/app/${ORG.slug} is held by an organization ${args.email} doesn't own: a real one, or an earlier run's for another --email. Nothing was changed.`,
+      );
     }
 
     // Only a new account gets a generated password; a re-run keeps the old one.

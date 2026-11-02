@@ -133,6 +133,12 @@ MIGRATE_DATABASE_URL='<production owner URL>' CONNECTORS_REVIEWER_PASSWORD='<a n
   database.
 - Re-running recreates the organization with fresh dates, so run it again
   shortly before each review, and after any review that changed things.
+- Checked on 2026-11-02 against a freshly migrated, unseeded local
+  database: a first run and a re-run (nothing duplicated, the password
+  kept), and its refusals of another account and of the slug held for
+  another email. As that account, the tools return what the reviewer
+  prompts below expect through the MCP server, but not yet through a real
+  client.
 - Then sign in at `https://bananasplit.fyi/sign-in` as the reviewer once,
   and connect Claude to it, to be sure the account works end to end.
 
