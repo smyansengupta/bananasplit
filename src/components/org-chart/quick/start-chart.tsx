@@ -30,7 +30,7 @@ const card = "bg-card edge rounded-card flex min-w-0 flex-col gap-3.5 p-6";
 
 function MiniNode({ person }: { person: StartPreviewPerson }) {
   return (
-    <span className="bg-card flex max-w-[11rem] items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_8%,transparent)]">
+    <span className="bg-card flex max-w-[11rem] items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_8%,transparent)] dark:ring-1 dark:ring-white/[0.06]">
       <UserAvatar user={person} size="xs" />
       <b className="truncate font-semibold">{person.title}</b>
     </span>

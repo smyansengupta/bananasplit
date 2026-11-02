@@ -1,4 +1,12 @@
-import { AddOnHeader, BackLink, Mini, Pill, StatusTag } from "@/components/addons/addon-page";
+import {
+  AddOnHeader,
+  BackLink,
+  Mini,
+  PANEL,
+  Pill,
+  StatusTag,
+  TINT,
+} from "@/components/addons/addon-page";
 import { Check, Handshake } from "@/components/icons";
 
 export const metadata = { title: "CRM" };
@@ -24,7 +32,9 @@ export default async function CrmAddOnPage({ params }: { params: Promise<{ orgSl
             "Handed down when leadership changes, so nobody starts from zero.",
           ].map((t) => (
             <li key={t} className="flex items-start gap-3 text-[15px] leading-relaxed">
-              <span className="mt-1 grid size-[22px] shrink-0 place-items-center rounded-full bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))] text-[color-mix(in_oklab,var(--chart-5)_62%,var(--foreground))]">
+              <span
+                className={`mt-1 grid size-[22px] shrink-0 place-items-center rounded-full ${TINT.pink}`}
+              >
                 <Check className="size-3" aria-hidden="true" />
               </span>
               {t}
@@ -33,7 +43,7 @@ export default async function CrmAddOnPage({ params }: { params: Promise<{ orgSl
         </ul>
         <div
           aria-hidden="true"
-          className="min-w-0 flex-[1_1_420px] rounded-[28px] bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))] p-8"
+          className={`min-w-0 flex-[1_1_420px] rounded-[28px] p-8 ${PANEL.pink}`}
         >
           <Mini className="gap-4 p-[22px]">
             <span className="flex items-center gap-3">

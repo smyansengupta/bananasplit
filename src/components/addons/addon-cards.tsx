@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AddAddOnButton } from "@/components/addons/addon-controls";
-import { Mini, Pill } from "@/components/addons/addon-page";
+import { Mini, PANEL, Pill } from "@/components/addons/addon-page";
 import { Check } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { ADD_ON_INFO, type AddOnId } from "@/lib/addons";
@@ -65,7 +65,7 @@ const FINANCE_PREVIEW = (
 );
 
 const CRM_PREVIEW = (
-  <Preview tint="bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))]">
+  <Preview tint={PANEL.pink}>
     {(
       [
         ["Northbank Credit Union", "Follow up", "amber"],

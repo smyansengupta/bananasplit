@@ -11,14 +11,18 @@ import { cn } from "@/lib/utils";
  * it working on the other. Server-safe, no hooks.
  */
 
-/** Soft tints the theme has no token for, mixed from the chart colours. */
+/**
+ * Soft tints. Amber and pink have no light-mode token, so they're mixed from
+ * the chart colours; dark mode uses the dark palette's own amber and pink
+ * (the avatar tints), which are made for its dark surfaces.
+ */
 export const TINT = {
   info: "bg-tint-info text-tint-info-foreground",
   success: "bg-tint-success text-tint-success-foreground",
   danger: "bg-tint-danger text-tint-danger-foreground",
   amber:
-    "bg-[color-mix(in_oklab,var(--chart-4)_16%,var(--card))] text-[color-mix(in_oklab,var(--chart-4)_62%,var(--foreground))]",
-  pink: "bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))] text-[color-mix(in_oklab,var(--chart-5)_62%,var(--foreground))]",
+    "bg-[color-mix(in_oklab,var(--chart-4)_16%,var(--card))] text-[color-mix(in_oklab,var(--chart-4)_62%,var(--foreground))] dark:bg-avatar-4 dark:text-avatar-4-foreground",
+  pink: "bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))] text-[color-mix(in_oklab,var(--chart-5)_62%,var(--foreground))] dark:bg-avatar-5 dark:text-avatar-5-foreground",
   muted: "bg-muted text-muted-foreground",
 } as const;
 export type Tint = keyof typeof TINT;
@@ -28,8 +32,8 @@ export const PANEL: Record<Tint | "tile", string> = {
   info: "bg-tint-info",
   success: "bg-tint-success",
   danger: "bg-tint-danger",
-  amber: "bg-[color-mix(in_oklab,var(--chart-4)_16%,var(--card))]",
-  pink: "bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))]",
+  amber: "bg-[color-mix(in_oklab,var(--chart-4)_16%,var(--card))] dark:bg-avatar-4",
+  pink: "bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))] dark:bg-avatar-5",
   muted: "bg-muted",
   tile: "bg-muted/55",
 };
@@ -192,7 +196,8 @@ export function Mini({ className, children }: { className?: string; children: Re
   return (
     <div
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-2.5 rounded-[18px] p-[18px] shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_6%,transparent),0_12px_32px_-14px_color-mix(in_oklab,var(--foreground)_14%,transparent)]",
+        // Dark mode: a hairline edge, since a shadow doesn't show there.
+        "bg-card text-card-foreground flex flex-col gap-2.5 rounded-[18px] p-[18px] shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_6%,transparent),0_12px_32px_-14px_color-mix(in_oklab,var(--foreground)_14%,transparent)] dark:ring-1 dark:ring-white/[0.06]",
         className,
       )}
     >
