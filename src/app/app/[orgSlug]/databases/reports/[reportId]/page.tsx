@@ -45,7 +45,7 @@ const BUILT_IN = new Set(["people", "attendance", "rsvps", "retention"]);
  * date pills pick, from the rows this viewer can see. Whoever made it (or an
  * owner/admin, on a shared one) arranges it as Home is arranged and changes
  * each widget's settings from its gear; everyone can keep a copy as it
- * reads now (Past reports).
+ * reads now (Report history).
  */
 export default async function SavedReportPage({
   params,
@@ -293,7 +293,7 @@ export default async function SavedReportPage({
         {snapshots.length > 0 && (
           <section aria-labelledby="copies" className="space-y-3">
             <h2 id="copies" className="heading text-[17px]">
-              Kept copies
+              History
             </h2>
             <ul className="flex flex-wrap gap-2">
               {snapshots.map((s) => (

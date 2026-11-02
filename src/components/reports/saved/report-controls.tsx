@@ -198,7 +198,7 @@ export function ReportHeaderControls({
         variant="outline"
         disabled={pending}
         onClick={() =>
-          run(() => takeSnapshotAction(orgId, reportId, range), "Kept in Past reports")
+          run(() => takeSnapshotAction(orgId, reportId, range), "Kept in History")
         }
         title="Keep this report as it reads now"
       >
@@ -270,7 +270,7 @@ export function ReportHeaderControls({
           <DialogHeader>
             <DialogTitle>Send on a schedule</DialogTitle>
             <DialogDescription>
-              Each person gets the report as they see it, and a copy is kept in Past reports.
+              Each person gets the report as they see it, and a copy is kept in History.
             </DialogDescription>
           </DialogHeader>
           <ScheduleFields schedule={draft} onChange={setDraft} shared={access === "ORGANIZATION"} />

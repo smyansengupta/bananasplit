@@ -30,9 +30,8 @@ import { PinToggle } from "@/components/pins/pins-context";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 
-import { DatabasesHome, type WeekNote } from "@/components/databases/databases-home";
+import { DatabasesHome, type HomeStat } from "@/components/databases/databases-home";
 import { displayText } from "@/lib/databases/fields";
-import { scheduleTag } from "@/lib/reports/schedule";
 import { loadFields } from "@/server/databases/custom";
 import {
   weeklyExpenses,
@@ -267,16 +266,6 @@ export default async function DatabasesPage({
     ...(home.tasks ? ["tasks"] : []),
     ...(home.expenses ? ["expenses"] : []),
   ];
-  const sourceName = (key: string) =>
-    key === "tasks"
-      ? "Tasks"
-      : key === "expenses"
-        ? "Expenses"
-        : key === "events"
-          ? "Events and attendance"
-          : key === "people"
-            ? "People"
-            : (databases.find((d) => `custom:${d.id}` === key)?.name ?? "A database");
   const weekRows = [
     ...databases.map((d) => ({
       name: d.name,
@@ -292,34 +281,48 @@ export default async function DatabasesPage({
       : key === "expenses"
         ? `/app/${orgSlug}/finance/transactions`
         : `/app/${orgSlug}/databases/${key}`;
-  const notes: WeekNote[] = [
-    ...(home.tasks && home.tasks.overdue > 0
+  // The line of numbers: how much there is, what moved this week, the
+  // reports, and what's late (which leads to Tasks).
+  const added = weekRows.reduce((a, b) => a + b.thisWeek, 0);
+  const busiest = [...weekRows].sort((a, b) => b.thisWeek - a.thisWeek)[0];
+  const missing = reportable.filter((key) => !reportFor(key)).length;
+  const stats: HomeStat[] = [
+    { key: "databases", icon: "databases", value: String(databases.length), label: "Databases" },
+    {
+      key: "growth",
+      icon: "growth",
+      value: `+${added.toLocaleString("en-US")}`,
+      label:
+        added > 0 && busiest
+          ? `Added this week, most to ${busiest.name}`
+          : "Nothing added this week",
+      href: added > 0 && busiest ? hrefOf(busiest.key) : undefined,
+    },
+    ...(home.reports
       ? [
           {
-            tag: String(home.tasks.overdue),
-            tone: "warn" as const,
-            text: `task${home.tasks.overdue === 1 ? "" : "s"} past due`,
-            where: "Tasks",
-            href: `/app/${orgSlug}/tasks`,
+            key: "reports",
+            icon: "reports" as const,
+            value: String(home.reports.length),
+            label: missing
+              ? `Reports. ${missing} database${missing === 1 ? " has" : "s have"} none`
+              : "Reports",
+            href: `/app/${orgSlug}/databases/reports`,
           },
         ]
       : []),
-    ...weekRows
-      .filter((r) => r.thisWeek > 0)
-      .sort((a, b) => b.thisWeek - a.thisWeek)
-      .slice(0, 4)
-      .map((r) => ({
-        tag: `+${r.thisWeek}`,
-        tone: "good" as const,
-        text:
-          r.key === "tasks"
-            ? "tasks filed"
-            : r.key === "expenses"
-              ? "expenses logged"
-              : "rows added",
-        where: r.name,
-        href: hrefOf(r.key),
-      })),
+    ...(home.tasks && home.tasks.overdue > 0
+      ? [
+          {
+            key: "late",
+            icon: "late" as const,
+            value: String(home.tasks.overdue),
+            label: `Task${home.tasks.overdue === 1 ? "" : "s"} past due`,
+            href: `/app/${orgSlug}/tasks`,
+            tone: "warn" as const,
+          },
+        ]
+      : []),
   ];
   const money = (cents: number) =>
     (cents / 100).toLocaleString("en-US", {
@@ -519,14 +522,7 @@ export default async function DatabasesPage({
       ) : (
         <>
           <DatabasesHome
-            stats={{
-              databases: databases.length,
-              addedThisWeek: weekRows.reduce((a, b) => a + b.thisWeek, 0),
-              across: weekRows.filter((r) => r.thisWeek > 0).length,
-              reports: home.reports ? home.reports.length : null,
-              withoutReport: reportable.filter((key) => !reportFor(key)).length,
-              empty: custom.filter((d) => (counts[d.key] ?? 0) === 0).length + empty.length,
-            }}
+            stats={stats}
             custom={custom.map((d) => {
               const href = `/app/${orgSlug}/databases/${d.key}`;
               const n = counts[d.key] ?? 0;
@@ -557,43 +553,6 @@ export default async function DatabasesPage({
               };
             })}
             builtIn={builtInRows}
-            notes={notes}
-            reports={
-              home.reports
-                ? home.reports.slice(0, 4).map((r) => ({
-                    title: r.title,
-                    sub: [sourceName(r.source), r.schedule ? scheduleTag(r.schedule) : null]
-                      .filter(Boolean)
-                      .join(", "),
-                    href: `/app/${orgSlug}/databases/reports/${r.id}`,
-                  }))
-                : null
-            }
-            newDatabase={
-              isAdmin ? (
-                <NewDatabaseDialog
-                  orgId={organization.id}
-                  orgSlug={orgSlug}
-                  personal={personal}
-                  trigger={
-                    <button
-                      type="button"
-                      className="rounded-card border-border hover:bg-muted/40 focus-glow flex h-full min-h-48 w-full flex-col items-start justify-center gap-2 border-[1.5px] border-dashed p-5 text-left outline-none"
-                    >
-                      <span className="bg-muted grid size-9 place-items-center rounded-full">
-                        <Plus className="size-4" aria-hidden="true" />
-                      </span>
-                      <b>New database</b>
-                      <span className="text-muted-foreground text-[13px]">
-                        Start empty, from a sheet, or from a template.
-                      </span>
-                    </button>
-                  }
-                />
-              ) : null
-            }
-            newReportHref={showReports ? `/app/${orgSlug}/databases/reports/new` : null}
-            reportsHref={showReports ? `/app/${orgSlug}/databases/reports` : null}
           />
           {empty.length > 0 && !showAll && (
             <p className="text-muted-foreground text-sm">

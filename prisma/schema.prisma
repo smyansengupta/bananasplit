@@ -3104,7 +3104,7 @@ model Report {
   @@index([createdById])
 }
 
-/// A report as it read at one moment (Past reports): every widget's numbers
+/// A report as it read at one moment (Report history): every widget's numbers
 /// and the insights, frozen, for the range it was taken over. Never edited.
 model ReportSnapshot {
   id             String   @id @default(cuid())

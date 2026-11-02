@@ -184,7 +184,7 @@ export async function archiveReportAction(
   }
 }
 
-/** Freezes the report as it reads over `range`, for Past reports. */
+/** Freezes the report as it reads over `range`, for Report history. */
 export async function takeSnapshotAction(
   organizationId: string,
   reportId: string,

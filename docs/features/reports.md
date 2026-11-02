@@ -29,7 +29,7 @@ shares a row. Whoever made it edits, renames and archives it; an owner or
 admin can too on a shared one. Only its maker shares or un-shares it.
 
 **Keep a copy** freezes every widget's numbers and the insights as they read
-now, for Past reports. A copy is never edited. The People and Events widgets
+now, for Report history. A copy is never edited. The People and Events widgets
 read the live built-in reports, so copies don't keep them.
 
 **Insights** is first on every report: the plain facts the widgets lead
@@ -65,7 +65,7 @@ empty.
 
 **On a schedule.** Step 3, or the report's ••• menu, sends it every week
 or month at a local hour, to you, owners and admins, or everyone (the last
-two only for a shared report). Each send keeps a copy in Past reports and
+two only for a shared report). Each send keeps a copy in Report history and
 emails every recipient the report computed as them, so nobody is sent a
 row they couldn't open (/api/cron/task-digest enqueues report-send, which
 queues report-email per person). Members turn it off on their profile
@@ -81,8 +81,8 @@ others, a report's Overdue and stale), Push back moves its due date
 (tomorrow, three days, next Monday, a week) and Nudge comments on it
 mentioning its owner.
 
-**Past reports** lists saved reports, kept copies and scheduled reports by
-month, and Reports home's Ask box answers a question from every report's
+**Report history** (History on Reports home) lists only the kept copies, by
+month: the reports themselves are live. Reports home's Ask box answers a question from every report's
 numbers with the organization's model (nothing is kept).
 
 ## The built-in reports

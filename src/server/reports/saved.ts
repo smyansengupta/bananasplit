@@ -384,7 +384,7 @@ export async function saveInsights(
   });
 }
 
-/** Freezes the report as it reads now, for Past reports. */
+/** Freezes the report as it reads now, for Report history. */
 export async function takeSnapshot(
   v: SourceViewer,
   report: Pick<ReportSummary, "id" | "title">,

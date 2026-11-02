@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * When a saved report emails itself. Each send keeps a copy (Past reports)
+ * When a saved report emails itself. Each send keeps a copy (Report history)
  * and emails every recipient the report as THEY see it (each one's own
  * rows), so a schedule never sends anyone a row they couldn't open.
  *
