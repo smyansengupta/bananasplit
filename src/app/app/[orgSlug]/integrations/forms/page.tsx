@@ -60,7 +60,7 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
         tint="info"
         name="Forms"
         status={<StatusTag tone={added ? "on" : "off"}>{added ? "Added" : "Not added"}</StatusTag>}
-        summary="Sign-ups, RSVPs, applications and quick polls, with every answer already in a database."
+        summary="Sign-ups, applications, surveys and quick polls, with every answer already in a database."
         action={action}
       />
 
@@ -68,17 +68,19 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
         preview={
           <div className="bg-tint-info relative flex min-h-[400px] flex-col gap-4 rounded-[26px] p-6 sm:block sm:p-8">
             <Mini className="gap-3 p-[22px] sm:w-[62%]">
-              <b className="heading text-[21px] tracking-tight">Spring social RSVP</b>
-              <span className="text-muted-foreground text-[13px]">Friday at the boathouse</span>
+              <b className="heading text-[21px] tracking-tight">Join a team</b>
+              <span className="text-muted-foreground text-[13px]">
+                Tell us where you&apos;d like to help this quarter
+              </span>
               <b className="mt-1 text-[13.5px]">Your name</b>
               <span className="border-border h-9 rounded-[10px] border" />
-              <b className="text-[13.5px]">Are you coming?</b>
+              <b className="text-[13.5px]">Which team?</b>
               <span className="flex flex-wrap gap-2">
                 <span className="bg-primary text-primary-foreground inline-flex h-7 items-center rounded-full px-3 text-xs font-semibold">
-                  Yes
+                  Programs
                 </span>
-                <span className={chip}>Maybe</span>
-                <span className={chip}>Can&apos;t make it</span>
+                <span className={chip}>Tech</span>
+                <span className={chip}>Growth</span>
               </span>
             </Mini>
             <Mini className="sm:absolute sm:right-8 sm:bottom-8 sm:w-[40%]">
@@ -88,13 +90,13 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
               </span>
               {(
                 [
-                  ["Yes", 71, "var(--chart-1)", 34],
-                  ["Maybe", 19, "var(--chart-4)", 9],
-                  ["No", 10, "var(--muted-strong)", 5],
+                  ["Programs", 44, "var(--chart-1)", 21],
+                  ["Tech", 35, "var(--chart-3)", 17],
+                  ["Growth", 21, "var(--chart-4)", 10],
                 ] as const
               ).map(([k, pct, color, n]) => (
                 <span key={k} className="flex items-center gap-2.5 text-[12.5px]">
-                  <span className="w-11">{k}</span>
+                  <span className="w-16">{k}</span>
                   <Bar pct={pct} color={color} className="flex-1" />
                   {n}
                 </span>
@@ -225,13 +227,11 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
         panel="success"
         preview={
           <Mini className="w-full max-w-[400px] self-center p-5">
-            <b className="heading text-[18px] tracking-tight">
-              Which night works for the spring social?
-            </b>
+            <b className="heading text-[18px] tracking-tight">Which logo should we go with?</b>
             {(
               [
-                ["Thursday", 62],
-                ["Friday", 38],
+                ["The round one", 62],
+                ["The wordmark", 38],
               ] as const
             ).map(([k, pct]) => (
               <span
@@ -323,14 +323,14 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
           <Mini className="gap-0 overflow-hidden p-0">
             <span className="bg-muted/55 text-muted-foreground grid grid-cols-[1.3fr_1fr_.7fr] px-4 py-2.5 text-xs font-bold">
               <span>Name</span>
-              <span>Coming</span>
-              <span>Guests</span>
+              <span>Team</span>
+              <span>Hours a week</span>
             </span>
             {(
               [
-                ["Alex Green", "Yes", "success", 1],
-                ["Kristine Min", "Yes", "success", 0],
-                ["Oliver Ward", "Maybe", "amber", 2],
+                ["Alex Green", "Programs", "info", 3],
+                ["Kristine Min", "Growth", "amber", 2],
+                ["Oliver Ward", "Tech", "success", 4],
               ] as const
             ).map(([name, ans, tint, n]) => (
               <span

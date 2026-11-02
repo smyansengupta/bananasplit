@@ -24,11 +24,11 @@ function Preview({ tint, children }: { tint: string; children: ReactNode }) {
 
 const FORMS_PREVIEW = (
   <Preview tint="bg-tint-info">
-    <b className="text-[13px]">Which night works for the spring social?</b>
+    <b className="text-[13px]">Which logo should we go with?</b>
     {(
       [
-        ["Thursday", "62%", true],
-        ["Friday", "38%", false],
+        ["The round one", "62%", true],
+        ["The wordmark", "38%", false],
       ] as const
     ).map(([k, v, on]) => (
       <span key={k} className="flex items-center gap-2 text-[12.5px]">
