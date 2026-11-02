@@ -16,17 +16,16 @@ import { cn } from "@/lib/utils";
 import type { FocusTimeData } from "@/server/overview/focus-time";
 import { saveFocusAvailability } from "@/server/overview/focus-time-actions";
 
-import { CardControls, OpenLink } from "./bits";
 import { Insight, LinkChips } from "./connections";
 
 /**
- * Focus time (Overview, one column, personal): the viewer's longest free
+ * Focus time (the Personal home's card): the viewer's longest free
  * stretch in the next seven days, the free hours of each day as a strip,
  * and the next tasks they have due (src/server/overview/focus-time.ts).
  *
  * Block it off adds the stretch to the viewer's availability as a one-day
  * rule labelled "Focus time" (the same availability the profile saves,
- * through this organization's own action), so it counts as busy from then
+ * through the Personal space's own action), so it counts as busy from then
  * on; at most four hours of it, so a free afternoon doesn't swallow a
  * whole day.
  */
@@ -38,15 +37,6 @@ const FOCUS_LABEL = "Focus time";
 /** "today" and "tomorrow" read lower-case mid-sentence; day names keep their capital. */
 const midSentence = (word: string) =>
   word === "Today" || word === "Tomorrow" ? word.toLowerCase() : word;
-
-/** The card header's ↗: the week on the calendar. */
-export function FocusTimeControls({ calendarHref }: { calendarHref: string }) {
-  return (
-    <CardControls>
-      <OpenLink href={calendarHref} label="Calendar" />
-    </CardControls>
-  );
-}
 
 export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData }) {
   const router = useRouter();
@@ -186,7 +176,6 @@ export function FocusTime({ orgId, data }: { orgId: string; data: FocusTimeData 
           </Link>
         </p>
       )}
-
     </div>
   );
 }

@@ -68,7 +68,6 @@ vi.mock("@/server/overview/votes", () => ({
 }));
 vi.mock("@/server/overview/decisions", () => ({ loadDecisions: mocks.loadDecisions }));
 vi.mock("@/server/overview/who-owns-what", () => ({ loadWhoOwnsWhat: vi.fn(async () => null) }));
-vi.mock("@/server/overview/focus-time", () => ({ loadFocusTime: vi.fn() }));
 // Actions the widgets' buttons call.
 vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({
   setTaskStatus: vi.fn(),

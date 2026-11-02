@@ -143,15 +143,6 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     h: 1,
   },
   {
-    type: "focus-time",
-    title: "Focus time",
-    description: "Your free stretches this week, and what to do with them.",
-    group: "You",
-    icon: "Timer",
-    w: 1,
-    h: 1,
-  },
-  {
     type: "quick-capture",
     title: "Quick capture",
     description: "Jot a task or a note without leaving Home.",
@@ -190,8 +181,7 @@ export function overviewWidgetsFor(isAdmin: boolean): OverviewWidgetMeta[] {
  * The Today strip, Up next and the setup checklist always lead and aren't
  * widgets (see page.tsx). Then a board of shapes that fills the four
  * columns: what changed (a rectangle) above the next deadlines, beside your
- * tasks (a big square); who's here and your focus time (squares) beside
- * meetings; the next seven days; events beside open forms and votes
+ * tasks (a big square); who's here beside meetings (rectangles); the next seven days; events beside open forms and votes
  * (squares); the weekly pulse. The week and the pulse fit their content.
  * Waiting on you, Waiting on others, Decisions, Who owns what, Quick
  * capture, Pick up where you left off and Pinned are offered in Add widget,
@@ -201,8 +191,7 @@ const DEFAULT_LAYOUT: readonly BoardWidget[] = [
   { id: "since-you-were-here", type: "since-you-were-here", w: 2, h: 1 },
   { id: "my-tasks", type: "my-tasks", w: 2, h: 2 },
   { id: "deadlines", type: "deadlines", w: 2, h: 1 },
-  { id: "here-now", type: "here-now", w: 1, h: 1 },
-  { id: "focus-time", type: "focus-time", w: 1, h: 1 },
+  { id: "here-now", type: "here-now", w: 2, h: 1 },
   { id: "meetings", type: "meetings", w: 2, h: 1 },
   { id: "week", type: "week", w: 4, h: null },
   { id: "events", type: "events", w: 2, h: 1 },

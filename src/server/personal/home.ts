@@ -11,13 +11,22 @@ import type {
 } from "@/generated/prisma/client";
 import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
 import { type SpaceInfo } from "@/lib/billing/space";
+import { parseAvailability } from "@/lib/availability";
+import { focusWeek, localHours, spansOf } from "@/lib/overview/focus-time";
 import { DUE_SOON_DAYS, UPCOMING_DAYS } from "@/lib/personal/home-windows";
 import { parseStoredLinks } from "@/lib/profile/links";
 import { pollHref } from "@/lib/polls/paths";
-import { addDaysToKey, effectiveTimezone, fromDateKey, localDateKey } from "@/lib/tasks/dates";
+import {
+  addDaysToKey,
+  effectiveTimezone,
+  fromDateKey,
+  localDateKey,
+  zonedInstant,
+} from "@/lib/tasks/dates";
 import { NotFoundError } from "@/lib/auth/errors";
 import { withOrgTx, withUserTx, type TxClient } from "@/server/db/context";
 import { listNoteFiles } from "@/server/notes/files";
+import type { FocusTimeData } from "@/server/overview/focus-time";
 import { myRsvpRegistrations, type RegistrationRow } from "@/server/rsvp/my-registrations";
 import { findPendingInvitationsForMe, type PendingInvitation } from "@/server/settings/invitations";
 import { taskFilterWhere } from "@/server/tasks/queries";
@@ -190,6 +199,14 @@ export interface PersonalHomeData {
   pendingInvites: PendingInvitation[];
   /** Events in the next UPCOMING_DAYS across Personal and your clubs. */
   upcoming: UpcomingItem[];
+  /**
+   * Focus time: your free hours in the next FOCUS_DAYS, against your
+   * availability and the timed events you said yes or maybe to (or keep in
+   * Personal) in every space. Null without a Personal space to save from.
+   */
+  focus?: FocusTimeData | null;
+  /** The Personal space's id, for Focus time's Block it off. */
+  personalOrgId?: string | null;
   /** Your open tasks due within DUE_SOON_DAYS (or overdue), across spaces. */
   dueSoon: DueTask[];
   /** How many of those there were before the list was cut. */
@@ -276,6 +293,8 @@ export interface PersonalHomeRaw {
     bio: string | null;
     links: Prisma.JsonValue | null;
     hasAvailability: boolean;
+    /** The saved availability (UserAvailability.rules), for Focus time. */
+    availabilityRules?: Prisma.JsonValue | null;
   } | null;
   spaces: { space: SpaceRow; digest: SpaceDigest | null }[];
   moreClubs: number;
@@ -502,7 +521,7 @@ async function readRaw(userId: string, now: Date): Promise<PersonalHomeRaw> {
         gradYear: true,
         bio: true,
         links: true,
-        availability: { select: { userId: true } },
+        availability: { select: { userId: true, rules: true } },
       },
     });
     const memberships = await db.membership.findMany({
@@ -579,6 +598,7 @@ async function readRaw(userId: string, now: Date): Promise<PersonalHomeRaw> {
           bio: user.bio,
           links: user.links,
           hasAvailability: user.availability !== null,
+          availabilityRules: user.availability?.rules ?? null,
         }
       : null,
     spaces: toRead.map((space, i) => ({ space, digest: digests[i] })),
@@ -748,6 +768,8 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
     .sort((a, b) => b.done - a.done);
   const personalDigest = raw.spaces.find((s) => s.space.kind === "PERSONAL");
   return {
+    focus: personal ? focusOf(raw, personal.slug, due, timeZone, todayKey, now) : null,
+    personalOrgId: personal?.id ?? null,
     yourWeek: { done: bySpace.reduce((n, s) => n + s.done, 0), bySpace },
     recentFiles: (personalDigest?.digest?.recentFiles ?? []).map((f) => ({
       ...f,
@@ -769,6 +791,50 @@ export function shapePersonalHome(raw: PersonalHomeRaw, now: Date): PersonalHome
     hosting,
     profileGaps,
     finishProfileHref: profileGaps[0] && personal ? `/app/${personal.slug}/profile` : null,
+  };
+}
+
+const FOCUS_DAYS = 7;
+const FOCUS_TASKS = 2;
+
+/** Focus time across every space (PersonalHomeData.focus). */
+function focusOf(
+  raw: PersonalHomeRaw,
+  personalSlug: string,
+  due: readonly DueTask[],
+  timeZone: string,
+  todayKey: string,
+  now: Date,
+): FocusTimeData {
+  const until = zonedInstant(addDaysToKey(todayKey, FOCUS_DAYS), 0, timeZone);
+  const busy = raw.spaces.flatMap(({ space, digest }) =>
+    (digest?.events ?? [])
+      .filter((e) => {
+        if (e.allDay || e.startsAt >= until || e.endsAt <= now) return false;
+        const rsvp = digest?.rsvps.get(e.id);
+        return space.kind === "PERSONAL" || rsvp === "YES" || rsvp === "MAYBE";
+      })
+      .flatMap((e) => spansOf(e.startsAt, e.endsAt, timeZone)),
+  );
+  const availability = parseAvailability(raw.user?.availabilityRules);
+  const tasks = due
+    .filter((t) => t.dueKey >= todayKey)
+    .sort((a, b) => a.dueKey.localeCompare(b.dueKey))
+    .slice(0, FOCUS_TASKS)
+    .map((t) => ({ id: t.id, title: t.title, href: t.href, dueKey: t.dueKey }));
+  return {
+    week: focusWeek({
+      todayKey,
+      nowHour: localHours(now, timeZone),
+      availability,
+      events: busy,
+      days: FOCUS_DAYS,
+    }),
+    todayKey,
+    availability,
+    tasks,
+    availabilityHref: `/app/${personalSlug}/profile`,
+    links: tasks.map((t) => ({ kind: "task", label: t.title, href: t.href })),
   };
 }
 

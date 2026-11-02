@@ -21,6 +21,7 @@ import {
   ChartColumn,
   ChartLine,
   ChartPie,
+  Check,
   CheckSquare,
   Clock,
   FolderOpen,
@@ -158,18 +159,19 @@ function useReflow(grid: RefObject<HTMLDivElement | null>, layout: unknown) {
     const el = grid.current;
     if (!el) return;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const origin = el.getBoundingClientRect();
     const next = new Map<string, { x: number; y: number }>();
     for (const node of el.querySelectorAll<HTMLElement>("[data-widget-id]")) {
       const id = node.dataset.widgetId ?? "";
-      const r = node.getBoundingClientRect();
-      const spot = { x: r.left - origin.left, y: r.top - origin.top };
+      // Layout offsets (the grid is the offset parent), which a slide still
+      // under way doesn't move: measuring mid-slide would start another.
+      const spot = { x: node.offsetLeft, y: node.offsetTop };
       next.set(id, spot);
       const was = spots.current.get(id);
       if (!was || still) continue;
       const dx = was.x - spot.x;
       const dy = was.y - spot.y;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      for (const running of node.getAnimations()) running.cancel();
       node.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
         duration: 260,
         easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
@@ -346,12 +348,17 @@ export function WidgetBoard({
     });
   }
 
-  const patch = (id: string, change: Partial<BoardWidget>) =>
-    setLayout((l) =>
-      l.map((w) =>
-        w.id === id && (change.w !== w.w || change.h !== w.h) ? { ...w, ...change } : w,
-      ),
-    );
+  // Unchanged is the same array, so a resize that hasn't crossed into the
+  // next cell renders nothing.
+  const patch = (id: string, change: { w: number; h: number | null }) =>
+    setLayout((l) => {
+      const at = l.findIndex((w) => w.id === id);
+      const was = l[at];
+      if (!was || (was.w === change.w && was.h === change.h)) return l;
+      const next = [...l];
+      next[at] = { ...was, ...change };
+      return next;
+    });
 
   function nudge(id: string, by: number) {
     setLayout((l) => {
@@ -388,7 +395,7 @@ export function WidgetBoard({
     const cols = style.gridTemplateColumns.split(" ").filter(Boolean).length || 1;
     const gap = parseFloat(style.columnGap) || 0;
     const col = (el.clientWidth - gap * (cols - 1)) / cols;
-    return { cols, gap, pitch: col + gap };
+    return { cols, gap, pitch: col + gap, left: el.getBoundingClientRect().left };
   }
 
   const add = (type: string) => {
@@ -410,22 +417,8 @@ export function WidgetBoard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">{intro}</div>
           <InBar>
+            {/* + stays put; Customize becomes Reset and Done (a check) while on. */}
             <div className="flex items-center gap-2 max-md:hidden">
-              {editing && customized && (
-                <Button type="button" variant="ghost" disabled={pending} onClick={reset}>
-                  <RotateCcw className="size-4" aria-hidden="true" />
-                  Reset
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant={editing ? "default" : "outline"}
-                aria-pressed={editing}
-                onClick={() => setEditing((on) => !on)}
-              >
-                <SlidersHorizontal className="size-4" aria-hidden="true" />
-                {editing ? "Done" : "Customize"}
-              </Button>
               <Button
                 type="button"
                 size="icon"
@@ -437,6 +430,35 @@ export function WidgetBoard({
               >
                 <Plus className="size-4" aria-hidden="true" />
               </Button>
+              {editing ? (
+                <>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    aria-label="Reset to the default board"
+                    title="Reset to the default board"
+                    disabled={pending || !customized}
+                    onClick={reset}
+                  >
+                    <RotateCcw className="size-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    aria-label="Done customizing"
+                    title="Done"
+                    onClick={() => setEditing(false)}
+                  >
+                    <Check className="size-4" aria-hidden="true" />
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+                  <SlidersHorizontal className="size-4" aria-hidden="true" />
+                  Customize
+                </Button>
+              )}
             </div>
           </InBar>
         </div>
@@ -494,7 +516,7 @@ export function WidgetBoard({
         >
           <SortableContext items={layout.map((w) => w.id)} strategy={() => null}>
             <div className="@container">
-              <div ref={grid} className={GRID}>
+              <div ref={grid} className={cn(GRID, "relative")}>
                 {layout.map((w) => {
                   const m = meta.get(w.type);
                   if (!m) return null;
@@ -626,7 +648,7 @@ function BoardItem({
   fresh: boolean;
   hiddenOnPhone: boolean;
   actions: ReactNode;
-  measure: () => { cols: number; gap: number; pitch: number } | null;
+  measure: () => { cols: number; gap: number; pitch: number; left: number } | null;
   onShape: (w: number, h: number | null) => void;
   onNudge: (by: number) => void;
   onRemove: () => void;
@@ -637,8 +659,13 @@ function BoardItem({
   const bare = m.frame === "bare";
 
   // The corner follows the pointer a cell at a time: half way into the next
-  // column or row takes it. A narrower screen's two columns read as half and
-  // full width, so a widget wider than half stays as wide as it was.
+  // column or row takes it. Everything is measured from where the widget
+  // was when the drag began, so a widget that moves (a wider one wrapping
+  // to the next row) can't feed back into its own size. It widens only up
+  // to the board's right edge from the column it's in; past that edge it
+  // goes full width. A narrower screen's two columns read as half and full
+  // width, so a widget wider than half stays as wide as it was. Moves are
+  // taken once a frame.
   function startResize(e: React.PointerEvent<HTMLSpanElement>) {
     e.preventDefault();
     e.stopPropagation();
@@ -648,15 +675,30 @@ function BoardItem({
     if (!card || !grid) return;
     handle.setPointerCapture(e.pointerId);
     setResizing(true);
-    const top = card.getBoundingClientRect();
-    const move = (ev: PointerEvent) => {
-      const across = Math.round((ev.clientX - top.left + grid.gap) / grid.pitch);
-      const down = Math.round((ev.clientY - top.top + grid.gap) / grid.pitch);
-      const cols = Math.min(grid.cols, Math.max(1, across));
-      const nw = grid.cols >= BOARD_COLUMNS ? cols : cols >= grid.cols ? Math.max(w.w, cols) : cols;
+    const start = card.getBoundingClientRect();
+    const column = Math.max(0, Math.round((start.left - grid.left) / grid.pitch));
+    const room = Math.max(1, grid.cols - column);
+    const edge = grid.left + grid.cols * grid.pitch - grid.gap;
+    let frame = 0;
+    let last: PointerEvent | null = null;
+    const apply = () => {
+      frame = 0;
+      if (!last) return;
+      const across = Math.round((last.clientX - start.left + grid.gap) / grid.pitch);
+      const down = Math.round((last.clientY - start.top + grid.gap) / grid.pitch);
+      const pastEdge = last.clientX > edge + grid.pitch / 3;
+      const cols = pastEdge ? grid.cols : Math.min(room, Math.max(1, across));
+      const nw =
+        grid.cols >= BOARD_COLUMNS ? cols : cols >= grid.cols ? Math.max(w.w, grid.cols) : cols;
       onShape(nw, Math.min(MAX_ROWS, Math.max(1, down)));
     };
+    const move = (ev: PointerEvent) => {
+      last = ev;
+      if (!frame) frame = requestAnimationFrame(apply);
+    };
     const end = () => {
+      if (frame) cancelAnimationFrame(frame);
+      apply();
       setResizing(false);
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", end);

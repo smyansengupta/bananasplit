@@ -6,7 +6,6 @@ import type { MainWidgets, OwnTxWidgets } from "@/server/overview/home-widgets";
 
 import { Decisions, DecisionsControls } from "./decisions";
 import { Deadlines } from "./deadlines";
-import { FocusTime, FocusTimeControls } from "./focus-time";
 import { HereNow, HereNowControls } from "./here-now";
 import { QuickCapture } from "./quick-capture";
 import { SinceYouWereHere } from "./since-you-were-here";
@@ -81,7 +80,6 @@ export function homeWidgetCards({
         <WhoOwnsWhat orgId={orgId} data={v} />
       )),
       votes: body("votes", d.votes, (v) => <Votes data={v} />),
-      "focus-time": body("focus-time", d.focus, (v) => <FocusTime orgId={orgId} data={v} />),
       "quick-capture": body("quick-capture", d.capture, (v) => (
         <QuickCapture orgId={orgId} orgSlug={orgSlug} viewerId={viewer.userId} data={v} />
       )),
@@ -101,7 +99,6 @@ export function homeWidgetCards({
       "here-now": <HereNowControls orgId={orgId} orgSlug={orgSlug} initial={online} />,
       decisions: <DecisionsControls count={d.decisions?.total ?? 0} href={`${base}/meetings`} />,
       "who-owns-what": <WhoOwnsWhatControls data={d.owners ?? null} />,
-      "focus-time": <FocusTimeControls calendarHref={`${base}/calendar`} />,
     },
   };
 }

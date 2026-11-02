@@ -7,7 +7,6 @@ import type { RecentItem } from "@/server/pins";
 
 import { loadDecisions, type DecisionsData } from "./decisions";
 import { loadDeadlines } from "./deadlines";
-import { loadFocusTime, type FocusTimeData } from "./focus-time";
 import { loadHereNow, type HereNowData } from "./here-now";
 import {
   answeredForms,
@@ -144,7 +143,6 @@ function readWidget<T>(
 export interface MainWidgets {
   hereNow?: HereNowData;
   capture?: QuickCaptureData;
-  focus?: FocusTimeData;
   deadlines?: Deadlines;
 }
 
@@ -168,13 +166,10 @@ export async function loadMainWidgets(
     recent: readonly RecentItem[];
   },
 ): Promise<MainWidgets> {
-  const { orgId, orgSlug, userId, now, timeZone, orgTimeZone } = viewer;
+  const { orgId, orgSlug, now, timeZone, orgTimeZone } = viewer;
   const hereNow = await guarded("here-now", placed, () => loadHereNow(orgSlug, { recent, now }));
   const capture = await guarded("quick-capture", placed, () =>
     loadQuickCapture({ upcoming, now, timeZone, orgTimeZone }),
-  );
-  const focus = await guarded("focus-time", placed, () =>
-    loadFocusTime(db, orgId, orgSlug, { userId, now, timeZone, myDue: shared.myDue }),
   );
   const deadlines = await guarded("deadlines", placed, async () =>
     loadDeadlines({
@@ -193,7 +188,7 @@ export async function loadMainWidgets(
         : null,
     }),
   );
-  return { hereNow, capture, focus, deadlines };
+  return { hereNow, capture, deadlines };
 }
 
 export interface OwnTxWidgets {

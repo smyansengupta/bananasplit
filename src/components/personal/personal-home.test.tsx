@@ -13,6 +13,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 vi.mock("@/app/onboarding/actions", () => ({ joinPendingInvitationAction: vi.fn() }));
 vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({ setTaskStatus: vi.fn() }));
+vi.mock("@/server/overview/focus-time-actions", () => ({ saveFocusAvailability: vi.fn() }));
 
 const { PersonalHome } = await import("./personal-home");
 
