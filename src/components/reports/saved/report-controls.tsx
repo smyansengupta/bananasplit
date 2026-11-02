@@ -6,6 +6,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import {
   archiveReportAction,
   askClaudeAction,
+  saveScheduleAction,
   saveWidgetConfigAction,
   takeSnapshotAction,
   updateReportAction,
@@ -13,6 +14,7 @@ import {
 import { WidgetBoard, type SaveBoard } from "@/components/boards/widget-board";
 import {
   Archive,
+  CalendarClock,
   Camera,
   Ellipsis,
   Globe,
@@ -42,7 +44,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "@/components/ui/toaster";
 import type { BoardWidget, WidgetMeta } from "@/lib/boards";
 import type { ReportWidget, SourceSummary, WidgetConfig } from "@/lib/reports/catalog";
+import { DEFAULT_SCHEDULE, describeSchedule, type ReportSchedule } from "@/lib/reports/schedule";
 
+import { ScheduleFields } from "./report-options";
 import { WidgetSettings } from "./widget-settings";
 
 function useRange(): { range?: string; from?: string; to?: string } {
@@ -161,6 +165,7 @@ export function ReportHeaderControls({
   access,
   canEdit,
   isOwner,
+  schedule,
 }: {
   orgId: string;
   orgSlug: string;
@@ -169,11 +174,14 @@ export function ReportHeaderControls({
   access: "ORGANIZATION" | "PRIVATE";
   canEdit: boolean;
   isOwner: boolean;
+  schedule: ReportSchedule | null;
 }) {
   const router = useRouter();
   const range = useRange();
   const [pending, start] = useTransition();
   const [renaming, setRenaming] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [draft, setDraft] = useState<ReportSchedule | null>(schedule);
   const [name, setName] = useState(title);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, done?: string) =>
@@ -205,6 +213,15 @@ export function ReportHeaderControls({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => {
+                setDraft(schedule ?? DEFAULT_SCHEDULE);
+                setScheduling(true);
+              }}
+            >
+              <CalendarClock aria-hidden="true" />
+              {schedule ? "Change the schedule" : "Send on a schedule"}
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setRenaming(true)}>
               <Pencil aria-hidden="true" />
               Rename
@@ -248,6 +265,36 @@ export function ReportHeaderControls({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+      <Dialog open={scheduling} onOpenChange={setScheduling}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Send on a schedule</DialogTitle>
+            <DialogDescription>
+              Each person gets the report as they see it, and a copy is kept in Past reports.
+            </DialogDescription>
+          </DialogHeader>
+          <ScheduleFields schedule={draft} onChange={setDraft} shared={access === "ORGANIZATION"} />
+          <DialogFooter>
+            <Button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  const result = await saveScheduleAction(orgId, reportId, draft);
+                  if (!result.ok) {
+                    toast({ title: result.error });
+                    return;
+                  }
+                  setScheduling(false);
+                  toast({ title: draft ? describeSchedule(draft) : "It won't send on a schedule" });
+                })
+              }
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

@@ -20,6 +20,8 @@ import {
 import { WidgetBody } from "@/components/reports/saved/widget-bodies";
 import { can } from "@/lib/auth/permissions";
 import { boardTypes } from "@/lib/reports/catalog";
+import { JOINED } from "@/lib/reports/join";
+import { describeSchedule } from "@/lib/reports/schedule";
 import { listAiConnections } from "@/server/ai/connections";
 import { planGate } from "@/server/billing/plan-gate";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
@@ -78,6 +80,9 @@ export default async function SavedReportPage({
   const { report, run, snapshots, tz } = loaded;
   const { source, range, computed } = run;
   const canEdit = canEditReport(report, user.id, role);
+  const joinedName = report.joinWith
+    ? source?.fields.find((f) => f.id.startsWith(JOINED))?.name.match(/\(([^)]+)\)$/)?.[1]
+    : null;
   const base = `/app/${orgSlug}/databases/reports`;
 
   const header = (
@@ -93,6 +98,7 @@ export default async function SavedReportPage({
           access={report.access}
           canEdit={canEdit}
           isOwner={report.createdById === user.id}
+          schedule={report.schedule}
         />
       }
       tabs={
@@ -188,6 +194,7 @@ export default async function SavedReportPage({
       bodies[id] = (
         <WidgetBody
           payload={c.payload}
+          taskActions={{ orgId: organization.id, viewerId: user.id }}
           insightsAction={
             c.payload.type === "insights" && aiReady ? (
               <AskClaudeButton
@@ -275,7 +282,9 @@ export default async function SavedReportPage({
                 {source.truncated
                   ? `, reading the newest ${MAX_REPORT_ROWS.toLocaleString("en-US")} rows`
                   : ""}
+                {report.joinWith && joinedName ? `, joined with ${joinedName}` : ""}
                 {report.access === "PRIVATE" ? ". Only you can open it" : ""}
+                {report.schedule ? `. ${describeSchedule(report.schedule)}` : ""}
               </p>
             }
           />

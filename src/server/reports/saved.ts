@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma/client";
 import type { ReportAccess, Role } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/auth/errors";
 import { can } from "@/lib/auth/permissions";
@@ -14,6 +15,8 @@ import {
   type WidgetType,
 } from "@/lib/reports/catalog";
 import type { ComputedWidget, InsightLine, WidgetPayload } from "@/lib/reports/compute";
+import { joinedSummary, matchableFields, readJoin, type ReportJoin } from "@/lib/reports/join";
+import { readSchedule, type ReportSchedule } from "@/lib/reports/schedule";
 import type { TxClient } from "@/server/db/context";
 import { AppError } from "@/server/db/errors";
 
@@ -44,6 +47,8 @@ export interface ReportSummary {
   snapshots: number;
   lastSnapshotAt: string | null;
   insights: { lines: InsightLine[]; at: string } | null;
+  joinWith: ReportJoin | null;
+  schedule: ReportSchedule | null;
 }
 
 export interface SnapshotWidget {
@@ -93,6 +98,8 @@ const SUMMARY_SELECT = {
   updatedAt: true,
   insights: true,
   insightsAt: true,
+  joinWith: true,
+  schedule: true,
   createdBy: { select: { name: true } },
   _count: { select: { snapshots: true } },
   snapshots: { select: { takenAt: true }, orderBy: { takenAt: "desc" }, take: 1 },
@@ -108,6 +115,8 @@ type SummaryRow = {
   updatedAt: Date;
   insights: unknown;
   insightsAt: Date | null;
+  joinWith: unknown;
+  schedule: unknown;
   createdBy: { name: string | null } | null;
   _count: { snapshots: number };
   snapshots: { takenAt: Date }[];
@@ -126,6 +135,8 @@ function toSummary(r: SummaryRow): ReportSummary {
     snapshots: r._count.snapshots,
     lastSnapshotAt: r.snapshots[0]?.takenAt.toISOString() ?? null,
     insights: readInsights(r.insights, r.insightsAt),
+    joinWith: readJoin(r.joinWith),
+    schedule: readSchedule(r.schedule),
   };
 }
 
@@ -178,10 +189,61 @@ function cleanWidgets(widgets: ReportWidget[], source: SourceSummary, role: Role
   return [...insights, ...kept.filter((w) => w.type !== "insights")];
 }
 
-async function sourceFor(v: SourceViewer, key: string): Promise<SourceSummary> {
-  const source = (await listSources(v)).find((s) => s.key === key);
+/** The report's database with its joined one's fields, as the widgets read it. */
+async function summaryFor(
+  v: SourceViewer,
+  key: string,
+  join: ReportJoin | null,
+): Promise<SourceSummary> {
+  const all = await listSources(v);
+  const source = all.find((s) => s.key === key);
   if (!source) throw new ReportInputError("That database isn't there, or you can't see it.");
-  return source;
+  const other = join ? all.find((s) => s.key === join.source) : null;
+  return join && other ? joinedSummary(source, other, join) : source;
+}
+
+const JOINABLE = new Set(["custom", "tasks", "expenses"]);
+
+/** A join both of whose databases this viewer sees, on fields that exist. */
+async function checkJoin(v: SourceViewer, key: string, raw: unknown): Promise<ReportJoin> {
+  const join = readJoin(raw);
+  if (!join) throw new ReportInputError("Pick the field to join the second database on.");
+  const all = await listSources(v);
+  const mine = all.find((s) => s.key === key);
+  const other = all.find((s) => s.key === join.source);
+  if (!mine || !other || join.source === key) {
+    throw new ReportInputError("That second database isn't there, or you can't see it.");
+  }
+  if (!JOINABLE.has(mine.kind) || !JOINABLE.has(other.kind)) {
+    throw new ReportInputError("Only databases with rows can be joined.");
+  }
+  if (
+    !matchableFields(mine).some((f) => f.id === join.field) ||
+    !matchableFields(other).some((f) => f.id === join.otherField)
+  ) {
+    throw new ReportInputError("Pick a field in each database that names the same thing.");
+  }
+  return join;
+}
+
+function checkSchedule(raw: unknown, access: ReportAccess): ReportSchedule {
+  const schedule = readSchedule(raw);
+  if (!schedule) throw new ReportInputError("Pick when to send it.");
+  // Recipients open what they're sent, so a report for others is a shared one.
+  if (schedule.to !== "me" && access !== "ORGANIZATION") {
+    throw new ReportInputError("Share the report first to send it to anyone but you.");
+  }
+  return schedule;
+}
+
+/** When the report emails itself, or null to stop. */
+export async function saveSchedule(v: SourceViewer, id: string, raw: unknown): Promise<void> {
+  const report = await editable(v, id);
+  const schedule = raw === null ? null : checkSchedule(raw, report.access);
+  await v.db.report.update({
+    where: { id },
+    data: { schedule: schedule === null ? Prisma.DbNull : (schedule as object) },
+  });
 }
 
 export interface CreateReportInput {
@@ -190,6 +252,9 @@ export interface CreateReportInput {
   access: ReportAccess;
   /** The walkthrough's picks, in order, with their shapes and settings. */
   widgets: unknown;
+  /** A second database joined on a shared field. */
+  join?: unknown;
+  schedule?: unknown;
 }
 
 export async function createReport(v: SourceViewer, input: CreateReportInput): Promise<string> {
@@ -198,7 +263,9 @@ export async function createReport(v: SourceViewer, input: CreateReportInput): P
     throw new ReportInputError(title.error.issues[0]?.message ?? "Name the report.");
   const parsed = reportWidgetsSchema.safeParse(input.widgets);
   if (!parsed.success) throw new ReportInputError("Those widgets couldn't be saved. Try again.");
-  const source = await sourceFor(v, input.source);
+  const join = input.join ? await checkJoin(v, input.source, input.join) : null;
+  const source = await summaryFor(v, input.source, join);
+  const schedule = input.schedule ? checkSchedule(input.schedule, input.access) : null;
   const widgets = cleanWidgets(parsed.data, source, v.role);
   if (widgets.length === 0) throw new ReportInputError("Pick at least one widget.");
   const report = await v.db.report.create({
@@ -208,6 +275,8 @@ export async function createReport(v: SourceViewer, input: CreateReportInput): P
       source: source.key,
       access: input.access,
       widgets: widgets as object[],
+      ...(join ? { joinWith: join as object } : {}),
+      ...(schedule ? { schedule: schedule as object } : {}),
       createdById: v.userId,
     },
     select: { id: true },
@@ -237,7 +306,7 @@ export async function saveReportLayout(
   layout: BoardWidget[] | null,
 ): Promise<void> {
   const report = await editable(v, id);
-  const source = await sourceFor(v, report.source);
+  const source = await summaryFor(v, report.source, report.joinWith);
   const byId = new Map(report.widgets.map((w) => [w.id, w]));
   let next: ReportWidget[];
   if (layout === null) {
@@ -332,7 +401,11 @@ export async function takeSnapshot(
       w: c.widget.w,
       h: c.widget.h,
       title: c.title,
-      payload: c.payload,
+      // A copy never keeps anyone's address.
+      payload:
+        c.payload?.type === "stopped"
+          ? { type: "stopped", data: { ...c.payload.data, emails: [] } }
+          : c.payload,
     })),
   };
   const row = await v.db.reportSnapshot.create({

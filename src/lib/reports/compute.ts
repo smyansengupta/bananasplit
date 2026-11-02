@@ -134,10 +134,20 @@ export interface OverduePayload {
     title: string;
     href: string | null;
     owner: string | null;
+    ownerId: string | null;
     date: string;
     daysLate: number;
   }[];
-  stale: { id: string; title: string; href: string | null; owner: string | null; days: number }[];
+  stale: {
+    id: string;
+    title: string;
+    href: string | null;
+    owner: string | null;
+    ownerId: string | null;
+    days: number;
+  }[];
+  /** The rows are tasks: Nudge and Push back work on them. */
+  tasks: boolean;
   overdueCount: number;
   staleCount: number;
   staleDays: number;
@@ -180,6 +190,42 @@ export interface FormResultsPayload {
   }[];
 }
 
+export interface JourneyPayload {
+  steps: { label: string; count: number }[];
+}
+
+export interface ReachPayload {
+  rows: { label: string; came: number; signedUp: number }[];
+  attendees: number;
+}
+
+export interface WhenPayload {
+  /** weekday 0 = Monday. */
+  cells: {
+    weekday: number;
+    slot: "morning" | "afternoon" | "evening";
+    events: number;
+    average: number;
+  }[];
+  best: {
+    weekday: number;
+    slot: "morning" | "afternoon" | "evening";
+    events: number;
+    average: number;
+  } | null;
+}
+
+export interface RegularsPayload {
+  rows: { id: string; name: string; checkIns: number; lastDate: string }[];
+}
+
+export interface StoppedPayload {
+  rows: { id: string; name: string; sessions: number; lastDate: string | null }[];
+  total: number;
+  /** Their addresses, for Invite them back (never kept in a copy). */
+  emails: string[];
+}
+
 export interface InsightLine {
   text: string;
   widgetId: string | null;
@@ -207,7 +253,12 @@ export type WidgetPayload =
   | { type: "spread"; data: SpreadPayload }
   | { type: "health"; data: HealthPayload }
   | { type: "form-results"; data: FormResultsPayload }
-  | { type: "insights"; data: InsightsPayload };
+  | { type: "insights"; data: InsightsPayload }
+  | { type: "journey"; data: JourneyPayload }
+  | { type: "reach"; data: ReachPayload }
+  | { type: "when"; data: WhenPayload }
+  | { type: "regulars"; data: RegularsPayload }
+  | { type: "stopped"; data: StoppedPayload };
 
 // ---- Dates -------------------------------------------------------------------
 
@@ -676,9 +727,13 @@ function computeOverdue(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): 
   const c = w.config;
   const staleDays = c.staleDays ?? 30;
   const due = field(s, c.date);
-  const owner = (r: ReportRow) => {
+  const ownerId = (r: ReportRow) => {
     const id = c.owner ? r.values[c.owner] : undefined;
-    return typeof id === "string" ? (s.members[id] ?? "Former member") : null;
+    return typeof id === "string" ? id : null;
+  };
+  const owner = (r: ReportRow) => {
+    const id = ownerId(r);
+    return id ? (s.members[id] ?? "Former member") : null;
   };
   const open = s.records.filter((r) => !isDone(s, r, c.group));
   const overdue = due
@@ -690,6 +745,7 @@ function computeOverdue(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): 
           title: x.r.title || "Untitled",
           href: x.r.href,
           owner: owner(x.r),
+          ownerId: ownerId(x.r),
           date: x.d,
           daysLate: daysFrom(x.d, ctx.today),
         }))
@@ -703,6 +759,7 @@ function computeOverdue(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): 
       title: r.title || "Untitled",
       href: r.href,
       owner: owner(r),
+      ownerId: ownerId(r),
       days: daysFrom(localDay(r.updatedAt, ctx.tz), ctx.today),
     }))
     .filter((x) => x.days >= staleDays)
@@ -714,6 +771,7 @@ function computeOverdue(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): 
     staleCount: stale.length,
     staleDays,
     hasDate: Boolean(due),
+    tasks: s.kind === "tasks",
   };
 }
 

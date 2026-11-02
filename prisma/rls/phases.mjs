@@ -463,6 +463,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "EVENT_REMINDER",
           // A new answer on a form (20261031160000_forms).
           "FORM_RESPONSE",
+          // A saved report on its schedule (20261102180000_report_join_schedule).
+          "REPORT_SENT",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         // Home's Decisions (20261102100000_home_widgets).

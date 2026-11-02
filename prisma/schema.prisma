@@ -504,6 +504,8 @@ enum NotificationType {
   EVENT_REMINDER
   // A new answer to a form you made (src/server/forms/public.ts)
   FORM_RESPONSE
+  // A saved report on its schedule (src/server/reports/jobs.ts)
+  REPORT_SENT
 }
 
 model Notification {
@@ -3083,6 +3085,11 @@ model Report {
   /// Claude's last reading of the report ({lines: [...]}), and when.
   insights       Json?
   insightsAt     DateTime?
+  /// A second database joined on a shared field: {source, field, otherField}
+  /// (src/lib/reports/join.ts).
+  joinWith       Json?
+  /// When it emails itself: {every, day, hour, to} (src/lib/reports/schedule.ts).
+  schedule       Json?
   createdById    String?
   archivedAt     DateTime?
   createdAt      DateTime     @default(now())

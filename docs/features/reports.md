@@ -57,6 +57,34 @@ report for everyone, dated, until someone asks again.
 other span is compared with as many days just before it. A report reads the
 newest 5,000 rows of its database and says so when there are more.
 
+**A second database.** Step 1 can join another database on a shared field
+(Expenses' "Paid to" against Sponsors' "Name", ignoring case and spaces):
+each row picks up the matching row's fields, named "Tier (Sponsors)", and
+any widget can use them. The first match wins; a row with none leaves them
+empty.
+
+**On a schedule.** Step 3, or the report's ••• menu, sends it every week
+or month at a local hour, to you, owners and admins, or everyone (the last
+two only for a shared report). Each send keeps a copy in Past reports and
+emails every recipient the report computed as them, so nobody is sent a
+row they couldn't open (/api/cron/task-digest enqueues report-send, which
+queues report-email per person). Members turn it off on their profile
+(REPORT_SENT).
+
+**People and events, optional.** From signup to regular, Who you reach (by
+class year), When people come (weekday by morning, afternoon, evening),
+Regulars and Stopped coming (owners and admins; Invite them back opens an
+email to all of them, and copies never keep the addresses).
+
+**Overdue tasks.** Wherever a late task shows (Home's My tasks, Waiting on
+others, a report's Overdue and stale), Push back moves its due date
+(tomorrow, three days, next Monday, a week) and Nudge comments on it
+mentioning its owner.
+
+**Past reports** lists saved reports, kept copies and scheduled reports by
+month, and Reports home's Ask box answers a question from every report's
+numbers with the organization's model (nothing is kept).
+
 ## The built-in reports
 
 ### For an org

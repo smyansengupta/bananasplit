@@ -68,6 +68,7 @@ export function MyTasksCard({
       // The epic or story it sits in (an epic shows as its chip when it's further up).
       context: task.parentTask ? `Part of ${task.parentTask.title}` : null,
       due: task.dueDate ? dueLabel(dueDateKey(task.dueDate), todayKey) : null,
+      late: task.dueDate ? dueDateKey(task.dueDate) < todayKey : false,
       high: extra?.priority === "HIGH",
       chips: (links?.get(`task:${task.id}`) ?? [])
         .filter((c) => !c.done)

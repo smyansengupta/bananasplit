@@ -24,9 +24,12 @@ import {
   type SourceSummary,
   type WidgetType,
 } from "@/lib/reports/catalog";
+import { joinedSummary, type ReportJoin } from "@/lib/reports/join";
+import type { ReportSchedule } from "@/lib/reports/schedule";
 import { cn } from "@/lib/utils";
 
 import { ReportIcon } from "./icons";
+import { JoinPanel, ScheduleFields } from "./report-options";
 import { WidgetSettings } from "./widget-settings";
 
 const STEPS = ["Pick a database", "Pick widgets", "Arrange and share"] as const;
@@ -140,7 +143,15 @@ export function ReportWizard({
   const first = sources.find((s) => s.key === initialSource) ?? null;
   const [step, setStep] = useState(first ? 1 : 0);
   const [sourceKey, setSourceKey] = useState<string | null>(first?.key ?? null);
-  const source = sources.find((s) => s.key === sourceKey) ?? null;
+  const base = sources.find((s) => s.key === sourceKey) ?? null;
+  const [join, setJoin] = useState<ReportJoin | null>(null);
+  const [schedule, setSchedule] = useState<ReportSchedule | null>(null);
+  const joined = join ? sources.find((s) => s.key === join.source) : null;
+  // The widgets read the joined database's fields too.
+  const source = useMemo(
+    () => (base && join && joined ? joinedSummary(base, joined, join) : base),
+    [base, join, joined],
+  );
   const [picked, setPicked] = useState<ReportWidget[]>(() => (first ? suggest(first) : []));
   const [open, setOpen] = useState<string | null>(null);
   const [title, setTitle] = useState(first?.name ?? "");
@@ -164,6 +175,7 @@ export function ReportWizard({
   function pickSource(s: SourceSummary) {
     if (s.key !== sourceKey) {
       setSourceKey(s.key);
+      setJoin(null);
       setPicked(suggest(s));
       setTitle(s.name);
       setOpen(null);
@@ -196,6 +208,8 @@ export function ReportWizard({
         source: source.key,
         access,
         widgets: picked,
+        join,
+        schedule: schedule && access !== "ORGANIZATION" ? { ...schedule, to: "me" } : schedule,
       });
       if (!result.ok) {
         setError(result.error);
@@ -365,6 +379,19 @@ export function ReportWizard({
               </div>
             </div>
           )}
+          {base && (
+            <JoinPanel
+              base={base}
+              sources={sources}
+              join={join}
+              onChange={(next) => {
+                setJoin(next);
+                const other = next ? sources.find((s) => s.key === next.source) : null;
+                setPicked(suggest(next && other ? joinedSummary(base, other, next) : base));
+                setOpen(null);
+              }}
+            />
+          )}
           {footer(
             <Button type="button" disabled={!source} onClick={() => go(1)}>
               Next: pick widgets
@@ -491,6 +518,13 @@ export function ReportWizard({
               <span className="text-muted-foreground text-xs">
                 Each person sees only the {source.name.toLowerCase()} rows they can open themselves.
               </span>
+            </div>
+            <div className="sm:col-span-2">
+              <ScheduleFields
+                schedule={schedule}
+                onChange={setSchedule}
+                shared={access === "ORGANIZATION"}
+              />
             </div>
           </div>
           {error && (

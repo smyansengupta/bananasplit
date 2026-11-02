@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 
 import { setTaskStatus } from "@/app/app/[orgSlug]/tasks/actions";
+import { PushBackButton } from "@/components/tasks/overdue-actions";
 import { TagChip } from "@/components/ui/chip";
 import { toast } from "@/components/ui/toaster";
 import { TaskStatus } from "@/generated/prisma/enums";
@@ -34,6 +35,8 @@ export interface TaskRowData {
   /** "Subtask of …", when it is one. */
   context: string | null;
   due: { text: string; tone: DueTone } | null;
+  /** Past its due date: Push back sits beside the date. */
+  late?: boolean;
   high: boolean;
   /** What it's linked to. */
   chips?: readonly ItemRef[];
@@ -133,6 +136,11 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
         )}
       </div>
       <span className="flex shrink-0 items-center gap-1.5">
+        {task.late && !done && (
+          <span className="relative z-10">
+            <PushBackButton orgId={orgId} taskId={task.id} title={task.title} size="icon-sm" />
+          </span>
+        )}
         {task.high && (
           <span
             title="High priority"

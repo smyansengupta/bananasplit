@@ -19,14 +19,23 @@ import { resolveAiCredentials } from "@/server/ai/connections";
 import { AiImportError } from "@/server/ai/generate";
 import { withOrgAction } from "@/server/db/context";
 import type { RangeParams } from "@/server/reports/range";
-import { reportViewer, runReport, writeInsights } from "@/server/reports/run";
+import {
+  answerAboutReports,
+  builtInInsights as eventsInsights,
+  loadBuiltInReports,
+  reportViewer,
+  runReport,
+  writeInsights,
+} from "@/server/reports/run";
 import {
   ReportInputError,
   archiveReport,
   createReport,
   getReport,
+  listReports,
   saveInsights,
   saveReportLayout,
+  saveSchedule,
   saveWidgetConfig,
   takeSnapshot,
   updateReportDetails,
@@ -144,6 +153,23 @@ export async function updateReportAction(
   }
 }
 
+/** When the report emails itself (null stops it). */
+export async function saveScheduleAction(
+  organizationId: string,
+  reportId: string,
+  schedule: unknown,
+): Promise<ReportResult> {
+  try {
+    await reportsAction(async (ctx) => saveSchedule(await reportViewer(ctx), reportId, schedule))(
+      organizationId,
+    );
+    refresh();
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 export async function archiveReportAction(
   organizationId: string,
   reportId: string,
@@ -211,7 +237,11 @@ export async function askClaudeAction(
       const report = await getReport(ctx.db, organizationId, reportId);
       const run = await runReport(v, { ...report, insights: null }, range);
       if (!run.source) throw new ReportInputError("You can't see this report's database any more.");
-      return { report, run };
+      const settings = await ctx.db.orgSettings.findUnique({
+        where: { organizationId },
+        select: { reportsDataVersion: true, reportsRefreshSeconds: true, updatedAt: true },
+      });
+      return { report, run, role: ctx.role, tz: v.tz, settings };
     })(organizationId);
   } catch (error) {
     return failure(error);
@@ -224,14 +254,31 @@ export async function askClaudeAction(
         "No AI model is connected yet. An owner or admin can connect one in Admin panel › Integrations.",
     };
   }
+  const types = new Set(read.run.computed.map((c) => c.widget.type));
+  const builtIn = await loadBuiltInReports({
+    orgId: organizationId,
+    role: read.role,
+    tz: read.tz,
+    range: read.run.range,
+    settings: read.settings,
+    want: { attendance: types.has("attendance"), retention: types.has("retention") },
+  });
+  const ids = (type: string) => read.run.computed.find((c) => c.widget.type === type)?.widget.id;
   let lines;
   try {
     lines = await writeInsights(creds, {
+      builtIn,
       title: read.report.title,
       sourceName: read.run.source!.name,
       range: read.run.range,
       computed: read.run.computed,
-      fallback: builtInInsights(read.run.computed, read.run.range),
+      fallback: [
+        ...eventsInsights(builtIn.attendance, builtIn.retention, {
+          attendance: ids("attendance"),
+          retention: ids("retention"),
+        }),
+        ...builtInInsights(read.run.computed, read.run.range),
+      ].slice(0, 5),
     });
   } catch (error) {
     if (error instanceof AiImportError) return { ok: false, error: error.message };
@@ -246,4 +293,58 @@ export async function askClaudeAction(
   }
   refresh();
   return { ok: true };
+}
+
+const ASK_PER_MEMBER_PER_HOUR = 30;
+
+/**
+ * Reports home's "Ask about your reports": every report the member can see,
+ * computed as them, goes to the organization's model as data with their
+ * question, and a short answer comes back. Nothing is kept.
+ */
+export async function askReportsAction(
+  organizationId: string,
+  question: string,
+  range: RangeParams,
+): Promise<ReportResult<{ answer: string }>> {
+  const asked = question.trim().slice(0, 500);
+  if (!asked) return { ok: false, error: "Ask a question first." };
+  const user = await requireUser();
+  const hit = await checkRateLimit(
+    rateLimitKey("reports-ask", organizationId, user.id),
+    ASK_PER_MEMBER_PER_HOUR,
+    60 * 60,
+  );
+  if (!hit.allowed)
+    return { ok: false, error: `That's a lot of questions. Try again ${retryAfterText(hit)}.` };
+  let reports;
+  try {
+    reports = await reportsAction(async (ctx) => {
+      const v = await reportViewer(ctx);
+      const out = [];
+      for (const report of (await listReports(ctx.db, organizationId)).slice(0, 12)) {
+        const run = await runReport(v, report, range);
+        if (run.source) out.push({ title: report.title, source: run.source.name, run });
+      }
+      return out;
+    })(organizationId);
+  } catch (error) {
+    return failure(error);
+  }
+  if (reports.length === 0) return { ok: false, error: "Make a report first, then ask about it." };
+  const creds = await resolveAiCredentials(organizationId, null);
+  if (!creds) {
+    return {
+      ok: false,
+      error:
+        "No AI model is connected yet. An owner or admin can connect one in Admin panel › Integrations.",
+    };
+  }
+  try {
+    const answer = await answerAboutReports(creds, asked, reports);
+    return { ok: true, answer };
+  } catch (error) {
+    if (error instanceof AiImportError) return { ok: false, error: error.message };
+    throw error;
+  }
 }

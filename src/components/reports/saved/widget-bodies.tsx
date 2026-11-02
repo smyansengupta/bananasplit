@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { BarList } from "@/components/reports/bar-list";
+import { NudgeButton, PushBackButton } from "@/components/tasks/overdue-actions";
 import { Stat } from "@/components/reports/stat";
 import { CHOICE_COLOR_CLASS } from "@/lib/databases/fields";
 import { formatValue, shortDay, type InsightLine, type WidgetPayload } from "@/lib/reports/compute";
@@ -161,10 +162,13 @@ function Lines({ lines }: { lines: InsightLine[] }) {
 export function WidgetBody({
   payload,
   insightsAction,
+  taskActions,
 }: {
   payload: WidgetPayload;
   /** Insights' Ask Claude button (the report page passes it to people who may use it). */
   insightsAction?: ReactNode;
+  /** Nudge and Push back on late tasks (the live report; a kept copy has none). */
+  taskActions?: { orgId: string; viewerId: string };
 }) {
   switch (payload.type) {
     case "insights": {
@@ -427,11 +431,22 @@ export function WidgetBody({
       const d = payload.data;
       if (d.overdueCount === 0 && d.staleCount === 0)
         return <Empty>Nothing overdue or stale.</Empty>;
-      const row = (title: string, href: string | null, sub: string, tag: string) => {
+      const row = (
+        r: {
+          id: string;
+          title: string;
+          href: string | null;
+          owner: string | null;
+          ownerId: string | null;
+        },
+        sub: string,
+        tag: string,
+        late: boolean,
+      ) => {
         const body = (
           <>
             <span className="min-w-0 flex-1">
-              <b className="block truncate text-sm">{title}</b>
+              <b className="block truncate text-sm">{r.title}</b>
               <span className="text-muted-foreground text-xs">{sub}</span>
             </span>
             <span className="bg-tint-danger text-tint-danger-foreground shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold">
@@ -439,15 +454,41 @@ export function WidgetBody({
             </span>
           </>
         );
-        return href ? (
-          <Link
-            href={href}
-            className="hover:bg-muted/60 focus-glow rounded-field -mx-2 flex items-center gap-3 px-2 py-2 outline-none"
-          >
-            {body}
-          </Link>
-        ) : (
-          <div className="flex items-center gap-3 py-2">{body}</div>
+        // A late task gets Nudge (someone else's) and Push back, on the live report only.
+        const actions =
+          d.tasks && taskActions ? (
+            <span className="flex shrink-0 items-center gap-1.5">
+              {r.ownerId && r.ownerId !== taskActions.viewerId && (
+                <NudgeButton
+                  orgId={taskActions.orgId}
+                  taskId={r.id}
+                  person={{ id: r.ownerId, name: r.owner }}
+                />
+              )}
+              {late && (
+                <PushBackButton
+                  orgId={taskActions.orgId}
+                  taskId={r.id}
+                  title={r.title}
+                  size="icon-sm"
+                />
+              )}
+            </span>
+          ) : null;
+        return (
+          <div className="flex items-center gap-2">
+            {r.href ? (
+              <Link
+                href={r.href}
+                className="hover:bg-muted/60 focus-glow rounded-field -mx-2 flex min-w-0 flex-1 items-center gap-3 px-2 py-2 outline-none"
+              >
+                {body}
+              </Link>
+            ) : (
+              <div className="flex min-w-0 flex-1 items-center gap-3 py-2">{body}</div>
+            )}
+            {actions}
+          </div>
         );
       };
       return (
@@ -455,17 +496,15 @@ export function WidgetBody({
           {d.overdue.map((r) => (
             <div key={r.id}>
               {row(
-                r.title,
-                r.href,
+                r,
                 `${r.owner ?? "No owner"}. Due ${shortDay(r.date)}`,
                 `${r.daysLate} days late`,
+                true,
               )}
             </div>
           ))}
           {d.stale.slice(0, Math.max(0, 6 - d.overdue.length)).map((r) => (
-            <div key={r.id}>
-              {row(r.title, r.href, r.owner ?? "No owner", `${r.days} days untouched`)}
-            </div>
+            <div key={r.id}>{row(r, r.owner ?? "No owner", `${r.days} days untouched`, false)}</div>
           ))}
           <p className="text-muted-foreground pt-1 text-xs">
             {d.overdueCount} past due, {d.staleCount} untouched for {d.staleDays} days or more
@@ -644,6 +683,173 @@ export function WidgetBody({
             </section>
           ))}
           <p className="text-muted-foreground text-xs">Free-text answers never show here.</p>
+        </div>
+      );
+    }
+    case "journey": {
+      const d = payload.data;
+      const first = d.steps[0]?.count ?? 0;
+      if (first === 0) return <Empty>Nobody signed up in this span.</Empty>;
+      return (
+        <div className="flex flex-col gap-2">
+          {d.steps.map((s) => (
+            <div
+              key={s.label}
+              className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm"
+            >
+              <span className="truncate font-medium">{s.label}</span>
+              <span className="bg-muted h-6 overflow-hidden rounded-full" aria-hidden="true">
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${Math.max(s.count ? 4 : 0, (s.count / first) * 100)}%`,
+                    background: "var(--chart-1)",
+                  }}
+                />
+              </span>
+              <span className="text-right tabular-nums">
+                <b>{s.count}</b>
+                <span className="text-muted-foreground ms-2 inline-block w-10 text-xs">
+                  {Math.round((s.count / first) * 100)}%
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case "reach": {
+      const d = payload.data;
+      if (d.rows.length === 0) return <Empty>No signups with a class year yet.</Empty>;
+      return (
+        <div className="flex flex-col gap-3">
+          <BarList
+            label="Who came, by class year"
+            items={d.rows.map((r) => ({
+              key: r.label,
+              label: r.label,
+              value: r.came,
+              display: `${r.came} of ${r.signedUp}`,
+              detail: r.signedUp
+                ? `${Math.round((r.came / r.signedUp) * 100)}% of those who signed up came`
+                : null,
+            }))}
+          />
+        </div>
+      );
+    }
+    case "when": {
+      const d = payload.data;
+      if (d.cells.length === 0) return <Empty>No events with check-ins in this span.</Empty>;
+      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const slots = ["morning", "afternoon", "evening"] as const;
+      const max = Math.max(1, ...d.cells.map((c) => c.average));
+      const cell = (wd: number, slot: (typeof slots)[number]) =>
+        d.cells.find((c) => c.weekday === wd && c.slot === slot);
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-center text-xs">
+              <thead>
+                <tr className="text-muted-foreground">
+                  <th className="pb-1.5" />
+                  {days.map((day) => (
+                    <th key={day} className="pb-1.5 font-semibold">
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {slots.map((slot) => (
+                  <tr key={slot}>
+                    <th className="text-muted-foreground pr-2 text-left font-semibold capitalize">
+                      {slot}
+                    </th>
+                    {days.map((day, wd) => {
+                      const c = cell(wd, slot);
+                      return (
+                        <td key={day} className="p-0.5">
+                          <span
+                            className="grid h-9 place-items-center rounded-[8px] font-semibold tabular-nums"
+                            style={{
+                              background: c
+                                ? `color-mix(in oklab, var(--chart-1) ${Math.round(18 + (c.average / max) * 62)}%, var(--card))`
+                                : "var(--muted)",
+                              color: c && c.average / max > 0.6 ? "var(--card)" : undefined,
+                            }}
+                            title={c ? `${c.events} events, ${c.average} a session` : "No events"}
+                          >
+                            {c ? Math.round(c.average) : ""}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {d.best && (
+            <p className="text-muted-foreground text-xs">
+              {days[d.best.weekday]} {d.best.slot}s draw the most: {d.best.average} a session over{" "}
+              {d.best.events} event{d.best.events === 1 ? "" : "s"}.
+            </p>
+          )}
+        </div>
+      );
+    }
+    case "regulars": {
+      const d = payload.data;
+      if (d.rows.length === 0) return <Empty>Nobody checked in this span.</Empty>;
+      return (
+        <ol className="flex flex-col gap-1.5">
+          {d.rows.map((r, i) => (
+            <li key={r.id} className="flex items-center gap-2.5 text-sm">
+              <span className="text-muted-foreground w-4 text-right text-xs tabular-nums">
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium">{r.name}</span>
+              <span className="font-semibold tabular-nums">{r.checkIns}</span>
+            </li>
+          ))}
+        </ol>
+      );
+    }
+    case "stopped": {
+      const d = payload.data;
+      if (d.total === 0) return <Empty>Nobody who came often has stopped.</Empty>;
+      const invite =
+        d.emails.length > 0
+          ? `mailto:?bcc=${encodeURIComponent(d.emails.join(","))}&subject=${encodeURIComponent("We miss you")}`
+          : null;
+      return (
+        <div className="flex flex-col gap-2">
+          <ul className="divide-border divide-y">
+            {d.rows.map((r) => (
+              <li key={r.id} className="flex items-center gap-3 py-2 text-sm">
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate">{r.name}</b>
+                  <span className="text-muted-foreground text-xs">
+                    Came {r.sessions} times{r.lastDate ? `, last on ${shortDay(r.lastDate)}` : ""}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-muted-foreground text-xs">
+              {d.total} who came three or more times
+            </span>
+            {invite && (
+              <a
+                href={invite}
+                className="bg-foreground text-background focus-glow rounded-full px-3.5 py-1.5 text-xs font-semibold outline-none"
+              >
+                Invite {d.emails.length === 1 ? "them" : `all ${d.emails.length}`} back
+              </a>
+            )}
+          </div>
         </div>
       );
     }
