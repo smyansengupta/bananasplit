@@ -9,13 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const calls = vi.hoisted(
-  () =>
-    [] as {
-      fn: (...a: unknown[]) => unknown;
-      keyParts: string[];
-      options: unknown;
-      args: unknown[];
-    }[],
+  () => [] as { fn: (...a: unknown[]) => unknown; keyParts: string[]; options: unknown; args: unknown[] }[],
 );
 vi.mock("next/cache", () => ({
   unstable_cache: (fn: (...a: unknown[]) => unknown, keyParts: string[], options: unknown) => {
@@ -118,9 +112,7 @@ describe("report cache keys", () => {
   it("change when reportsDataVersion is bumped or the settings change", async () => {
     const base = await keyOf("stamps", keyFor());
     expect(await keyOf("stamps", keyFor({ dataVersion: 5 }))).not.toBe(base);
-    expect(await keyOf("stamps", keyFor({ settingsStamp: "2026-09-21T00:00:00.000Z" }))).not.toBe(
-      base,
-    );
+    expect(await keyOf("stamps", keyFor({ settingsStamp: "2026-09-21T00:00:00.000Z" }))).not.toBe(base);
   });
 
   it("tag every entry with the tags.ts reports tags the services invalidate", async () => {
@@ -140,9 +132,6 @@ describe("report cache keys", () => {
   });
 
   it("write all time as empty strings", () => {
-    expect(reportCacheArgs("attendance", keyFor({ from: null, to: null })).slice(3, 5)).toEqual([
-      "",
-      "",
-    ]);
+    expect(reportCacheArgs("attendance", keyFor({ from: null, to: null })).slice(3, 5)).toEqual(["", ""]);
   });
 });

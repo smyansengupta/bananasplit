@@ -57,12 +57,7 @@ export function upperBound(to: string | null, tz: string): Prisma.Sql {
 }
 
 /** `col` within the org-local range [from, to] (both inclusive days). */
-export function inRange(
-  col: Prisma.Sql,
-  from: string | null,
-  to: string | null,
-  tz: string,
-): Prisma.Sql {
+export function inRange(col: Prisma.Sql, from: string | null, to: string | null, tz: string): Prisma.Sql {
   return Prisma.sql`${col} >= ${lowerBound(from, tz)} AND ${col} < ${upperBound(to, tz)}`;
 }
 

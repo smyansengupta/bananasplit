@@ -55,11 +55,7 @@ export const reportLinks = {
   sessions(slug: string, range: LinkRange, kind?: string): string {
     const filters: DbViewFilter[] = [HELD];
     if (kind) filters.push({ col: "kind", op: "eq", value: kind });
-    return dbViewHref(slug, "sessions", {
-      filters,
-      ...dates(range),
-      sort: { col: "startsAt", dir: "asc" },
-    });
+    return dbViewHref(slug, "sessions", { filters, ...dates(range), sort: { col: "startsAt", dir: "asc" } });
   },
 
   /** First-ever check-ins in the range: one row per new attendee. */
