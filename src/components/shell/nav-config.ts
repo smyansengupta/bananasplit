@@ -82,14 +82,14 @@ export const PERSONAL_NAV: readonly {
     exact: false,
     group: "collect",
   },
-  // Notes and uploads together, as in a club: one library at /notes.
+  // Notes and uploads together, as in an organization: one library at /notes, in Data.
   {
     id: "notes",
     label: "Files",
     icon: "FolderOpen",
     path: "/notes",
     exact: false,
-    group: "workspace",
+    group: "collect",
   },
 ];
 

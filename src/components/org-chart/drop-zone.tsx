@@ -1,8 +1,8 @@
 "use client";
 
-import { FileUp, Loader2 } from "@/components/icons";
+import { FileUp, Loader2, Upload } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,10 @@ import { cn } from "@/lib/utils";
  * the real type) and opens the new draft. The portal's own parser runs
  * inside that request, so a document it understands is ready to review by
  * the time the draft opens; anything it cannot read shows its progress.
+ *
+ * The "tile" variant is the org chart start screen's "Bring what you
+ * have": the whole tile is the button, and text pasted anywhere on the
+ * page outside a field is imported as a plain-text document.
  */
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -23,10 +27,12 @@ export function DropZone({
   orgId,
   orgSlug,
   disabled,
+  variant = "default",
 }: {
   orgId: string;
   orgSlug: string;
   disabled?: boolean;
+  variant?: "default" | "tile";
 }) {
   const router = useRouter();
   const inputId = useId();
@@ -34,6 +40,7 @@ export function DropZone({
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const tile = variant === "tile";
 
   async function upload(file: File) {
     setError(null);
@@ -68,9 +75,47 @@ export function DropZone({
   }
 
   const inactive = disabled || busy !== null;
+  const uploadRef = useRef(upload);
+  useEffect(() => {
+    uploadRef.current = upload;
+  });
+
+  // The tile takes text or a file pasted anywhere outside a field.
+  useEffect(() => {
+    if (!tile || inactive) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      const file = e.clipboardData?.files[0];
+      const text = e.clipboardData?.getData("text/plain")?.trim();
+      if (!file && !text) return;
+      e.preventDefault();
+      void uploadRef.current(
+        file ?? new File([text as string], "pasted.txt", { type: "text/plain" }),
+      );
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [tile, inactive]);
+
+  const fileInput = (
+    <input
+      ref={input}
+      id={inputId}
+      type="file"
+      accept={ACCEPT}
+      className="sr-only"
+      tabIndex={tile ? -1 : undefined}
+      disabled={inactive}
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (file) void upload(file);
+      }}
+    />
+  );
 
   return (
-    <div className="space-y-2">
+    <div className={cn("space-y-2", tile && "flex flex-1 flex-col")}>
       <div
         onDragOver={(e) => {
           if (inactive) return;
@@ -92,8 +137,23 @@ export function DropZone({
           const file = e.dataTransfer.files[0];
           if (file) void upload(file);
         }}
+        {...(tile
+          ? {
+              role: "button",
+              tabIndex: inactive ? -1 : 0,
+              "aria-disabled": inactive || undefined,
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (inactive || (e.key !== "Enter" && e.key !== " ")) return;
+                e.preventDefault();
+                input.current?.click();
+              },
+            }
+          : {})}
         className={cn(
-          "flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
+          "flex flex-col items-center justify-center text-center transition-colors",
+          tile
+            ? "bg-muted/50 focus-visible:outline-foreground min-h-[150px] flex-1 gap-2 rounded-2xl border-[1.5px] border-dashed p-6 outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+            : "gap-3 rounded-xl border-2 border-dashed p-8",
           over ? "border-primary bg-primary/5" : "border-border",
           inactive ? "opacity-60" : "hover:bg-muted/40 cursor-pointer",
         )}
@@ -105,6 +165,15 @@ export function DropZone({
               Uploading {busy}…
             </p>
           </>
+        ) : tile ? (
+          <>
+            <Upload className="size-5" aria-hidden="true" />
+            <span className="text-[13.5px] font-semibold">Drop a file, or paste text</span>
+            <span className="text-muted-foreground text-[12.5px]">
+              Word, PDF, Markdown or plain text
+            </span>
+            {fileInput}
+          </>
         ) : (
           <>
             <FileUp className="text-muted-foreground size-8" aria-hidden="true" />
@@ -114,18 +183,7 @@ export function DropZone({
                 Word, Markdown, text or PDF, up to 4 MB.
               </p>
             </div>
-            <input
-              ref={input}
-              id={inputId}
-              type="file"
-              accept={ACCEPT}
-              className="sr-only"
-              disabled={inactive}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void upload(file);
-              }}
-            />
+            {fileInput}
             <Button
               type="button"
               variant="outline"

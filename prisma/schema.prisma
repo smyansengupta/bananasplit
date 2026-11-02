@@ -2181,6 +2181,10 @@ model OrgSettings {
   /// The sidebar for everyone in the org: [{ id, hidden?, label? }] in order
   /// (src/lib/nav/sidebar.ts). NULL: the default sidebar. OWNER/ADMIN edit it.
   sidebar                       Json?
+  /// The add-ons this organization has added ("forms", "finance";
+  /// src/lib/addons.ts). One that isn't here stays out of the sidebar and
+  /// New; its data is never touched. Backfilled from use when introduced.
+  addOns                        String[]         @default([])
   // The weekly pulse (PulseIssue)
   pulseEnabled                  Boolean          @default(true)
   /// The day it goes out, 0 Sunday … 6 Saturday (as weeklyUpdateDay).

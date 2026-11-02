@@ -201,7 +201,7 @@ function NavItemLink({
 export const SECTION_NAMES: Record<string, string> = {
   plan: "Planning",
   collect: "Data",
-  workspace: "Files & apps",
+  workspace: "Integrations and apps",
   money: "Money",
 };
 

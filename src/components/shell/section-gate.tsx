@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff } from "@/components/icons";
+import { EyeOff, LayoutGrid } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,7 +19,15 @@ export function SectionGate({
 }: {
   orgSlug: string;
   /** Every section's paths, and whether the org hid it. */
-  sectionPaths: readonly { path: string; also?: readonly string[]; hidden: boolean }[];
+  sectionPaths: readonly {
+    id?: string;
+    path: string;
+    also?: readonly string[];
+    hidden: boolean;
+    /** An add-on the organization hasn't added (src/lib/addons.ts). */
+    notAdded?: boolean;
+    label?: string;
+  }[];
   isAdmin: boolean;
   children: React.ReactNode;
 }) {
@@ -28,13 +36,49 @@ export function SectionGate({
   // The most specific section wins: Polls lives under Calendar, and each
   // can be on or off by itself.
   const match = sectionPaths
-    .flatMap((s) => [s.path, ...(s.also ?? [])].map((path) => ({ path, hidden: s.hidden })))
+    .flatMap((s) =>
+      [s.path, ...(s.also ?? [])].map((path) => ({
+        path,
+        hidden: s.hidden,
+        notAdded: s.notAdded ?? false,
+        id: s.id,
+        label: s.label,
+      })),
+    )
     .filter(
       (s) =>
         s.path && (pathname === `${base}${s.path}` || pathname.startsWith(`${base}${s.path}/`)),
     )
     .sort((a, b) => b.path.length - a.path.length)[0];
   if (!match?.hidden) return <>{children}</>;
+  // An add-on nobody has added yet: its page says what it is, and how to add it.
+  if (match.notAdded && match.id) {
+    return (
+      <EmptyState
+        icon={LayoutGrid}
+        title={`${match.label ?? "This"} isn't added yet`}
+        description={
+          isAdmin
+            ? "It's an add-on. See what it does and add it in one click."
+            : "It's an add-on. Ask an owner or admin to add it."
+        }
+        action={
+          isAdmin ? (
+            <Link
+              href={`${base}/integrations/${match.id}`}
+              className="text-sm underline underline-offset-4"
+            >
+              See {match.label ?? "it"}
+            </Link>
+          ) : (
+            <Link href={base} className="text-sm underline underline-offset-4">
+              Back to Home
+            </Link>
+          )
+        }
+      />
+    );
+  }
   if (isAdmin) {
     return (
       <div className="space-y-4">

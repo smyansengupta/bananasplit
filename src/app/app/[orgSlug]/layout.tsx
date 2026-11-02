@@ -184,12 +184,16 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         user={shellUser}
         pins={pins}
         counts={counts ? { inbox: counts.inbox, forms: counts.forms, finance: counts.finance } : {}}
-        sections={navSections(ctx.organization.slug, visibleSidebar(ctx.settings?.sidebar), {
-          space: ctx.organization,
-          // Owners and admins see what the plan lacks (locked); members don't.
-          showLocked: can({ role: ctx.role }, "settings.view"),
-        })}
-        sectionPaths={resolveSidebar(ctx.settings?.sidebar)
+        sections={navSections(
+          ctx.organization.slug,
+          visibleSidebar(ctx.settings?.sidebar, ctx.settings?.addOns ?? []),
+          {
+            space: ctx.organization,
+            // Owners and admins see what the plan lacks (locked); members don't.
+            showLocked: can({ role: ctx.role }, "settings.view"),
+          },
+        )}
+        sectionPaths={resolveSidebar(ctx.settings?.sidebar, ctx.settings?.addOns ?? [])
           .flatMap((g) => g.items)
           .map((i) => ({
             id: i.id,
@@ -198,6 +202,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
             path: i.path,
             also: i.also,
             hidden: i.hidden,
+            ...(i.notAdded ? { notAdded: true } : {}),
             icon: i.icon,
             description: i.description,
           }))}

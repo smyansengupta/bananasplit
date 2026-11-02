@@ -2,9 +2,10 @@ import { normalizeOrgChart, type NormalizedChart } from "./normalize";
 import type { OrgChartParse } from "./schema";
 
 /**
- * The starter structure: the roles a student club almost always has, laid
- * out and written up, with nobody in them. An org that has no document to
- * upload picks this instead of an empty page and fills in the names.
+ * The starter structure ("A president and VPs"): the roles an organization
+ * almost always has, laid out and written up, with nobody in them. An org
+ * that has no document to upload picks this instead of an empty page and
+ * fills in the names.
  *
  * Every title, responsibility and decision here is a suggestion the admin
  * edits or deletes in the draft editor. It goes through the same
@@ -31,7 +32,7 @@ const positions: OrgChartParse["positions"] = [
   },
   {
     id: "advisor",
-    title: "Faculty Advisor",
+    title: "Advisor",
     person_name: null,
     reports_to: "president",
     manages: [],

@@ -173,8 +173,18 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
 
 export const OVERVIEW_WIDGET_TYPES = OVERVIEW_WIDGETS.map((w) => w.type);
 
-export function overviewWidgetsFor(isAdmin: boolean): OverviewWidgetMeta[] {
-  return OVERVIEW_WIDGETS.filter((w) => isAdmin || !w.admin);
+/** Widgets that belong to an add-on (src/lib/addons.ts), offered only once it's added. */
+const ADD_ON_WIDGETS: Partial<Record<string, string>> = { polls: "forms" };
+
+export function overviewWidgetsFor(
+  isAdmin: boolean,
+  addOns?: readonly string[] | null,
+): OverviewWidgetMeta[] {
+  return OVERVIEW_WIDGETS.filter((w) => {
+    const addOn = ADD_ON_WIDGETS[w.type];
+    if (addOn && addOns != null && !addOns.includes(addOn)) return false;
+    return isAdmin || !w.admin;
+  });
 }
 
 /**
@@ -206,8 +216,12 @@ const DEFAULT_LAYOUT: readonly BoardWidget[] = [
  * onto it, and widgets that are gone drop out (parseBoard keeps only known
  * types).
  */
-export function resolveOverview(saved: unknown, isAdmin: boolean): BoardWidget[] {
-  const allowed = overviewWidgetsFor(isAdmin).map((w) => w.type);
+export function resolveOverview(
+  saved: unknown,
+  isAdmin: boolean,
+  addOns?: readonly string[] | null,
+): BoardWidget[] {
+  const allowed = overviewWidgetsFor(isAdmin, addOns).map((w) => w.type);
   if (saved != null) {
     const parsed = parseBoard(saved, allowed);
     if (parsed) return parsed;

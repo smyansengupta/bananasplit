@@ -1,0 +1,31 @@
+import type { Metadata } from "next";
+
+import { ReviewScreen } from "@/components/org-chart/quick/review-screen";
+import { planGate } from "@/server/billing/plan-gate";
+
+import { loadQuickDraft } from "../quick-data";
+
+export const metadata: Metadata = { title: "Check your org chart" };
+
+/** "Draft my chart": the drafted chart, what to check, and Publish. */
+export default async function ReviewDraftPage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string; versionId: string }>;
+}) {
+  const { orgSlug, versionId } = await params;
+  const planLock = await planGate(orgSlug, "people");
+  if (planLock) return planLock;
+  const data = await loadQuickDraft(orgSlug, versionId);
+  return (
+    <ReviewScreen
+      key={data.version.editVersion}
+      orgId={data.organization.id}
+      orgSlug={orgSlug}
+      version={data.version}
+      positions={data.positions}
+      members={data.members}
+      canSetTitles={data.canSetTitles}
+    />
+  );
+}

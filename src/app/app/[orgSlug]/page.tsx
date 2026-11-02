@@ -177,7 +177,9 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const now = new Date();
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
-    const placed = new Set(resolveOverview(saved, isAdmin).map((w) => w.type));
+    const placed = new Set(
+      resolveOverview(saved, isAdmin, settings?.addOns).map((w) => w.type),
+    );
     const me = await db.user.findUnique({
       where: { id: user.id },
       select: { timezone: true, name: true, image: true, avatar: true },
@@ -851,8 +853,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     <div className="space-y-6">
       <OverviewBoard
         orgId={org.id}
-        types={overviewWidgetsFor(isAdmin)}
-        initialLayout={resolveOverview(data.saved, isAdmin)}
+        types={overviewWidgetsFor(isAdmin, settings?.addOns)}
+        initialLayout={resolveOverview(data.saved, isAdmin, settings?.addOns)}
         customized={data.saved !== null}
         bodies={bodies}
         headerActions={headerActions}

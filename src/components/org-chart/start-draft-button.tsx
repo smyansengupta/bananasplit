@@ -7,7 +7,7 @@ import { startDraftAction } from "@/app/app/[orgSlug]/org-chart/actions";
 import { Button } from "@/components/ui/button";
 
 /**
- * "Edit the chart", "Start from scratch" and "Start from the club template":
+ * "Edit the chart", "Start from scratch" and "Start from the template":
  * creates a MANUAL draft and opens it. Never calls Claude.
  */
 export function StartDraftButton({
