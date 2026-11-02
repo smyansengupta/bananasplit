@@ -17,6 +17,7 @@ import {
   ReportHeaderControls,
   WidgetSettingsButton,
 } from "@/components/reports/saved/report-controls";
+import { AskReports } from "@/components/reports/saved/ask-reports";
 import { WidgetBody } from "@/components/reports/saved/widget-bodies";
 import { can } from "@/lib/auth/permissions";
 import { boardTypes } from "@/lib/reports/catalog";
@@ -201,14 +202,22 @@ export default async function SavedReportPage({
         <WidgetBody
           payload={c.payload}
           taskActions={{ orgId: organization.id, viewerId: user.id }}
-          insightsAction={
-            c.payload.type === "insights" && aiReady ? (
-              <AskClaudeButton
-                orgId={organization.id}
-                reportId={report.id}
-                again={c.payload.data.byClaude}
-              />
-            ) : undefined
+          insights={
+            c.payload.type === "insights"
+              ? {
+                  on: source.name,
+                  rewrite: aiReady ? (
+                    <AskClaudeButton
+                      orgId={organization.id}
+                      reportId={report.id}
+                      again={c.payload.data.byClaude}
+                    />
+                  ) : undefined,
+                  ask: aiReady ? (
+                    <AskReports orgId={organization.id} reportId={report.id} />
+                  ) : undefined,
+                }
+              : undefined
           }
         />
       );

@@ -139,16 +139,27 @@ function asData(value: unknown): string {
 }
 
 const insightsSchema = z.object({
+  lead: z.string().max(300),
   lines: z
     .array(
       z.object({
         text: z.string().max(280),
+        bold: z.string().max(60).nullable(),
         widgetId: z.string().max(40).nullable(),
         tone: z.enum(["info", "good", "warn"]),
+        direction: z.enum(["up", "down"]).nullable(),
       }),
     )
     .max(5),
+  next: z.string().max(300).nullable(),
 });
+
+/** A reading: the sentence on top, the lines under it, and the next step. */
+export interface InsightReading {
+  lead: string | null;
+  lines: InsightLine[];
+  next: string | null;
+}
 
 /**
  * Claude's reading of a report: the widgets' numbers (never a row's name
@@ -166,7 +177,7 @@ export async function writeInsights(
     computed: readonly ComputedWidget[];
     fallback: InsightLine[];
   },
-): Promise<InsightLine[]> {
+): Promise<InsightReading> {
   const widgets: { id: string; title: string; type: string; data: unknown }[] = [];
   for (const c of input.computed) {
     if (c.payload && c.payload.type !== "insights") {
@@ -204,7 +215,7 @@ export async function writeInsights(
     "<report_data>",
     asData(widgets).slice(0, 60_000),
     "</report_data>",
-    "Write 3 to 5 short sentences for the organization's officers: what changed, what's off, and end with one thing to do next. Use the numbers. Name the widget each sentence comes from by its id (widgetId), or null.",
+    "For the organization's leaders, write: `lead`, one sentence that says what matters most across the report; `lines`, 3 to 5 short sentences, the most pressing first, each with the figure that matters in it copied exactly into `bold` (or null), the widget it comes from by its id in `widgetId` (or null), `tone` (warn for something going wrong, good for something going right, else info) and `direction` (up or down when a number moved, else null); and `next`, one concrete thing to do next. Use the numbers; don't repeat the lead in the lines.",
   ].join("\n");
   const result = await generateStructured(creds, {
     system:
@@ -213,12 +224,33 @@ export async function writeInsights(
     schema: insightsSchema,
     name: "report_insights",
     maxOutputTokens: 900,
-    standin: () => ({ lines: input.fallback }),
+    standin: () => ({
+      lead: input.fallback[0]?.text ?? "",
+      lines: input.fallback.slice(1).map((l) => ({
+        text: l.text,
+        bold: l.bold ?? null,
+        widgetId: l.widgetId,
+        tone: l.tone,
+        direction: l.direction ?? null,
+      })),
+      next: input.fallback.find((l) => l.next)?.next ?? null,
+    }),
   });
-  return result.data.lines.map((l) => ({
-    ...l,
-    widgetId: l.widgetId && known.has(l.widgetId) ? l.widgetId : null,
-  }));
+  const titles = new Map(widgets.map((w) => [w.id, w.title]));
+  return {
+    lead: result.data.lead.trim() || null,
+    lines: result.data.lines.map((l) => {
+      const widgetId = l.widgetId && known.has(l.widgetId) ? l.widgetId : null;
+      // A bold figure that isn't in its sentence is dropped, not shown on its own.
+      return {
+        ...l,
+        widgetId,
+        bold: l.bold && l.text.includes(l.bold) ? l.bold : null,
+        label: widgetId ? (titles.get(widgetId) ?? null) : null,
+      };
+    }),
+    next: result.data.next?.trim() || null,
+  };
 }
 
 /**
@@ -239,6 +271,8 @@ export function builtInInsights(
     lines.push({
       tone: "info",
       widgetId: widgetIds.attendance ?? null,
+      label: "Attendance over time",
+      bold: `${attendance.totalCheckIns.toLocaleString("en-US")} check-ins`,
       text: `${attendance.totalCheckIns.toLocaleString("en-US")} check-ins over ${n} session${n === 1 ? "" : "s"}, ${attendance.average} a session${peak ? `; the most came to ${peak.title} (${peak.checkIns})` : ""}.`,
     });
   }
@@ -246,6 +280,8 @@ export function builtInInsights(
     lines.push({
       tone: "info",
       widgetId: widgetIds.retention ?? null,
+      label: "Retention",
+      bold: `${retention.regulars} came three or more times`,
       text:
         retention.returning === 0
           ? `${retention.attendees === 1 ? "The 1 person" : `All ${people(retention.attendees)}`} who came ${when} ${retention.attendees === 1 ? "was" : "were"} new; ${retention.regulars} came three or more times.`
@@ -255,6 +291,9 @@ export function builtInInsights(
       lines.push({
         tone: "warn",
         widgetId: widgetIds.retention ?? null,
+        label: "Retention",
+        bold: people(retention.lapsedInRange),
+        next: `Invite back the ${people(retention.lapsedInRange)} who stopped coming.`,
         text: `${people(retention.lapsedInRange)} who used to come have missed the last ${retention.lapsedAfterSessions} sessions.`,
       });
     }

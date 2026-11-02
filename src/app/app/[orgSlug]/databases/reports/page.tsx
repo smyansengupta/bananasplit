@@ -1,4 +1,4 @@
-import { ChartNoAxesColumn, Plus, Sparkles } from "@/components/icons";
+import { ChartNoAxesColumn, Plus } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { RangePicker } from "@/components/reports/range-picker";
 import { ReportsBody, ReportsFrame } from "@/components/reports/reports-frame";
 import { AskReports } from "@/components/reports/saved/ask-reports";
+import { InsightsCard } from "@/components/reports/saved/insights-card";
 import { CreateSuggestedButton } from "@/components/reports/saved/create-suggested-button";
 import { ReportIcon } from "@/components/reports/saved/icons";
 import { Button } from "@/components/ui/button";
@@ -264,43 +265,19 @@ export default async function ReportsPage({
 
         <ReportsBody className="space-y-8">
           {lines.length > 0 && (
-            <section
-              aria-labelledby="h-insights"
-              className="bg-muted/45 rounded-card grid gap-6 p-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:p-7"
-            >
-              <div className="flex flex-col gap-3">
-                <span className="text-muted-foreground flex items-center gap-2 text-[13px] font-semibold">
-                  <Sparkles className="size-4" aria-hidden="true" />
-                  <span id="h-insights">Insights</span>
-                </span>
-                <p className="heading text-[22px] leading-snug tracking-tight">{lead}</p>
-                {aiReady && (
-                  <div className="mt-auto">
-                    <AskReports orgId={organization.id} />
-                  </div>
-                )}
-              </div>
-              <ul className="bg-card ring-foreground/6 rounded-tile divide-border divide-y ring-1">
-                {lines.slice(0, 5).map(({ line, report }) => (
-                  <li key={report.id}>
-                    <Link
-                      href={withRange(`${base}/${report.id}`)}
-                      className="group/line hover:bg-muted/40 flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 first:rounded-t-[inherit] last:rounded-b-[inherit]"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={cn("mt-1.5 size-2 shrink-0 rounded-full", TONE_DOT[line.tone])}
-                      />
-                      <span className="min-w-0 flex-1 basis-56 text-[14px] leading-relaxed">
-                        {line.text}
-                      </span>
-                      <span className="text-muted-foreground mt-0.5 shrink-0 text-xs font-semibold group-hover/line:underline max-sm:ms-5">
-                        {report.title}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+            <section aria-label="Insights">
+              <InsightsCard
+                wide
+                subtitle={`Across your ${n} report${n === 1 ? "" : "s"}, from their numbers`}
+                lead={lead}
+                lines={lines.slice(0, 6).map(({ line, report }) => ({
+                  ...line,
+                  label: report.title,
+                  href: withRange(`${base}/${report.id}`),
+                }))}
+                next={lines.find((l) => l.line.next)?.line.next ?? null}
+                ask={aiReady ? <AskReports orgId={organization.id} /> : undefined}
+              />
             </section>
           )}
 

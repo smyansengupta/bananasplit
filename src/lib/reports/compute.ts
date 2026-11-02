@@ -234,10 +234,22 @@ export interface InsightLine {
   text: string;
   widgetId: string | null;
   tone: "info" | "good" | "warn";
+  /** The figure in the sentence to set in bold ("9 tasks", "$4,750"). */
+  bold?: string | null;
+  /** Which way it moved, for the line's arrow. */
+  direction?: "up" | "down" | null;
+  /** The widget it comes from, for its link ("Amount by category"). */
+  label?: string | null;
+  /** A next step this line suggests ("What I'd do next"). */
+  next?: string | null;
 }
 
 export interface InsightsPayload {
+  /** The one sentence on top; when absent, the first line is it. */
+  lead?: string | null;
   lines: InsightLine[];
+  /** "What I'd do next"; when absent, the first line's suggestion. */
+  next?: string | null;
   /** Claude wrote them (an older reading kept on the report), not the built-in reading. */
   byClaude: boolean;
   at: string | null;
@@ -1118,12 +1130,20 @@ export function readInsights(
           warn.push({
             tone: "warn",
             widgetId: id,
+            label: title,
+            bold: rowsOf(source, d.overdueCount),
+            next: d.tasks
+              ? `Nudge whoever owns the ${rowsOf(source, d.overdueCount)} past due, or push their dates back.`
+              : `Follow up on the ${rowsOf(source, d.overdueCount)} past due, starting with ${first.title}.`,
             text: `${rowsOf(source, d.overdueCount)} ${d.overdueCount === 1 ? "is" : "are"} past due. The longest overdue is ${first.title}, ${days(first.daysLate)} late${first.owner ? ` (${first.owner})` : ""}.`,
           });
         } else if (d.staleCount > 0) {
           warn.push({
             tone: "warn",
             widgetId: id,
+            label: title,
+            bold: rowsOf(source, d.staleCount),
+            next: `Update or close the ${rowsOf(source, d.staleCount)} nobody has changed in ${d.staleDays} days.`,
             text: `${rowsOf(source, d.staleCount)} ${d.staleCount === 1 ? "hasn't" : "haven't"} been changed in ${d.staleDays} days or more.`,
           });
         }
@@ -1139,6 +1159,14 @@ export function readInsights(
                 ? "good"
                 : "info",
           widgetId: id,
+          label: title,
+          bold: formatValue(d.value, d.format),
+          direction:
+            d.deltaPct !== null && Math.abs(d.deltaPct) >= 1
+              ? d.deltaPct > 0
+                ? "up"
+                : "down"
+              : null,
           text: `${title}: ${formatValue(d.value, d.format)} ${spanPhrase(span)}${change(d.deltaPct, d.previousLabel)}.`,
         });
         break;
@@ -1150,6 +1178,8 @@ export function readInsights(
           lines.push({
             tone: "info",
             widgetId: id,
+            label: title,
+            bold: `${Math.round(top.share)}%`,
             text: d.multi
               ? `${top.label} is on ${Math.round(top.share)}% of ${rowsNoun(source)}.`
               : fieldName(widget.config.field)
@@ -1166,6 +1196,8 @@ export function readInsights(
           lines.push({
             tone: "info",
             widgetId: id,
+            label: title,
+            bold: `${stuck.count} of ${d.total}`,
             text: `More sit at ${stuck.label} than at any other stage: ${stuck.count} of ${d.total}.`,
           });
         }
@@ -1177,6 +1209,12 @@ export function readInsights(
           lines.push({
             tone: d.pct >= 100 ? "good" : "info",
             widgetId: id,
+            label: title,
+            bold: d.pct >= 100 ? formatValue(d.value, d.format) : `${d.pct}%`,
+            next:
+              d.pct < 100 && d.perWeek
+                ? `Aim for ${formatValue(d.perWeek, d.format)} a week to reach ${title.replace(/^Goal: /, "")}.`
+                : null,
             text:
               d.pct >= 100
                 ? `${title} reached: ${formatValue(d.value, d.format)} of ${formatValue(d.target, d.format)}.`
@@ -1191,6 +1229,8 @@ export function readInsights(
           lines.push({
             tone: "info",
             widgetId: id,
+            label: title,
+            bold: `${d.topShare}%`,
             text: `The biggest 10% of ${rowsNoun(source)} make up ${d.topShare}% of the total ${lowerFirst(fieldName(widget.config.field) ?? "amount")}, so the average (${formatValue(d.average ?? 0, d.format)}) runs high; the median is ${formatValue(d.median ?? 0, d.format)}.`,
           });
         }
@@ -1202,6 +1242,9 @@ export function readInsights(
           warn.push({
             tone: "warn",
             widgetId: id,
+            label: title,
+            bold: `${d.duplicates.length} name${d.duplicates.length === 1 ? "" : "s"}`,
+            next: `Merge the names that appear more than once, starting with ${d.duplicates[0].title}.`,
             text: `${d.duplicates.length} name${d.duplicates.length === 1 ? " appears" : "s appear"} more than once, starting with ${d.duplicates[0].title}.`,
           });
         }
@@ -1212,6 +1255,8 @@ export function readInsights(
           lines.push({
             tone: "info",
             widgetId: id,
+            label: title,
+            bold: `${payload.data.busiestWeekday}s`,
             text: `${payload.data.busiestWeekday}s are the busiest day.`,
           });
         }
@@ -1230,7 +1275,7 @@ export function computeReport(
   source: LoadedSource,
   ctx: ComputeContext,
   /** Claude's reading for this viewer and these dates, when there is one. */
-  saved: { lines: InsightLine[]; at: string } | null,
+  saved: { lines: InsightLine[]; lead?: string | null; next?: string | null; at: string } | null,
 ): ComputedWidget[] {
   const out: ComputedWidget[] = widgets.map((widget) => ({
     widget,
@@ -1243,7 +1288,13 @@ export function computeReport(
     item.payload = {
       type: "insights",
       data: saved
-        ? { lines: saved.lines, byClaude: true, at: saved.at }
+        ? {
+            lead: saved.lead ?? null,
+            lines: saved.lines,
+            next: saved.next ?? null,
+            byClaude: true,
+            at: saved.at,
+          }
         : { lines, byClaude: false, at: null },
     };
   }

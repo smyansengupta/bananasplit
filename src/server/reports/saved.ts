@@ -79,7 +79,9 @@ export interface SnapshotSummary {
 }
 
 export interface SavedInsights {
+  lead: string | null;
   lines: InsightLine[];
+  next: string | null;
   at: string;
   /** Who asked: the rows Claude read were theirs. */
   by: string | null;
@@ -89,7 +91,14 @@ export interface SavedInsights {
 
 function readInsights(raw: unknown, at: Date | null): ReportSummary["insights"] {
   if (!raw || typeof raw !== "object" || !at) return null;
-  const r = raw as { lines?: unknown; by?: unknown; from?: unknown; to?: unknown };
+  const r = raw as {
+    lead?: unknown;
+    lines?: unknown;
+    next?: unknown;
+    by?: unknown;
+    from?: unknown;
+    to?: unknown;
+  };
   const lines = r.lines;
   if (!Array.isArray(lines)) return null;
   const text = (v: unknown) => (typeof v === "string" ? v : null);
@@ -100,7 +109,9 @@ function readInsights(raw: unknown, at: Date | null): ReportSummary["insights"] 
       ["info", "good", "warn"].includes((l as InsightLine).tone),
   );
   return {
+    lead: text(r.lead),
     lines: ok.slice(0, 6),
+    next: text(r.next),
     at: at.toISOString(),
     by: text(r.by),
     from: text(r.from),
@@ -465,14 +476,14 @@ export async function restoreReport(v: SourceViewer, id: string): Promise<void> 
 export async function saveInsights(
   v: SourceViewer,
   id: string,
-  lines: InsightLine[],
+  reading: { lead: string | null; lines: InsightLine[]; next: string | null },
   range: { from: string | null; to: string | null },
 ): Promise<void> {
   await editable(v, id);
   await v.db.report.update({
     where: { id },
     data: {
-      insights: { lines, by: v.userId, from: range.from, to: range.to } as object,
+      insights: { ...reading, by: v.userId, from: range.from, to: range.to } as object,
       insightsAt: new Date(),
     },
   });

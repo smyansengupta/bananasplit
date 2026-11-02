@@ -2,10 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { BarList } from "@/components/reports/bar-list";
+import { InsightsCard, splitReading } from "@/components/reports/saved/insights-card";
 import { NudgeButton, PushBackButton } from "@/components/tasks/overdue-actions";
 import { Stat } from "@/components/reports/stat";
 import { CHOICE_COLOR_CLASS } from "@/lib/databases/fields";
-import { formatValue, shortDay, type InsightLine, type WidgetPayload } from "@/lib/reports/compute";
+import { formatValue, shortDay, type WidgetPayload } from "@/lib/reports/compute";
 import { cn } from "@/lib/utils";
 
 /**
@@ -126,71 +127,46 @@ function Columns({
   );
 }
 
-function Lines({ lines }: { lines: InsightLine[] }) {
-  return (
-    <ul className="flex flex-col gap-2.5">
-      {lines.map((l, i) => (
-        <li key={i} className="flex items-start gap-2.5 text-[15px] leading-snug">
-          <span
-            aria-hidden="true"
-            className={cn(
-              "mt-1 size-2.5 shrink-0 rounded-full",
-              l.tone === "warn"
-                ? "bg-[var(--chart-4)]"
-                : l.tone === "good"
-                  ? "bg-[var(--chart-3)]"
-                  : "bg-[var(--chart-1)]",
-            )}
-          />
-          <span>
-            {l.text}
-            {l.widgetId ? (
-              <a
-                href={`#w-${l.widgetId}`}
-                className="text-muted-foreground hover:text-foreground ms-1.5 text-[13px] underline-offset-2 hover:underline"
-              >
-                See it
-              </a>
-            ) : null}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function WidgetBody({
   payload,
-  insightsAction,
+  insights,
   taskActions,
 }: {
   payload: WidgetPayload;
-  /** Insights' Ask Claude button (the report page passes it to people who may use it). */
-  insightsAction?: ReactNode;
+  /**
+   * Insights' extras on the live report: the database it reads, and (for
+   * whoever may use them) Rewrite and the ask box. A kept copy has none.
+   */
+  insights?: { on?: string; rewrite?: ReactNode; ask?: ReactNode };
   /** Nudge and Push back on late tasks (the live report; a kept copy has none). */
   taskActions?: { orgId: string; viewerId: string };
 }) {
   switch (payload.type) {
     case "insights": {
       const d = payload.data;
+      const { lead, lines, next } = splitReading(d);
+      const by =
+        d.byClaude && d.at
+          ? `written by Claude, ${new Date(d.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+          : "from this report's numbers";
       return (
-        <div className="flex flex-col gap-3">
-          {d.lines.length ? (
-            <Lines lines={d.lines} />
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              Nothing stands out yet. Add rows, or widgets with numbers, and this fills in.
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-muted-foreground text-xs">
-              {d.byClaude && d.at
-                ? `Written by Claude on ${new Date(d.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                : "From the numbers below"}
-            </span>
-            {insightsAction}
-          </div>
-        </div>
+        <InsightsCard
+          className="min-h-0 flex-1 overflow-auto"
+          subtitle={insights?.on ? `On ${insights.on}, ${by}` : by[0].toUpperCase() + by.slice(1)}
+          lead={lead}
+          lines={lines.map((l) => ({
+            ...l,
+            href: l.widgetId ? `#w-${l.widgetId}` : null,
+          }))}
+          next={next}
+          rewrite={insights?.rewrite}
+          ask={insights?.ask}
+          foot={
+            insights?.ask
+              ? "Reads only what's on this report, and only what you can see."
+              : undefined
+          }
+        />
       );
     }
     case "number": {

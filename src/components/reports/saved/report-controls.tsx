@@ -22,7 +22,6 @@ import {
   Lock,
   Pencil,
   Settings,
-  Sparkles,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
@@ -126,7 +125,7 @@ export function WidgetSettingsButton({
   );
 }
 
-/** Insights' Ask Claude: reads the report again and keeps what Claude says on it. */
+/** Insights' Ask Claude (Rewrite once it has): Claude reads the report and its reading is kept on it. */
 export function AskClaudeButton({
   orgId,
   reportId,
@@ -151,8 +150,7 @@ export function AskClaudeButton({
         })
       }
     >
-      <Sparkles aria-hidden="true" />
-      {pending ? "Claude is reading..." : again ? "Read it again" : "Ask Claude"}
+      {pending ? "Writing..." : again ? "Rewrite" : "Ask Claude"}
     </Button>
   );
 }

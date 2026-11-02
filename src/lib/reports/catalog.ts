@@ -552,7 +552,8 @@ export function boardTypes(source: SourceSummary, isAdmin: boolean): WidgetMeta[
       icon: WIDGETS[t].icon,
       w: WIDGETS[t].w,
       h: WIDGETS[t].h,
-      ...(builtIn ? { frame: "bare" as const } : {}),
+      // Insights draws its own card too, with its own title row.
+      ...(builtIn || t === "insights" ? { frame: "bare" as const } : {}),
     };
   });
 }

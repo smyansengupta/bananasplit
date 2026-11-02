@@ -357,6 +357,8 @@ export async function askReportsAction(
   organizationId: string,
   question: string,
   range: RangeParams,
+  /** One report's own "Ask about this report"; else every report. */
+  reportId?: string,
 ): Promise<ReportResult<{ answer: string }>> {
   const asked = question.trim().slice(0, 500);
   if (!asked) return { ok: false, error: "Ask a question first." };
@@ -384,7 +386,9 @@ export async function askReportsAction(
     reports = await reportsAction(async (ctx) => {
       const v = await reportViewer(ctx);
       const out = [];
-      for (const report of (await listReports(ctx.db, organizationId)).slice(0, 12)) {
+      const all = await listReports(ctx.db, organizationId);
+      const picked = reportId ? all.filter((r) => r.id === reportId) : all.slice(0, 12);
+      for (const report of picked) {
         const run = await runReport(v, report, range);
         if (run.source) out.push({ title: report.title, source: run.source.name, run });
       }
@@ -393,7 +397,12 @@ export async function askReportsAction(
   } catch (error) {
     return failure(error);
   }
-  if (reports.length === 0) return { ok: false, error: "Make a report first, then ask about it." };
+  if (reports.length === 0) {
+    return {
+      ok: false,
+      error: reportId ? "You can't open this report." : "Make a report first, then ask about it.",
+    };
+  }
   const creds = await resolveAiCredentials(organizationId, null);
   if (!creds) {
     return {
