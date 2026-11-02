@@ -4,21 +4,27 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 
 import { discardDraftAction } from "@/app/app/[orgSlug]/org-chart/actions";
+import { useMediaQuery } from "@/components/calendar/hooks";
 import { Check, Plus, Search, X } from "@/components/icons";
 import type { EditorMember } from "@/components/org-chart/editor/member-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/toaster";
 import { UserAvatar } from "@/components/user-avatar";
 import { addPosition, removePosition, type DraftPosition } from "@/lib/org-chart/draft";
 import { normalizeName } from "@/lib/org-chart/match";
+import { outlineOrder } from "@/lib/org-chart/outline";
 import {
   isFilled,
   nextEmptySeat,
   searchMembers,
   seatOrder,
   seatSuggestions,
+  withOpenSeats,
 } from "@/lib/org-chart/quick";
 import type { NamedTeam } from "@/lib/org-chart/teams";
 import type { OpenItem } from "@/lib/org-chart/types";
@@ -27,15 +33,21 @@ import { cn } from "@/lib/utils";
 import { useDraftSaver } from "./use-draft-saver";
 
 /**
- * "Start from a shape": the shape's seats as a small tree. Each empty seat
- * takes a typed name (member autocomplete; Enter fills it and moves to the
- * next empty seat), a one-click confirm of the member whose own title fits
- * the seat, or a member dragged (or clicked) in from the list beside it.
- * Titles rename in place; a seat left empty publishes as an open role. It
- * all saves into an ordinary draft and publishes with the normal publish.
+ * "Start from a shape": the shape's seats as a small tree (an indented
+ * list on a phone). Each empty seat takes a typed name (member
+ * autocomplete, which leaves out anyone already seated; Enter fills it and
+ * moves to the next empty seat), a one-tap confirm of the member whose own
+ * title fits the seat, or a member tapped in from the list beside it
+ * (dragging works too, on a desktop). Titles rename in place. Nothing is
+ * saved until something changes; a seat left empty is marked an open role
+ * at Publish. It all saves into an ordinary draft and publishes with the
+ * normal publish.
  */
 
 const MEMBER_TYPE = "application/x-bananasplit-member";
+
+/** Below Tailwind's sm breakpoint the seats are a list, not a tree. */
+const NARROW = "(max-width: 39.99rem)";
 
 type Option =
   { kind: "member"; member: EditorMember } | { kind: "name"; name: string } | { kind: "open" };
@@ -99,11 +111,15 @@ export function SeatsScreen({
 }) {
   const router = useRouter();
   const listId = useId();
+  const narrow = useMediaQuery(NARROW);
+  const [confirmEl, confirm] = useConfirm();
   const [pending, startTransition] = useTransition();
+  const [publishing, startPublish] = useTransition();
   const [status, setStatus] = useState<string | null>(null);
-  // An empty seat is an open role; a filled one is not.
-  const [initial] = useState(() => given.map((p) => ({ ...p, isOpen: !isFilled(p) })));
-  const initiallyDirty = initial.some((p, i) => p.isOpen !== given[i].isOpen);
+  const [setTitles, setSetTitles] = useState(true);
+  /** Published with a change that came in too late: stay, say so, edit nothing more. */
+  const [published, setPublished] = useState(false);
+  const locked = pending || publishing || published;
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -124,11 +140,10 @@ export function SeatsScreen({
     setRenaming((r) => (r ? { ...r, id: remap(r.id) as string } : r));
     setFocusTarget((t) => (t ? { ...t, id: remap(t.id) as string } : t));
   };
-  const { positions, change, publish, error, keyOf } = useDraftSaver({
+  const { positions, change, pause, publish, error, keyOf } = useDraftSaver({
     orgId,
     version,
-    initial,
-    initiallyDirty,
+    initial: given,
     onRemap,
   });
 
@@ -158,6 +173,7 @@ export function SeatsScreen({
     }
     return map;
   }, [positions]);
+  const outline = useMemo(() => outlineOrder(positions), [positions]);
   const unseated = members.filter((m) => !seated.has(m.id));
   const listed = find.trim()
     ? unseated.filter((m) => normalizeName(m.name ?? "").includes(normalizeName(find)))
@@ -167,6 +183,7 @@ export function SeatsScreen({
   const optionsFor = (q: string): Option[] => {
     const text = q.trim();
     if (!text) return [];
+    // Anyone already in a seat is left out, so nobody lands in two by accident.
     const found = searchMembers(text, members, seated, 5);
     const out: Option[] = found.map((member) => ({ kind: "member", member }));
     if (found.length === 0) out.push({ kind: "name", name: text });
@@ -187,6 +204,7 @@ export function SeatsScreen({
   };
 
   const fill = (seatId: string, update: (p: DraftPosition) => DraftPosition, moveOn = true) => {
+    if (locked) return;
     let after: DraftPosition[] = [];
     change((current) => {
       after = current.map((p) => (p.id === seatId ? update(p) : p));
@@ -196,12 +214,13 @@ export function SeatsScreen({
   };
 
   const pick = (seatId: string, option: Option) => {
+    if (locked) return;
     if (option.kind === "member") fill(seatId, (p) => filled(p, option.member));
     else if (option.kind === "name") fill(seatId, (p) => named(p, option.name));
     else goNext(seatId, positions);
   };
 
-  /** Where a clicked member goes: the seat last worked on, else the first empty one. */
+  /** Where a tapped member goes: the seat last worked on, else the first empty one. */
   const seatForClick = () => {
     const active = activeId ? positions.find((p) => p.id === activeId) : undefined;
     if (active && !isFilled(active)) return active.id;
@@ -217,6 +236,7 @@ export function SeatsScreen({
   };
 
   const addSeat = () => {
+    if (locked) return;
     const id = `new-seat-${Date.now().toString(36)}`;
     change((current) =>
       addPosition(current, top?.id ?? null, id).map((p) =>
@@ -226,44 +246,73 @@ export function SeatsScreen({
     setRenaming({ id, title: "New seat" });
   };
 
-  const onDifferentShape = () =>
+  /** Throws the draft away and goes back to the ways to start; an error message if it can't. */
+  const discard = async (): Promise<string | undefined> => {
+    const result = await discardDraftAction(orgId, version.id);
+    if (!result.ok) return "error" in result ? result.error : "The draft couldn't be discarded.";
+    router.push(`/app/${orgSlug}/people?view=chart`);
+    router.refresh();
+  };
+
+  const onStartOver = async () => {
+    setStatus(null);
+    // No save may land on a draft that's being thrown away.
+    const resume = pause();
+    if (positions.some(isFilled)) {
+      const confirmed = await confirm({
+        title: "Start over?",
+        description: "The seats you filled are cleared.",
+        confirmLabel: "Start over",
+        run: discard,
+      });
+      if (!confirmed) resume();
+      return;
+    }
     startTransition(async () => {
-      const result = await discardDraftAction(orgId, version.id);
-      if (!result.ok) {
-        setStatus("error" in result ? result.error : "The draft couldn't be discarded.");
-        return;
+      const failed = await discard();
+      if (failed) {
+        setStatus(failed);
+        resume();
       }
-      router.push(`/app/${orgSlug}/people?view=chart`);
-      router.refresh();
     });
+  };
 
   const onPublish = () =>
-    startTransition(async () => {
+    startPublish(async () => {
       setStatus(null);
-      const result = await publish(canSetTitles);
+      // An empty seat publishes as an open role (saved only if that changes anything).
+      change(withOpenSeats);
+      const result = await publish(canSetTitles && setTitles);
       if (!result.ok) {
         setStatus(result.error);
         return;
       }
       toast({ title: "Org chart published" });
+      if (result.unsaved) {
+        setPublished(true);
+        setStatus(
+          "Published. Your last change came in after publishing, so it isn't on the chart. Make it again with Edit chart.",
+        );
+        return;
+      }
       router.push(`/app/${orgSlug}/people?view=chart`);
       router.refresh();
     });
 
-  const renderSeat = (p: DraftPosition) => {
+  const renderSeat = (p: DraftPosition, wide = false) => {
     const k = keyOf(p.id);
     const member = p.userId ? membersById.get(p.userId) : undefined;
     const isFull = isFilled(p);
     const suggestion = !isFull ? membersById.get(suggestions.get(p.id) ?? "") : undefined;
     const focused = focusedId === p.id;
-    const options = focused ? optionsFor(query) : [];
+    const options = focused && !locked ? optionsFor(query) : [];
     const open = focused && options.length > 0;
     const optionId = (i: number) => `${listId}-${k}-${i}`;
 
     return (
       <div
         onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes(MEMBER_TYPE)) return;
+          if (locked || !e.dataTransfer.types.includes(MEMBER_TYPE)) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = "copy";
           setDropOn(p.id);
@@ -277,7 +326,8 @@ export function SeatsScreen({
           fill(p.id, (x) => filled(x, m), false);
         }}
         className={cn(
-          "relative flex w-[200px] flex-col gap-2 rounded-2xl p-3 text-left",
+          "relative flex flex-col gap-2 rounded-2xl p-3 text-left",
+          wide ? "w-full" : "w-[200px]",
           isFull ? "bg-card edge" : "bg-card/60 border-foreground/25 border-[1.5px] border-dashed",
           (activeId === p.id && !isFull) || dropOn === p.id
             ? "outline-primary border-transparent outline-2"
@@ -290,7 +340,7 @@ export function SeatsScreen({
               autoFocus
               aria-label="Seat title"
               value={renaming.title}
-              className="h-8 text-[13.5px]"
+              className="h-10 md:text-[13.5px]"
               onChange={(e) => setRenaming({ id: p.id, title: e.target.value })}
               onBlur={commitRename}
               onKeyDown={(e) => {
@@ -304,7 +354,7 @@ export function SeatsScreen({
             <button
               type="button"
               onClick={() => setRenaming({ id: p.id, title: p.title })}
-              className="focus-visible:outline-foreground min-w-0 flex-1 rounded-md text-left text-[13.5px] font-semibold outline-none hover:underline focus-visible:outline-2"
+              className="focus-visible:outline-foreground min-w-0 flex-1 rounded-md py-0.5 text-left text-[13.5px] font-semibold break-words outline-none hover:underline focus-visible:outline-2"
             >
               {p.title || "Untitled seat"}
             </button>
@@ -312,22 +362,25 @@ export function SeatsScreen({
           <Button
             type="button"
             variant="ghost"
-            size="icon-xs"
+            size="icon"
+            // A 40px target that doesn't make the seat taller.
+            className="-my-2 -mr-2 shrink-0"
             aria-label={isFull ? `Empty the ${p.title} seat` : `Remove the ${p.title} seat`}
             onClick={() => {
+              if (locked) return;
               if (isFull) {
                 if (p.userId) setSkip((s) => new Set([...s, `${p.id}:${p.userId}`]));
                 fill(p.id, cleared, false);
               } else change((current) => removePosition(current, p.id));
             }}
           >
-            <X aria-hidden="true" />
+            <X className="size-4" aria-hidden="true" />
           </Button>
         </div>
 
         {isFull ? (
           <span className="flex min-w-0 items-center gap-2">
-            {member && <UserAvatar user={member} size="sm" />}
+            {member && <UserAvatar user={member} size="sm" className="shrink-0" />}
             <span className="text-muted-foreground truncate text-[12.5px]">
               {member?.name ?? p.personName}
             </span>
@@ -336,11 +389,12 @@ export function SeatsScreen({
           <>
             {suggestion && (
               <span className="flex items-center gap-2 text-[13px]">
-                <UserAvatar user={suggestion} size="xs" />
+                <UserAvatar user={suggestion} size="xs" className="shrink-0" />
                 <span className="min-w-0 flex-1 truncate">{suggestion.name}?</span>
                 <Button
                   type="button"
-                  size="icon-sm"
+                  size="icon"
+                  className="-my-1 shrink-0"
                   aria-label={`Yes, ${suggestion.name ?? "this member"}`}
                   onClick={() => fill(p.id, (x) => filled(x, suggestion))}
                 >
@@ -388,7 +442,7 @@ export function SeatsScreen({
                     setQuery("");
                   }
                 }}
-                className="border-input bg-card focus-visible:border-foreground h-[34px] w-full rounded-[10px] border px-2.5 text-[13.5px] outline-none"
+                className="border-input bg-card focus-visible:border-foreground focus-glow h-10 w-full rounded-[10px] border px-2.5 text-base outline-none disabled:opacity-60 md:text-[13.5px]"
               />
               {open && (
                 <div
@@ -408,14 +462,14 @@ export function SeatsScreen({
                       onMouseEnter={() => setHighlight(i)}
                       onClick={() => pick(p.id, o)}
                       className={cn(
-                        "flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13.5px]",
+                        "flex min-h-10 cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13.5px]",
                         i === highlight && "bg-muted",
                         o.kind !== "member" && "text-muted-foreground text-[13px]",
                       )}
                     >
                       {o.kind === "member" ? (
                         <>
-                          <UserAvatar user={o.member} size="sm" />
+                          <UserAvatar user={o.member} size="sm" className="shrink-0" />
                           <b className="truncate font-semibold">{o.member.name}</b>
                         </>
                       ) : o.kind === "name" ? (
@@ -433,6 +487,21 @@ export function SeatsScreen({
       </div>
     );
   };
+
+  /** The phone layout: every seat full width, indented under its manager. */
+  const renderList = () => (
+    <ul className="flex flex-col gap-2.5">
+      {outline.map(({ position: p, depth }) => (
+        <li
+          key={keyOf(p.id)}
+          style={depth > 0 ? { marginLeft: `${(Math.min(depth, 3) - 1) * 14 + 4}px` } : undefined}
+          className={cn(depth > 0 && "border-muted-strong border-l-2 pl-2.5")}
+        >
+          {renderSeat(p, true)}
+        </li>
+      ))}
+    </ul>
+  );
 
   const renderBranch = (parentId: string | null): React.ReactNode => {
     const list = children.get(parentId) ?? [];
@@ -464,19 +533,41 @@ export function SeatsScreen({
 
   return (
     <div className="space-y-6">
+      {confirmEl}
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="page-title flex-1">Org chart</h1>
         <Badge variant="accent">Draft</Badge>
-        <Button type="button" variant="ghost" disabled={pending} onClick={onDifferentShape}>
-          Different shape
-        </Button>
-        <Button type="button" disabled={pending || positions.length === 0} onClick={onPublish}>
-          {pending ? "Saving…" : "Publish"}
-        </Button>
+        {published ? (
+          <Button type="button" onClick={() => router.push(`/app/${orgSlug}/people?view=chart`)}>
+            Go to the chart
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="ghost" disabled={locked} onClick={onStartOver}>
+              Start over
+            </Button>
+            {canSetTitles && (
+              <span className="flex items-center gap-2 px-1">
+                <Checkbox
+                  id="seats-set-titles"
+                  checked={setTitles}
+                  disabled={locked}
+                  onCheckedChange={(v) => setSetTitles(v === true)}
+                />
+                <Label htmlFor="seats-set-titles" className="text-sm font-normal">
+                  Update members&apos; titles
+                </Label>
+              </span>
+            )}
+            <Button type="button" disabled={locked || positions.length === 0} onClick={onPublish}>
+              {publishing ? "Publishing…" : "Publish"}
+            </Button>
+          </>
+        )}
       </header>
 
       <p className="display-title max-w-[44ch] text-2xl">
-        Fill the seats. Type a name and press Enter to jump to the next one, or drag someone in.
+        Fill the seats. Type a name, or tap someone in the list to put them in the next empty seat.
       </p>
 
       {(status || error) && (
@@ -485,18 +576,26 @@ export function SeatsScreen({
         </p>
       )}
 
-      <div className="flex flex-wrap items-start gap-5">
+      <fieldset disabled={locked} className="flex min-w-0 flex-wrap items-start gap-5">
         <section
           aria-label="Seats"
           className="bg-card edge rounded-card flex min-w-0 flex-[999_1_640px] flex-col overflow-hidden"
         >
-          <div className="overflow-x-auto bg-[radial-gradient(color-mix(in_oklab,var(--foreground)_12%,transparent)_1px,transparent_1.2px)] bg-[length:20px_20px] px-4 py-8">
-            <div className="mx-auto flex w-max flex-col items-center">
-              {renderBranch(null)}
+          <div
+            className={cn(
+              "bg-[radial-gradient(color-mix(in_oklab,var(--foreground)_12%,transparent)_1px,transparent_1.2px)] bg-[length:20px_20px]",
+              narrow ? "px-3 py-4" : "overflow-x-auto px-4 py-8",
+            )}
+          >
+            <div className={cn("flex flex-col", narrow ? "gap-2.5" : "mx-auto w-max items-center")}>
+              {narrow ? renderList() : renderBranch(null)}
               <button
                 type="button"
                 onClick={addSeat}
-                className="border-foreground/20 text-muted-foreground hover:bg-muted/50 focus-visible:outline-foreground mt-2 flex h-12 w-[200px] items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed text-[13px] font-semibold outline-none focus-visible:outline-2"
+                className={cn(
+                  "border-foreground/20 text-muted-foreground hover:bg-muted/50 focus-visible:outline-foreground flex h-12 items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed text-[13px] font-semibold outline-none focus-visible:outline-2",
+                  narrow ? "w-full" : "mt-2 w-[200px]",
+                )}
               >
                 <Plus className="size-3.5" aria-hidden="true" />
                 Add a seat
@@ -504,7 +603,7 @@ export function SeatsScreen({
             </div>
           </div>
           <p className="text-muted-foreground px-5 pt-1 pb-4 text-[12.5px]">
-            Click a seat&apos;s title to rename it. A seat left empty is shown as an open role.
+            Tap a seat&apos;s title to rename it. Empty seats show as open roles.
           </p>
         </section>
 
@@ -533,12 +632,12 @@ export function SeatsScreen({
               className="rounded-full pl-9"
             />
           </label>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="-m-1 flex max-h-[60vh] flex-col gap-1.5 overflow-y-auto p-1">
             {listed.map((m) => (
               <li key={m.id}>
                 <button
                   type="button"
-                  draggable
+                  draggable={!locked}
                   onDragStart={(e) => {
                     e.dataTransfer.setData(MEMBER_TYPE, m.id);
                     e.dataTransfer.effectAllowed = "copy";
@@ -547,9 +646,9 @@ export function SeatsScreen({
                     const seatId = seatForClick();
                     if (seatId) fill(seatId, (p) => filled(p, m));
                   }}
-                  className="bg-card hover:bg-muted/50 focus-visible:outline-foreground flex w-full cursor-grab items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px] shadow-[0_0_0_1px_var(--border)] outline-none focus-visible:outline-2"
+                  className="bg-card hover:bg-muted/50 focus-visible:outline-foreground flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px] shadow-[0_0_0_1px_var(--border)] outline-none focus-visible:outline-2"
                 >
-                  <UserAvatar user={m} size="sm" />
+                  <UserAvatar user={m} size="sm" className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{m.name ?? "Unnamed member"}</span>
                   {m.title && (
                     <span className="text-muted-foreground max-w-[45%] truncate text-xs">
@@ -566,7 +665,7 @@ export function SeatsScreen({
             )}
           </ul>
         </aside>
-      </div>
+      </fieldset>
     </div>
   );
 }

@@ -117,11 +117,14 @@ export function AddOnCards({
   orgSlug,
   added,
   canManage,
+  locked,
 }: {
   orgId: string;
   orgSlug: string;
   added: readonly AddOnId[];
   canManage: boolean;
+  /** Add-ons the plan doesn't include: offered as an upgrade, not an Add. */
+  locked: readonly AddOnId[];
 }) {
   const base = `/app/${orgSlug}`;
   const card = (id: AddOnId, preview: ReactNode) => {
@@ -142,7 +145,7 @@ export function AddOnCards({
           ) : undefined
         }
         body={info.summary}
-        foot={info.who}
+        foot={!on && locked.includes(id) ? `Not on your plan. ${info.who}.` : info.who}
         actions={
           on ? (
             <>
@@ -150,14 +153,20 @@ export function AddOnCards({
                 <Link href={`${base}${info.path}`}>Open {info.name}</Link>
               </Button>
               <Button asChild variant="ghost">
-                <Link href={page}>Settings</Link>
+                <Link href={page}>Details</Link>
               </Button>
             </>
           ) : (
             <>
-              {canManage && <AddAddOnButton orgId={orgId} orgSlug={orgSlug} id={id} />}
+              {locked.includes(id)
+                ? canManage && (
+                    <Button asChild>
+                      <Link href={`${base}/settings/plan`}>See plans</Link>
+                    </Button>
+                  )
+                : canManage && <AddAddOnButton orgId={orgId} orgSlug={orgSlug} id={id} />}
               <Button asChild variant="ghost">
-                <Link href={page}>See what it does</Link>
+                <Link href={page}>Details</Link>
               </Button>
             </>
           )
@@ -173,11 +182,11 @@ export function AddOnCards({
         preview={CRM_PREVIEW}
         name="CRM"
         tag={<Pill>Coming later</Pill>}
-        body="Sponsors, partners and alumni in one place, with every email and meeting you've had with them."
+        body="Sponsors, partners and contacts in one place, with every email and meeting you've had with them."
         foot="Not ready to add yet"
         actions={
           <Button asChild variant="ghost">
-            <Link href={`${base}/integrations/crm`}>See what it will do</Link>
+            <Link href={`${base}/integrations/crm`}>Details</Link>
           </Button>
         }
       />

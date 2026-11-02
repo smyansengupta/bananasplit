@@ -18,6 +18,7 @@ import {
   trialPlanName,
 } from "@/lib/billing/space";
 import { getSession, requireUser } from "@/lib/auth/session";
+import { readAddOns } from "@/lib/addons";
 import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
 import { clubIcons } from "@/lib/metadata/share";
 import { orgLogoUrl } from "@/lib/org-logo";
@@ -166,8 +167,13 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
       orgId: ctx.organization.id,
       userId: ctx.user.id,
       org: ctx.organization,
-      canReviewFinance: can({ role: ctx.role }, "finance.manage"),
-      canReviewForms: can({ role: ctx.role }, "databases.write"),
+      // An add-on that isn't added keeps its rows out of Inbox and the badge.
+      canReviewFinance:
+        can({ role: ctx.role }, "finance.manage") &&
+        readAddOns(ctx.settings?.addOns).includes("finance"),
+      canReviewForms:
+        can({ role: ctx.role }, "databases.write") &&
+        readAddOns(ctx.settings?.addOns).includes("forms"),
     }),
   ).catch(() => null);
   // Docked or rail, as the member left it, so the first paint is right.

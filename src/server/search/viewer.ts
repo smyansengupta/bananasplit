@@ -22,6 +22,19 @@ export function hiddenSections(sidebar: unknown): Set<SectionId> {
   );
 }
 
+/**
+ * Add-ons the org hasn't added (OrgSettings.addOns): hidden from everyone,
+ * owners and admins too, unlike a section turned off in Settings › Sidebar.
+ */
+export function notAddedSections(addOns: readonly string[] | null | undefined): Set<SectionId> {
+  return new Set(
+    resolveSidebar(null, addOns ?? [])
+      .flatMap((g) => g.items)
+      .filter((i) => i.notAdded)
+      .map((i) => i.id),
+  );
+}
+
 /** The member as searchWorkspace needs them, or null when the space is gone. */
 export async function loadSearchViewer(
   db: TxClient,
@@ -34,7 +47,7 @@ export async function loadSearchViewer(
       kind: true,
       timezone: true,
       activeOrgChartVersionId: true,
-      settings: { select: { sidebar: true } },
+      settings: { select: { sidebar: true, addOns: true } },
     },
   });
   if (!org) return null;
@@ -51,6 +64,7 @@ export async function loadSearchViewer(
     role: member.role,
     zones: { viewer: viewerZone, org: orgZone },
     hiddenSections: hiddenSections(org.settings?.sidebar),
+    notAddedSections: notAddedSections(org.settings?.addOns),
     orgChartVersionId: org.activeOrgChartVersionId,
     personal: org.kind === "PERSONAL",
   };

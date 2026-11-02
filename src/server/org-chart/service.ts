@@ -393,6 +393,14 @@ export const DRAFT_SOURCES = [
 export type DraftSource = (typeof DRAFT_SOURCES)[number];
 
 /**
+ * parseModel on a draft started from "members" ("Draft my chart"). MANUAL
+ * drafts have no model otherwise, so this is how the review screen tells
+ * a drafted chart from a blank one or a copy. (Shapes are parseMethod
+ * TEMPLATE.) ParseReportPanel only shows the model for CLAUDE.
+ */
+export const MEMBERS_DRAFT_MODEL = "members";
+
+/**
  * A new MANUAL draft. Works with no Claude key, and never calls anything:
  *   blank    an empty chart to build up by hand;
  *   current  a copy of the published chart, to edit;
@@ -475,6 +483,7 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
       source: OrgChartSource.MANUAL,
       basedOnVersionId: from === "current" ? active : null,
       parseMethod: isShape(from) ? OrgChartParseMethod.TEMPLATE : OrgChartParseMethod.MANUAL,
+      parseModel: from === "members" ? MEMBERS_DRAFT_MODEL : null,
       openItems,
       warnings,
       teams,

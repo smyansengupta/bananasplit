@@ -177,9 +177,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const now = new Date();
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
-    const placed = new Set(
-      resolveOverview(saved, isAdmin, settings?.addOns).map((w) => w.type),
-    );
+    const placed = new Set(resolveOverview(saved, isAdmin, settings?.addOns).map((w) => w.type));
     const me = await db.user.findUnique({
       where: { id: user.id },
       select: { timezone: true, name: true, image: true, avatar: true },
@@ -214,6 +212,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       now,
       memberCount,
       myDue,
+      addOns: settings?.addOns,
     });
     const polls = shared.upNextPolls;
     // Cards this member hid from their own Up next (own-row RLS).
@@ -276,6 +275,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       timeZone: tz,
       orgTimeZone: orgZone,
       now,
+      addOns: settings?.addOns,
     };
     const rest = {
       timeZone: tz,
@@ -378,8 +378,10 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       orgId: org.id,
       userId: user.id,
       org,
-      canReviewFinance: can({ role }, "finance.manage"),
-      canReviewForms: can({ role }, "databases.write"),
+      canReviewFinance:
+        can({ role }, "finance.manage") && (settings?.addOns?.includes("finance") ?? true),
+      canReviewForms:
+        can({ role }, "databases.write") && (settings?.addOns?.includes("forms") ?? true),
       now,
     }).catch(() => null);
     return { ...rest, widgets, online, since, needsYou };
@@ -768,7 +770,11 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   };
 
   // Shown until every step is done or checked off, then gone by itself.
-  const startedSkipped = settings?.startedSkipped ?? [];
+  // Without Finance added there's no budget to set up: that step counts as not needed.
+  const startedSkipped = [
+    ...(settings?.startedSkipped ?? []),
+    ...(settings?.addOns && !settings.addOns.includes("finance") ? ["budget"] : []),
+  ];
   const showStarted =
     data.started !== null && !startedProgress(data.started, startedSkipped).complete;
   // The invite tile copies the join link right there, while members is still to do.

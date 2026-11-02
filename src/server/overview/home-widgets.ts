@@ -55,6 +55,12 @@ export interface HomeSharedInput {
   now: Date;
   memberCount: number;
   myDue: DueTaskRow[];
+  /**
+   * The organization's add-ons (OrgSettings.addOns). Without Forms, Home
+   * reads no forms or quick polls (they live in Forms); Find a time polls
+   * and elections stay. Left out, everything counts as added.
+   */
+  addOns?: readonly string[] | null;
 }
 
 /** HomeShared, plus each open poll's turnout and whether the viewer answered, by poll id. */
@@ -66,9 +72,12 @@ export interface HomeReads extends HomeShared {
 
 export async function readHomeShared(db: TxClient, input: HomeSharedInput): Promise<HomeReads> {
   const { orgId, userId, now, memberCount } = input;
-  const forms = await listOpenForms(db, orgId, now, memberCount);
+  const formsOn = input.addOns?.includes("forms") ?? true;
+  const forms = formsOn ? await listOpenForms(db, orgId, now, memberCount) : [];
   const elections = await listOpenElections(db, orgId, now);
-  const { questions, availability } = await listOpenMemberPolls(db, orgId, now);
+  const open = await listOpenMemberPolls(db, orgId, now);
+  const questions = formsOn ? open.questions : [];
+  const availability = open.availability;
   const answered = await answeredForms(
     db,
     orgId,
@@ -113,6 +122,8 @@ export interface WidgetViewer {
   timeZone: string;
   orgTimeZone: string;
   now: Date;
+  /** The organization's add-ons; left out, everything counts as added. */
+  addOns?: readonly string[] | null;
 }
 
 /** Runs one widget's read, or says it failed (logged); undefined either way when it isn't placed. */
@@ -180,12 +191,13 @@ export async function loadMainWidgets(
       shared,
       voters: new Map([...shared.pollStats].map(([id, s]) => [id, s.voters])),
       // The budget period's last day is for finance roles only.
-      budgetPeriod: can({ role: viewer.role }, "finance.manage")
-        ? await db.budgetPeriod.findFirst({
-            where: { organizationId: orgId, isActive: true },
-            select: { id: true, label: true, endsOn: true },
-          })
-        : null,
+      budgetPeriod:
+        can({ role: viewer.role }, "finance.manage") && (viewer.addOns?.includes("finance") ?? true)
+          ? await db.budgetPeriod.findFirst({
+              where: { organizationId: orgId, isActive: true },
+              select: { id: true, label: true, endsOn: true },
+            })
+          : null,
     }),
   );
   return { hereNow, capture, deadlines };

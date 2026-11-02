@@ -52,7 +52,7 @@ export function AddAddOnButton({
         })
       }
     >
-      {pending ? "Adding..." : `Add ${name}`}
+      {pending ? "Adding…" : `Add ${name}`}
     </Button>
   );
 }
@@ -76,7 +76,9 @@ export function RemoveAddOnButton({ orgId, id }: { orgId: string; id: AddOnId })
             title: `${name} is off. Everything in it is kept.`,
             run: async () => fail(await removeAddOnAction(orgId, id).catch(() => null)),
             undo: async () => {
-              await addAddOnAction(orgId, id);
+              const back = await addAddOnAction(orgId, id).catch(() => null);
+              if (!back || !back.ok)
+                return back && !back.ok ? back.error : "That didn't work. Try again.";
               router.refresh();
             },
           });

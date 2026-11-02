@@ -26,6 +26,8 @@ export interface SourceViewer {
   role: Role;
   slug: string;
   space: SpaceInfo;
+  /** The organization's add-ons (OrgSettings.addOns); left out, all count as added. */
+  addOns?: readonly string[];
 }
 
 /** The newest rows a report reads; more than this and it says so. */
@@ -146,7 +148,11 @@ async function categoryChoices(v: SourceViewer): Promise<Choice[]> {
 }
 
 function canFinance(v: SourceViewer): boolean {
-  return spaceIncludes(v.space, "finance") && can({ role: v.role }, "finance.manage");
+  return (
+    spaceIncludes(v.space, "finance") &&
+    can({ role: v.role }, "finance.manage") &&
+    (v.addOns?.includes("finance") ?? true)
+  );
 }
 
 /** One listing per viewer per transaction: a page that runs many reports reads it once. */

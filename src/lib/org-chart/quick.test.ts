@@ -9,6 +9,7 @@ import {
   searchMembers,
   seatOrder,
   seatSuggestions,
+  withOpenSeats,
 } from "./quick";
 import { SHAPES, shapeChart } from "./shapes";
 import { validateChart } from "./validate";
@@ -129,15 +130,47 @@ describe("seats", () => {
     expect(nextEmptySeat(filled, null)?.title).toBe("Lead");
   });
 
-  it("finds members by name, unseated first", () => {
+  it("finds members by name, leaving out anyone already seated", () => {
     const members = [
       { id: "1", name: "Anthony Jones", title: null },
       { id: "2", name: "Ana Kim", title: null },
       { id: "3", name: "Dan Antal", title: null },
     ];
     expect(searchMembers("an", members, new Set()).map((m) => m.id)).toEqual(["2", "1", "3"]);
-    expect(searchMembers("an", members, new Set(["2"])).map((m) => m.id)).toEqual(["1", "3", "2"]);
+    expect(searchMembers("an", members, new Set(["2"])).map((m) => m.id)).toEqual(["1", "3"]);
+    expect(searchMembers("ana", members, new Set(["2"]))).toEqual([]);
+    expect(searchMembers("an", members, new Set(["1", "2", "3"]))).toEqual([]);
     expect(searchMembers("  ", members, new Set())).toEqual([]);
+  });
+
+  it("caps the results at the limit", () => {
+    const members = Array.from({ length: 10 }, (_, i) => ({
+      id: `m${i}`,
+      name: `Sam ${i}`,
+      title: null,
+    }));
+    expect(searchMembers("sam", members, new Set(), 5)).toHaveLength(5);
+  });
+
+  it("marks empty seats open only when something changes", () => {
+    const positions = seats([
+      ["Lead", null],
+      ["One", "Lead"],
+      ["Two", "Lead"],
+    ]).map((p) => ({ ...p, isOpen: false }));
+    const withOne = positions.map((p) => (p.title === "One" ? { ...p, userId: "u1" } : p));
+    const marked = withOpenSeats(withOne);
+    expect(marked?.map((p) => [p.title, p.isOpen])).toEqual([
+      ["Lead", true],
+      ["One", false],
+      ["Two", true],
+    ]);
+    // Untouched seats keep their identity, and a second pass has nothing to do.
+    expect(marked?.find((p) => p.title === "One")).toBe(withOne.find((p) => p.title === "One"));
+    expect(withOpenSeats(marked ?? [])).toBeNull();
+    // A filled seat that was marked open is no longer open.
+    const stale = withOne.map((p) => ({ ...p, isOpen: true }));
+    expect(withOpenSeats(stale)?.find((p) => p.title === "One")?.isOpen).toBe(false);
   });
 
   it("an empty seat publishes as an open role", () => {

@@ -69,6 +69,7 @@ export function ReviewScreen({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [publishing, startPublish] = useTransition();
   const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
   const [otherFor, setOtherFor] = useState<string | null>(null);
   const [adding, setAdding] = useState<{
@@ -77,6 +78,9 @@ export function ReviewScreen({
     managerId: string;
   } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  /** Published with a change that came in too late: stay, say so, edit nothing more. */
+  const [published, setPublished] = useState(false);
+  const locked = pending || publishing || published;
 
   const onRemap = (ids: Record<string, string>) => {
     const remap = (id: string) => ids[id] ?? id;
@@ -97,10 +101,9 @@ export function ReviewScreen({
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const ordered = useMemo(() => outlineOrder(positions).map((o) => o.position), [positions]);
   const keyOfQuestion = (q: ReviewQuestion) => `${q.kind}:${q.positionId}`;
-  const questions = reviewQuestions(positions, members).filter(
-    (q) => !answered.has(keyOfQuestion(q)),
-  );
-  const offChart = membersOffChart(positions, members);
+  const asked = useMemo(() => reviewQuestions(positions, members), [positions, members]);
+  const questions = asked.filter((q) => !answered.has(keyOfQuestion(q)));
+  const offChart = useMemo(() => membersOffChart(positions, members), [positions, members]);
   const advisors = positions.filter((p) => p.isAdvisor && (p.userId || p.personName));
 
   const personOf = (p: DraftPosition) =>
@@ -178,7 +181,7 @@ export function ReviewScreen({
     });
 
   const onPublish = () =>
-    startTransition(async () => {
+    startPublish(async () => {
       setStatus(null);
       const result = await publish(canSetTitles);
       if (!result.ok) {
@@ -186,6 +189,13 @@ export function ReviewScreen({
         return;
       }
       toast({ title: "Org chart published" });
+      if (result.unsaved) {
+        setPublished(true);
+        setStatus(
+          "Published. Your last change came in after publishing, so it isn't on the chart. Make it again with Edit chart.",
+        );
+        return;
+      }
       router.push(`/app/${orgSlug}/people?view=chart`);
       router.refresh();
     });
@@ -206,12 +216,20 @@ export function ReviewScreen({
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="page-title flex-1">Org chart</h1>
         <Badge variant="accent">Draft</Badge>
-        <Button type="button" variant="ghost" disabled={pending} onClick={onEditByHand}>
-          Edit by hand
-        </Button>
-        <Button type="button" disabled={pending || positions.length === 0} onClick={onPublish}>
-          {pending ? "Saving…" : "Publish"}
-        </Button>
+        {published ? (
+          <Button type="button" onClick={() => router.push(`/app/${orgSlug}/people?view=chart`)}>
+            Go to the chart
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="ghost" disabled={locked} onClick={onEditByHand}>
+              Edit by hand
+            </Button>
+            <Button type="button" disabled={locked || positions.length === 0} onClick={onPublish}>
+              {publishing ? "Publishing…" : "Publish"}
+            </Button>
+          </>
+        )}
       </header>
 
       <p className="display-title max-w-[40ch] text-2xl">{lead}</p>
@@ -222,7 +240,7 @@ export function ReviewScreen({
         </p>
       )}
 
-      <div className="flex flex-wrap items-start gap-5">
+      <fieldset disabled={locked} className="flex min-w-0 flex-wrap items-start gap-5">
         <section
           aria-label="Drafted chart"
           className="bg-card edge rounded-card flex min-w-0 flex-[999_1_640px] flex-col overflow-hidden"
@@ -256,14 +274,14 @@ export function ReviewScreen({
                           : { memberId: m.id, title: m.title ?? "", managerId: top?.id ?? "" },
                       )
                     }
-                    className="bg-secondary hover:bg-muted-strong aria-pressed:bg-muted-strong focus-visible:outline-foreground inline-flex h-7 items-center gap-1.5 rounded-full pr-2.5 pl-0.5 text-xs font-semibold outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                    className="bg-secondary hover:bg-muted-strong aria-pressed:bg-muted-strong focus-visible:outline-foreground inline-flex h-10 max-w-[14rem] min-w-0 items-center gap-2 rounded-full pr-3.5 pl-1 text-[13px] font-semibold outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
-                    <UserAvatar user={m} size="xs" />
-                    {m.name ?? "Unnamed member"}
+                    <UserAvatar user={m} size="sm" className="shrink-0" />
+                    <span className="truncate">{m.name ?? "Unnamed member"}</span>
                   </button>
                 ))}
                 <span className="text-muted-foreground text-[12.5px]">
-                  Members without a position. Click one to give them a position.
+                  Members without a position. Tap one to give them a position.
                 </span>
               </div>
               {adding && (
@@ -300,7 +318,7 @@ export function ReviewScreen({
                         ))}
                     </select>
                   </label>
-                  <Button type="submit" size="sm" disabled={!adding.title.trim()}>
+                  <Button type="submit" disabled={!adding.title.trim()}>
                     Add
                   </Button>
                 </form>
@@ -396,7 +414,6 @@ export function ReviewScreen({
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      size="sm"
                       onClick={() => {
                         if (q.kind === "match") {
                           const m = membersById.get(q.userId);
@@ -411,12 +428,7 @@ export function ReviewScreen({
                     >
                       Yes
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setOtherFor(k)}
-                    >
+                    <Button type="button" variant="outline" onClick={() => setOtherFor(k)}>
                       Something else
                     </Button>
                   </div>
@@ -437,7 +449,7 @@ export function ReviewScreen({
             </p>
           )}
         </aside>
-      </div>
+      </fieldset>
     </div>
   );
 }

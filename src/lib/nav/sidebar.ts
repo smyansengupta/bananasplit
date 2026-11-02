@@ -202,7 +202,7 @@ const RENAMED_FROM: Partial<Record<SectionId, (typeof RETIRED_SECTION_IDS)[numbe
  * older saved sidebar says: Files is part of Data, and Integrations and apps
  * is Integrations first with each added add-on below it.
  */
-const PINNED_PLACE: readonly SectionId[] = ["notes", "integrations", "forms", "finance"];
+export const PINNED_PLACE: readonly SectionId[] = ["notes", "integrations", "forms", "finance"];
 
 /** Groups have no names any more; kept so saved configs and callers still line up. */
 export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = {
@@ -298,6 +298,11 @@ export function resolveSidebar(raw: unknown, addOns?: readonly string[] | null):
     const fromSaved = from ? saved.get(from) : undefined;
     const pinned = PINNED_PLACE.includes(def.id);
     const notAdded = addOns != null && isAddOn(def.id) && !addOns.includes(def.id);
+    const group: GroupId = def.locked
+      ? "main"
+      : pinned
+        ? def.group
+        : (groupOf(s?.group) ?? before?.group ?? def.group);
     items.push({
       id: def.id,
       label: s?.label ?? def.label,
@@ -308,14 +313,20 @@ export function resolveSidebar(raw: unknown, addOns?: readonly string[] | null):
       exact: def.exact ?? false,
       hidden: notAdded || (def.locked ? false : (s?.hidden ?? fromSaved?.hidden ?? false)),
       locked: def.locked ?? false,
-      group: def.locked
-        ? "main"
-        : pinned
-          ? def.group
-          : (groupOf(s?.group) ?? before?.group ?? def.group),
+      group,
       description: def.description,
       ...(notAdded ? { notAdded: true } : {}),
-      order: pinned ? 1000 + i : s ? s.index : before ? before.order + 0.01 : 100 + i,
+      // Integrations and apps is Integrations, then the add-ons, then
+      // anything else an older saved sidebar put there.
+      order: pinned
+        ? 1000 + i
+        : group === "workspace"
+          ? 2000 + (s ? s.index : i)
+          : s
+            ? s.index
+            : before
+              ? before.order + 0.01
+              : 100 + i,
     });
   }
   // Overview always leads.

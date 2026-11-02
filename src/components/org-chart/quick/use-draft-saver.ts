@@ -10,37 +10,44 @@ import type { OpenItem } from "@/lib/org-chart/types";
 /**
  * The quick setup screens' draft state: positions that save themselves a
  * moment after each change (saveDraftAction, one save at a time, with the
- * draft's editVersion), and Publish, which saves first. New positions get
+ * draft's editVersion), and Publish, which saves first. Nothing is saved
+ * until something changes, so opening a screen never bumps the draft's
+ * editVersion under a colleague's editor. While Publish runs, changes wait
+ * (a save landing mid-publish would conflict with it); a change that came
+ * in too late to be published is reported as `unsaved`. New positions get
  * their row ids back from the save; `keyOf` keeps the id they started with,
  * so React keys and focus survive the swap.
  */
 
 const SAVE_DELAY_MS = 600;
 
-type PublishOutcome = { ok: true } | { ok: false; error: string };
+type PublishOutcome =
+  /** `unsaved`: a change came in after the last save and is not in what was published. */
+  { ok: true; unsaved: boolean } | { ok: false; error: string };
 
 export function useDraftSaver({
   orgId,
   version,
   initial,
-  initiallyDirty = false,
   onRemap,
 }: {
   orgId: string;
   version: { id: string; editVersion: number; openItems: OpenItem[]; teams: NamedTeam[] };
   initial: DraftPosition[];
-  /** Save once even before the first change (the screen adjusted `initial`). */
-  initiallyDirty?: boolean;
   /** Called with the client id -> row id map after each save. */
   onRemap?: (ids: Record<string, string>) => void;
 }) {
   const [positions, setState] = useState<DraftPosition[]>(initial);
   const [error, setError] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(initiallyDirty);
+  const [dirty, setDirty] = useState(false);
   const current = useRef(initial);
   const editVersion = useRef(version.editVersion);
-  const changes = useRef(initiallyDirty ? 1 : 0);
+  const changes = useRef(0);
   const saved = useRef(0);
+  /** Publishing, or paused by the screen: changes wait instead of saving. */
+  const holding = useRef(0);
+  /** Published: nothing more saves into this draft. */
+  const closed = useRef(false);
   const queue = useRef<Promise<boolean>>(Promise.resolve(true));
   const timer = useRef<number | null>(null);
   const aliases = useRef(new Map<string, string>());
@@ -125,6 +132,8 @@ export function useDraftSaver({
 
   const schedule = useCallback(() => {
     if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    if (holding.current > 0 || closed.current) return;
     timer.current = window.setTimeout(() => {
       timer.current = null;
       void flush();
@@ -147,37 +156,59 @@ export function useDraftSaver({
   );
 
   useEffect(() => {
-    if (initiallyDirty) schedule();
-    // Once, on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  /**
+   * Stops saving until the returned resume() runs (which saves anything
+   * that waited): for an action that may throw the draft away, so a
+   * pending save doesn't race it.
+   */
+  const pause = useCallback(() => {
+    holding.current += 1;
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    let resumed = false;
+    return () => {
+      if (resumed) return;
+      resumed = true;
+      holding.current -= 1;
+      if (saved.current < changes.current) schedule();
+    };
+  }, [schedule]);
+
   const publish = useCallback(
     async (setTitles: boolean): Promise<PublishOutcome> => {
-      if (!(await flush())) return { ok: false, error: "The draft couldn't be saved." };
-      const result = await publishDraftAction(orgId, version.id, {
-        setTitles,
-        expectedEditVersion: editVersion.current,
-      });
-      if (result.ok) return { ok: true };
-      const detail =
-        "issues" in result && result.issues?.length
-          ? ` ${result.issues.map((i) => i.message).join(" ")}`
-          : "";
-      return { ok: false, error: `${result.error}${detail}` };
+      const resume = pause();
+      try {
+        if (!(await flush())) return { ok: false, error: "The draft couldn't be saved." };
+        const result = await publishDraftAction(orgId, version.id, {
+          setTitles,
+          expectedEditVersion: editVersion.current,
+        });
+        if (result.ok) {
+          closed.current = true;
+          return { ok: true, unsaved: saved.current < changes.current };
+        }
+        const detail =
+          "issues" in result && result.issues?.length
+            ? ` ${result.issues.map((i) => i.message).join(" ")}`
+            : "";
+        return { ok: false, error: `${result.error}${detail}` };
+      } finally {
+        resume();
+      }
     },
-    [flush, orgId, version.id],
+    [flush, orgId, pause, version.id],
   );
 
   /** The id a position started with in this session (a stable React key). */
   const keyOf = useCallback((id: string) => aliasMap.get(id) ?? id, [aliasMap]);
 
-  return { positions, change, flush, publish, error, dirty, keyOf };
+  return { positions, change, flush, pause, publish, error, dirty, keyOf };
 }

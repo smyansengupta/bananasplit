@@ -16,7 +16,7 @@ export default async function SeatsDraftPage({
   const { orgSlug, versionId } = await params;
   const planLock = await planGate(orgSlug, "people");
   if (planLock) return planLock;
-  const data = await loadQuickDraft(orgSlug, versionId);
+  const data = await loadQuickDraft(orgSlug, versionId, "seats");
   return (
     <SeatsScreen
       key={data.version.editVersion}

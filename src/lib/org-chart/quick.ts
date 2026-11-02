@@ -78,6 +78,16 @@ export function isFilled(p: Pick<DraftPosition, "userId" | "personName">): boole
   return Boolean(p.userId || p.personName);
 }
 
+/**
+ * The seats as they publish: an empty seat is an open role, a filled one
+ * is not. Null when every seat already says so (nothing to save), so the
+ * seat screen only writes the draft when this changes something.
+ */
+export function withOpenSeats(positions: readonly DraftPosition[]): DraftPosition[] | null {
+  if (positions.every((p) => p.isOpen === !isFilled(p))) return null;
+  return positions.map((p) => (p.isOpen === !isFilled(p) ? p : { ...p, isOpen: !isFilled(p) }));
+}
+
 /** The seats in reading order: each manager before its reports, siblings by rank. */
 export function seatOrder(positions: readonly DraftPosition[]): DraftPosition[] {
   return outlineOrder(positions).map((o) => o.position);
@@ -133,7 +143,11 @@ export function seatSuggestions(
   return out;
 }
 
-/** Members whose name starts with (or has a word starting with) `query`; unseated first. */
+/**
+ * Members whose name starts with (or has a word starting with) `query`.
+ * Anyone in `seated` already holds a seat and is left out, so one person
+ * can't end up in two seats by accident.
+ */
 export function searchMembers<M extends SeatMember>(
   query: string,
   members: readonly M[],
@@ -144,6 +158,7 @@ export function searchMembers<M extends SeatMember>(
   if (!q) return [];
   const scored: { m: M; score: number }[] = [];
   for (const m of members) {
+    if (seated.has(m.id)) continue;
     const name = normalizeName(m.name ?? "");
     if (!name) continue;
     let score = -1;
@@ -151,7 +166,7 @@ export function searchMembers<M extends SeatMember>(
     else if (name.split(" ").some((w) => w.startsWith(q))) score = 2;
     else if (name.includes(q)) score = 1;
     if (score < 0) continue;
-    scored.push({ m, score: score + (seated.has(m.id) ? 0 : 10) });
+    scored.push({ m, score });
   }
   return scored
     .sort((a, b) => b.score - a.score || (a.m.name ?? "").localeCompare(b.m.name ?? ""))

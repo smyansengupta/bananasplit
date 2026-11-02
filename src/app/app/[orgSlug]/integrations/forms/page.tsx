@@ -16,6 +16,7 @@ import {
 import { ClipboardList, Star } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
+import { spaceIncludes } from "@/lib/billing/space";
 import { readAddOns } from "@/lib/addons";
 import { QUESTION_META, QUESTION_TYPES, FORM_LIMITS } from "@/lib/forms/questions";
 import { getOrgContextBySlug } from "@/server/db/context";
@@ -36,6 +37,8 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
   const { organization: org, role, settings } = await getOrgContextBySlug(orgSlug);
   const added = readAddOns(settings?.addOns).includes("forms");
   const canManage = can({ role }, "settings.general.write");
+  // On a plan without it, the way in is a plan that has it.
+  const onPlan = spaceIncludes(org, "polls");
   const base = `/app/${orgSlug}`;
   const uploadMb = Math.round(FORM_LIMITS.uploadBytes / (1024 * 1024));
 
@@ -46,8 +49,14 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
       </Button>
       {canManage && <RemoveAddOnButton orgId={org.id} id="forms" />}
     </div>
+  ) : canManage && !onPlan ? (
+    <Button asChild>
+      <Link href={`${base}/settings/plan`}>See plans</Link>
+    </Button>
   ) : canManage ? (
     <AddAddOnButton orgId={org.id} orgSlug={orgSlug} id="forms" />
+  ) : !onPlan ? (
+    <p className="text-muted-foreground text-sm">Not on your organization&apos;s plan.</p>
   ) : (
     <p className="text-muted-foreground text-sm">Ask an owner or admin to add it.</p>
   );
@@ -66,7 +75,7 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
 
       <Hero
         preview={
-          <div className="bg-tint-info relative flex min-h-[400px] flex-col gap-4 rounded-[26px] p-6 sm:block sm:p-8">
+          <div className="bg-tint-info rounded-card relative flex min-h-[400px] flex-col gap-4 p-6 sm:block sm:p-8">
             <Mini className="gap-3 p-[22px] sm:w-[62%]">
               <b className="heading text-[21px] tracking-tight">Join a team</b>
               <span className="text-muted-foreground text-[13px]">
@@ -115,14 +124,6 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
                 ["Turning it off", "Hides it; every form and answer is kept"],
               ]}
             />
-            {!added && canManage && (
-              <AddAddOnButton
-                orgId={org.id}
-                orgSlug={orgSlug}
-                id="forms"
-                className="mt-auto w-full"
-              />
-            )}
           </>
         }
       />
@@ -180,7 +181,7 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
         lead="Open a form to the public, keep it to members, or allow anyone signed in. Nobody can answer a draft."
         details={[
           ["Access", "Anyone with the link, members only, or anyone signed in"],
-          ["Once each", "Signed-in people can answer only once"],
+          ["One answer each", "Optional: signed-in people answer only once"],
           ["Anonymous", "Who answered isn't recorded at all"],
           ["Closing", "On a date, after a set number of answers, or by hand"],
         ]}
@@ -221,7 +222,7 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
         title="Quick polls, answered from Home"
         lead="A one-question form that sits on everyone's Home until it closes."
         details={[
-          ["Results", "Shown once someone votes, or only after it closes"],
+          ["Results", "Shown to each person after they vote, or only after it closes"],
           ["Make one", "From New, in a few seconds"],
         ]}
         panel="success"
@@ -311,12 +312,15 @@ export default async function FormsAddOnPage({ params }: { params: Promise<{ org
       <FeatureCard
         id="f-data"
         title="Every answer is already data"
-        lead="Each form gets its own database, so responses can be filtered, joined with your other data and put on a report."
+        lead="Each form gets its own database, so responses can be filtered, joined with your other data and exported."
         details={[
           ["Export", "CSV, with choices, members and ratings written as words"],
           ["Renaming", "Renaming a question renames its column"],
           ["Uploads", `Up to ${uploadMb} MB each, kept in a Files folder`],
-          ["Emails", "A copy for whoever answers; a note to you on each one"],
+          [
+            "Emails",
+            "Optional copy to whoever answers, if they give an email; a note to the form's maker on each one",
+          ],
         ]}
         panel="tile"
         preview={

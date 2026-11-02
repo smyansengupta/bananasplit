@@ -36,6 +36,7 @@ import {
   RECENT_DAYS,
 } from "@/server/announcements/rules";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { loadInboxState } from "@/server/inbox/state";
@@ -84,7 +85,9 @@ export default async function InboxPage({
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org, user } = ctx;
   const base = `/app/${orgSlug}`;
-  const canReview = can(ctx, "finance.manage");
+  // An add-on that isn't added keeps its rows out of Inbox (src/lib/addons.ts).
+  const addOns = readAddOns(ctx.settings?.addOns);
+  const canReview = can(ctx, "finance.manage") && addOns.includes("finance");
   const canManagePosts = can(ctx, "events.write");
   const allPosts = sp.announcements === "all";
   const now = new Date();
@@ -111,7 +114,7 @@ export default async function InboxPage({
         include: { actor: { select: { name: true, image: true, avatar: true } } },
       }),
       // Forms this person made whose responses wait on a review.
-      can(ctx, "databases.write")
+      can(ctx, "databases.write") && addOns.includes("forms")
         ? toReviewForOwner(db, org.id, user.id)
         : Promise.resolve([] as { id: string; title: string; count: number }[]),
       // For the empty state: what's next, so caught up still points somewhere.

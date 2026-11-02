@@ -1,3 +1,5 @@
+import type { PlanFeature } from "@/lib/billing/features";
+
 /**
  * Add-ons: parts of Bananasplit an organization adds when it wants them,
  * so a workspace starts with only what everyone uses. Owners and admins add
@@ -22,6 +24,8 @@ export function readAddOns(raw: readonly string[] | null | undefined): AddOnId[]
 
 export interface AddOnInfo {
   id: AddOnId;
+  /** The plan feature it needs (src/lib/billing/features.ts). */
+  feature: PlanFeature;
   name: string;
   /** One line, for its card. */
   summary: string;
@@ -34,14 +38,16 @@ export interface AddOnInfo {
 export const ADD_ON_INFO: Record<AddOnId, AddOnInfo> = {
   forms: {
     id: "forms",
+    feature: "polls",
     name: "Forms",
     summary:
-      "Sign-ups, applications and quick polls. Responses land in Inbox and in a database you can report on.",
+      "Sign-ups, applications and quick polls. Every response is saved in a database you can filter and export.",
     who: "Owners and admins make forms; anyone you choose answers",
     path: "/forms",
   },
   finance: {
     id: "finance",
+    feature: "finance",
     name: "Finance",
     summary:
       "Budgets by quarter or year, expenses with receipts, and reimbursements that need an approval.",

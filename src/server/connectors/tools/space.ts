@@ -10,7 +10,7 @@ import { sectionLabel, type SectionId } from "@/lib/nav/sidebar";
 import { effectiveTimezone } from "@/lib/tasks/dates";
 import { withConnectorOrgTx, type OrgContext } from "@/server/db/context";
 import { AppError } from "@/server/db/errors";
-import { hiddenSections } from "@/server/search/viewer";
+import { hiddenSections, notAddedSections } from "@/server/search/viewer";
 
 import type { ConnectorSession } from "./shared";
 
@@ -75,7 +75,7 @@ export async function loadToolSpace(ctx: OrgContext): Promise<ToolSpace> {
       trialEndsAt: true,
       planAfterTrial: true,
       timezone: true,
-      settings: { select: { sidebar: true } },
+      settings: { select: { sidebar: true, addOns: true } },
     },
   });
   if (!org) throw new NotFoundError();
@@ -96,7 +96,7 @@ function toolSpace(
     trialEndsAt: Date | null;
     planAfterTrial: OrgPlan | null;
     timezone: string;
-    settings: { sidebar: unknown } | null;
+    settings: { sidebar: unknown; addOns?: string[] } | null;
   },
   userZone: string | null,
 ): ToolSpace {
@@ -104,8 +104,10 @@ function toolSpace(
   const name = personal ? "Personal" : org.name;
   const admin = can({ role: ctx.role }, "settings.view");
   const hidden = hiddenSections(org.settings?.sidebar);
+  // An add-on the org hasn't added is closed to everyone, admins too.
+  const notAdded = notAddedSections(org.settings?.addOns ?? null);
   const orgZone = effectiveTimezone(null, org);
-  const opens = (section: SectionId) => admin || !hidden.has(section);
+  const opens = (section: SectionId) => !notAdded.has(section) && (admin || !hidden.has(section));
   return {
     id: ctx.organizationId,
     name,

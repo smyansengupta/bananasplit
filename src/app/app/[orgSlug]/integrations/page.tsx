@@ -8,7 +8,8 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
-import { readAddOns } from "@/lib/addons";
+import { ADD_ON_INFO, ADD_ONS, readAddOns } from "@/lib/addons";
+import { spaceIncludes } from "@/lib/billing/space";
 import { brandOr, INTEGRATION_MARKS as M } from "@/lib/integrations/marks";
 import { planGate } from "@/server/billing/plan-gate";
 import { loadMeetingConnections } from "@/server/conference/connections";
@@ -57,9 +58,42 @@ export default async function IntegrationsPage({
   const { orgSlug } = await params;
   const sp = await searchParams;
   const planLock = await planGate(orgSlug, "integrations");
-  if (planLock) return planLock;
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org } = ctx;
+  // A Personal space has no add-ons (its sidebar is fixed); a team keeps
+  // its add-ons here even on a plan without connected apps, since Forms is
+  // on every plan.
+  const addOns =
+    org.kind === "PERSONAL" ? null : (
+      <section className="space-y-4" aria-labelledby="int-addons">
+        <h2 id="int-addons" className="heading text-[20px]">
+          Add-ons
+        </h2>
+        <AddOnCards
+          orgId={org.id}
+          orgSlug={orgSlug}
+          added={readAddOns(ctx.settings?.addOns)}
+          canManage={can({ role: ctx.role }, "settings.general.write")}
+          locked={ADD_ONS.filter((id) => !spaceIncludes(org, ADD_ON_INFO[id].feature))}
+        />
+      </section>
+    );
+  const header = (
+    <PageHeader
+      title="Integrations and apps"
+      description="Add only what your organization uses. Added ones show in the sidebar under Integrations and apps. Turn one off and it's hidden; nothing is deleted."
+    />
+  );
+  if (planLock) {
+    if (!addOns) return planLock;
+    return (
+      <div className="space-y-9">
+        {header}
+        {addOns}
+        {planLock}
+      </div>
+    );
+  }
   const canManage = can({ role: ctx.role }, "integrations.write");
 
   const [dtos, meetings, mail] = await Promise.all([
@@ -257,22 +291,8 @@ export default async function IntegrationsPage({
 
   return (
     <div className="space-y-9">
-      <PageHeader
-        title="Integrations and apps"
-        description="Add only what your organization uses. Each add-on shows up in the sidebar under Integrations and apps; take it off and it's gone from everyone's view."
-      />
-
-      <section className="space-y-4" aria-labelledby="int-addons">
-        <h2 id="int-addons" className="heading text-[20px]">
-          Add-ons
-        </h2>
-        <AddOnCards
-          orgId={org.id}
-          orgSlug={orgSlug}
-          added={readAddOns(ctx.settings?.addOns)}
-          canManage={can({ role: ctx.role }, "settings.general.write")}
-        />
-      </section>
+      {header}
+      {addOns}
 
       <section className="space-y-4" aria-labelledby="int-apps">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">

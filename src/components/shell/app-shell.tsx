@@ -283,7 +283,13 @@ export function AppShell({
               className="reveal-page relative isolate mx-auto w-full max-w-[1680px] min-w-0 flex-1 py-4 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] max-md:overflow-x-clip md:p-6"
             >
               {banner}
-              <SectionGate orgSlug={orgSlug} sectionPaths={sectionPaths} isAdmin={isAdmin}>
+              <SectionGate
+                orgId={orgId}
+                orgSlug={orgSlug}
+                role={role}
+                sectionPaths={sectionPaths}
+                isAdmin={isAdmin}
+              >
                 {children}
               </SectionGate>
             </main>

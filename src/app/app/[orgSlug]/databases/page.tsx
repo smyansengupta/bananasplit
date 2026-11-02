@@ -206,7 +206,9 @@ export default async function DatabasesPage({
           }
         : null;
       const expenses =
-        spaceIncludes(organization, "finance") && can({ role }, "finance.manage")
+        spaceIncludes(organization, "finance") &&
+        can({ role }, "finance.manage") &&
+        (settings?.addOns?.includes("finance") ?? true)
           ? {
               weekly: await weeklyExpenses(db, organization.id),
               total: await db.transaction.count({

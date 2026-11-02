@@ -22,14 +22,14 @@ export default async function CrmAddOnPage({ params }: { params: Promise<{ orgSl
         tint="pink"
         name="CRM"
         status={<StatusTag tone="soon">Coming later</StatusTag>}
-        summary="Every sponsor, partner and alum, and everything you've said to them."
+        summary="Every sponsor, partner and contact, and everything you've said to them."
       />
       <div className="flex flex-wrap items-center gap-8">
         <ul className="flex min-w-0 flex-[1_1_380px] flex-col gap-3">
           {[
             "A page for each contact, with the emails, meetings and tasks that mention them.",
             "A pipeline for sponsorships, from first email to paid.",
-            "Handed down when leadership changes, so nobody starts from zero.",
+            "Stays with the organization when people change roles, so nobody starts from zero.",
           ].map((t) => (
             <li key={t} className="flex items-start gap-3 text-[15px] leading-relaxed">
               <span
@@ -43,7 +43,7 @@ export default async function CrmAddOnPage({ params }: { params: Promise<{ orgSl
         </ul>
         <div
           aria-hidden="true"
-          className={`min-w-0 flex-[1_1_420px] rounded-[28px] p-8 ${PANEL.pink}`}
+          className={`rounded-card min-w-0 flex-[1_1_420px] p-8 ${PANEL.pink}`}
         >
           <Mini className="gap-4 p-[22px]">
             <span className="flex items-center gap-3">

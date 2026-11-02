@@ -4,20 +4,31 @@ import { EyeOff, LayoutGrid } from "@/components/icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AddAddOnButton } from "@/components/addons/addon-controls";
 import { EmptyState } from "@/components/empty-state";
+import { isAddOn } from "@/lib/addons";
 
 /**
  * A section the org turned off in Admin panel › Sidebar: members get a notice
  * instead of the page (it isn't a permission; the data rules are the same).
  * Owners and admins still see the page, with a reminder that it's hidden.
+ *
+ * An add-on the organization hasn't added (src/lib/addons.ts) works the same
+ * way, with Add right there for owners and admins. Treasurers keep Finance's
+ * pages (an approval email still opens), and anyone keeps their own
+ * reimbursements, so turning Finance off never strands money someone is owed.
  */
 export function SectionGate({
+  orgId,
   orgSlug,
+  role,
   sectionPaths,
   isAdmin,
   children,
 }: {
+  orgId: string;
   orgSlug: string;
+  role: string | null;
   /** Every section's paths, and whether the org hid it. */
   sectionPaths: readonly {
     id?: string;
@@ -51,30 +62,33 @@ export function SectionGate({
     )
     .sort((a, b) => b.path.length - a.path.length)[0];
   if (!match?.hidden) return <>{children}</>;
-  // An add-on nobody has added yet: its page says what it is, and how to add it.
-  if (match.notAdded && match.id) {
+  if (match.notAdded && match.id && isAddOn(match.id)) {
+    const id = match.id;
+    const name = match.label ?? "This add-on";
+    if (pathname.startsWith(`${base}/finance/my-reimbursements`)) return <>{children}</>;
+    if (isAdmin || (id === "finance" && role === "TREASURER")) {
+      return (
+        <div className="space-y-4">
+          <div className="bg-muted/50 text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2 text-sm">
+            <LayoutGrid className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              {name} isn&apos;t added, so it&apos;s hidden from the sidebar.
+            </span>
+            {isAdmin && <AddAddOnButton orgId={orgId} orgSlug={orgSlug} id={id} size="sm" />}
+          </div>
+          {children}
+        </div>
+      );
+    }
     return (
       <EmptyState
         icon={LayoutGrid}
-        title={`${match.label ?? "This"} isn't added yet`}
-        description={
-          isAdmin
-            ? "It's an add-on. See what it does and add it in one click."
-            : "It's an add-on. Ask an owner or admin to add it."
-        }
+        title={`${name} isn't added`}
+        description="It's an add-on. Ask an owner or admin to add it."
         action={
-          isAdmin ? (
-            <Link
-              href={`${base}/integrations/${match.id}`}
-              className="text-sm underline underline-offset-4"
-            >
-              See {match.label ?? "it"}
-            </Link>
-          ) : (
-            <Link href={base} className="text-sm underline underline-offset-4">
-              Back to Home
-            </Link>
-          )
+          <Link href={base} className="text-sm underline underline-offset-4">
+            Back to Home
+          </Link>
         }
       />
     );
@@ -99,7 +113,7 @@ export function SectionGate({
       description="Your organization's admins turned it off."
       action={
         <Link href={base} className="text-sm underline underline-offset-4">
-          Back to the Overview
+          Back to Home
         </Link>
       }
     />

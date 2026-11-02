@@ -4,21 +4,34 @@ import { can } from "@/lib/auth/permissions";
 import type { DraftPosition } from "@/lib/org-chart/draft";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { getOrgMembersForPicker } from "@/server/members";
-import { loadVersion } from "@/server/org-chart/service";
+import { loadVersion, MEMBERS_DRAFT_MODEL } from "@/server/org-chart/service";
+
+/** Which quick screen a draft belongs to. */
+export type QuickScreen = "review" | "seats";
 
 /**
- * What the quick setup screens (review, seats) need: an editable draft,
- * its positions and the members. Anything that is not a ready draft (a
- * published version, a document still being read) goes to the full
- * editor, which explains it.
+ * What the quick setup screens need: an editable draft, its positions and
+ * the members. Each screen only takes the drafts made for it: review the
+ * ones "Draft my chart" made (MANUAL, parseModel MEMBERS_DRAFT_MODEL),
+ * seats the ones started from a shape (TEMPLATE). Anything else (a blank
+ * draft, an import, a copy of the chart, a published version, a document
+ * still being read) goes to the full editor, which explains it.
  */
-export async function loadQuickDraft(orgSlug: string, versionId: string) {
+export async function loadQuickDraft(orgSlug: string, versionId: string, screen: QuickScreen) {
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "orgchart.write")) notFound();
   const detail = await withOrgTx(organization.id, (ctx) => loadVersion(ctx, versionId));
   if (!detail) notFound();
   const { version } = detail;
-  if (version.status !== "DRAFT" || (version.parseStatus && version.parseStatus !== "READY")) {
+  const madeForScreen =
+    screen === "seats"
+      ? version.parseMethod === "TEMPLATE"
+      : version.parseMethod === "MANUAL" && version.parseModel === MEMBERS_DRAFT_MODEL;
+  if (
+    version.status !== "DRAFT" ||
+    (version.parseStatus && version.parseStatus !== "READY") ||
+    !madeForScreen
+  ) {
     redirect(`/app/${orgSlug}/org-chart/drafts/${versionId}`);
   }
   const members = await getOrgMembersForPicker(organization.id);

@@ -16,7 +16,7 @@ export default async function ReviewDraftPage({
   const { orgSlug, versionId } = await params;
   const planLock = await planGate(orgSlug, "people");
   if (planLock) return planLock;
-  const data = await loadQuickDraft(orgSlug, versionId);
+  const data = await loadQuickDraft(orgSlug, versionId, "review");
   return (
     <ReviewScreen
       key={data.version.editVersion}

@@ -74,7 +74,7 @@ export function AddOnHeader({
       </span>
       <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="heading text-[40px] leading-none tracking-tight sm:text-[48px]">{name}</h1>
+          <h1 className="page-title">{name}</h1>
           {status}
         </div>
         <p className="text-muted-foreground text-[15.5px]">{summary}</p>
@@ -197,7 +197,7 @@ export function Mini({ className, children }: { className?: string; children: Re
     <div
       className={cn(
         // Dark mode: a hairline edge, since a shadow doesn't show there.
-        "bg-card text-card-foreground flex flex-col gap-2.5 rounded-[18px] p-[18px] shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_6%,transparent),0_12px_32px_-14px_color-mix(in_oklab,var(--foreground)_14%,transparent)] dark:ring-1 dark:ring-white/[0.06]",
+        "bg-card text-card-foreground rounded-tile flex flex-col gap-2.5 p-[18px] shadow-[0_1px_2px_color-mix(in_oklab,var(--foreground)_6%,transparent),0_12px_32px_-14px_color-mix(in_oklab,var(--foreground)_14%,transparent)] dark:ring-1 dark:ring-white/[0.06]",
         className,
       )}
     >

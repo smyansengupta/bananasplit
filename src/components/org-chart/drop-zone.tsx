@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils";
  * the time the draft opens; anything it cannot read shows its progress.
  *
  * The "tile" variant is the org chart start screen's "Bring what you
- * have": the whole tile is the button, and text pasted anywhere on the
- * page outside a field is imported as a plain-text document.
+ * have": the whole tile is the button, and a file or text pasted while the
+ * tile itself has focus is imported (text as a plain-text document). A
+ * paste anywhere else on the page is left alone.
  */
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -37,6 +38,7 @@ export function DropZone({
   const router = useRouter();
   const inputId = useId();
   const input = useRef<HTMLInputElement>(null);
+  const zone = useRef<HTMLDivElement>(null);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,12 +82,13 @@ export function DropZone({
     uploadRef.current = upload;
   });
 
-  // The tile takes text or a file pasted anywhere outside a field.
+  // The tile takes text or a file pasted while it has focus, and only then.
+  // (Listened for on the document: a paste outside an editable field is
+  // aimed at the selection, not reliably at the focused tile.)
   useEffect(() => {
     if (!tile || inactive) return;
     const onPaste = (e: ClipboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (!zone.current || document.activeElement !== zone.current) return;
       const file = e.clipboardData?.files[0];
       const text = e.clipboardData?.getData("text/plain")?.trim();
       if (!file && !text) return;
@@ -117,6 +120,7 @@ export function DropZone({
   return (
     <div className={cn("space-y-2", tile && "flex flex-1 flex-col")}>
       <div
+        ref={zone}
         onDragOver={(e) => {
           if (inactive) return;
           e.preventDefault();
@@ -168,9 +172,9 @@ export function DropZone({
         ) : tile ? (
           <>
             <Upload className="size-5" aria-hidden="true" />
-            <span className="text-[13.5px] font-semibold">Drop a file, or paste text</span>
+            <span className="text-[13.5px] font-semibold">Choose a file, or paste text</span>
             <span className="text-muted-foreground text-[12.5px]">
-              Word, PDF, Markdown or plain text
+              Word, PDF, Markdown or plain text, up to 4 MB
             </span>
             {fileInput}
           </>

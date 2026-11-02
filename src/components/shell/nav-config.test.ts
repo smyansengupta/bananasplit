@@ -191,6 +191,14 @@ describe("sidebar navigation", () => {
         .find((s) => s.id === "collect")!
         .items.map((i) => i.label),
     ).toContain("Files");
+    // Another section an older sidebar put in that group sits below the add-ons.
+    const tasksThere = {
+      groups: [],
+      items: [{ id: "tasks", group: "workspace", hidden: false, label: null }],
+    };
+    const there = workspace(tasksThere, ["forms"]);
+    expect(there.slice(0, 2)).toEqual(["Integrations", "Forms"]);
+    expect(there).toContain("Tasks");
     // An add-on that isn't added is hidden, and marked so the page can say so.
     const forms = resolveSidebar(null, [])
       .flatMap((g) => g.items)

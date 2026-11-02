@@ -64,6 +64,8 @@ export interface SearchViewer {
   zones: { viewer: string; org: string };
   /** Sections the org turned off in Settings › Sidebar. */
   hiddenSections: ReadonlySet<SectionId>;
+  /** Add-ons the org hasn't added: left out for everyone (src/lib/addons.ts). */
+  notAddedSections?: ReadonlySet<SectionId>;
   /** The published org chart, if any. */
   orgChartVersionId: string | null;
   /** A Personal space: its databases are its owner's, not the club's. */
@@ -1040,12 +1042,13 @@ function sectionOf(href: string, base: string): SectionId | null {
 /** Which groups a search reads: the filter's, minus sections the org hid (unless admin). */
 export function groupsFor(
   scope: SearchScope,
-  viewer: Pick<SearchViewer, "role" | "hiddenSections">,
+  viewer: Pick<SearchViewer, "role" | "hiddenSections" | "notAddedSections">,
 ): ServerGroupId[] {
   const admin = can({ role: viewer.role }, "settings.view");
   return SERVER_GROUPS.filter((id) => {
     if (scope !== "all" && GROUP_SCOPE[id] !== scope) return false;
     const section = GROUP_SECTION[id];
+    if (section && viewer.notAddedSections?.has(section)) return false;
     return admin || !section || !viewer.hiddenSections.has(section);
   });
 }
@@ -1078,6 +1081,7 @@ export async function searchWorkspace(
     const recent = (await listRecent(db, viewer.orgId, viewer.orgSlug, viewer.userId, 10))
       .filter((r) => {
         const section = sectionOf(r.href, base);
+        if (section && viewer.notAddedSections?.has(section)) return false;
         return admin || !section || !viewer.hiddenSections.has(section);
       })
       .slice(0, 6);

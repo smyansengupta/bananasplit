@@ -18,6 +18,9 @@ import { getPublishedOrgChart } from "@/server/org-chart/queries";
 
 import { ChartHeaderActions } from "./chart-header-actions";
 
+/** The most members the start screen's preview reads. */
+const PREVIEW_MEMBER_CAP = 1000;
+
 export interface OrgChartSection {
   /** "12 positions, 3 teams, version 4, published Oct 2", or null with no chart. */
   summary: string | null;
@@ -112,14 +115,23 @@ export async function loadOrgChartSection({
   );
 
   // No chart and no draft: the ways to start one, drafted from the members.
+  // The preview only needs the top of the chart, so it reads a capped page
+  // of members (titled ones first, which is who it places) and counts the rest.
   const start =
     canEdit && !(chart && nodes.length > 0) && !draftHref
-      ? await withOrgTx(organization.id, ({ db }) =>
-          db.membership.findMany({
+      ? await withOrgTx(organization.id, async ({ db }) => {
+          const rows = await db.membership.findMany({
             where: { organizationId: organization.id },
             select: { userId: true, role: true, title: true, user: { select: userPublicSelect } },
-          }),
-        ).then((rows) => {
+            orderBy: [{ title: { sort: "asc", nulls: "last" } }, { userId: "asc" }],
+            take: PREVIEW_MEMBER_CAP,
+          });
+          const count =
+            rows.length < PREVIEW_MEMBER_CAP
+              ? rows.length
+              : await db.membership.count({ where: { organizationId: organization.id } });
+          return { rows, count };
+        }).then(({ rows, count }) => {
           const placed = planFromMembers(
             rows.map((r) => ({
               id: r.userId,
@@ -139,7 +151,7 @@ export async function loadOrgChartSection({
             avatar: p.member.user.avatar,
             title: (p.member.title ?? "").trim(),
           }));
-          return { memberCount: rows.length, preview };
+          return { memberCount: count, preview };
         })
       : null;
 

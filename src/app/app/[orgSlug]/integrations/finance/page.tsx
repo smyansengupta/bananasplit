@@ -18,8 +18,10 @@ import { FinanceSetup, type SetupMember } from "@/components/addons/finance-setu
 import { ArrowRight, Check, Minus, Wallet } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
+import { spaceIncludes } from "@/lib/billing/space";
 import { readAddOns } from "@/lib/addons";
 import { MAX_UPLOAD_BYTES } from "@/lib/finance/prepare-receipt";
+import { FINANCE_WIDGETS } from "@/lib/finance/widgets";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 
 export const metadata = { title: "Finance" };
@@ -56,21 +58,24 @@ export default async function FinanceAddOnPage({
   const { organization: org, role, settings, user } = await getOrgContextBySlug(orgSlug);
   const added = readAddOns(settings?.addOns).includes("finance");
   const canManage = can({ role }, "settings.general.write");
+  // On a plan without it, the way in is a plan that has it.
+  const onPlan = spaceIncludes(org, "finance");
   const base = `/app/${orgSlug}`;
   const receiptMb = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
 
   let setup: { members: SetupMember[] } | null = null;
-  if (added && canManage && sp.setup === "1") {
+  if (added && canManage && onPlan && sp.setup === "1") {
     const found = await withOrgTx(org.id, async ({ db }) => ({
       period: await db.budgetPeriod.findFirst({
         where: { organizationId: org.id },
         select: { id: true },
       }),
+      // Only members can be made treasurers here; everyone else already approves.
       members: await db.membership.findMany({
-        where: { organizationId: org.id },
+        where: { organizationId: org.id, role: "MEMBER" },
         select: { userId: true, role: true, user: { select: { name: true } } },
         orderBy: { joinedAt: "asc" },
-        take: 500,
+        take: 2000,
       }),
     }));
     if (found.period) redirect(`${base}/finance`);
@@ -92,8 +97,14 @@ export default async function FinanceAddOnPage({
       </Button>
       {canManage && <RemoveAddOnButton orgId={org.id} id="finance" />}
     </div>
+  ) : canManage && !onPlan ? (
+    <Button asChild>
+      <Link href={`${base}/settings/plan`}>See plans</Link>
+    </Button>
   ) : canManage ? (
     <AddAddOnButton orgId={org.id} orgSlug={orgSlug} id="finance" />
+  ) : !onPlan ? (
+    <p className="text-muted-foreground text-sm">Not on your organization&apos;s plan.</p>
   ) : (
     <p className="text-muted-foreground text-sm">Ask an owner or admin to add it.</p>
   );
@@ -112,7 +123,7 @@ export default async function FinanceAddOnPage({
 
       <Hero
         preview={
-          <div className="bg-tint-success flex h-full flex-col justify-center gap-3.5 rounded-[26px] p-6 sm:p-8">
+          <div className="bg-tint-success rounded-card flex h-full flex-col justify-center gap-3.5 p-6 sm:p-8">
             <Mini className="gap-3.5 p-[22px]">
               <span className="flex items-center text-sm">
                 <b className="flex-1">This quarter</b>
@@ -150,17 +161,10 @@ export default async function FinanceAddOnPage({
                 ["Who sees the books", "Owners, admins and treasurers"],
                 ["Who can submit expenses", "Every member, from New"],
                 ["Budget periods", "A quarter or a calendar year"],
+                ["Plan", "Team; sponsorships and runway on Team Advanced"],
                 ["Turning it off", "Hides it; every record is kept"],
               ]}
             />
-            {!added && canManage && (
-              <AddAddOnButton
-                orgId={org.id}
-                orgSlug={orgSlug}
-                id="finance"
-                className="mt-auto w-full"
-              />
-            )}
           </>
         }
       />
@@ -235,7 +239,7 @@ export default async function FinanceAddOnPage({
               <span className="numeral text-[30px] leading-none">$86.40</span>
               <span className="flex flex-wrap gap-1.5">
                 <Pill tint="info">Food</Pill>
-                <Pill>Spring social</Pill>
+                <Pill>Launch party</Pill>
               </span>
               <span className="bg-muted/55 text-muted-foreground grid h-16 place-items-center rounded-xl text-xs">
                 receipt.jpg
@@ -249,7 +253,7 @@ export default async function FinanceAddOnPage({
                 <b className="flex-1 text-[13px]">Kristine wants $86.40 back</b>
               </span>
               <span className="text-muted-foreground text-[12.5px]">
-                Food for the spring social. Food has $20 left after this.
+                Food for the launch party. Food has $20 left after this.
               </span>
               <span className="mt-auto flex gap-1.5">
                 <span className="bg-primary text-primary-foreground inline-flex h-8 items-center rounded-full px-3.5 text-[12.5px] font-semibold">
@@ -272,15 +276,17 @@ export default async function FinanceAddOnPage({
           Who can do what
         </h2>
         <p className="text-muted-foreground max-w-[60ch] text-[15px] leading-relaxed">
-          Members never see the books, only their own expenses. Treasurer is a role you give in
-          People, and every change anyone makes is logged where nobody can edit it.
+          Finance roles are owners, admins and treasurers. Members never see the books, only their
+          own expenses, and every change anyone makes is logged where nobody can edit it.
         </p>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[480px] text-[13.5px]">
+          <table className="w-full text-[13.5px]">
             <thead>
               <tr className="text-muted-foreground text-left text-xs">
-                <th className="py-2 font-bold" />
-                <th className="py-2 font-bold">Owners, admins, treasurers</th>
+                <th className="py-2 font-bold">
+                  <span className="sr-only">What</span>
+                </th>
+                <th className="py-2 font-bold">Finance roles</th>
                 <th className="py-2 font-bold">Members</th>
               </tr>
             </thead>
@@ -363,10 +369,13 @@ export default async function FinanceAddOnPage({
         title="Bring last year's records"
         lead="Drop in what you kept before. Finance matches the columns to dates, amounts and budget lines, and shows what it'll bring in first."
         details={[
-          ["Reads", "CSV, TSV, Excel, PDF statements, or a photo of one, up to 4 MB"],
+          [
+            "Reads",
+            "CSV, TSV or Excel; PDF statements and photos of them on Team Advanced, up to 4 MB",
+          ],
           [
             "Dashboard",
-            "16 cards to choose from, like balance over time, when money runs out and biggest expenses",
+            `${FINANCE_WIDGETS.length} cards to choose from, like balance over time, spending by category and biggest expenses`,
           ],
         ]}
         panel="tile"

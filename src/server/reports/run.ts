@@ -41,10 +41,12 @@ export async function reportViewer(ctx: {
       plan: true,
       trialEndsAt: true,
       planAfterTrial: true,
+      settings: { select: { addOns: true } },
     },
   });
   return {
     db: ctx.db,
+    addOns: org.settings?.addOns ?? [],
     organizationId: ctx.organizationId,
     userId: ctx.userId,
     role: ctx.role,
