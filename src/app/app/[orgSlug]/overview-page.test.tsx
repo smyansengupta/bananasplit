@@ -307,12 +307,12 @@ describe("org overview", () => {
   it("builds the member's own board, and offers every widget but the admin ones", async () => {
     mocks.loadSavedBoard.mockResolvedValue([
       { id: "week", type: "week", w: 4, h: null },
-      { id: "polls", type: "polls", w: 1, h: 240 },
+      { id: "polls", type: "polls", w: 1, h: 2 },
     ]);
     const html = await render();
     expect(html).toContain("This week");
     expect(html).toContain("Open forms");
-    expect(html).toContain("height:240px");
+    expect(html).toContain("--rows:2");
     // Not on this member's board.
     expect(html).not.toContain(">Meetings<");
   });

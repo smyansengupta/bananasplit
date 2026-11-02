@@ -23,7 +23,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "Zap",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "waiting-on-you",
@@ -32,7 +32,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "Hourglass",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "waiting-on-others",
@@ -41,7 +41,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "ArrowLeftRight",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "my-tasks",
@@ -50,7 +50,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "CheckSquare",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "deadlines",
@@ -59,7 +59,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Calendar",
     icon: "Target",
     w: 1,
-    h: null,
+    h: 1,
   },
   {
     type: "here-now",
@@ -68,7 +68,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Organization",
     icon: "Users",
     w: 1,
-    h: null,
+    h: 1,
   },
   {
     type: "week",
@@ -86,7 +86,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Calendar",
     icon: "Users",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "events",
@@ -95,7 +95,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Calendar",
     icon: "CalendarDays",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "decisions",
@@ -104,7 +104,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Organization",
     icon: "ListChecks",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "who-owns-what",
@@ -113,7 +113,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Organization",
     icon: "Handshake",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "weekly-pulse",
@@ -131,7 +131,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Forms and votes",
     icon: "Vote",
     w: 1,
-    h: null,
+    h: 1,
   },
   {
     type: "votes",
@@ -140,7 +140,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "Forms and votes",
     icon: "ChartBar",
     w: 1,
-    h: null,
+    h: 1,
   },
   {
     type: "focus-time",
@@ -149,7 +149,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "Timer",
     w: 1,
-    h: null,
+    h: 1,
   },
   {
     type: "quick-capture",
@@ -158,7 +158,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "NotebookText",
     w: 1,
-    h: null,
+    h: 1,
   },
   {
     type: "recent",
@@ -167,7 +167,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "Clock",
     w: 2,
-    h: null,
+    h: 1,
   },
   {
     type: "pinned",
@@ -176,7 +176,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     group: "You",
     icon: "Pin",
     w: 2,
-    h: null,
+    h: 1,
   },
 ];
 
@@ -188,26 +188,27 @@ export function overviewWidgetsFor(isAdmin: boolean): OverviewWidgetMeta[] {
 
 /**
  * The Today strip, Up next and the setup checklist always lead and aren't
- * widgets (see page.tsx). Then rows that each fill the four columns: what
- * changed beside your tasks; the next deadlines (two columns wide here,
- * one in Add widget) with who's here and your focus time; the next seven
- * days; meetings beside events; the weekly pulse; open forms beside votes
- * (each two wide). Waiting on you, Waiting on others, Decisions, Who owns
- * what, Quick capture, Pick up where you left off and Pinned are offered
- * in Add widget, not placed.
+ * widgets (see page.tsx). Then a board of shapes that fills the four
+ * columns: what changed (a rectangle) above the next deadlines, beside your
+ * tasks (a big square); who's here and your focus time (squares) beside
+ * meetings; the next seven days; events beside open forms and votes
+ * (squares); the weekly pulse. The week and the pulse fit their content.
+ * Waiting on you, Waiting on others, Decisions, Who owns what, Quick
+ * capture, Pick up where you left off and Pinned are offered in Add widget,
+ * not placed.
  */
 const DEFAULT_LAYOUT: readonly BoardWidget[] = [
-  { id: "since-you-were-here", type: "since-you-were-here", w: 2, h: null },
-  { id: "my-tasks", type: "my-tasks", w: 2, h: null },
-  { id: "deadlines", type: "deadlines", w: 2, h: null },
-  { id: "here-now", type: "here-now", w: 1, h: null },
-  { id: "focus-time", type: "focus-time", w: 1, h: null },
+  { id: "since-you-were-here", type: "since-you-were-here", w: 2, h: 1 },
+  { id: "my-tasks", type: "my-tasks", w: 2, h: 2 },
+  { id: "deadlines", type: "deadlines", w: 2, h: 1 },
+  { id: "here-now", type: "here-now", w: 1, h: 1 },
+  { id: "focus-time", type: "focus-time", w: 1, h: 1 },
+  { id: "meetings", type: "meetings", w: 2, h: 1 },
   { id: "week", type: "week", w: 4, h: null },
-  { id: "meetings", type: "meetings", w: 2, h: null },
-  { id: "events", type: "events", w: 2, h: null },
+  { id: "events", type: "events", w: 2, h: 1 },
+  { id: "polls", type: "polls", w: 1, h: 1 },
+  { id: "votes", type: "votes", w: 1, h: 1 },
   { id: "weekly-pulse", type: "weekly-pulse", w: 4, h: null },
-  { id: "polls", type: "polls", w: 2, h: null },
-  { id: "votes", type: "votes", w: 2, h: null },
 ];
 
 /**
