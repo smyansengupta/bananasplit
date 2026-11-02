@@ -93,6 +93,7 @@ import { TableFrame } from "../table-frame";
 import { CellEditor, type Member } from "./cell-editor";
 import { ChoicesDialog, NewFieldPopover } from "./field-dialogs";
 import { FieldIcon } from "./field-icon";
+import { useDeleteDatabase } from "./delete-database";
 import { DatabaseSettingsDialog } from "./settings-dialog";
 
 /**
@@ -240,6 +241,12 @@ export function DatabaseGrid({
   const [editingChoices, setEditingChoices] = useState<FieldDef | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dbName, setDbName] = useState(database.name);
+  // Owners and admins delete from Settings; a member allowed to, from here.
+  const [deleteEl, deleteDatabase] = useDeleteDatabase({
+    orgId,
+    orgSlug,
+    database: { ...database, name: dbName },
+  });
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [dragField, setDragField] = useState<string | null>(null);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -796,6 +803,7 @@ export function DatabaseGrid({
   return (
     <div className="space-y-7.5">
       {confirmEl}
+      {deleteEl}
       <div className="space-y-3">
         <BackLink
           href={trash ? base : `/app/${orgSlug}/databases`}
@@ -835,6 +843,17 @@ export function DatabaseGrid({
                       <Download aria-hidden="true" />
                     )}
                   </Button>
+                  {database.canDelete && !database.canManage && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="Delete database"
+                      title="Delete database"
+                      onClick={() => void deleteDatabase()}
+                    >
+                      <Trash2 aria-hidden="true" className="text-destructive" />
+                    </Button>
+                  )}
                   {database.canManage && (
                     <Button
                       variant="outline"

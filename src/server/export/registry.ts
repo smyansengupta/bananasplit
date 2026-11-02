@@ -136,6 +136,8 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   // kept: numbers already shown in the app, no rows of their own.
   { model: "Report", key: ID },
   { model: "ReportSnapshot", key: ID },
+  // Who a report is shared with outside the organization, by email.
+  { model: "ReportInvite", key: ID },
 ];
 
 /** Org tables that are deliberately not exported, and why. */

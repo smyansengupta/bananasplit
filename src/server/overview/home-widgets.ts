@@ -61,6 +61,8 @@ export interface HomeSharedInput {
    * and elections stay. Left out, everything counts as added.
    */
   addOns?: readonly string[] | null;
+  /** Website polls, only while the website data sync is connected (left out: shown). */
+  elections?: boolean;
 }
 
 /** HomeShared, plus each open poll's turnout and whether the viewer answered, by poll id. */
@@ -74,7 +76,7 @@ export async function readHomeShared(db: TxClient, input: HomeSharedInput): Prom
   const { orgId, userId, now, memberCount } = input;
   const formsOn = input.addOns?.includes("forms") ?? true;
   const forms = formsOn ? await listOpenForms(db, orgId, now, memberCount) : [];
-  const elections = await listOpenElections(db, orgId, now);
+  const elections = input.elections === false ? [] : await listOpenElections(db, orgId, now);
   const open = await listOpenMemberPolls(db, orgId, now);
   const questions = formsOn ? open.questions : [];
   const availability = open.availability;

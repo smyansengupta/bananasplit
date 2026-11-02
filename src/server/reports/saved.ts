@@ -4,13 +4,13 @@ import { NotFoundError } from "@/lib/auth/errors";
 import { can } from "@/lib/auth/permissions";
 import type { BoardWidget } from "@/lib/boards";
 import {
-  WIDGETS,
   WIDGET_TYPES,
   fillRows,
   newWidget,
   readWidgets,
   reportTitleSchema,
   reportWidgetsSchema,
+  suggestedLayout,
   widgetsFor,
   type ReportWidget,
   type SourceSummary,
@@ -19,9 +19,11 @@ import {
 import type { ComputedWidget, InsightLine, WidgetPayload } from "@/lib/reports/compute";
 import { joinedSummary, matchableFields, readJoin, type ReportJoin } from "@/lib/reports/join";
 import { readSchedule, type ReportSchedule } from "@/lib/reports/schedule";
+import { MAX_INVITES, readInviteEmails } from "@/lib/reports/share";
 import type { TxClient } from "@/server/db/context";
 import { AppError } from "@/server/db/errors";
 
+import { generateShareToken, hashShareToken } from "./share-token";
 import { listSources, type SourceViewer } from "./sources";
 
 /**
@@ -52,6 +54,8 @@ export interface ReportSummary {
   insights: SavedInsights | null;
   joinWith: ReportJoin | null;
   schedule: ReportSchedule | null;
+  /** The view-only link is on (its token is never read back). */
+  linkOn: boolean;
 }
 
 export interface SnapshotWidget {
@@ -131,6 +135,7 @@ const SUMMARY_SELECT = {
   insightsAt: true,
   joinWith: true,
   schedule: true,
+  linkTokenHash: true,
   createdBy: { select: { name: true } },
   _count: { select: { snapshots: true } },
   snapshots: { select: { takenAt: true }, orderBy: { takenAt: "desc" }, take: 1 },
@@ -148,6 +153,7 @@ type SummaryRow = {
   insightsAt: Date | null;
   joinWith: unknown;
   schedule: unknown;
+  linkTokenHash: string | null;
   createdBy: { name: string | null } | null;
   _count: { snapshots: number };
   snapshots: { takenAt: Date }[];
@@ -168,6 +174,7 @@ function toSummary(r: SummaryRow): ReportSummary {
     insights: readInsights(r.insights, r.insightsAt),
     joinWith: readJoin(r.joinWith),
     schedule: readSchedule(r.schedule),
+    linkOn: r.linkTokenHash !== null,
   };
 }
 
@@ -321,9 +328,15 @@ export interface CreateReportInput {
   /** A second database joined on a shared field. */
   join?: unknown;
   schedule?: unknown;
+  /** Shared outside the organization from the Save dialog (an organization report only). */
+  share?: { link?: boolean; invites?: unknown };
 }
 
-export async function createReport(v: SourceViewer, input: CreateReportInput): Promise<string> {
+/** A new report, and its link's token when it was saved with the link on (shown once). */
+export async function createReport(
+  v: SourceViewer,
+  input: CreateReportInput,
+): Promise<{ id: string; linkToken: string | null }> {
   const title = reportTitleSchema.safeParse(input.title);
   if (!title.success)
     throw new ReportInputError(title.error.issues[0]?.message ?? "Name the report.");
@@ -349,6 +362,8 @@ export async function createReport(v: SourceViewer, input: CreateReportInput): P
       `Your organization has ${MAX_REPORTS_PER_ORG} reports. Archive one to make another.`,
     );
   }
+  const outside = readShareInput(input.share, input.access);
+  const linkToken = outside.link ? generateShareToken() : null;
   const report = await v.db.report.create({
     data: {
       organizationId: v.organizationId,
@@ -358,14 +373,43 @@ export async function createReport(v: SourceViewer, input: CreateReportInput): P
       widgets: widgets as object[],
       ...(join ? { joinWith: join as object } : {}),
       ...(schedule ? { schedule: schedule as object } : {}),
+      ...(linkToken ? { linkTokenHash: hashShareToken(linkToken), linkCreatedAt: new Date() } : {}),
       createdById: v.userId,
     },
     select: { id: true },
   });
-  return report.id;
+  if (outside.invites.length > 0) {
+    await v.db.reportInvite.createMany({
+      data: outside.invites.map((email) => ({
+        organizationId: v.organizationId,
+        reportId: report.id,
+        email,
+      })),
+      skipDuplicates: true,
+    });
+  }
+  return { id: report.id, linkToken };
 }
 
-async function editable(v: SourceViewer, id: string): Promise<ReportSummary> {
+/** The Save dialog's sharing, checked: only a report the organization sees is shared outside it. */
+function readShareInput(
+  raw: CreateReportInput["share"],
+  access: ReportAccess,
+): { link: boolean; invites: string[] } {
+  if (!raw || access !== "ORGANIZATION") return { link: false, invites: [] };
+  const typed = Array.isArray(raw.invites)
+    ? raw.invites.filter((e): e is string => typeof e === "string").join(",")
+    : "";
+  const { emails, bad } = readInviteEmails(typed);
+  if (bad.length > 0) throw new ReportInputError(`${bad[0]} isn't an email address.`);
+  if (emails.length > MAX_INVITES) {
+    throw new ReportInputError(`Share it with ${MAX_INVITES} people at most.`);
+  }
+  return { link: raw.link === true, invites: emails };
+}
+
+/** The report, if this person may change it (its maker, or an owner/admin on a shared one). */
+export async function editable(v: SourceViewer, id: string): Promise<ReportSummary> {
   const report = await getReport(v.db, v.organizationId, id);
   if (!canEditReport(report, v.userId, v.role)) {
     throw new ReportInputError(
@@ -379,25 +423,23 @@ async function editable(v: SourceViewer, id: string): Promise<ReportSummary> {
  * A board save from the report page: the order and shapes the board sends,
  * with each widget's settings kept by id. A widget the board just added has
  * none yet, so it's set up for the source here. null puts the report back
- * to the walkthrough's suggested widgets.
+ * to the walkthrough's suggested widgets (Reset).
+ *
+ * Returns what was saved, and the widgets it replaced (with their
+ * settings), so Reset can show the new board at once and Undo can put the
+ * old one back exactly.
  */
 export async function saveReportLayout(
   v: SourceViewer,
   id: string,
   layout: BoardWidget[] | null,
-): Promise<void> {
+): Promise<{ widgets: ReportWidget[]; before: ReportWidget[] }> {
   const report = await editable(v, id);
   const source = await summaryFor(v, report.source, report.joinWith);
   const byId = new Map(report.widgets.map((w) => [w.id, w]));
   let next: ReportWidget[];
   if (layout === null) {
-    const taken: ReportWidget[] = [];
-    for (const type of widgetsFor(source, isAdmin(v.role)).filter((t) =>
-      WIDGETS[t].suggested(source),
-    )) {
-      taken.push(newWidget(type, source, taken));
-    }
-    next = fillRows(taken);
+    next = suggestedLayout(source, isAdmin(v.role));
   } else {
     next = layout.map((b) => {
       const was = byId.get(b.id);
@@ -414,6 +456,25 @@ export async function saveReportLayout(
   const parsed = reportWidgetsSchema.safeParse(cleanWidgets(next, source, v.role));
   if (!parsed.success) throw new ReportInputError("That layout couldn't be saved.");
   await v.db.report.update({ where: { id }, data: { widgets: parsed.data as object[] } });
+  return { widgets: parsed.data, before: report.widgets };
+}
+
+/** Reset's Undo: the widgets as they were, settings and all. */
+export async function restoreReportWidgets(
+  v: SourceViewer,
+  id: string,
+  widgets: unknown,
+): Promise<ReportWidget[]> {
+  const report = await editable(v, id);
+  const source = await summaryFor(v, report.source, report.joinWith);
+  const parsed = reportWidgetsSchema.safeParse(widgets);
+  if (!parsed.success) throw new ReportInputError("Those widgets couldn't be put back.");
+  const clean = reportWidgetsSchema.safeParse(cleanWidgets(parsed.data, source, v.role));
+  if (!clean.success || clean.data.length === 0) {
+    throw new ReportInputError("Those widgets couldn't be put back.");
+  }
+  await v.db.report.update({ where: { id }, data: { widgets: clean.data as object[] } });
+  return clean.data;
 }
 
 /** One widget's settings changed (its fields, title, target...). */
@@ -446,17 +507,48 @@ export async function updateReportDetails(
       throw new ReportInputError(title.error.issues[0]?.message ?? "Name the report.");
     data.title = title.data;
   }
+  let closing = false;
   if (input.access !== undefined) {
     if (report.createdById !== v.userId)
       throw new ReportInputError("Only whoever made this report can change who sees it.");
     data.access = input.access;
+    // Only you: nobody outside the organization keeps it either.
+    closing = input.access === "PRIVATE" && report.access !== "PRIVATE";
   }
-  await v.db.report.update({ where: { id }, data });
+  await v.db.report.update({
+    where: { id },
+    data: closing ? { ...data, linkTokenHash: null, linkCreatedAt: null } : data,
+  });
+  if (closing) {
+    await v.db.reportInvite.deleteMany({
+      where: { organizationId: v.organizationId, reportId: id },
+    });
+  }
 }
 
 export async function archiveReport(v: SourceViewer, id: string): Promise<void> {
   await editable(v, id);
   await v.db.report.update({ where: { id }, data: { archivedAt: new Date() } });
+}
+
+/**
+ * Deletes the report for good, with its kept copies and its invites (the
+ * database cascades them). Its editors may: whoever made it, or an owner or
+ * admin on one the organization shares.
+ */
+export async function deleteReport(v: SourceViewer, id: string): Promise<void> {
+  const report = await v.db.report.findFirst({
+    where: { organizationId: v.organizationId, id },
+    select: { createdById: true, access: true },
+  });
+  if (!report) throw new NotFoundError();
+  if (!canEditReport(report, v.userId, v.role)) {
+    throw new ReportInputError(
+      "Only whoever made this report, or an owner or admin, can delete it.",
+    );
+  }
+  const done = await v.db.report.deleteMany({ where: { organizationId: v.organizationId, id } });
+  if (done.count === 0) throw new NotFoundError();
 }
 
 /** Archive's Undo: the report back, if this person may change it (RLS decides). */

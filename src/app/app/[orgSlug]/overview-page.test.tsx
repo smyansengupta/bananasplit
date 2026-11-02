@@ -47,6 +47,9 @@ vi.mock("@/server/overview/queries", async (actual) => ({
 }));
 // The Inbox's Needs you, as the sidebar badge counts it (its own tests).
 vi.mock("@/server/inbox/counts", () => ({ sidebarCounts: mocks.sidebarCounts }));
+vi.mock("@/server/integrations/website-sync", () => ({
+  websiteSyncConnected: async () => true,
+}));
 // The newer widgets' loaders: each has its own tests.
 vi.mock("@/server/overview/since-you-were-here", () => ({
   loadSinceYouWereHere: vi.fn(async () => ({

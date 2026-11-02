@@ -177,7 +177,19 @@ const collision: CollisionDetection = (args) => {
 
 const noSubscribe = () => () => {};
 
-export type SaveBoard = (layout: BoardWidget[] | null) => Promise<{ ok: boolean; error?: string }>;
+/**
+ * What a save sends back. A Reset (null) may answer with the board it put
+ * back, which the board shows at once, and an undo that puts the old one
+ * back exactly (a report's widget settings too) and answers with that board.
+ */
+export type SaveBoardResult = {
+  ok: boolean;
+  error?: string;
+  layout?: BoardWidget[];
+  undo?: () => Promise<{ ok: boolean; error?: string; layout?: BoardWidget[] }>;
+};
+
+export type SaveBoard = (layout: BoardWidget[] | null) => Promise<SaveBoardResult>;
 
 /**
  * The board's widgets slide to their new places when the layout changes
@@ -328,7 +340,7 @@ export function WidgetBoard({
   /** Set by a Reset: take the next layout the server sends. */
   const takeNext = useRef(false);
 
-  function persist(next: BoardWidget[] | null) {
+  function persist(next: BoardWidget[] | null, then?: (result: SaveBoardResult) => void) {
     setError(null);
     start(async () => {
       const result = await onSave(next);
@@ -336,8 +348,13 @@ export function WidgetBoard({
         setError(result.error ?? "Couldn't save the layout. Check your connection and try again.");
         return;
       }
-      // Reset: the server's default arrives with the refresh; take it then.
-      if (next === null) takeNext.current = true;
+      // Reset: when the save says what it put back, show it now. Otherwise
+      // the server's default arrives with the refresh; take it then.
+      if (next === null) {
+        if (result.layout) take(result.layout);
+        else takeNext.current = true;
+      }
+      then?.(result);
       if (refreshOnSave) router.refresh();
     });
   }
@@ -345,6 +362,11 @@ export function WidgetBoard({
   // The board saves as you go: every change (a remove, an add, a drag) is
   // sent a moment after the last one, so there is no Save or Cancel.
   const saved = useRef(JSON.stringify(initialLayout));
+  /** Shows a board that is already saved (what a Reset or its Undo put back). */
+  function take(next: BoardWidget[]) {
+    saved.current = JSON.stringify(next);
+    setLayout(next);
+  }
   useEffect(() => {
     if (dragId) return;
     const now = JSON.stringify(layout);
@@ -411,17 +433,26 @@ export function WidgetBoard({
 
   function reset() {
     const before = layout;
-    persist(null);
-    toast({
-      title: resetLabel,
-      action: {
-        label: "Undo",
-        run: () => {
-          setLayout(before);
-          saved.current = "";
+    // The toast comes once it's done, so its Undo has what it needs.
+    persist(null, (result) =>
+      toast({
+        title: resetLabel,
+        action: {
+          label: "Undo",
+          run: async () => {
+            if (!result.undo) {
+              setLayout(before);
+              saved.current = "";
+              return;
+            }
+            const back = await result.undo();
+            if (!back.ok) return back.error ?? "Couldn't put it back. Try again.";
+            take(back.layout ?? before);
+            if (refreshOnSave) router.refresh();
+          },
         },
-      },
-    });
+      }),
+    );
   }
 
   // Unchanged is the same array, so a resize that hasn't crossed into the
@@ -896,7 +927,9 @@ function BoardItem({
           "min-h-0 flex-1",
           bare
             ? "flex flex-col"
-            : "overflow-auto overscroll-contain rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
+            : // The page keeps scrolling past a widget: a long one scrolls inside, then hands
+              // the wheel back to the page (no overscroll-contain, which trapped it there).
+              "overflow-auto rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
           editing && "opacity-70",
         )}
       >

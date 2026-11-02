@@ -20,6 +20,11 @@ import {
   type FieldType,
   type StoredValue,
 } from "@/lib/databases/fields";
+import {
+  canDeleteDatabase,
+  deleteBlockedReason,
+  type DatabaseDeleteCheck,
+} from "@/lib/databases/delete";
 import { DATABASE_TEMPLATES, findTemplate } from "@/lib/databases/templates";
 import { writeOrgAuditLog } from "@/server/audit";
 import type { TxClient } from "@/server/db/context";
@@ -84,8 +89,14 @@ export interface CustomDatabase {
   trashCount: number;
   /** Add and edit rows (app.can_edit_database). */
   canEdit: boolean;
-  /** Fields, settings, deleting for good (owners and admins). */
+  /** Fields, settings, deleting rows for good (owners and admins). */
   canManage: boolean;
+  /** Deleting the whole database for good (lib/databases/delete.ts). */
+  canDelete: boolean;
+  /** Why it can never be deleted (a form writes into it), shown where Delete would be. */
+  deleteBlocked: string | null;
+  /** Saved reports (the viewer can see) that read it: the delete confirm says they'll show it's gone. */
+  reportCount: number;
 }
 
 /** Rows a page loads at once; "Load more" fetches the next page. */
@@ -166,6 +177,8 @@ export async function loadCustomDatabase(
   const trashCount = await db.databaseRecord.count({
     where: { organizationId, databaseId: def.id, deletedAt: { not: null } },
   });
+  const canEdit = await allowed(db, "can_edit_database", def.id);
+  const check = await deleteCheck(actor, def.id, canEdit);
   return {
     id: def.id,
     key: def.key,
@@ -179,8 +192,11 @@ export async function loadCustomDatabase(
     next: page.next,
     total: page.total,
     trashCount,
-    canEdit: await allowed(db, "can_edit_database", def.id),
+    canEdit,
     canManage: can({ role: actor.role }, "databases.write"),
+    canDelete: canDeleteDatabase(check),
+    deleteBlocked: deleteBlockedReason(check),
+    reportCount: await reportsReading(db, organizationId, def.id),
   };
 }
 
@@ -651,6 +667,91 @@ export async function archiveDatabase(actor: Actor, databaseId: string): Promise
     action: "database.archived",
     targetType: "DatabaseDefinition",
     targetId: databaseId,
+  });
+}
+
+/** Everything canDeleteDatabase needs about one CUSTOM database, read as the viewer. */
+async function deleteCheck(
+  actor: Actor,
+  databaseId: string,
+  canEditRows: boolean,
+  kind: DatabaseDeleteCheck["kind"] = "CUSTOM",
+): Promise<DatabaseDeleteCheck> {
+  const { db, organizationId } = actor;
+  const forms = await db.form.count({ where: { organizationId, databaseId } });
+  const settings = await db.orgSettings.findUnique({
+    where: { organizationId },
+    select: { memberCanDeleteDatabases: true },
+  });
+  return {
+    role: actor.role,
+    kind,
+    formOwned: forms > 0,
+    membersCanDelete: settings?.memberCanDeleteDatabases ?? false,
+    canEditRows,
+  };
+}
+
+/** Built-ins are refused by deleteBlockedReason; a CUSTOM one must be the viewer's to open. */
+async function viewable(db: TxClient, databaseId: string, kind: string): Promise<boolean> {
+  return kind !== "CUSTOM" || allowed(db, "can_view_database", databaseId);
+}
+
+/** Saved reports (not archived) that read a database, as their source or their join. */
+async function reportsReading(
+  db: TxClient,
+  organizationId: string,
+  databaseId: string,
+): Promise<number> {
+  const source = `custom:${databaseId}`;
+  return db.report.count({
+    where: {
+      organizationId,
+      archivedAt: null,
+      OR: [{ source }, { joinWith: { path: ["source"], equals: source } }],
+    },
+  });
+}
+
+/**
+ * Deletes a database for good: its fields and rows go with it (they
+ * cascade from the definition). Built-in databases and a form's answers
+ * can't be deleted; who else may is canDeleteDatabase, and the DELETE
+ * policy on "DatabaseDefinition" refuses anyone else whatever they send.
+ * A report reading it shows its database is gone.
+ */
+export async function deleteDatabase(actor: Actor, databaseId: string): Promise<void> {
+  const { db, organizationId } = actor;
+  const def = await db.databaseDefinition.findFirst({
+    where: { id: databaseId, organizationId },
+    select: { id: true, name: true, kind: true, archivedAt: true },
+  });
+  if (!def) throw new NotFoundError();
+  // A live one the viewer can't open doesn't exist for them (an archived
+  // one is out of everyone's sight; owners and admins may still delete it).
+  if (!def.archivedAt && !(await viewable(db, def.id, def.kind))) throw new NotFoundError();
+  const canEditRows = await allowed(db, "can_edit_database", def.id);
+  const check = await deleteCheck(actor, def.id, canEditRows, def.kind);
+  const blocked = deleteBlockedReason(check);
+  if (blocked) throw new DatabaseInputError(blocked);
+  if (!canDeleteDatabase(check)) {
+    throw new DatabaseInputError(
+      check.membersCanDelete
+        ? "Only owners, admins and members who can edit this database can delete it."
+        : "Only owners and admins can delete databases.",
+    );
+  }
+  const rows = await db.databaseRecord.count({ where: { organizationId, databaseId: def.id } });
+  const deleted = await db.databaseDefinition.deleteMany({
+    where: { id: def.id, organizationId },
+  });
+  if (deleted.count === 0) throw new DatabaseInputError("That database could not be deleted.");
+  await writeOrgAuditLog(db, {
+    organizationId,
+    action: "database.deleted",
+    targetType: "DatabaseDefinition",
+    targetId: def.id,
+    diff: { name: def.name, rows },
   });
 }
 

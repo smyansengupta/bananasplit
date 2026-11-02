@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 
-import { WidgetBoard } from "@/components/boards/widget-board";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { RangePicker } from "@/components/reports/range-picker";
@@ -18,6 +17,7 @@ import {
   WidgetSettingsButton,
 } from "@/components/reports/saved/report-controls";
 import { AskReports } from "@/components/reports/saved/ask-reports";
+import { ReportBoard } from "@/components/reports/saved/report-board";
 import { WidgetBody } from "@/components/reports/saved/widget-bodies";
 import { can } from "@/lib/auth/permissions";
 import { boardTypes } from "@/lib/reports/catalog";
@@ -36,7 +36,6 @@ import { getVisibleReports } from "@/server/reports/visibility";
 
 import { DatabasesTabs } from "../../databases-tabs";
 import { PeopleSummarySection, RsvpAttendanceSection } from "../organization-sections";
-import { saveReportLayoutAction } from "../report-actions";
 
 export const metadata = { title: "Report" };
 
@@ -101,6 +100,7 @@ export default async function SavedReportPage({
           canEdit={canEdit}
           isOwner={report.createdById === user.id}
           schedule={report.schedule}
+          linkOn={report.linkOn}
         />
       }
       tabs={
@@ -272,14 +272,15 @@ export default async function SavedReportPage({
       <div className="space-y-7.5">
         {header}
         <ReportsBody>
-          <WidgetBoard
+          <ReportBoard
+            orgId={organization.id}
+            reportId={report.id}
             types={boardTypes(source, isAdmin)}
             initialLayout={report.widgets.map(({ id, type, w, h }) => ({ id, type, w, h }))}
             customized
             titles={titles}
             bodies={bodies}
             headerActions={actions}
-            onSave={saveReportLayoutAction.bind(null, organization.id, report.id)}
             readOnly={!canEdit}
             editHint={
               report.access === "PRIVATE"
@@ -300,6 +301,7 @@ export default async function SavedReportPage({
                   : ""}
                 {report.joinWith && joinedName ? `, joined with ${joinedName}` : ""}
                 {report.access === "PRIVATE" ? ". Only you can open it" : ""}
+                {report.linkOn ? ". Anyone with its link can view it" : ""}
                 {report.schedule
                   ? `. ${describeSchedule(
                       report.schedule,

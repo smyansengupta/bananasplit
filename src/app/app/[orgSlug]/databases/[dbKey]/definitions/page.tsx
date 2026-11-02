@@ -20,10 +20,11 @@ import { planGate } from "@/server/billing/plan-gate";
 
 /**
  * Ballots > Poll definitions (OWNER/ADMIN): import the website's poll files
- * (labels, question types, the voting window) and flag test polls. Counts
- * per exclusion reason show why ballots are or are not counted; they are
- * read as the viewer through RLS, so an admin who may not see individual
- * ballots sees no counts here (the Results tab shows the totals).
+ * (labels, question types, the voting window), flag test polls, close one
+ * now or delete one with its votes. Counts per exclusion reason show why
+ * ballots are or are not counted; they are read as the viewer through RLS,
+ * so an admin who may not see individual ballots sees no counts here (the
+ * Results tab shows the totals).
  */
 export default async function BallotDefinitionsPage({
   params,
@@ -64,6 +65,7 @@ export default async function BallotDefinitionsPage({
   }
 
   const tz = organization.timezone;
+  const now = new Date().getTime();
   const local = (d: Date | null) =>
     d ? format(new TZDate(d.getTime(), tz), "yyyy-MM-dd'T'HH:mm") : "";
   const sessions = data.sessions.map((s) => ({
@@ -133,6 +135,9 @@ export default async function BallotDefinitionsPage({
           const def = readDefinition(d.definition);
           const counts = bySlug.get(d.slug) ?? [];
           const counted = counts.filter((c) => !c.reason).reduce((s, c) => s + c.n, 0);
+          const isOpen =
+            (!d.opensAt || d.opensAt.getTime() <= now) &&
+            (!d.closesAt || d.closesAt.getTime() > now);
           return (
             <li key={d.id}>
               <DefinitionEditForm
@@ -140,6 +145,7 @@ export default async function BallotDefinitionsPage({
                 sessions={sessions}
                 title={d.title}
                 action={d.isTest ? <Badge variant="secondary">Test</Badge> : undefined}
+                isOpen={isOpen}
                 description={
                   <span className="tabular-nums">
                     <code className="font-mono text-xs">{d.slug}</code>, {def.questions.length}{" "}

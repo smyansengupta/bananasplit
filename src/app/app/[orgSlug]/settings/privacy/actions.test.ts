@@ -7,8 +7,13 @@ vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 
 const { fake, resetFake } = await import("@/test/fake-context");
 const { ForbiddenError } = await import("@/lib/auth/errors");
-const { updateBallotVisibility, updateConnectorsEnabled, updateDatabaseVisibility, updatePrivacy } =
-  await import("./actions");
+const {
+  updateBallotVisibility,
+  updateConnectorsEnabled,
+  updateDatabaseVisibility,
+  updateMemberCanDeleteDatabases,
+  updatePrivacy,
+} = await import("./actions");
 
 const current = {
   ballotIndividualVisibility: "OWNER_ONLY",
@@ -18,6 +23,7 @@ const current = {
   publicEventsEnabled: false,
   contactEmailVisibility: "ADMINS",
   connectorsEnabled: true,
+  memberCanDeleteDatabases: false,
 };
 
 beforeEach(() => {
@@ -118,5 +124,29 @@ describe("Privacy settings", () => {
 
     fake.role = "MEMBER";
     await expect(updateConnectorsEnabled("org_1", false)).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("ADMINs let members delete databases, audited; members and treasurers can't", async () => {
+    expect(await updateMemberCanDeleteDatabases("org_1", true)).toEqual({});
+    expect(fake.db.orgSettings.update).toHaveBeenCalledWith({
+      where: { organizationId: "org_1" },
+      data: { memberCanDeleteDatabases: true, updatedById: "actor" },
+    });
+    const audit = fake.db.$queryRaw.mock.calls[0];
+    expect(audit[2]).toBe("privacy.database_delete_changed");
+
+    vi.clearAllMocks();
+    expect(await updateMemberCanDeleteDatabases("org_1", false)).toEqual({});
+    expect(fake.db.orgSettings.update).not.toHaveBeenCalled();
+    expect(
+      (await updateMemberCanDeleteDatabases("org_1", "on" as unknown as boolean)).error,
+    ).toBeTruthy();
+
+    for (const role of ["MEMBER", "TREASURER"] as const) {
+      fake.role = role;
+      await expect(updateMemberCanDeleteDatabases("org_1", true)).rejects.toBeInstanceOf(
+        ForbiddenError,
+      );
+    }
   });
 });

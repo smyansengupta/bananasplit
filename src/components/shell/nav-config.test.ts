@@ -20,8 +20,8 @@ describe("sidebar navigation", () => {
       "Tasks",
       "Calendar",
       "Meetings",
-      "Databases",
       "Files",
+      "Databases",
       "Integrations",
       "Forms",
       "Finance",
@@ -220,7 +220,7 @@ describe("the sidebar in each space", () => {
   const nav = (space: Space, showLocked = false) =>
     navSections("me", visibleSidebar(null), { space, showLocked }).flatMap((s) => s.items);
 
-  it("gives Personal its own: Home, Inbox, Tasks, Calendar, Meetings, Databases and Files", () => {
+  it("gives Personal its own: Home, Inbox, Tasks, Calendar, Meetings, Files and Databases", () => {
     const items = nav(PERSONAL, true);
     expect(items.map((i) => i.label)).toEqual([
       "Home",
@@ -228,8 +228,8 @@ describe("the sidebar in each space", () => {
       "Tasks",
       "Calendar",
       "Meetings",
-      "Databases",
       "Files",
+      "Databases",
     ]);
     expect(items.map((i) => i.href)).toEqual([
       "/app/me",
@@ -237,8 +237,8 @@ describe("the sidebar in each space", () => {
       "/app/me/tasks",
       "/app/me/calendar",
       "/app/me/meetings",
-      "/app/me/databases",
       "/app/me/notes",
+      "/app/me/databases",
     ]);
     expect(items.some((i) => i.locked)).toBe(false);
     const all = items;

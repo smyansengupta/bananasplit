@@ -2171,6 +2171,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "redeem_org_creation_code",
         "refresh_contact_rollups",
         "refresh_lapsed",
+        // A shared report's pages: the org and report an invite or a link's
+        // token hash opens, ids only (live, organization-shared reports).
+        "report_invite_target",
+        "report_link_target",
         "resolve_org_slug",
         // AI connectors: the identity plane's revoke (app_auth only), for a
         // password reset and the Google sign-in gate.
@@ -2444,6 +2448,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       poll_org_id: "s",
       purge_unverified_users: "a",
       rsvp_page: "s",
+      report_link_target: "s",
+      report_invite_target: "s",
       rsvp_ticket: "s",
       form_page: "s",
       my_rsvp_registrations: "u",

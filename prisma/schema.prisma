@@ -2199,6 +2199,9 @@ model OrgSettings {
   eventTypes                    Json?
   // What members (not only OWNER/ADMIN) may create; RLS reads these.
   memberCanCreateTags           Boolean          @default(true)
+  /// Members who can edit a database's rows may also delete it for good
+  /// (Admin panel › Privacy › Databases). Off: only owners and admins.
+  memberCanDeleteDatabases      Boolean          @default(false)
   /// Members may use the club from AI apps they connect (Admin panel ›
   /// Privacy › AI connectors; docs/features/ai-connectors.md). Off refuses
   /// every connector call for the club; nothing is revoked.
@@ -3076,7 +3079,7 @@ enum ReportAccess {
 /// A saved report: one source (a database, or Tasks, Expenses, Events or
 /// People) and a board of widgets on it, each with its own settings
 /// (src/lib/reports/catalog.ts). Built by the New report walkthrough.
-/// Removing one archives it (app_user has no DELETE).
+/// Archived, or deleted for good with its copies and invites by its editors.
 model Report {
   id             String       @id @default(cuid())
   organizationId String
@@ -3094,6 +3097,10 @@ model Report {
   joinWith       Json?
   /// When it emails itself: {every, day, hour, to} (src/lib/reports/schedule.ts).
   schedule       Json?
+  /// The view-only link (/r/{token}): sha256 of its token, hex. The token
+  /// itself exists only in the link shown when it is made; null is off.
+  linkTokenHash  String?      @unique
+  linkCreatedAt  DateTime?
   createdById    String?
   archivedAt     DateTime?
   createdAt      DateTime     @default(now())
@@ -3102,6 +3109,7 @@ model Report {
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User?            @relation("ReportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   snapshots    ReportSnapshot[]
+  invites      ReportInvite[]
 
   @@unique([organizationId, id])
   @@index([organizationId, archivedAt, updatedAt])
@@ -3127,4 +3135,21 @@ model ReportSnapshot {
 
   @@index([organizationId, reportId, takenAt])
   @@index([takenById])
+}
+
+/// Someone outside the organization a report is shared with: whoever signs
+/// in with this verified email opens it read-only (/r/invite/{reportId}).
+/// Only the report's editors read and change these.
+model ReportInvite {
+  id             String   @id @default(cuid())
+  organizationId String
+  reportId       String
+  /// lower(trim(email)).
+  email          String
+  createdAt      DateTime @default(now())
+
+  report Report @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([reportId, email])
+  @@index([organizationId, reportId])
 }

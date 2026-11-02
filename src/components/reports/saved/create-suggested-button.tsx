@@ -38,7 +38,7 @@ export function CreateSuggestedButton({
         })
       }
     >
-      {pending ? "Making it..." : "Make this report"}
+      {pending ? "Making it…" : "Make this report"}
     </Button>
   );
 }

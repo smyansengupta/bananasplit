@@ -15,6 +15,7 @@ import {
   type ReportWidget,
   type WidgetConfig,
 } from "@/lib/reports/catalog";
+import { appUrl } from "@/lib/app-url";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
 import { resolveAiCredentials } from "@/server/ai/connections";
 import { AiImportError } from "@/server/ai/generate";
@@ -33,9 +34,11 @@ import {
   archiveReport,
   canEditReport,
   createReport,
+  deleteReport,
   getReport,
   listReports,
   restoreReport,
+  restoreReportWidgets,
   saveInsights,
   saveReportLayout,
   saveSchedule,
@@ -44,6 +47,13 @@ import {
   updateReportDetails,
   type CreateReportInput,
 } from "@/server/reports/saved";
+import {
+  addReportInvites,
+  getReportSharing,
+  removeReportInvite,
+  setReportLink,
+  type ReportSharing,
+} from "@/server/reports/share";
 import { listSources } from "@/server/reports/sources";
 
 /**
@@ -70,16 +80,26 @@ function failure(error: unknown): { ok: false; error: string } {
   throw error;
 }
 
+/** The view-only link a token opens (shown once, to the editor who made it). */
+function linkUrl(token: string): string {
+  return appUrl(`/r/${token}`);
+}
+
+/** Where invited people open a report (they sign in with the invited address). */
+function inviteUrl(reportId: string): string {
+  return appUrl(`/r/invite/${reportId}`);
+}
+
 export async function createReportAction(
   organizationId: string,
   input: CreateReportInput,
-): Promise<ReportResult<{ id: string }>> {
+): Promise<ReportResult<{ id: string; link: string | null }>> {
   try {
-    const id = await reportsAction(async (ctx) => {
+    const made = await reportsAction(async (ctx) => {
       requirePermission(ctx, "reports.view");
       return createReport(await reportViewer(ctx), input);
     })(organizationId);
-    return { ok: true, id };
+    return { ok: true, id: made.id, link: made.linkToken ? linkUrl(made.linkToken) : null };
   } catch (error) {
     return failure(error);
   }
@@ -100,12 +120,13 @@ export async function createSuggestedReport(
       for (const type of suggestedWidgets(source, can(ctx, "databases.write"))) {
         widgets.push(newWidget(type, source, widgets));
       }
-      return createReport(v, {
+      const made = await createReport(v, {
         title: source.name,
         source: source.key,
         access: "ORGANIZATION",
         widgets: fillRows(widgets),
       });
+      return made.id;
     })(organizationId);
     return { ok: true, id };
   } catch (error) {
@@ -113,15 +134,126 @@ export async function createSuggestedReport(
   }
 }
 
+/**
+ * A board save. A Reset (null) answers with the widgets it put back and the
+ * ones it replaced, settings included, for the board to show at once and
+ * for its Undo (restoreReportWidgetsAction).
+ */
 export async function saveReportLayoutAction(
   organizationId: string,
   reportId: string,
   layout: BoardWidget[] | null,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<ReportResult<{ widgets?: ReportWidget[]; before?: ReportWidget[] }>> {
   try {
-    await reportsAction(async (ctx) => saveReportLayout(await reportViewer(ctx), reportId, layout))(
+    const saved = await reportsAction(async (ctx) =>
+      saveReportLayout(await reportViewer(ctx), reportId, layout),
+    )(organizationId);
+    return layout === null ? { ok: true, ...saved } : { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Reset's Undo: the widgets as they were before it. */
+export async function restoreReportWidgetsAction(
+  organizationId: string,
+  reportId: string,
+  widgets: ReportWidget[],
+): Promise<ReportResult<{ widgets: ReportWidget[] }>> {
+  try {
+    const back = await reportsAction(async (ctx) =>
+      restoreReportWidgets(await reportViewer(ctx), reportId, widgets),
+    )(organizationId);
+    return { ok: true, widgets: back };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Deletes the report for good, with its kept copies and its sharing. */
+export async function deleteReportAction(
+  organizationId: string,
+  reportId: string,
+): Promise<ReportResult> {
+  try {
+    await reportsAction(async (ctx) => deleteReport(await reportViewer(ctx), reportId))(
       organizationId,
     );
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export type SharingState = ReportSharing & { inviteUrl: string };
+
+/** The report's sharing outside the organization, for its editors' Share dialog. */
+export async function getReportSharingAction(
+  organizationId: string,
+  reportId: string,
+): Promise<ReportResult<{ sharing: SharingState }>> {
+  try {
+    const sharing = await reportsAction(async (ctx) =>
+      getReportSharing(await reportViewer(ctx), reportId),
+    )(organizationId);
+    return { ok: true, sharing: { ...sharing, inviteUrl: inviteUrl(reportId) } };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Turns the view-only link on (a new one each time; the old stops working) or off. */
+export async function setReportLinkAction(
+  organizationId: string,
+  reportId: string,
+  on: boolean,
+): Promise<ReportResult<{ link: string | null }>> {
+  try {
+    const token = await reportsAction(async (ctx) =>
+      setReportLink(await reportViewer(ctx), reportId, on),
+    )(organizationId);
+    refresh();
+    return { ok: true, link: token ? linkUrl(token) : null };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+const INVITES_PER_HOUR = 60;
+
+export async function addReportInvitesAction(
+  organizationId: string,
+  reportId: string,
+  typed: string,
+): Promise<ReportResult<{ invites: string[] }>> {
+  const user = await requireUser();
+  const hit = await checkRateLimit(
+    rateLimitKey("report-invite", organizationId, user.id),
+    INVITES_PER_HOUR,
+    60 * 60,
+  );
+  if (!hit.allowed) {
+    return { ok: false, error: `That's a lot of invites. Try again ${retryAfterText(hit)}.` };
+  }
+  try {
+    const invites = await reportsAction(async (ctx) =>
+      addReportInvites(await reportViewer(ctx), reportId, String(typed ?? "").slice(0, 5000)),
+    )(organizationId);
+    return { ok: true, invites };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function removeReportInviteAction(
+  organizationId: string,
+  reportId: string,
+  email: string,
+): Promise<ReportResult> {
+  try {
+    await reportsAction(async (ctx) =>
+      removeReportInvite(await reportViewer(ctx), reportId, String(email ?? "")),
+    )(organizationId);
     return { ok: true };
   } catch (error) {
     return failure(error);

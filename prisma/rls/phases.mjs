@@ -44,12 +44,20 @@ const GRANTS = {
   // deleted by a member.
   Decision: ["SIu", "SD", ""],
   // Saved reports: members make them (createdById pinned); the maker, or an
-  // owner/admin on a shared one, edits and archives (title, access,
-  // widgets, insights, insightsAt, archivedAt, updatedAt). A snapshot is
-  // taken as yourself of a report you can see, and never edited.
-  Report: ["SIu", "SD", ""],
+  // owner/admin on a shared one, edits, archives and deletes (title, access,
+  // widgets, insights, insightsAt, archivedAt, updatedAt, and the link's
+  // linkTokenHash and linkCreatedAt). A snapshot is taken as yourself of a
+  // report you can see, and never edited.
+  Report: ["SIuD", "SD", ""],
   ReportSnapshot: ["SI", "SD", ""],
-  DatabaseDefinition: ["SIU", "SIUD", ""],
+  // Who a report is shared with outside the organization: its editors read,
+  // add and remove them; nobody edits one.
+  ReportInvite: ["SID", "SD", ""],
+  // Databases: members read; owners and admins make and edit them. An
+  // organization's own (CUSTOM, no form) is deleted for good by owners and
+  // admins, or by members who can edit it while
+  // OrgSettings.memberCanDeleteDatabases is on (20261103130000).
+  DatabaseDefinition: ["SIUD", "SIUD", ""],
   // Club-made databases: rows and fields, guarded per database by
   // app.can_view_database / app.can_edit_database.
   DatabaseField: ["SIUD", "SIUD", ""],
@@ -232,6 +240,7 @@ const NEW_TENANT_TABLES = [
   "Decision",
   "Report",
   "ReportSnapshot",
+  "ReportInvite",
   "Form",
   "FormResponse",
   "DatabaseField",
@@ -1436,7 +1445,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
   );
   await tcase(
     "P4a-04",
-    "DatabaseDefinition: members read; OWNER/ADMIN create and edit; nobody deletes (archive)",
+    "DatabaseDefinition: members read; OWNER/ADMIN create and edit; a built-in is never deleted",
     "app_user",
     A("u_memberA"),
     async (q) => {
@@ -1461,7 +1470,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         member_update: 0,
         admin_update: 1,
         admin_insert: 1,
-        admin_delete: "42501",
+        admin_delete: 0,
       },
     },
   );
@@ -5440,9 +5449,9 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
          VALUES ('rs_1','org_A','rp_mine','u_memberA','Fall 2026','{}')`,
       );
-      s.delete = await tryq(q, `DELETE FROM "Report" WHERE "id" = 'rp_shared'`);
       s.change_maker = await tryq(q, `UPDATE "Report" SET "createdById" = 'u_bothAB' WHERE "id" = 'rp_shared'`);
       await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.member_deletes_shared = await rc(q, `DELETE FROM "Report" WHERE "id" = 'rp_shared'`);
       s.member_reads = await count(q, `SELECT count(*) n FROM "Report"`);
       s.member_reads_copies = await count(q, `SELECT count(*) n FROM "ReportSnapshot"`);
       // A copy the maker (or an admin) took of the SHARED report: theirs alone.
@@ -5479,8 +5488,8 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         make: 2,
         make_as_other: "42501",
         keep_copy: 1,
-        delete: "42501",
         change_maker: "42501",
+        member_deletes_shared: 0,
         member_reads: 1,
         member_reads_copies: 0,
         member_reads_others_copy: 0,
@@ -5496,6 +5505,231 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       },
     },
   );
+  await tcase(
+    "P-REPORTS-02",
+    "sharing reports outside the organization, and deleting them: only a report's editors see, add and remove its invites or touch its link, only on a report the organization shares, and deleting takes its copies and invites with it",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      await q(
+        `INSERT INTO "Report" ("id","organizationId","title","source","access","createdById","updatedAt")
+         VALUES ('rp_out','org_A','Sponsors','tasks','ORGANIZATION','u_memberA',now()),
+                ('rp_priv','org_A','Mine','tasks','PRIVATE','u_memberA',now())`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      await q(
+        `INSERT INTO "Report" ("id","organizationId","title","source","access","createdById","updatedAt")
+         VALUES ('rp_adm','org_A','Budget','tasks','ORGANIZATION','u_adminA',now()),
+                ('rp_adm_priv','org_A','Notes','tasks','PRIVATE','u_adminA',now())`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.maker_invites = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_1','org_A','rp_out','guest@example.org')`,
+      );
+      s.invite_private = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_2','org_A','rp_priv','guest@example.org')`,
+      );
+      s.invite_someone_elses = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_3','org_A','rp_adm','guest@example.org')`,
+      );
+      s.invite_unnormalized = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_4','org_A','rp_out','Guest@Example.org ')`,
+      );
+      s.invite_twice = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_5','org_A','rp_out','guest@example.org')`,
+      );
+      s.link_on = await rc(
+        q,
+        `UPDATE "Report" SET "linkTokenHash" = '${HASH("a")}', "linkCreatedAt" = now() WHERE "id" = 'rp_out'`,
+      );
+      s.link_on_private = await tryq(
+        q,
+        `UPDATE "Report" SET "linkTokenHash" = '${HASH("b")}' WHERE "id" = 'rp_priv'`,
+      );
+      s.link_plaintext = await tryq(
+        q,
+        `UPDATE "Report" SET "linkTokenHash" = 'my-secret-token' WHERE "id" = 'rp_out'`,
+      );
+      s.link_someone_elses = await rc(
+        q,
+        `UPDATE "Report" SET "linkTokenHash" = '${HASH("c")}' WHERE "id" = 'rp_adm'`,
+      );
+
+      // A member who didn't make it: nothing of its sharing, no delete.
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.member_reads_invites = await count(q, `SELECT count(*) n FROM "ReportInvite"`);
+      s.member_invites = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_6','org_A','rp_out','friend@example.org')`,
+      );
+      s.member_removes = await rc(q, `DELETE FROM "ReportInvite"`);
+      s.member_link_off = await rc(
+        q,
+        `UPDATE "Report" SET "linkTokenHash" = NULL WHERE "id" = 'rp_out'`,
+      );
+      s.member_deletes = await rc(q, `DELETE FROM "Report" WHERE "id" IN ('rp_out','rp_adm')`);
+
+      // An admin turns a shared report's sharing off, and deletes any shared report.
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads_invites = await count(q, `SELECT count(*) n FROM "ReportInvite"`);
+      s.admin_link_off = await rc(
+        q,
+        `UPDATE "Report" SET "linkTokenHash" = NULL, "linkCreatedAt" = NULL WHERE "id" = 'rp_out'`,
+      );
+      s.admin_removes = await rc(q, `DELETE FROM "ReportInvite" WHERE "reportId" = 'rp_out'`);
+      s.admin_invites = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_7','org_A','rp_out','guest@example.org')`,
+      );
+      s.admin_deletes_members_private = await rc(q, `DELETE FROM "Report" WHERE "id" = 'rp_priv'`);
+      s.admin_deletes_own_private = await rc(
+        q,
+        `DELETE FROM "Report" WHERE "id" = 'rp_adm_priv'`,
+      );
+
+      // Another organization: nothing.
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads_invites = await count(q, `SELECT count(*) n FROM "ReportInvite"`);
+      s.other_org_invites = await tryq(
+        q,
+        `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+         VALUES ('ri_8','org_A','rp_out','b@example.org')`,
+      );
+      s.other_org_deletes = await rc(q, `DELETE FROM "Report" WHERE "id" = 'rp_out'`);
+
+      // The maker deletes it: every copy (another member's too) and invite goes with it.
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      await q(
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_out','org_A','rp_out','u_memberA','Q4','{}')`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      await q(
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_out_2','org_A','rp_out','u_bothAB','Q4','{}')`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.maker_deletes = await rc(q, `DELETE FROM "Report" WHERE "id" = 'rp_out'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.copies_left = await count(
+        q,
+        `SELECT count(*) n FROM "ReportSnapshot" WHERE "reportId" = 'rp_out'`,
+      );
+      s.invites_left = await count(
+        q,
+        `SELECT count(*) n FROM "ReportInvite" WHERE "reportId" = 'rp_out'`,
+      );
+      return s;
+    },
+    {
+      value: {
+        maker_invites: 1,
+        invite_private: "42501",
+        invite_someone_elses: "42501",
+        invite_unnormalized: "23514",
+        invite_twice: "23505",
+        link_on: 1,
+        link_on_private: "23514",
+        link_plaintext: "23514",
+        link_someone_elses: 0,
+        member_reads_invites: 0,
+        member_invites: "42501",
+        member_removes: 0,
+        member_link_off: 0,
+        member_deletes: 0,
+        admin_reads_invites: 1,
+        admin_link_off: 1,
+        admin_removes: 1,
+        admin_invites: 1,
+        admin_deletes_members_private: 0,
+        admin_deletes_own_private: 1,
+        other_org_reads_invites: 0,
+        other_org_invites: "42501",
+        other_org_deletes: 0,
+        maker_deletes: 1,
+        copies_left: 0,
+        invites_left: 0,
+      },
+    },
+  );
+  // The shared report lookups run on the service path with no org context,
+  // so their rows are committed by the owner first and removed after.
+  await clients.owner.query(
+    `INSERT INTO "Report" ("id","organizationId","title","source","access","createdById","updatedAt","linkTokenHash","archivedAt")
+     VALUES ('rp_l1','org_A','Live','tasks','ORGANIZATION','u_memberA',now(),'${HASH("e")}',NULL),
+            ('rp_l2','org_A','Archived','tasks','ORGANIZATION','u_memberA',now(),'${HASH("f")}',now())`,
+  );
+  await clients.owner.query(
+    `INSERT INTO "ReportInvite" ("id","organizationId","reportId","email")
+     VALUES ('ri_l1','org_A','rp_l1','guest@example.org'),
+            ('ri_l2','org_A','rp_l2','guest@example.org')`,
+  );
+  try {
+    await tcase(
+      "P-REPORTS-03",
+      "the shared report lookups answer, ids only, for a live organization-shared report by its link's hash or an invited address (whatever its case), never an archived one",
+      "app_service",
+      null,
+      async (q) => ({
+        live: (await q(`SELECT * FROM app.report_link_target('${HASH("e")}')`)).rows,
+        archived: await count(q, `SELECT count(*) n FROM app.report_link_target('${HASH("f")}')`),
+        unknown: await count(q, `SELECT count(*) n FROM app.report_link_target('${HASH("d")}')`),
+        invited: (
+          await q(`SELECT * FROM app.report_invite_target('rp_l1', ' Guest@Example.org ')`)
+        ).rows,
+        invited_archived: await count(
+          q,
+          `SELECT count(*) n FROM app.report_invite_target('rp_l2', 'guest@example.org')`,
+        ),
+        not_invited: await count(
+          q,
+          `SELECT count(*) n FROM app.report_invite_target('rp_l1', 'someone@example.org')`,
+        ),
+        // Without an org context the service path reads no row itself.
+        service_reads_invites: await count(q, `SELECT count(*) n FROM "ReportInvite"`),
+      }),
+      {
+        value: {
+          live: [{ organizationId: "org_A", reportId: "rp_l1" }],
+          archived: 0,
+          unknown: 0,
+          invited: [{ organizationId: "org_A", reportId: "rp_l1" }],
+          invited_archived: 0,
+          not_invited: 0,
+          service_reads_invites: 0,
+        },
+      },
+    );
+    await tcase(
+      "P-REPORTS-04",
+      "members can't call the shared report lookups",
+      "app_user",
+      A("u_memberA"),
+      async (q) => ({
+        link: await tryv(q, `SELECT count(*) FROM app.report_link_target('${HASH("e")}')`),
+        invite: await tryv(
+          q,
+          `SELECT count(*) FROM app.report_invite_target('rp_l1', 'guest@example.org')`,
+        ),
+      }),
+      { value: { link: "error:42501", invite: "error:42501" } },
+    );
+  } finally {
+    await clients.owner.query(`DELETE FROM "Report" WHERE "id" IN ('rp_l1','rp_l2')`);
+  }
   await tcase(
     "P-HOME-03",
     "presence: a member records the page they have open on their own row only",
@@ -5523,6 +5757,114 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       return s;
     },
     { value: { own: 1, move: 1, other_moves: 0, other_reads: ["Inbox"] } },
+  );
+
+  // ======================= Deleting a database (20261103130000) =======================
+  await tcase(
+    "P-DBDEL-01",
+    "DatabaseDefinition DELETE: owners/admins delete their own; members only while the setting is on and they can edit it; never a built-in, a form's, or another org's",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      const make = (id, key, edit) =>
+        q(`INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind","memberVisibility","memberCanEdit","updatedAt")
+           VALUES ('${id}','org_A','${key}','${key}','CUSTOM','MEMBERS',${edit},now())`);
+      await make("dd_edit", "del-edit", true);
+      await make("dd_read", "del-read", false);
+      await make("dd_form", "del-form", true);
+      await make("dd_keep", "del-keep", true);
+      await q(`INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","isPrimary","updatedAt")
+               VALUES ('df_del','org_A','dd_edit','Name','TEXT',true,now())`);
+      await q(`INSERT INTO "DatabaseRecord" ("id","organizationId","databaseId","values","createdById","updatedAt")
+               VALUES ('dr_del','org_A','dd_edit','{}','u_adminA',now())`);
+      s.form = await tryq(
+        q,
+        `INSERT INTO "Form" ("id","organizationId","databaseId","title","slug","createdById","updatedAt")
+         VALUES ('fm_del','org_A','dd_form','Sign-up','dbdel-sign-up','u_adminA',now())`,
+      );
+      const del = (id) => rc(q, `DELETE FROM "DatabaseDefinition" WHERE "id" = '${id}'`);
+
+      // The setting is off by default: members delete nothing.
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.setting_default = (
+        await q(`SELECT "memberCanDeleteDatabases" v FROM "OrgSettings"`)
+      ).rows[0].v;
+      s.member_off = await del("dd_edit");
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.treasurer_off = await del("dd_edit");
+      // Members can't turn it on themselves.
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_turns_on = await rc(q, `UPDATE "OrgSettings" SET "memberCanDeleteDatabases" = true`);
+
+      // An admin turns it on.
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_turns_on = await rc(q, `UPDATE "OrgSettings" SET "memberCanDeleteDatabases" = true`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_read_only = await del("dd_read");
+      s.member_form = await del("dd_form");
+      s.member_builtin = await del(
+        (await q(`SELECT "id" FROM "DatabaseDefinition" WHERE "key" = 'people'`)).rows[0].id,
+      );
+      s.member_on = await del("dd_edit");
+
+      // Its fields and rows went with it.
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.fields_left = await count(
+        q,
+        `SELECT count(*) n FROM "DatabaseField" WHERE "databaseId" = 'dd_edit'`,
+      );
+      s.rows_left = await count(
+        q,
+        `SELECT count(*) n FROM "DatabaseRecord" WHERE "databaseId" = 'dd_edit'`,
+      );
+      s.admin_builtin = await rc(q, `DELETE FROM "DatabaseDefinition" WHERE "key" = 'people'`);
+      s.admin_form = await del("dd_form");
+      s.admin_read_only = await del("dd_read");
+
+      // Another org, its own setting on: never org A's databases.
+      await q(`SELECT app.set_context('u_ownerB','org_B')`);
+      s.other_turns_on = await rc(q, `UPDATE "OrgSettings" SET "memberCanDeleteDatabases" = true`);
+      s.other_owner = await del("dd_keep");
+      await q(`SELECT app.set_context('u_bothAB','org_B')`);
+      s.both_from_b = await del("dd_keep");
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.kept = await count(q, `SELECT count(*) n FROM "DatabaseDefinition" WHERE "id" = 'dd_keep'`);
+
+      // Off again: the same member is refused.
+      s.admin_turns_off = await rc(
+        q,
+        `UPDATE "OrgSettings" SET "memberCanDeleteDatabases" = false`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_off_again = await del("dd_keep");
+      return s;
+    },
+    {
+      value: {
+        form: 1,
+        setting_default: false,
+        member_off: 0,
+        treasurer_off: 0,
+        member_turns_on: 0,
+        admin_turns_on: 1,
+        member_read_only: 0,
+        member_form: 0,
+        member_builtin: 0,
+        member_on: 1,
+        fields_left: 0,
+        rows_left: 0,
+        admin_builtin: 0,
+        admin_form: 0,
+        admin_read_only: 1,
+        other_turns_on: 1,
+        other_owner: 0,
+        both_from_b: 0,
+        kept: 1,
+        admin_turns_off: 1,
+        member_off_again: 0,
+      },
+    },
   );
 
   await own(`DELETE FROM "Organization" WHERE "id" IN ('org_PA','org_PB','org_PM')`);

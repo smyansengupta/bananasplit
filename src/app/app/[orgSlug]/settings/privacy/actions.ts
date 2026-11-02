@@ -169,3 +169,35 @@ export const updateConnectorsEnabled = privacyAction(
     return {};
   },
 );
+
+/**
+ * Admin panel > Privacy > Databases: whether members who can edit a
+ * database's rows may also delete it for good. Off (the default), only
+ * owners and admins can. The DELETE policy on "DatabaseDefinition" reads
+ * this, so it holds whatever page or call a member uses.
+ */
+export const updateMemberCanDeleteDatabases = privacyAction(
+  async (ctx, enabled: boolean): Promise<PrivacyResult> => {
+    requirePermission(ctx, "privacy.write");
+    const parsed = z.boolean().safeParse(enabled);
+    if (!parsed.success) return { error: "Choose on or off." };
+    const before = await ctx.db.orgSettings.findUniqueOrThrow({
+      where: { organizationId: ctx.organizationId },
+      select: { memberCanDeleteDatabases: true },
+    });
+    if (before.memberCanDeleteDatabases === parsed.data) return {};
+    await ctx.db.orgSettings.update({
+      where: { organizationId: ctx.organizationId },
+      data: { memberCanDeleteDatabases: parsed.data, updatedById: ctx.userId },
+    });
+    await writeOrgAuditLog(ctx.db, {
+      organizationId: ctx.organizationId,
+      action: "privacy.database_delete_changed",
+      targetType: "OrgSettings",
+      targetId: ctx.organizationId,
+      diff: { from: before.memberCanDeleteDatabases, to: parsed.data },
+    });
+    invalidate([tags.databases(ctx.organizationId)]);
+    return {};
+  },
+);

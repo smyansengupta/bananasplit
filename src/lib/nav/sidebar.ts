@@ -63,8 +63,8 @@ export interface SectionDef {
 }
 
 // Home, Inbox and People first (yours and who's here); then planning
-// (Tasks, Calendar, Meetings); then the organization's data (Databases,
-// Files); then Integrations and apps: Integrations itself, then each add-on
+// (Tasks, Calendar, Meetings); then the organization's data (Files, then
+// Databases); then Integrations and apps: Integrations itself, then each add-on
 // the organization has added (Forms, Finance; src/lib/addons.ts).
 export const SECTIONS: readonly SectionDef[] = [
   {
@@ -121,20 +121,20 @@ export const SECTIONS: readonly SectionDef[] = [
     description: "Calls, meet-ups, sign-up pages and finding a time.",
   },
   {
-    id: "databases",
-    label: "Databases",
-    icon: "Database",
-    path: "/databases",
-    group: "collect",
-    description: "Attendance, sign-ups, votes and reports.",
-  },
-  {
     id: "notes",
     label: "Files",
     icon: "FolderOpen",
     path: "/notes",
     group: "collect",
     description: "Notes, documents and uploads.",
+  },
+  {
+    id: "databases",
+    label: "Databases",
+    icon: "Database",
+    path: "/databases",
+    group: "collect",
+    description: "Attendance, sign-ups, votes and reports.",
   },
   {
     id: "integrations",
@@ -199,8 +199,8 @@ const RENAMED_FROM: Partial<Record<SectionId, (typeof RETIRED_SECTION_IDS)[numbe
 
 /**
  * Sections that always sit in their own group, in this order, whatever an
- * older saved sidebar says: Files is part of Data, and Integrations and apps
- * is Integrations first with each added add-on below it.
+ * older saved sidebar says: Files heads Data, and Integrations and apps is
+ * Integrations first with each added add-on below it.
  */
 export const PINNED_PLACE: readonly SectionId[] = ["notes", "integrations", "forms", "finance"];
 
@@ -318,15 +318,20 @@ export function resolveSidebar(raw: unknown, addOns?: readonly string[] | null):
       ...(notAdded ? { notAdded: true } : {}),
       // Integrations and apps is Integrations, then the add-ons, then
       // anything else an older saved sidebar put there.
-      order: pinned
-        ? 1000 + i
-        : group === "workspace"
-          ? 2000 + (s ? s.index : i)
-          : s
-            ? s.index
-            : before
-              ? before.order + 0.01
-              : 100 + i,
+      // Files always heads Data; Integrations and apps is Integrations, then
+      // the add-ons.
+      order:
+        def.id === "notes"
+          ? -1
+          : pinned
+            ? 1000 + i
+            : group === "workspace"
+              ? 2000 + (s ? s.index : i)
+              : s
+                ? s.index
+                : before
+                  ? before.order + 0.01
+                  : 100 + i,
     });
   }
   // Overview always leads.

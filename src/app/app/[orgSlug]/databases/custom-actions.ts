@@ -11,6 +11,7 @@ import {
   createDatabase,
   createRecord,
   DatabaseInputError,
+  deleteDatabase,
   deleteField,
   loadRecords,
   moveField,
@@ -111,6 +112,11 @@ export const updateDatabaseSettingsAction = action(
 
 export const archiveDatabaseAction = action(async (a, databaseId: string) => {
   await archiveDatabase(a, id.parse(databaseId));
+});
+
+/** Deletes a database for good (its fields and rows with it). */
+export const deleteDatabaseAction = action(async (a, databaseId: string) => {
+  await deleteDatabase(a, id.parse(databaseId));
 });
 
 const fieldInput = z.object({

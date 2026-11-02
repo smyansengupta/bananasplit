@@ -539,6 +539,16 @@ export function newWidget(
   return { id, type, w: def.w, h: def.h, config: def.setup(source) ?? {} };
 }
 
+/**
+ * The suggested widgets for a source, set up and laid out in full rows: a
+ * new report's starting board, and what Reset puts back.
+ */
+export function suggestedLayout(source: SourceSummary, isAdmin: boolean): ReportWidget[] {
+  const out: ReportWidget[] = [];
+  for (const type of suggestedWidgets(source, isAdmin)) out.push(newWidget(type, source, out));
+  return fillRows(out);
+}
+
 /** The board's widget menu for a source (WidgetBoard's types). */
 export function boardTypes(source: SourceSummary, isAdmin: boolean): WidgetMeta[] {
   return widgetsFor(source, isAdmin).map((t) => {

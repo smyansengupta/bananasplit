@@ -74,20 +74,20 @@ export const PERSONAL_NAV: readonly {
     exact: false,
     group: "plan",
   },
-  {
-    id: "databases",
-    label: "Databases",
-    icon: "Database",
-    path: "/databases",
-    exact: false,
-    group: "collect",
-  },
   // Notes and uploads together, as in an organization: one library at /notes, in Data.
   {
     id: "notes",
     label: "Files",
     icon: "FolderOpen",
     path: "/notes",
+    exact: false,
+    group: "collect",
+  },
+  {
+    id: "databases",
+    label: "Databases",
+    icon: "Database",
+    path: "/databases",
     exact: false,
     group: "collect",
   },

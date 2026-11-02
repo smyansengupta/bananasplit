@@ -450,6 +450,38 @@ export async function updateBallotDefinition(ctx: OrgContext, id: string, patch:
   return { slug: def.slug };
 }
 
+/**
+ * Deletes a poll for good: its definition and every ballot cast in it
+ * (their BallotChoice rows cascade), website ballots included. Service path
+ * (withSystemOrgTx), called only after authorizing an editor of the
+ * Ballots database (as the merges are): the acting admin's tier may not see
+ * the individual ballots, and website ballots are never deletable from the
+ * member path because a sync could bring them back. A poll that is gone
+ * stays gone: the sync doesn't make definitions, so ballots it still sends
+ * for that slug wait for a definition, uncounted.
+ */
+export async function deletePoll(db: TxClient, organizationId: string, id: string) {
+  const def = await db.ballotDefinition.findFirst({
+    where: { id, organizationId },
+    select: { id: true, slug: true, title: true },
+  });
+  if (!def) throw new NotFoundError();
+  const ballots = await db.ballot.deleteMany({
+    where: { organizationId, OR: [{ ballotDefinitionId: def.id }, { pollSlug: def.slug }] },
+  });
+  const deleted = await db.ballotDefinition.deleteMany({ where: { id: def.id, organizationId } });
+  if (deleted.count === 0) throw new DatabaseEditError("That poll could not be deleted.");
+  await writeOrgAuditLog(db, {
+    organizationId,
+    action: "ballot_definition.deleted",
+    targetType: "BallotDefinition",
+    targetId: def.id,
+    diff: { slug: def.slug, title: def.title, ballots: ballots.count },
+  });
+  await markDataChanged(db, organizationId);
+  return { title: def.title, ballots: ballots.count };
+}
+
 /** Suppress (exclude) or restore one ballot. */
 export async function setBallotSuppressed(ctx: OrgContext, ballotId: string, suppressed: boolean) {
   await assertCanEdit(ctx, DatabaseKind.BALLOTS);

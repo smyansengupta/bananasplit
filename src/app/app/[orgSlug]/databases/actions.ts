@@ -18,6 +18,7 @@ import {
   assertCanEdit,
   DatabaseEditError,
   deleteAttendance,
+  deletePoll,
   deleteSignup,
   importBallotDefinition,
   linkContactToMember,
@@ -446,6 +447,33 @@ export async function updateDefinitionAction(
       linkedEventId: form.linkedEventId,
       isTest: form.isTest,
     });
+    return reevaluateAsService(organizationId, out.slug);
+  });
+}
+
+/**
+ * Deletes a poll and its votes for good (editors of the Ballots database):
+ * authorized as the member, then done on the service path, which can reach
+ * every ballot of the poll (see deletePoll).
+ */
+export async function deletePollAction(organizationId: string, id: string) {
+  return run(async () => {
+    const pollId = z.string().min(1).max(100).parse(id);
+    const actor = await authorizeServiceWrite(organizationId, DatabaseKind.BALLOTS);
+    return withSystemOrgTx(organizationId, { userId: actor.userId }, ({ db }) =>
+      deletePoll(db, organizationId, pollId),
+    );
+  });
+}
+
+const closePollTx = databasesAction((ctx, id: string) =>
+  updateBallotDefinition(ctx, id, { closesAt: new Date() }),
+);
+
+/** "Close now": the poll stops counting votes cast from now on. */
+export async function closePollAction(organizationId: string, id: string) {
+  return run(async () => {
+    const out = await closePollTx(organizationId, z.string().min(1).max(100).parse(id));
     return reevaluateAsService(organizationId, out.slug);
   });
 }

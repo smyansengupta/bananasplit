@@ -1,7 +1,6 @@
 import {
   CalendarDays,
   Database,
-  Globe,
   Plus,
   Table2,
   Upload,
@@ -21,6 +20,8 @@ import { isPersonalSpace, spaceIncludes } from "@/lib/billing/space";
 import { sectionLabel } from "@/lib/nav/sidebar";
 import { fmtDateTime } from "@/server/databases/format";
 import { listDatabases } from "@/server/databases/views";
+import { websiteSyncConnected } from "@/server/integrations/website-sync";
+import { withoutStaleWebsiteData } from "@/lib/databases/website-sync";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { loadSetupState } from "@/server/setup/progress";
 import { loadSyncStatus } from "@/server/sync/status";
@@ -101,6 +102,11 @@ export default async function DatabasesPage({
   const sp = await searchParams;
   const { organization, role, user, settings } = await getOrgContextBySlug(orgSlug);
   const personal = isPersonalSpace(organization);
+  // Without a connected website sync, the databases only it fills (Ballots)
+  // stay off this page; their pages still open by URL, and the sync is
+  // connected from Admin panel › Integrations. Asked on the service path,
+  // outside the page's transaction.
+  const websiteSync = !personal && (await websiteSyncConnected(organization.id, user.id));
   const isAdmin = can({ role }, "databases.write");
   // A data source fills a club's built-in databases; Personal Plus's data
   // connection is for calendar sync.
@@ -114,7 +120,10 @@ export default async function DatabasesPage({
   const { databases, counts, sync, dataStep, pinned, home } = await withOrgTx(
     organization.id,
     async ({ db }) => {
-      const list = await listDatabases(db, organization.id, role);
+      const list = withoutStaleWebsiteData(
+        await listDatabases(db, organization.id, role),
+        websiteSync,
+      );
       const counts: Record<string, number> = {};
       for (const d of list) {
         if (d.kind === "SESSIONS") {
@@ -402,40 +411,20 @@ export default async function DatabasesPage({
                     </div>
                   </li>
                 )}
-                {/* A club's built-in data: sessions from its calendar, and its website's. */}
+                {/* A club's built-in data: sessions from its calendar. */}
                 {!personal && (
-                  <>
-                    <li className={setupRow}>
-                      <IconChip icon={CalendarDays} />
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="font-semibold">Start from the calendar</p>
-                        <p className="text-muted-foreground text-sm">
-                          Every event becomes a session, ready for check-ins.
-                        </p>
-                      </div>
-                      <Button asChild variant="outline">
-                        <Link href={`/app/${orgSlug}/calendar`}>Open the calendar</Link>
-                      </Button>
-                    </li>
-                    <li className={setupRow}>
-                      <IconChip icon={Globe} />
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="font-semibold">Website database</p>
-                        <p className="text-muted-foreground text-sm">
-                          Sync check-ins, sign-ups and votes from Supabase.
-                        </p>
-                      </div>
-                      <Button asChild variant={connecting ? "secondary" : "ghost"}>
-                        <Link
-                          href={`/app/${orgSlug}/databases?connect=1#connect`}
-                          scroll={false}
-                          aria-current={connecting ? "step" : undefined}
-                        >
-                          Connect
-                        </Link>
-                      </Button>
-                    </li>
-                  </>
+                  <li className={setupRow}>
+                    <IconChip icon={CalendarDays} />
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="font-semibold">Start from the calendar</p>
+                      <p className="text-muted-foreground text-sm">
+                        Every event becomes a session, ready for check-ins.
+                      </p>
+                    </div>
+                    <Button asChild variant="outline">
+                      <Link href={`/app/${orgSlug}/calendar`}>Open the calendar</Link>
+                    </Button>
+                  </li>
                 )}
               </ul>
             </CardContent>
@@ -545,18 +534,6 @@ export default async function DatabasesPage({
             detail: s.detail,
           }))}
         />
-      )}
-      {/* Admins only (databases.write and integrations.write); hidden while the connect panel below is open. */}
-      {isAdmin && !sync && !needsSetup && canConnect && !(showAll && connecting && dataStep) && (
-        <p className="text-muted-foreground text-sm">
-          Website database?{" "}
-          <Link
-            className="hover:text-foreground underline underline-offset-2"
-            href={`/app/${orgSlug}/databases?connect=1&all=1#connect`}
-          >
-            Connect it
-          </Link>
-        </p>
       )}
       {showAll && connecting && dataStep && !needsSetup && (
         <Card id="connect" className="scroll-mt-20">

@@ -87,6 +87,7 @@ import {
   weeklyDoneTrend,
 } from "@/server/pulse/queries";
 import { upcomingPulseSend } from "@/server/pulse/schedule";
+import { websiteSyncConnected } from "@/server/integrations/website-sync";
 import { onlineNow } from "@/server/presence";
 import { OnlineNow } from "@/components/overview/online-now";
 import { loadPersonalHome } from "@/server/personal/home";
@@ -175,6 +176,9 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   // reads and the cheap ones among them run here too
   // (src/server/overview/home-widgets.ts).
   const now = new Date();
+  // Website polls (elections) come from the website data sync; without it
+  // they're stale leftovers nobody can update or remove, so Home leaves them out.
+  const websitePolls = await websiteSyncConnected(org.id, user.id).catch(() => false);
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
     const placed = new Set(resolveOverview(saved, isAdmin, settings?.addOns).map((w) => w.type));
@@ -213,6 +217,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       memberCount,
       myDue,
       addOns: settings?.addOns,
+      elections: websitePolls,
     });
     const polls = shared.upNextPolls;
     // Cards this member hid from their own Up next (own-row RLS).
