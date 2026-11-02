@@ -66,11 +66,15 @@ const TO_LABEL: Record<ScheduleTo, string> = {
   everyone: "to everyone",
 };
 
-/** "Every Monday at 9 AM, to you"; "Mondays" for a card tag. */
-export function describeSchedule(s: ReportSchedule): string {
+/**
+ * "Every Monday at 9 AM, to you"; "Mondays" for a card tag. `maker` names
+ * who "me" is when someone else reads it ("to Jackson").
+ */
+export function describeSchedule(s: ReportSchedule, maker?: string | null): string {
   const when =
     s.every === "week" ? `Every ${WEEKDAYS[s.day]}` : `The ${ordinal(s.day)} of every month`;
-  return `${when} at ${hourLabel(s.hour)}, ${TO_LABEL[s.to]}`;
+  const to = s.to === "me" && maker ? `to ${maker}` : TO_LABEL[s.to];
+  return `${when} at ${hourLabel(s.hour)}, ${to}`;
 }
 
 export function scheduleTag(s: ReportSchedule): string {

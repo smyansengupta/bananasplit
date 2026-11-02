@@ -125,7 +125,7 @@ export function buildUpNext(input: {
         : forEvent
           ? `For ${forEvent.label}, ${whenOf(calendar.find((e) => e.id === forEvent.ref.id)!)}.`
           : sameDay
-            ? `Lands on ${sameDay.title} day.`
+            ? `Due the day of ${sameDay.title}.`
             : null;
     blocks.push({
       id: task.id,

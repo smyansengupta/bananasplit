@@ -150,9 +150,23 @@ const SPAN: Record<number, string> = {
  * 1.125rem). A widget with rows spans them and is exactly that tall.
  */
 const GRID =
-  "grid grid-cols-1 gap-4.5 sm:grid-cols-2 lg:grid-cols-4 sm:[--board-row:calc((100cqw_-_1.125rem)/2)] lg:[--board-row:calc((100cqw_-_3.375rem)/4)]";
+  "grid grid-cols-1 gap-4.5 sm:grid-cols-2 lg:grid-cols-4 sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
+/** Rows on a tablet or computer; a phone's widgets are as tall as what's in them. */
 const ROWS_TALL =
-  "sm:h-[calc(var(--board-row)*var(--rows)_+_1.125rem*(var(--rows)_-_1))] sm:[grid-row:span_var(--rows)] max-sm:max-h-[30rem]";
+  "sm:h-[calc(var(--board-row)*var(--rows)_+_1.125rem*(var(--rows)_-_1))] sm:[grid-row:span_var(--rows)]";
+
+/** A touch screen: a widget moves by its grip, so a swipe anywhere else still scrolls the page. */
+function useCoarsePointer(): boolean {
+  return useSyncExternalStore(
+    (change) => {
+      const query = window.matchMedia("(pointer: coarse)");
+      query.addEventListener("change", change);
+      return () => query.removeEventListener("change", change);
+    },
+    () => window.matchMedia("(pointer: coarse)").matches,
+    () => false,
+  );
+}
 
 /** The item under the pointer, or the nearest one when it's between them. */
 const collision: CollisionDetection = (args) => {
@@ -236,6 +250,7 @@ export function WidgetBoard({
   resetLabel = "Reset to the default board",
   startEditing = false,
   refreshOnSave = true,
+  noun = "your board",
 }: {
   types: readonly WidgetMeta[];
   initialLayout: BoardWidget[];
@@ -281,6 +296,8 @@ export function WidgetBoard({
   startEditing?: boolean;
   /** Re-reads the page after each save; off where the board only feeds a form. */
   refreshOnSave?: boolean;
+  /** What the widgets are on, in its messages ("your board", "this report"). */
+  noun?: string;
 }) {
   const router = useRouter();
   const [layout, setLayout] = useState(initialLayout);
@@ -309,7 +326,7 @@ export function WidgetBoard({
     start(async () => {
       const result = await onSave(next);
       if (!result.ok) {
-        setError(result.error ?? "That layout couldn't be saved.");
+        setError(result.error ?? "Couldn't save the layout. Check your connection and try again.");
         return;
       }
       if (next === null) setLayout(initialLayout);
@@ -376,7 +393,7 @@ export function WidgetBoard({
     if (!gone) return;
     setLayout((l) => l.filter((x) => x.id !== id));
     toast({
-      title: "Removed",
+      title: `Removed ${titles?.[gone.id] ?? meta.get(gone.type)?.title ?? "the widget"}`,
       action: {
         label: "Undo",
         run: () =>
@@ -391,7 +408,7 @@ export function WidgetBoard({
     const before = layout;
     persist(null);
     toast({
-      title: "Reset",
+      title: resetLabel,
       action: {
         label: "Undo",
         run: () => {
@@ -547,7 +564,7 @@ export function WidgetBoard({
           <span className="bg-muted grid size-14 place-items-center rounded-full">
             <LayoutGrid className="size-6" aria-hidden="true" />
           </span>
-          Your board is empty.
+          {noun[0].toUpperCase() + noun.slice(1)} has no widgets yet.
           <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
             <Plus className="size-4" aria-hidden="true" />
             Add a widget
@@ -626,16 +643,15 @@ export function WidgetBoard({
       )}
 
       <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[85svh] overflow-y-auto overscroll-contain sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a widget</DialogTitle>
-            <DialogDescription className="sr-only">
-              It goes at the end of your board.
-            </DialogDescription>
+            <DialogDescription className="sr-only">It goes at the end of {noun}.</DialogDescription>
           </DialogHeader>
           {layout.length >= MAX_WIDGETS ? (
             <p className="text-muted-foreground text-sm">
-              Your board is full ({MAX_WIDGETS} widgets). Remove one first.
+              {noun[0].toUpperCase() + noun.slice(1)} is full ({MAX_WIDGETS} widgets). Remove one
+              first.
             </p>
           ) : (
             <div className="space-y-5">
@@ -659,7 +675,7 @@ export function WidgetBoard({
                               <span className="min-w-0">
                                 <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                                   {t.title}
-                                  {onBoard && <Badge variant="secondary">On your board</Badge>}
+                                  {onBoard && <Badge variant="secondary">Already added</Badge>}
                                 </span>
                                 <span className="text-muted-foreground block text-xs">
                                   {t.description}
@@ -716,6 +732,10 @@ function BoardItem({
   children: ReactNode;
 }) {
   const { setNodeRef, listeners } = useSortable({ id: w.id, disabled: !editing });
+  const coarse = useCoarsePointer();
+  const drag = editing
+    ? (listeners?.onPointerDown as React.PointerEventHandler | undefined)
+    : undefined;
   const [resizing, setResizing] = useState(false);
   const bare = m.frame === "bare";
 
@@ -777,9 +797,7 @@ function BoardItem({
       aria-label={m.title}
       data-widget-id={w.id}
       data-frame={bare ? "bare" : "card"}
-      onPointerDown={
-        editing ? (listeners?.onPointerDown as React.PointerEventHandler | undefined) : undefined
-      }
+      onPointerDown={coarse ? undefined : drag}
       style={w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
       className={cn(
         SPAN[w.w] ?? SPAN[1],
@@ -790,7 +808,8 @@ function BoardItem({
           : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
         w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
         editing &&
-          "outline-border cursor-grab touch-none outline-[1.5px] outline-offset-[3px] outline-dashed select-none active:cursor-grabbing",
+          "outline-border cursor-grab outline-[1.5px] outline-offset-[3px] outline-dashed select-none active:cursor-grabbing",
+        editing && !coarse && "touch-none",
         editing && bare && "bg-muted/40 p-2",
         editing && resizing && "outline-foreground outline-solid",
         dragging && "bg-muted/50 outline-foreground opacity-50",
@@ -823,6 +842,7 @@ function BoardItem({
           <span
             tabIndex={0}
             role="button"
+            onPointerDown={coarse ? drag : undefined}
             aria-label={`Move ${m.title}. Arrow keys move it earlier or later.`}
             onKeyDown={(e) => {
               if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
@@ -833,7 +853,10 @@ function BoardItem({
                 onNudge(1);
               }
             }}
-            className="text-muted-foreground hover:text-foreground hover:bg-muted focus-glow -ml-2 grid size-8 shrink-0 place-items-center rounded-full outline-none"
+            className={cn(
+              "text-muted-foreground hover:text-foreground hover:bg-muted focus-glow -ml-2 grid size-8 shrink-0 place-items-center rounded-full outline-none",
+              coarse && "size-10 touch-none",
+            )}
           >
             <GripVertical className="size-4" aria-hidden="true" />
           </span>
@@ -868,7 +891,7 @@ function BoardItem({
           "min-h-0 flex-1",
           bare
             ? "flex flex-col"
-            : "overflow-auto rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
+            : "overflow-auto overscroll-contain rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
           editing && "opacity-70",
         )}
       >

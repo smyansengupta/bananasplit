@@ -1,5 +1,5 @@
 import { DEFAULT_CATEGORY_NAMES } from "@/lib/finance/default-categories";
-import { fromDateValue, schoolYear } from "@/lib/finance/periods";
+import { calendarYear, fromDateValue } from "@/lib/finance/periods";
 import type { TxClient } from "@/server/db/context";
 
 /**
@@ -9,7 +9,7 @@ import type { TxClient } from "@/server/db/context";
  *
  * 1. returns the active period, or
  * 2. activates the period that covers today (or else the latest one), or
- * 3. creates this school year (Aug 1 – Jul 31) with the starter categories
+ * 3. creates this calendar year (Jan 1 – Dec 31) with the starter categories
  *    and makes it active.
  *
  * Runs inside the caller's transaction as app_user; the BudgetPeriod
@@ -43,7 +43,7 @@ export async function ensureActivePeriod(
     return { ...existing, created: false };
   }
 
-  const draft = schoolYear(today);
+  const draft = calendarYear(today);
   const created = await db.budgetPeriod.create({
     data: {
       organizationId,

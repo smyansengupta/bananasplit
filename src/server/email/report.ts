@@ -34,7 +34,9 @@ export function reportEmail(input: {
       const change =
         p.data.deltaPct === null
           ? ""
-          : `, ${p.data.deltaPct >= 0 ? "up" : "down"} ${Math.abs(Math.round(p.data.deltaPct))}% on ${p.data.previousLabel ?? "the span before"}`;
+          : Math.abs(p.data.deltaPct) < 1
+            ? `, about the same as ${p.data.previousLabel ?? "the period before"}`
+            : `, ${p.data.deltaPct > 0 ? "up" : "down"} ${Math.abs(Math.round(p.data.deltaPct))}% on ${p.data.previousLabel ?? "the period before"}`;
       numbers.push({
         title: `${c.title}: ${formatValue(p.data.value, p.data.format)}`,
         detail: `${input.rangeLabel}${change}`,
@@ -51,7 +53,7 @@ export function reportEmail(input: {
       });
     }
   }
-  const sub = `${input.sourceName}, ${input.rangeLabel}`;
+  const sub = `${input.sourceName}, ${input.rangeLabel.replace(/^(This|Last|All) /, (w) => w.toLowerCase())}`;
   const bodyHtml =
     `<p style="margin:0 0 4px;font-size:22px;font-weight:700;line-height:1.25;color:${C.ink}">${escapeHtml(input.title)}</p>` +
     `<p style="margin:0 0 18px;font-size:14px;color:${C.muted}">${escapeHtml(sub)}</p>` +

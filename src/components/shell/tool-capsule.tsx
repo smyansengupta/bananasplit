@@ -20,7 +20,7 @@ export function ToolCapsule({
   return (
     <div
       data-tool-capsule=""
-      className="pointer-events-none sticky top-0 z-30 flex pt-3 pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:hidden"
+      className="pointer-events-none sticky top-0 z-30 flex pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] md:hidden"
     >
       <div
         role="toolbar"

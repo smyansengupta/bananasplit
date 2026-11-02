@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/permissions";
 import type { BoardWidget } from "@/lib/boards";
 import {
   WIDGETS,
+  WIDGET_TYPES,
   fillRows,
   newWidget,
   readWidgets,
@@ -47,7 +48,8 @@ export interface ReportSummary {
   updatedAt: string;
   snapshots: number;
   lastSnapshotAt: string | null;
-  insights: { lines: InsightLine[]; at: string } | null;
+  /** Claude's last reading: who asked, over which dates (shown only to them, for those dates). */
+  insights: SavedInsights | null;
   joinWith: ReportJoin | null;
   schedule: ReportSchedule | null;
 }
@@ -76,17 +78,34 @@ export interface SnapshotSummary {
   takenByName: string | null;
 }
 
+export interface SavedInsights {
+  lines: InsightLine[];
+  at: string;
+  /** Who asked: the rows Claude read were theirs. */
+  by: string | null;
+  from: string | null;
+  to: string | null;
+}
+
 function readInsights(raw: unknown, at: Date | null): ReportSummary["insights"] {
   if (!raw || typeof raw !== "object" || !at) return null;
-  const lines = (raw as { lines?: unknown }).lines;
+  const r = raw as { lines?: unknown; by?: unknown; from?: unknown; to?: unknown };
+  const lines = r.lines;
   if (!Array.isArray(lines)) return null;
+  const text = (v: unknown) => (typeof v === "string" ? v : null);
   const ok = lines.filter(
     (l): l is InsightLine =>
       Boolean(l) &&
       typeof (l as InsightLine).text === "string" &&
       ["info", "good", "warn"].includes((l as InsightLine).tone),
   );
-  return { lines: ok.slice(0, 6), at: at.toISOString() };
+  return {
+    lines: ok.slice(0, 6),
+    at: at.toISOString(),
+    by: text(r.by),
+    from: text(r.from),
+    to: text(r.to),
+  };
 }
 
 const SUMMARY_SELECT = {
@@ -227,9 +246,16 @@ async function checkJoin(v: SourceViewer, key: string, raw: unknown): Promise<Re
   return join;
 }
 
-function checkSchedule(raw: unknown, access: ReportAccess): ReportSchedule {
+/** Scheduled reports at most, per organization and per person. */
+const MAX_SCHEDULED_PER_ORG = 20;
+const MAX_SCHEDULED_PER_PERSON = 5;
+
+function checkSchedule(raw: unknown, access: ReportAccess, role?: Role): ReportSchedule {
   const schedule = readSchedule(raw);
   if (!schedule) throw new ReportInputError("Pick when to send it.");
+  if (schedule.to !== "me" && role && !isAdmin(role)) {
+    throw new ReportInputError("Only owners and admins can send a report to other people.");
+  }
   // Recipients open what they're sent, so a report for others is a shared one.
   if (schedule.to !== "me" && access !== "ORGANIZATION") {
     throw new ReportInputError("Share the report first to send it to anyone but you.");
@@ -237,10 +263,34 @@ function checkSchedule(raw: unknown, access: ReportAccess): ReportSchedule {
   return schedule;
 }
 
+/** Room for one more scheduled report, in the organization and for this person. */
+async function checkScheduleRoom(v: SourceViewer, except: string | null): Promise<void> {
+  const scheduled = await v.db.report.findMany({
+    where: {
+      organizationId: v.organizationId,
+      archivedAt: null,
+      schedule: { not: Prisma.DbNull },
+      ...(except ? { id: { not: except } } : {}),
+    },
+    select: { createdById: true },
+  });
+  if (scheduled.length >= MAX_SCHEDULED_PER_ORG) {
+    throw new ReportInputError(
+      `Your organization has ${MAX_SCHEDULED_PER_ORG} reports on a schedule already. Stop one first.`,
+    );
+  }
+  if (scheduled.filter((r) => r.createdById === v.userId).length >= MAX_SCHEDULED_PER_PERSON) {
+    throw new ReportInputError(
+      `You have ${MAX_SCHEDULED_PER_PERSON} reports on a schedule already. Stop one first.`,
+    );
+  }
+}
+
 /** When the report emails itself, or null to stop. */
 export async function saveSchedule(v: SourceViewer, id: string, raw: unknown): Promise<void> {
   const report = await editable(v, id);
-  const schedule = raw === null ? null : checkSchedule(raw, report.access);
+  const schedule = raw === null ? null : checkSchedule(raw, report.access, v.role);
+  if (schedule && !report.schedule) await checkScheduleRoom(v, id);
   await v.db.report.update({
     where: { id },
     data: { schedule: schedule === null ? Prisma.DbNull : (schedule as object) },
@@ -266,7 +316,8 @@ export async function createReport(v: SourceViewer, input: CreateReportInput): P
   if (!parsed.success) throw new ReportInputError("Those widgets couldn't be saved. Try again.");
   const join = input.join ? await checkJoin(v, input.source, input.join) : null;
   const source = await summaryFor(v, input.source, join);
-  const schedule = input.schedule ? checkSchedule(input.schedule, input.access) : null;
+  const schedule = input.schedule ? checkSchedule(input.schedule, input.access, v.role) : null;
+  if (schedule) await checkScheduleRoom(v, null);
   const widgets = cleanWidgets(parsed.data, source, v.role);
   if (widgets.length === 0) throw new ReportInputError("Pick at least one widget.");
   const report = await v.db.report.create({
@@ -322,6 +373,9 @@ export async function saveReportLayout(
     next = layout.map((b) => {
       const was = byId.get(b.id);
       if (was && was.type === b.type) return { ...was, w: b.w, h: b.h };
+      if (!(WIDGET_TYPES as readonly string[]).includes(b.type)) {
+        throw new ReportInputError("That widget isn't one a report can have.");
+      }
       return { ...newWidget(b.type as WidgetType, source, []), id: b.id, w: b.w, h: b.h };
     });
     // A widget added or taken off: the rows close up, so no gap is left.
@@ -376,15 +430,33 @@ export async function archiveReport(v: SourceViewer, id: string): Promise<void> 
   await v.db.report.update({ where: { id }, data: { archivedAt: new Date() } });
 }
 
+/** Archive's Undo: the report back, if this person may change it (RLS decides). */
+export async function restoreReport(v: SourceViewer, id: string): Promise<void> {
+  const done = await v.db.report.updateMany({
+    where: { id, organizationId: v.organizationId, archivedAt: { not: null } },
+    data: { archivedAt: null },
+  });
+  if (done.count === 0) throw new ReportInputError("That report can't be brought back.");
+}
+
+/**
+ * Claude's reading, kept on the report for whoever asked and the dates they
+ * asked over. It was written from their rows, so nobody else is shown it:
+ * everyone else gets the built-in reading of their own rows.
+ */
 export async function saveInsights(
   v: SourceViewer,
   id: string,
   lines: InsightLine[],
+  range: { from: string | null; to: string | null },
 ): Promise<void> {
-  await getReport(v.db, v.organizationId, id);
+  await editable(v, id);
   await v.db.report.update({
     where: { id },
-    data: { insights: { lines } as object, insightsAt: new Date() },
+    data: {
+      insights: { lines, by: v.userId, from: range.from, to: range.to } as object,
+      insightsAt: new Date(),
+    },
   });
 }
 

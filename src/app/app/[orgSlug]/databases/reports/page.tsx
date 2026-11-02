@@ -12,7 +12,12 @@ import { ReportIcon } from "@/components/reports/saved/icons";
 import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
 import { WIDGETS, suggestedWidgets, type SourceKind } from "@/lib/reports/catalog";
-import { formatValue, type ComputedWidget, type InsightLine } from "@/lib/reports/compute";
+import {
+  formatValue,
+  spanPhrase,
+  type ComputedWidget,
+  type InsightLine,
+} from "@/lib/reports/compute";
 import { scheduleTag } from "@/lib/reports/schedule";
 import { cn } from "@/lib/utils";
 import { listAiConnections } from "@/server/ai/connections";
@@ -28,8 +33,8 @@ import { DatabasesTabs } from "../databases-tabs";
 
 export const metadata = { title: "Reports" };
 
-/** Reports read on the home page: the most recently changed. */
-const HOME_REPORTS = 9;
+/** Reports whose numbers the home page reads (the most recently changed); the rest are listed plainly. */
+const HOME_REPORTS = 12;
 
 const TONE_DOT: Record<InsightLine["tone"], string> = {
   warn: "bg-[var(--chart-2)]",
@@ -156,8 +161,8 @@ export default async function ReportsPage({
     });
     const all = await listReports(ctx.db, organization.id);
     const read = [];
-    for (const report of all.slice(0, HOME_REPORTS)) {
-      read.push({ report, run: await runReport(v, report, sp) });
+    for (const [i, report] of all.entries()) {
+      read.push({ report, run: i < HOME_REPORTS ? await runReport(v, report, sp) : null });
     }
     return {
       reports: read,
@@ -173,6 +178,7 @@ export default async function ReportsPage({
   // An Events report's cards are the built-in reports: read them for its line and headline.
   const events = new Map<string, { lines: InsightLine[]; headline: Headline | null }>();
   for (const { report, run } of reports) {
+    if (!run) continue;
     const types = new Set(run.computed.map((c) => c.widget.type));
     if (!types.has("attendance") && !types.has("retention")) continue;
     const built = await loadBuiltInReports({
@@ -185,7 +191,7 @@ export default async function ReportsPage({
     });
     const a = built.attendance;
     events.set(report.id, {
-      lines: builtInInsights(a, built.retention, {}),
+      lines: builtInInsights(a, built.retention, {}, spanPhrase(range)),
       headline: a
         ? {
             value: a.totalCheckIns.toLocaleString("en-US"),
@@ -204,7 +210,7 @@ export default async function ReportsPage({
   const base = `/app/${orgSlug}/databases/reports`;
 
   const cards = reports.map(({ report, run }) => {
-    const insights = run.computed.find((c) => c.payload?.type === "insights");
+    const insights = run?.computed.find((c) => c.payload?.type === "insights");
     const line =
       (insights?.payload?.type === "insights" ? insights.payload.data.lines[0] : null) ??
       events.get(report.id)?.lines[0] ??
@@ -213,7 +219,7 @@ export default async function ReportsPage({
       report,
       run,
       line,
-      head: headline(run.computed) ?? events.get(report.id)?.headline ?? null,
+      head: (run && headline(run.computed)) ?? events.get(report.id)?.headline ?? null,
     };
   });
   const lines = cards
@@ -278,16 +284,16 @@ export default async function ReportsPage({
                   <li key={report.id}>
                     <Link
                       href={withRange(`${base}/${report.id}`)}
-                      className="group/line hover:bg-muted/40 flex items-start gap-3 px-4 py-3 first:rounded-t-[inherit] last:rounded-b-[inherit]"
+                      className="group/line hover:bg-muted/40 flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 first:rounded-t-[inherit] last:rounded-b-[inherit]"
                     >
                       <span
                         aria-hidden="true"
                         className={cn("mt-1.5 size-2 shrink-0 rounded-full", TONE_DOT[line.tone])}
                       />
-                      <span className="min-w-0 flex-1 text-[14px] leading-relaxed">
+                      <span className="min-w-0 flex-1 basis-56 text-[14px] leading-relaxed">
                         {line.text}
                       </span>
-                      <span className="text-muted-foreground mt-0.5 shrink-0 text-xs font-semibold group-hover/line:underline">
+                      <span className="text-muted-foreground mt-0.5 shrink-0 text-xs font-semibold group-hover/line:underline max-sm:ms-5">
                         {report.title}
                       </span>
                     </Link>
@@ -329,9 +335,11 @@ export default async function ReportsPage({
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="heading block truncate text-[16px]">{r.title}</span>
-                            <span className="text-muted-foreground block truncate text-[12.5px]">
-                              {run.source?.name ?? "A database you can't see"}
-                            </span>
+                            {(run?.source?.name ?? source?.name) !== r.title && (
+                              <span className="text-muted-foreground block truncate text-[12.5px]">
+                                {run?.source?.name ?? source?.name ?? "A database you can't see"}
+                              </span>
+                            )}
                           </span>
                           {tag && (
                             <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-semibold">
@@ -398,7 +406,9 @@ export default async function ReportsPage({
               <section aria-labelledby="start-report" className="space-y-3.5">
                 <div className="flex flex-wrap items-baseline gap-2.5">
                   <h2 id="start-report" className="heading text-[17px]">
-                    {reports.length ? "No report yet" : "Start with a report on any database"}
+                    {reports.length
+                      ? "Databases without a report"
+                      : "Start with a report on any database"}
                   </h2>
                   <span className="text-muted-foreground text-[13.5px]">
                     Each comes with widgets already picked
@@ -434,7 +444,7 @@ export default async function ReportsPage({
                         <span className="flex items-center gap-1.5">
                           <Button asChild size="sm" variant="ghost">
                             <Link href={`${base}/new?source=${encodeURIComponent(s.key)}`}>
-                              Choose widgets
+                              Pick widgets
                             </Link>
                           </Button>
                           <CreateSuggestedButton

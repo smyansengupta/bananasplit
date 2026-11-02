@@ -47,8 +47,15 @@ export function AskReports({ orgId }: { orgId: string }) {
           maxLength={500}
           aria-label="Ask about your reports"
           placeholder="Ask about your reports, like: which month did we spend the most?"
-          className="bg-muted/60 focus-glow h-11 w-full rounded-full pr-4 pl-11 text-sm outline-none"
+          className="bg-muted/60 focus-glow h-11 w-full rounded-full pr-20 pl-11 text-base outline-none md:text-sm"
         />
+        <button
+          type="submit"
+          disabled={!question.trim() || pending}
+          className="bg-foreground text-background focus-glow absolute top-1/2 right-1.5 h-8 -translate-y-1/2 rounded-full px-3.5 text-xs font-semibold outline-none disabled:opacity-40"
+        >
+          Ask
+        </button>
       </form>
       {pending && (
         <p className="text-muted-foreground text-sm">Claude is reading your reports...</p>

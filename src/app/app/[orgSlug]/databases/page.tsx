@@ -30,7 +30,7 @@ import { PinToggle } from "@/components/pins/pins-context";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 
-import { DatabasesHome, type HomeStat } from "@/components/databases/databases-home";
+import { DatabasesHome } from "@/components/databases/databases-home";
 import { displayText } from "@/lib/databases/fields";
 import { loadFields } from "@/server/databases/custom";
 import {
@@ -61,6 +61,15 @@ function IconChip({ icon: Icon, className }: { icon: IconComponent; className?: 
     </span>
   );
 }
+
+/** What a built-in database holds, for its line on Databases home. */
+const BUILT_IN_DETAIL: Partial<Record<string, string>> = {
+  SESSIONS: "Your events, from the calendar",
+  ATTENDANCE: "Every check-in",
+  SIGNUPS: "Sign-ups from forms and your website",
+  BALLOTS: "Votes and elections",
+  PEOPLE: "Everyone who has come to something",
+};
 
 /** The report source of a built-in database. */
 const BUILT_IN_SOURCE: Partial<Record<string, string>> = {
@@ -199,16 +208,6 @@ export default async function DatabasesPage({
               total: await db.transaction.count({
                 where: { organizationId: organization.id, direction: "OUT", voidedAt: null },
               }),
-              waiting: await db.transaction.aggregate({
-                where: {
-                  organizationId: organization.id,
-                  direction: "OUT",
-                  voidedAt: null,
-                  status: { in: ["SUBMITTED", "APPROVED"] },
-                },
-                _count: true,
-                _sum: { amountCents: true },
-              }),
               spentCents:
                 (
                   await db.transaction.aggregate({
@@ -219,17 +218,13 @@ export default async function DatabasesPage({
             }
           : null;
       const reports = showReports ? await listReports(db, organization.id) : null;
-      const forms = await db.form.findMany({
-        where: { organizationId: organization.id },
-        select: { databaseId: true, title: true },
-      });
       return {
         databases: list,
         counts,
         sync,
         dataStep,
         pinned: new Set(pins.map((p) => p.href)),
-        home: { weekly, latest, tasks, expenses, reports, forms },
+        home: { weekly, latest, tasks, expenses, reports },
       };
     },
   );
@@ -261,11 +256,6 @@ export default async function DatabasesPage({
   const sourceOf = (d: (typeof databases)[number]) =>
     syncedKinds.has(d.kind) ? "Supabase" : "Bananasplit";
 
-  const unitOf = (d: (typeof databases)[number], n: number) => {
-    const unit = d.kind === "BALLOTS" ? "polls" : d.kind === "PEOPLE" ? "people" : "rows";
-    return n === 1 ? (unit === "people" ? "person" : unit.replace(/s$/, "")) : unit;
-  };
-
   const setupRow = "flex flex-wrap items-center gap-x-6 gap-y-3 py-4 first:pt-0 last:pb-0";
 
   // Databases home: which report reads each database, and what changed this week.
@@ -287,53 +277,6 @@ export default async function DatabasesPage({
       currency: "USD",
       maximumFractionDigits: 0,
     });
-  // The line along the top: only what needs someone, each when it isn't zero.
-  const formDbs = new Map(home.forms.map((f) => [f.databaseId, f.title]));
-  const answers = custom
-    .filter((d) => formDbs.has(d.id))
-    .map((d) => ({ d, n: home.weekly[d.key]?.thisWeek ?? 0 }))
-    .filter((x) => x.n > 0)
-    .sort((a, b) => b.n - a.n);
-  const waiting = home.expenses?.waiting;
-  const stats: HomeStat[] = [
-    ...(home.tasks && home.tasks.overdue > 0
-      ? [
-          {
-            key: "late",
-            icon: "late" as const,
-            value: String(home.tasks.overdue),
-            label: `Task${home.tasks.overdue === 1 ? "" : "s"} past due`,
-            href: `/app/${orgSlug}/tasks`,
-            tone: "warn" as const,
-          },
-        ]
-      : []),
-    ...(waiting && waiting._count > 0
-      ? [
-          {
-            key: "waiting",
-            icon: "money" as const,
-            value: money(waiting._sum.amountCents ?? 0),
-            label: `${waiting._count} expense${waiting._count === 1 ? "" : "s"} waiting to be paid back`,
-            href: `/app/${orgSlug}/finance/transactions`,
-          },
-        ]
-      : []),
-    ...(answers.length > 0
-      ? [
-          {
-            key: "answers",
-            icon: "answers" as const,
-            value: `+${answers.reduce((a, b) => a + b.n, 0)}`,
-            label:
-              answers.length === 1
-                ? `New answers to ${formDbs.get(answers[0].d.id)} this week`
-                : `New form answers this week, most to ${formDbs.get(answers[0].d.id)}`,
-            href: `/app/${orgSlug}/databases/${answers[0].d.key}`,
-          },
-        ]
-      : []),
-  ];
   const builtInRows = [
     ...(home.expenses
       ? [
@@ -369,7 +312,7 @@ export default async function DatabasesPage({
       return {
         key: d.key,
         name: d.name,
-        detail: `${d.description ?? `${n.toLocaleString("en-US")} ${unitOf(d, n)}`}${
+        detail: `${d.description ?? BUILT_IN_DETAIL[d.kind] ?? ""}${
           isAdmin && !personal && sourceOf(d) === "Supabase" ? ". Synced from Supabase" : ""
         }`,
         href: hrefOf(d.key),
@@ -526,7 +469,6 @@ export default async function DatabasesPage({
       ) : (
         <>
           <DatabasesHome
-            stats={stats}
             custom={custom.map((d) => {
               const href = `/app/${orgSlug}/databases/${d.key}`;
               const n = counts[d.key] ?? 0;

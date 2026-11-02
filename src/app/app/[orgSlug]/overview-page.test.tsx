@@ -625,7 +625,7 @@ describe("org overview", () => {
     expect(html).not.toContain("is 4 days late");
     // My tasks: the task's linked event as a chip, and the crowded week.
     expect(html).toContain('title="Event: Fall Social"');
-    expect(html).toContain("3 of your tasks land in Fall Social week:");
+    expect(html).toContain("3 of your tasks are due the week of Fall Social:");
     // This week: deadlines beside the events, the late one on today.
     expect(html).toContain("Due: Order pizza");
     expect(html).toContain("Book the room, overdue");

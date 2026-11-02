@@ -149,7 +149,7 @@ export const createTransaction = financeAction(
 
     // No period picked: the active one. Finance never dead-ends on "create a
     // budget period first": for a treasurer the first one is made here
-    // (this school year, starter categories). A member's request needs one
+    // (this year, starter categories). A member's request needs one
     // that a treasurer set up, since only they can create periods.
     let periodId = data.budgetPeriodId || null;
     if (!periodId) {

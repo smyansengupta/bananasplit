@@ -5445,6 +5445,17 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       await q(`SELECT app.set_context('u_bothAB','org_A')`);
       s.member_reads = await count(q, `SELECT count(*) n FROM "Report"`);
       s.member_reads_copies = await count(q, `SELECT count(*) n FROM "ReportSnapshot"`);
+      // A copy the maker (or an admin) took of the SHARED report: theirs alone.
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      await q(
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_shared','org_A','rp_shared','u_memberA','Q4','{}')`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.member_reads_others_copy = await count(
+        q,
+        `SELECT count(*) n FROM "ReportSnapshot" WHERE "id" = 'rs_shared'`,
+      );
       s.member_edits_shared = await rc(q, `UPDATE "Report" SET "title" = 'x' WHERE "id" = 'rp_shared'`);
       s.member_copies_private = await tryq(
         q,
@@ -5453,6 +5464,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       );
       await q(`SELECT app.set_context('u_adminA','org_A')`);
       s.admin_reads = await count(q, `SELECT count(*) n FROM "Report"`);
+      s.admin_reads_copies = await count(q, `SELECT count(*) n FROM "ReportSnapshot"`);
       s.admin_edits_shared = await rc(q, `UPDATE "Report" SET "title" = 'Sponsorship' WHERE "id" = 'rp_shared'`);
       s.admin_edits_private = await rc(q, `UPDATE "Report" SET "title" = 'x' WHERE "id" = 'rp_mine'`);
       s.admin_makes_private = await tryq(q, `UPDATE "Report" SET "access" = 'PRIVATE' WHERE "id" = 'rp_shared'`);
@@ -5471,9 +5483,11 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         change_maker: "42501",
         member_reads: 1,
         member_reads_copies: 0,
+        member_reads_others_copy: 0,
         member_edits_shared: 0,
         member_copies_private: "42501",
         admin_reads: 1,
+        admin_reads_copies: 1,
         admin_edits_shared: 1,
         admin_edits_private: 0,
         admin_makes_private: "42501",

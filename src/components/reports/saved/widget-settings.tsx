@@ -44,7 +44,7 @@ export function WidgetSettings({
     </label>
   );
 
-  const dateRow = (label = "Placed by") =>
+  const dateRow = (label = "Date to use") =>
     row(
       "date",
       label,
@@ -63,7 +63,9 @@ export function WidgetSettings({
       </FieldSelect>,
     );
 
-  const valueRow = (countLabel = "Number of rows") =>
+  const valueRow = (
+    countLabel = `Number of ${source.kind === "custom" ? "rows" : source.name.toLowerCase()}`,
+  ) =>
     row(
       "field",
       "Shows",
@@ -81,7 +83,7 @@ export function WidgetSettings({
         <option value="">{countLabel}</option>
         {numbers.map((f) => (
           <option key={f.id} value={f.id}>
-            {c.agg === "avg" ? "Average" : "Total"} {f.name.toLowerCase()}
+            {f.name}
           </option>
         ))}
       </FieldSelect>,
@@ -250,7 +252,7 @@ export function WidgetSettings({
             value={c.owner ?? ""}
             onChange={(e) => set({ owner: e.target.value || undefined })}
           >
-            <option value="">Nobody</option>
+            <option value="">Don&apos;t show owners</option>
             {members.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}

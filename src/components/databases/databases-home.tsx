@@ -1,15 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { AlarmClock, ClipboardList, Lock, ReceiptText } from "@/components/icons";
+import { Lock } from "@/components/icons";
 import { ReportIcon } from "@/components/reports/saved/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Databases home (the Databases tab): a line of what needs someone (tasks
- * past due, expenses waiting to be paid back, new form answers), each
- * shown only when there is one and leading to it, then
+ * Databases home (the Databases tab):
  * the organization's own databases as cards across the whole width (how
  * many rows, how fast they're growing, the report on each or a way to make
  * one), then the built-in ones as a list. Data from the page
@@ -48,22 +46,6 @@ export interface HomeBuiltIn {
   report: { title: string; href: string } | null;
 }
 
-/** One of the numbers along the top; a link when there's somewhere to go. */
-export interface HomeStat {
-  key: string;
-  icon: "late" | "money" | "answers";
-  value: string;
-  label: string;
-  href?: string;
-  tone?: "warn";
-}
-
-const STAT_ICONS = {
-  late: AlarmClock,
-  money: ReceiptText,
-  answers: ClipboardList,
-} as const;
-
 const TINTS = [
   "bg-tint-success text-tint-success-foreground",
   "bg-tint-info text-tint-info-foreground",
@@ -97,61 +79,17 @@ function Spark({ values }: { values: number[] }) {
   );
 }
 
-function Stat({ stat }: { stat: HomeStat }) {
-  const Icon = STAT_ICONS[stat.icon];
-  const body = (
-    <>
-      <span
-        className={cn(
-          "grid size-[52px] shrink-0 place-items-center rounded-full",
-          stat.tone === "warn"
-            ? "bg-tint-danger text-tint-danger-foreground"
-            : "bg-card ring-foreground/6 shadow-[var(--edge-highlight)] ring-1",
-        )}
-      >
-        <Icon className="size-[22px]" aria-hidden="true" />
-      </span>
-      <span className="min-w-0">
-        <span className="numeral block text-[28px] leading-none">{stat.value}</span>
-        <span className="text-muted-foreground mt-1.5 block text-[13px] group-hover/stat:underline">
-          {stat.label}
-        </span>
-      </span>
-    </>
-  );
-  return stat.href ? (
-    <Link
-      href={stat.href}
-      className="group/stat focus-glow flex min-w-0 items-center gap-3.5 rounded-full pr-3 outline-none"
-    >
-      {body}
-    </Link>
-  ) : (
-    <div className="flex min-w-0 items-center gap-3.5">{body}</div>
-  );
-}
-
 const CARD = "bg-card text-card-foreground ring-foreground/6 rounded-card edge ring-1";
 
 export function DatabasesHome({
-  stats,
   custom,
   builtIn,
 }: {
-  stats: HomeStat[];
   custom: HomeDatabase[];
   builtIn: HomeBuiltIn[];
 }) {
   return (
     <div className="space-y-7">
-      {stats.length > 0 && (
-        <section aria-label="Needs someone" className="flex flex-wrap gap-x-11 gap-y-4">
-          {stats.map((s) => (
-            <Stat key={s.key} stat={s} />
-          ))}
-        </section>
-      )}
-
       {custom.length > 0 && (
         <section aria-labelledby="h-yours" className="space-y-3.5">
           <div className="flex flex-wrap items-baseline gap-2.5">
@@ -200,7 +138,7 @@ export function DatabasesHome({
                   ) : (
                     <span className="text-muted-foreground">Nothing added this week</span>
                   )}
-                  {d.latest && <span className="text-muted-foreground"> Latest: {d.latest}</span>}
+                  {d.latest && <span className="text-muted-foreground">. Latest: {d.latest}</span>}
                 </p>
                 {(d.report || d.newReportHref) && (
                   <div className="border-border mt-auto flex flex-wrap items-center gap-2 border-t pt-3">
@@ -215,9 +153,9 @@ export function DatabasesHome({
                       <span className="text-muted-foreground text-xs">No report yet</span>
                     )}
                     <span className="flex-1" />
-                    {!d.report && d.newReportHref && (
+                    {!d.report && d.newReportHref && d.count > 0 && (
                       <Button asChild size="sm" variant="outline">
-                        <Link href={d.newReportHref}>Report on this</Link>
+                        <Link href={d.newReportHref}>Make a report</Link>
                       </Button>
                     )}
                   </div>
@@ -252,11 +190,11 @@ export function DatabasesHome({
                 </span>
                 <span
                   className={cn(
-                    "w-12 text-right text-xs font-semibold tabular-nums",
+                    "w-24 text-right text-xs font-semibold tabular-nums",
                     b.thisWeek > 0 ? "text-tint-success-foreground" : "text-muted-foreground",
                   )}
                 >
-                  {b.thisWeek > 0 ? `+${b.thisWeek}` : ""}
+                  {b.thisWeek > 0 ? `+${b.thisWeek} this week` : ""}
                 </span>
                 <span className="flex w-40 justify-end">
                   {b.report ? (
@@ -268,7 +206,7 @@ export function DatabasesHome({
                     </Link>
                   ) : b.newReportHref ? (
                     <Button asChild size="sm" variant="ghost">
-                      <Link href={b.newReportHref}>Report on this</Link>
+                      <Link href={b.newReportHref}>Make a report</Link>
                     </Button>
                   ) : null}
                 </span>

@@ -110,7 +110,7 @@ describe("finance board: the runway widget", () => {
 
   it("offers a way back when the board is empty", () => {
     const html = render(dashboard({}), []);
-    expect(html).toContain("Your board is empty.");
+    expect(html).toContain("Your board has no widgets yet.");
     expect(html).toContain("Add a widget");
   });
 });

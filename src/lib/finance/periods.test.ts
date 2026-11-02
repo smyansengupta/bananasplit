@@ -6,26 +6,33 @@ import {
   formatPeriodRange,
   fromDateValue,
   periodCovers,
-  schoolYear,
-  semester,
+  quarter,
   toDateValue,
 } from "./periods";
 
 const on = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12);
 
 describe("budget period presets", () => {
-  it("the school year runs Aug 1 to Jul 31, starting this year from July", () => {
-    expect(schoolYear(on(2026, 9, 30))).toEqual({ label: "2026–27", startsOn: "2026-08-01", endsOn: "2027-07-31" });
-    expect(schoolYear(on(2027, 3, 2))).toEqual({ label: "2026–27", startsOn: "2026-08-01", endsOn: "2027-07-31" });
-    expect(schoolYear(on(2027, 7, 15)).label).toBe("2027–28");
-    expect(schoolYear(on(2099, 9, 1)).label).toBe("2099–00");
+  it("quarters run three calendar months", () => {
+    expect(quarter(on(2026, 9, 30))).toEqual({
+      label: "Q3 2026",
+      startsOn: "2026-07-01",
+      endsOn: "2026-09-30",
+    });
+    expect(quarter(on(2027, 2, 1))).toEqual({
+      label: "Q1 2027",
+      startsOn: "2027-01-01",
+      endsOn: "2027-03-31",
+    });
+    expect(quarter(on(2027, 12, 31)).label).toBe("Q4 2027");
   });
 
-  it("semesters and calendar years", () => {
-    expect(semester(on(2026, 9, 30))).toEqual({ label: "Fall 2026", startsOn: "2026-08-01", endsOn: "2026-12-31" });
-    expect(semester(on(2027, 2, 1))).toEqual({ label: "Spring 2027", startsOn: "2027-01-01", endsOn: "2027-05-31" });
-    expect(semester(on(2027, 6, 20)).label).toBe("Summer 2027");
-    expect(calendarYear(on(2026, 9, 30))).toEqual({ label: "2026", startsOn: "2026-01-01", endsOn: "2026-12-31" });
+  it("calendar years run Jan 1 to Dec 31", () => {
+    expect(calendarYear(on(2026, 9, 30))).toEqual({
+      label: "2026",
+      startsOn: "2026-01-01",
+      endsOn: "2026-12-31",
+    });
   });
 });
 

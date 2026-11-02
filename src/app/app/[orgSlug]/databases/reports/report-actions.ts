@@ -7,7 +7,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/auth/errors";
 import { can, requirePermission } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import type { BoardWidget } from "@/lib/boards";
-import { readInsights as builtInInsights } from "@/lib/reports/compute";
+import { readInsights as builtInInsights, spanPhrase } from "@/lib/reports/compute";
 import {
   fillRows,
   newWidget,
@@ -31,9 +31,11 @@ import {
 import {
   ReportInputError,
   archiveReport,
+  canEditReport,
   createReport,
   getReport,
   listReports,
+  restoreReport,
   saveInsights,
   saveReportLayout,
   saveSchedule,
@@ -59,7 +61,12 @@ function failure(error: unknown): { ok: false; error: string } {
   if (error instanceof ReportInputError) return { ok: false, error: error.message };
   if (error instanceof NotFoundError)
     return { ok: false, error: "That report isn't there any more." };
-  if (error instanceof ForbiddenError) return { ok: false, error: "You can't do that here." };
+  if (error instanceof ForbiddenError) {
+    return {
+      ok: false,
+      error: "Only whoever made this report, or an owner or admin, can change it.",
+    };
+  }
   throw error;
 }
 
@@ -171,6 +178,20 @@ export async function saveScheduleAction(
   }
 }
 
+export async function restoreReportAction(
+  organizationId: string,
+  reportId: string,
+): Promise<ReportResult> {
+  try {
+    await reportsAction(async (ctx) => restoreReport(await reportViewer(ctx), reportId))(
+      organizationId,
+    );
+    return { ok: true };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 export async function archiveReportAction(
   organizationId: string,
   reportId: string,
@@ -185,12 +206,23 @@ export async function archiveReportAction(
   }
 }
 
-/** Freezes the report as it reads over `range`, for Report history. */
+const COPIES_PER_HOUR = 20;
+
+/** Freezes the report as it reads over `range`, as this person sees it (theirs and admins' to open). */
 export async function takeSnapshotAction(
   organizationId: string,
   reportId: string,
   range: RangeParams,
 ): Promise<ReportResult<{ id: string }>> {
+  const user = await requireUser();
+  const hit = await checkRateLimit(
+    rateLimitKey("report-copy", organizationId, user.id),
+    COPIES_PER_HOUR,
+    60 * 60,
+  );
+  if (!hit.allowed) {
+    return { ok: false, error: `That's a lot of copies. Try again ${retryAfterText(hit)}.` };
+  }
   try {
     const id = await reportsAction(async (ctx) => {
       const v = await reportViewer(ctx);
@@ -242,6 +274,12 @@ export async function askClaudeAction(
     read = await reportsAction(async (ctx) => {
       const v = await reportViewer(ctx);
       const report = await getReport(ctx.db, organizationId, reportId);
+      // Claude's reading is kept on the report, so only its editors may ask.
+      if (!canEditReport(report, ctx.userId, ctx.role)) {
+        throw new ReportInputError(
+          "Only whoever made this report, or an owner or admin, can ask Claude about it.",
+        );
+      }
       const run = await runReport(v, { ...report, insights: null }, range);
       if (!run.source) throw new ReportInputError("You can't see this report's database any more.");
       const settings = await ctx.db.orgSettings.findUnique({
@@ -280,10 +318,15 @@ export async function askClaudeAction(
       range: read.run.range,
       computed: read.run.computed,
       fallback: [
-        ...eventsInsights(builtIn.attendance, builtIn.retention, {
-          attendance: ids("attendance"),
-          retention: ids("retention"),
-        }),
+        ...eventsInsights(
+          builtIn.attendance,
+          builtIn.retention,
+          {
+            attendance: ids("attendance"),
+            retention: ids("retention"),
+          },
+          spanPhrase(read.run.range),
+        ),
         ...builtInInsights(read.run.computed, read.run.range),
       ].slice(0, 5),
     });
@@ -292,9 +335,9 @@ export async function askClaudeAction(
     throw error;
   }
   try {
-    await reportsAction(async (ctx) => saveInsights(await reportViewer(ctx), reportId, lines))(
-      organizationId,
-    );
+    await reportsAction(async (ctx) =>
+      saveInsights(await reportViewer(ctx), reportId, lines, read.run.range),
+    )(organizationId);
   } catch (error) {
     return failure(error);
   }

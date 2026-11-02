@@ -70,7 +70,7 @@ export function JoinPanel({
           }}
         >
           <Plus aria-hidden="true" />
-          Add one
+          Join a second database
         </Button>
       </div>
     );

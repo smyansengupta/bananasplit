@@ -6,6 +6,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import {
   archiveReportAction,
   askClaudeAction,
+  restoreReportAction,
   saveScheduleAction,
   saveWidgetConfigAction,
   takeSnapshotAction,
@@ -195,7 +196,7 @@ export function ReportHeaderControls({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button type="button" size="icon" variant="outline" aria-label="More">
+          <Button type="button" size="icon" variant="outline" aria-label="More report actions">
             <Ellipsis className="size-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
@@ -205,12 +206,12 @@ export function ReportHeaderControls({
             onSelect={() =>
               run(
                 () => takeSnapshotAction(orgId, reportId, range),
-                "Kept a copy. It's at the bottom of this report.",
+                "Saved a copy. It's at the bottom of this report.",
               )
             }
           >
             <Camera aria-hidden="true" />
-            Keep a copy of today
+            Save a copy
           </DropdownMenuItem>
           {canEdit && (
             <>
@@ -259,7 +260,17 @@ export function ReportHeaderControls({
                       toast({ title: result.error });
                       return;
                     }
-                    toast({ title: `Archived ${title}` });
+                    toast({
+                      title: `Archived ${title}`,
+                      action: {
+                        label: "Undo",
+                        run: async () => {
+                          const back = await restoreReportAction(orgId, reportId);
+                          if (!back.ok) return back.error;
+                          router.push(`/app/${orgSlug}/databases/reports/${reportId}`);
+                        },
+                      },
+                    });
                     router.push(`/app/${orgSlug}/databases/reports`);
                   })
                 }

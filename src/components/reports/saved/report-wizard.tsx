@@ -65,7 +65,7 @@ function SourceCard({
       <span className="text-muted-foreground line-clamp-2 text-[13px]">
         {source.rows.toLocaleString("en-US")}{" "}
         {source.kind === "people"
-          ? "members"
+          ? "people"
           : source.kind === "events"
             ? "events"
             : source.rows === 1
@@ -210,7 +210,7 @@ export function ReportWizard({
           on ? "ring-foreground/40" : "ring-foreground/8",
         )}
       >
-        <div className="flex items-center gap-3 p-3.5">
+        <div className="flex flex-wrap items-center gap-3 p-3.5">
           <button
             type="button"
             role="checkbox"
@@ -219,14 +219,14 @@ export function ReportWizard({
             disabled={locked}
             onClick={() => toggle(type)}
             className={cn(
-              "focus-glow grid size-5 shrink-0 place-items-center rounded-[6px] border-[1.5px] outline-none",
+              "focus-glow relative grid size-5 shrink-0 place-items-center rounded-[6px] border-[1.5px] outline-none after:absolute after:-inset-2.5 after:content-['']",
               on ? "bg-foreground border-foreground text-background" : "border-muted-foreground",
             )}
           >
             {on && <Check className="size-3.5" aria-hidden="true" />}
           </button>
           <ReportIcon name={def.icon} className="text-muted-foreground size-4 shrink-0" />
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1 basis-40">
             <b className="block text-sm">{w ? widgetTitle(w, source) : def.title}</b>
             <span className="text-muted-foreground block text-[13px]">{def.description}</span>
           </span>
@@ -237,7 +237,7 @@ export function ReportWizard({
               type="button"
               aria-expanded={open === w!.id}
               onClick={() => setOpen(open === w!.id ? null : w!.id)}
-              className="bg-muted hover:bg-muted/70 focus-glow flex h-7 max-w-44 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold outline-none"
+              className="bg-muted hover:bg-muted/70 focus-glow flex h-8 max-w-full shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold outline-none max-sm:ms-8 sm:max-w-44"
             >
               <span className="truncate">{uses.length ? uses.join(", ") : "Settings"}</span>
               <ChevronDown
@@ -326,9 +326,7 @@ export function ReportWizard({
           )}
           {builtIn.length > 0 && (
             <div className="space-y-2.5">
-              <h3 className="text-muted-foreground text-[13px] font-semibold">
-                Built into Bananasplit
-              </h3>
+              <h3 className="text-muted-foreground text-[13px] font-semibold">Built in</h3>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {builtIn.map((s) => (
                   <SourceCard
@@ -438,8 +436,12 @@ export function ReportWizard({
                 </p>,
               ]),
             )}
-            startEditing
+            // A phone arranges by the grips once Customize is on; it doesn't start there.
+            startEditing={
+              typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches
+            }
             refreshOnSave={false}
+            noun="this report"
             editHint="Arrange it once; anyone who can edit it changes it later."
             intro={
               <h2 id="arrange" className="heading text-[22px]">

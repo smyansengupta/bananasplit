@@ -25,7 +25,7 @@ describe("Home's findings", () => {
     expect(crowded?.tasks.map((t) => t.id)).toEqual(["c", "b", "a"]);
     expect(myTasksFinding(crowded)).toEqual({
       tone: "warn",
-      lead: "3 of your tasks land in Fall Social week:",
+      lead: "3 of your tasks are due the week of Fall Social:",
       text: "Task c, Task b and Task a.",
     });
     // Two deadlines that week, or none with an event: nothing to say.

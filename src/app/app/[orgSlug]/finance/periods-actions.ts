@@ -32,7 +32,7 @@ interface ActionResult {
 }
 
 const periodInputSchema = z.object({
-  label: z.string().trim().min(1, "Give the period a name, like 2026–27.").max(100),
+  label: z.string().trim().min(1, "Give the period a name, like 2026 or Q3 2026.").max(100),
   startsOn: z.string(),
   endsOn: z.string(),
 });
@@ -138,7 +138,7 @@ export const createBudgetPeriod = financeAction(
 );
 
 /**
- * One click from an empty Finance page: this school year with the starter
+ * One click from an empty Finance page: this year with the starter
  * categories (or the period the org already has, made active).
  */
 export const startBudget = financeAction(async (ctx): Promise<ActionResult> => {

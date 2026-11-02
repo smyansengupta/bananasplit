@@ -201,12 +201,12 @@ export function WidgetBody({
             <span className="numeral text-[40px] leading-none">
               {formatValue(d.value, d.format)}
             </span>
-            <Delta pct={d.deltaPct} label={`on ${d.previousLabel ?? "the span before"}`} />
+            <Delta pct={d.deltaPct} label={`on ${d.previousLabel ?? "the period before"}`} />
           </div>
           <div className="flex items-end justify-between gap-3">
             <span className="text-muted-foreground text-xs">
               {d.previous !== null
-                ? `${formatValue(d.previous, d.format)} ${d.previousLabel ?? "the span before"}`
+                ? `${formatValue(d.previous, d.format)} ${d.previousLabel ?? "the period before"}`
                 : d.unit}
             </span>
             <Spark values={d.spark} label="By week" />
@@ -216,7 +216,7 @@ export function WidgetBody({
     }
     case "over-time": {
       const d = payload.data;
-      if (d.points.every((p) => p.value === 0)) return <Empty>Nothing in this span.</Empty>;
+      if (d.points.every((p) => p.value === 0)) return <Empty>Nothing in these dates.</Empty>;
       return (
         <div className="flex h-full flex-col gap-3">
           <div className="flex flex-wrap items-baseline gap-2">
@@ -224,7 +224,7 @@ export function WidgetBody({
             {d.previousTotal !== null && (
               <span className="text-muted-foreground text-xs">
                 against {formatValue(d.previousTotal, d.format)}{" "}
-                {d.previousLabel ?? "the span before"} (dashed)
+                {d.previousLabel ?? "the period before"} (dashed)
               </span>
             )}
           </div>
@@ -234,7 +234,7 @@ export function WidgetBody({
     }
     case "breakdown": {
       const d = payload.data;
-      if (d.rows.length === 0) return <Empty>Nothing in this span.</Empty>;
+      if (d.rows.length === 0) return <Empty>Nothing in these dates.</Empty>;
       return (
         <div className="flex flex-col gap-3">
           <div className="flex h-3 overflow-hidden rounded-full" aria-hidden="true">
@@ -271,11 +271,11 @@ export function WidgetBody({
       const top = Math.max(1, ...d.stages.map((s) => s.reached));
       return (
         <div className="flex flex-col gap-2">
-          {d.stages.map((s) => {
+          {d.stages.map((s, i) => {
             return (
               <div
                 key={s.id}
-                className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm"
+                className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_2.5rem] items-center gap-3 text-sm sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)_7.5rem]"
               >
                 <span className="truncate font-medium">{s.label}</span>
                 <span className="bg-muted h-6 overflow-hidden rounded-full" aria-hidden="true">
@@ -289,10 +289,13 @@ export function WidgetBody({
                 </span>
                 <span className="text-right tabular-nums">
                   <b>{s.count}</b>
-                  <span className="text-muted-foreground ms-2 inline-block w-20 text-xs">
-                    {Math.round((s.reached / Math.max(1, d.stages[0]?.reached ?? 0)) * 100)}% got
-                    here
-                  </span>
+                  {/* The first stage is everyone; from the second on, the share that got this far. */}
+                  {i > 0 && (
+                    <span className="text-muted-foreground ms-2 inline-block w-20 text-xs max-sm:hidden">
+                      {Math.round((s.reached / Math.max(1, d.stages[0]?.reached ?? 0)) * 100)}% got
+                      here
+                    </span>
+                  )}
                 </span>
               </div>
             );
@@ -310,7 +313,7 @@ export function WidgetBody({
     }
     case "top-values": {
       const d = payload.data;
-      if (d.rows.length === 0) return <Empty>No values in this span.</Empty>;
+      if (d.rows.length === 0) return <Empty>No values in these dates.</Empty>;
       return (
         <BarList
           label="Top values"
@@ -365,7 +368,10 @@ export function WidgetBody({
     }
     case "compare": {
       const d = payload.data;
-      if (!d.hasBefore) return <Empty>All time has no span before it. Pick a term or dates.</Empty>;
+      if (!d.hasBefore)
+        return (
+          <Empty>All time has nothing before it to compare. Pick a quarter, a year or dates.</Empty>
+        );
       return (
         <table className="w-full text-sm">
           <thead>
@@ -406,7 +412,7 @@ export function WidgetBody({
           <div
             className="flex gap-[3px] overflow-x-auto pb-1"
             role="img"
-            aria-label={`${d.total} in this span${d.busiestWeekday ? `; ${d.busiestWeekday}s are busiest` : ""}`}
+            aria-label={`${d.total} in these dates${d.busiestWeekday ? `; ${d.busiestWeekday}s are busiest` : ""}`}
           >
             {d.weeks.map((week) => (
               <div key={week[0].date} className="flex shrink-0 flex-col gap-[3px]">
@@ -422,7 +428,8 @@ export function WidgetBody({
             ))}
           </div>
           <p className="text-muted-foreground text-xs">
-            {d.total} in all{d.busiestWeekday ? `. ${d.busiestWeekday}s are the busiest.` : "."}
+            {d.total} in these dates
+            {d.busiestWeekday ? `. ${d.busiestWeekday}s are the busiest.` : "."}
           </p>
         </div>
       );
@@ -446,7 +453,7 @@ export function WidgetBody({
         const body = (
           <>
             <span className="min-w-0 flex-1">
-              <b className="block truncate text-sm">{r.title}</b>
+              <b className="line-clamp-2 block text-sm break-words">{r.title}</b>
               <span className="text-muted-foreground text-xs">{sub}</span>
             </span>
             <span className="bg-tint-danger text-tint-danger-foreground shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold">
@@ -457,7 +464,7 @@ export function WidgetBody({
         // A late task gets Nudge (someone else's) and Push back, on the live report only.
         const actions =
           d.tasks && taskActions ? (
-            <span className="flex shrink-0 items-center gap-1.5">
+            <span className="flex shrink-0 items-center gap-1.5 max-sm:ms-auto max-sm:pb-2">
               {r.ownerId && r.ownerId !== taskActions.viewerId && (
                 <NudgeButton
                   orgId={taskActions.orgId}
@@ -476,7 +483,7 @@ export function WidgetBody({
             </span>
           ) : null;
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2">
             {r.href ? (
               <Link
                 href={r.href}
@@ -498,13 +505,20 @@ export function WidgetBody({
               {row(
                 r,
                 `${r.owner ?? "No owner"}. Due ${shortDay(r.date)}`,
-                `${r.daysLate} days late`,
+                `${r.daysLate} ${r.daysLate === 1 ? "day" : "days"} late`,
                 true,
               )}
             </div>
           ))}
           {d.stale.slice(0, Math.max(0, 6 - d.overdue.length)).map((r) => (
-            <div key={r.id}>{row(r, r.owner ?? "No owner", `${r.days} days untouched`, false)}</div>
+            <div key={r.id}>
+              {row(
+                r,
+                r.owner ?? "No owner",
+                `${r.days} ${r.days === 1 ? "day" : "days"} untouched`,
+                false,
+              )}
+            </div>
           ))}
           <p className="text-muted-foreground pt-1 text-xs">
             {d.overdueCount} past due, {d.staleCount} untouched for {d.staleDays} days or more
@@ -565,14 +579,14 @@ export function WidgetBody({
           <p className="text-muted-foreground text-xs">
             {d.rows.length < d.total
               ? `The newest ${d.rows.length} of ${d.total}`
-              : `${d.total} rows`}
+              : `${d.total} ${d.total === 1 ? "row" : "rows"}`}
           </p>
         </div>
       );
     }
     case "spread": {
       const d = payload.data;
-      if (d.count === 0) return <Empty>No values in this span.</Empty>;
+      if (d.count === 0) return <Empty>No values in these dates.</Empty>;
       const max = Math.max(1, ...d.bins.map((b) => b.count));
       return (
         <div className="flex h-full flex-col gap-3">
@@ -648,12 +662,14 @@ export function WidgetBody({
     }
     case "form-results": {
       const d = payload.data;
-      if (d.responses === 0) return <Empty>No answers in this span.</Empty>;
+      if (d.responses === 0) return <Empty>No answers in these dates.</Empty>;
       return (
         <div className="flex flex-col gap-4">
           <p className="text-sm">
             <b className="numeral text-[22px]">{d.responses}</b>{" "}
-            <span className="text-muted-foreground">answers</span>
+            <span className="text-muted-foreground">
+              {d.responses === 1 ? "answer" : "answers"}
+            </span>
           </p>
           {d.questions.map((q) => (
             <section key={q.id} className="flex flex-col gap-1.5">
@@ -689,13 +705,13 @@ export function WidgetBody({
     case "journey": {
       const d = payload.data;
       const first = d.steps[0]?.count ?? 0;
-      if (first === 0) return <Empty>Nobody signed up in this span.</Empty>;
+      if (first === 0) return <Empty>Nobody signed up in these dates.</Empty>;
       return (
         <div className="flex flex-col gap-2">
           {d.steps.map((s) => (
             <div
               key={s.label}
-              className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm"
+              className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_4.5rem] items-center gap-3 text-sm sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)_5.5rem]"
             >
               <span className="truncate font-medium">{s.label}</span>
               <span className="bg-muted h-6 overflow-hidden rounded-full" aria-hidden="true">
@@ -740,7 +756,7 @@ export function WidgetBody({
     }
     case "when": {
       const d = payload.data;
-      if (d.cells.length === 0) return <Empty>No events with check-ins in this span.</Empty>;
+      if (d.cells.length === 0) return <Empty>No events with check-ins in these dates.</Empty>;
       const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
       const slots = ["morning", "afternoon", "evening"] as const;
       const max = Math.max(1, ...d.cells.map((c) => c.average));
@@ -778,7 +794,11 @@ export function WidgetBody({
                                 : "var(--muted)",
                               color: c && c.average / max > 0.6 ? "var(--card)" : undefined,
                             }}
-                            title={c ? `${c.events} events, ${c.average} a session` : "No events"}
+                            title={
+                              c
+                                ? `${c.events} ${c.events === 1 ? "event" : "events"}, ${c.average} a session`
+                                : "No events"
+                            }
                           >
                             {c ? Math.round(c.average) : ""}
                           </span>
@@ -801,7 +821,7 @@ export function WidgetBody({
     }
     case "regulars": {
       const d = payload.data;
-      if (d.rows.length === 0) return <Empty>Nobody checked in this span.</Empty>;
+      if (d.rows.length === 0) return <Empty>Nobody checked in during these dates.</Empty>;
       return (
         <ol className="flex flex-col gap-1.5">
           {d.rows.map((r, i) => (
@@ -810,7 +830,10 @@ export function WidgetBody({
                 {i + 1}
               </span>
               <span className="min-w-0 flex-1 truncate font-medium">{r.name}</span>
-              <span className="font-semibold tabular-nums">{r.checkIns}</span>
+              <span className="font-semibold tabular-nums">
+                {r.checkIns}
+                <span className="text-muted-foreground ms-1 text-xs font-normal">check-ins</span>
+              </span>
             </li>
           ))}
         </ol>
@@ -839,7 +862,7 @@ export function WidgetBody({
           </ul>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-muted-foreground text-xs">
-              {d.total} who came three or more times
+              {d.total} {d.total === 1 ? "regular has" : "regulars have"} stopped coming
             </span>
             {invite && (
               <a

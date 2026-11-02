@@ -133,7 +133,7 @@ export function myTasksFinding(crowded: ReturnType<typeof crowdedEventWeek>): Fi
   const rest = crowded.tasks.length - titles.length;
   return {
     tone: "warn",
-    lead: `${crowded.tasks.length} of your tasks land in ${crowded.event.title} week:`,
+    lead: `${crowded.tasks.length} of your tasks are due the week of ${crowded.event.title}:`,
     text: `${listWords(rest > 0 ? [...titles, plural(rest, "more")] : titles)}.`,
   };
 }

@@ -213,9 +213,13 @@ describe("widget numbers", () => {
     ).toMatchObject({
       from: "2026-09-04",
       to: "2026-10-03",
-      label: "the span before",
+      label: "the period before",
     });
     expect(previousSpan({ from: null, to: null, label: "All time" })).toBeNull();
+    // A quarter still under way: the same number of days into last quarter.
+    expect(
+      previousSpan({ from: "2026-10-01", to: "2026-12-31", label: "This quarter" }, "2026-11-02"),
+    ).toEqual({ from: "2026-07-01", to: "2026-08-02", label: "the same point last quarter" });
   });
 
   it("totals a number over the span and against the span before", () => {

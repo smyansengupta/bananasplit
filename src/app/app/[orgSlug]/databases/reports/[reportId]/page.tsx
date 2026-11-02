@@ -20,6 +20,7 @@ import {
 import { WidgetBody } from "@/components/reports/saved/widget-bodies";
 import { can } from "@/lib/auth/permissions";
 import { boardTypes } from "@/lib/reports/catalog";
+import { spanPhrase } from "@/lib/reports/compute";
 import { JOINED } from "@/lib/reports/join";
 import { describeSchedule } from "@/lib/reports/schedule";
 import { listAiConnections } from "@/server/ai/connections";
@@ -165,10 +166,15 @@ export default async function SavedReportPage({
       retentionId && visible.has("retention") ? loadReport("retention", viewCtx) : null,
     ]);
     insights.payload.data.lines = [
-      ...builtInInsights(attendance?.data ?? null, retention?.data ?? null, {
-        attendance: attendanceId,
-        retention: retentionId,
-      }),
+      ...builtInInsights(
+        attendance?.data ?? null,
+        retention?.data ?? null,
+        {
+          attendance: attendanceId,
+          retention: retentionId,
+        },
+        spanPhrase(range),
+      ),
       ...insights.payload.data.lines,
     ].slice(0, 5);
   }
@@ -273,6 +279,7 @@ export default async function SavedReportPage({
                 : "Everyone who opens this report sees your changes."
             }
             resetLabel="Back to the suggested widgets"
+            noun="this report"
             intro={
               <p className="text-muted-foreground text-sm">
                 {computed.length} widget{computed.length === 1 ? "" : "s"} on{" "}
@@ -284,7 +291,15 @@ export default async function SavedReportPage({
                   : ""}
                 {report.joinWith && joinedName ? `, joined with ${joinedName}` : ""}
                 {report.access === "PRIVATE" ? ". Only you can open it" : ""}
-                {report.schedule ? `. ${describeSchedule(report.schedule)}` : ""}
+                {report.schedule
+                  ? `. ${describeSchedule(
+                      report.schedule,
+                      report.createdById === user.id
+                        ? null
+                        : (report.createdByName?.split(/\s+/)[0] ?? "whoever set it"),
+                    )}`
+                  : ""}
+                .
               </p>
             }
           />
@@ -293,7 +308,7 @@ export default async function SavedReportPage({
         {snapshots.length > 0 && (
           <section aria-labelledby="copies" className="space-y-3">
             <h2 id="copies" className="heading text-[17px]">
-              Copies you kept
+              Saved copies
             </h2>
             <ul className="flex flex-wrap gap-2">
               {snapshots.map((s) => (

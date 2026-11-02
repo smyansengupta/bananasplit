@@ -58,7 +58,7 @@ export interface NumberPayload {
   spark: number[];
   format: ValueFormat;
   unit: string;
-  /** "last quarter", "last year", "the span before". */
+  /** "last quarter", "the same point last year", "the period before". */
   previousLabel: string | null;
 }
 
@@ -303,11 +303,25 @@ function lastDayOfMonth(year: number, month: number): string {
 }
 
 /**
- * The span just before `span`: the calendar year, quarter or month before
+ * The period just before `span`: the calendar year, quarter or month before
  * one ("last year", "last quarter", "last month"), otherwise as many days
- * just before it ("the span before"); null for All time.
+ * just before it ("the period before"); null for All time. When the span
+ * runs past `today` (this quarter, this year), only as many days of the
+ * period before count as have gone by in this one, so the third week of a
+ * quarter is set against the third week of the last ("the same point last
+ * quarter"), not the whole of it.
  */
-export function previousSpan(span: Span): Span | null {
+export function previousSpan(span: Span, today?: string): Span | null {
+  const full = wholePreviousSpan(span);
+  if (!full || !today || !span.from || !span.to || span.to <= today || today < span.from) {
+    return full;
+  }
+  const to = plusDays(full.from!, daysFrom(span.from, today));
+  const label = /^last /.test(full.label) ? `the same point ${full.label}` : full.label;
+  return { from: full.from, to: to < full.to! ? to : full.to, label };
+}
+
+function wholePreviousSpan(span: Span): Span | null {
   if (!span.from || !span.to) return null;
   const [y, m, d] = span.from.split("-").map(Number);
   if (d === 1) {
@@ -334,7 +348,7 @@ export function previousSpan(span: Span): Span | null {
   const days = daysFrom(span.from, span.to) + 1;
   const to = plusDays(span.from, -1);
   const from = plusDays(span.from, -days);
-  return { from, to, label: "the span before" };
+  return { from, to, label: "the period before" };
 }
 
 function inSpan(date: string | null, span: Span): boolean {
@@ -438,7 +452,7 @@ function computeNumber(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): N
   const agg = f ? (c.agg ?? "sum") : "count";
   const dated = s.records.map((r) => ({ r, d: rowDate(r, c.date, ctx.tz) }));
   const now = dated.filter((x) => inSpan(x.d, ctx.span)).map((x) => x.r);
-  const prevSpan = previousSpan(ctx.span);
+  const prevSpan = previousSpan(ctx.span, ctx.today);
   const before = prevSpan
     ? aggregate(
         dated.filter((x) => inSpan(x.d, prevSpan)).map((x) => x.r),
@@ -505,7 +519,7 @@ function computeOverTime(w: ReportWidget, s: LoadedSource, ctx: ComputeContext):
     const key = bucketKey(x.d, bucket);
     byKey.set(key, [...(byKey.get(key) ?? []), x.r]);
   }
-  const prev = previousSpan(ctx.span);
+  const prev = previousSpan(ctx.span, ctx.today);
   const shift = prev && ctx.span.from ? daysFrom(prev.from!, ctx.span.from) : 0;
   const prevRows = prev ? dated.filter((x) => inSpan(x.d, prev)) : [];
   const prevByKey = new Map<string, ReportRow[]>();
@@ -650,7 +664,7 @@ function computeGoal(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): Goa
 }
 
 function computeCompare(w: ReportWidget, s: LoadedSource, ctx: ComputeContext): ComparePayload {
-  const prev = previousSpan(ctx.span);
+  const prev = previousSpan(ctx.span, ctx.today);
   const dated = s.records.map((r) => ({ r, d: rowDate(r, w.config.date, ctx.tz) }));
   const now = dated.filter((x) => inSpan(x.d, ctx.span)).map((x) => x.r);
   const before = prev ? dated.filter((x) => inSpan(x.d, prev)).map((x) => x.r) : [];
@@ -1002,9 +1016,30 @@ export function spanPhrase(span: Span): string {
 
 function change(deltaPct: number | null, before: string | null): string {
   if (deltaPct === null) return "";
-  const when = before ?? "the span before";
+  const when = before ?? "the period before";
   if (Math.abs(deltaPct) < 1) return `, about the same as ${when}`;
   return `, ${deltaPct > 0 ? "up" : "down"} ${Math.abs(Math.round(deltaPct))}% on ${when}`;
+}
+
+/** "9 tasks", "1 expense", "4 rows in Sponsors": what a source's rows are called. */
+export function rowsOf(source: Pick<SourceSummary, "kind" | "name">, n: number): string {
+  if (source.kind === "tasks") return `${n} ${n === 1 ? "task" : "tasks"}`;
+  if (source.kind === "expenses") return `${n} ${n === 1 ? "expense" : "expenses"}`;
+  return `${n} ${n === 1 ? "row" : "rows"} in ${source.name}`;
+}
+
+/** "tasks", "expenses", "rows in Sponsors": the rows, uncounted. */
+function rowsNoun(source: Pick<SourceSummary, "kind" | "name">): string {
+  return rowsOf(source, 2).replace(/^2 /, "");
+}
+
+/** "amount", but "CBC sponsors" stays as written. */
+function lowerFirst(text: string): string {
+  return /^[A-Z][a-z]/.test(text) ? text[0].toLowerCase() + text.slice(1) : text;
+}
+
+function days(n: number): string {
+  return `${n} ${n === 1 ? "day" : "days"}`;
 }
 
 /**
@@ -1013,7 +1048,17 @@ function change(deltaPct: number | null, before: string | null): string {
  * rewrites these, when the organization has connected it, from the same
  * payloads; without it, this is what Insights says.
  */
-export function readInsights(widgets: readonly ComputedWidget[], span: Span): InsightLine[] {
+export function readInsights(
+  widgets: readonly ComputedWidget[],
+  span: Span,
+  source: Pick<SourceSummary, "kind" | "name" | "fields"> = {
+    kind: "custom",
+    name: "this database",
+    fields: [],
+  },
+): InsightLine[] {
+  const fieldName = (id: string | null | undefined) =>
+    id ? (source.fields.find((f) => f.id === id)?.name ?? null) : null;
   const warn: InsightLine[] = [];
   const lines: InsightLine[] = [];
   for (const { widget, title, payload } of widgets) {
@@ -1027,13 +1072,13 @@ export function readInsights(widgets: readonly ComputedWidget[], span: Span): In
           warn.push({
             tone: "warn",
             widgetId: id,
-            text: `${d.overdueCount} ${d.overdueCount === 1 ? "is" : "are"} past due. The longest overdue is ${first.title}, ${first.daysLate} days late${first.owner ? ` (${first.owner})` : ""}.`,
+            text: `${rowsOf(source, d.overdueCount)} ${d.overdueCount === 1 ? "is" : "are"} past due. The longest overdue is ${first.title}, ${days(first.daysLate)} late${first.owner ? ` (${first.owner})` : ""}.`,
           });
         } else if (d.staleCount > 0) {
           warn.push({
             tone: "warn",
             widgetId: id,
-            text: `${d.staleCount} haven't been touched in ${d.staleDays} days or more.`,
+            text: `${rowsOf(source, d.staleCount)} ${d.staleCount === 1 ? "hasn't" : "haven't"} been changed in ${d.staleDays} days or more.`,
           });
         }
         break;
@@ -1059,7 +1104,9 @@ export function readInsights(widgets: readonly ComputedWidget[], span: Span): In
           lines.push({
             tone: "info",
             widgetId: id,
-            text: `${top.label} is ${Math.round(top.share)}% of ${title[0].toLowerCase()}${title.slice(1)}.`,
+            text: fieldName(widget.config.field)
+              ? `${top.label} is ${Math.round(top.share)}% of the total ${lowerFirst(fieldName(widget.config.field)!)}.`
+              : `${top.label} is ${Math.round(top.share)}% of ${rowsNoun(source)}.`,
           });
         }
         break;
@@ -1071,7 +1118,7 @@ export function readInsights(widgets: readonly ComputedWidget[], span: Span): In
           lines.push({
             tone: "info",
             widgetId: id,
-            text: `Most sit at ${stuck.label}: ${stuck.count} of ${d.total}.`,
+            text: `More sit at ${stuck.label} than at any other stage: ${stuck.count} of ${d.total}.`,
           });
         }
         break;
@@ -1096,7 +1143,7 @@ export function readInsights(widgets: readonly ComputedWidget[], span: Span): In
           lines.push({
             tone: "info",
             widgetId: id,
-            text: `The largest tenth of ${title.toLowerCase().replace(/ spread$/, "")} is ${d.topShare}% of the total, so the average (${formatValue(d.average ?? 0, d.format)}) runs high; the median is ${formatValue(d.median ?? 0, d.format)}.`,
+            text: `The biggest 10% of ${rowsNoun(source)} make up ${d.topShare}% of the total ${lowerFirst(fieldName(widget.config.field) ?? "amount")}, so the average (${formatValue(d.average ?? 0, d.format)}) runs high; the median is ${formatValue(d.median ?? 0, d.format)}.`,
           });
         }
         break;
@@ -1134,6 +1181,7 @@ export function computeReport(
   widgets: readonly ReportWidget[],
   source: LoadedSource,
   ctx: ComputeContext,
+  /** Claude's reading for this viewer and these dates, when there is one. */
   saved: { lines: InsightLine[]; at: string } | null,
 ): ComputedWidget[] {
   const out: ComputedWidget[] = widgets.map((widget) => ({
@@ -1141,7 +1189,7 @@ export function computeReport(
     title: widgetTitle(widget, source),
     payload: widget.type === "insights" ? null : computeWidget(widget, source, ctx),
   }));
-  const lines = readInsights(out, ctx.span);
+  const lines = readInsights(out, ctx.span, source);
   for (const item of out) {
     if (item.widget.type !== "insights") continue;
     item.payload = {

@@ -128,12 +128,18 @@ export function PushBackButton({
   const router = useRouter();
   const [pending, start] = useTransition();
   const today = todayKey();
+  // Next Monday is left out when it's tomorrow or a week away (another choice already).
+  const monday = nextMonday(today);
   const choices = [
     { label: "Tomorrow", key: addDaysToKey(today, 1) },
     { label: "In 3 days", key: addDaysToKey(today, 3) },
-    { label: "Next Monday", key: nextMonday(today) },
+    { label: "Next Monday", key: monday },
     { label: "In a week", key: addDaysToKey(today, 7) },
-  ];
+  ].filter(
+    (c) =>
+      c.label !== "Next Monday" ||
+      (monday !== addDaysToKey(today, 1) && monday !== addDaysToKey(today, 7)),
+  );
   const push = (key: string, label: string) =>
     start(async () => {
       const result = await runAction(() => updateTask(orgId, taskId, { dueDate: key }));
@@ -142,7 +148,9 @@ export function PushBackButton({
         toast({ title: result.error, tone: "error" });
         return;
       }
-      toast({ title: `${title} is now due ${label.toLowerCase()}` });
+      toast({
+        title: `${title} is now due ${label.replace(/^(Tomorrow|In|Next)\b/, (w) => w.toLowerCase())}`,
+      });
       router.refresh();
     });
   return (

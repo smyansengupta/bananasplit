@@ -48,7 +48,7 @@ export default async function PastReportPage({
     <div className="space-y-7.5">
       <PageHeader
         title={snap.data.title}
-        description={`As it read on ${taken}${snap.takenByName ? `, kept by ${snap.takenByName}` : ""}. ${snap.data.sourceName}, ${snap.rangeLabel}`}
+        description={`As it read on ${taken}${snap.takenByName ? `, kept by ${snap.takenByName}` : ""}. ${snap.data.sourceName}, ${snap.rangeLabel.replace(/^(This|Last|All) /, (w) => w.toLowerCase())}`}
         actions={
           <Button asChild variant="outline">
             <Link href={`/app/${orgSlug}/databases/reports/${reportId}`}>Open the report now</Link>

@@ -135,8 +135,25 @@ function canFinance(v: SourceViewer): boolean {
   return spaceIncludes(v.space, "finance") && can({ role: v.role }, "finance.manage");
 }
 
+/** One listing per viewer per transaction: a page that runs many reports reads it once. */
+const listed = new WeakMap<TxClient, Map<string, Promise<SourceSummary[]>>>();
+
 /** Everything the viewer may report on, for Reports home and the walkthrough's first step. */
-export async function listSources(v: SourceViewer): Promise<SourceSummary[]> {
+export function listSources(v: SourceViewer): Promise<SourceSummary[]> {
+  let byUser = listed.get(v.db);
+  if (!byUser) {
+    byUser = new Map();
+    listed.set(v.db, byUser);
+  }
+  let found = byUser.get(v.userId);
+  if (!found) {
+    found = readSources(v);
+    byUser.set(v.userId, found);
+  }
+  return found;
+}
+
+async function readSources(v: SourceViewer): Promise<SourceSummary[]> {
   const { db, organizationId, slug } = v;
   const base = `/app/${slug}`;
   const out: SourceSummary[] = [];
@@ -223,7 +240,7 @@ export async function listSources(v: SourceViewer): Promise<SourceSummary[]> {
         description: "Members, the board and who's new",
         href: `${base}/people`,
         fields: [],
-        rows: await db.membership.count({ where: { organizationId } }),
+        rows: await db.contact.count({ where: { organizationId, sessionsAttended: { gt: 0 } } }),
         form: null,
       });
     }

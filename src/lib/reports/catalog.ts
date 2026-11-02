@@ -236,7 +236,7 @@ export const WIDGETS: Record<WidgetType, WidgetDef> = {
   },
   number: {
     title: "Number",
-    description: "One count, total or average, with its change since the span before.",
+    description: "One count, total or average, with its change since the period before.",
     icon: "Hash",
     w: 1,
     h: 1,
@@ -251,7 +251,7 @@ export const WIDGETS: Record<WidgetType, WidgetDef> = {
   },
   "over-time": {
     title: "Over time",
-    description: "Rows added, or a number summed, by week or month, against the span before.",
+    description: "Rows added, or a number summed, by week or month, against the period before.",
     icon: "ChartLine",
     w: 2,
     h: 1,
@@ -328,7 +328,7 @@ export const WIDGETS: Record<WidgetType, WidgetDef> = {
   },
   compare: {
     title: "Compare periods",
-    description: "This span against the one before, number by number.",
+    description: "These dates against the period before, number by number.",
     icon: "ArrowLeftRight",
     w: 2,
     h: 1,
@@ -564,6 +564,11 @@ function fieldName(
  * Category", "Sponsors by week"), so a report of eight widgets reads like a
  * list of questions rather than eight "Breakdown"s.
  */
+/** "amount" mid-title, but "CBC sponsors" as written. */
+function lowerFirst(text: string): string {
+  return /^[A-Z][a-z]/.test(text) ? text[0].toLowerCase() + text.slice(1) : text;
+}
+
 export function widgetTitle(
   widget: Pick<ReportWidget, "type" | "config">,
   source: Pick<SourceSummary, "fields" | "name">,
@@ -575,22 +580,22 @@ export function widgetTitle(
   switch (widget.type) {
     case "number":
       return value
-        ? `${c.agg === "avg" ? "Average" : "Total"} ${value.toLowerCase()}`
-        : source.name;
+        ? `${c.agg === "avg" ? "Average" : "Total"} ${lowerFirst(value)}`
+        : `${source.name} added`;
     case "over-time":
       return `${value ?? source.name} by ${c.bucket ?? "week"}`;
     case "breakdown":
-      return group ? `${value ?? source.name} by ${group.toLowerCase()}` : WIDGETS.breakdown.title;
+      return group ? `${value ?? source.name} by ${lowerFirst(group)}` : WIDGETS.breakdown.title;
     case "pipeline":
-      return group ? `${source.name} by ${group.toLowerCase()}` : WIDGETS.pipeline.title;
+      return group ? `${source.name} by ${lowerFirst(group)}` : WIDGETS.pipeline.title;
     case "top-values":
       return value
-        ? `Top ${source.name.toLowerCase()} by ${value.toLowerCase()}`
+        ? `Top ${lowerFirst(source.name)} by ${lowerFirst(value)}`
         : WIDGETS["top-values"].title;
     case "spread":
       return value ? `${value} spread` : WIDGETS.spread.title;
     case "goal":
-      return value ? `${value} goal` : `${source.name} goal`;
+      return value ? `Goal: total ${lowerFirst(value)}` : `Goal: ${lowerFirst(source.name)} added`;
     default:
       return WIDGETS[widget.type].title;
   }
