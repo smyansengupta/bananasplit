@@ -744,7 +744,7 @@ export function BudgetReview({
             value={periodId}
             onChange={(e) => setPeriodId(e.target.value)}
           >
-            {!active && <option value="">This school year (new)</option>}
+            {!active && <option value="">This year (new)</option>}
             {periods.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}

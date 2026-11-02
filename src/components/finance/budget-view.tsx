@@ -61,7 +61,7 @@ export interface BudgetCategoryRow {
 }
 
 /**
- * Finance > Budget: the periods (school year, semester...) and, for the
+ * Finance > Budget: the periods (a year, a quarter...) and, for the
  * active one, each category's budget against what's been spent. Every field
  * says what it is, new periods start from a preset, and everything can be
  * renamed, moved or deleted.
@@ -571,7 +571,7 @@ function PeriodDialog({
 }) {
   const isNew = period === "new";
   const open = period !== null;
-  // The form starts from the period being edited, or the school-year preset.
+  // The form starts from the period being edited, or the This year preset.
   const initial: PeriodDraft =
     period && period !== "new"
       ? { label: period.label, startsOn: period.startsOn, endsOn: period.endsOn }
@@ -674,7 +674,7 @@ function PeriodForm({
           value={draft.label}
           maxLength={100}
           onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          placeholder="e.g. 2026–27 or Fall 2026"
+          placeholder="e.g. 2026 or Q3 2026"
         />
       </div>
       <div className="grid grid-cols-2 gap-3">

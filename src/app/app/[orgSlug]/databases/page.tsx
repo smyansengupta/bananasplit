@@ -1,20 +1,10 @@
 import {
   CalendarDays,
-  ClipboardCheck,
   Database,
   Globe,
-  Handshake,
-  Lightbulb,
-  Lock,
-  Package,
   Plus,
-  Sheet,
-  Shirt,
   Table2,
   Upload,
-  UserPlus,
-  Users,
-  Vote,
   type IconComponent,
 } from "@/components/icons";
 import Link from "next/link";
@@ -24,7 +14,6 @@ import { DatabaseFileImport } from "@/components/databases/custom/database-file-
 import { NewDatabaseDialog } from "@/components/databases/custom/new-database-dialog";
 import { SyncPanel } from "@/components/databases/sync-panel";
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { can } from "@/lib/auth/permissions";
@@ -41,23 +30,21 @@ import { PinToggle } from "@/components/pins/pins-context";
 import { listPins } from "@/server/pins";
 import { planGate } from "@/server/billing/plan-gate";
 
+import { DatabasesHome } from "@/components/databases/databases-home";
+import { displayText } from "@/lib/databases/fields";
+import { loadFields } from "@/server/databases/custom";
+import {
+  weeklyExpenses,
+  weeklyRowsFor,
+  weeklyTasks,
+  type WeeklyRows,
+} from "@/server/databases/home";
+import { todayIn } from "@/server/reports/range";
+import { listReports } from "@/server/reports/saved";
+
 import { StepPanel } from "../setup/step-panel";
 import type { SetupStepView } from "../setup/view";
 import { DatabasesTabs } from "./databases-tabs";
-
-const ICONS: Record<string, IconComponent> = {
-  CalendarDays,
-  ClipboardCheck,
-  UserPlus,
-  Vote,
-  Users,
-  Table2,
-  Sheet,
-  Package,
-  Shirt,
-  Handshake,
-  Lightbulb,
-};
 
 /**
  * The 36px icon chip (ui/stat's IconChip, size sm), drawn here: IconChip is
@@ -76,8 +63,21 @@ function IconChip({ icon: Icon, className }: { icon: IconComponent; className?: 
   );
 }
 
-/** The database cards: 18px apart, three across on a wide screen. */
-const GRID = "grid gap-4.5 sm:grid-cols-2 lg:grid-cols-3";
+/** What a built-in database holds, for its line on Databases home. */
+const BUILT_IN_DETAIL: Partial<Record<string, string>> = {
+  SESSIONS: "Your events, from the calendar",
+  ATTENDANCE: "Every check-in",
+  SIGNUPS: "Sign-ups from forms and your website",
+  BALLOTS: "Votes and elections",
+  PEOPLE: "Everyone who has come to something",
+};
+
+/** The report source of a built-in database. */
+const BUILT_IN_SOURCE: Partial<Record<string, string>> = {
+  SESSIONS: "events",
+  ATTENDANCE: "events",
+  PEOPLE: "people",
+};
 
 const VISIBILITY_COPY: Record<string, string> = {
   MEMBERS: "All members",
@@ -111,7 +111,7 @@ export default async function DatabasesPage({
     Boolean(reportTier(role)) &&
     can({ role }, "reports.view");
 
-  const { databases, counts, sync, dataStep, pinned } = await withOrgTx(
+  const { databases, counts, sync, dataStep, pinned, home } = await withOrgTx(
     organization.id,
     async ({ db }) => {
       const list = await listDatabases(db, organization.id, role);
@@ -159,7 +159,79 @@ export default async function DatabasesPage({
           }
         : null;
       const pins = await listPins(db, organization.id, organization.slug, user.id);
-      return { databases: list, counts, sync, dataStep, pinned: new Set(pins.map((p) => p.href)) };
+      // Databases home: how each one grew, its newest row, and the reports.
+      const weekly: Record<string, WeeklyRows> = {};
+      const latest: Record<string, string | null> = {};
+      for (const d of list) {
+        weekly[d.key] = await weeklyRowsFor(db, organization.id, d);
+        if (d.kind === "CUSTOM") {
+          const fields = await loadFields(db, organization.id, d.id);
+          const primary = fields.find((f) => f.isPrimary) ?? fields[0];
+          const row = await db.databaseRecord.findFirst({
+            where: { organizationId: organization.id, databaseId: d.id, deletedAt: null },
+            orderBy: { createdAt: "desc" },
+            select: { values: true },
+          });
+          const values = (row?.values ?? {}) as Record<string, unknown>;
+          latest[d.key] =
+            primary && row ? displayText(primary, values[primary.id], new Map()) || null : null;
+        }
+      }
+      const tasks = spaceIncludes(organization, "tasks")
+        ? {
+            weekly: await weeklyTasks(db, organization.id),
+            open: await db.task.count({
+              where: {
+                organizationId: organization.id,
+                deletedAt: null,
+                type: { not: "EPIC" },
+                status: { not: "COMPLETED" },
+              },
+            }),
+            overdue: await db.task.count({
+              where: {
+                organizationId: organization.id,
+                deletedAt: null,
+                type: { not: "EPIC" },
+                status: { not: "COMPLETED" },
+                // Due dates are stored as UTC midnight of the day: before today's.
+                dueDate: {
+                  lt: new Date(`${todayIn(organization.timezone || "UTC")}T00:00:00.000Z`),
+                },
+              },
+            }),
+            total: await db.task.count({
+              where: { organizationId: organization.id, deletedAt: null, type: { not: "EPIC" } },
+            }),
+          }
+        : null;
+      const expenses =
+        spaceIncludes(organization, "finance") &&
+        can({ role }, "finance.manage") &&
+        (settings?.addOns?.includes("finance") ?? true)
+          ? {
+              weekly: await weeklyExpenses(db, organization.id),
+              total: await db.transaction.count({
+                where: { organizationId: organization.id, direction: "OUT", voidedAt: null },
+              }),
+              spentCents:
+                (
+                  await db.transaction.aggregate({
+                    where: { organizationId: organization.id, direction: "OUT", voidedAt: null },
+                    _sum: { amountCents: true },
+                  })
+                )._sum.amountCents ?? 0,
+            }
+          : null;
+      const reports = showReports ? await listReports(db, organization.id) : null;
+      return {
+        databases: list,
+        counts,
+        sync,
+        dataStep,
+        pinned: new Set(pins.map((p) => p.href)),
+        home: { weekly, latest, tasks, expenses, reports },
+      };
     },
   );
 
@@ -190,76 +262,73 @@ export default async function DatabasesPage({
   const sourceOf = (d: (typeof databases)[number]) =>
     syncedKinds.has(d.kind) ? "Supabase" : "Bananasplit";
 
-  const unitOf = (d: (typeof databases)[number], n: number) => {
-    const unit = d.kind === "BALLOTS" ? "polls" : d.kind === "PEOPLE" ? "people" : "rows";
-    return n === 1 ? (unit === "people" ? "person" : unit.replace(/s$/, "")) : unit;
-  };
-
-  const card = (d: (typeof databases)[number], muted = false) => {
-    const Icon = (d.icon && ICONS[d.icon]) || Database;
-    const count = counts[d.key] ?? 0;
-    const href = `/app/${orgSlug}/databases/${d.key}`;
-    return (
-      <li key={d.id} className="group relative">
-        <PinToggle
-          href={href}
-          label={d.name}
-          className={cn(
-            "absolute right-5 bottom-5 z-10 size-8 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
-            pinned.has(href) && "opacity-100",
-          )}
-        />
-        <Link
-          href={href}
-          className={cn(
-            "bg-card text-card-foreground ring-foreground/6 rounded-card flex h-full min-h-44 flex-col p-6 ring-1 outline-none",
-            "focus-visible:outline-foreground transition-[transform,box-shadow] duration-200 ease-(--ease-ink) focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transform-none",
-            muted ? "hover:bg-muted/40" : "edge hover:shadow-e2 hover:-translate-y-0.5",
-          )}
-        >
-          <span className="flex items-start justify-between gap-2">
-            <IconChip icon={Icon} className={cn(muted && "text-muted-foreground")} />
-            <span className="flex flex-wrap justify-end gap-1.5">
-              {d.memberVisibility !== "MEMBERS" && (
-                <Badge variant="secondary">
-                  <Lock aria-hidden="true" />
-                  {VISIBILITY_COPY[d.memberVisibility]}
-                </Badge>
-              )}
-              {isAdmin && !personal && sourceOf(d) === "Supabase" && (
-                <Badge variant="secondary" title={`Stored in ${sourceOf(d)}`}>
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      sourceOf(d) === "Supabase" ? "bg-success" : "bg-glow",
-                    )}
-                  />
-                  {sourceOf(d)}
-                </Badge>
-              )}
-            </span>
-          </span>
-          <span className="heading mt-4 text-[17px]">{d.name}</span>
-          <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-            {d.description ?? ""}
-          </span>
-          <span className="mt-auto flex items-baseline gap-1.5 pt-4">
-            {muted ? (
-              <span className="text-muted-foreground text-sm">Empty</span>
-            ) : (
-              <>
-                <span className="numeral text-[23px]">{count.toLocaleString()}</span>
-                <span className="text-muted-foreground text-sm">{unitOf(d, count)}</span>
-              </>
-            )}
-          </span>
-        </Link>
-      </li>
-    );
-  };
-
   const setupRow = "flex flex-wrap items-center gap-x-6 gap-y-3 py-4 first:pt-0 last:pb-0";
+
+  // Databases home: which report reads each database, and what changed this week.
+  const reportFor = (key: string) => {
+    const r = home.reports?.find((x) => x.source === key);
+    return r ? { title: r.title, href: `/app/${orgSlug}/databases/reports/${r.id}` } : null;
+  };
+  const newReport = (key: string) =>
+    showReports ? `/app/${orgSlug}/databases/reports/new?source=${encodeURIComponent(key)}` : null;
+  const hrefOf = (key: string) =>
+    key === "tasks"
+      ? `/app/${orgSlug}/tasks`
+      : key === "expenses"
+        ? `/app/${orgSlug}/finance/transactions`
+        : `/app/${orgSlug}/databases/${key}`;
+  const money = (cents: number) =>
+    (cents / 100).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    });
+  const builtInRows = [
+    ...(home.expenses
+      ? [
+          {
+            key: "expenses",
+            name: "Expenses",
+            detail: `From Finance. ${money(home.expenses.spentCents)} spent`,
+            href: hrefOf("expenses"),
+            count: home.expenses.total,
+            thisWeek: home.expenses.weekly.thisWeek,
+            report: reportFor("expenses"),
+            newReportHref: newReport("expenses"),
+          },
+        ]
+      : []),
+    ...(home.tasks
+      ? [
+          {
+            key: "tasks",
+            name: "Tasks",
+            detail: `${home.tasks.open} open, ${home.tasks.overdue} overdue`,
+            href: hrefOf("tasks"),
+            count: home.tasks.total,
+            thisWeek: home.tasks.weekly.thisWeek,
+            report: reportFor("tasks"),
+            newReportHref: newReport("tasks"),
+          },
+        ]
+      : []),
+    ...[...withData, ...(showAll ? empty : [])].map((d) => {
+      const source = BUILT_IN_SOURCE[d.kind] ?? null;
+      const n = counts[d.key] ?? 0;
+      return {
+        key: d.key,
+        name: d.name,
+        detail: `${d.description ?? BUILT_IN_DETAIL[d.kind] ?? ""}${
+          isAdmin && !personal && sourceOf(d) === "Supabase" ? ". Synced from Supabase" : ""
+        }`,
+        href: hrefOf(d.key),
+        count: n,
+        thisWeek: home.weekly[d.key]?.thisWeek ?? 0,
+        report: source ? reportFor(source) : null,
+        newReportHref: source ? newReport(source) : null,
+      };
+    }),
+  ];
 
   return (
     <div className="space-y-7.5">
@@ -405,22 +474,48 @@ export default async function DatabasesPage({
         </section>
       ) : (
         <>
-          {/*
-            One list: the organization's own databases and the built-in ones together,
-            each tagged with where its rows live (Bananasplit or the website's
-            Supabase). Empty built-ins fold away under the list.
-          */}
-          <section aria-labelledby="db-all" className="space-y-4">
-            <h2 id="db-all" className="sr-only">
-              Databases
-            </h2>
-            <ul className={GRID}>
-              {custom.map((d) => card(d))}
-              {withData.map((d) => card(d))}
-            </ul>
-            {/* The empty ones, quieter, after the rest: one click to open, nothing to unfold. */}
-            {empty.length > 0 && <ul className={GRID}>{empty.map((d) => card(d, true))}</ul>}
-          </section>
+          <DatabasesHome
+            custom={custom.map((d) => {
+              const href = `/app/${orgSlug}/databases/${d.key}`;
+              const n = counts[d.key] ?? 0;
+              return {
+                id: d.id,
+                name: d.name,
+                icon: d.icon,
+                href,
+                count: n,
+                unit: n === 1 ? "row" : "rows",
+                weeks: home.weekly[d.key]?.weeks ?? [],
+                thisWeek: home.weekly[d.key]?.thisWeek ?? 0,
+                latest: home.latest[d.key] ?? null,
+                restricted:
+                  d.memberVisibility !== "MEMBERS" ? VISIBILITY_COPY[d.memberVisibility] : null,
+                report: reportFor(`custom:${d.id}`),
+                newReportHref: newReport(`custom:${d.id}`),
+                pin: (
+                  <PinToggle
+                    href={href}
+                    label={d.name}
+                    className={cn(
+                      "size-8 rounded-full opacity-0 group-hover/db:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+                      pinned.has(href) && "opacity-100",
+                    )}
+                  />
+                ),
+              };
+            })}
+            builtIn={builtInRows}
+          />
+          {empty.length > 0 && !showAll && (
+            <p className="text-muted-foreground text-sm">
+              <Link
+                href={`/app/${orgSlug}/databases?all=1`}
+                className="underline underline-offset-2"
+              >
+                Show {empty.length} empty built-in database{empty.length === 1 ? "" : "s"}
+              </Link>
+            </p>
+          )}
         </>
       )}
 

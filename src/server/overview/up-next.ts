@@ -1,19 +1,55 @@
+import type { ItemRef } from "@/lib/overview/types";
 import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/client";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { dayWordOfKey, dueLabel, whenWord } from "@/lib/overview/format";
+import { agendaItems } from "@/lib/overview/insights";
 import { arrangeUpNext, taskTone, type UpNextCandidate } from "@/lib/overview/up-next";
 import { pollHref } from "@/lib/polls/paths";
 import { addDaysToKey, dueDateKey, localDateKey } from "@/lib/tasks/dates";
 import type { MyOpenTask } from "@/server/tasks/queries";
 
-import type { EventGoing, PersonFace, PollStat, TaskExtras } from "./queries";
+import {
+  type EventDetail,
+  type EventGoing,
+  type LinkedChip,
+  type PersonFace,
+  type PollStat,
+  type TaskExtras,
+} from "./queries";
 
 /**
  * The Up next blocks from what the Overview already read: the viewer's
  * tasks due within the week, meetings and events in the next seven days
  * (an RSVP still waiting on the viewer becomes an answer), and open polls
  * they haven't answered. Ordering: src/lib/overview/up-next.ts.
+ *
+ * Each card says why it matters in one line (what blocks a task, which
+ * event it's for; a meeting's agenda and the action items still open from
+ * the last one; seats taken against the room), from `context` when the page
+ * read it, and carries chips for what it's linked to.
  */
+
+/** Open action items from the last meeting in an upcoming meeting's series. */
+export interface LastMeetingActions {
+  open: number;
+  total: number;
+  /** The last meeting's page. */
+  href: string;
+}
+
+export interface UpNextContext {
+  /** What each task and event is linked to, keyed "task:id" and "event:id". */
+  links?: ReadonlyMap<string, readonly LinkedChip[]>;
+  /** Agenda, series and notes of meetings and events, by event id. */
+  details?: ReadonlyMap<string, EventDetail>;
+  /** By upcoming meeting id. */
+  lastActions?: ReadonlyMap<string, LastMeetingActions>;
+  /** Seats taken on an event's RSVP page, where the viewer may see the count. */
+  seats?: ReadonlyMap<string, number>;
+}
+
+/** At most this many chips on a card: it's a card, not the Linked panel. */
+const CARD_CHIPS = 3;
 
 export interface UpNextBlock extends UpNextCandidate {
   /** The event's kind, so its card can take that kind's colour. */
@@ -30,6 +66,8 @@ export interface UpNextBlock extends UpNextCandidate {
   href: string;
   /** A one-choice poll's options, answered right on the card. */
   choices?: { id: string; label: string }[];
+  /** What it's linked to, as chips. */
+  chips?: ItemRef[];
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -48,10 +86,25 @@ export function buildUpNext(input: {
   polls: readonly PollStat[];
   /** "{kind}:{id}" of the cards this member hid (UpNextDismissal). */
   hidden?: ReadonlySet<string>;
+  context?: UpNextContext;
 }) {
   const base = `/app/${input.orgSlug}`;
   const weekEnd = addDaysToKey(input.todayKey, 7);
   const blocks: UpNextBlock[] = [];
+  const ctx = input.context ?? {};
+  const linked = (key: string) => [...(ctx.links?.get(key) ?? [])];
+  const chipsOf = (list: readonly ItemRef[]) =>
+    list.slice(0, CARD_CHIPS).map(({ kind, label, href }) => ({ kind, label, href }));
+  // The week's meetings and events by day, for "Lands on Fall Social day".
+  const calendar = [...input.events, ...input.meetings].filter(
+    (e) => e.startsAt.getTime() - input.now.getTime() <= WEEK_MS,
+  );
+  const dayOf = (e: CalendarEventSummary) =>
+    localDateKey(e.startsAt, e.allDay ? input.zones.org : input.zones.viewer);
+  const whenOf = (e: CalendarEventSummary) =>
+    whenWord(e.startsAt, e.allDay, input.zones, input.now).replace(/^(Today|Tomorrow)/, (w) =>
+      w.toLowerCase(),
+    );
 
   for (const task of input.tasks) {
     if (!task.dueDate) continue;
@@ -60,6 +113,20 @@ export function buildUpNext(input: {
     const extra = input.taskExtras.get(task.id);
     const due = dueLabel(dueKey, input.todayKey);
     const subs = extra?.subtasks;
+    const links = linked(`task:${task.id}`);
+    // Why it matters: what's blocking it, the event it's for, or the event it lands on.
+    const forEvent = links.find(
+      (c) => c.ref.kind === "event" && calendar.some((e) => e.id === c.ref.id),
+    );
+    const sameDay = calendar.find((e) => dayOf(e) === dueKey);
+    const why =
+      task.status === "BLOCKED" && task.blockedReason
+        ? `Blocked: ${task.blockedReason}`
+        : forEvent
+          ? `For ${forEvent.label}, ${whenOf(calendar.find((e) => e.id === forEvent.ref.id)!)}.`
+          : sameDay
+            ? `Due the day of ${sameDay.title}.`
+            : null;
     blocks.push({
       id: task.id,
       kind: "task",
@@ -73,7 +140,8 @@ export function buildUpNext(input: {
             : due.text
           : `Due ${due.text === "Tomorrow" ? "tomorrow" : due.text}`,
       title: task.title,
-      subtitle: task.parentTask ? `Part of ${task.parentTask.title}` : null,
+      subtitle: why ?? (task.parentTask ? `Part of ${task.parentTask.title}` : null),
+      chips: chipsOf(links),
       ...(subs && subs.total > 0
         ? { figure: `${subs.done} of ${subs.total}`, figureLabel: "subtasks done" }
         : {}),
@@ -96,15 +164,45 @@ export function buildUpNext(input: {
       const when = whenWord(event.startsAt, event.allDay, input.zones, input.now);
       const waiting = rsvp === "PENDING";
       const count = going?.going ?? 0;
+      const detail = ctx.details?.get(event.id);
+      const chips: ItemRef[] = (detail?.notes ?? []).map((n) => ({
+        kind: "note" as const,
+        label: n.title,
+        href: `${base}/notes/${n.id}`,
+      }));
+      const reasons: string[] = [];
+      if (kind === "meeting") {
+        const items = agendaItems(detail?.description ?? null);
+        if (detail)
+          reasons.push(
+            items.length > 0
+              ? `${items.length} agenda ${items.length === 1 ? "item" : "items"}.`
+              : "No agenda yet.",
+          );
+        const last = ctx.lastActions?.get(event.id);
+        if (last && last.open > 0) {
+          reasons.push(
+            `${last.open} action ${last.open === 1 ? "item" : "items"} from last time ${last.open === 1 ? "is" : "are"} still open.`,
+          );
+          chips.push({ kind: "task", label: `${last.open} open actions`, href: last.href });
+        }
+      } else {
+        const seats = ctx.seats?.get(event.id);
+        if (seats !== undefined && detail?.capacity)
+          reasons.push(`${seats} of ${detail.capacity} seats taken.`);
+      }
+      // Its linked tasks are its own business; Up next shows the rest.
+      chips.push(...linked(`event:${event.id}`).filter((c) => c.ref.kind !== "task"));
       blocks.push({
         id: event.id,
         kind: waiting ? "rsvp" : kind,
         tone: waiting ? "answer" : "quiet",
         eventKind: event.kind,
         at: event.startsAt,
-        kicker: when,
+        kicker: event.location ? `${when}, ${event.location}` : when,
         title: event.title,
-        subtitle: event.location,
+        subtitle: reasons.length > 0 ? reasons.join(" ") : null,
+        chips: chipsOf(chips),
         ...(count > 0
           ? {
               figure: String(count),

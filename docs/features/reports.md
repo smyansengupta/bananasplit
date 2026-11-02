@@ -1,10 +1,93 @@
-# Reports: setup and metric definitions
+# Reports: saved reports, widgets and metric definitions
 
-The Reports tab (sidebar > Reports, `/app/{slug}/reports`) turns the
-Databases into answers: seven default reports over one date range, each with
-a "View" link into the underlying database view, already filtered.
+Reports (Databases > Reports, `/app/{slug}/databases/reports`) turns any
+database into a report: one database and a board of widgets on it, saved so
+anyone it's shared with can open it again, over whatever dates the pills pick.
 
-## For an org
+## Saved reports
+
+**Reports home** lists the organization's reports (yours and the shared
+ones), a one-click report for every database with rows and no report yet
+("Make it", with the widgets that suit it), and the past copies people kept.
+The date pills (This quarter, This year, 30 days, All time, custom) sit beside the
+Databases and Reports tabs, as Tasks' do, and go with every report opened.
+
+**New report** is a walkthrough:
+
+1. **Pick a database**: any of yours (a form's answers included), or the
+   built-in Tasks, Expenses (finance roles only: members only see their own
+   expenses), Events and attendance, and People.
+2. **Pick widgets**: the ones that suit its fields are ticked (see the table
+   below); each says which field it reads, and opens its settings.
+3. **Arrange and share**: the widgets on a board, moved and resized as Home's
+   are, a name, and who can see it (everyone, or only you).
+
+**Who sees what.** A shared report is every member's to open; a private one
+only its maker's. Either way each person's numbers come from the rows THEY
+can see (the database's own visibility, RLS), so sharing a report never
+shares a row. Whoever made it edits, renames and archives it; an owner or
+admin can too on a shared one. Only its maker shares or un-shares it.
+
+**Keep a copy** (in the report's ••• menu) freezes every widget's numbers and
+the insights as they read now, listed at the bottom of the report. A copy is never edited. The People and Events widgets
+read the live built-in reports, so copies don't keep them.
+
+**Insights** is first on every report: the plain facts the widgets lead
+with, most pressing first (what's overdue, a big swing). With an AI model
+connected (Admin panel > Integrations), the report's editors can press Ask
+Claude: the widgets' numbers (never rows beyond what a widget shows) go to
+the organization's model, and its three to five sentences are kept on the
+report for everyone, dated, until someone asks again.
+
+| Widget | Shows | Ticked when the database has |
+|---|---|---|
+| Insights | What matters, in sentences | always (always first) |
+| Number | One count, total or average, against the span before | always |
+| Over time | Rows added, or a number summed, by week or month | a date |
+| Breakdown | How rows split across a choice | a choice field |
+| Pipeline | Rows through a status, step by step | a status or stage field |
+| Top values | The rows that lead on a number | a number or money field |
+| Overdue and stale | Rows past their due date, or untouched a while | a due date or an owner |
+| Database health | Repeated names, mostly empty fields | always (owners and admins only) |
+| Form results | A form's choice questions (never free text) | a form fills it |
+| Goal, Compare periods, Activity calendar, Table, Spread | as named | optional |
+| People; Attendance over time, RSVPs and check-ins, Retention | the built-in reports below | People; Events and attendance |
+
+"The span before" a term is the term before it (Fall against Spring); any
+other span is compared with as many days just before it. A report reads the
+newest 5,000 rows of its database and says so when there are more.
+
+**A second database.** Step 1 can join another database on a shared field
+(Expenses' "Paid to" against Sponsors' "Name", ignoring case and spaces):
+each row picks up the matching row's fields, named "Tier (Sponsors)", and
+any widget can use them. The first match wins; a row with none leaves them
+empty.
+
+**On a schedule.** Step 3, or the report's ••• menu, sends it every week
+or month at a local hour, to you, owners and admins, or everyone (the last
+two only for a shared report). Each send keeps a copy in Report history and
+emails every recipient the report computed as them, so nobody is sent a
+row they couldn't open (/api/cron/task-digest enqueues report-send, which
+queues report-email per person). Members turn it off on their profile
+(REPORT_SENT).
+
+**People and events, optional.** From signup to regular, Who you reach (by
+class year), When people come (weekday by morning, afternoon, evening),
+Regulars and Stopped coming (owners and admins; Invite them back opens an
+email to all of them, and copies never keep the addresses).
+
+**Overdue tasks.** Wherever a late task shows (Home's My tasks, Waiting on
+others, a report's Overdue and stale), Push back moves its due date
+(tomorrow, three days, next Monday, a week) and Nudge comments on it
+mentioning its owner.
+
+A report is always live; the copies kept of it (by hand from its ••• menu,
+or on its schedule) are listed at the bottom of that report. Reports home's Ask box answers a question from every report's
+numbers with the organization's model (nothing is kept).
+
+## The built-in reports
+
+### For an org
 
 **Nothing to switch on.** Reports read the org's own Sessions, Attendance,
 Signups, Ballots and People databases. Data arrives from the website sync
@@ -41,11 +124,12 @@ Reports never show who voted for what, never show free-text answers, and
 never list people: the links do that, in Databases, under Databases' own
 visibility rules.
 
-**Date range.** One range applies to every card: This term (the default),
-Last 30 days, All time, or a custom first and last day. Terms split at July 1
-in the org timezone (January to June is spring, July to December is fall),
-the same rule the website uses. Bookmark or share the URL to keep a range
-(`?range=30d`, `?range=all`, `?from=2026-09-01&to=2026-09-30`).
+**Date range.** One range applies to every card: This quarter (the default),
+This year, Last 30 days, All time, or a custom first and last day, by the
+calendar in the organization's timezone. A quarter is compared with last
+quarter, a year with last year, anything else with as many days before it.
+Bookmark or share the URL to keep a range (`?range=year`, `?range=30d`,
+`?range=all`, `?from=2026-09-01&to=2026-09-30`).
 
 **Freshness.** Every card says when it was computed ("as of 6:42 PM"). A
 report is recomputed when data changes (the website sync, an event edit, an
@@ -158,7 +242,7 @@ date-filtered view; that is the only way a link and its card can differ.
   `tags.reports(orgId)` and `tags.reports(orgId, id)`, `revalidate` =
   reportsRefreshSeconds, and positional primitive arguments
   `(id, orgId, tier, from, to, tz, reportsDataVersion, OrgSettings.updatedAt)`.
-  So owner and member ballot results never share an entry, "this term" and
+  So owner and member ballot results never share an entry, "this quarter" and
   the same custom dates share one, and a data or settings change always
   changes the key. The computation opens its own `withSystemOrgTx(orgId)` and
   never reads the request's transaction, cookies or headers.

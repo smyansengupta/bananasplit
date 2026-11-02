@@ -18,6 +18,7 @@ import { tagToken, type TagColor } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 import type { TrendWeek } from "@/server/pulse/queries";
 
+import { LinkChips, type ItemRef } from "./connections";
 import { KindIcon } from "./kind-tiles";
 import { PulseBars } from "./pulse-bars";
 
@@ -25,8 +26,9 @@ import { PulseBars } from "./pulse-bars";
  * The Overview's Weekly pulse (redesign guide 9 and 15): the latest
  * issue's figures on the left (tasks done last week against the average,
  * the run of weeks, the best one), tasks finished per week as columns on
- * the right, and the issue's highlights as coloured tiles under both.
- * Nothing about money. The board's card header holds "Sent Fri, Oct 9"
+ * the right, one finding about the run (the page works it out) with chips
+ * for the epics and events behind it, and the issue's highlights as
+ * coloured tiles under both. Nothing about money. The board's card header holds "Sent Fri, Oct 9"
  * and the link to the archive.
  */
 
@@ -37,7 +39,7 @@ interface Highlight {
   color: TagColor;
 }
 
-export function pulseHighlights(data: PulseIssueData): Highlight[] {
+function pulseHighlights(data: PulseIssueData): Highlight[] {
   const out: Highlight[] = [];
   const epic = data.epicsFinished?.[0];
   if (epic) out.push({ icon: <Layers />, title: epic.title, sub: "Epic finished", color: "navy" });
@@ -84,6 +86,8 @@ export function WeeklyPulseCard({
   issueHref,
   nextSend,
   draftHref,
+  insight,
+  chips = [],
 }: {
   issue: { data: PulseIssueData } | null;
   trend: readonly TrendWeek[];
@@ -93,6 +97,9 @@ export function WeeklyPulseCard({
   nextSend: string | null;
   /** Admins: this week's draft, to add a note before it goes out. */
   draftHref: string | null;
+  insight?: ReactNode;
+  /** The epics that moved and the events held in the issue's week. */
+  chips?: readonly ItemRef[];
 }) {
   // The last full week is the latest issue's; the trend's final point is the week under way.
   const finished = trend.slice(0, -1);
@@ -180,6 +187,8 @@ export function WeeklyPulseCard({
           />
         </div>
       </div>
+      {insight}
+      <LinkChips items={chips} />
       {highlights.length > 0 && issueHref && (
         <ul className="grid gap-2.5 sm:grid-cols-3">
           {highlights.map((h) => (

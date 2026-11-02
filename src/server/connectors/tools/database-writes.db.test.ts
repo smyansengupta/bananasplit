@@ -201,7 +201,7 @@ describe("add_database_record", () => {
         id: sessions.id,
         values: {},
       }),
-    ).rejects.toThrow(/Only databases the club made/);
+    ).rejects.toThrow(/Only databases the organization made/);
     // Owners and admins edit any club-made database.
     await expect(
       addDatabaseRecordTool(await fx.session(bob, { access: "WRITE" }), {

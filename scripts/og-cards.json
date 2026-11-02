@@ -70,23 +70,23 @@
     "alt": "Bananasplit: start your workspace, fourteen days free."
   },
   "invite": {
-    "group": "A club's links",
+    "group": "An organization's links",
     "link": "/invite/…",
-    "title": "You've been invited to join Robotics Club on Bananasplit",
+    "title": "You've been invited to join Robotics Society on Bananasplit",
     "targets": ["public/og/invite.png"],
     "alt": "You're invited to join an organization's workspace on Bananasplit."
   },
   "join": {
-    "group": "A club's links",
+    "group": "An organization's links",
     "link": "/join/RPKA-YWSF",
-    "title": "You've been invited to join Robotics Club on Bananasplit",
+    "title": "You've been invited to join Robotics Society on Bananasplit",
     "targets": ["src/app/onboarding/join/opengraph-image.png", "public/og/join.png"],
     "alt": "Join your organization on Bananasplit: an eight-box invite code."
   },
   "poll": {
-    "group": "A club's links",
+    "group": "An organization's links",
     "link": "/poll/…",
-    "title": "Robotics Club is finding a time",
+    "title": "Robotics Society is finding a time",
     "targets": ["public/og/poll.png"],
     "alt": "Bananasplit: find a time that works — a week of times with a few marked."
   }

@@ -70,7 +70,7 @@ const confirmArg = z
   .boolean()
   .optional()
   .describe(
-    "The member confirmed assigning someone above them in the club's org chart (the app asks first).",
+    "The member confirmed assigning someone above them in the organization's org chart (the app asks first).",
   );
 
 const taskOutput = z.object({ space: spaceRef, task: taskSummary });
@@ -95,7 +95,7 @@ async function serviceWrite(run: () => Promise<TaskActionResult>): Promise<strin
 function confirmRefusal(confirm: FlagConfirmation): WriteRefusedError {
   const names = confirm.flagged.map((f) => f.name?.trim() || "a member").join(", ");
   return new WriteRefusedError(
-    `Assigning ${names} goes above the member's place in the club's org chart, and Bananasplit asks before saving that. Nothing was saved. If the member confirms, call again with confirmAboveLevel true.`,
+    `Assigning ${names} goes above the member's place in the organization's org chart, and Bananasplit asks before saving that. Nothing was saved. If the member confirms, call again with confirmAboveLevel true.`,
   );
 }
 
@@ -287,7 +287,7 @@ export const registerTaskWrites: ToolRegistrar = (server, session) => {
     {
       title: "Create a task",
       description:
-        "Creates a task in one space, as the member: a title, and optionally a description, owner, due day, priority and status. The club's task rules apply, and the owner is notified, as in the app.",
+        "Creates a task in one space, as the member: a title, and optionally a description, owner, due day, priority and status. The organization's task rules apply, and the owner is notified, as in the app.",
       inputSchema: createInput,
       outputSchema: taskOutput,
       annotations: ADDS,

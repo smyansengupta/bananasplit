@@ -229,6 +229,7 @@ export const NOTIFICATION_TYPE_META: Record<
   NOTE_SHARED: { label: "Someone shares a note with me", group: "org" },
   FORM_RESPONSE: { label: "Someone answers a form I made", group: "org" },
   WEEKLY_PULSE: { label: "My organization's weekly pulse", group: "org" },
+  REPORT_SENT: { label: "A report sent to me on its schedule", group: "org" },
   INTEGRATION_ERROR: {
     label: "An integration stops working",
     group: "org",

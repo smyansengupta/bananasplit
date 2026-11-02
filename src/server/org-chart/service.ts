@@ -14,7 +14,7 @@ import {
 import { requirePermission } from "@/lib/auth/permissions";
 import { LIMITS, normalizeOpenItems, type NormalizedChart } from "@/lib/org-chart/normalize";
 import { applyOutline, draftFromMembers, parseOutline } from "@/lib/org-chart/outline";
-import { starterChart } from "@/lib/org-chart/starter";
+import { isShape, shapeChart } from "@/lib/org-chart/shapes";
 import {
   clamp,
   cleanBullets,
@@ -382,16 +382,33 @@ export async function retryParse(
 
 // ------------------------------------------------------------------ drafts
 
-export const DRAFT_SOURCES = ["blank", "current", "starter", "members"] as const;
+export const DRAFT_SOURCES = [
+  "blank",
+  "current",
+  "starter",
+  "committees",
+  "team",
+  "members",
+] as const;
 export type DraftSource = (typeof DRAFT_SOURCES)[number];
+
+/**
+ * parseModel on a draft started from "members" ("Draft my chart"). MANUAL
+ * drafts have no model otherwise, so this is how the review screen tells
+ * a drafted chart from a blank one or a copy. (Shapes are parseMethod
+ * TEMPLATE.) ParseReportPanel only shows the model for CLAUDE.
+ */
+export const MEMBERS_DRAFT_MODEL = "members";
 
 /**
  * A new MANUAL draft. Works with no Claude key, and never calls anything:
  *   blank    an empty chart to build up by hand;
  *   current  a copy of the published chart, to edit;
- *   starter  the common club roles already laid out and written up
- *            (src/lib/org-chart/starter.ts), with nobody in them - what an
- *            org uses when it has no document to import;
+ *   starter  the roles an organization almost always has, laid out and
+ *            written up (src/lib/org-chart/starter.ts), with nobody in
+ *            them - what an org uses when it has no document to import;
+ *   committees, team  the other shapes (src/lib/org-chart/shapes.ts):
+ *            bare seats with nobody in them;
  *   members  positions drafted from the titles members already have
  *            (draftFromMembers in src/lib/org-chart/outline.ts), each
  *            linked to its member; untitled members wait in the tray.
@@ -451,8 +468,8 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
       sourceQuote: [],
       rank: p.rank,
     }));
-  } else if (from === "starter") {
-    const chart = starterChart();
+  } else if (isShape(from)) {
+    const chart = shapeChart(from);
     writes = chartToWrites(chart, await memberCandidates(db, organizationId));
     openItems = chart.openItems as unknown as Prisma.InputJsonValue;
     warnings = chart.warnings as unknown as Prisma.InputJsonValue;
@@ -465,7 +482,8 @@ export async function startDraft(ctx: Ctx, from: DraftSource): Promise<string> {
       status: OrgChartVersionStatus.DRAFT,
       source: OrgChartSource.MANUAL,
       basedOnVersionId: from === "current" ? active : null,
-      parseMethod: from === "starter" ? OrgChartParseMethod.TEMPLATE : OrgChartParseMethod.MANUAL,
+      parseMethod: isShape(from) ? OrgChartParseMethod.TEMPLATE : OrgChartParseMethod.MANUAL,
+      parseModel: from === "members" ? MEMBERS_DRAFT_MODEL : null,
       openItems,
       warnings,
       teams,

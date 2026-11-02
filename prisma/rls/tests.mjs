@@ -2279,6 +2279,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       // tenant-only (it pins createdById and a new task is always readable
       // by its creator).
       value: [
+        // Announcements: any member posts (authorId pinned); each member
+        // marks only their own sightings (userId pinned).
+        "Announcement:INSERT",
+        "AnnouncementSeen:INSERT",
         "AvailabilityPoll:DELETE",
         "AvailabilityPoll:INSERT",
         "AvailabilityPoll:UPDATE",
@@ -2289,6 +2293,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         // Club-made database rows: app.can_edit_database is the role check.
         "DatabaseRecord:INSERT",
         "DatabaseRecord:UPDATE",
+        // Decisions: any member raises one (createdById pinned).
+        "Decision:INSERT",
         "EventAttendee:DELETE",
         "EventAttendee:INSERT",
         "EventAttendee:UPDATE",
@@ -2346,6 +2352,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "RecentVisit:DELETE",
         "RecentVisit:INSERT",
         "RecentVisit:UPDATE",
+        "Report:INSERT",
+        "ReportSnapshot:INSERT",
         "Task:INSERT",
         "TaskActivity:INSERT",
         "TaskAssignee:DELETE",
@@ -2528,6 +2536,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       note_cycle_guard: "",
       note_parent_visible: "",
       note_comment_guard: "",
+      // Home widgets: who puts a removed announcement back, and what a
+      // decision's UPDATE may change (trigger functions, no grant).
+      announcement_guard: "",
+      decision_guard: "",
       // The nightly job's counter repair (service path, its org context only).
       storage_reconcile: "s",
       // Moonstone gaps: "Free now" asks whether availability was shared at

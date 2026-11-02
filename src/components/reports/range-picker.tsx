@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarRange } from "@/components/icons";
+import {
+  Calendar as CalendarIcon,
+  CalendarDays,
+  CalendarRange,
+  Clock,
+  History,
+  type IconComponent,
+} from "@/components/icons";
 import type { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
@@ -13,12 +20,13 @@ import { cn } from "@/lib/utils";
 
 import { useReportsFrame } from "./reports-frame";
 
-export type RangePresetId = "term" | "30d" | "all" | "custom";
+export type RangePresetId = "quarter" | "year" | "30d" | "all" | "custom";
 
-const PRESETS: { id: Exclude<RangePresetId, "custom">; label: string }[] = [
-  { id: "term", label: "This term" },
-  { id: "30d", label: "30 days" },
-  { id: "all", label: "All time" },
+const PRESETS: { id: Exclude<RangePresetId, "custom">; label: string; icon: IconComponent }[] = [
+  { id: "quarter", label: "This quarter", icon: CalendarRange },
+  { id: "year", label: "This year", icon: CalendarDays },
+  { id: "30d", label: "30 days", icon: Clock },
+  { id: "all", label: "All time", icon: History },
 ];
 
 function toIsoDate(d: Date): string {
@@ -71,9 +79,9 @@ export function RangePicker({
     <div className="flex flex-wrap items-center gap-2">
       <Segmented
         label="Date range"
-        options={PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+        options={PRESETS.map((p) => ({ value: p.id, label: p.label, icon: p.icon, compact: true }))}
         value={preset === "custom" ? "" : preset}
-        onSelect={(id) => go(id === "term" ? {} : { range: id })}
+        onSelect={(id) => go(id === "quarter" ? {} : { range: id })}
         className={cn(pending && "opacity-80")}
       />
       <Popover
@@ -90,7 +98,7 @@ export function RangePicker({
             aria-label={preset === "custom" ? `Date range: ${label}` : "Custom range"}
             title="Custom range"
           >
-            <CalendarRange aria-hidden="true" />
+            <CalendarIcon aria-hidden="true" />
             {preset === "custom" && <span className="font-medium">{span ?? label}</span>}
           </Button>
         </PopoverTrigger>

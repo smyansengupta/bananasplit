@@ -5,18 +5,21 @@ import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 
 import { setTaskStatus } from "@/app/app/[orgSlug]/tasks/actions";
+import { PushBackButton } from "@/components/tasks/overdue-actions";
 import { TagChip } from "@/components/ui/chip";
 import { toast } from "@/components/ui/toaster";
 import { TaskStatus } from "@/generated/prisma/enums";
 import type { DueTone } from "@/lib/overview/format";
 import { cn } from "@/lib/utils";
 
+import { LinkChips, type ItemRef } from "./connections";
 import { TaskCheck } from "./task-check";
 
 /**
  * My tasks' rows (redesign guide 7.11, 16): a 22px circle check, the title,
- * a meta line (the epic as a tag chip, the due label by urgency), and a
- * High chip on the right. Checking one marks it done through the tasks
+ * a meta line (the epic as a tag chip, the due label by urgency), chips for
+ * what the task is linked to (its event, meeting or note), and a High chip
+ * on the right. Checking one marks it done through the tasks
  * action (the same checks as the task page), with the check's spring and a
  * "Done: …" toast with Undo; the row leaves when the page refreshes.
  */
@@ -32,7 +35,11 @@ export interface TaskRowData {
   /** "Subtask of …", when it is one. */
   context: string | null;
   due: { text: string; tone: DueTone } | null;
+  /** Past its due date: Push back sits beside the date. */
+  late?: boolean;
   high: boolean;
+  /** What it's linked to. */
+  chips?: readonly ItemRef[];
 }
 
 /** The due date as a pill on the right: red when late or today, firm tomorrow, quiet after. */
@@ -119,6 +126,9 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
             )}
           </div>
         )}
+        {task.chips && task.chips.length > 0 && (
+          <LinkChips items={task.chips} className="relative z-10 mt-1.5" />
+        )}
         {error && (
           <p role="alert" className="text-destructive mt-1 text-xs">
             {error}
@@ -126,6 +136,11 @@ function TaskRow({ orgId, task, first }: { orgId: string; task: TaskRowData; fir
         )}
       </div>
       <span className="flex shrink-0 items-center gap-1.5">
+        {task.late && !done && (
+          <span className="relative z-10">
+            <PushBackButton orgId={orgId} taskId={task.id} title={task.title} size="icon-sm" />
+          </span>
+        )}
         {task.high && (
           <span
             title="High priority"

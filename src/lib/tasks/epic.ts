@@ -56,6 +56,26 @@ type WithParents = Node & {
   parentTask?: (Node & { parentTask?: Node | null }) | null;
 };
 
+/**
+ * The task fields epicOf reads, two parents up, as a Prisma select: spread
+ * it into a task query's select and hand the rows to epicOf.
+ */
+export const epicParentsSelect = {
+  id: true,
+  title: true,
+  type: true,
+  color: true,
+  parentTask: {
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      color: true,
+      parentTask: { select: { id: true, title: true, type: true, color: true } },
+    },
+  },
+} as const;
+
 /** The epic a task belongs to: itself, its parent or its grandparent; null outside one. */
 export function epicOf(task: WithParents): EpicRef | null {
   const chain: (Node | null | undefined)[] = [task, task.parentTask, task.parentTask?.parentTask];

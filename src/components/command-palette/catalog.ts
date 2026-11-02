@@ -45,6 +45,8 @@ export interface PaletteSection {
   /** Other paths in the same section (People's /org-chart). */
   also?: readonly string[];
   hidden: boolean;
+  /** An add-on the organization hasn't added: not offered at all. */
+  notAdded?: boolean;
   icon: string;
   description: string;
 }
@@ -355,6 +357,7 @@ const SETTINGS_KEYWORDS: Record<string, readonly string[]> = {
 function sectionVisible(input: CatalogInput, section: SectionId | undefined): boolean {
   if (!section) return true;
   const found = input.sections.find((s) => s.id === section);
+  if (found?.notAdded) return false;
   return !found?.hidden || can({ role: input.role }, "settings.view");
 }
 

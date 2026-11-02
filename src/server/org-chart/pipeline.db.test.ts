@@ -801,8 +801,8 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       const draft = await withOrgTx(s.cbcId, (ctx) => loadVersion(ctx, versionId));
       expect(draft?.version).toMatchObject({ source: "MANUAL", parseMethod: "TEMPLATE" });
       expect(draft?.positions.map((p) => p.title).sort()).toEqual([
+        "Advisor",
         "Events Lead",
-        "Faculty Advisor",
         "Marketing Lead",
         "President",
         "Secretary",
@@ -812,7 +812,7 @@ describe.skipIf(!seeded)("org chart pipeline against the local database (seeded 
       // Roles and reporting lines are filled in; the people are not.
       expect(draft?.positions.every((p) => p.personName === null && p.userId === null)).toBe(true);
       expect(draft?.positions.find((p) => p.key === "marketing-lead")?.isOpen).toBe(true);
-      expect(draft?.positions.find((p) => p.key === "faculty-advisor")?.isAdvisor).toBe(true);
+      expect(draft?.positions.find((p) => p.key === "advisor")?.isAdvisor).toBe(true);
       expect(draft?.positions.filter((p) => p.reportsToId === null)).toHaveLength(1);
       expect(
         draft?.positions.find((p) => p.key === "president")?.responsibilities.length,

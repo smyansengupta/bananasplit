@@ -67,7 +67,7 @@ export function TaskCheck({
         onCheck();
       }}
       className={cn(
-        "relative z-10 grid size-[22px] shrink-0 place-items-center rounded-full border-[1.5px] transition-[background-color,border-color,color] duration-200",
+        "relative z-10 grid size-[22px] shrink-0 place-items-center rounded-full border-[1.5px] transition-[background-color,border-color,color] duration-200 after:absolute after:-inset-2.5 after:content-['']",
         "focus-visible:outline-foreground focus-visible:outline-2 focus-visible:outline-offset-2",
         checked
           ? "bg-block-goal border-block-goal text-block-goal-foreground scale-[1.08]"

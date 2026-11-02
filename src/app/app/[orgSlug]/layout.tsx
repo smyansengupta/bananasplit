@@ -18,6 +18,7 @@ import {
   trialPlanName,
 } from "@/lib/billing/space";
 import { getSession, requireUser } from "@/lib/auth/session";
+import { readAddOns } from "@/lib/addons";
 import { resolveSidebar, visibleSidebar } from "@/lib/nav/sidebar";
 import { clubIcons } from "@/lib/metadata/share";
 import { orgLogoUrl } from "@/lib/org-logo";
@@ -166,8 +167,13 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
       orgId: ctx.organization.id,
       userId: ctx.user.id,
       org: ctx.organization,
-      canReviewFinance: can({ role: ctx.role }, "finance.manage"),
-      canReviewForms: can({ role: ctx.role }, "databases.write"),
+      // An add-on that isn't added keeps its rows out of Inbox and the badge.
+      canReviewFinance:
+        can({ role: ctx.role }, "finance.manage") &&
+        readAddOns(ctx.settings?.addOns).includes("finance"),
+      canReviewForms:
+        can({ role: ctx.role }, "databases.write") &&
+        readAddOns(ctx.settings?.addOns).includes("forms"),
     }),
   ).catch(() => null);
   // Docked or rail, as the member left it, so the first paint is right.
@@ -184,12 +190,16 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
         user={shellUser}
         pins={pins}
         counts={counts ? { inbox: counts.inbox, forms: counts.forms, finance: counts.finance } : {}}
-        sections={navSections(ctx.organization.slug, visibleSidebar(ctx.settings?.sidebar), {
-          space: ctx.organization,
-          // Owners and admins see what the plan lacks (locked); members don't.
-          showLocked: can({ role: ctx.role }, "settings.view"),
-        })}
-        sectionPaths={resolveSidebar(ctx.settings?.sidebar)
+        sections={navSections(
+          ctx.organization.slug,
+          visibleSidebar(ctx.settings?.sidebar, ctx.settings?.addOns ?? []),
+          {
+            space: ctx.organization,
+            // Owners and admins see what the plan lacks (locked); members don't.
+            showLocked: can({ role: ctx.role }, "settings.view"),
+          },
+        )}
+        sectionPaths={resolveSidebar(ctx.settings?.sidebar, ctx.settings?.addOns ?? [])
           .flatMap((g) => g.items)
           .map((i) => ({
             id: i.id,
@@ -198,6 +208,7 @@ export default async function OrgLayout({ params, children }: LayoutProps<"/app/
             path: i.path,
             also: i.also,
             hidden: i.hidden,
+            ...(i.notAdded ? { notAdded: true } : {}),
             icon: i.icon,
             description: i.description,
           }))}

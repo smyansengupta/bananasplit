@@ -20,14 +20,15 @@ describe("sidebar navigation", () => {
       "Tasks",
       "Calendar",
       "Meetings",
-      "Forms",
       "Databases",
-      "Finance",
       "Files",
       "Integrations",
+      "Forms",
+      "Finance",
     ]);
     const groups = navSections("cbc", visibleSidebar(null));
-    // Finance is part of Data; the money group is empty by default and drops out.
+    // Files is part of Data; Integrations and apps is Integrations, then the
+    // add-ons. The money group is empty by default and drops out.
     expect(groups.map((s) => s.id)).toEqual(["main", "plan", "collect", "workspace"]);
     // The sidebar names the groups itself (SECTION_NAMES).
     expect(groups.every((s) => s.label === null)).toBe(true);
@@ -119,7 +120,7 @@ describe("sidebar navigation", () => {
   it("names a section's page the way the organization's sidebar does", () => {
     expect(sectionLabel(null, "notes")).toBe("Files");
     const groups = resolveSidebar(null);
-    groups.find((g) => g.id === "workspace")!.items.find((i) => i.id === "notes")!.label = "Docs";
+    groups.find((g) => g.id === "collect")!.items.find((i) => i.id === "notes")!.label = "Docs";
     groups.find((g) => g.id === "plan")!.items.find((i) => i.id === "meetings")!.hidden = true;
     const config = toConfig(groups);
     expect(sectionLabel(config, "notes")).toBe("Docs");
@@ -134,19 +135,19 @@ describe("sidebar navigation", () => {
   it("follows the org's sidebar: hidden, renamed, moved and reordered sections", () => {
     const groups = resolveSidebar(null);
     const collect = groups.find((g) => g.id === "collect")!;
-    collect.items.find((i) => i.id === "forms")!.hidden = true;
+    groups.find((g) => g.id === "workspace")!.items.find((i) => i.id === "forms")!.hidden = true;
     const main = groups.find((g) => g.id === "main")!;
     main.items.find((i) => i.id === "people")!.label = "Members";
-    // Move Finance into the first group, right after Home.
-    const finance = collect.items.splice(
-      collect.items.findIndex((i) => i.id === "finance"),
+    // Move Databases into the first group, right after Home.
+    const databases = collect.items.splice(
+      collect.items.findIndex((i) => i.id === "databases"),
       1,
     )[0]!;
-    main.items.splice(1, 0, finance);
+    main.items.splice(1, 0, databases);
     const config = toConfig(groups);
     const labels = links(config).map((i) => i.label);
     expect(labels).not.toContain("Forms");
-    expect(labels.slice(0, 3)).toEqual(["Home", "Finance", "Inbox"]);
+    expect(labels.slice(0, 3)).toEqual(["Home", "Databases", "Inbox"]);
     expect(labels).toContain("Members");
     // An emptied group drops out.
     expect(navSections("cbc", visibleSidebar(config)).map((s) => s.id)).toEqual([
@@ -163,6 +164,46 @@ describe("sidebar navigation", () => {
       ),
     };
     expect(links(tampered).map((i) => i.label)).toEqual(expect.arrayContaining(["Home", "Inbox"]));
+  });
+
+  it("keeps Integrations first in its section, with only the added add-ons below it", () => {
+    const workspace = (raw: unknown, addOns?: string[]) =>
+      navSections("cbc", visibleSidebar(raw, addOns))
+        .find((s) => s.id === "workspace")!
+        .items.map((i) => i.label);
+    expect(workspace(null, [])).toEqual(["Integrations"]);
+    expect(workspace(null, ["finance"])).toEqual(["Integrations", "Finance"]);
+    expect(workspace(null, ["finance", "forms"])).toEqual(["Integrations", "Forms", "Finance"]);
+    // A sidebar saved with Files and the add-ons elsewhere, Integrations last:
+    // Files goes to Data, and the section keeps its order.
+    const saved = {
+      groups: [],
+      items: [
+        { id: "finance", group: "main", hidden: false, label: null },
+        { id: "forms", group: "collect", hidden: false, label: null },
+        { id: "notes", group: "workspace", hidden: false, label: null },
+        { id: "integrations", group: "workspace", hidden: false, label: null },
+      ],
+    };
+    expect(workspace(saved, ["forms", "finance"])).toEqual(["Integrations", "Forms", "Finance"]);
+    expect(
+      navSections("cbc", visibleSidebar(saved))
+        .find((s) => s.id === "collect")!
+        .items.map((i) => i.label),
+    ).toContain("Files");
+    // Another section an older sidebar put in that group sits below the add-ons.
+    const tasksThere = {
+      groups: [],
+      items: [{ id: "tasks", group: "workspace", hidden: false, label: null }],
+    };
+    const there = workspace(tasksThere, ["forms"]);
+    expect(there.slice(0, 2)).toEqual(["Integrations", "Forms"]);
+    expect(there).toContain("Tasks");
+    // An add-on that isn't added is hidden, and marked so the page can say so.
+    const forms = resolveSidebar(null, [])
+      .flatMap((g) => g.items)
+      .find((i) => i.id === "forms")!;
+    expect(forms).toMatchObject({ hidden: true, notAdded: true });
   });
 });
 

@@ -1,3 +1,5 @@
+import type { ChipKind } from "@/lib/overview/types";
+
 /**
  * What can be linked in a space (ItemLink), shared by the server and the
  * Linked panel. See src/server/links/links.ts for how links are read.
@@ -14,6 +16,11 @@ export const LINK_KINDS = [
   "form",
   "budget",
   "record",
+  // A question poll (Forms), a decision (Home's Decisions: it has no page
+  // of its own) and an announcement (the Inbox).
+  "poll",
+  "decision",
+  "announcement",
 ] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
@@ -31,6 +38,13 @@ export interface ResolvedRef extends LinkRef {
   href: string;
   /** A second line: what it is, and a fact or two. */
   detail: string;
+  /** How Home draws it as a chip: a meeting or an event, a quick poll, money. */
+  chip: ChipKind;
+  /** Events: when it starts, and how many members said they're going. */
+  startsAt?: Date;
+  going?: number;
+  /** Tasks: finished. */
+  done?: boolean;
 }
 
 export interface LinkedItem extends ResolvedRef {
@@ -49,12 +63,25 @@ export const KIND_WORD: Record<LinkKind, string> = {
   form: "Form",
   budget: "Budget",
   record: "Row",
+  poll: "Poll",
+  decision: "Decision",
+  announcement: "Announcement",
 };
+
+/**
+ * Whether an event is a meeting: a board meeting, or one with a meeting
+ * type. The one rule for links and Home's chips: a meeting opens on its
+ * meeting page, anything else on the calendar.
+ */
+export function isMeeting(event: { kind: string; meetingType: string | null }): boolean {
+  return event.kind === "BOARD_MEETING" || Boolean(event.meetingType);
+}
 
 /** The search palette's kinds that can be linked, and what they link as. */
 export function linkKindOfSearch(kind: string): LinkKind | null {
   if (kind === "epic") return "task";
-  // Old polls and Find a time aren't forms: their ids would never resolve.
+  // Search's polls include Find a time, which can't be linked: those ids
+  // would never resolve as question polls.
   if (kind === "poll") return null;
   return isLinkKind(kind) ? kind : null;
 }

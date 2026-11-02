@@ -5,23 +5,28 @@ import { Suspense, type ReactNode } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { ChartList } from "@/components/org-chart/chart-list";
 import { ChartView } from "@/components/org-chart/chart-view";
-import { StartDraftButton } from "@/components/org-chart/start-draft-button";
+import { StartChart, type StartPreviewPerson } from "@/components/org-chart/quick/start-chart";
 import { Button } from "@/components/ui/button";
 import type { Role } from "@/generated/prisma/client";
 import { can } from "@/lib/auth/permissions";
+import { planFromMembers } from "@/lib/org-chart/outline";
 import { chartTeams } from "@/lib/org-chart/teams";
 import type { ChartNodeDTO } from "@/lib/org-chart/types";
 import { withOrgTx } from "@/server/db/context";
+import { userPublicSelect } from "@/server/members";
 import { getPublishedOrgChart } from "@/server/org-chart/queries";
 
 import { ChartHeaderActions } from "./chart-header-actions";
+
+/** The most members the start screen's preview reads. */
+const PREVIEW_MEMBER_CAP = 1000;
 
 export interface OrgChartSection {
   /** "12 positions, 3 teams, version 4, published Oct 2", or null with no chart. */
   summary: string | null;
   /** Edit chart (or Continue draft) and the "…" menu, for editors. */
   actions: ReactNode;
-  /** The chart, or the empty state with the ways to start one. */
+  /** The chart, or the empty state with the ways to start one (StartChart). */
   body: ReactNode;
 }
 
@@ -109,6 +114,47 @@ export async function loadOrgChartSection({
     />
   );
 
+  // No chart and no draft: the ways to start one, drafted from the members.
+  // The preview only needs the top of the chart, so it reads a capped page
+  // of members (titled ones first, which is who it places) and counts the rest.
+  const start =
+    canEdit && !(chart && nodes.length > 0) && !draftHref
+      ? await withOrgTx(organization.id, async ({ db }) => {
+          const rows = await db.membership.findMany({
+            where: { organizationId: organization.id },
+            select: { userId: true, role: true, title: true, user: { select: userPublicSelect } },
+            orderBy: [{ title: { sort: "asc", nulls: "last" } }, { userId: "asc" }],
+            take: PREVIEW_MEMBER_CAP,
+          });
+          const count =
+            rows.length < PREVIEW_MEMBER_CAP
+              ? rows.length
+              : await db.membership.count({ where: { organizationId: organization.id } });
+          return { rows, count };
+        }).then(({ rows, count }) => {
+          const placed = planFromMembers(
+            rows.map((r) => ({
+              id: r.userId,
+              name: r.user.name,
+              title: r.title,
+              role: r.role,
+              user: r.user,
+            })),
+          ).filter((p) => !p.advisor);
+          const head = placed.find((p) => p.managerId === null) ?? placed[0];
+          const preview: StartPreviewPerson[] = (
+            head ? [head, ...placed.filter((p) => p !== head && p.depth === 1).slice(0, 3)] : []
+          ).map((p) => ({
+            id: p.member.id,
+            name: p.member.user.name,
+            image: p.member.user.image,
+            avatar: p.member.user.avatar,
+            title: (p.member.title ?? "").trim(),
+          }));
+          return { memberCount: count, preview };
+        })
+      : null;
+
   const body =
     chart && nodes.length > 0 ? (
       <Suspense fallback={<ChartList nodes={nodes} hrefFor={hrefFor} />}>
@@ -124,40 +170,28 @@ export async function loadOrgChartSection({
           listFallback={<ChartList nodes={nodes} hrefFor={hrefFor} selectedKey={selectedKey} />}
         />
       </Suspense>
+    ) : start ? (
+      <StartChart
+        orgId={organization.id}
+        orgSlug={orgSlug}
+        memberCount={start.memberCount}
+        preview={start.preview}
+      />
     ) : (
       <EmptyState
-        title={canEdit ? "No org chart yet" : "Not published yet"}
+        title="No org chart yet"
         action={
-          canEdit ? (
+          canEdit && draftHref ? (
             <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm">
+                <Link href={draftHref}>Continue draft v{openDraft?.number}</Link>
+              </Button>
               <Button asChild variant="outline" size="sm">
                 <Link href={`${base}/import`}>
                   <FileUp className="size-4" aria-hidden="true" />
                   Import
                 </Link>
               </Button>
-              {draftHref ? (
-                <Button asChild variant="outline" size="sm">
-                  <Link href={draftHref}>Continue draft v{openDraft?.number}</Link>
-                </Button>
-              ) : (
-                <>
-                  <StartDraftButton
-                    orgId={organization.id}
-                    orgSlug={orgSlug}
-                    from="blank"
-                    variant="create"
-                  >
-                    Type it
-                  </StartDraftButton>
-                  <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="members">
-                    From members
-                  </StartDraftButton>
-                  <StartDraftButton orgId={organization.id} orgSlug={orgSlug} from="starter">
-                    Template
-                  </StartDraftButton>
-                </>
-              )}
             </div>
           ) : undefined
         }

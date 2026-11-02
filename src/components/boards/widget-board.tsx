@@ -1,7 +1,20 @@
 "use client";
 
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragOverEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable } from "@dnd-kit/sortable";
+import {
   Activity,
+  AlarmClock,
   ArrowLeftRight,
   CalendarDays,
   CalendarRange,
@@ -9,12 +22,16 @@ import {
   ChartColumn,
   ChartLine,
   ChartPie,
+  Check,
   CheckSquare,
+  ClipboardList,
   Clock,
+  Filter,
   FolderOpen,
   GripVertical,
   HandCoins,
   Handshake,
+  Hash,
   LayoutGrid,
   Hourglass,
   Link2,
@@ -26,11 +43,15 @@ import {
   ReceiptText,
   Rocket,
   RotateCcw,
+  ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
+  Table2,
   Target,
   Ticket,
   Timer,
   TrendingDown,
+  Trophy,
   Users,
   Vote,
   Wallet,
@@ -39,8 +60,19 @@ import {
   type IconComponent,
 } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
+import { ShapeIcon, ShapePicker } from "@/components/boards/shape-picker";
 import { Badge } from "@/components/ui/badge";
 import { InBar } from "@/components/ui/bar-slot";
 import { Button } from "@/components/ui/button";
@@ -51,21 +83,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Segmented } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toaster";
 import { IconChip } from "@/components/ui/stat";
 import {
   BOARD_COLUMNS,
-  HEIGHT_PRESETS,
+  MAX_ROWS,
   MAX_WIDGETS,
+  fillRows,
   newWidgetId,
+  shapeName,
   type BoardWidget,
   type WidgetMeta,
 } from "@/lib/boards";
+import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 export const BOARD_ICONS: Record<string, IconComponent> = {
   Activity,
+  AlarmClock,
   ArrowLeftRight,
   CalendarDays,
   CalendarRange,
@@ -74,10 +109,13 @@ export const BOARD_ICONS: Record<string, IconComponent> = {
   ChartLine,
   ChartPie,
   CheckSquare,
+  ClipboardList,
   Clock,
+  Filter,
   FolderOpen,
   HandCoins,
   Handshake,
+  Hash,
   Hourglass,
   Link2,
   ListChecks,
@@ -86,10 +124,14 @@ export const BOARD_ICONS: Record<string, IconComponent> = {
   Pin,
   ReceiptText,
   Rocket,
+  ShieldCheck,
+  Sparkles,
+  Table2,
   Target,
   Ticket,
   Timer,
   TrendingDown,
+  Trophy,
   Users,
   Vote,
   Wallet,
@@ -103,27 +145,87 @@ const SPAN: Record<number, string> = {
   4: "col-span-1 sm:col-span-2 lg:col-span-4",
 };
 
-const WIDTHS = [
-  { value: "1", label: "¼" },
-  { value: "2", label: "½" },
-  { value: "3", label: "¾" },
-  { value: "4", label: "Full" },
-];
+/**
+ * A row is as tall as a column is wide, so 1 by 1 is a square: the board is
+ * a size container and --board-row is one column's width (the gap is 4.5,
+ * 1.125rem). A widget with rows spans them and is exactly that tall.
+ */
+const GRID =
+  "grid grid-cols-1 gap-4.5 sm:grid-cols-2 lg:grid-cols-4 sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
+/** Rows on a tablet or computer; a phone's widgets are as tall as what's in them. */
+const ROWS_TALL =
+  "sm:h-[calc(var(--board-row)*var(--rows)_+_1.125rem*(var(--rows)_-_1))] sm:[grid-row:span_var(--rows)]";
+
+/** A touch screen: a widget moves by its grip, so a swipe anywhere else still scrolls the page. */
+function useCoarsePointer(): boolean {
+  return useSyncExternalStore(
+    (change) => {
+      const query = window.matchMedia("(pointer: coarse)");
+      query.addEventListener("change", change);
+      return () => query.removeEventListener("change", change);
+    },
+    () => window.matchMedia("(pointer: coarse)").matches,
+    () => false,
+  );
+}
+
+/** The item under the pointer, or the nearest one when it's between them. */
+const collision: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  return within.length > 0 ? within : closestCenter(args);
+};
+
+const noSubscribe = () => () => {};
 
 export type SaveBoard = (layout: BoardWidget[] | null) => Promise<{ ok: boolean; error?: string }>;
 
 /**
+ * The board's widgets slide to their new places when the layout changes
+ * (a move, a resize, an add): each one's last spot is kept, relative to the
+ * grid so scrolling doesn't count, and it animates from there.
+ */
+function useReflow(grid: RefObject<HTMLDivElement | null>, layout: unknown) {
+  const spots = useRef(new Map<string, { x: number; y: number }>());
+  useLayoutEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const next = new Map<string, { x: number; y: number }>();
+    for (const node of el.querySelectorAll<HTMLElement>("[data-widget-id]")) {
+      const id = node.dataset.widgetId ?? "";
+      // Layout offsets (the grid is the offset parent), which a slide still
+      // under way doesn't move: measuring mid-slide would start another.
+      const spot = { x: node.offsetLeft, y: node.offsetTop };
+      next.set(id, spot);
+      const was = spots.current.get(id);
+      if (!was || still) continue;
+      const dx = was.x - spot.x;
+      const dy = was.y - spot.y;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      for (const running of node.getAnimations()) running.cancel();
+      node.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
+        duration: 260,
+        easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+      });
+    }
+    spots.current = next;
+  }, [grid, layout]);
+}
+
+/**
  * A member's own board of widgets.
  *
- * Reading it is just the widgets, in the order the member put them: rows
- * line up (a widget that isn't full width stops growing at a set height and
- * scrolls inside), and nothing is packed out of order to fill a gap.
+ * Reading it is just the widgets, in the order the member put them, each in
+ * its shape: a row is as tall as a column is wide, so a widget is a Square, a
+ * Rectangle, a Big square, a Full rectangle and so on, or it fits its
+ * content. Nothing is packed out of order to fill a gap.
  *
- * Removing and adding need no mode: every widget has an x (on hover) that
- * takes it off with Undo, and a + at the end of the board adds one. Customize
- * is a switch for the rest: each widget gets a handle to drag it (arrow keys
- * move it too) and its width and height. Every change saves itself, so there
- * is no Done or Cancel. Only the member's own board changes.
+ * The + beside Customize adds a widget, and every widget has an x (on hover)
+ * that takes it off with Undo. Customize is a switch for the rest: drag a
+ * widget anywhere on it to move it (the others slide out of the way; its
+ * handle moves it with the arrow keys too), drag its corner to resize it
+ * cell by cell, or pick its shape from a grid. Every change saves itself, so
+ * Done (or Esc) just ends it. Only the member's own board changes.
  *
  * Not on a phone: there the board is read, not arranged, so Customize is a
  * computer thing, and `hiddenOnPhone` widgets (the Overview's Recently
@@ -143,6 +245,14 @@ export function WidgetBoard({
   belowIntro,
   footer,
   hiddenOnPhone = [],
+  titles,
+  readOnly = false,
+  editHint = "Only you see your board.",
+  resetLabel = "Reset to the default board",
+  startEditing = false,
+  refreshOnSave = true,
+  noun = "your board",
+  fillGaps = false,
 }: {
   types: readonly WidgetMeta[];
   initialLayout: BoardWidget[];
@@ -172,35 +282,71 @@ export function WidgetBoard({
   footer?: ReactNode;
   /** Widget types a phone leaves out. */
   hiddenOnPhone?: readonly string[];
+  /**
+   * Titles by widget id, where two widgets of a type say different things (a
+   * saved report's "Amount by category" and "Sponsors by stage"). Bodies and
+   * header actions are looked up by id too, then by type.
+   */
+  titles?: Readonly<Record<string, string>>;
+  /** Shown, not arranged: no +, Customize or remove (a report someone else made). */
+  readOnly?: boolean;
+  /** The first words of the Customize hint (whose board changes). */
+  editHint?: string;
+  /** What Reset puts back. */
+  resetLabel?: string;
+  /** Opens in Customize (the New report walkthrough's Arrange step). */
+  startEditing?: boolean;
+  /** Re-reads the page after each save; off where the board only feeds a form. */
+  refreshOnSave?: boolean;
+  /** What the widgets are on, in its messages ("your board", "this report"). */
+  noun?: string;
+  /** Close up the rows when a widget is added or removed (a saved report). */
+  fillGaps?: boolean;
 }) {
   const router = useRouter();
   const [layout, setLayout] = useState(initialLayout);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startEditing);
   const [adding, setAdding] = useState(false);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const beforeDrag = useRef<BoardWidget[] | null>(null);
+  const lastSwap = useRef<string | null>(null);
   const meta = new Map(types.map((t) => [t.type, t]));
   const groups = [...new Set(types.map((t) => t.group))];
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  useReflow(grid, layout);
+  // The drag preview goes on the body, which is only there in the browser.
+  const browser = useSyncExternalStore(
+    noSubscribe,
+    () => true,
+    () => false,
+  );
+
+  /** Set by a Reset: take the next layout the server sends. */
+  const takeNext = useRef(false);
 
   function persist(next: BoardWidget[] | null) {
     setError(null);
     start(async () => {
       const result = await onSave(next);
       if (!result.ok) {
-        setError(result.error ?? "That layout couldn't be saved.");
+        setError(result.error ?? "Couldn't save the layout. Check your connection and try again.");
         return;
       }
-      if (next === null) setLayout(initialLayout);
-      router.refresh();
+      // Reset: the server's default arrives with the refresh; take it then.
+      if (next === null) takeNext.current = true;
+      if (refreshOnSave) router.refresh();
     });
   }
 
   // The board saves as you go: every change (a remove, an add, a drag) is
-  // sent a moment after the last one, so there is no Save, Done or Cancel.
+  // sent a moment after the last one, so there is no Save or Cancel.
   const saved = useRef(JSON.stringify(initialLayout));
   useEffect(() => {
+    if (dragId) return;
     const now = JSON.stringify(layout);
     if (now === saved.current) return;
     const timer = setTimeout(() => {
@@ -210,21 +356,55 @@ export function WidgetBoard({
     return () => clearTimeout(timer);
     // persist is stable enough here: it only reads onSave and the router.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout]);
+  }, [layout, dragId]);
+
+  // After a Reset, the default the server sends back replaces the board (and
+  // counts as saved). Otherwise the board is the person's: a refresh never
+  // overwrites a change they've just made.
+  const incoming = JSON.stringify(initialLayout);
+  useEffect(() => {
+    if (!takeNext.current) return;
+    takeNext.current = false;
+    saved.current = incoming;
+    setLayout(JSON.parse(incoming) as BoardWidget[]);
+  }, [incoming]);
+
+  /** A report closes its rows up as widgets come and go; Home leaves them as they are. */
+  const arrange = (next: BoardWidget[]) => (fillGaps ? fillRows(next) : next);
+
+  // Esc ends Customize, unless a menu or dialog is open to close first.
+  useEffect(() => {
+    if (!editing) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented || overlayOpen()) return;
+      setEditing(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [editing]);
+
+  // A widget just added is scrolled to and lit for a moment.
+  useEffect(() => {
+    if (!fresh) return;
+    grid.current
+      ?.querySelector(`[data-widget-id="${CSS.escape(fresh)}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setFresh(null), 1800);
+    return () => clearTimeout(timer);
+  }, [fresh]);
 
   function remove(id: string) {
     const at = layout.findIndex((x) => x.id === id);
     const gone = layout[at];
     if (!gone) return;
-    setLayout((l) => l.filter((x) => x.id !== id));
+    const before = layout;
+    setLayout((l) => arrange(l.filter((x) => x.id !== id)));
     toast({
-      title: "Removed",
+      title: `Removed ${titles?.[gone.id] ?? meta.get(gone.type)?.title ?? "the widget"}`,
       action: {
         label: "Undo",
-        run: () =>
-          setLayout((l) =>
-            l.some((x) => x.id === id) ? l : [...l.slice(0, at), gone, ...l.slice(at)],
-          ),
+        // Back exactly as it was, sizes included (closing up the rows may have changed some).
+        run: () => setLayout((l) => (l.some((x) => x.id === id) ? l : before)),
       },
     });
   }
@@ -233,7 +413,7 @@ export function WidgetBoard({
     const before = layout;
     persist(null);
     toast({
-      title: "Reset",
+      title: resetLabel,
       action: {
         label: "Undo",
         run: () => {
@@ -244,42 +424,69 @@ export function WidgetBoard({
     });
   }
 
-  const patch = (id: string, change: Partial<BoardWidget>) =>
-    setLayout((l) => l.map((w) => (w.id === id ? { ...w, ...change } : w)));
-
-  function moveBefore(sourceId: string, targetId: string | null) {
+  // Unchanged is the same array, so a resize that hasn't crossed into the
+  // next cell renders nothing.
+  const patch = (id: string, change: { w: number; h: number | null }) =>
     setLayout((l) => {
-      const source = l.find((w) => w.id === sourceId);
-      if (!source || sourceId === targetId) return l;
-      const rest = l.filter((w) => w.id !== sourceId);
-      const at = targetId ? rest.findIndex((w) => w.id === targetId) : rest.length;
-      return [
-        ...rest.slice(0, at < 0 ? rest.length : at),
-        source,
-        ...rest.slice(at < 0 ? rest.length : at),
-      ];
+      const at = l.findIndex((w) => w.id === id);
+      const was = l[at];
+      if (!was || (was.w === change.w && was.h === change.h)) return l;
+      const next = [...l];
+      next[at] = { ...was, ...change };
+      return next;
     });
-  }
 
   function nudge(id: string, by: number) {
     setLayout((l) => {
       const i = l.findIndex((w) => w.id === id);
       const j = i + by;
       if (i < 0 || j < 0 || j >= l.length) return l;
-      const next = [...l];
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
+      return arrayMove(l, i, j);
     });
+  }
+
+  // The others make way as you drag: the widget takes the place of the one
+  // under the pointer. Once two have swapped, they don't swap back until the
+  // pointer has left that one (a big widget would otherwise flicker).
+  function onDragOver({ active, over }: DragOverEvent) {
+    const target = over ? String(over.id) : null;
+    if (!target || target === active.id) {
+      lastSwap.current = null;
+      return;
+    }
+    if (target === lastSwap.current) return;
+    lastSwap.current = target;
+    setLayout((l) => {
+      const from = l.findIndex((w) => w.id === active.id);
+      const to = l.findIndex((w) => w.id === target);
+      return from < 0 || to < 0 ? l : arrayMove(l, from, to);
+    });
+  }
+
+  /** The grid's columns right now, and how far apart they are (a row is the same). */
+  function measure() {
+    const el = grid.current;
+    if (!el) return null;
+    const style = getComputedStyle(el);
+    const cols = style.gridTemplateColumns.split(" ").filter(Boolean).length || 1;
+    const gap = parseFloat(style.columnGap) || 0;
+    const col = (el.clientWidth - gap * (cols - 1)) / cols;
+    return { cols, gap, pitch: col + gap, left: el.getBoundingClientRect().left };
   }
 
   const add = (type: string) => {
     const m = meta.get(type);
     if (!m) return;
-    setLayout([...layout, { id: newWidgetId(type, layout), type, w: m.w, h: m.h }]);
+    const id = newWidgetId(type, layout);
+    setLayout(arrange([...layout, { id, type, w: m.w, h: m.h }]));
     setAdding(false);
+    setFresh(id);
   };
 
-  const body = (type: string) => (bodies ? bodies[type] : renderBody?.(type)) ?? null;
+  const body = (w: BoardWidget) =>
+    (bodies ? (bodies[w.id] ?? bodies[w.type]) : renderBody?.(w.type)) ?? null;
+  const dragged = dragId ? layout.find((w) => w.id === dragId) : undefined;
+  const draggedMeta = dragged ? meta.get(dragged.type) : undefined;
 
   return (
     <div className="space-y-[18px]">
@@ -287,24 +494,49 @@ export function WidgetBoard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">{intro}</div>
           <InBar>
-          <div className="flex items-center gap-2 max-md:hidden">
-            {editing && <span className="text-muted-foreground text-sm">Only you see this.</span>}
-            {editing && customized && (
-              <Button type="button" variant="ghost" disabled={pending} onClick={reset}>
-                <RotateCcw className="size-4" aria-hidden="true" />
-                Reset
+            {/* + stays put; Customize becomes Reset and Done (a check) while on. */}
+            <div className={cn("flex items-center gap-2 max-md:hidden", readOnly && "hidden")}>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                aria-label="Add a widget"
+                title="Add a widget"
+                disabled={layout.length >= MAX_WIDGETS}
+                onClick={() => setAdding(true)}
+              >
+                <Plus className="size-4" aria-hidden="true" />
               </Button>
-            )}
-            <Button
-              type="button"
-              variant={editing ? "secondary" : "outline"}
-              aria-pressed={editing}
-              onClick={() => setEditing((on) => !on)}
-            >
-              <SlidersHorizontal className="size-4" aria-hidden="true" />
-              Customize
-            </Button>
-          </div>
+              {editing ? (
+                <>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    aria-label={resetLabel}
+                    title={resetLabel}
+                    disabled={pending || !customized}
+                    onClick={reset}
+                  >
+                    <RotateCcw className="size-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    aria-label="Done customizing"
+                    title="Done"
+                    onClick={() => setEditing(false)}
+                  >
+                    <Check className="size-4" aria-hidden="true" />
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+                  <SlidersHorizontal className="size-4" aria-hidden="true" />
+                  Customize
+                </Button>
+              )}
+            </div>
           </InBar>
         </div>
         {introDescription && (
@@ -312,6 +544,14 @@ export function WidgetBoard({
         )}
       </div>
       {belowIntro && <div className="pt-2 pb-3">{belowIntro}</div>}
+
+      {editing && (
+        <p className="bg-muted/60 text-muted-foreground rounded-tile flex flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2.5 text-[13px] max-md:hidden">
+          <span className="text-foreground font-semibold">{editHint}</span>
+          <span>Drag a widget to move it.</span>
+          <span>Drag its corner, or pick a shape, to resize it.</span>
+        </p>
+      )}
 
       {error && (
         <p
@@ -329,198 +569,94 @@ export function WidgetBoard({
           <span className="bg-muted grid size-14 place-items-center rounded-full">
             <LayoutGrid className="size-6" aria-hidden="true" />
           </span>
-          Your board is empty.
+          {noun[0].toUpperCase() + noun.slice(1)} has no widgets yet.
           <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
             <Plus className="size-4" aria-hidden="true" />
             Add a widget
           </Button>
         </div>
       ) : (
-        <div
-          className="grid grid-cols-1 gap-4.5 sm:grid-cols-2 lg:grid-cols-4"
-          onDragOver={(e) => {
-            if (dragId) e.preventDefault();
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collision}
+          onDragStart={({ active }) => {
+            beforeDrag.current = layout;
+            lastSwap.current = null;
+            setDragId(String(active.id));
           }}
-          onDrop={(e) => {
-            if (!dragId) return;
-            e.preventDefault();
-            if (!overId) moveBefore(dragId, null);
+          onDragOver={onDragOver}
+          onDragEnd={() => setDragId(null)}
+          onDragCancel={() => {
+            if (beforeDrag.current) setLayout(beforeDrag.current);
             setDragId(null);
-            setOverId(null);
           }}
         >
-          {layout.map((w) => {
-            const m = meta.get(w.type);
-            if (!m) return null;
-            const bare = m.frame === "bare";
-            const actions = !editing ? headerActions?.[w.type] : null;
-            return (
-              <section
-                key={w.id}
-                aria-label={m.title}
-                data-dragging={dragId === w.id || undefined}
-                data-frame={bare ? "bare" : "card"}
-                className={cn(
-                  SPAN[w.w] ?? SPAN[1],
-                  hiddenOnPhone.includes(w.type) && "max-md:hidden",
-                  "group/widget relative flex min-w-0 flex-col transition-[opacity,outline-color]",
-                  bare
-                    ? "rounded-block"
-                    : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
-                  // Part-width widgets stop at a common height so rows line up.
-                  !bare && !w.h && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
-                  editing && "outline-border outline-[1.5px] outline-offset-[3px] outline-dashed",
-                  editing && bare && "bg-muted/40 p-2",
-                  dragId === w.id && "opacity-40",
-                  overId === w.id && dragId !== w.id && "outline-foreground outline-solid",
-                )}
-                style={w.h ? { height: w.h } : undefined}
-                onDragOver={(e) => {
-                  if (!dragId) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setOverId(w.id);
-                }}
-                onDrop={(e) => {
-                  if (!dragId) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  moveBefore(dragId, w.id);
-                  setDragId(null);
-                  setOverId(null);
-                }}
+          <SortableContext items={layout.map((w) => w.id)} strategy={() => null}>
+            <div className="@container">
+              <div ref={grid} className={cn(GRID, "relative")}>
+                {layout.map((w) => {
+                  const known = meta.get(w.type);
+                  if (!known) return null;
+                  const m = titles?.[w.id] ? { ...known, title: titles[w.id] } : known;
+                  return (
+                    <BoardItem
+                      key={w.id}
+                      widget={w}
+                      meta={m}
+                      readOnly={readOnly}
+                      editing={editing}
+                      dragging={dragId === w.id}
+                      fresh={fresh === w.id}
+                      hiddenOnPhone={hiddenOnPhone.includes(w.type)}
+                      actions={!editing ? (headerActions?.[w.id] ?? headerActions?.[w.type]) : null}
+                      measure={measure}
+                      onShape={(nw, nh) => patch(w.id, { w: nw, h: nh })}
+                      onNudge={(by) => nudge(w.id, by)}
+                      onRemove={() => remove(w.id)}
+                    >
+                      {body(w)}
+                    </BoardItem>
+                  );
+                })}
+              </div>
+            </div>
+          </SortableContext>
+          {/* On the body: the page's own transforms would put a fixed overlay off. */}
+          {browser &&
+            createPortal(
+              <DragOverlay
+                dropAnimation={{ duration: 220, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }}
               >
-                {!editing && (
-                  <button
-                    type="button"
-                    aria-label={`Remove ${m.title}`}
-                    onClick={() => remove(w.id)}
-                    className="bg-card text-muted-foreground hover:text-destructive ring-foreground/10 focus-glow absolute -top-2.5 -right-2.5 z-10 grid size-7 place-items-center rounded-full opacity-0 shadow-sm ring-1 transition-opacity outline-none group-focus-within/widget:opacity-100 group-hover/widget:opacity-100 focus-visible:opacity-100 max-md:hidden"
-                  >
-                    <X className="size-3.5" aria-hidden="true" />
-                  </button>
-                )}
-                {/* While editing, a narrow widget's controls wrap below its title. A
-                    bare widget has no header until then: its body is its own surface. */}
-                <header
-                  className={cn(
-                    "flex flex-wrap items-center gap-2",
-                    bare
-                      ? editing
-                        ? "mb-2 min-h-10 px-2"
-                        : "sr-only"
-                      : "min-h-14 px-[18px] pt-4 pb-1 sm:px-6 sm:pt-5",
-                  )}
-                >
-                  {editing && (
-                    <span
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("text/plain", w.id);
-                        e.dataTransfer.effectAllowed = "move";
-                        setDragId(w.id);
-                      }}
-                      onDragEnd={() => {
-                        setDragId(null);
-                        setOverId(null);
-                      }}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`Move ${m.title}. Arrow keys move it earlier or later.`}
-                      onKeyDown={(e) => {
-                        if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-                          e.preventDefault();
-                          nudge(w.id, -1);
-                        } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-                          e.preventDefault();
-                          nudge(w.id, 1);
-                        }
-                      }}
-                      className="text-muted-foreground hover:text-foreground hover:bg-muted focus-glow -ml-2 grid size-8 cursor-grab place-items-center rounded-full outline-none active:cursor-grabbing"
-                    >
-                      <GripVertical className="size-4" aria-hidden="true" />
-                    </span>
-                  )}
-                  <h2 className="heading min-w-0 text-[17px] break-words">{m.title}</h2>
-                  {actions && (
-                    <div className="flex min-w-0 flex-1 items-center gap-1.5">{actions}</div>
-                  )}
-                  {editing && (
-                    <div
-                      className={cn(
-                        "ms-auto flex min-w-0 flex-wrap items-center justify-end gap-1",
-                        w.w === 1 && "lg:ms-0 lg:basis-full lg:justify-start",
-                      )}
-                    >
-                      <Segmented
-                        label={`${m.title} width`}
-                        value={String(w.w)}
-                        onSelect={(v) => patch(w.id, { w: Number(v) })}
-                        options={WIDTHS}
-                        className="hidden sm:inline-flex"
-                      />
-                      <Segmented
-                        label={`${m.title} height`}
-                        value={String(w.h ?? "fit")}
-                        onSelect={(v) => patch(w.id, { h: v === "fit" ? null : Number(v) })}
-                        options={HEIGHT_PRESETS.map((p) => ({
-                          value: String(p.value ?? "fit"),
-                          label: p.label,
-                        }))}
-                        className="hidden lg:inline-flex"
-                      />
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label={`Remove ${m.title}`}
-                        onClick={() => remove(w.id)}
-                      >
-                        <X className="size-4" aria-hidden="true" />
-                      </Button>
+                {dragged && draggedMeta ? (
+                  <div className="bg-card text-card-foreground ring-foreground/10 rounded-card shadow-e2 flex h-full cursor-grabbing flex-col gap-2 p-5 ring-1">
+                    <div className="flex items-center gap-2">
+                      <GripVertical className="text-muted-foreground size-4" aria-hidden="true" />
+                      <span className="heading text-[17px]">
+                        {titles?.[dragged.id] ?? draggedMeta.title}
+                      </span>
                     </div>
-                  )}
-                </header>
-                <div
-                  className={cn(
-                    "min-h-0 flex-1",
-                    bare
-                      ? "flex flex-col"
-                      : "overflow-auto rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
-                  )}
-                >
-                  {body(w.type)}
-                </div>
-              </section>
-            );
-          })}
-          {layout.length < MAX_WIDGETS && (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="group/add text-muted-foreground hover:text-foreground hover:bg-muted/40 border-border focus-glow rounded-card flex min-h-24 items-center justify-center gap-2.5 border-[1.5px] border-dashed text-sm font-semibold transition-colors outline-none max-md:hidden"
-            >
-              <span className="bg-muted group-hover/add:bg-foreground group-hover/add:text-background grid size-8 place-items-center rounded-full transition-colors">
-                <Plus className="size-4" aria-hidden="true" />
-              </span>
-              Add a widget
-            </button>
-          )}
-        </div>
+                    <span className="text-muted-foreground flex items-center gap-2 text-[13px]">
+                      <ShapeIcon w={dragged.w} h={dragged.h} />
+                      {shapeName(dragged.w, dragged.h)}
+                    </span>
+                  </div>
+                ) : null}
+              </DragOverlay>,
+              document.body,
+            )}
+        </DndContext>
       )}
 
       <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[85svh] overflow-y-auto overscroll-contain sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a widget</DialogTitle>
-            <DialogDescription className="sr-only">
-              It goes at the end of your board.
-            </DialogDescription>
+            <DialogDescription className="sr-only">It goes at the end of {noun}.</DialogDescription>
           </DialogHeader>
           {layout.length >= MAX_WIDGETS ? (
             <p className="text-muted-foreground text-sm">
-              Your board is full ({MAX_WIDGETS} widgets). Remove one first.
+              {noun[0].toUpperCase() + noun.slice(1)} is full ({MAX_WIDGETS} widgets). Remove one
+              first.
             </p>
           ) : (
             <div className="space-y-5">
@@ -544,10 +680,14 @@ export function WidgetBoard({
                               <span className="min-w-0">
                                 <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                                   {t.title}
-                                  {onBoard && <Badge variant="secondary">On your board</Badge>}
+                                  {onBoard && <Badge variant="secondary">Already added</Badge>}
                                 </span>
                                 <span className="text-muted-foreground block text-xs">
                                   {t.description}
+                                </span>
+                                <span className="text-muted-foreground mt-1.5 flex items-center gap-1.5 text-xs">
+                                  <ShapeIcon w={t.w} h={t.h} />
+                                  {shapeName(t.w, t.h)}
                                 </span>
                               </span>
                             </button>
@@ -563,5 +703,230 @@ export function WidgetBoard({
       </Dialog>
       {footer}
     </div>
+  );
+}
+
+/** One widget on the board: its card, and while customizing its handle, shape and corner. */
+function BoardItem({
+  widget: w,
+  meta: m,
+  editing,
+  readOnly,
+  dragging,
+  fresh,
+  hiddenOnPhone,
+  actions,
+  measure,
+  onShape,
+  onNudge,
+  onRemove,
+  children,
+}: {
+  widget: BoardWidget;
+  meta: WidgetMeta;
+  editing: boolean;
+  readOnly: boolean;
+  dragging: boolean;
+  fresh: boolean;
+  hiddenOnPhone: boolean;
+  actions: ReactNode;
+  measure: () => { cols: number; gap: number; pitch: number; left: number } | null;
+  onShape: (w: number, h: number | null) => void;
+  onNudge: (by: number) => void;
+  onRemove: () => void;
+  children: ReactNode;
+}) {
+  const { setNodeRef, listeners } = useSortable({ id: w.id, disabled: !editing });
+  const coarse = useCoarsePointer();
+  const drag = editing
+    ? (listeners?.onPointerDown as React.PointerEventHandler | undefined)
+    : undefined;
+  const [resizing, setResizing] = useState(false);
+  const bare = m.frame === "bare";
+
+  // The corner follows the pointer a cell at a time: half way into the next
+  // column or row takes it. Everything is measured from where the widget
+  // was when the drag began, so a widget that moves (a wider one wrapping
+  // to the next row) can't feed back into its own size. It widens only up
+  // to the board's right edge from the column it's in; past that edge it
+  // goes full width. A narrower screen's two columns read as half and full
+  // width, so a widget wider than half stays as wide as it was. Moves are
+  // taken once a frame.
+  function startResize(e: React.PointerEvent<HTMLSpanElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    const handle = e.currentTarget;
+    const card = handle.closest<HTMLElement>("[data-widget-id]");
+    const grid = measure();
+    if (!card || !grid) return;
+    handle.setPointerCapture(e.pointerId);
+    setResizing(true);
+    const start = card.getBoundingClientRect();
+    const column = Math.max(0, Math.round((start.left - grid.left) / grid.pitch));
+    const room = Math.max(1, grid.cols - column);
+    const edge = grid.left + grid.cols * grid.pitch - grid.gap;
+    let frame = 0;
+    let last: PointerEvent | null = null;
+    const apply = () => {
+      frame = 0;
+      if (!last) return;
+      const across = Math.round((last.clientX - start.left + grid.gap) / grid.pitch);
+      const down = Math.round((last.clientY - start.top + grid.gap) / grid.pitch);
+      const pastEdge = last.clientX > edge + grid.pitch / 3;
+      const cols = pastEdge ? grid.cols : Math.min(room, Math.max(1, across));
+      const nw =
+        grid.cols >= BOARD_COLUMNS ? cols : cols >= grid.cols ? Math.max(w.w, grid.cols) : cols;
+      onShape(nw, Math.min(MAX_ROWS, Math.max(1, down)));
+    };
+    const move = (ev: PointerEvent) => {
+      last = ev;
+      if (!frame) frame = requestAnimationFrame(apply);
+    };
+    const end = () => {
+      if (frame) cancelAnimationFrame(frame);
+      apply();
+      setResizing(false);
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+
+  return (
+    <section
+      ref={setNodeRef}
+      id={`w-${w.id}`}
+      aria-label={m.title}
+      data-widget-id={w.id}
+      data-frame={bare ? "bare" : "card"}
+      onPointerDown={coarse ? undefined : drag}
+      style={w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
+      className={cn(
+        SPAN[w.w] ?? SPAN[1],
+        hiddenOnPhone && "max-md:hidden",
+        "group/widget relative flex min-w-0 flex-col transition-[opacity,outline-color,box-shadow]",
+        bare
+          ? "rounded-block"
+          : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
+        w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
+        editing &&
+          "outline-border cursor-grab outline-[1.5px] outline-offset-[3px] outline-dashed select-none active:cursor-grabbing",
+        editing && !coarse && "touch-none",
+        editing && bare && "bg-muted/40 p-2",
+        editing && resizing && "outline-foreground outline-solid",
+        dragging && "bg-muted/50 outline-foreground opacity-50",
+        fresh && "ring-foreground/40 ring-2",
+      )}
+    >
+      {!editing && !readOnly && (
+        <button
+          type="button"
+          aria-label={`Remove ${m.title}`}
+          onClick={onRemove}
+          className="bg-card text-muted-foreground hover:text-destructive ring-foreground/10 focus-glow absolute -top-2.5 -right-2.5 z-10 grid size-7 place-items-center rounded-full opacity-0 shadow-sm ring-1 transition-opacity outline-none group-focus-within/widget:opacity-100 group-hover/widget:opacity-100 focus-visible:opacity-100 max-md:hidden"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      )}
+      {/* A bare widget has no header until Customize: its body is its own surface. */}
+      <header
+        className={cn(
+          "flex items-center gap-2",
+          bare
+            ? editing
+              ? "mb-2 min-h-10 px-2"
+              : "sr-only"
+            : "min-h-14 px-[18px] pt-4 pb-1 sm:px-6 sm:pt-5",
+          !editing && "flex-wrap",
+        )}
+      >
+        {editing && (
+          <span
+            tabIndex={0}
+            role="button"
+            onPointerDown={coarse ? drag : undefined}
+            aria-label={`Move ${m.title}. Arrow keys move it earlier or later.`}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                e.preventDefault();
+                onNudge(-1);
+              } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                e.preventDefault();
+                onNudge(1);
+              }
+            }}
+            className={cn(
+              "text-muted-foreground hover:text-foreground hover:bg-muted focus-glow -ml-2 grid size-8 shrink-0 place-items-center rounded-full outline-none",
+              coarse && "size-10 touch-none",
+            )}
+          >
+            <GripVertical className="size-4" aria-hidden="true" />
+          </span>
+        )}
+        <h2 className={cn("heading min-w-0 text-[17px] break-words", editing && "truncate")}>
+          {m.title}
+        </h2>
+        {actions && <div className="flex min-w-0 flex-1 items-center gap-1.5">{actions}</div>}
+        {editing && (
+          // Pressing a control here is a click, not the start of a drag.
+          <div
+            className="ms-auto flex shrink-0 items-center gap-1"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <ShapePicker title={m.title} w={w.w} h={w.h} compact={w.w === 1} onChange={onShape} />
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              className="text-muted-foreground hover:text-destructive"
+              aria-label={`Remove ${m.title}`}
+              onClick={onRemove}
+            >
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        )}
+      </header>
+      <div
+        inert={editing || undefined}
+        className={cn(
+          "min-h-0 flex-1",
+          bare
+            ? "flex flex-col"
+            : "overflow-auto overscroll-contain rounded-b-[inherit] px-[18px] pt-3 pb-5 sm:px-6 sm:pb-6",
+          editing && "opacity-70",
+        )}
+      >
+        {children}
+      </div>
+      {editing && resizing && (
+        <span className="bg-foreground text-background shadow-e2 pointer-events-none absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-semibold whitespace-nowrap">
+          <ShapeIcon w={w.w} h={w.h} />
+          {shapeName(w.w, w.h)}
+        </span>
+      )}
+      {editing && (
+        <span
+          role="presentation"
+          title="Drag to resize"
+          onPointerDown={startResize}
+          className="group/corner absolute -right-1.5 -bottom-1.5 z-10 grid size-7 cursor-nwse-resize touch-none place-items-center max-sm:hidden"
+        >
+          <span className="bg-card ring-foreground/15 group-hover/corner:bg-foreground group-hover/corner:text-background text-muted-foreground grid size-5 place-items-center rounded-full shadow-sm ring-1 transition-colors">
+            <svg viewBox="0 0 10 10" className="size-2.5" aria-hidden="true">
+              <path
+                d="M9 3 3 9M9 6.5 6.5 9"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+        </span>
+      )}
+    </section>
   );
 }

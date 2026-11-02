@@ -2,6 +2,11 @@ import { Inbox } from "@/components/icons";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
+import {
+  InboxAnnouncements,
+  type AnnouncementEventOption,
+  type InboxAnnouncement,
+} from "@/components/inbox/announcements";
 import { InboxView, type InboxRow, type InboxView as View } from "@/components/inbox/inbox-view";
 import { ClearRead, MarkAllRead } from "@/components/inbox/inbox-actions";
 import { listWhen } from "@/components/meetings/meeting-card";
@@ -18,15 +23,34 @@ import {
   localDateKey,
 } from "@/lib/tasks/dates";
 import type { NotificationType } from "@/generated/prisma/enums";
+import {
+  countAnnouncements,
+  listAnnouncements,
+  signupInsights,
+} from "@/server/announcements/announcements";
+import {
+  byline,
+  INBOX_LIMIT,
+  postedWhen,
+  recapWindowStart,
+  RECENT_DAYS,
+} from "@/server/announcements/rules";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
+import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { loadInboxState } from "@/server/inbox/state";
+import { RECAP_TITLE } from "@/server/overview/recap-week-text";
 import { getMyOpenTasks } from "@/server/tasks/queries";
 
 /** How far ahead a task counts as needing you now. */
 const TASK_DAYS = 7;
 const TASKS_LIMIT = 40;
 const UPDATES_LIMIT = 80;
+/** "See all" announcements shows this many, newest first. */
+const ANNOUNCEMENTS_ALL = 50;
+/** The events a new announcement can be about: from yesterday on, the next few. */
+const EVENT_CHOICES = 20;
 
 /**
  * Inbox: everything waiting on you in this space, with the thing to do right
@@ -43,6 +67,12 @@ const UPDATES_LIMIT = 80;
  *
  * A row opens beside the list (the side peek); the chips above filter by
  * kind; j and k move, Enter opens, e finishes, s snoozes until tomorrow.
+ *
+ * Above the tabs, in every view: Announcements, the organization's latest
+ * posts (the last two weeks, a few at most; ?announcements=all for every
+ * one), with a composer anyone can post from. The composer also drafts this
+ * week's recap on demand (the recap isn't loaded here); from Friday to Sunday
+ * (the organization's time) it nudges to post it until one goes out.
  */
 export default async function InboxPage({
   params,
@@ -55,8 +85,14 @@ export default async function InboxPage({
   const ctx = await getOrgContextBySlug(orgSlug);
   const { organization: org, user } = ctx;
   const base = `/app/${orgSlug}`;
-  const canReview = can(ctx, "finance.manage");
+  // An add-on that isn't added keeps its rows out of Inbox (src/lib/addons.ts).
+  const addOns = readAddOns(ctx.settings?.addOns);
+  const canReview = can(ctx, "finance.manage") && addOns.includes("finance");
+  const canManagePosts = can(ctx, "events.write");
+  const allPosts = sp.announcements === "all";
   const now = new Date();
+  // The end of the week, when the composer nudges to post the recap (null other days).
+  const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
 
   const data = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
@@ -64,45 +100,12 @@ export default async function InboxPage({
     const todayKey = localDateKey(now, tz);
     const [state, invites, open, toReview, notifications, forms, nextEvent] = await Promise.all([
       loadInboxState(db, org.id, user.id, now),
-      db.eventAttendee.findMany({
-        where: {
-          organizationId: org.id,
-          userId: user.id,
-          rsvp: "PENDING",
-          event: { deletedAt: null, mergedIntoId: null, endsAt: { gt: now } },
-        },
-        select: {
-          event: {
-            select: {
-              id: true,
-              title: true,
-              startsAt: true,
-              endsAt: true,
-              allDay: true,
-              location: true,
-              createdBy: { select: { name: true, image: true, avatar: true } },
-              host: { select: { name: true, image: true, avatar: true } },
-            },
-          },
-        },
-        orderBy: { event: { startsAt: "asc" } },
-        take: 30,
-      }),
+      listOpenInvites(db, org.id, user.id, now),
       getMyOpenTasks(db, org.id, user.id, { limit: TASKS_LIMIT, today: fromDateKey(todayKey) }),
       // Each reimbursement request waiting on a treasurer, oldest first.
+      // A treasurer can't approve their own, so theirs aren't listed here.
       canReview
-        ? db.transaction.findMany({
-            where: { organizationId: org.id, status: "SUBMITTED", voidedAt: null },
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              description: true,
-              amountCents: true,
-              occurredAt: true,
-              submittedBy: { select: { name: true, image: true, avatar: true } },
-            },
-            take: 30,
-          })
+        ? listRequestsToReview(db, org.id, { notSubmittedBy: user.id })
         : Promise.resolve([]),
       db.notification.findMany({
         where: { organizationId: org.id, userId: user.id },
@@ -111,7 +114,7 @@ export default async function InboxPage({
         include: { actor: { select: { name: true, image: true, avatar: true } } },
       }),
       // Forms this person made whose responses wait on a review.
-      can(ctx, "databases.write")
+      can(ctx, "databases.write") && addOns.includes("forms")
         ? toReviewForOwner(db, org.id, user.id)
         : Promise.resolve([] as { id: string; title: string; count: number }[]),
       // For the empty state: what's next, so caught up still points somewhere.
@@ -126,10 +129,47 @@ export default async function InboxPage({
         select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
       }),
     ]);
+    // Announcements, one query after the other (a transaction has one connection).
+    const posts = await listAnnouncements(db, org.id, user.id, {
+      limit: allPosts ? ANNOUNCEMENTS_ALL : INBOX_LIMIT,
+      since: allPosts ? undefined : new Date(now.getTime() - RECENT_DAYS * 86_400_000),
+      orgSlug,
+    });
+    // Counted always: "See all" stays when every post is older than two weeks.
+    const postCount = await countAnnouncements(db, org.id);
+    // Sign-ups are for owners and admins to read, so only they get the fact.
+    const insights = canManagePosts ? await signupInsights(db, org.id, posts, now) : new Map();
+    // Friday to Sunday: is this week's recap still to go out? (One posted since Friday is it.)
+    const recapDue = recapFrom
+      ? (await db.announcement.count({
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            title: { startsWith: RECAP_TITLE },
+            createdAt: { gte: recapFrom },
+          },
+        })) === 0
+      : false;
+    const eventChoices = await db.event.findMany({
+      where: {
+        organizationId: org.id,
+        deletedAt: null,
+        mergedIntoId: null,
+        startsAt: { gte: new Date(now.getTime() - 86_400_000) },
+      },
+      orderBy: { startsAt: "asc" },
+      take: EVENT_CHOICES,
+      select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
+    });
     return {
       tz,
       todayKey,
       state,
+      posts,
+      postCount,
+      insights,
+      recapDue,
+      eventChoices,
       invites,
       tasks: open.tasks,
       toReview,
@@ -140,6 +180,7 @@ export default async function InboxPage({
   });
 
   const { tz, todayKey, state } = data;
+
   const weekEnd = addDaysToKey(todayKey, TASK_DAYS);
 
   const needs: InboxRow[] = [
@@ -239,6 +280,33 @@ export default async function InboxPage({
   const view: View = asked === "snoozed" && snoozed.length === 0 ? "needs" : asked;
   const rows = view === "needs" ? needsNow : view === "updates" ? updatesNow : snoozed;
 
+  const announcements: InboxAnnouncement[] = data.posts.map((p) => ({
+    id: p.id,
+    title: p.title,
+    body: p.body,
+    author: p.author,
+    byline: byline(p.author?.name, postedWhen(p.createdAt, now, tz)),
+    seenCount: p.seenCount,
+    memberCount: p.memberCount,
+    seenByMe: p.seenByMe,
+    links: p.links,
+    canManage: canManagePosts || p.author?.id === user.id,
+    insight: data.insights.get(p.id) ?? null,
+  }));
+  const eventChoices: AnnouncementEventOption[] = data.eventChoices.map((e) => ({
+    id: e.id,
+    label: `${e.title}, ${listWhen(e.startsAt, e.endsAt, tz, e.allDay)}`,
+  }));
+  // Links keep the Inbox's tab (view) as it is.
+  const inboxHref = (to: { view?: View; all?: boolean } = {}): string => {
+    const tab = to.view ?? asked;
+    const query = [tab === "needs" ? "" : `view=${tab}`, to.all ? "announcements=all" : ""].filter(
+      Boolean,
+    );
+    return query.length > 0 ? `${base}/inbox?${query.join("&")}` : `${base}/inbox`;
+  };
+  const seeAllHref = inboxHref({ all: true });
+
   const next = data.nextEvent;
   const caughtUp = (
     <EmptyState
@@ -275,6 +343,15 @@ export default async function InboxPage({
         }
       />
 
+      <InboxAnnouncements
+        orgId={org.id}
+        items={announcements}
+        events={eventChoices}
+        total={data.postCount}
+        seeAllHref={seeAllHref}
+        recapDue={data.recapDue}
+      />
+
       <InboxView
         key={view}
         orgId={org.id}
@@ -285,13 +362,13 @@ export default async function InboxPage({
             value: "needs",
             label: "Needs you",
             count: needsNow.length,
-            href: `${base}/inbox`,
+            href: inboxHref({ view: "needs" }),
           },
           {
             value: "updates",
             label: "Updates",
             count: unread,
-            href: `${base}/inbox?view=updates`,
+            href: inboxHref({ view: "updates" }),
           },
           ...(snoozed.length > 0
             ? [
@@ -299,7 +376,7 @@ export default async function InboxPage({
                   value: "snoozed" as const,
                   label: "Snoozed",
                   count: snoozed.length,
-                  href: `${base}/inbox?view=snoozed`,
+                  href: inboxHref({ view: "snoozed" }),
                 },
               ]
             : []),

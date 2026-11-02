@@ -8,12 +8,15 @@ import {
   FileText,
   Link2,
   Loader2,
+  Megaphone,
+  MessageCircleQuestion,
   NotebookText,
   PiggyBank,
   Plus,
   Search,
   Table,
   Users,
+  Vote,
   Wallet,
   X,
   type IconComponent,
@@ -43,6 +46,9 @@ const ICONS: Record<LinkKind, IconComponent> = {
   form: ClipboardList,
   budget: PiggyBank,
   record: Table,
+  poll: Vote,
+  decision: MessageCircleQuestion,
+  announcement: Megaphone,
 };
 
 /**
@@ -61,6 +67,9 @@ const TONES: Record<LinkKind, string> = {
   form: "var(--tag-navy)",
   budget: "var(--tag-ochre)",
   record: "var(--tag-teal)",
+  poll: "var(--tag-navy)",
+  decision: "var(--tag-burgundy)",
+  announcement: "var(--tag-rust)",
 };
 
 /** A row the page attaches itself (a meeting's notes): opens like a link, can't be unlinked here. */

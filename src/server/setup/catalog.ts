@@ -139,7 +139,7 @@ export const SETUP_STEPS: readonly SetupStepDefinition[] = [
     summary: "Read an org chart out of a slide, a PDF or a screenshot.",
     unlocks: [
       "Upload last year's org chart and get positions and people, not a picture",
-      "Re-run it each semester instead of retyping the board",
+      "Re-run it whenever the board changes instead of retyping it",
     ],
     minutes: 3,
     prerequisite: null,

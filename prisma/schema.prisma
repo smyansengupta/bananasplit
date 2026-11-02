@@ -116,6 +116,13 @@ model User {
   noteCommentsResolved   NoteComment[]        @relation("NoteCommentResolvedBy")
   noteVersions           NoteVersion[]        @relation("NoteVersionCreatedBy")
   itemLinksMade          ItemLink[]
+  announcements          Announcement[]       @relation("AnnouncementAuthor")
+  announcementsRemoved   Announcement[]       @relation("AnnouncementDeletedBy")
+  announcementsSeen      AnnouncementSeen[]
+  decisionsOwned         Decision[]           @relation("DecisionOwner")
+  decisionsCreated       Decision[]           @relation("DecisionCreatedBy")
+  reportsCreated         Report[]             @relation("ReportCreatedBy")
+  reportSnapshotsTaken   ReportSnapshot[]     @relation("ReportSnapshotTakenBy")
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -188,7 +195,11 @@ model MemberPrefs {
   financeWidgets  Json?
   /// Overview widget layout, same shape (src/lib/overview/widgets.ts).
   overviewWidgets Json?
-  updatedAt       DateTime @default(now()) @updatedAt
+  /// When they last opened Home, and the visit before that: "Since you were
+  /// here" counts what changed after homePrevVisitAt.
+  homeVisitAt     DateTime?
+  homePrevVisitAt DateTime?
+  updatedAt       DateTime  @default(now()) @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -438,6 +449,10 @@ model Organization {
   pulseIssues       PulseIssue[]
   connectorGrants   ConnectorGrant[]
   itemLinks         ItemLink[]
+  announcements     Announcement[]
+  decisions         Decision[]
+  reports           Report[]
+  reportSnapshots   ReportSnapshot[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -489,6 +504,8 @@ enum NotificationType {
   EVENT_REMINDER
   // A new answer to a form you made (src/server/forms/public.ts)
   FORM_RESPONSE
+  // A saved report on its schedule (src/server/reports/jobs.ts)
+  REPORT_SENT
 }
 
 model Notification {
@@ -683,6 +700,7 @@ model Task {
   @@index([organizationId, completedAt])
   // C4: the "Private only" filter, and the RLS predicate's cheap first test.
   @@index([organizationId, visibility])
+  @@index([organizationId, createdById, status])
 }
 
 /// How an assignee (or owner) relates to the assigner in the published org
@@ -769,6 +787,7 @@ model TaskComment {
   author User @relation("TaskCommentAuthor", fields: [authorId], references: [id])
 
   @@index([organizationId, taskId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 /// @[Name](user:id) tokens found in a task description ('desc') or a
@@ -789,6 +808,7 @@ model TaskMention {
 
   @@unique([taskId, sourceKey, mentionedUserId])
   @@index([organizationId, mentionedUserId, createdAt])
+  @@index([organizationId, mentionedById, createdAt])
 }
 
 /// Append-only task history (no UPDATE or DELETE for app_user).
@@ -807,6 +827,7 @@ model TaskActivity {
   actor User? @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, taskId, createdAt])
+  @@index([organizationId, type, createdAt])
 }
 
 /// A lead's Sunday update: done / next / blocked for the org-local week
@@ -1004,6 +1025,7 @@ model NoteComment {
   @@unique([noteId, id])
   @@index([organizationId, noteId, createdAt])
   @@index([noteId, threadId])
+  @@index([organizationId, createdAt])
 }
 
 /// A saved copy of a note's body: autosave snapshots (the service path,
@@ -1449,6 +1471,10 @@ model MemberPresence {
   organizationId String
   userId         String
   lastSeenAt     DateTime @default(now())
+  /// The page they have open (a path under /app/{slug}) and its sidebar
+  /// section's name, for Home's "Here now". Never the page's own title.
+  pageHref       String?
+  pageLabel      String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2155,6 +2181,10 @@ model OrgSettings {
   /// The sidebar for everyone in the org: [{ id, hidden?, label? }] in order
   /// (src/lib/nav/sidebar.ts). NULL: the default sidebar. OWNER/ADMIN edit it.
   sidebar                       Json?
+  /// The add-ons this organization has added ("forms", "finance";
+  /// src/lib/addons.ts). One that isn't here stays out of the sidebar and
+  /// New; its data is never touched. Backfilled from use when introduced.
+  addOns                        String[]         @default([])
   // The weekly pulse (PulseIssue)
   pulseEnabled                  Boolean          @default(true)
   /// The day it goes out, 0 Sunday … 6 Saturday (as weeklyUpdateDay).
@@ -2958,4 +2988,143 @@ model ItemLink {
 
   @@unique([organizationId, fromKind, fromId, toKind, toId])
   @@index([organizationId, toKind, toId])
+}
+
+/// An announcement to the whole organization, at the top of the Inbox. Any
+/// member posts one (authorId pinned); the author or an owner/admin edits or
+/// removes it (deletedAt, deletedById); only whoever removed it, or an
+/// owner/admin, puts it back (app.announcement_guard). A linked event goes
+/// through ItemLink (fromKind "announcement").
+model Announcement {
+  id             String    @id @default(cuid())
+  organizationId String
+  authorId       String?
+  title          String
+  body           String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  /// Who removed it, while it's removed.
+  deletedById    String?
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  author       User?              @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  deletedBy    User?              @relation("AnnouncementDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  seen         AnnouncementSeen[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, deletedAt, createdAt])
+}
+
+/// Who has seen an announcement, for "Seen by N of M". Every member reads
+/// the rows; each writes only their own (RLS pins userId).
+model AnnouncementSeen {
+  organizationId String
+  announcementId String
+  userId         String
+  seenAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [organizationId, announcementId], references: [organizationId, id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@index([organizationId, userId])
+}
+
+enum DecisionStatus {
+  OPEN
+  DECIDED
+  DROPPED
+}
+
+/// Something the organization has to decide (Home's Decisions). Any member
+/// raises one; anyone takes an unowned one; the owner, whoever raised it or
+/// an owner/admin decides or drops it, and a settled one doesn't change
+/// (app.decision_guard). Meetings, notes, polls and events it
+/// came from link through ItemLink (fromKind "decision").
+model Decision {
+  id             String         @id @default(cuid())
+  organizationId String
+  question       String
+  detail         String?
+  status         DecisionStatus @default(OPEN)
+  outcome        String?
+  ownerId        String?
+  createdById    String?
+  decidedAt      DateTime?
+  dueAt          DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?        @relation("DecisionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation("DecisionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, createdAt])
+  @@index([ownerId])
+  @@index([createdById])
+}
+
+/// Who sees a saved report (Databases > Reports): only whoever made it, or
+/// everyone in the organization. Either way each viewer's numbers come from
+/// the rows THEY can see, so sharing a report never shares a row.
+enum ReportAccess {
+  PRIVATE
+  ORGANIZATION
+}
+
+/// A saved report: one source (a database, or Tasks, Expenses, Events or
+/// People) and a board of widgets on it, each with its own settings
+/// (src/lib/reports/catalog.ts). Built by the New report walkthrough.
+/// Removing one archives it (app_user has no DELETE).
+model Report {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  /// "custom:<databaseId>", "tasks", "expenses", "events" or "people".
+  source         String
+  access         ReportAccess @default(ORGANIZATION)
+  /// [{id, type, w, h, config}] in board order, validated by zod.
+  widgets        Json         @default("[]")
+  /// Claude's last reading of the report ({lines: [...]}), and when.
+  insights       Json?
+  insightsAt     DateTime?
+  /// A second database joined on a shared field: {source, field, otherField}
+  /// (src/lib/reports/join.ts).
+  joinWith       Json?
+  /// When it emails itself: {every, day, hour, to} (src/lib/reports/schedule.ts).
+  schedule       Json?
+  createdById    String?
+  archivedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?            @relation("ReportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  snapshots    ReportSnapshot[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, archivedAt, updatedAt])
+  @@index([createdById])
+}
+
+/// A report as it read at one moment (Report history): every widget's numbers
+/// and the insights, frozen, for the range it was taken over. Never edited.
+model ReportSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  reportId       String
+  takenById      String?
+  /// e.g. "Fall 2026".
+  rangeLabel     String
+  /// {title, widgets: [{id, type, w, h, title, payload}], insights}.
+  data           Json
+  takenAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  report       Report       @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Cascade)
+  takenBy      User?        @relation("ReportSnapshotTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, reportId, takenAt])
+  @@index([takenById])
 }

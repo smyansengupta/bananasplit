@@ -131,7 +131,7 @@ export function NavMenu({
             </button>
           </div>
 
-          <nav aria-label="Sections" className="mt-4 min-h-0 flex-1 overflow-y-auto">
+          <nav aria-label="Sections" className="mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
             {sections.map((section, i) => {
               const links = section.items.filter((l) => !l.locked);
               if (links.length === 0) return null;

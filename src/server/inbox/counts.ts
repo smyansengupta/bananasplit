@@ -15,6 +15,8 @@ export interface SidebarCounts {
   forms: number;
   /** Reimbursement requests waiting on a treasurer. */
   finance: number;
+  /** What `inbox` is made of, for Home's Today strip. */
+  needsYou: { invites: number; tasks: number; requests: number; reviews: number };
 }
 
 /**
@@ -88,5 +90,6 @@ export async function sidebarCounts(
     inbox: invites + tasks + finance + formsWaiting,
     forms: formResponses,
     finance,
+    needsYou: { invites, tasks, requests: finance, reviews: formsWaiting },
   };
 }

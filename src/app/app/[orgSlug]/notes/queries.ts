@@ -1,7 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { trashCutoff } from "@/lib/notes/trash";
 import type { TxClient } from "@/server/db/context";
-import { userPublicSelect } from "@/server/members";
 import { noteVisibleWhere } from "@/server/notes/visibility";
 import { everyWord } from "@/server/search/where";
 
@@ -88,7 +87,12 @@ export function getNotesForList(
  * member may restore (their own, and for an admin any shared note), the
  * same people restoreNote lets through.
  */
-export function getDeletedNotes(db: TxClient, organizationId: string, userId: string, isAdmin: boolean) {
+export function getDeletedNotes(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  isAdmin: boolean,
+) {
   return db.note.findMany({
     where: {
       organizationId,
@@ -108,7 +112,12 @@ export function getDeletedNotes(db: TxClient, organizationId: string, userId: st
 }
 
 /** How many items "Recently deleted" holds for this member (notes and files). */
-export async function countDeleted(db: TxClient, organizationId: string, userId: string, isAdmin: boolean) {
+export async function countDeleted(
+  db: TxClient,
+  organizationId: string,
+  userId: string,
+  isAdmin: boolean,
+) {
   const since = trashCutoff();
   const notes = await db.note.count({
     where: {
@@ -118,36 +127,17 @@ export async function countDeleted(db: TxClient, organizationId: string, userId:
     },
   });
   const files = await db.orgFile.count({
-    where: { organizationId, deletedAt: { gte: since }, ...(isAdmin ? {} : { uploadedById: userId }) },
+    where: {
+      organizationId,
+      deletedAt: { gte: since },
+      ...(isAdmin ? {} : { uploadedById: userId }),
+    },
   });
   return notes + files;
 }
 
 export const NOTE_SORTS = ["edited", "created", "title"] as const;
 export type NoteSort = (typeof NOTE_SORTS)[number];
-
-/** The overview's most recently edited notes the viewer may read. */
-export function getRecentNotes(
-  db: TxClient,
-  organizationId: string,
-  userId: string,
-  limit: number,
-) {
-  return db.note.findMany({
-    where: { organizationId, deletedAt: null, ...visibleToUser(userId) },
-    select: {
-      id: true,
-      title: true,
-      visibility: true,
-      updatedAt: true,
-      updatedBy: { select: userPublicSelect },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: limit,
-  });
-}
-
-export type RecentNote = Awaited<ReturnType<typeof getRecentNotes>>[number];
 
 /** One note the viewer may read, with their own share of it (if any) in `shares`. */
 export function getNoteById(db: TxClient, organizationId: string, userId: string, noteId: string) {

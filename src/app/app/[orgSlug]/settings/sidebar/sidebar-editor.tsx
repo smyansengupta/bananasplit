@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toaster";
 import {
+  PINNED_PLACE,
   toConfig,
   type GroupId,
   type ResolvedGroup,
@@ -113,7 +114,9 @@ export function SidebarEditor({
   /** Moves `id` to `group`, in front of `beforeId` (or to the end). */
   function move(id: string, group: GroupId, beforeId: string | null) {
     const item = groups.flatMap((g) => g.items).find((i) => i.id === id);
-    if (!item || item.locked) return;
+    // Files and Integrations and apps keep their place (src/lib/nav/sidebar.ts).
+    if (!item || item.locked || PINNED_PLACE.includes(item.id)) return;
+    if (group === "workspace") return;
     const without = groups.map((g) => ({ ...g, items: g.items.filter((i) => i.id !== id) }));
     commit(
       without.map((g) => {
@@ -203,9 +206,12 @@ export function SidebarEditor({
                       setDragId(null);
                     }}
                   >
-                    {item.locked ? (
+                    {item.locked || PINNED_PLACE.includes(item.id) ? (
                       <span className="grid size-8 shrink-0 place-items-center">
-                        <Lock className="text-muted-foreground size-4" aria-label="Always shown" />
+                        <Lock
+                          className="text-muted-foreground size-4"
+                          aria-label={item.locked ? "Always shown" : "Stays in its place"}
+                        />
                       </span>
                     ) : (
                       <span

@@ -1,4 +1,5 @@
 import {
+  DecisionStatus,
   OrgChartVersionStatus,
   PositionMatchState,
   Role,
@@ -86,6 +87,8 @@ export function outstandingExpensesMessage(n: number, self: boolean): string {
  *     their ICS feed);
  *   - ownership of open tasks (they become unowned and anyone can claim
  *     them; completed tasks keep their owner as history), epics included;
+ *   - ownership of open decisions, the same way (decided and dropped ones
+ *     keep theirs);
  *   - org chart positions revert to placeholders (the title stays), and the
  *     member drops out of draft match suggestions.
  * Their notes, comments and past events stay, authored by a former member.
@@ -110,6 +113,10 @@ export async function untieDepartingMember(
       deletedAt: null,
     },
     data: { ownerId: null, ownerRelation: null, ownerFlagged: false, ownerAssignedById: null },
+  });
+  await db.decision.updateMany({
+    where: { organizationId, ownerId: userId, status: DecisionStatus.OPEN },
+    data: { ownerId: null, updatedAt: new Date() },
   });
   await untieOrgChart(db, organizationId, userId);
 }

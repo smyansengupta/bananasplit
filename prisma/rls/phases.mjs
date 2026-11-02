@@ -17,6 +17,13 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // P-CAT1 until this matrix is updated in review.
 const GRANTS = {
   Account: ["", "", "SIUD"],
+  // Announcements: members post (authorId pinned); the author or an admin
+  // edits and removes one (title, body, updatedAt, deletedAt and deletedById
+  // are app_user's UPDATE columns; app.announcement_guard keeps a removal
+  // the remover's or an admin's to undo). Seeing one is an insert of your
+  // own row.
+  Announcement: ["SIu", "SD", ""],
+  AnnouncementSeen: ["SI", "SD", ""],
   Attendance: ["SIUD", "SIUD", ""],
   AvailabilityPoll: ["SIUD", "SIUD", ""],
   Ballot: ["SIUD", "SIUD", ""],
@@ -31,6 +38,17 @@ const GRANTS = {
   // context); app_auth revokes through app.revoke_connector_grants only.
   ConnectorGrant: ["SIUD", "", ""],
   DataSourceSyncState: ["S", "SIUD", ""],
+  // Decisions: members raise and take them; the owner, the raiser or an
+  // admin decides or drops one (a column grant of status, outcome, ownerId,
+  // decidedAt and updatedAt; app.decision_guard does the rest). Never
+  // deleted by a member.
+  Decision: ["SIu", "SD", ""],
+  // Saved reports: members make them (createdById pinned); the maker, or an
+  // owner/admin on a shared one, edits and archives (title, access,
+  // widgets, insights, insightsAt, archivedAt, updatedAt). A snapshot is
+  // taken as yourself of a report you can see, and never edited.
+  Report: ["SIu", "SD", ""],
+  ReportSnapshot: ["SI", "SD", ""],
   DatabaseDefinition: ["SIU", "SIUD", ""],
   // Club-made databases: rows and fields, guarded per database by
   // app.can_view_database / app.can_edit_database.
@@ -209,6 +227,11 @@ const NEW_TENANT_TABLES = [
   "MemberPresence",
   "InboxItemState",
   "ItemLink",
+  "Announcement",
+  "AnnouncementSeen",
+  "Decision",
+  "Report",
+  "ReportSnapshot",
   "Form",
   "FormResponse",
   "DatabaseField",
@@ -403,6 +426,10 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         await q(`SELECT array_agg(e.enumlabel::text ORDER BY e.enumsortorder) v FROM pg_enum e
                            JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'TaskStatus'`)
       ).rows[0].v,
+      decision_status: (
+        await q(`SELECT array_agg(e.enumlabel::text ORDER BY e.enumsortorder) v FROM pg_enum e
+                           JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'DecisionStatus'`)
+      ).rows[0].v,
       indexes: (
         await q(`SELECT array_agg(indexname::text ORDER BY indexname) v FROM pg_indexes WHERE schemaname = 'public' AND indexname IN
       ('Transaction_categoryId_idx','FinanceAuditLog_transactionId_idx','BudgetCategory_budgetPeriodId_idx',
@@ -436,8 +463,12 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "EVENT_REMINDER",
           // A new answer on a form (20261031160000_forms).
           "FORM_RESPONSE",
+          // A saved report on its schedule (20261102180000_report_join_schedule).
+          "REPORT_SENT",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
+        // Home's Decisions (20261102100000_home_widgets).
+        decision_status: ["OPEN", "DECIDED", "DROPPED"],
         indexes: [
           "BudgetCategory_budgetPeriodId_idx",
           "FinanceAuditLog_transactionId_idx",
@@ -5126,6 +5157,372 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     A("u_memberA"),
     async (q) => tryv(q, `SELECT count(*) FROM app.revoke_connector_grants('u_adminA')`),
     { value: "error:42501" },
+  );
+
+  // ======================= Home widgets (20261102100000_home_widgets) =======================
+  await tcase(
+    "P-HOME-01",
+    "announcements: any member posts as themselves, the author or an admin edits, only the remover or an admin restores, each member marks only their own sighting",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.post_own = await tryq(
+        q,
+        `INSERT INTO "Announcement" ("id","organizationId","authorId","title","body","updatedAt")
+         VALUES ('an_1','org_A','u_memberA','Social on Friday','Bring a friend',now())`,
+      );
+      s.post_as_other = await tryq(
+        q,
+        `INSERT INTO "Announcement" ("id","organizationId","authorId","title","body","updatedAt")
+         VALUES ('an_2','org_A','u_adminA','x','x',now())`,
+      );
+      s.post_other_org = await tryq(
+        q,
+        `INSERT INTO "Announcement" ("id","organizationId","authorId","title","body","updatedAt")
+         VALUES ('an_3','org_B','u_memberA','x','x',now())`,
+      );
+      s.empty_title = await tryq(
+        q,
+        `INSERT INTO "Announcement" ("id","organizationId","authorId","title","body","updatedAt")
+         VALUES ('an_4','org_A','u_memberA','','x',now())`,
+      );
+      s.seen_own = await tryq(
+        q,
+        `INSERT INTO "AnnouncementSeen" ("organizationId","announcementId","userId") VALUES ('org_A','an_1','u_memberA')`,
+      );
+      s.seen_for_other = await tryq(
+        q,
+        `INSERT INTO "AnnouncementSeen" ("organizationId","announcementId","userId") VALUES ('org_A','an_1','u_adminA')`,
+      );
+      s.author_edits = await rc(
+        q,
+        `UPDATE "Announcement" SET "title" = 'Social moved' WHERE "id" = 'an_1'`,
+      );
+      s.author_moves_author = await tryq(
+        q,
+        `UPDATE "Announcement" SET "authorId" = 'u_bothAB' WHERE "id" = 'an_1'`,
+      );
+      s.unseen = await tryq(q, `DELETE FROM "AnnouncementSeen" WHERE "announcementId" = 'an_1'`);
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.member_reads = await count(q, `SELECT count(*) n FROM "Announcement" WHERE "id" = 'an_1'`);
+      s.member_counts_seen = await count(
+        q,
+        `SELECT count(*) n FROM "AnnouncementSeen" WHERE "announcementId" = 'an_1'`,
+      );
+      s.member_edits_other = await rc(
+        q,
+        `UPDATE "Announcement" SET "title" = 'x' WHERE "id" = 'an_1'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_removes = await rc(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = now(), "deletedById" = 'u_adminA' WHERE "id" = 'an_1'`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.author_undoes_admin = await tryq(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = NULL, "deletedById" = NULL WHERE "id" = 'an_1'`,
+      );
+      s.author_edits_removed = await tryq(
+        q,
+        `UPDATE "Announcement" SET "title" = 'x' WHERE "id" = 'an_1'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_restores_keeping_remover = await tryq(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = NULL WHERE "id" = 'an_1'`,
+      );
+      s.admin_restores = await rc(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = NULL, "deletedById" = NULL WHERE "id" = 'an_1'`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.remove_unsigned = await tryq(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = now() WHERE "id" = 'an_1'`,
+      );
+      s.remove_as_other = await tryq(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = now(), "deletedById" = 'u_adminA' WHERE "id" = 'an_1'`,
+      );
+      s.remover_moves_live = await tryq(
+        q,
+        `UPDATE "Announcement" SET "deletedById" = 'u_memberA' WHERE "id" = 'an_1'`,
+      );
+      s.author_removes = await rc(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = now(), "deletedById" = 'u_memberA' WHERE "id" = 'an_1'`,
+      );
+      s.author_restores_own = await rc(
+        q,
+        `UPDATE "Announcement" SET "deletedAt" = NULL, "deletedById" = NULL WHERE "id" = 'an_1'`,
+      );
+      s.post_removed = await tryq(
+        q,
+        `INSERT INTO "Announcement" ("id","organizationId","authorId","title","body","updatedAt","deletedAt")
+         VALUES ('an_5','org_A','u_memberA','x','x',now(),now())`,
+      );
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "Announcement"`);
+      return s;
+    },
+    {
+      value: {
+        post_own: 1,
+        post_as_other: "42501",
+        post_other_org: "42501",
+        empty_title: "23514",
+        seen_own: 1,
+        seen_for_other: "42501",
+        author_edits: 1,
+        author_moves_author: "42501",
+        unseen: "42501",
+        member_reads: 1,
+        member_counts_seen: 1,
+        member_edits_other: 0,
+        admin_removes: 1,
+        author_undoes_admin: "42501",
+        author_edits_removed: "42501",
+        admin_restores_keeping_remover: "42501",
+        admin_restores: 1,
+        remove_unsigned: "42501",
+        remove_as_other: "42501",
+        remover_moves_live: "42501",
+        author_removes: 1,
+        author_restores_own: 1,
+        post_removed: "42501",
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-HOME-02",
+    "decisions: any member raises one and takes an unowned one; only the owner, the raiser or an admin settles one; a settled one is frozen",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.raise = await tryq(
+        q,
+        `INSERT INTO "Decision" ("id","organizationId","question","createdById","updatedAt")
+         VALUES ('dc_1','org_A','Hackathon date','u_memberA',now())`,
+      );
+      s.raise_as_other = await tryq(
+        q,
+        `INSERT INTO "Decision" ("id","organizationId","question","createdById","updatedAt")
+         VALUES ('dc_2','org_A','x','u_adminA',now())`,
+      );
+      // As an admin, so app.decision_guard lets the owner change through to
+      // the membership check.
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.owner_outside_org = await tryq(
+        q,
+        `UPDATE "Decision" SET "ownerId" = 'u_memberB' WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.decided_without_outcome = await tryq(
+        q,
+        `UPDATE "Decision" SET "status" = 'DECIDED' WHERE "id" = 'dc_1'`,
+      );
+      s.raiser_changes_creator = await tryq(
+        q,
+        `UPDATE "Decision" SET "createdById" = 'u_bothAB' WHERE "id" = 'dc_1'`,
+      );
+      s.delete = await tryq(q, `DELETE FROM "Decision" WHERE "id" = 'dc_1'`);
+      s.edit_question = await tryq(q, `UPDATE "Decision" SET "question" = 'x' WHERE "id" = 'dc_1'`);
+      s.raiser_assigns = await tryq(
+        q,
+        `UPDATE "Decision" SET "ownerId" = 'u_treasA' WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.bystander_drops_unowned = await tryq(
+        q,
+        `UPDATE "Decision" SET "status" = 'DROPPED' WHERE "id" = 'dc_1'`,
+      );
+      s.take_unowned = await rc(
+        q,
+        `UPDATE "Decision" SET "ownerId" = 'u_bothAB' WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_treasA','org_A')`);
+      s.bystander_drops = await rc(
+        q,
+        `UPDATE "Decision" SET "status" = 'DROPPED' WHERE "id" = 'dc_1'`,
+      );
+      s.bystander_steals = await rc(
+        q,
+        `UPDATE "Decision" SET "ownerId" = 'u_treasA' WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.owner_hands_off = await tryq(
+        q,
+        `UPDATE "Decision" SET "ownerId" = 'u_treasA' WHERE "id" = 'dc_1'`,
+      );
+      s.owner_lets_go = await rc(q, `UPDATE "Decision" SET "ownerId" = NULL WHERE "id" = 'dc_1'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_assigns = await rc(
+        q,
+        `UPDATE "Decision" SET "ownerId" = 'u_bothAB' WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.owner_decides = await rc(
+        q,
+        `UPDATE "Decision" SET "status" = 'DECIDED', "outcome" = 'Dec 5', "decidedAt" = now() WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.raiser_reopens = await tryq(
+        q,
+        `UPDATE "Decision" SET "status" = 'OPEN', "outcome" = NULL, "decidedAt" = NULL WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_changes_settled = await tryq(
+        q,
+        `UPDATE "Decision" SET "outcome" = 'Dec 12' WHERE "id" = 'dc_1'`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      await q(
+        `INSERT INTO "Decision" ("id","organizationId","question","createdById","updatedAt")
+         VALUES ('dc_3','org_A','T-shirt vendor','u_memberA',now())`,
+      );
+      s.raiser_drops_unowned = await rc(
+        q,
+        `UPDATE "Decision" SET "status" = 'DROPPED' WHERE "id" = 'dc_3'`,
+      );
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "Decision"`);
+      return s;
+    },
+    {
+      value: {
+        raise: 1,
+        raise_as_other: "42501",
+        owner_outside_org: "23514",
+        decided_without_outcome: "23514",
+        raiser_changes_creator: "42501",
+        delete: "42501",
+        edit_question: "42501",
+        raiser_assigns: "42501",
+        bystander_drops_unowned: "42501",
+        take_unowned: 1,
+        bystander_drops: 0,
+        bystander_steals: 0,
+        owner_hands_off: "42501",
+        owner_lets_go: 1,
+        admin_assigns: 1,
+        owner_decides: 1,
+        raiser_reopens: "42501",
+        admin_changes_settled: "42501",
+        raiser_drops_unowned: 1,
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-REPORTS-01",
+    "saved reports: a private one is its maker's alone; a shared one is every member's to read, and its maker's or an admin's to change; snapshots follow their report",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.make = await tryq(
+        q,
+        `INSERT INTO "Report" ("id","organizationId","title","source","access","createdById","updatedAt")
+         VALUES ('rp_shared','org_A','Sponsors','tasks','ORGANIZATION','u_memberA',now()),
+                ('rp_mine','org_A','Mine','tasks','PRIVATE','u_memberA',now())`,
+      );
+      s.make_as_other = await tryq(
+        q,
+        `INSERT INTO "Report" ("id","organizationId","title","source","createdById","updatedAt")
+         VALUES ('rp_x','org_A','x','tasks','u_adminA',now())`,
+      );
+      s.keep_copy = await tryq(
+        q,
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_1','org_A','rp_mine','u_memberA','Fall 2026','{}')`,
+      );
+      s.delete = await tryq(q, `DELETE FROM "Report" WHERE "id" = 'rp_shared'`);
+      s.change_maker = await tryq(q, `UPDATE "Report" SET "createdById" = 'u_bothAB' WHERE "id" = 'rp_shared'`);
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.member_reads = await count(q, `SELECT count(*) n FROM "Report"`);
+      s.member_reads_copies = await count(q, `SELECT count(*) n FROM "ReportSnapshot"`);
+      // A copy the maker (or an admin) took of the SHARED report: theirs alone.
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      await q(
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_shared','org_A','rp_shared','u_memberA','Q4','{}')`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.member_reads_others_copy = await count(
+        q,
+        `SELECT count(*) n FROM "ReportSnapshot" WHERE "id" = 'rs_shared'`,
+      );
+      s.member_edits_shared = await rc(q, `UPDATE "Report" SET "title" = 'x' WHERE "id" = 'rp_shared'`);
+      s.member_copies_private = await tryq(
+        q,
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_2','org_A','rp_mine','u_bothAB','Fall 2026','{}')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "Report"`);
+      s.admin_reads_copies = await count(q, `SELECT count(*) n FROM "ReportSnapshot"`);
+      s.admin_edits_shared = await rc(q, `UPDATE "Report" SET "title" = 'Sponsorship' WHERE "id" = 'rp_shared'`);
+      s.admin_edits_private = await rc(q, `UPDATE "Report" SET "title" = 'x' WHERE "id" = 'rp_mine'`);
+      s.admin_makes_private = await tryq(q, `UPDATE "Report" SET "access" = 'PRIVATE' WHERE "id" = 'rp_shared'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.maker_archives = await rc(q, `UPDATE "Report" SET "archivedAt" = now() WHERE "id" = 'rp_mine'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "Report"`);
+      return s;
+    },
+    {
+      value: {
+        make: 2,
+        make_as_other: "42501",
+        keep_copy: 1,
+        delete: "42501",
+        change_maker: "42501",
+        member_reads: 1,
+        member_reads_copies: 0,
+        member_reads_others_copy: 0,
+        member_edits_shared: 0,
+        member_copies_private: "42501",
+        admin_reads: 1,
+        admin_reads_copies: 1,
+        admin_edits_shared: 1,
+        admin_edits_private: 0,
+        admin_makes_private: "42501",
+        maker_archives: 1,
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-HOME-03",
+    "presence: a member records the page they have open on their own row only",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.own = await tryq(
+        q,
+        `INSERT INTO "MemberPresence" ("organizationId","userId","pageHref","pageLabel")
+         VALUES ('org_A','u_memberA','/app/fx-a/tasks','Tasks')`,
+      );
+      s.move = await rc(
+        q,
+        `UPDATE "MemberPresence" SET "pageHref" = '/app/fx-a/inbox', "pageLabel" = 'Inbox' WHERE "userId" = 'u_memberA'`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.other_moves = await rc(
+        q,
+        `UPDATE "MemberPresence" SET "pageLabel" = 'x' WHERE "userId" = 'u_memberA'`,
+      );
+      s.other_reads = (
+        await q(`SELECT "pageLabel" v FROM "MemberPresence" WHERE "userId" = 'u_memberA'`)
+      ).rows.map((r) => r.v);
+      return s;
+    },
+    { value: { own: 1, move: 1, other_moves: 0, other_reads: ["Inbox"] } },
   );
 
   await own(`DELETE FROM "Organization" WHERE "id" IN ('org_PA','org_PB','org_PM')`);

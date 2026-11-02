@@ -368,3 +368,46 @@ describe("profileGapsOf / Finish your profile", () => {
     expect(profileGapsOf({ ...user, bio: null, links })).toEqual([]);
   });
 });
+
+describe("Focus time on the Personal home", () => {
+  const evening = (id: string) => ({
+    id,
+    title: "Build night",
+    // Thursday 6 to 9 PM in Chicago.
+    startsAt: at("2026-10-15T23:00:00Z"),
+    endsAt: at("2026-10-16T02:00:00Z"),
+    allDay: false,
+    kind: "WORKSHOP" as const,
+    location: null,
+  });
+  const freeHours = (rsvp: "YES" | "NO" | null) => {
+    const data = shapePersonalHome(
+      raw({
+        spaces: [
+          { space: personal, digest: digest() },
+          {
+            space: robotics,
+            digest: digest({
+              events: [evening("e1")],
+              rsvps: rsvp ? new Map([["e1", rsvp]]) : new Map(),
+            }),
+          },
+        ],
+      }),
+      NOW,
+    );
+    expect(data.personalOrgId).toBe("p1");
+    expect(data.focus?.availabilityHref).toBe("/app/me-abc/profile");
+    return data.focus!.week.days.reduce((n, d) => n + d.free, 0);
+  };
+
+  it("counts an organization's event as busy only once you said yes", () => {
+    expect(freeHours("NO")).toBe(freeHours(null));
+    expect(freeHours("YES")).toBeLessThan(freeHours(null));
+  });
+
+  it("is left out without a Personal space", () => {
+    const data = shapePersonalHome(raw({ spaces: [{ space: robotics, digest: digest() }] }), NOW);
+    expect(data.focus).toBeNull();
+  });
+});

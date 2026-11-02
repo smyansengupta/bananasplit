@@ -451,6 +451,10 @@ async function main() {
   }
 
   // --- Finance: Org A (full example) ---
+  await prisma.orgSettings.update({
+    where: { organizationId: orgA.id },
+    data: { addOns: ["forms", "finance"] },
+  });
   const orgAPeriod = await prisma.budgetPeriod.create({
     data: {
       organizationId: orgA.id,
@@ -699,6 +703,10 @@ async function main() {
   }
 
   // --- Finance: Org B (lighter, still non-trivial) ---
+  await prisma.orgSettings.update({
+    where: { organizationId: orgB.id },
+    data: { addOns: ["forms", "finance"] },
+  });
   const orgBPeriod = await prisma.budgetPeriod.create({
     data: {
       organizationId: orgB.id,
@@ -793,7 +801,8 @@ async function main() {
   // sender (Phase 1 backfill); the seeded org also publishes its public feed.
   await prisma.orgSettings.update({
     where: { organizationId: cbc.id },
-    data: { platformMailFallback: true, publicEventsEnabled: true },
+    // Its forms and budget are part of the demo: both add-ons are on.
+    data: { platformMailFallback: true, publicEventsEnabled: true, addOns: ["forms", "finance"] },
   });
   const template = await applyCbcTemplate(prisma, {
     organizationId: cbc.id,

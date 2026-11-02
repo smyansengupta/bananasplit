@@ -16,7 +16,6 @@ import {
   Wallet,
   type IconComponent,
 } from "@/components/icons";
-import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { PinKind } from "@/lib/pins/pages";
@@ -24,11 +23,11 @@ import { tagToken, type TagColor } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 
 /**
- * Home's coloured tiles (Recently visited, Pinned, notes, uploads): each
- * kind of thing keeps one colour from the tag palette, so a row of tiles
- * reads as a row of different things at a glance. The kind is always named
- * in the tile's text too, so colour is never the only cue. A "page" takes
- * its section's icon (Meetings, Forms…) and the neutral ink.
+ * Home's coloured kind icons (Pick up where you left off, Pinned, Open
+ * forms): each kind of thing keeps one colour from the tag palette and its
+ * own icon, so a list reads as different things at a glance and colour is
+ * never the only cue. A "page" takes its section's icon (Meetings, Forms…)
+ * and the neutral ink.
  */
 
 const KIND_COLOR: Partial<Record<PinKind, TagColor>> = {
@@ -123,33 +122,3 @@ export function KindIcon({
 
 export const kindTileClass =
   "group/tile bg-card hover:bg-muted/50 ring-foreground/8 rounded-tile relative flex min-w-0 items-center gap-3 p-3 ring-1 transition-[background-color,transform,box-shadow] duration-200 hover:-translate-y-px hover:shadow-[0_6px_16px_-10px_rgb(0_0_0/0.35)] motion-reduce:hover:translate-y-0";
-
-/** One coloured tile: the kind's icon square, a title and a line under it. */
-export function KindTile({
-  href,
-  kind,
-  title,
-  sub,
-  className,
-  draggable,
-}: {
-  href: string;
-  kind: PinKind;
-  title: string;
-  sub: ReactNode;
-  className?: string;
-  draggable?: boolean;
-}) {
-  const Icon = SECTION_ICON[pageSection(kind, href)] ?? KIND_ICON[kind] ?? FileText;
-  return (
-    <Link href={href} draggable={draggable} className={cn(kindTileClass, className)}>
-      <KindIcon color={kindToken(kind, href)}>
-        <Icon />
-      </KindIcon>
-      <span className="min-w-0">
-        <span className="block truncate text-sm leading-tight font-semibold">{title}</span>
-        <span className="text-muted-foreground mt-1 block truncate text-[12.5px]">{sub}</span>
-      </span>
-    </Link>
-  );
-}

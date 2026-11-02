@@ -1,7 +1,7 @@
 /**
- * Budget periods, the human way: a club's money runs by school year (or
- * semester, or calendar year), so these build sensible defaults instead of
- * asking for a label and two bare dates. Pure and client-safe.
+ * Budget periods, the human way: an organization's money runs by calendar
+ * year or by quarter, so these build sensible defaults instead of asking
+ * for a label and two bare dates. Pure and client-safe.
  *
  * Dates are YYYY-MM-DD strings (what <input type="date"> uses) and the
  * stored @db.Date values are UTC midnight, so anything shown to people is
@@ -20,19 +20,13 @@ export interface PeriodDraft {
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
 
-/** The school year around `today`: August 1 to July 31 ("2026–27"). */
-export function schoolYear(today: Date = new Date()): PeriodDraft {
-  const y = today.getMonth() >= 6 ? today.getFullYear() : today.getFullYear() - 1;
-  return { label: `${y}–${String((y + 1) % 100).padStart(2, "0")}`, startsOn: ymd(y, 8, 1), endsOn: ymd(y + 1, 7, 31) };
-}
-
-/** The semester around `today`: Fall (Aug–Dec), Spring (Jan–May) or Summer (Jun–Jul). */
-export function semester(today: Date = new Date()): PeriodDraft {
+/** The calendar quarter around `today`: "Q3 2026", Jul 1 to Sep 30. */
+export function quarter(today: Date = new Date()): PeriodDraft {
   const y = today.getFullYear();
-  const m = today.getMonth() + 1;
-  if (m >= 8) return { label: `Fall ${y}`, startsOn: ymd(y, 8, 1), endsOn: ymd(y, 12, 31) };
-  if (m <= 5) return { label: `Spring ${y}`, startsOn: ymd(y, 1, 1), endsOn: ymd(y, 5, 31) };
-  return { label: `Summer ${y}`, startsOn: ymd(y, 6, 1), endsOn: ymd(y, 7, 31) };
+  const q = Math.floor(today.getMonth() / 3);
+  const start = q * 3 + 1;
+  const end = new Date(Date.UTC(y, start + 2, 0)).getUTCDate();
+  return { label: `Q${q + 1} ${y}`, startsOn: ymd(y, start, 1), endsOn: ymd(y, start + 2, end) };
 }
 
 /** January to December. */
@@ -42,9 +36,8 @@ export function calendarYear(today: Date = new Date()): PeriodDraft {
 }
 
 export const PERIOD_PRESETS = [
-  { id: "school-year", name: "School year", hint: "Aug 1 – Jul 31", make: schoolYear },
-  { id: "semester", name: "This semester", hint: "Fall, spring or summer", make: semester },
-  { id: "calendar-year", name: "Calendar year", hint: "Jan 1 – Dec 31", make: calendarYear },
+  { id: "year", name: "This year", hint: "Jan 1 – Dec 31", make: calendarYear },
+  { id: "quarter", name: "This quarter", hint: "Three months", make: quarter },
 ] as const;
 
 export type PeriodPresetId = (typeof PERIOD_PRESETS)[number]["id"];
@@ -61,7 +54,12 @@ export function fromDateValue(value: string): Date | null {
   return Number.isNaN(d.getTime()) || toDateValue(d) !== value ? null : d;
 }
 
-const dayFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const dayFmt = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 /** "Aug 1, 2026" for a stored @db.Date, never shifted a day by the viewer's timezone. */
 export function formatPeriodDate(date: Date | string): string {

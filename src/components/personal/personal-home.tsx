@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 
 import { KIND_META, RSVP_META } from "@/components/calendar/kinds";
 import { EmptyState } from "@/components/empty-state";
+import { FocusTime } from "@/components/overview/focus-time";
 import { PendingInviteCard } from "@/app/onboarding/pending-invite-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,8 @@ import { PersonalShortcuts } from "./personal-shortcuts";
  * The Personal space's home (/app/{personal slug}): the Personal dashboard
  * of docs/features/personal-and-clubs.md. Invites and "Finish your profile"
  * first, then your clubs, when you meet next and what's due on the left;
- * your RSVPs and polls on the right. It uses the whole width, as a club's
+ * Focus time, your RSVPs and polls on the right (Focus time lives here,
+ * not on an organization's Home: it's about your own week). It uses the whole width, as a club's
  * Overview does, and every block is the same card (HomeCard: icon, title,
  * a link to its page), so the two columns' headings line up. Every list
  * says what goes in it and how to put something there when it's empty.
@@ -139,6 +141,16 @@ export function PersonalHome({
           <DueSoonSection data={data} base={base} />
         </div>
         <div className="min-w-0 space-y-6">
+          {data.focus && data.personalOrgId && (
+            <HomeCard
+              id="focus-heading"
+              icon={CalendarClock}
+              title="Focus time"
+              action={<CardLink href={`${base}/calendar`}>Calendar</CardLink>}
+            >
+              <FocusTime orgId={data.personalOrgId} data={data.focus} />
+            </HomeCard>
+          )}
           <YourWeekCard data={data} base={base} />
           <RsvpsCard data={data} now={now} base={base} />
           <RecentFilesCard data={data} now={now} base={base} />

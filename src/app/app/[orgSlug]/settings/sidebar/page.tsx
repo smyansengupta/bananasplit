@@ -21,7 +21,11 @@ export default async function SidebarSettingsPage({
   if (!can({ role }, "settings.view")) {
     return <SettingsNoAccess title="Sidebar" who="owners and admins" />;
   }
-  const groups = resolveSidebar(settings?.sidebar);
+  // Add-ons the organization hasn't added aren't there to arrange.
+  const groups = resolveSidebar(settings?.sidebar, settings?.addOns ?? []).map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.notAdded),
+  }));
   const customized = settings?.sidebar != null;
 
   return (

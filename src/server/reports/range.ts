@@ -3,21 +3,23 @@
  *
  * Every preset becomes a canonical (from, to) pair of org-local calendar
  * dates (yyyy-mm-dd, inclusive) BEFORE any cached loader is called, so
- * "this term" and the same explicit dates share one cache key, and "all
- * time" is (null, null).
+ * "this quarter" and the same explicit dates share one cache key, and "all
+ * time" is (null, null). The periods are an organization's (quarters and
+ * years), not a school's terms.
  *
- *   ?range=term  (default)  the current term by the July-1 rule in the org
- *                           timezone: spring = Jan 1 - Jun 30, fall =
- *                           Jul 1 - Dec 31 (the same split as app.term_of)
- *   ?range=30d              the last 30 days, today included
- *   ?range=all              no bounds
+ *   ?range=quarter (default)  this calendar quarter in the org timezone
+ *   ?range=year               this calendar year
+ *   ?range=30d                the last 30 days, today included
+ *   ?range=all                no bounds
  *   ?from=yyyy-mm-dd&to=yyyy-mm-dd   a custom range (wins over ?range)
  *
- * Malformed or reversed custom dates fall back to the default preset.
+ * Malformed or reversed custom dates fall back to the default preset. The
+ * term helpers below stay for the built-in attendance data, which records
+ * a term on each check-in; no range is ever named after one.
  * Pure: no database, no request APIs.
  */
 
-export type RangePreset = "term" | "30d" | "all" | "custom";
+export type RangePreset = "quarter" | "year" | "30d" | "all" | "custom";
 
 export interface ReportRange {
   preset: RangePreset;
@@ -27,7 +29,7 @@ export interface ReportRange {
   to: string | null;
   /** The term the range is exactly (fall-2026), when it is one. */
   term: string | null;
-  /** e.g. "Fall 2026", "Last 30 days", "All time", "Sep 1 - Sep 30, 2026". */
+  /** e.g. "This quarter", "Last 30 days", "All time", "Sep 1 - Sep 30, 2026". */
   label: string;
   /** e.g. "Jul 1 - Dec 31, 2026"; null for all time. */
   span: string | null;
@@ -142,25 +144,43 @@ export function formatSpan(from: string, to: string): string {
 function build(preset: RangePreset, from: string | null, to: string | null): ReportRange {
   const term = termOfRange(from, to);
   const span = from && to ? formatSpan(from, to) : null;
-  let label: string;
-  if (preset === "all") label = "All time";
-  else if (preset === "30d") label = "Last 30 days";
-  else if (term) label = termLabel(term);
-  else label = span ?? "Custom range";
+  const label =
+    preset === "all"
+      ? "All time"
+      : preset === "30d"
+        ? "Last 30 days"
+        : preset === "quarter"
+          ? "This quarter"
+          : preset === "year"
+            ? "This year"
+            : (span ?? "Custom range");
   return { preset, from, to, term, label, span };
 }
 
-/** The current term's range in `tz`. */
-export function currentTermRange(tz: string, now: Date = new Date()): ReportRange {
-  const bounds = termBounds(termOfDate(todayIn(tz, now)));
-  return build("term", bounds.from, bounds.to);
+/** The calendar quarter holding `date`. */
+export function quarterBounds(date: string): { from: string; to: string } {
+  const [y, m] = parts(date);
+  const start = Math.floor((m - 1) / 3) * 3 + 1;
+  const from = `${y}-${String(start).padStart(2, "0")}-01`;
+  const next = start + 3 > 12 ? `${y + 1}-01-01` : `${y}-${String(start + 3).padStart(2, "0")}-01`;
+  return { from, to: addDays(next, -1) };
+}
+
+/** This quarter's range in `tz`. */
+export function currentQuarterRange(tz: string, now: Date = new Date()): ReportRange {
+  const bounds = quarterBounds(todayIn(tz, now));
+  return build("quarter", bounds.from, bounds.to);
 }
 
 /**
  * Resolves the page's search params to explicit dates. `now` is injectable
  * for tests; the page passes nothing.
  */
-export function resolveReportRange(params: RangeParams, tz: string, now: Date = new Date()): ReportRange {
+export function resolveReportRange(
+  params: RangeParams,
+  tz: string,
+  now: Date = new Date(),
+): ReportRange {
   const from = first(params.from);
   const to = first(params.to);
   if (isIsoDate(from) && isIsoDate(to) && from <= to && daysBetween(from, to) <= MAX_SPAN_DAYS) {
@@ -170,13 +190,19 @@ export function resolveReportRange(params: RangeParams, tz: string, now: Date = 
   const today = todayIn(tz, now);
   if (preset === "all") return build("all", null, null);
   if (preset === "30d") return build("30d", addDays(today, -29), today);
-  return currentTermRange(tz, now);
+  if (preset === "year")
+    return build("year", `${today.slice(0, 4)}-01-01`, `${today.slice(0, 4)}-12-31`);
+  return currentQuarterRange(tz, now);
 }
 
 /** The search params that select `range` again (for links that keep it). */
-export function rangeQuery(range: Pick<ReportRange, "preset" | "from" | "to">): Record<string, string> {
-  if (range.preset === "custom" && range.from && range.to) return { from: range.from, to: range.to };
+export function rangeQuery(
+  range: Pick<ReportRange, "preset" | "from" | "to">,
+): Record<string, string> {
+  if (range.preset === "custom" && range.from && range.to)
+    return { from: range.from, to: range.to };
   if (range.preset === "all") return { range: "all" };
   if (range.preset === "30d") return { range: "30d" };
+  if (range.preset === "year") return { range: "year" };
   return {};
 }

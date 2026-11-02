@@ -246,6 +246,31 @@ export const JOB_KINDS = {
       "One weekly pulse email to one recipient (Money moved only for finance roles); key pulse-email:{issueId}:{userId}.",
   }),
 
+  // ---- Saved reports on a schedule (src/server/reports/schedule-jobs.ts) ----
+  "report-send": kind({
+    payload: z.object({ reportId: id, sendKey: isoDate }).strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/reports/schedule-jobs").then((m) => m.reportSendJob),
+    description:
+      "A saved report's scheduled send (once=true per report and day): keeps a copy as its maker sees it, then queues report-email per recipient; enqueued by /api/cron/task-digest.",
+  }),
+  "report-email": kind({
+    payload: z.object({ reportId: id, userId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    sendsEmail: true,
+    handler: () => import("@/server/reports/schedule-jobs").then((m) => m.reportEmailJob),
+    description:
+      "One scheduled report email, computed as its recipient (their own rows); key report-email:{reportId}:{date}:{userId}.",
+  }),
+
   // ---- Calendar (Phase 7; handlers owned by B7) ----
   gcal: kind({
     payload: z.object({ eventId: id }).strict(),

@@ -538,19 +538,34 @@ function words(title: string): Set<string> {
   );
 }
 
+export interface MemberPlacement<M extends TitledMember = TitledMember> {
+  member: M;
+  depth: number;
+  advisor: boolean;
+  /** The member this one reports to (or advises), or null at the top. */
+  managerId: string | null;
+  /**
+   * True when the manager was chosen only because the two titles share a
+   * word ("Events coordinator" under "VP Events"): a guess worth checking.
+   */
+  guessed: boolean;
+}
+
 /**
- * A first outline from the titles members already have: the top title
+ * Where a first chart puts each titled member, in outline order: the top title
  * (President, Chair, Captain...) at the top, advisors beside it, leads
  * (VP, Head, Director, Treasurer...) under it, and everyone else under the
  * lead whose title shares a word with theirs ("Head of Programs" under
  * "VP Ops & Programs"), or under the top. Members without a title (or
  * titled just "Member") are left for the tray.
  */
-export function draftFromMembers(members: readonly TitledMember[]): string {
+export function planFromMembers<M extends TitledMember>(
+  members: readonly M[],
+): MemberPlacement<M>[] {
   const titled = members
     .filter((m) => m.title && m.title.trim() && !/^members?$/i.test(m.title.trim()))
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  const isTop = (m: TitledMember) =>
+  const isTop = (m: M) =>
     TOP.test(m.title!.trim()) && !/vice|vp/i.test(m.title!) && !ADVISOR.test(m.title!);
   const ownerFirst = [...titled].sort(
     (a, b) => Number(b.role === "OWNER") - Number(a.role === "OWNER"),
@@ -563,17 +578,17 @@ export function draftFromMembers(members: readonly TitledMember[]): string {
   );
   const others = rest.filter((m) => !advisors.includes(m) && !leads.includes(m));
 
-  const line = (m: TitledMember, depth: number, advisor = false) =>
-    `${"  ".repeat(depth)}${advisor ? "Advisor: " : ""}${m.title!.trim()} — @${m.name ?? "Member"}`;
   const base = top ? 1 : 0;
-  const out: string[] = [];
-  if (top) out.push(line(top, 0));
-  for (const a of advisors) out.push(line(a, base, true));
-  const under = new Map<TitledMember, TitledMember[]>();
-  const loose: TitledMember[] = [];
+  const topId = top?.id ?? null;
+  const out: MemberPlacement<M>[] = [];
+  if (top) out.push({ member: top, depth: 0, advisor: false, managerId: null, guessed: false });
+  for (const a of advisors)
+    out.push({ member: a, depth: base, advisor: true, managerId: topId, guessed: false });
+  const under = new Map<M, M[]>();
+  const loose: M[] = [];
   for (const o of others) {
     const w = words(o.title!);
-    let best: TitledMember | null = null;
+    let best: M | null = null;
     let score = 0;
     for (const l of leads) {
       const shared = [...words(l.title!)].filter((x) => w.has(x)).length;
@@ -586,9 +601,24 @@ export function draftFromMembers(members: readonly TitledMember[]): string {
     else loose.push(o);
   }
   for (const l of leads) {
-    out.push(line(l, base));
-    for (const o of under.get(l) ?? []) out.push(line(o, base + 1));
+    out.push({ member: l, depth: base, advisor: false, managerId: topId, guessed: false });
+    for (const o of under.get(l) ?? [])
+      out.push({ member: o, depth: base + 1, advisor: false, managerId: l.id, guessed: true });
   }
-  for (const o of loose) out.push(line(o, base));
-  return out.join("\n");
+  for (const o of loose)
+    out.push({ member: o, depth: base, advisor: false, managerId: topId, guessed: false });
+  return out;
+}
+
+/**
+ * A first outline from the titles members already have (planFromMembers):
+ * one "Title — @Name" line per titled member, indented under its manager.
+ */
+export function draftFromMembers(members: readonly TitledMember[]): string {
+  return planFromMembers(members)
+    .map(
+      (p) =>
+        `${"  ".repeat(p.depth)}${p.advisor ? "Advisor: " : ""}${p.member.title!.trim()} — @${p.member.name ?? "Member"}`,
+    )
+    .join("\n");
 }

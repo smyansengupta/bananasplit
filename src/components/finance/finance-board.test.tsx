@@ -110,7 +110,7 @@ describe("finance board: the runway widget", () => {
 
   it("offers a way back when the board is empty", () => {
     const html = render(dashboard({}), []);
-    expect(html).toContain("Your board is empty.");
+    expect(html).toContain("Your board has no widgets yet.");
     expect(html).toContain("Add a widget");
   });
 });
@@ -125,14 +125,18 @@ describe("finance board layout", () => {
   });
 
   it("keeps a member's saved board, reads the old size-only shape, and ignores one that doesn't parse", () => {
-    const saved = [{ id: "trend", type: "trend", w: 3, h: 340 }];
+    const saved = [{ id: "trend", type: "trend", w: 3, h: 2 }];
     expect(resolveLayout(saved, new Set())).toEqual(saved);
+    // An old board's height in pixels reads as rows.
+    expect(resolveLayout([{ id: "trend", type: "trend", w: 3, h: 340 }], new Set())).toEqual([
+      { id: "trend", type: "trend", w: 3, h: 1 },
+    ]);
     expect(resolveLayout([{ id: "trend", type: "trend", size: "lg" }], new Set())).toEqual([
       { id: "trend", type: "trend", w: 4, h: null },
     ]);
-    // Heights snap to 20px and stay within bounds; widths to 1-4 columns.
+    // Heights stay within 1 to 3 rows (5 reads as old pixels); widths 1-4 columns.
     expect(resolveLayout([{ id: "a", type: "trend", w: 9, h: 5 }], new Set())).toEqual([
-      { id: "a", type: "trend", w: 4, h: 120 },
+      { id: "a", type: "trend", w: 4, h: 1 },
     ]);
     expect(resolveLayout([{ id: "x", type: "nope", w: 1 }], new Set(["runway"]))).toEqual([]);
     expect(resolveLayout("garbage", new Set(["runway"])).length).toBeGreaterThan(1);
