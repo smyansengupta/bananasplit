@@ -14,6 +14,7 @@ import {
 import { SortableContext, arrayMove, useSortable } from "@dnd-kit/sortable";
 import {
   Activity,
+  AlarmClock,
   ArrowLeftRight,
   CalendarDays,
   CalendarRange,
@@ -23,11 +24,14 @@ import {
   ChartPie,
   Check,
   CheckSquare,
+  ClipboardList,
   Clock,
+  Filter,
   FolderOpen,
   GripVertical,
   HandCoins,
   Handshake,
+  Hash,
   LayoutGrid,
   Hourglass,
   Link2,
@@ -39,11 +43,15 @@ import {
   ReceiptText,
   Rocket,
   RotateCcw,
+  ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
+  Table2,
   Target,
   Ticket,
   Timer,
   TrendingDown,
+  Trophy,
   Users,
   Vote,
   Wallet,
@@ -91,6 +99,7 @@ import { cn } from "@/lib/utils";
 
 export const BOARD_ICONS: Record<string, IconComponent> = {
   Activity,
+  AlarmClock,
   ArrowLeftRight,
   CalendarDays,
   CalendarRange,
@@ -99,10 +108,13 @@ export const BOARD_ICONS: Record<string, IconComponent> = {
   ChartLine,
   ChartPie,
   CheckSquare,
+  ClipboardList,
   Clock,
+  Filter,
   FolderOpen,
   HandCoins,
   Handshake,
+  Hash,
   Hourglass,
   Link2,
   ListChecks,
@@ -111,10 +123,14 @@ export const BOARD_ICONS: Record<string, IconComponent> = {
   Pin,
   ReceiptText,
   Rocket,
+  ShieldCheck,
+  Sparkles,
+  Table2,
   Target,
   Ticket,
   Timer,
   TrendingDown,
+  Trophy,
   Users,
   Vote,
   Wallet,
@@ -214,6 +230,12 @@ export function WidgetBoard({
   belowIntro,
   footer,
   hiddenOnPhone = [],
+  titles,
+  readOnly = false,
+  editHint = "Only you see your board.",
+  resetLabel = "Reset to the default board",
+  startEditing = false,
+  refreshOnSave = true,
 }: {
   types: readonly WidgetMeta[];
   initialLayout: BoardWidget[];
@@ -243,10 +265,26 @@ export function WidgetBoard({
   footer?: ReactNode;
   /** Widget types a phone leaves out. */
   hiddenOnPhone?: readonly string[];
+  /**
+   * Titles by widget id, where two widgets of a type say different things (a
+   * saved report's "Amount by category" and "Sponsors by stage"). Bodies and
+   * header actions are looked up by id too, then by type.
+   */
+  titles?: Readonly<Record<string, string>>;
+  /** Shown, not arranged: no +, Customize or remove (a report someone else made). */
+  readOnly?: boolean;
+  /** The first words of the Customize hint (whose board changes). */
+  editHint?: string;
+  /** What Reset puts back. */
+  resetLabel?: string;
+  /** Opens in Customize (the New report walkthrough's Arrange step). */
+  startEditing?: boolean;
+  /** Re-reads the page after each save; off where the board only feeds a form. */
+  refreshOnSave?: boolean;
 }) {
   const router = useRouter();
   const [layout, setLayout] = useState(initialLayout);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startEditing);
   const [adding, setAdding] = useState(false);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -275,7 +313,7 @@ export function WidgetBoard({
         return;
       }
       if (next === null) setLayout(initialLayout);
-      router.refresh();
+      if (refreshOnSave) router.refresh();
     });
   }
 
@@ -407,7 +445,8 @@ export function WidgetBoard({
     setFresh(id);
   };
 
-  const body = (type: string) => (bodies ? bodies[type] : renderBody?.(type)) ?? null;
+  const body = (w: BoardWidget) =>
+    (bodies ? (bodies[w.id] ?? bodies[w.type]) : renderBody?.(w.type)) ?? null;
   const dragged = dragId ? layout.find((w) => w.id === dragId) : undefined;
   const draggedMeta = dragged ? meta.get(dragged.type) : undefined;
 
@@ -418,7 +457,7 @@ export function WidgetBoard({
           <div className="min-w-0">{intro}</div>
           <InBar>
             {/* + stays put; Customize becomes Reset and Done (a check) while on. */}
-            <div className="flex items-center gap-2 max-md:hidden">
+            <div className={cn("flex items-center gap-2 max-md:hidden", readOnly && "hidden")}>
               <Button
                 type="button"
                 size="icon"
@@ -436,8 +475,8 @@ export function WidgetBoard({
                     type="button"
                     size="icon"
                     variant="outline"
-                    aria-label="Reset to the default board"
-                    title="Reset to the default board"
+                    aria-label={resetLabel}
+                    title={resetLabel}
                     disabled={pending || !customized}
                     onClick={reset}
                   >
@@ -470,7 +509,7 @@ export function WidgetBoard({
 
       {editing && (
         <p className="bg-muted/60 text-muted-foreground rounded-tile flex flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2.5 text-[13px] max-md:hidden">
-          <span className="text-foreground font-semibold">Only you see your board.</span>
+          <span className="text-foreground font-semibold">{editHint}</span>
           <span>Drag a widget to move it.</span>
           <span>Drag its corner, or pick a shape, to resize it.</span>
         </p>
@@ -518,24 +557,26 @@ export function WidgetBoard({
             <div className="@container">
               <div ref={grid} className={cn(GRID, "relative")}>
                 {layout.map((w) => {
-                  const m = meta.get(w.type);
-                  if (!m) return null;
+                  const known = meta.get(w.type);
+                  if (!known) return null;
+                  const m = titles?.[w.id] ? { ...known, title: titles[w.id] } : known;
                   return (
                     <BoardItem
                       key={w.id}
                       widget={w}
                       meta={m}
+                      readOnly={readOnly}
                       editing={editing}
                       dragging={dragId === w.id}
                       fresh={fresh === w.id}
                       hiddenOnPhone={hiddenOnPhone.includes(w.type)}
-                      actions={!editing ? headerActions?.[w.type] : null}
+                      actions={!editing ? (headerActions?.[w.id] ?? headerActions?.[w.type]) : null}
                       measure={measure}
                       onShape={(nw, nh) => patch(w.id, { w: nw, h: nh })}
                       onNudge={(by) => nudge(w.id, by)}
                       onRemove={() => remove(w.id)}
                     >
-                      {body(w.type)}
+                      {body(w)}
                     </BoardItem>
                   );
                 })}
@@ -552,7 +593,9 @@ export function WidgetBoard({
                   <div className="bg-card text-card-foreground ring-foreground/10 rounded-card shadow-e2 flex h-full cursor-grabbing flex-col gap-2 p-5 ring-1">
                     <div className="flex items-center gap-2">
                       <GripVertical className="text-muted-foreground size-4" aria-hidden="true" />
-                      <span className="heading text-[17px]">{draggedMeta.title}</span>
+                      <span className="heading text-[17px]">
+                        {titles?.[dragged.id] ?? draggedMeta.title}
+                      </span>
                     </div>
                     <span className="text-muted-foreground flex items-center gap-2 text-[13px]">
                       <ShapeIcon w={dragged.w} h={dragged.h} />
@@ -631,6 +674,7 @@ function BoardItem({
   widget: w,
   meta: m,
   editing,
+  readOnly,
   dragging,
   fresh,
   hiddenOnPhone,
@@ -644,6 +688,7 @@ function BoardItem({
   widget: BoardWidget;
   meta: WidgetMeta;
   editing: boolean;
+  readOnly: boolean;
   dragging: boolean;
   fresh: boolean;
   hiddenOnPhone: boolean;
@@ -712,6 +757,7 @@ function BoardItem({
   return (
     <section
       ref={setNodeRef}
+      id={`w-${w.id}`}
       aria-label={m.title}
       data-widget-id={w.id}
       data-frame={bare ? "bare" : "card"}
@@ -735,7 +781,7 @@ function BoardItem({
         fresh && "ring-foreground/40 ring-2",
       )}
     >
-      {!editing && (
+      {!editing && !readOnly && (
         <button
           type="button"
           aria-label={`Remove ${m.title}`}

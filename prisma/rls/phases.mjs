@@ -43,6 +43,12 @@ const GRANTS = {
   // decidedAt and updatedAt; app.decision_guard does the rest). Never
   // deleted by a member.
   Decision: ["SIu", "SD", ""],
+  // Saved reports: members make them (createdById pinned); the maker, or an
+  // owner/admin on a shared one, edits and archives (title, access,
+  // widgets, insights, insightsAt, archivedAt, updatedAt). A snapshot is
+  // taken as yourself of a report you can see, and never edited.
+  Report: ["SIu", "SD", ""],
+  ReportSnapshot: ["SI", "SD", ""],
   DatabaseDefinition: ["SIU", "SIUD", ""],
   // Club-made databases: rows and fields, guarded per database by
   // app.can_view_database / app.can_edit_database.
@@ -224,6 +230,8 @@ const NEW_TENANT_TABLES = [
   "Announcement",
   "AnnouncementSeen",
   "Decision",
+  "Report",
+  "ReportSnapshot",
   "Form",
   "FormResponse",
   "DatabaseField",
@@ -5403,6 +5411,71 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         raiser_reopens: "42501",
         admin_changes_settled: "42501",
         raiser_drops_unowned: 1,
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-REPORTS-01",
+    "saved reports: a private one is its maker's alone; a shared one is every member's to read, and its maker's or an admin's to change; snapshots follow their report",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.make = await tryq(
+        q,
+        `INSERT INTO "Report" ("id","organizationId","title","source","access","createdById","updatedAt")
+         VALUES ('rp_shared','org_A','Sponsors','tasks','ORGANIZATION','u_memberA',now()),
+                ('rp_mine','org_A','Mine','tasks','PRIVATE','u_memberA',now())`,
+      );
+      s.make_as_other = await tryq(
+        q,
+        `INSERT INTO "Report" ("id","organizationId","title","source","createdById","updatedAt")
+         VALUES ('rp_x','org_A','x','tasks','u_adminA',now())`,
+      );
+      s.keep_copy = await tryq(
+        q,
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_1','org_A','rp_mine','u_memberA','Fall 2026','{}')`,
+      );
+      s.delete = await tryq(q, `DELETE FROM "Report" WHERE "id" = 'rp_shared'`);
+      s.change_maker = await tryq(q, `UPDATE "Report" SET "createdById" = 'u_bothAB' WHERE "id" = 'rp_shared'`);
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.member_reads = await count(q, `SELECT count(*) n FROM "Report"`);
+      s.member_reads_copies = await count(q, `SELECT count(*) n FROM "ReportSnapshot"`);
+      s.member_edits_shared = await rc(q, `UPDATE "Report" SET "title" = 'x' WHERE "id" = 'rp_shared'`);
+      s.member_copies_private = await tryq(
+        q,
+        `INSERT INTO "ReportSnapshot" ("id","organizationId","reportId","takenById","rangeLabel","data")
+         VALUES ('rs_2','org_A','rp_mine','u_bothAB','Fall 2026','{}')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_reads = await count(q, `SELECT count(*) n FROM "Report"`);
+      s.admin_edits_shared = await rc(q, `UPDATE "Report" SET "title" = 'Sponsorship' WHERE "id" = 'rp_shared'`);
+      s.admin_edits_private = await rc(q, `UPDATE "Report" SET "title" = 'x' WHERE "id" = 'rp_mine'`);
+      s.admin_makes_private = await tryq(q, `UPDATE "Report" SET "access" = 'PRIVATE' WHERE "id" = 'rp_shared'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.maker_archives = await rc(q, `UPDATE "Report" SET "archivedAt" = now() WHERE "id" = 'rp_mine'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "Report"`);
+      return s;
+    },
+    {
+      value: {
+        make: 2,
+        make_as_other: "42501",
+        keep_copy: 1,
+        delete: "42501",
+        change_maker: "42501",
+        member_reads: 1,
+        member_reads_copies: 0,
+        member_edits_shared: 0,
+        member_copies_private: "42501",
+        admin_reads: 1,
+        admin_edits_shared: 1,
+        admin_edits_private: 0,
+        admin_makes_private: "42501",
+        maker_archives: 1,
         other_org_reads: 0,
       },
     },

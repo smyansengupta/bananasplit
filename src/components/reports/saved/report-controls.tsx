@@ -1,0 +1,316 @@
+"use client";
+
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition, type ReactNode } from "react";
+
+import {
+  archiveReportAction,
+  askClaudeAction,
+  saveWidgetConfigAction,
+  takeSnapshotAction,
+  updateReportAction,
+} from "@/app/app/[orgSlug]/databases/reports/report-actions";
+import { WidgetBoard, type SaveBoard } from "@/components/boards/widget-board";
+import {
+  Archive,
+  Camera,
+  Ellipsis,
+  Globe,
+  Lock,
+  Pencil,
+  Settings,
+  Sparkles,
+} from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast } from "@/components/ui/toaster";
+import type { BoardWidget, WidgetMeta } from "@/lib/boards";
+import type { ReportWidget, SourceSummary, WidgetConfig } from "@/lib/reports/catalog";
+
+import { WidgetSettings } from "./widget-settings";
+
+function useRange(): { range?: string; from?: string; to?: string } {
+  const sp = useSearchParams();
+  return {
+    ...(sp.get("range") ? { range: sp.get("range")! } : {}),
+    ...(sp.get("from") ? { from: sp.get("from")! } : {}),
+    ...(sp.get("to") ? { to: sp.get("to")! } : {}),
+  };
+}
+
+/** A widget's gear: its settings in a popover, saved with Save. */
+export function WidgetSettingsButton({
+  orgId,
+  reportId,
+  widget,
+  source,
+  title,
+}: {
+  orgId: string;
+  reportId: string;
+  widget: ReportWidget;
+  source: SourceSummary;
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [config, setConfig] = useState<WidgetConfig>(widget.config);
+  const [pending, start] = useTransition();
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setConfig(widget.config);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          className="text-muted-foreground ms-auto"
+          aria-label={`${title} settings`}
+          title="Settings"
+        >
+          <Settings className="size-4" aria-hidden="true" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(30rem,calc(100vw-2rem))] space-y-4 p-4">
+        <p className="text-sm font-semibold">{title}</p>
+        <WidgetSettings widget={{ ...widget, config }} source={source} onChange={setConfig} />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const result = await saveWidgetConfigAction(orgId, reportId, widget.id, config);
+                if (!result.ok) {
+                  toast({ title: result.error });
+                  return;
+                }
+                setOpen(false);
+              })
+            }
+          >
+            Save
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Insights' Ask Claude: reads the report again and keeps what Claude says on it. */
+export function AskClaudeButton({
+  orgId,
+  reportId,
+  again,
+}: {
+  orgId: string;
+  reportId: string;
+  again: boolean;
+}) {
+  const range = useRange();
+  const [pending, start] = useTransition();
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          const result = await askClaudeAction(orgId, reportId, range);
+          if (!result.ok) toast({ title: result.error });
+        })
+      }
+    >
+      <Sparkles aria-hidden="true" />
+      {pending ? "Claude is reading..." : again ? "Read it again" : "Ask Claude"}
+    </Button>
+  );
+}
+
+/** The report's header controls: keep a snapshot, and (for its editors) rename, share and archive. */
+export function ReportHeaderControls({
+  orgId,
+  orgSlug,
+  reportId,
+  title,
+  access,
+  canEdit,
+  isOwner,
+}: {
+  orgId: string;
+  orgSlug: string;
+  reportId: string;
+  title: string;
+  access: "ORGANIZATION" | "PRIVATE";
+  canEdit: boolean;
+  isOwner: boolean;
+}) {
+  const router = useRouter();
+  const range = useRange();
+  const [pending, start] = useTransition();
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(title);
+
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, done?: string) =>
+    start(async () => {
+      const result = await fn();
+      if (!result.ok) toast({ title: result.error ?? "That didn't work. Try again." });
+      else if (done) toast({ title: done });
+    });
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={pending}
+        onClick={() =>
+          run(() => takeSnapshotAction(orgId, reportId, range), "Kept in Past reports")
+        }
+        title="Keep this report as it reads now"
+      >
+        <Camera aria-hidden="true" />
+        Keep a copy
+      </Button>
+      {canEdit && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" size="icon" variant="outline" aria-label="More">
+              <Ellipsis className="size-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setRenaming(true)}>
+              <Pencil aria-hidden="true" />
+              Rename
+            </DropdownMenuItem>
+            {isOwner && (
+              <DropdownMenuItem
+                onSelect={() =>
+                  run(
+                    () =>
+                      updateReportAction(orgId, reportId, {
+                        access: access === "PRIVATE" ? "ORGANIZATION" : "PRIVATE",
+                      }),
+                    access === "PRIVATE"
+                      ? "Everyone in the organization can open it"
+                      : "Only you can open it now",
+                  )
+                }
+              >
+                {access === "PRIVATE" ? <Globe aria-hidden="true" /> : <Lock aria-hidden="true" />}
+                {access === "PRIVATE" ? "Share with everyone" : "Make it only yours"}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() =>
+                start(async () => {
+                  const result = await archiveReportAction(orgId, reportId);
+                  if (!result.ok) {
+                    toast({ title: result.error });
+                    return;
+                  }
+                  toast({ title: `Archived ${title}` });
+                  router.push(`/app/${orgSlug}/databases/reports`);
+                })
+              }
+            >
+              <Archive aria-hidden="true" />
+              Archive
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <Dialog open={renaming} onOpenChange={setRenaming}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename report</DialogTitle>
+            <DialogDescription className="sr-only">A new name for this report.</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={name}
+            maxLength={80}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            aria-label="Name"
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              disabled={pending || !name.trim()}
+              onClick={() =>
+                start(async () => {
+                  const result = await updateReportAction(orgId, reportId, { title: name });
+                  if (!result.ok) {
+                    toast({ title: result.error });
+                    return;
+                  }
+                  setRenaming(false);
+                })
+              }
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** A board shown, not arranged (a past report, or a report someone else made). */
+export function StaticBoard({
+  types,
+  layout,
+  titles,
+  bodies,
+  intro,
+}: {
+  types: WidgetMeta[];
+  layout: BoardWidget[];
+  titles: Record<string, string>;
+  bodies: Record<string, ReactNode>;
+  intro?: ReactNode;
+}) {
+  const noSave: SaveBoard = async () => ({ ok: true });
+  return (
+    <WidgetBoard
+      types={types}
+      initialLayout={layout}
+      customized={false}
+      titles={titles}
+      bodies={bodies}
+      onSave={noSave}
+      readOnly
+      refreshOnSave={false}
+      intro={intro}
+    />
+  );
+}

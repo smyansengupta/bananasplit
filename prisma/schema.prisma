@@ -121,6 +121,8 @@ model User {
   announcementsSeen      AnnouncementSeen[]
   decisionsOwned         Decision[]           @relation("DecisionOwner")
   decisionsCreated       Decision[]           @relation("DecisionCreatedBy")
+  reportsCreated         Report[]             @relation("ReportCreatedBy")
+  reportSnapshotsTaken   ReportSnapshot[]     @relation("ReportSnapshotTakenBy")
 
   /// People search: trigram matching on the name (pg_trgm, GIN).
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -449,6 +451,8 @@ model Organization {
   itemLinks         ItemLink[]
   announcements     Announcement[]
   decisions         Decision[]
+  reports           Report[]
+  reportSnapshots   ReportSnapshot[]
 }
 
 /// CLUB or PERSONAL (docs/features/personal-and-clubs.md).
@@ -3053,4 +3057,63 @@ model Decision {
   @@index([organizationId, status, createdAt])
   @@index([ownerId])
   @@index([createdById])
+}
+
+/// Who sees a saved report (Databases > Reports): only whoever made it, or
+/// everyone in the organization. Either way each viewer's numbers come from
+/// the rows THEY can see, so sharing a report never shares a row.
+enum ReportAccess {
+  PRIVATE
+  ORGANIZATION
+}
+
+/// A saved report: one source (a database, or Tasks, Expenses, Events or
+/// People) and a board of widgets on it, each with its own settings
+/// (src/lib/reports/catalog.ts). Built by the New report walkthrough.
+/// Removing one archives it (app_user has no DELETE).
+model Report {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  /// "custom:<databaseId>", "tasks", "expenses", "events" or "people".
+  source         String
+  access         ReportAccess @default(ORGANIZATION)
+  /// [{id, type, w, h, config}] in board order, validated by zod.
+  widgets        Json         @default("[]")
+  /// Claude's last reading of the report ({lines: [...]}), and when.
+  insights       Json?
+  insightsAt     DateTime?
+  createdById    String?
+  archivedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?            @relation("ReportCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  snapshots    ReportSnapshot[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, archivedAt, updatedAt])
+  @@index([createdById])
+}
+
+/// A report as it read at one moment (Past reports): every widget's numbers
+/// and the insights, frozen, for the range it was taken over. Never edited.
+model ReportSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  reportId       String
+  takenById      String?
+  /// e.g. "Fall 2026".
+  rangeLabel     String
+  /// {title, widgets: [{id, type, w, h, title, payload}], insights}.
+  data           Json
+  takenAt        DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  report       Report       @relation(fields: [organizationId, reportId], references: [organizationId, id], onDelete: Cascade)
+  takenBy      User?        @relation("ReportSnapshotTakenBy", fields: [takenById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, reportId, takenAt])
+  @@index([takenById])
 }

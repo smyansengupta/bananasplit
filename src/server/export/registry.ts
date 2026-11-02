@@ -132,6 +132,10 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { model: "AnnouncementSeen", key: ["announcementId", "userId"] },
   // Home's Decisions: what was raised, who owns it, what was decided.
   { model: "Decision", key: ID },
+  // Saved reports (which database, which widgets) and the copies people
+  // kept: numbers already shown in the app, no rows of their own.
+  { model: "Report", key: ID },
+  { model: "ReportSnapshot", key: ID },
 ];
 
 /** Org tables that are deliberately not exported, and why. */

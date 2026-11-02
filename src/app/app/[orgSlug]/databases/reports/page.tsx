@@ -1,103 +1,65 @@
-import { ChartNoAxesColumn } from "@/components/icons";
-import { Suspense, type ReactNode } from "react";
+import { ChartNoAxesColumn, Globe, History, Lock, Plus } from "@/components/icons";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { RangePicker } from "@/components/reports/range-picker";
-import { ReportSkeleton } from "@/components/reports/report-skeleton";
-import { ReportsBody, ReportsFrame } from "@/components/reports/reports-frame";
-import { BallotsSection } from "@/components/reports/sections/ballots-section";
-import {
-  RetentionSection,
-  SignupsSection,
-  StampsSection,
-} from "@/components/reports/sections/people-sections";
-import {
-  AttendanceSection,
-  LastSessionSection,
-  SessionTypesSection,
-} from "@/components/reports/sections/session-sections";
-import type { ReportViewContext } from "@/components/reports/sections/shared";
+import { ReportsFrame } from "@/components/reports/reports-frame";
+import { CreateSuggestedButton } from "@/components/reports/saved/create-suggested-button";
+import { ReportIcon } from "@/components/reports/saved/icons";
+import { Button } from "@/components/ui/button";
 import { can } from "@/lib/auth/permissions";
-import { getOrgContextBySlug } from "@/server/db/context";
-import { clampRefreshSeconds } from "@/server/reports/cache";
-import { resolveReportRange } from "@/server/reports/range";
-import { reportTier } from "@/server/reports/tier";
-import type { ReportId } from "@/server/reports/types";
-import { getVisibleReports } from "@/server/reports/visibility";
+import { WIDGETS, suggestedWidgets } from "@/lib/reports/catalog";
+import { cn } from "@/lib/utils";
 import { planGate } from "@/server/billing/plan-gate";
+import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
+import { rangeQuery, resolveReportRange } from "@/server/reports/range";
+import { reportViewer } from "@/server/reports/run";
+import { listReports, listSnapshots } from "@/server/reports/saved";
+import { listSources } from "@/server/reports/sources";
+import { reportTier } from "@/server/reports/tier";
 
 import { DatabasesTabs } from "../databases-tabs";
-import { PeopleSummarySection, RsvpAttendanceSection } from "./organization-sections";
-import { AutoRefresh } from "./refresh-controls";
 
 export const metadata = { title: "Reports" };
 
-interface Slot {
-  render: (ctx: ReportViewContext) => ReactNode;
-  skeleton: ReactNode;
-  className: string;
+const CARD =
+  "bg-card text-card-foreground ring-foreground/6 rounded-card edge flex h-full flex-col p-6 ring-1 outline-none transition-[transform,box-shadow] duration-200 ease-(--ease-ink) hover:shadow-e2 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground motion-reduce:transform-none";
+
+function Chip({ icon }: { icon: string }) {
+  return (
+    <span className="bg-card ring-foreground/6 grid size-9 shrink-0 place-items-center rounded-full shadow-[var(--edge-highlight)] ring-1">
+      <ReportIcon name={icon} className="size-[18px]" />
+    </span>
+  );
 }
 
-/** Page order and grid placement of the seven default reports. */
-const SLOTS: Record<ReportId, Slot> = {
-  "last-session": {
-    render: (ctx) => <LastSessionSection ctx={ctx} />,
-    skeleton: <ReportSkeleton title="Last session" bodyHeight={160} />,
-    className: "lg:col-span-1",
-  },
-  attendance: {
-    render: (ctx) => <AttendanceSection ctx={ctx} />,
-    skeleton: <ReportSkeleton title="Attendance over time" stats={4} />,
-    className: "lg:col-span-2",
-  },
-  retention: {
-    render: (ctx) => <RetentionSection ctx={ctx} />,
-    skeleton: <ReportSkeleton title="Retention" stats={5} bodyHeight={266} />,
-    className: "lg:col-span-2",
-  },
-  "session-types": {
-    render: (ctx) => <SessionTypesSection ctx={ctx} />,
-    skeleton: <ReportSkeleton title="Session breakdown" bodyHeight={200} />,
-    className: "lg:col-span-1",
-  },
-  signups: {
-    render: (ctx) => <SignupsSection ctx={ctx} />,
-    skeleton: <ReportSkeleton title="Signups" stats={3} bodyHeight={266} />,
-    className: "lg:col-span-2",
-  },
-  stamps: {
-    render: (ctx) => <StampsSection ctx={ctx} />,
-    skeleton: <ReportSkeleton title="Stamp-card progress" bodyHeight={180} />,
-    className: "lg:col-span-1",
-  },
-  ballots: {
-    render: (ctx) => <BallotsSection ctx={ctx} />,
-    skeleton: <ReportSkeleton title="Ballots" bodyHeight={280} />,
-    className: "lg:col-span-3",
-  },
-};
+/** "Overdue and stale", "RSVPs and check-ins" mid-sentence. */
+function lowerFirst(title: string): string {
+  return /^[A-Z][a-z]/.test(title) ? title[0].toLowerCase() + title.slice(1) : title;
+}
 
-const ORDER: ReportId[] = [
-  "last-session",
-  "attendance",
-  "retention",
-  "session-types",
-  "signups",
-  "stamps",
-  "ballots",
-];
+function rowCount(s: { rows: number; kind: string }): string {
+  const unit =
+    s.kind === "people"
+      ? ["member", "members"]
+      : s.kind === "events"
+        ? ["event", "events"]
+        : ["row", "rows"];
+  return `${s.rows.toLocaleString("en-US")} ${s.rows === 1 ? unit[0] : unit[1]}`;
+}
+
+function day(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 /**
- * Reports (Phase 5). Authorize, derive the tier, resolve the date range to
- * explicit org-local dates, decide which reports this tier may see, then
- * stream each report in its own Suspense boundary. The reports' numbers come
- * from the cached aggregate loaders in src/server/reports. Ahead of them,
- * two uncached cards about the organization itself (organization-sections.tsx,
- * moved here from the Overview): People, counts only besides the org chart's
- * seats, and RSVPs against check-ins, which reads the range's latest events
- * (120 at most) for their turnout.
+ * Reports home: the organization's saved reports (each one database and a
+ * board of widgets on it), a one-click report for every database that has
+ * none yet, and the past reports people kept. The date pills sit beside the
+ * Databases and Reports tabs, as Tasks' do; the range they pick goes with
+ * every report opened from here. New report starts the walkthrough.
  */
 export default async function ReportsPage({
   params,
@@ -107,46 +69,54 @@ export default async function ReportsPage({
   const planLock = await planGate(orgSlug, "reports");
   if (planLock) return planLock;
   const sp = await searchParams;
-  const { organization, role, settings } = await getOrgContextBySlug(orgSlug);
-  const tier = reportTier(role);
-  if (!tier || !can({ role }, "reports.view")) notFound();
-
+  const { organization, role, user } = await getOrgContextBySlug(orgSlug);
+  if (!reportTier(role) || !can({ role }, "reports.view")) notFound();
   const tz = organization.timezone || "UTC";
   const range = resolveReportRange(sp, tz);
-  const visible = new Set(await getVisibleReports(organization.id, tier));
-  const refreshSeconds = clampRefreshSeconds(settings?.reportsRefreshSeconds);
+  const keep = new URLSearchParams(rangeQuery(range)).toString();
+  const withRange = (href: string) => (keep ? `${href}?${keep}` : href);
+  const isAdmin = can({ role }, "databases.write");
 
-  const ctx: ReportViewContext = {
-    key: {
-      orgId: organization.id,
-      tier,
-      from: range.from,
-      to: range.to,
-      tz,
-      dataVersion: settings?.reportsDataVersion ?? 0,
-      settingsStamp: settings?.updatedAt ? new Date(settings.updatedAt).toISOString() : "",
-    },
-    refreshSeconds,
-    slug: organization.slug,
-    tz,
-    link: { from: range.from, to: range.to, term: range.term },
-    rangeLabel: range.label,
-  };
-  // Stamp cards are opt-in: an org with no milestones has no stamps to report.
-  const usesStamps = (settings?.stampMilestones?.length ?? 0) > 0;
-  const ids = ORDER.filter((id) => visible.has(id) && (id !== "stamps" || usesStamps));
-  const isAdmin = tier === "OWNER" || tier === "ADMIN";
-  // RSVPs against check-ins reads what "Attendance over time" reads.
-  const showAttendance = visible.has("attendance");
+  const { reports, sources, snapshots } = await withOrgTx(organization.id, async (ctx) => {
+    const v = await reportViewer({
+      db: ctx.db,
+      organizationId: organization.id,
+      userId: user.id,
+      role,
+    });
+    return {
+      reports: await listReports(ctx.db, organization.id),
+      sources: await listSources(v),
+      snapshots: await listSnapshots(ctx.db, organization.id),
+    };
+  });
+  const sourceBy = new Map(sources.map((s) => [s.key, s]));
+  const reported = new Set(reports.map((r) => r.source));
+  // Empty ones wait until they have rows: a report on nothing reads nothing.
+  const unreported = sources.filter((s) => !reported.has(s.key) && s.rows > 0);
+  const base = `/app/${orgSlug}/databases/reports`;
 
   return (
     <ReportsFrame>
       <div className="space-y-7.5">
         <PageHeader
           title="Reports"
-          description={`Times in ${tz}`}
+          description={
+            reports.length
+              ? `${reports.length} report${reports.length === 1 ? "" : "s"}. Times in ${tz}`
+              : `Times in ${tz}`
+          }
           actions={
-            <>
+            <Button asChild variant="create">
+              <Link href={`${base}/new`}>
+                <Plus aria-hidden="true" />
+                New report
+              </Link>
+            </Button>
+          }
+          tabs={
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <DatabasesTabs orgSlug={orgSlug} showReports />
               <RangePicker
                 preset={range.preset}
                 from={range.from}
@@ -154,54 +124,144 @@ export default async function ReportsPage({
                 label={range.label}
                 span={range.span}
               />
-              <AutoRefresh seconds={refreshSeconds} />
-            </>
+            </div>
           }
-          tabs={<DatabasesTabs orgSlug={orgSlug} showReports />}
         />
 
-        <ReportsBody className="grid grid-cols-1 gap-4.5 lg:grid-cols-3">
-          <div
-            className={`flex min-w-0 flex-col ${showAttendance ? "lg:col-span-1" : "lg:col-span-3"}`}
-          >
-            <Suspense fallback={<ReportSkeleton title="People" stats={3} bodyHeight={120} />}>
-              <PeopleSummarySection orgId={organization.id} slug={orgSlug} tz={tz} />
-            </Suspense>
-          </div>
-          {showAttendance && (
-            <div className="flex min-w-0 flex-col lg:col-span-2">
-              <Suspense
-                fallback={<ReportSkeleton title="RSVPs and check-ins" stats={3} bodyHeight={180} />}
-              >
-                <RsvpAttendanceSection
-                  orgId={organization.id}
-                  slug={orgSlug}
-                  tz={tz}
-                  from={range.from}
-                  to={range.to}
-                  rangeLabel={range.label}
-                  isAdmin={isAdmin}
-                  showReturns={visible.has("retention")}
-                />
-              </Suspense>
-            </div>
-          )}
-        </ReportsBody>
+        {reports.length > 0 && (
+          <section aria-labelledby="your-reports" className="space-y-4">
+            <h2 id="your-reports" className="heading text-[17px]">
+              Your reports
+            </h2>
+            <ul className="grid gap-4.5 sm:grid-cols-2 lg:grid-cols-3">
+              {reports.map((r) => {
+                const source = sourceBy.get(r.source);
+                const lead = r.insights?.lines[0]?.text;
+                return (
+                  <li key={r.id}>
+                    <Link href={withRange(`${base}/${r.id}`)} className={cn(CARD, "min-h-48")}>
+                      <span className="flex items-start justify-between gap-2">
+                        <Chip icon={source?.icon ?? "Database"} />
+                        <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                          {r.access === "PRIVATE" ? (
+                            <>
+                              <Lock className="size-3.5" aria-hidden="true" /> Only you
+                            </>
+                          ) : (
+                            <>
+                              <Globe className="size-3.5" aria-hidden="true" /> Shared
+                            </>
+                          )}
+                        </span>
+                      </span>
+                      <span className="heading mt-4 text-[17px]">{r.title}</span>
+                      <span className="text-muted-foreground mt-1 text-sm">
+                        {source?.name ?? "A database you can't see"}, {r.widgets.length} widget
+                        {r.widgets.length === 1 ? "" : "s"}
+                      </span>
+                      {lead && <span className="mt-3 line-clamp-2 text-sm">{lead}</span>}
+                      <span className="text-muted-foreground mt-auto pt-4 text-xs">
+                        Changed {day(r.updatedAt)}
+                        {r.createdById !== user.id && r.createdByName
+                          ? ` by ${r.createdByName}`
+                          : ""}
+                        {r.snapshots
+                          ? `. ${r.snapshots} past report${r.snapshots === 1 ? "" : "s"}`
+                          : ""}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
 
-        {ids.length === 0 ? (
+        {sources.length === 0 ? (
           <EmptyState
             icon={ChartNoAxesColumn}
-            title="No reports to show"
-            description="Your role can't see the databases behind them."
+            title="Nothing to report on yet"
+            description="Make a database, or add tasks or expenses, and reports can read it."
           />
         ) : (
-          <ReportsBody className="grid grid-cols-1 gap-4.5 lg:grid-cols-3">
-            {ids.map((id) => (
-              <div key={id} className={`min-w-0 ${SLOTS[id].className} flex flex-col`}>
-                <Suspense fallback={SLOTS[id].skeleton}>{SLOTS[id].render(ctx)}</Suspense>
+          unreported.length > 0 && (
+            <section aria-labelledby="start-report" className="space-y-4">
+              <div className="space-y-1">
+                <h2 id="start-report" className="heading text-[17px]">
+                  {reports.length
+                    ? "Databases with no report yet"
+                    : "Start with a report on any database"}
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Make it in one click with the widgets that suit it, or choose your own.
+                </p>
               </div>
-            ))}
-          </ReportsBody>
+              <ul className="grid gap-4.5 sm:grid-cols-2 lg:grid-cols-3">
+                {unreported.map((s) => {
+                  const picks = suggestedWidgets(s, isAdmin).filter((t) => t !== "insights");
+                  return (
+                    <li key={s.key} className="bg-muted/45 rounded-card flex flex-col gap-3 p-5">
+                      <span className="flex items-center gap-3">
+                        <Chip icon={s.icon} />
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold">{s.name}</span>
+                          <span className="text-muted-foreground block text-xs">{rowCount(s)}</span>
+                        </span>
+                      </span>
+                      <span className="text-muted-foreground text-sm">
+                        Insights, {picks.map((t) => lowerFirst(WIDGETS[t].title)).join(", ")}
+                      </span>
+                      <span className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+                        <CreateSuggestedButton
+                          orgId={organization.id}
+                          orgSlug={orgSlug}
+                          sourceKey={s.key}
+                          name={s.name}
+                        />
+                        <Button asChild size="sm" variant="ghost">
+                          <Link href={`${base}/new?source=${encodeURIComponent(s.key)}`}>
+                            Choose widgets
+                          </Link>
+                        </Button>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )
+        )}
+
+        {snapshots.length > 0 && (
+          <section aria-labelledby="past-reports" className="space-y-4">
+            <div className="space-y-1">
+              <h2 id="past-reports" className="heading text-[17px]">
+                Past reports
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Reports as they read when someone kept them.
+              </p>
+            </div>
+            <ul className="bg-card ring-foreground/6 rounded-card edge divide-border divide-y ring-1">
+              {snapshots.slice(0, 12).map((s) => (
+                <li key={s.id}>
+                  <Link
+                    href={`${base}/${s.reportId}/past/${s.id}`}
+                    className="hover:bg-muted/40 focus-glow flex items-center gap-3 px-5 py-3.5 outline-none first:rounded-t-[inherit] last:rounded-b-[inherit]"
+                  >
+                    <History className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate font-medium">{s.reportTitle}</span>
+                    <span className="text-muted-foreground hidden text-sm sm:inline">
+                      {s.rangeLabel}
+                    </span>
+                    <span className="text-muted-foreground text-sm tabular-nums">
+                      {day(s.takenAt)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     </ReportsFrame>

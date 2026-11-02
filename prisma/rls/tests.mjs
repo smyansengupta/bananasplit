@@ -2352,6 +2352,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "RecentVisit:DELETE",
         "RecentVisit:INSERT",
         "RecentVisit:UPDATE",
+        "Report:INSERT",
+        "ReportSnapshot:INSERT",
         "Task:INSERT",
         "TaskActivity:INSERT",
         "TaskAssignee:DELETE",
