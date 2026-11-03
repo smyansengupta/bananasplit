@@ -20,9 +20,8 @@ import {
  * all work the same way: on the left the page's own switch (whose tasks,
  * grid or list), then Filters with a count (it opens a FilterSheet), and a
  * search icon at the right that turns the row into the search box, with
- * Cancel to put the row back. `middle` (Tasks' layouts) leads the same row
- * and takes whatever room is left, its label shortening before anything
- * overlaps. Shown below md only; the desktop keeps its own bar.
+ * Cancel to put the row back. `middle` (Tasks' layout picker, an icon)
+ * leads the same row. Shown below md only; the desktop keeps its own bar.
  */
 export function PhoneToolbar({
   leading,
@@ -35,7 +34,7 @@ export function PhoneToolbar({
   onCancelSearch,
 }: {
   leading?: ReactNode;
-  /** First in the row, taking the room that's left (Tasks' layout picker). */
+  /** First in the row (Tasks' layout picker). */
   middle?: ReactNode;
   filterCount: number;
   onFilters: () => void;
@@ -70,9 +69,9 @@ export function PhoneToolbar({
 
   return (
     <div className="flex items-center gap-2 md:hidden">
-      {middle ? <div className="flex min-w-0 flex-1">{middle}</div> : null}
+      {middle}
       {leading}
-      {!middle && <span className="flex-1" />}
+      <span className="flex-1" />
       <Button
         variant="outline"
         className="h-10 shrink-0 gap-1.5 rounded-full px-3"

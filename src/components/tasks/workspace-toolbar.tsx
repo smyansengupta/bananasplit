@@ -326,19 +326,17 @@ function MobileToolbar({
       <PhoneToolbar
         middle={
           layouts.length > 1 && (
-            // The layouts a phone has, first on the row and filling the room
-            // up to whose tasks; the name shortens before anything overlaps.
+            // The layouts a phone has, first on the row: the current one's
+            // icon (a 390px row has no room for its name), named in the menu.
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="h-10 w-full min-w-0 justify-between gap-1 rounded-full px-3"
+                  className="h-10 shrink-0 gap-1 rounded-full px-3"
                   aria-label={`Layout: ${current?.label ?? "List"}`}
+                  title={current?.label ?? "List"}
                 >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    {CurrentIcon && <CurrentIcon className="size-4 shrink-0" aria-hidden="true" />}
-                    <span className="truncate">{current?.label ?? "List"}</span>
-                  </span>
+                  {CurrentIcon && <CurrentIcon className="size-4 shrink-0" aria-hidden="true" />}
                   <ChevronDown className="size-3.5 shrink-0 opacity-60" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
