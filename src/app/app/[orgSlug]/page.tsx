@@ -884,6 +884,9 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ...(data.meetings.length === 0 ? ["meetings"] : []),
     ...(data.events.length === 0 ? ["events"] : []),
     ...(data.recent.length === 0 ? ["recent"] : []),
+    // Personal: your organizations' tasks are in Up next and This week, so an
+    // empty list of your own steps aside rather than saying all clear.
+    ...(personal && data.myTasks.total === 0 ? ["my-tasks"] : []),
   ];
   // From your apps, read when Ambient shows it or it's on the board.
   const apps = placed.has("apps")
