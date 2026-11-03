@@ -39,13 +39,7 @@ import {
   listAnnouncements,
   signupInsights,
 } from "@/server/announcements/announcements";
-import {
-  byline,
-  INBOX_LIMIT,
-  postedWhen,
-  recapWindowStart,
-  RECENT_DAYS,
-} from "@/server/announcements/rules";
+import { byline, postedWhen, recapWindowStart } from "@/server/announcements/rules";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
@@ -58,8 +52,6 @@ import { getMyOpenTasks } from "@/server/tasks/queries";
 const TASK_DAYS = 7;
 const TASKS_LIMIT = 40;
 const UPDATES_LIMIT = 80;
-/** "See all" announcements shows this many, newest first. */
-const ANNOUNCEMENTS_ALL = 50;
 /** The events a new announcement can be about: from yesterday on, the next few. */
 const EVENT_CHOICES = 20;
 
@@ -80,8 +72,8 @@ const EVENT_CHOICES = 20;
  * kind; j and k move, Enter opens, e finishes, s snoozes until tomorrow.
  *
  * Above the tabs, in every view: Announcements, the organization's latest
- * posts (the last two weeks, a few at most; ?announcements=all for every
- * one), with a composer anyone can post from. The composer also drafts this
+ * post in full (a new one takes its place), with a composer anyone can post
+ * from. The composer also drafts this
  * week's recap on demand (the recap isn't loaded here); from Friday to Sunday
  * (the organization's time) it nudges to post it until one goes out.
  */
@@ -100,7 +92,6 @@ export default async function InboxPage({
   const addOns = readAddOns(ctx.settings?.addOns);
   const canReview = can(ctx, "finance.manage") && addOns.includes("finance");
   const canManagePosts = can(ctx, "events.write");
-  const allPosts = sp.announcements === "all";
   const now = new Date();
   // The end of the week, when the composer nudges to post the recap (null other days).
   const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
@@ -141,12 +132,8 @@ export default async function InboxPage({
       }),
     ]);
     // Announcements, one query after the other (a transaction has one connection).
-    const posts = await listAnnouncements(db, org.id, user.id, {
-      limit: allPosts ? ANNOUNCEMENTS_ALL : INBOX_LIMIT,
-      since: allPosts ? undefined : new Date(now.getTime() - RECENT_DAYS * 86_400_000),
-      orgSlug,
-    });
-    // Counted always: "See all" stays when every post is older than two weeks.
+    // Just the latest: it shows until the next one goes out.
+    const posts = await listAnnouncements(db, org.id, user.id, { limit: 1, orgSlug });
     const postCount = await countAnnouncements(db, org.id);
     // Sign-ups are for owners and admins to read, so only they get the fact.
     const insights = canManagePosts ? await signupInsights(db, org.id, posts, now) : new Map();
@@ -345,14 +332,10 @@ export default async function InboxPage({
     label: `${e.title}, ${listWhen(e.startsAt, e.endsAt, tz, e.allDay)}`,
   }));
   // Links keep the Inbox's tab (view) as it is.
-  const inboxHref = (to: { view?: View; all?: boolean } = {}): string => {
+  const inboxHref = (to: { view?: View } = {}): string => {
     const tab = to.view ?? asked;
-    const query = [tab === "needs" ? "" : `view=${tab}`, to.all ? "announcements=all" : ""].filter(
-      Boolean,
-    );
-    return query.length > 0 ? `${base}/inbox?${query.join("&")}` : `${base}/inbox`;
+    return tab === "needs" ? `${base}/inbox` : `${base}/inbox?view=${tab}`;
   };
-  const seeAllHref = inboxHref({ all: true });
 
   const next = data.nextEvent;
   const caughtUp = (
@@ -395,7 +378,6 @@ export default async function InboxPage({
         items={announcements}
         events={eventChoices}
         total={data.postCount}
-        seeAllHref={seeAllHref}
         recapDue={data.recapDue}
       />
 

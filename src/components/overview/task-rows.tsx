@@ -197,6 +197,14 @@ function TaskRow({
         )}
       </div>
       <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        {task.high && (
+          <span
+            title="High priority"
+            className="bg-tint-accent text-tint-accent-foreground grid size-6 place-items-center rounded-full"
+          >
+            <Flag className="size-3.5" aria-label="High priority" />
+          </span>
+        )}
         {/* Its ambient buttons, above the row's link. */}
         {!done && (task.late || task.startable) && (
           <span className="relative z-10 inline-flex">
@@ -205,14 +213,6 @@ function TaskRow({
             ) : (
               <StartItButton orgId={orgId} taskId={task.id} title={task.title} />
             )}
-          </span>
-        )}
-        {task.high && (
-          <span
-            title="High priority"
-            className="bg-tint-accent text-tint-accent-foreground grid size-6 place-items-center rounded-full"
-          >
-            <Flag className="size-3.5" aria-label="High priority" />
           </span>
         )}
         {task.due && (

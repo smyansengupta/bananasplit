@@ -62,7 +62,7 @@ export function TaskCard({
   showEpic?: boolean;
   /** The completion circle, for cards in the Completed column. */
   check?: React.ReactNode;
-  /** Its ambient buttons (an unowned card's Take it and Assign), under the meta row. */
+  /** Its ambient buttons (Push back, Nudge, Take it...), right after the due date. */
   ambient?: React.ReactNode;
 }) {
   const done = task.status === "COMPLETED";
@@ -123,8 +123,9 @@ export function TaskCard({
         <ProgressBar done={progress.done} total={progress.total} color={color} />
       )}
 
-      <div className="text-muted-foreground flex items-center gap-2.5 text-[13px]">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px]">
         <DueLabel dueDate={task.dueDate} todayKey={todayKey} done={done} />
+        {ambient}
         {task._count.comments > 0 && (
           <span className="flex items-center gap-1">
             <MessageSquare className="size-3.5" aria-hidden="true" />
@@ -148,7 +149,6 @@ export function TaskCard({
           </span>
         )}
       </div>
-      {ambient}
     </div>
   );
 }

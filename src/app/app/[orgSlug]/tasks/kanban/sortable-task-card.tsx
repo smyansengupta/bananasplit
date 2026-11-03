@@ -68,7 +68,7 @@ export function SortableTaskCard({
             task={{ ...task, status }}
             todayKey={todayKey}
             showEpic={showEpic}
-            ambient={<TaskAmbientActions task={task} align="start" why />}
+            ambient={<TaskAmbientActions task={task} align="start" />}
             check={
               done ? (
                 <TaskCheck
