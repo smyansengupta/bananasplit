@@ -841,16 +841,20 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const nextMeeting = nextMeetings.find((m) => !m.allDay) ?? null;
   const nextEvent = data.events.find((e) => !e.allDay) ?? null;
   const tomorrowKey = addDaysToKey(todayKey, 1);
-  const firstTomorrow = data.weekEvents.find((e) => !e.allDay && dayKeyOf(e) === tomorrowKey);
   const clock = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     hourCycle: "h23",
     weekday: "short",
     timeZone,
   }).formatToParts(now);
+  const hourNow = Number(clock.find((p) => p.type === "hour")?.value ?? 12);
+  // Late at night, the next morning's first thing; before dawn that's today's.
+  const firstTomorrow = data.weekEvents.find(
+    (e) => !e.allDay && e.startsAt > now && dayKeyOf(e) === (hourNow < 5 ? todayKey : tomorrowKey),
+  );
   const weekdayOf = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const signals: HomeSignals = {
-    hour: Number(clock.find((p) => p.type === "hour")?.value ?? 12),
+    hour: hourNow,
     weekday: weekdayOf.indexOf(clock.find((p) => p.type === "weekday")?.value ?? "Wed"),
     role,
     meeting: nextMeeting

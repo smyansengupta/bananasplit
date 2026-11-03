@@ -57,7 +57,7 @@ export interface HomeSignals {
   othersOnline: number;
   /** The next seven days. */
   week: { events: number; due: number; meetings: number };
-  /** Tomorrow's first meeting or event, for late at night ("Workshop 8, 6 PM"). */
+  /** The next morning's first meeting or event, for late at night ("Workshop 8, 6 PM"). */
   tomorrowFirst?: { widget: "meetings" | "events"; label: string } | null;
 }
 
@@ -118,7 +118,8 @@ export function scoreHome(s: HomeSignals): Map<string, WidgetScore> {
   }
   // Late at night: tomorrow's first thing, and nothing else that's merely coming up.
   if (isNight(s.hour) && s.tomorrowFirst) {
-    set(s.tomorrowFirst.widget, 40, `Tomorrow first: ${s.tomorrowFirst.label}`);
+    const first = s.hour < 5 ? "First thing today" : "Tomorrow first";
+    set(s.tomorrowFirst.widget, 40, `${first}: ${s.tomorrowFirst.label}`);
   }
   const live = (m && (m.underWay || m.startsInMin <= 15)) || e?.underWay;
   if (live && s.othersOnline >= 2) {
