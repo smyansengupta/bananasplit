@@ -32,6 +32,7 @@ vi.mock("@/server/cache/invalidate", () => ({ invalidate: vi.fn() }));
 vi.mock("@/server/org-chart/queries", () => ({ getPublishedOrgChart: vi.fn(async () => null) }));
 vi.mock("@/server/jobs/kick", () => ({ scheduleKick: vi.fn() }));
 
+import { addDaysToKey, localDateKey, zonedInstant } from "@/lib/tasks/dates";
 import { authDb, disconnectAll } from "@/server/db/clients";
 import { withOrgTx, withSystemOrgTx, type OrgContext } from "@/server/db/context";
 import { sidebarCounts } from "@/server/inbox/counts";
@@ -41,6 +42,7 @@ import { deliverDraft } from "./drafts";
 import type { CrmEventPayload } from "./events";
 import { forecastItems } from "./forecast";
 import { ingestEmail } from "./outreach/inbound";
+import { book, createBookingPage, loadBooking, updateBookingPage } from "./outreach/booking";
 import { composeEmail, deliver } from "./outreach/send";
 import { createSequence, crmSequenceJob, enroll, saveSequence, setSequenceStatus } from "./outreach/sequences";
 import { createTemplate } from "./outreach/templates";
@@ -346,4 +348,48 @@ describe("the CRM's phases together", () => {
     const items = await withSystemOrgTx(org, ({ db }) => forecastItems(db, org, pipeline.id));
     expect(items.find((i) => i.closedOn)?.closedOn).toBe("2026-03-31");
   });
+
+  it("keeps a host's one-off dates off their booking page: a day off, and a date's hours", async () => {
+    if (!reachable) return;
+    const tz = "America/New_York";
+    const now = new Date();
+    const today = localDateKey(now, tz);
+    const dayOff = addDaysToKey(today, 2);
+    const busyDay = addDaysToKey(today, 3);
+    await ownerDb.userAvailability.upsert({
+      where: { userId: member.id },
+      create: { userId: member.id, rules: {}, busy: [] },
+      update: {},
+    });
+    await ownerDb.userAvailability.update({
+      where: { userId: member.id },
+      data: {
+        rules: {
+          v: 1,
+          blocks: ["6-22"],
+          rules: [
+            { kind: "date", label: "Trip", date: dayOff, start: null, end: null },
+            { kind: "date", label: "Dentist", date: busyDay, start: 13, end: 15 },
+          ],
+        },
+        busy: ["6-22"],
+      },
+    });
+    const page = await as(member, (ctx) => createBookingPage(ctx, "Intro call"));
+    await as(member, (ctx) => updateBookingPage(ctx, page.id, { minNoticeHours: 0, maxDaysAhead: 6, durationMin: 30 }));
+    const loaded = await loadBooking(page.slug, now);
+    const slots = loaded!.slots;
+    const day = (d: Date) => localDateKey(d, tz);
+    const hour = (d: Date) => Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: tz }).format(d));
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots.some((s) => day(s.start) === dayOff)).toBe(false);
+    const onBusyDay = slots.filter((s) => day(s.start) === busyDay);
+    expect(onBusyDay.some((s) => hour(s.start) === 10)).toBe(true);
+    expect(onBusyDay.some((s) => hour(s.start) === 13 || hour(s.start) === 14)).toBe(false);
+    expect(onBusyDay.some((s) => hour(s.start) === 15)).toBe(true);
+    // Booking a time on the day off is refused even when asked for directly.
+    const r = await book(page.slug, { start: zonedInstant(dayOff, 10, tz).toISOString(), name: "Dee Off", email: `dee-${tag}@example.org`, answers: {} }, now);
+    expect(r.ok).toBe(false);
+  });
+
 });

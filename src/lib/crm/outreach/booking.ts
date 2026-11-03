@@ -8,7 +8,9 @@ import { addDaysToKey, isValidTimeZone, localDateKey, weekdayOfKey, zonedInstant
  * the fewest lately). A host who set their availability is bookable
  * whenever it doesn't say they're busy, within the availability grid's
  * hours (8 AM to 11 PM) on any day; a host who never set it, weekdays 9 to
- * 5. Pure.
+ * 5. One-off dates in their availability ("One date you can't make") hold
+ * too: an all-day one takes that day off, one with hours takes those hours
+ * that date. Pure.
  */
 
 export interface BookingHost {
@@ -19,6 +21,43 @@ export interface BookingHost {
   events: readonly { start: Date; end: Date }[];
   /** They set their availability (UserAvailability): their hours are its grid less their busy cells. */
   ownHours?: boolean;
+  /**
+   * One-off dates they can't make (their availability's date rules, no
+   * labels): a whole day off when start and end are null, else the hours
+   * start to end that day, in the organization's timezone.
+   */
+  dates?: readonly BusyDate[];
+}
+
+export interface BusyDate {
+  /** YYYY-MM-DD */
+  date: string;
+  start: number | null;
+  end: number | null;
+}
+
+/** app.crm_booking_busy's dates column: well-formed entries only, never throws. */
+export function readBusyDates(raw: unknown): BusyDate[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BusyDate[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object") continue;
+    const { date, start, end } = r as Record<string, unknown>;
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    const hour = (v: unknown, min: number, max: number) =>
+      typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : null;
+    const s = hour(start, 0, 23);
+    const e = hour(end, 1, 24);
+    if (s === null || e === null) {
+      // Both missing is a day off; one missing, or a malformed range, counts as the whole day too (busy errs on the safe side).
+      out.push({ date, start: null, end: null });
+    } else if (e > s) {
+      out.push({ date, start: s, end: e });
+    } else {
+      out.push({ date, start: null, end: null });
+    }
+  }
+  return out;
 }
 
 /** The hours a host who set their availability can be booked: the availability grid's, every day. */
@@ -73,6 +112,12 @@ function hostFree(
   const own = host.ownHours ? OWN_HOURS : hours;
   if (!(own.days as readonly number[]).includes(day + 1) || firstHour < own.startHour || lastHour >= own.endHour || lastHour < firstHour) return false;
   for (let h = firstHour; h <= lastHour; h++) if (busy.has(`${day}-${h}`)) return false;
+  // One-off dates: a day off takes the whole day; a range takes those hours that day, on top of the week's.
+  for (const d of host.dates ?? []) {
+    if (d.date !== key) continue;
+    if (d.start === null || d.end === null) return false;
+    if (firstHour < d.end && lastHour >= d.start) return false;
+  }
   const s = start.getTime() - bufferMs;
   const e = end.getTime() + bufferMs;
   return !host.events.some((ev) => ev.start.getTime() < e && ev.end.getTime() > s);

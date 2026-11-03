@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bookingSlots, OWN_HOURS } from "./outreach/booking";
+import { bookingSlots, OWN_HOURS, readBusyDates } from "./outreach/booking";
 import { renderMerge } from "./outreach/merge";
 import { AUTOMATION_WINDOW, nextInWindow } from "./outreach/schedule";
 import { EVERYDAY_STARTERS, STARTER_TEMPLATES, starterFor } from "./outreach/starters";
@@ -89,5 +89,70 @@ describe("booking hours", () => {
     expect(sunday8?.hostIds).toEqual(["own"]);
     const monday10 = slots.find((s) => s.start.toISOString() === "2026-11-02T15:00:00.000Z");
     expect(monday10?.hostIds).toEqual(["fixed", "own"]);
+  });
+
+  it("takes a host's day off out of that date only", () => {
+    // Tuesday November 3 off, all day.
+    const host = { userId: "a", busy: [], events: [], dates: [{ date: "2026-11-03", start: null, end: null }] };
+    const slots = bookingSlots({ ...base, now, hosts: [host] });
+    const day = (s: { start: Date }) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(s.start);
+    expect(slots.some((s) => day(s) === "2026-11-03")).toBe(false);
+    expect(slots.some((s) => day(s) === "2026-11-02")).toBe(true);
+    expect(slots.some((s) => day(s) === "2026-11-04")).toBe(true);
+    // The same for a host who set their own hours.
+    const own = bookingSlots({ ...base, now, hosts: [{ ...host, busy: ["6-23"], ownHours: true }] });
+    expect(own.some((s) => day(s) === "2026-11-03")).toBe(false);
+    expect(own.some((s) => day(s) === "2026-11-04")).toBe(true);
+  });
+
+  it("takes a date's hours on top of the week's, and leaves the rest of that day bookable", () => {
+    // Wednesday November 4, 1 to 3 PM; busy every Wednesday at 9 AM (2 = Wednesday).
+    const slots = bookingSlots({
+      ...base,
+      now,
+      hosts: [{ userId: "a", busy: ["2-9"], events: [], dates: [{ date: "2026-11-04", start: 13, end: 15 }] }],
+    });
+    const at = (iso: string) => slots.some((s) => s.start.toISOString() === iso);
+    expect(at("2026-11-04T14:00:00.000Z")).toBe(false); // 9 AM: the weekly rule still holds
+    expect(at("2026-11-04T15:00:00.000Z")).toBe(true); // 10 AM
+    expect(at("2026-11-04T17:00:00.000Z")).toBe(true); // 12 PM to 1 PM ends as the range starts
+    expect(at("2026-11-04T17:30:00.000Z")).toBe(false); // 12:30 runs into 1 PM
+    expect(at("2026-11-04T18:00:00.000Z")).toBe(false); // 1 PM
+    expect(at("2026-11-04T19:30:00.000Z")).toBe(false); // 2:30 PM
+    expect(at("2026-11-04T20:00:00.000Z")).toBe(true); // 3 PM
+    expect(at("2026-11-05T18:00:00.000Z")).toBe(true); // Thursday 1 PM: only that date
+  });
+
+  it("keeps another host bookable on a host's day off", () => {
+    const slots = bookingSlots({
+      ...base,
+      now,
+      hosts: [
+        { userId: "off", busy: [], events: [], dates: [{ date: "2026-11-03", start: null, end: null }] },
+        { userId: "in", busy: [], events: [] },
+      ],
+    });
+    const tue10 = slots.find((s) => s.start.toISOString() === "2026-11-03T15:00:00.000Z");
+    expect(tue10?.hostIds).toEqual(["in"]);
+  });
+
+  it("reads the dates the database hands over, dropping malformed ones and never trusting a bad range", () => {
+    expect(
+      readBusyDates([
+        { date: "2026-11-03", start: null, end: null },
+        { date: "2026-11-04", start: 13, end: 15 },
+        { date: "2026-11-05", start: 15, end: 13 },
+        { date: "2026-11-06", start: 9 },
+        { date: "Nov 7", start: null, end: null },
+        "junk",
+        null,
+      ]),
+    ).toEqual([
+      { date: "2026-11-03", start: null, end: null },
+      { date: "2026-11-04", start: 13, end: 15 },
+      { date: "2026-11-05", start: null, end: null },
+      { date: "2026-11-06", start: null, end: null },
+    ]);
+    expect(readBusyDates(null)).toEqual([]);
   });
 });

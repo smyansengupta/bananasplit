@@ -5790,13 +5790,15 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
      INSERT INTO "CrmBookingPage" ("id","organizationId","slug","title","hostIds","active","updatedAt")
        VALUES ('bp_on','org_A','meet-ada','Meet','{u_memberA,u_memberB}',true,now()),
               ('bp_off','org_A','meet-off','Off','{u_memberA}',false,now());
-     INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA','{}','{0-9}')
-       ON CONFLICT ("userId") DO UPDATE SET "busy" = '{0-9}';`,
+     INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA',
+       '{"v":1,"blocks":["0-9"],"rules":[{"kind":"date","label":"Dentist","date":"2099-03-02","start":14,"end":16},{"kind":"date","label":"Trip","date":"2099-03-01","start":null,"end":null},{"kind":"date","label":"Long gone","date":"2001-01-01","start":null,"end":null},{"kind":"weekly","label":"Standup","days":[1],"start":10,"end":11}]}',
+       '{0-9}')
+       ON CONFLICT ("userId") DO UPDATE SET "rules" = EXCLUDED."rules", "busy" = '{0-9}';`,
   );
   try {
     await tcase(
       "P-CRM-03",
-      "CRM public links: the lookups answer ids only, for a live booking page, a live unexpired guest link, a person not in the trash, a BCC token and a tracking token; a booking page's busy hours come only for its hosts who are members, only in its own organization's context",
+      "CRM public links: the lookups answer ids only, for a live booking page, a live unexpired guest link, a person not in the trash, a BCC token and a tracking token; a booking page's busy hours (and upcoming one-off dates, without labels) come only for its hosts who are members, only in its own organization's context",
       "app_service",
       null,
       async (q) => {
@@ -5817,7 +5819,12 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         await q(`SELECT app.set_context(NULL,'org_B')`);
         s.busy_other_org = await count(q, `SELECT count(*) n FROM app.crm_booking_busy('bp_on')`);
         await q(`SELECT app.set_context(NULL,'org_A')`);
-        s.busy = (await q(`SELECT * FROM app.crm_booking_busy('bp_on')`)).rows;
+        s.busy = (await q(`SELECT * FROM app.crm_booking_busy('bp_on')`)).rows.map((r) => ({
+          userId: r.userId,
+          busy: r.busy,
+          // jsonb orders keys its own way; compare in a fixed order.
+          dates: r.dates.map((d) => ({ date: d.date, start: d.start, end: d.end })),
+        }));
         return s;
       },
       {
@@ -5834,7 +5841,17 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           wrong_kind: 0,
           busy_no_context: 0,
           busy_other_org: 0,
-          busy: [{ userId: "u_memberA", busy: ["0-9"] }],
+          // One-off dates come too (20261105200000_crm_booking_dates): upcoming ones only, never their labels.
+          busy: [
+            {
+              userId: "u_memberA",
+              busy: ["0-9"],
+              dates: [
+                { date: "2099-03-01", start: null, end: null },
+                { date: "2099-03-02", start: 14, end: 16 },
+              ],
+            },
+          ],
         },
       },
     );

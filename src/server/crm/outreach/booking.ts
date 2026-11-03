@@ -5,6 +5,7 @@ import {
   bookingSlots,
   bookingSlug,
   pickHost,
+  readBusyDates,
   readQuestions,
   SLUG_RE,
   type BookingQuestion,
@@ -27,7 +28,8 @@ import { randomToken } from "./tokens";
 /**
  * Booking pages (/book/{slug}; docs/features/crm.md, module 5, "Booking
  * links"): times come from the hosts' availability (their busy hours in a
- * typical week, through app.crm_booking_busy) and the meetings already on
+ * typical week and the one-off dates they can't make, through
+ * app.crm_booking_busy) and the meetings already on
  * their calendars. Several hosts round-robin: a booking goes to whoever of
  * those free has had the fewest lately. Booking makes a Bananasplit
  * meeting (Meetings, the host's calendar), finds or adds the person, puts
@@ -125,8 +127,8 @@ export interface PublicBooking {
 }
 
 async function slotsFor(db: TxClient, organizationId: string, page: { id: string; hostIds: string[]; durationMin: number; bufferMin: number; minNoticeHours: number; maxDaysAhead: number }, tz: string, now: Date) {
-  const busy = await db.$queryRaw<{ userId: string; busy: string[] }[]>`
-    SELECT "userId", "busy" FROM app.crm_booking_busy(${page.id})`;
+  const busy = await db.$queryRaw<{ userId: string; busy: string[]; dates: unknown }[]>`
+    SELECT "userId", "busy", "dates" FROM app.crm_booking_busy(${page.id})`;
   const until = new Date(now.getTime() + (page.maxDaysAhead + 1) * 86_400_000);
   const hosts = page.hostIds.filter((h) => busy.some((b) => b.userId === h));
   const attending = await db.eventAttendee.findMany({
@@ -156,6 +158,8 @@ async function slotsFor(db: TxClient, organizationId: string, page: { id: string
       busy: busy.find((b) => b.userId === h)?.busy ?? [],
       // Set their availability: bookable when it doesn't say they're busy, not only weekdays 9 to 5.
       ownHours: (busy.find((b) => b.userId === h)?.busy.length ?? 0) > 0,
+      // One-off dates they can't make: a day off, or some hours that day.
+      dates: readBusyDates(busy.find((b) => b.userId === h)?.dates),
       events: [
         ...attending.filter((a) => a.userId === h && !a.event.allDay).map((a) => ({ start: a.event.startsAt, end: a.event.endsAt })),
         ...hosting.filter((e) => e.hostUserId === h && !e.allDay).map((e) => ({ start: e.startsAt, end: e.endsAt })),
