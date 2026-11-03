@@ -10,7 +10,7 @@ deployment/restore procedures.
 - **OWNER** — full control, including inviting/removing members and changing
   roles. Usually the club president or whoever set the org up.
 - **ADMIN** — org management (members, labels, most content) and finance, as owners and treasurers have.
-- **TREASURER** — finance access (transactions, budget, sponsorships,
+- **TREASURER** — finance access (transactions, budget, deals,
   reimbursements) plus ordinary member access everywhere else. Not a rung on
   the admin ladder — a treasurer who isn't also an admin can't manage
   members.

@@ -29,14 +29,13 @@ has a default that works on the first click. An organization that has
 never used a CRM should get value in its first five minutes; one leaving
 Salesforce should find the depth it expects.
 
-**It's for any organization reaching out to people, not just sales or
-sponsors.** The same CRM runs:
+**It's for any organization reaching out to people, not just sales.** The same CRM runs:
 
 | Who you're reaching | Example pipeline (ready-made, renameable) |
 |---|---|
 | New members, volunteers, applicants | Interested, Reached out, Talked, Applied, Joined |
 | Donors and funders | Identified, Asked, Pledged, Received, Thanked |
-| Sponsors and partners | Prospect, Committed, Invoiced, Received (today's Sponsorships) |
+| Partners and deals | Prospect, Committed, Invoiced, Received (Finance's Deals) |
 | Speakers, guests, judges, mentors | Invited, Confirmed, Briefed, Done, Thanked |
 | Alumni and past members | Keep in touch (no stages, just a cadence) |
 | Press, venues, vendors | Contacted, Quoted, Booked |
@@ -44,7 +43,7 @@ sponsors.** The same CRM runs:
 | Grants | Researching, Drafting, Submitted, Awarded or Declined |
 
 So the words on screen follow the organization: a pipeline names what it
-tracks ("an applicant", "a donation", "a sponsorship"), amounts are
+tracks ("an applicant", "a donation", "a deal"), amounts are
 optional, and Won/Lost can read Joined/Didn't join. Underneath, it's one
 system. On screen, the other side of the relationship is a **Company**,
 never an "organization", so it can't be confused with the workspace.
@@ -86,7 +85,7 @@ never an "organization", so it can't be confused with the workspace.
 | Add-on switch, add-on page | `ADD_ONS`, `OrgSettings.addOns`, `/integrations/crm` placeholder | `src/lib/addons.ts` |
 | Custom fields and field types | Custom databases: fields, JSONB values with a GIN index, CSV import | `DatabaseField`, `DatabaseRecord`, `src/lib/databases/fields.ts` |
 | Bringing people in | Forms that write every response to a database, no sign-in needed | `Form`, `FormResponse`, `docs/features/forms.md` |
-| Sponsors and a sponsorship pipeline | `Sponsor`, `Sponsorship` (Prospect to Received), linked to Finance | Finance |
+| Partners and a deals pipeline (Finance › Deals) | `Sponsor`, `Sponsorship` (Prospect to Received), linked to Finance | Finance |
 | People we've met | `Contact` + `ContactEmail` (check-ins, sign-ups, unsubscribes) | website sync |
 | Tasks, notes, meetings, files | Tasks, Notes, Meetings/Events, Files, plus `ItemLink` to link any two | `ItemLink` |
 | Booking links | Availability (`UserAvailability`), Find a time, RSVP pages | Meetings |
@@ -112,10 +111,10 @@ field never needs a migration.
 
 | Table | What it is |
 |---|---|
-| `CrmPerson` | The heart of it. Name, emails, phones, socials, title, company, owner, relationship type (member prospect, donor, sponsor contact, alumni, speaker, client, custom), source, last contacted, next follow-up, keep-in-touch cadence, score, unsubscribe and consent flags, custom fields. Linked to an existing `Contact` and/or `User` when the email matches, so check-ins, RSVPs and membership show on their page. |
+| `CrmPerson` | The heart of it. Name, emails, phones, socials, title, company, owner, relationship type (member prospect, donor, partner, alumni, speaker, client, custom), source, last contacted, next follow-up, keep-in-touch cadence, score, unsubscribe and consent flags, custom fields. Linked to an existing `Contact` and/or `User` when the email matches, so check-ins, RSVPs and membership show on their page. |
 | `CrmCompany` | The other side when it's a group: a business, school, foundation, venue, another organization. Name, domain, size, industry, owner, custom fields. On screen, "Company". |
 | `CrmPipeline`, `CrmStage` | Any number of pipelines from the templates above or from scratch. Each names what it tracks ("applicant", "donation"). A stage has an order, an optional likelihood, a "stuck after N days" limit and an Open/Won/Lost kind with renameable labels. |
-| `CrmDeal` | One thing moving through a pipeline (an application, a pledge, a sponsorship, a booking). Stage, owner, people with roles, optional amount and expected date, optional forecast category (Pipeline, Best case, Commit), won/lost reason, next step, custom fields. Called by its pipeline's own word on screen; `CrmDeal` is only the table name. |
+| `CrmDeal` | One thing moving through a pipeline (an application, a pledge, a deal, a booking). Stage, owner, people with roles, optional amount and expected date, optional forecast category (Pipeline, Best case, Commit), won/lost reason, next step, custom fields. Called by its pipeline's own word on screen; `CrmDeal` is only the table name. |
 | `CrmActivity` | One timeline row: email, meeting, call, text, note, form response, RSVP, check-in, stage change, field change, sequence step. Points at any mix of person, company and pipeline item. |
 | `CrmEmailThread`, `CrmEmailMessage` | Emails logged from any source, threaded, with open/click/reply state. |
 | `CrmTemplate`, `CrmSequence`, `CrmSequenceStep`, `CrmEnrollment` | Email templates with merge fields; timed multi-step sequences that stop on reply. |
@@ -133,13 +132,14 @@ row in `prisma/rls/phases.mjs`; deletes go to a restorable trash
 (`deletedAt`); every write that matters lands in `CrmFieldHistory` or the
 audit log.
 
-**Moving Sponsors in.** Sponsorships become one of the ready-made pipelines,
-not the point of the CRM. Existing `Sponsor` rows become companies (their
-contact name and email become people) and `Sponsorship` rows become items
-in a **Sponsorships** pipeline (Prospect, Committed, Invoiced, Received,
-Declined, Written off). Marking one Received still records the Finance
-transaction, as today, and Finance keeps its sponsorship totals by reading
-the CRM. Organizations that never had sponsors never see this pipeline.
+**Moving Finance deals in.** Finance's deals become one of the ready-made
+pipelines, not the point of the CRM. Existing `Sponsor` rows (partners on
+screen) become companies (their contact name and email become people) and
+`Sponsorship` rows (deals on screen) become items in a **Deals** pipeline
+(Prospect, Committed, Invoiced, Received, Declined, Written off). Marking
+one Received still records the Finance transaction, as today, and Finance
+keeps its deal totals by reading the CRM. Organizations that never had
+Finance deals never see this pipeline.
 
 ## How it fits into Databases
 
@@ -165,7 +165,7 @@ from typed tables, with built-in columns from code. The CRM uses exactly that.
   appear on those records. This replaces a separate "custom objects"
   system.
 - **Turn any database into CRM records.** Pick an existing database (an old
-  sponsor spreadsheet, form responses, an alumni list), match its columns
+  partner spreadsheet, form responses, an alumni list), match its columns
   to the CRM's (suggested automatically from names and types), and it
   creates or updates people and companies, deduped on email and domain. The
   original database stays, with a Relation column pointing at the records
@@ -326,7 +326,7 @@ Insights) carries over.
 Us $0. Org $0.
 
 ### 8. Forecasting
-What's likely to come in: money (donations, sponsorships, client work) and
+What's likely to come in: money (donations, deals, client work) and
 people (applicants likely to join, speakers likely to confirm). All three
 methods from the teardown: weighted pipeline (amount or count × stage
 likelihood), category roll-up (members mark Commit, Best case or Pipeline;
@@ -416,7 +416,7 @@ name this case).
   person; record a voice note and it lands on their timeline. No native app
   store fees.
 - Restore any record to an earlier point from its field history.
-- Guest links: a sponsor or partner opens a private page with their own
+- Guest links: a partner or client opens a private page with their own
   agreement, deliverables and recap, and nothing else in the CRM.
 - Scale target: 100,000 people and 20,000 pipeline items in one org stay fast
   (server-side filters, cursor pagination, indexes, the GIN index on custom
@@ -443,18 +443,18 @@ threads across several CRMs.
 | Open tracking is wrong since Apple Mail Privacy Protection | Common | Replies, clicks and bookings are the headline numbers; opens are labeled approximate |
 | Outlook treated as second class (HubSpot), extensions that slow Gmail | Common | Gmail and Outlook equal; no browser extension required |
 | History leaves with the person; whoever inherits their contacts gets no context | Common | Relationships owned by a **role** as well as a person (below); handover briefs |
-| Partners and sponsors can't be let in safely, so updates live in email | Common | Guest links: a sponsor sees their own agreement, deliverables and recap, nothing else |
+| Partners and clients can't be let in safely, so updates live in email | Common | Guest links: a partner sees their own agreement, deliverables and recap, nothing else |
 | Zapier glue that breaks quietly; sales to delivery hand-off breaks | Widespread | One system: a closed item can start a project (tasks, owner, files) automatically |
 | Mobile apps are a cut-down shadow; nobody uses them | Widespread | Phone-first "today" view, card and badge scanning at events, voice notes |
 | Weeks of setup and consultants | Widespread | Pick what kind of organization you are; fields, pipelines, forms and reports are made for you |
 | Switching CRMs loses the timeline, not just the contacts | Common | Importers that keep notes and activity from HubSpot, Salesforce and Pipedrive exports; export includes the timeline |
 | No undo for bulk edits or wrong stage moves | Narrow | Undo on every bulk action; restore any record to an earlier point from its field history |
 | Nonprofits: donors, volunteers, events and grants need separate tools or workarounds | Common | Donations, recurring gifts, volunteer hours and grants on the person, through Finance and the ready-made pipelines |
-| Student organizations: sponsor history lives in personal inboxes and dies every leadership change; no product serves them | Common; no product found | Role ownership, handover, and records that fill from the workspace |
+| Volunteer-run organizations: partner history lives in personal inboxes and dies every leadership change; no product serves them | Common; no product found | Role ownership, handover, and records that fill from the workspace |
 | Slow pages (Salesforce admits Lightning is slow) | Common | Server-side filters, cursor pagination, a seeded load test of 100,000 people, keyboard shortcuts |
 
 **Relationships owned by a role.** A person, company or pipeline can be
-owned by an org-chart position ("Sponsorship lead", "Volunteer
+owned by an org-chart position ("Partnerships lead", "Volunteer
 coordinator") as well as a member. When the member in that position
 changes, the relationships follow the position, the new person gets the
 handover briefs, and the timeline stays. Bananasplit already has the org
@@ -466,10 +466,10 @@ the next step, and it lands in the review queue. Bananasplit already turns
 calendar screenshots into events the same way.
 
 **Organization setup in one step.** On adding the CRM: "What do you mostly
-reach out to?" (members and volunteers, donors, sponsors and partners,
+reach out to?" (members and volunteers, donors, partners and deals,
 clients, all of these). It creates the pipelines, fields, intake forms,
 saved views and a starter report, and offers to bring in existing people
-from Bananasplit (members, check-ins, form responses, sponsors) and from a
+from Bananasplit (members, check-ins, form responses, Finance partners) and from a
 spreadsheet.
 
 ## What every CRM has in 2026 (we must match it)
@@ -491,7 +491,7 @@ longer differentiators; leaving one out reads as unfinished.
 | Usage-metered AI | `AiUsage` |
 
 **AI fields.** Any CRM database can have a field filled by AI per row: a
-prompt ("Is this a good sponsor fit for a robotics team? Yes, Maybe, No",
+prompt ("Is this a good partner fit for us? Yes, Maybe, No",
 "Their mission in one line"), optional web research through the org's
 Tavily key, and an output type (text, select, number, URL). Runs on new
 rows, on demand, or on a schedule, on the org's key (or later Bananasplit
@@ -516,11 +516,11 @@ where those assumptions break.
    each person and company on meetings together, events attended, forms,
    payments, files and tasks as well as email, and show "who in our
    organization knows them best" on every record.
-3. **It knows the money.** Sponsorships, donations, dues and invoices from
+3. **It knows the money.** Deals, donations, dues and invoices from
    Finance on each person and company: pledged versus received, lifetime
    total, which budget it funds, and the renewal created automatically from
    the end date. Mainstream CRMs leave this to a separate tool.
-4. **What we owe them, tracked.** For sponsors and partners, the promises
+4. **What we owe them, tracked.** For partners and clients, the promises
    (logo on the shirts, a talk slot, social posts) are tasks linked to the
    agreement and its payment, and one click makes a recap for them from
    real event and attendance numbers.
@@ -552,7 +552,7 @@ where those assumptions break.
     nobody has talked to someone in 90 days. Web signals (news, job
     changes) layer on through the org's own Tavily key.
 12. **Pipelines for every kind of relationship.** Members, volunteers,
-    donors, sponsors, partners, speakers, press, alumni, clients, grants,
+    donors, partners, speakers, press, alumni, clients, grants,
     each with stages, a ready intake form, Finance links and report
     presets, in plain words rather than sales jargon.
 13. **People keep their own details current.** Through the RSVP and form
@@ -598,7 +598,7 @@ day those land, it gets much better with no rework:
   creation, so the CRM doesn't fill with newsletters.
 - **Relationship strength and who knows whom.** How often and how recently
   anyone in the organization has emailed or met someone, so a new member
-  can see who already knows a sponsor before writing cold.
+  can see who already knows a partner before writing cold.
 - **Real reply detection.** Stop-on-reply, out-of-office detection
   (pause, then resume after the return date) and bounce handling read the
   actual mailbox instead of relying on our Reply-To.
@@ -648,8 +648,8 @@ is cut; this is only the order.
    Bananasplit's own data, the ready-made pipelines, custom fields, saved
    views, import/export (spreadsheets, Notion, Airtable, and HubSpot,
    Salesforce and Pipedrive exports with their notes and activity kept), dedupe and merge, field history, relationship strength
-   from workspace touchpoints, Finance on people and companies, Sponsors
-   moved into the Sponsorships pipeline, the add-on page rewritten from
+   from workspace touchpoints, Finance on people and companies, Finance
+   deals moved into the Deals pipeline, the add-on page rewritten from
    "Coming later" to real feature rows.
 2. **Reaching out.** The follow-up queue, keep-in-touch cadences, lists and
    campaigns split among members, templates and mail merge, 1:1 email
@@ -657,7 +657,7 @@ is cut; this is only the order.
    tracking, invites to events and forms, booking links, sequences with
    stop-on-reply, bulk email with unsubscribe and sender checks, Forms to
    CRM, embeds, owner routing, the BCC logging address, handover when
-   members change roles, "what we owe them" for sponsors and partners with
+   members change roles, "what we owe them" for partners and clients with
    guest links, people updating their own details through RSVP and form
    links, donations, recurring gifts and volunteer hours on the person.
 3. **Automation and numbers.** Workflow builder with describe-it-in-words
@@ -768,7 +768,7 @@ for the organizations using Bananasplit today.
 ## Plan
 
 The CRM is an add-on on **Team Advanced** (`SOCIETY`, the highest plan),
-like sponsorships today: a `crm` entry in `PLAN_FEATURES` set to `SOCIETY`,
+like Deals (feature key `sponsorships`): a `crm` entry in `PLAN_FEATURES` set to `SOCIETY`,
 and `crm` added to `ADD_ONS`. A 14-day trial includes it, as it includes
 everything on Team Advanced.
 
@@ -817,8 +817,8 @@ lives, and what's left.
 "What do you mostly reach out to?" (`SETUP_KINDS`,
 `src/lib/crm/templates.ts`) makes CrmSettings, the relationship types,
 one pipeline per answer (alumni get a keep-in-touch cadence instead), the
-People, Companies and pipeline databases, and the saved views. Finance
-sponsors bring the Sponsorships pipeline even when not picked, and move in
+People, Companies and pipeline databases, and the saved views. Finance's
+deals bring the Deals pipeline even when not picked, and move in
 (`src/server/crm/sponsors.ts`). Run again, it adds only what's missing.
 Then: bring in members, check-in contacts and form respondents
 (`src/server/crm/bring-in.ts`, a job over 200), or a file.
@@ -839,7 +839,7 @@ Then: bring in members, check-in contacts and form respondents
 | Pipelines | `createPipeline`, `createPipelineFrom`, `updatePipeline`, `archivePipeline`, `saveStages`, `listPipelines` (pipelines.ts) |
 | Role owners | `rolePositions(orgId)`, `ownerLabel`, `effectiveOwnerId`, `rolesHeldBy` (owners.ts) |
 | Workspace mirroring | `mirrorWorkspace(db, orgId, { personId? })` (mirror.ts); strength: `recomputeStrength`, `touchpointsOf` (strength.ts) |
-| Sponsorships | `syncDealFromSponsorship`, `dropDealForSponsorship`, `companyForSponsor`, `sponsorshipsPipeline` (sponsor-sync.ts); `moveSponsorsIn` (sponsors.ts). Finance's `setSponsorshipStatus` now lives in `src/server/finance/sponsorship-status.ts` |
+| Finance deals | `syncDealFromSponsorship`, `dropDealForSponsorship`, `companyForSponsor`, `sponsorshipsPipeline` (sponsor-sync.ts); `moveSponsorsIn` (sponsors.ts). Finance's `setSponsorshipStatus` now lives in `src/server/finance/sponsorship-status.ts` |
 | Import and export | `createImportLog`, `startImport`, `runImportTurn`, `importRow` (import.ts); `previewConvert`, `convertDatabase` (convert.ts); `exportCsv` (export.ts) |
 | Lists and pages | `listPeople`, `listCompanies`, `listDeals`, `todayList`, `parseListQuery` (queries.ts); `loadPerson`, `loadCompany`, `loadDeal` (records.ts); the record form: `personForm`, `companyForm`, `dealForm`, `saveForm` (forms.ts) |
 
@@ -911,7 +911,7 @@ Keys: j and k, Enter, x, n, /.
   import table would let an admin see everyone's imports.
 - Role ownership resolves holders from the published chart; there is no
   handover step yet (Phase 2).
-- A sponsorship's amount and date edited in the CRM need a finance role,
+- A Finance deal's amount and date edited in the CRM need a finance role,
   as in Finance; its stage moves only through Finance's rules.
 - The intake forms and starter report from setup come with Forms to CRM
   (Phase 2) and the CRM's own widgets (Phase 3).
@@ -1344,7 +1344,7 @@ link). The recipient reads it in the organization's theme, downloads the
 PDF (react-pdf, the org's colour and logo), and accepts by typing their
 name (name, time and a hash of the IP with the org are kept) or declines;
 past its date it can't be accepted. Acceptance moves the item to its first
-won stage through `moveDeal` (a sponsorship still moves only through
+won stage through `moveDeal` (a Finance deal still moves only through
 Finance's rules). Copy, make an invoice from a quote, move to another
 item, and mark paid (a finance role can book it as Finance income in the
 active period, audited).
@@ -1583,7 +1583,7 @@ expires old mail suggestions.
   is in the CRM; members turn it on or off on the person page.
 - Giving (`giving.ts`): Finance income whose counterparty is the person or
   their company (finance roles only, as in Finance), won items in donor,
-  grant and sponsor pipelines, recurring when the same payer gives at a
+  grant and deal pipelines, recurring when the same payer gives at a
   steady interval, and hours at events from their check-ins.
 
 ### Never step on each other
@@ -1646,7 +1646,7 @@ written the same thing, one stayed and the other now calls it.
 | One review queue | Email-sourced new people are `CREATE_PERSON` suggestions with Phase 4's payload (`proposeChange`); Outreach, Your mail lists them filtered (`listQueue` with `source: "EMAIL"`) and accepts through `acceptSuggestion`. Signals (`source: SIGNAL`) stay out of Review (`REVIEW_WHERE`); they're the Inbox's To review rows. |
 | Inbox | The sidebar count adds the member's follow-up queue rows and one `crm:review` row for Review suggestions assigned to them (`crmReviewRow`), less what they snoozed or finished; the Inbox lists the same row and Home's Today strip reads the same count. |
 | Refresh timing | Form answers (`formToCrm`), RSVPs (`registerGuest`), a member's own RSVP (`setOwnRsvp`) and check-ins (`setRegistrationCheckIn`) call `queueCrmRefreshFor`: a `crm-refresh` keyed by the source (`m:response:{id}` and so on, so a burst merges into one pending job) that finds the people on the service path and mirrors only their timelines. |
-| Sponsorships | A new item in the Sponsorships pipeline makes its Finance sponsor (from the company) and sponsorship through Finance's `createSponsorshipRecord` (also Finance's own action), in the active period, at the stage's status. It needs a finance role, a company and an amount. |
+| Finance deals | A new item in the Deals pipeline makes its Finance partner (from the company) and deal through Finance's `createSponsorshipRecord` (also Finance's own action), in the active period, at the stage's status. It needs a finance role, a company and an amount. |
 | Custom columns | Sort in Databases: by number, date, choice order or text, up to 5,000 rows ordered in memory, then just the page loaded (keyset export too). |
 | Workflows private | Migration `20261105160000_crm_workflows_private`: `CrmWorkflow` and `CrmWorkflowRun` are readable only by owners, admins and CRM managers. A member's change knows whether to queue an event from `CrmSettings.workflowTriggers` (kept by every save, switch and delete). RLS P-CRM-05 and P-CRM-06. Nothing member-facing reads workflows (the Automations pages are managers only). |
 | Outgoing calls | Slack, Discord and webhook steps use the outgoing webhooks' guarded transport: the address is checked in the connection's own DNS lookup, so it's the address connected to. One blocked-address list. |
@@ -1756,3 +1756,41 @@ On the way:
 `src/lib/crm/automation.test.ts`, `src/server/crm/automation.db.test.ts`,
 `src/lib/forms/forms.test.ts`, and P-CRM-03, P-CRM-05, P-CRM-06 and
 P-CRM-07 in `prisma/rls/phases.mjs`.
+
+## Deals, not sponsorships
+
+Bananasplit is for organizations (companies, nonprofits, teams), and
+professional CRMs (HubSpot, Pipedrive, Zoho, Attio, Twenty) call money a
+partner commits a **deal** moving through a pipeline of stages. So
+everything people read says deals and partners:
+
+- The ready-made pipeline is **Deals** (items are deals, "New deal"), and
+  the setup answer reads "Partners and deals". Its template id stays
+  `sponsors` (`CrmPipeline.template`, recipes' `@pipeline:sponsors`).
+- The "Sponsor contact" relationship type is gone: the same answer already
+  made **Partner**, and Finance's synced contacts are tagged `partner`.
+- Finance › Deals is at `/finance/deals`; `/finance/sponsorships`
+  redirects there (a permanent redirect, so old links and pins work).
+  A Sponsor row is a **partner** on screen, a Sponsorship row a **deal**,
+  and the `SPONSORSHIP` transaction kind reads "Deal". A CRM item in the
+  Deals pipeline makes its Finance deal.
+- What we owe them stays: promises and deliverables, on any deal or
+  partnership. The "A new sponsor commits" recipe is "A partner commits to
+  a deal"; the "Sponsorship ask" starter email is "Partnership ask".
+
+What keeps its old name, on purpose: the `Sponsor` and `Sponsorship`
+models and tables, `SponsorshipStatus` and `SponsorshipType`, the
+`SPONSORSHIP` transaction kind, the finance audit actions
+(`SPONSORSHIP_CREATE` and so on), the `sponsorships` plan feature and
+Finance widget keys, the `sponsor` search hit type, and the server files
+(`sponsorships-actions.ts`, `sponsorship-status.ts`, `sponsor-sync.ts`).
+All are stored or keyed values nobody reads; renaming them would need a
+schema migration and buy nothing on screen. Finance's spreadsheet import
+still recognizes "sponsor" in a sheet as a deal.
+
+Migration `20261105210000_crm_deals_not_sponsorships` (data only, no
+schema or security change) renames pipelines and their databases still
+called "Sponsorships", turns "sponsor" people into "partner" (and folds the
+type into Partner in each organization's relationship types, views,
+workflow conditions and score rules), and renames the untouched starter
+email and recipe workflow.

@@ -17,7 +17,7 @@ org and jumps to it, and does a few things without leaving the keyboard.
 | People | Name, this org's title, major, pronouns; email for owners and admins | Their profile |
 | Org chart | Role title, who holds it, what it's responsible for | The role on the chart |
 | Databases | Name, kind, tag | The database |
-| Finance | Description, payee, category, or an amount ("$45.50"); sponsors by name | Owners and treasurers: Transactions on that day, or Sponsorships. Everyone else: their own expenses, on My reimbursements |
+| Finance | Description, payee, category, or an amount ("$45.50"); Deals' partners by name | Owners and treasurers: Transactions on that day, or Deals. Everyone else: their own expenses, on My reimbursements |
 
 Every word has to match somewhere, in any order: "budget spring" finds
 "Spring budget review". Case and accents don't matter when ranking. The best
@@ -48,7 +48,7 @@ Search runs as the member, under the same row-level security as every page,
 so it never shows a private note or private task they couldn't open. It also
 follows the rules the pages enforce in code:
 
-- **Finance:** owners and treasurers search the ledger and sponsors. Members
+- **Finance:** owners and treasurers search the ledger and Deals' partners. Members
   only find expenses they submitted.
 - **Emails:** only owners and admins can find a member by email address.
 - **Hidden sections** (Settings › Sidebar): members don't get results from a

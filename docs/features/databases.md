@@ -11,7 +11,7 @@ clubs that already keep check-ins and sign-ups there.
 Owners and admins make databases from **Databases › New database**:
 
 - from a template (Blank, Spreadsheet, Member roster, Equipment, Merch
-  orders, Sponsors and contacts, Event ideas;
+  orders, Partners and contacts, Event ideas;
   `src/lib/databases/templates.ts`). **Spreadsheet** (also **New
   spreadsheet** on the Databases page) is a blank grid: text columns A to F
   and 20 empty rows to type straight into; rename a column or change its
