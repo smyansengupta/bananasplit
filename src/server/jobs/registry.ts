@@ -495,6 +495,37 @@ export const JOB_KINDS = {
       "A big CRM import (spreadsheet, vCard, HubSpot, Salesforce, Pipedrive) or bring-in, in turns; key crm-import:{importId} or crm-import:bring:{source}.",
   }),
 
+  "crm-event": kind({
+    payload: z
+      .object({
+        type: z.enum([
+          "record.changed",
+          "email.replied",
+          "email.bounced",
+          "meeting.booked",
+          "form.submitted",
+          "sequence.finished",
+          "call.logged",
+        ]),
+        targetKind: z.enum(["person", "company", "deal"]),
+        targetId: id,
+        /** Field names that changed (record.changed), never values. */
+        fields: z.array(z.string().max(80)).max(200),
+        userId: id.nullable(),
+        sourceId: id.nullable(),
+        source: z.string().max(40).nullable(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 30_000,
+    leaseSeconds: 90,
+    tier: "fast",
+    afterEligible: true,
+    handler: () => import("@/server/crm/events").then((m) => m.crmEventJob),
+    description:
+      "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows; enqueued only while a workflow is on (src/server/crm/events.ts).",
+  }),
+
   // ---- Platform maintenance (this module) ----
   "purge-unverified": kind({
     payload: z.object({}).strict(),

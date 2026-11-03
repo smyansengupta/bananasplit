@@ -1,6 +1,8 @@
 import { Prisma } from "@/generated/prisma/client";
 import type { TxClient } from "@/server/db/context";
 
+import { emitCrmEvent } from "./events";
+
 /**
  * Field history (Salesforce's, docs/features/crm.md module 1): every change
  * to a person, company or pipeline item is a CrmFieldHistory row with who,
@@ -88,6 +90,13 @@ export async function writeHistory(
       batchId: input.batchId ?? null,
       changedAt: input.at ?? new Date(),
     })),
+  });  await emitCrmEvent(db, input.organizationId, {
+    type: "record.changed",
+    targetKind: input.targetKind,
+    targetId: input.targetId,
+    fields: input.changes.map((c) => c.field),
+    userId: input.userId,
+    source: input.source,
   });
 }
 
