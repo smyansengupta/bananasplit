@@ -1,191 +1,214 @@
-import { AlarmClock, Flag, Hourglass, Sparkles, Trophy, Users, type IconComponent } from "@/components/icons";
-import Link from "next/link";
-
-import { CrmAiBar } from "@/components/crm/ai/ai-bar";
-import { CrmTabs } from "@/components/crm/crm-tabs";
-import { GoalList } from "@/components/crm/forecast";
-import { TodayCalls } from "@/components/crm/phone/today-calls";
-import { CrmTodayKeys } from "@/components/crm/today-keys";
-import { QueueSection } from "@/components/crm/outreach/queue-section";
-import { when } from "@/components/crm/record-page";
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { crmRecordHref } from "@/lib/crm/href";
+import { AmbientButton, AmbientWhy } from "@/components/ambient/ambient-button";
+import { CrmHeader } from "@/components/crm/chrome/crm-header";
+import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
+import { TodayList } from "@/components/crm/today/today-list";
+import { TodayToolbar } from "@/components/crm/today/today-toolbar";
 import { formatMoney } from "@/lib/crm/fields";
-import { todayList, type TodayItem } from "@/server/crm/queries";
+import { hrefWithOpen } from "@/lib/crm/overlay";
+import { POWER_HOUR_KEY, powerHourBackLabel, powerHourMinutes } from "@/lib/crm/power-hour";
+import { effectiveTimezone, localDateKey } from "@/lib/tasks/dates";
 import { listGoals } from "@/server/crm/goals";
-import { safeTimeZone } from "@/lib/calendar/dates";
-import { localDateKey } from "@/lib/tasks/dates";
+import { onItsOwn } from "@/server/crm/on-its-own";
+import { comingUp, TODAY_GROUPS, todayRows, type TodayGroup } from "@/server/crm/today";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmShell } from "./shell";
 
 export const metadata = { title: "CRM" };
 
-function daysAgo(days: number): Date {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - days);
-  return d;
+type Search = Record<string, string | string[] | undefined>;
+
+function one(v: string | string[] | undefined): string | undefined {
+  return typeof v === "string" && v ? v : undefined;
 }
 
-const GROUPS: { kind: TodayItem["kind"]; title: string; empty: string; icon: IconComponent }[] = [
-  { kind: "followup", title: "Follow-ups due", empty: "Nobody to follow up with today.", icon: AlarmClock },
-  { kind: "cold", title: "Going cold", empty: "Nobody's gone quiet.", icon: Hourglass },
-  { kind: "new", title: "New from forms this week", empty: "Nobody new from forms this week.", icon: Sparkles },
-  { kind: "stuck", title: "Stuck", empty: "Nothing's stuck.", icon: Hourglass },
-  { kind: "nostep", title: "No next step", empty: "Every open item has a next step.", icon: Flag },
-];
-
 /**
- * The CRM's home: who to reach out to today (docs/features/crm.md, module 5;
- * Phase 2 grows it into the full follow-up queue). Yours first, or
- * everyone's when nothing is yours.
+ * The CRM's Today (docs/features/crm.md, "Redesign"): who needs you and
+ * why, in one list grouped as Replies, Due today, To approve and Calls,
+ * each row with at most two ambient buttons. Power hour works the list one
+ * person at a time (?open=power); Done on its own lists what the CRM did
+ * without asking (?open=log). Goals and what's coming up on the right.
+ * Yours first; everyone's with ?who=all or when nothing is yours.
  */
-export default async function CrmHomePage({ params, searchParams }: PageProps<"/app/[orgSlug]/crm">) {
+export default async function CrmTodayPage({
+  params,
+  searchParams,
+}: PageProps<"/app/[orgSlug]/crm">) {
   const { orgSlug } = await params;
-  const sp = (await searchParams) as Record<string, string | undefined>;
+  const sp = (await searchParams) as Search;
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const orgId = shell.org.id;
-  const everyone = sp.who === "all";
-  const since = daysAgo(90);
+  const everyone = one(sp.who) === "all";
+  const show = one(sp.show) as TodayGroup | undefined;
+  const q = one(sp.q)?.toLowerCase();
+  const now = new Date();
+  const relationships = new Map(
+    (shell.access.settings?.relationshipTypes ?? []).map((t) => [t.id, t.label]),
+  );
+
   const data = await withOrgTx(orgId, async ({ db }) => {
-    const mine = await todayList(db, orgId, shell.user.id, shell.roles, { mine: true });
-    const anyMine = Object.values(mine).some((l) => l.length > 0);
-    const lists = everyone || !anyMine ? await todayList(db, orgId, shell.user.id, shell.roles, { mine: false }) : mine;
-    const people = await db.crmPerson.count({ where: { organizationId: orgId, deletedAt: null } });
-    const open = await db.crmDeal.aggregate({
-      where: { organizationId: orgId, deletedAt: null, closedAt: null },
-      _count: { _all: true },
-      _sum: { amountCents: true },
+    const me = await db.user.findUnique({
+      where: { id: shell.user.id },
+      select: { timezone: true },
     });
-    const won = await db.crmDeal.count({
+    const tz = effectiveTimezone(me, shell.org);
+    const today = await todayRows(db, orgId, shell.user.id, shell.roles, {
+      everyone,
+      relationships,
+      now,
+    });
+    const goals = await listGoals(db, orgId, localDateKey(now, tz), { current: true, take: 4 });
+    const upcoming = await comingUp(db, orgId, shell.user.id, {
+      everyone: everyone || !today.mine,
+      now,
+    });
+    const log = await onItsOwn(db, orgId, { now, tz });
+    const snooze = await db.inboxItemState.findFirst({
       where: {
         organizationId: orgId,
-        deletedAt: null,
-        stage: { kind: "WON" },
-        closedAt: { gte: since },
+        userId: shell.user.id,
+        itemKey: POWER_HOUR_KEY,
+        snoozedUntil: { gt: now },
       },
+      select: { snoozedUntil: true },
     });
-    // This quarter's and year's goals, with how far along each is (set on the Forecast tab).
-    const goals = await listGoals(db, orgId, localDateKey(new Date(), safeTimeZone(shell.org.timezone ?? "UTC")), { current: true, take: 6 });
-    return { lists, showingMine: !everyone && anyMine, people, open, won, goals };
+    return {
+      tz,
+      today,
+      goals,
+      upcoming,
+      logCount: log.length,
+      snoozedUntil: snooze?.snoozedUntil ?? null,
+    };
   });
+
+  const rows = data.today.rows.filter(
+    (r) =>
+      (!show || r.group === show) &&
+      (!q || r.name.toLowerCase().includes(q) || r.text.toLowerCase().includes(q)),
+  );
+  const powerRows = data.today.rows.filter(
+    (r) => (r.group === "replies" || r.group === "due" || r.group === "calls") && r.person,
+  );
   const base = `/app/${orgSlug}/crm`;
-  const order = GROUPS.flatMap((g) => data.lists[g.kind].map((i) => i));
+  const names = new Map(shell.members.map((m) => [m.id, m.name]));
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Today"
-        description={data.showingMine ? "Yours: owned by you or your role." : "Everyone's."}
-        actions={
-          <Button asChild variant="outline">
-            <Link href={data.showingMine ? `${base}?who=all` : base}>{data.showingMine ? "Everyone's" : "Just mine"}</Link>
-          </Button>
-        }
-        tabs={<CrmTabs tabs={shell.tabs} />}
+    <div>
+      <CrmHeader
+        orgSlug={orgSlug}
+        settings={shell.access.manager}
+        toolbar={<TodayToolbar tabs={shell.tabs} logCount={data.logCount} />}
       />
-      <CrmAiBar orgId={orgId} orgSlug={orgSlug} />
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {(
-          [
-            [Users, data.people, "People"],
-            [Flag, data.open._count._all, "Open items"],
-            [AlarmClock, data.lists.followup.length, "Follow-ups due"],
-            [Trophy, data.won, "Won, last 90 days"],
-          ] as const
-        ).map(([Icon, value, label]) => (
-          <div key={label} className="bg-card ring-foreground/6 flex items-center gap-3 rounded-2xl px-4 py-3 ring-1">
-            <Icon className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
-            <div>
-              <dd className="numeral text-[26px] tabular-nums">{value.toLocaleString()}</dd>
-              <dt className="text-muted-foreground text-xs">{label}</dt>
-            </div>
-          </div>
-        ))}
-      </dl>
-      {(data.open._sum.amountCents ?? 0) > 0 && (
-        <p className="text-muted-foreground text-sm">{formatMoney(data.open._sum.amountCents)} in open items.</p>
+      {!data.today.mine && !everyone && (
+        <p className="text-muted-foreground -mt-3 mb-5 text-sm">
+          Nothing of yours today, so this is everyone&apos;s.
+        </p>
       )}
-      {data.goals.length > 0 && (
-        <Card className="gap-3 p-5">
-          <h2 className="heading flex items-center gap-2 text-base">
-            <Trophy className="text-muted-foreground size-4" aria-hidden="true" />
-            Goals
-            <Link href={`${base}/forecast`} className="text-muted-foreground ms-auto text-xs font-normal hover:underline">
-              Forecast
-            </Link>
-          </h2>
-          <GoalList
-            orgId={orgId}
-            manager={false}
-            members={[]}
-            pipelineId={null}
-            periods={[]}
-            goals={data.goals.map((g) => {
-              const fmt = (n: number) => (g.metric === "amount_won" ? formatMoney(n) : n.toLocaleString("en-US"));
-              const who = g.ownerId ? (shell.members.find((m) => m.id === g.ownerId)?.name ?? "a member") : "the team";
-              return {
-                id: g.id,
-                label: `${g.metricLabel}, ${who}`,
-                metric: g.metric,
-                period: g.periodLabel,
-                actual: fmt(g.attainment.actual),
-                target: fmt(g.target),
-                share: g.attainment.share,
-                pace: g.attainment.pace,
-                onTrack: g.attainment.onTrack,
-              };
-            })}
-          />
-        </Card>
-      )}
-      <QueueSection orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} members={shell.members} everyone={everyone} />
-      <CrmTodayKeys hrefs={order.map((i) => crmRecordHref(orgSlug, i.targetKind, i.id))} />
-      <TodayCalls orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} />
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
-        {GROUPS.map((g) => {
-          const items = data.lists[g.kind];
-          const Icon = g.icon;
-          return (
-            <Card key={g.kind} className="gap-3 p-5">
-              <h2 className="heading flex items-center gap-2 text-base">
-                <Icon className="text-muted-foreground size-4" aria-hidden="true" />
-                {g.title}
-                {items.length > 0 && (
-                  <span className="bg-foreground/10 text-foreground/70 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
-                    {items.length}
-                  </span>
-                )}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <TodayList
+          orgId={orgId}
+          groups={TODAY_GROUPS}
+          rows={rows}
+          power={{
+            people: powerRows.length,
+            minutes: powerHourMinutes(powerRows.length),
+            drafts: powerRows.filter((r) => r.draft).length,
+            snoozed: data.snoozedUntil ? powerHourBackLabel(data.snoozedUntil, now, data.tz) : null,
+          }}
+        />
+        <aside className="flex min-w-0 flex-col gap-4">
+          {data.goals.length > 0 && (
+            <section className="bg-card ring-foreground/6 space-y-4 rounded-[22px] p-5 ring-1">
+              <h2 className="heading text-base">Goals this quarter</h2>
+              {data.goals.map((g) => {
+                const fmt = (n: number) =>
+                  g.metric === "amount_won" ? formatMoney(n) : n.toLocaleString("en-US");
+                const who = g.ownerId ? (names.get(g.ownerId) ?? "A member") : null;
+                return (
+                  <div key={g.id} className="space-y-1.5">
+                    <div className="flex items-baseline gap-2 text-sm">
+                      <span className="min-w-0 flex-1 truncate font-semibold">
+                        {g.name || g.metricLabel}
+                        {who && <span className="text-muted-foreground font-normal">, {who}</span>}
+                      </span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">
+                        {fmt(g.attainment.actual)} of {fmt(g.target)}
+                      </span>
+                    </div>
+                    <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                      <div
+                        className={
+                          g.attainment.onTrack
+                            ? "bg-foreground h-full rounded-full"
+                            : "h-full rounded-full bg-(--attention)"
+                        }
+                        style={{ width: `${Math.min(100, Math.round(g.attainment.share * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          )}
+          {data.upcoming.length > 0 && (
+            <section className="bg-card ring-foreground/6 space-y-4 rounded-[22px] p-5 ring-1">
+              <h2 className="heading flex items-baseline gap-2 text-base">
+                Coming up
+                <span className="text-muted-foreground ms-auto text-sm font-normal">
+                  {data.upcoming[0]!.at.toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    timeZone: data.tz,
+                  })}
+                </span>
               </h2>
-              {items.length === 0 ? (
-                <p className="text-muted-foreground text-sm">{g.empty}</p>
-              ) : (
-                <ul className="space-y-1">
-                  {items.map((i) => (
-                    <li key={`${i.targetKind}:${i.id}`}>
-                      <Link
-                        href={crmRecordHref(orgSlug, i.targetKind, i.id)}
-                        data-today-row
-                        className="hover:bg-muted focus-visible:bg-muted flex items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm outline-none"
-                      >
-                        <b className="truncate">{i.title}</b>
-                        {i.sub && <span className="text-muted-foreground min-w-0 flex-1 truncate">{i.sub}</span>}
-                        {i.at && (
-                          <span className="text-muted-foreground ms-auto shrink-0 text-xs tabular-nums">
-                            {g.kind === "cold" ? `last ${when(i.at).toLowerCase()}` : when(i.at)}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          );
-        })}
+              {data.upcoming.map((m, i) => {
+                const mins = Math.round((m.at.getTime() - now.getTime()) / 60_000);
+                const soon =
+                  mins < 60
+                    ? `Starts in ${Math.max(1, mins)} min`
+                    : mins < 24 * 60
+                      ? `Starts in ${Math.round(mins / 60)} hours`
+                      : m.at.toLocaleDateString("en-US", { weekday: "long", timeZone: data.tz });
+                return (
+                  <div
+                    key={m.id}
+                    className={i > 0 ? "border-border/60 space-y-2 border-t pt-3" : "space-y-2"}
+                  >
+                    <div>
+                      <b className="block text-[15px]">{m.subject}</b>
+                      {m.personName && (
+                        <span className="text-muted-foreground text-sm">
+                          {[m.personName, ...m.lines].join(", ")}
+                        </span>
+                      )}
+                    </div>
+                    {m.personId && i === 0 && mins < 24 * 60 ? (
+                      <div className="flex flex-nowrap items-center gap-2">
+                        <AmbientButton
+                          action={{
+                            key: "brief",
+                            label: "Open the brief",
+                            tone: "solid",
+                            reason: soon,
+                            href: hrefWithOpen(base, sp, { kind: "person", id: m.personId }),
+                          }}
+                        />
+                        <AmbientWhy className="min-w-0 truncate">{soon}</AmbientWhy>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">{soon}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </section>
+          )}
+        </aside>
       </div>
+      <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
     </div>
   );
 }
