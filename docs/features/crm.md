@@ -1923,3 +1923,47 @@ named by one search param (`src/lib/crm/overlay.ts`):
   timeline, details) until their own designs land; **New** makes a person,
   company or deal and opens its card. `/crm/deals` lists the pipelines for
   now.
+
+### Settings and setup
+
+- **CRM settings** is one page per section, `/crm/settings/{section}`
+  (`src/lib/crm/settings-sections.ts`): the CRM header titled "CRM
+  settings" with no create button, the Admin panel's list card on the left
+  (`CrmSettingsNav`) and the section's `SettingsCard`s on the right
+  (`CrmSettingsFrame`). Sections are server components in
+  `src/components/crm/settings/sections/`. You, Templates and Booking link
+  are every member's; Automations, Sending, Deal stages and types, Fields,
+  AI and Import and export are for owners, admins and CRM managers; Phone
+  and texts, Team and access and API and webhooks for owners and admins.
+  `/crm/settings` opens Automations (or You). A Personal space has no Team
+  and access (so no who sees what, CRM managers or lead routing; handover
+  goes to People) and is offered its own ready-made pipelines.
+- **Pages under a section**: one automation at
+  `/crm/settings/automations/{id}` (`new?describe=` fills the steps from
+  the describe box's sentence) and one booking page at
+  `/crm/settings/booking/{id}`. `/crm/automations`, `/crm/outreach/booking`
+  and the old `/crm/settings/webhooks` redirect.
+- **Kept on CrmSettings**: `sending` (the hours group mail goes out,
+  weekends, the unsubscribe line; `readSending` in
+  `src/lib/crm/settings-prefs.ts`, applied in `send.ts`'s prepare once set)
+  and `autonomy` (how much it may do alone; "Suggest" for automation email
+  makes every automation email a draft for review). Merges, signature
+  changes and stage moves keep their level but don't read it yet.
+- **Sending is paused** (`SendingPausedBanner` in
+  `src/components/crm/settings/sending-paused.tsx`, one line on any page):
+  the spending cap reached, or bulk email with no verified sender; a
+  warning when a week's group email bounces 5% or more. Sending lists what
+  bounced or didn't go in the last two weeks.
+- **Import and export**: a dropped spreadsheet shows its column matches
+  and comes in with one button; a finished import keeps its skipped rows,
+  and each is fixed in place (an email added) or left out
+  (`fixImportRow`, `letRowGo`). Export everything is one zip
+  (`/crm/export?kind=all`, `&notes=1` adds the timeline).
+- **First-time setup** (`/crm/setup`, `src/components/crm/setup.tsx`):
+  what you mostly reach out to (picked for you), then 1 Bring people in (a
+  spreadsheet beside members, event guests and form answers; in a Personal
+  space only the people who RSVP'd), 2 Who looks after them (Split evenly,
+  By relationship, Leave them for now: `planOwners` in
+  `src/lib/crm/setup-owners.ts`, which also sets the routing for new
+  people; not in a Personal space), 3 Connect, if you like (opens AI or
+  Phone after setup). The summary pill sits next to Set up the CRM.
