@@ -75,7 +75,7 @@ export function SortableTaskCard({
                 task={task}
                 align="start"
                 short
-                className="min-w-0 [&_a]:px-2.5 [&_button]:px-2.5 @max-[15rem]:[&_svg]:hidden"
+                className="[&_a]:px-2.5 [&_button]:px-2.5 @max-[13rem]:[&_svg]:hidden"
               />
             }
             check={
