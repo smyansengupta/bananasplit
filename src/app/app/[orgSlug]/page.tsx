@@ -614,8 +614,17 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   });
 
   // Meetings: a repeating meeting shows once, its next time, not every week ahead.
-  // One without a series is its own: two different meetings can share a title.
-  const seriesKey = (m: { id: string }) => data.details.get(m.id)?.seriesId ?? m.id;
+  // Without a series id, the same title on the same weekday and time is a
+  // repeat; the same title at another time is a different meeting.
+  const slotOf = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "numeric",
+    timeZone: orgZone,
+  });
+  const seriesKey = (m: { id: string; title: string; startsAt: Date }) =>
+    data.details.get(m.id)?.seriesId ??
+    `${m.title.trim().toLowerCase()}|${slotOf.format(m.startsAt)}`;
   const nextMeetings = data.meetings.filter(
     (m, i, all) => all.findIndex((o) => seriesKey(o) === seriesKey(m)) === i,
   );
