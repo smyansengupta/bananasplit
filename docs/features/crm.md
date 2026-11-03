@@ -78,6 +78,43 @@ never an "organization", so it can't be confused with the workspace.
    member's own Gmail or Outlook once they connect it, so replies come back
    to them and nothing is sent "from Bananasplit".
 
+## Whose keys pay for what
+
+Everything that costs money per use runs on a key the organization saved
+in CRM settings > AI (`src/components/crm/settings/org-keys.tsx`, server
+side `src/server/crm/org-keys.ts` and `crm/org-keys-actions.ts`). Keys are
+`OrgSecret`s through `src/server/secrets` (encrypted at rest, audited,
+owners alerted); owners and admins save and test them, only owners remove
+them, and only the last four characters ever come back ("sk-ant-…4f2a").
+
+| Cost | Where | Whose key |
+|---|---|---|
+| AI: drafts, summaries, briefs, Ask, AI fields, agents, transcripts, scans, describe an automation, call summaries | `runCrmAi` and `crmCredentials` in `src/server/crm/ai.ts` | The organization's Claude key, else its OpenAI-compatible key. Bananasplit's own key (`ANTHROPIC_API_KEY`) only when `BANANASPLIT_AI=1` (the later plan, billed as ours and outside the cap). The local stand-in only with `AI_STANDIN=1` off Vercel. |
+| Web research and enrichment | `enrich.ts`, `agents.ts`, `ai-fields.ts` | Its Tavily, Hunter or Prospeo key, or Claude's own web search on its Claude key |
+| Texts and calls | `src/server/crm/phone/` | Its Telnyx or Twilio account |
+| Call and voice note transcripts | `crmTranscribeJob` | Its Deepgram key |
+| Bulk email and campaigns | `sendFromMailbox` | Its own Resend sender on a verified domain, always |
+| One-to-one and sequence email | `sendFromMailbox` | Its Resend sender when verified; until then our sender on its behalf (the one allowed fallback: low volume, never bulk) |
+| Your own Claude over MCP | `src/server/connectors/tools/crm*.ts` | The member's own Claude plan |
+
+**The meter and the cap.** Every use writes one `AiUsage` row: tokens for
+AI (plus $10 per thousand for Claude's web searches), and an estimated
+list price for everything else (`src/lib/crm/per-use.ts`: a Tavily search,
+a Hunter or Prospeo lookup, an SMS segment, a call minute, a transcript
+minute, an email on the organization's sender), metered by
+`src/server/crm/spend.ts`. One monthly spending cap
+(`CrmSettings.aiMonthlyCapCents`, owners and admins, no cap by default)
+covers all of it: past the cap, AI and lookups refuse with "Your
+organization has reached this month's spending cap of $25. An owner or
+admin can raise it in CRM settings > AI.", texts and calls refuse before
+they start, queued texts and bulk email stop, and transcripts leave the
+audio as it is. One-to-one email still goes. A missing key says where to
+add it ("Add your Telnyx or Twilio key in CRM settings > AI first.").
+Outside the CRM, the AI imports (`docs/features/ai-imports.md`), Reports'
+AI, Forms' AI and the pulse summary still use the shared connection list
+(`resolveAiCredentials`), which ends with the platform key; that's a
+separate decision for those features.
+
 ## What we already have and will reuse
 
 | Need | Already in Bananasplit | Where |
@@ -1480,30 +1517,20 @@ marks the campaign, tells the member with `CRM_REPLY`, emits
 `/api/crm/inbound` takes the parsed message from a Cloudflare Email Worker,
 with `Authorization: Bearer {CRM_INBOUND_SECRET}` (24 characters or more).
 
-**Setup, once per deployment.** Set `CRM_INBOUND_DOMAIN` (for example
-`in.bananasplit.app`) and `CRM_INBOUND_SECRET` on the app. In Cloudflare,
-add the domain, turn on Email Routing, add a catch-all rule that sends to a
-Worker, and deploy this Worker with `INBOUND_URL`
-(`https://<app>/api/crm/inbound`) and `INBOUND_SECRET` set:
-
-```js
-// npm i postal-mime
-import PostalMime from "postal-mime";
-
-export default {
-  async email(message, env) {
-    const parsed = await PostalMime.parse(message.raw);
-    const headers = {};
-    for (const h of parsed.headers) headers[h.key.toLowerCase()] = h.value;
-    const res = await fetch(env.INBOUND_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.INBOUND_SECRET}` },
-      body: JSON.stringify({ from: message.from, to: [message.to], headers, text: parsed.text ?? "", html: parsed.html ?? null }),
-    });
-    if (!res.ok && res.status >= 500) message.setReject("Try again later");
-  },
-};
-```
+**Setup, once per deployment.** The Worker lives in the repo at
+`workers/crm-inbound/` (`src/index.js`, `package.json` with `postal-mime`,
+`wrangler.toml` with a placeholder `INBOUND_URL` and no secrets). Its
+README has the exact steps: add the domain to Cloudflare, turn on Email
+Routing, deploy the Worker (`wrangler secret put INBOUND_SECRET`, set
+`INBOUND_URL` to `https://<app>/api/crm/inbound`), point the catch-all rule
+at it, then set `CRM_INBOUND_DOMAIN` (for example `in.bananasplit.app`) and
+`CRM_INBOUND_SECRET` (the same value) on the app. The folder is outside the
+app's TypeScript, lint and tests. The Worker accepts mail the app took or
+can never take (2xx, 400, 413) and rejects the rest (a wrong secret, 429,
+503, 5xx), so a bad setup bounces mail back to the sender instead of
+losing it. `src/app/api/crm/inbound/route.db.test.ts` drives the route the
+way the Worker does: a reply that stops a sequence, a bounce, and requests
+without the secret.
 
 Without `CRM_INBOUND_DOMAIN`, Reply-To is the member's own address and no
 BCC address is offered.
