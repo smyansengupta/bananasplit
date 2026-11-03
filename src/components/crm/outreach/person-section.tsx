@@ -4,12 +4,12 @@ import { appUrl } from "@/lib/app-url";
 import { formatMoney } from "@/lib/crm/fields";
 import { ownerLabel, type RoleOwner } from "@/server/crm/owners";
 import { givingFor } from "@/server/crm/outreach/giving";
-import { contactable, conflictFor } from "@/server/crm/outreach/send";
+import { contactable, conflictFor, draftsFor } from "@/server/crm/outreach/send";
 import { selfUpdateToken, selfUpdateUrl, sha256 } from "@/server/crm/outreach/tokens";
 import { composeTemplates } from "@/server/crm/outreach/view";
 import { withOrgTx } from "@/server/db/context";
 
-import { ComposeButton } from "./compose";
+import { ComposeButton, OpenDraftButton } from "./compose";
 import { PersonOutreachControls } from "./person-controls";
 
 /**
@@ -114,6 +114,8 @@ export async function PersonOutreachSection({
         bounced: sent.filter((s) => s.status === "BOUNCED").length,
       },
       selfUpdate: linkOn ? selfUpdateUrl(orgId, p.id) : null,
+      // Unsent drafts waiting in the viewer's compose (an AI draft, an automation's to look over).
+      drafts: await draftsFor(db, orgId, p.id, viewerId),
     };
   });
   if (!data) return null;
@@ -150,6 +152,19 @@ export async function PersonOutreachSection({
             </p>
           )}
           {!can.ok && <Badge variant="destructive">{can.reason}</Badge>}
+          {data.drafts.length > 0 && (
+            <ul className="space-y-1.5 pt-1">
+              {data.drafts.map((d) => (
+                <li key={d.id} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="text-muted-foreground">Draft: </span>
+                    {d.subject || "(no subject)"}
+                  </span>
+                  <OpenDraftButton orgId={orgId} draftId={d.id} />
+                </li>
+              ))}
+            </ul>
+          )}
           {mail.sent > 0 && (
             <p className="text-muted-foreground">
               {mail.sent} sent: {mail.replied} replied, {mail.clicked} clicked{mail.bounced ? `, ${mail.bounced} bounced` : ""}. About {mail.opened} opened (opens are approximate).

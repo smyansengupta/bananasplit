@@ -1,7 +1,7 @@
 # CRM add-on: plan
 
-Status: Phases 1, 3 and 4 built on `claude/crm` (see the "as built" sections at the
-end); phases 2 and 5 are being merged, phase 6 is plan. Source material: the CRM teardown PDF (seven
+Status: Phases 1 to 5 built and wired together on `claude/crm` (see the "as built"
+sections and "Integration as built" at the end); phase 6 is plan. Source material: the CRM teardown PDF (seven
 CRMs, 12 modules, rebuild costs), read against this repo on `claude/fc-all`,
 plus three research passes on 2026-11-02: user complaints (about 80
 sources), 53 newer CRMs and tools, and the facts on self-hosted models,
@@ -1595,3 +1595,42 @@ P-CRM-03 and P-CRM-04 in `prisma/rls/phases.mjs`.
 - Texting is a disabled button (or an `sms:` link once a phone provider is
   connected); Phase 5 builds it.
 - AI drafts aren't in compose (Phase 4).
+
+## Integration as built
+
+The five phases wired together on `claude/crm`. Where two phases had each
+written the same thing, one stayed and the other now calls it.
+
+### Hand-offs
+
+| What | Now |
+|---|---|
+| AI drafts | `deliverDraft` (drafts.ts) saves an unsent DRAFT `CrmEmailMessage` for the person (`saveDraft` in outreach/send.ts, `CrmEmailMessage.personId`). The member who asked sees it in compose at once, on its preview; an agent's or a connected app's also waits in Review, where Open in compose picks up the same draft. Sending it (`composeEmail` with `draftId`) discards the draft and marks the suggestion accepted. Drafts are never sent by anything but a member's Send. |
+| Workflow email | `sendTemplateAction` and `inviteToEventAction` render with outreach's merge renderer (`renderFor`) and go through `queueEmail` and `crm-send` from the record owner's name: do-not-contact, unsubscribes, bounces, the daily cap (`CrmEmailMessage.workflowId` counts) and waking hours (`AUTOMATION_WINDOW`, 8 AM to 9 PM any day, the organization's timezone) all apply, with the unsubscribe footer. A step set to "Owner reviews first" (`params.review`) leaves an unsent draft and a Review suggestion instead. Invites to people outside the organization email the event's RSVP link (outreach's `inviteLink`). |
+| Workflow sequences | `enrollInSequenceAction` calls outreach's `enroll` from the owner's mailbox, conflicts respected. |
+| Starter templates | One list, `src/lib/crm/outreach/starters.ts`, in outreach's merge fields (`{{first_name|there}}`, `{{my_first_name}}`); Outreach makes the everyday three, a recipe makes the one it names. |
+| Merge renderers | Email is rendered only by outreach's `renderMerge`. The workflow's `{name}` renderer stays for task titles, notices and Slack text, which read record fields (stage, owner, link) that emails don't have. |
+| Sequence steps | To-do steps make real Tasks (as the sequence's maker, else the sender, owned by the sender, linked to the person, due that day), through the Tasks service in a system transaction (`actAs`, system-actor.ts, which the workflow engine uses too). Text steps send through Phase 5's `queueText` when the person agreed to texts; otherwise, and for calls and LinkedIn, an open step waits in the sender's queue saying why. Call steps are on the dialer and Calls to make (`openCallSteps`), first; logging the call (`logCall` with `stepId`) closes the step. |
+| The queue's buttons | Text opens Phase 5's thread in a window (`TextDialog`, `textThreadAction`); Call is Phase 5's softphone or the phone's dialer then Phase 5's call log (`CallPerson compact`). Phase 2's own call logger is gone; "Call and log" on the person page is gone (the Calls section has it). |
+| One review queue | Email-sourced new people are `CREATE_PERSON` suggestions with Phase 4's payload (`proposeChange`); Outreach, Your mail lists them filtered (`listQueue` with `source: "EMAIL"`) and accepts through `acceptSuggestion`. Signals (`source: SIGNAL`) stay out of Review (`REVIEW_WHERE`); they're the Inbox's To review rows. |
+| Inbox | The sidebar count adds the member's follow-up queue rows and one `crm:review` row for Review suggestions assigned to them (`crmReviewRow`), less what they snoozed or finished; the Inbox lists the same row and Home's Today strip reads the same count. |
+| Refresh timing | Form answers (`formToCrm`), RSVPs (`registerGuest`), a member's own RSVP (`setOwnRsvp`) and check-ins (`setRegistrationCheckIn`) call `queueCrmRefreshFor`: a `crm-refresh` keyed by the source (`m:response:{id}` and so on, so a burst merges into one pending job) that finds the people on the service path and mirrors only their timelines. |
+| Sponsorships | A new item in the Sponsorships pipeline makes its Finance sponsor (from the company) and sponsorship through Finance's `createSponsorshipRecord` (also Finance's own action), in the active period, at the stage's status. It needs a finance role, a company and an amount. |
+| Custom columns | Sort in Databases: by number, date, choice order or text, up to 5,000 rows ordered in memory, then just the page loaded (keyset export too). |
+| Workflows private | Migration `20261105160000_crm_workflows_private`: `CrmWorkflow` and `CrmWorkflowRun` are readable only by owners, admins and CRM managers. A member's change knows whether to queue an event from `CrmSettings.workflowTriggers` (kept by every save, switch and delete). RLS P-CRM-05 and P-CRM-06. Nothing member-facing reads workflows (the Automations pages are managers only). |
+| Outgoing calls | Slack, Discord and webhook steps use the outgoing webhooks' guarded transport: the address is checked in the connection's own DNS lookup, so it's the address connected to. One blocked-address list. |
+| Time zones | Forecasts count a close on its day in the organization's timezone; goals count over their period's local days; signal dates and the renewal year too. |
+| Unknown texters | Calls lists one row per number not in the CRM with Add as person: their texts move onto the new person's timeline (a STOP among them is kept). |
+| Booking hours | A host who set their availability is bookable whenever it doesn't say they're busy, 8 AM to 11 PM any day; one who never set it, weekdays 9 to 5. |
+
+### Migrations
+
+`20261105160000_crm_workflows_private` (policies, `CrmSettings.workflowTriggers`
+with a backfill) and `20261105170000_crm_integration` (`CrmEmailMessage.workflowId`
+and `personId`, an index). `app.security_manifest()` is unchanged.
+
+### Tests
+
+`src/server/crm/integration.db.test.ts`, `src/server/forms/forms.db.test.ts`,
+`src/lib/crm/integration.test.ts`, `src/server/databases/sources/crm-sort.test.ts`,
+and P-CRM-05 and P-CRM-06 in `prisma/rls/phases.mjs`.

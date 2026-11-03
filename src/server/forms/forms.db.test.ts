@@ -10,6 +10,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
  * organization with the CRM switched on: an owner makes a form from each
  * template, saves its settings, publishes it, sends its answers to the CRM
  * (its CRM destination), and someone answers it, which reaches the CRM.
+ * Opening a form records the visit and it can be pinned (the Pin and
+ * RecentVisit kind checks once refused "form", so every form page's visit
+ * failed with "That change is not allowed.").
  * Skipped when the database is not reachable.
  */
 
@@ -25,6 +28,7 @@ import { withOrgTx, type OrgContext } from "@/server/db/context";
 import { disconnectOwnerDb, ownerDb } from "@/test/owner-db";
 
 import { formToCrm, saveFormDestination } from "../crm/outreach/intake";
+import { recordVisit, togglePin } from "../pins";
 import { runSetup } from "../crm/setup";
 import { createForm, saveSettings, setPublished } from "./forms";
 import { formPageTarget, submitResponse } from "./public";
@@ -85,6 +89,14 @@ describe("forms against the local database", () => {
     const row = await ownerDb.form.findUniqueOrThrow({ where: { id: form.id } });
     expect(row.publishedAt).not.toBeNull();
     expect(row.title).toBe("Sign up for updates");
+
+    // Opening it lands in Recently visited, and it pins.
+    const slug = `forms-${tag}`;
+    await as(owner, (ctx) => recordVisit(ctx.db, org, slug, owner.id, `/app/${slug}/forms/${form.id}`));
+    expect(await ownerDb.recentVisit.findFirst({ where: { organizationId: org, userId: owner.id, kind: "form" } })).toMatchObject({
+      label: "Sign up for updates",
+    });
+    expect(await as(owner, (ctx) => togglePin(ctx.db, org, slug, owner.id, `/app/${slug}/forms/${form.id}`))).toEqual({ ok: true, pinned: true });
   });
 
   it("sends a form's answers to the CRM: the destination saves, and an answer makes a person", async () => {
