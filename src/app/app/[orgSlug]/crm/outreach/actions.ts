@@ -7,6 +7,7 @@ import type { Routing } from "@/lib/crm/outreach/assign";
 import type { BookingQuestion } from "@/lib/crm/outreach/booking";
 import { CrmError, requireManager } from "@/server/crm/access";
 import { logActivity } from "@/server/crm/activity";
+import { newBatchId } from "@/server/crm/history";
 import { createPerson, updatePerson } from "@/server/crm/people";
 import { rolePositions } from "@/server/crm/owners";
 import { createBookingPage, updateBookingPage, type BookingPageInput } from "@/server/crm/outreach/booking";
@@ -25,7 +26,7 @@ import {
 } from "@/server/crm/outreach/campaigns";
 import { handOver } from "@/server/crm/outreach/handover";
 import { saveFormDestination, saveOrgRouting } from "@/server/crm/outreach/intake";
-import { saveList, type ListFilters } from "@/server/crm/outreach/lists";
+import { listPeople, saveList, type ListFilters } from "@/server/crm/outreach/lists";
 import { checkSender } from "@/server/crm/outreach/mailbox";
 import { saveMemberSettings } from "@/server/crm/outreach/member";
 import {
@@ -166,6 +167,19 @@ export const keepInTouchAction = outreachAction(async (ctx, _a, personIds: strin
     if (r.changed.length) changed++;
   }
   return { changed };
+});
+
+/** Keep in touch, in bulk, for everyone on a list (each change undoable from history). */
+export const keepInTouchListAction = outreachAction(async (ctx, _a, viewId: string, days: number | null) => {
+  if (days !== null && (!Number.isInteger(days) || days < 1 || days > 730)) throw new CrmError("Pick how often.");
+  const people = await listPeople(ctx.db, ctx.organizationId, viewId, ctx.userId, await rolePositions(ctx.organizationId), 2000);
+  const batchId = newBatchId();
+  let changed = 0;
+  for (const p of people) {
+    const r = await updatePerson(ctx, p.id, { keepInTouchDays: days }, { trusted: true, batchId });
+    if (r.changed.length) changed++;
+  }
+  return { changed, batchId };
 });
 
 // ---- Bulk email ---------------------------------------------------------------------
