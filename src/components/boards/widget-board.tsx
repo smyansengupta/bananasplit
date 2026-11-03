@@ -157,8 +157,9 @@ const SPAN: Record<number, string> = {
 /**
  * Ambient bands are eight columns on a wide screen, two on a tablet, one on
  * a phone. Now's widgets are small, so that band stays two across until the
- * widest screens. On two columns each widget takes one, and a lone one (or
- * the last of an odd count) both, so no band leaves a hole.
+ * widest screens. On two columns a full-size widget takes both; Now's pair
+ * up, and a lone one (or the last of an odd count) takes both, so no band
+ * leaves a hole.
  */
 const BAND_SPAN_LG: Record<number, string> = {
   1: "lg:col-span-1",
@@ -772,7 +773,8 @@ export function WidgetBoard({
                               span: item.span,
                               square: row.band === "now",
                               compact: item.compact,
-                              full: n === 1 || (n % 2 === 1 && index === n - 1),
+                              full:
+                                row.band !== "now" || n === 1 || (n % 2 === 1 && index === n - 1),
                             }}
                           >
                             {body(item.widget)}
