@@ -377,7 +377,7 @@ function MobileToolbar({
               compact: true,
               title: scope.label,
             }))}
-            className="[&>button]:px-2.5"
+            className="[&>button]:px-2 min-[380px]:[&>button]:px-2.5"
           />
         }
         filterCount={count}

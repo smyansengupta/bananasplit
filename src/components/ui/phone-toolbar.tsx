@@ -68,7 +68,7 @@ export function PhoneToolbar({
   }
 
   return (
-    <div className="flex items-center gap-2 md:hidden">
+    <div className="flex items-center gap-1.5 md:hidden">
       {middle}
       {leading}
       <span className="flex-1" />
