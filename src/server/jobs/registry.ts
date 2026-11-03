@@ -455,6 +455,46 @@ export const JOB_KINDS = {
     description: "Hard-delete an org after the 30-day grace (key org-purge:{orgId}).",
   }),
 
+  // ---- CRM add-on (docs/features/crm.md; handlers in src/server/crm/jobs.ts) ----
+  "crm-refresh": kind({
+    payload: z
+      .object({
+        /** Only this person (a new person's own timeline); absent: the whole organization. */
+        personId: id.optional(),
+        /** Where the last run stopped, for a continuation. */
+        step: z.enum(["mirror", "strength", "dedupe"]).optional(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 30_000,
+    leaseSeconds: 90,
+    tier: "fast",
+    afterEligible: true,
+    handler: () => import("@/server/crm/jobs").then((m) => m.crmRefreshJob),
+    description:
+      "CRM upkeep: mirror workspace activity onto timelines (idempotent by sourceKind/sourceId), recompute relationship strength, look for duplicates. Key crm-refresh:{orgId} (setup, nightly), crm-refresh:p:{personId} (a new person).",
+  }),
+  "crm-import": kind({
+    payload: z
+      .object({
+        /** The import's log row (CrmView, objectKind import). */
+        importId: id.optional(),
+        /** Or bring in the people Bananasplit knows: members, contacts, forms. */
+        bringIn: z.enum(["members", "contacts", "forms"]).optional(),
+        /** The member who started it (records are made as them). */
+        userId: id,
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 240_000,
+    leaseSeconds: 330,
+    tier: "heavy",
+    afterEligible: false,
+    handler: () => import("@/server/crm/jobs").then((m) => m.crmImportJob),
+    description:
+      "A big CRM import (spreadsheet, vCard, HubSpot, Salesforce, Pipedrive) or bring-in, in turns; key crm-import:{importId} or crm-import:bring:{source}.",
+  }),
+
   // ---- Platform maintenance (this module) ----
   "purge-unverified": kind({
     payload: z.object({}).strict(),

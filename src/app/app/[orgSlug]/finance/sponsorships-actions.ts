@@ -2,15 +2,12 @@
 
 import { z } from "zod";
 
-import {
-  SponsorshipStatus,
-  SponsorshipType,
-  TransactionDirection,
-  TransactionKind,
-} from "@/generated/prisma/client";
+import { SponsorshipStatus, SponsorshipType } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/permissions";
 import { writeFinanceAuditLog } from "@/lib/finance/audit";
-import { withOrgAction, type OrgContext } from "@/server/db/context";
+import { withOrgAction } from "@/server/db/context";
+import { setSponsorshipStatus } from "@/server/finance/sponsorship-status";
+import { dropDealForSponsorship, syncDealFromSponsorship } from "@/server/crm/sponsor-sync";
 
 /** Every action here belongs to sponsorships (withOrgAction's space check). */
 const sponsorshipsAction: typeof withOrgAction = (handler, options) =>
@@ -151,6 +148,9 @@ export const createSponsorship = sponsorshipsAction(
     if (data.status && data.status !== SponsorshipStatus.PROSPECT) {
       const moved = await setSponsorshipStatus(ctx, created.id, data.status);
       if (moved.error) return moved;
+    } else {
+      // The CRM's Sponsorships pipeline shows it too (when the CRM has one).
+      await syncDealFromSponsorship(ctx.db, organizationId, ctx.userId, created.id);
     }
 
     return { sponsorshipId: created.id, sponsorId: sponsor.id };
@@ -170,112 +170,6 @@ export const updateSponsorshipStatus = sponsorshipsAction(
     return setSponsorshipStatus(ctx, sponsorshipId, status);
   },
 );
-
-async function setSponsorshipStatus(
-  ctx: OrgContext,
-  sponsorshipId: string,
-  status: string,
-): Promise<ActionResult> {
-  const organizationId = ctx.organizationId;
-  const db = ctx.db;
-
-  const parsedStatus = z.enum(SPONSORSHIP_STATUS_VALUES).safeParse(status);
-  if (!parsedStatus.success) return { error: "Invalid status." };
-
-  const sponsorship = await db.sponsorship.findFirst({
-    where: { id: sponsorshipId, organizationId },
-    include: { sponsor: { select: { name: true } } },
-  });
-  if (!sponsorship) return { error: "Sponsorship not found." };
-
-  const nextStatus = parsedStatus.data;
-  if (nextStatus === sponsorship.status) return { sponsorshipId };
-
-  let transactionId = sponsorship.transactionId;
-  const isCash = sponsorship.type === SponsorshipType.CASH;
-
-  if (isCash && nextStatus === SponsorshipStatus.RECEIVED) {
-    const existing = transactionId
-      ? await db.transaction.findFirst({ where: { id: transactionId, organizationId } })
-      : null;
-
-    if (existing) {
-      // Re-entering RECEIVED after a prior void (e.g. RECEIVED -> COMMITTED
-      // -> RECEIVED): un-void the same transaction instead of creating a
-      // second one for the same pledge.
-      await db.transaction.update({
-        where: { id: existing.id },
-        data: { voidedAt: null, voidReason: null },
-      });
-      await writeFinanceAuditLog(db, {
-        organizationId,
-        transactionId: existing.id,
-        sponsorshipId,
-        action: "SPONSORSHIP_TRANSACTION_UNVOID",
-        before: { voidedAt: existing.voidedAt },
-        after: { voidedAt: null },
-      });
-    } else {
-      const transaction = await db.transaction.create({
-        data: {
-          organizationId,
-          budgetPeriodId: sponsorship.budgetPeriodId,
-          direction: TransactionDirection.IN,
-          kind: TransactionKind.SPONSORSHIP,
-          amountCents: sponsorship.amountCents,
-          // Named for the sponsor, so the ledger tells them apart.
-          description: `${sponsorship.sponsor.name} sponsorship`,
-          occurredAt: new Date(),
-          submittedById: ctx.userId,
-          status: "NOT_APPLICABLE",
-        },
-      });
-      transactionId = transaction.id;
-      await writeFinanceAuditLog(db, {
-        organizationId,
-        transactionId,
-        sponsorshipId,
-        action: "SPONSORSHIP_TRANSACTION_CREATE",
-        after: transaction,
-      });
-    }
-  } else if (isCash && sponsorship.status === SponsorshipStatus.RECEIVED && transactionId) {
-    const existing = await db.transaction.findFirst({
-      where: { id: transactionId, organizationId },
-    });
-    if (existing && !existing.voidedAt) {
-      await db.transaction.update({
-        where: { id: transactionId },
-        data: {
-          voidedAt: new Date(),
-          voidReason: `Sponsorship moved from RECEIVED to ${nextStatus}`,
-        },
-      });
-      await writeFinanceAuditLog(db, {
-        organizationId,
-        transactionId,
-        sponsorshipId,
-        action: "SPONSORSHIP_TRANSACTION_VOID",
-        before: { voidedAt: null },
-        after: { voidedAt: new Date() },
-      });
-    }
-  }
-
-  const updated = await db.sponsorship.update({
-    where: { id: sponsorshipId },
-    data: { status: nextStatus, transactionId },
-  });
-  await writeFinanceAuditLog(db, {
-    organizationId,
-    sponsorshipId,
-    action: "SPONSORSHIP_STATUS_CHANGE",
-    before: { status: sponsorship.status },
-    after: { status: updated.status },
-  });
-
-  return { sponsorshipId };
-}
 
 const sponsorshipEditSchema = z.object({
   amountCents: z.number().int().positive("Amount must be greater than zero.").optional(),
@@ -349,6 +243,7 @@ export const updateSponsorship = sponsorshipsAction(
       before: existing,
       after: updated,
     });
+    await syncDealFromSponsorship(ctx.db, organizationId, ctx.userId, sponsorshipId);
     return { sponsorshipId };
   },
 );
@@ -368,6 +263,7 @@ export const deleteSponsorship = sponsorshipsAction(
       include: { sponsor: { select: { name: true } } },
     });
     if (!sponsorship) return { error: "Sponsorship not found." };
+    await dropDealForSponsorship(ctx.db, organizationId, ctx.userId, sponsorship.id);
     await ctx.db.sponsorship.delete({ where: { id: sponsorship.id } });
     await writeFinanceAuditLog(ctx.db, {
       organizationId,

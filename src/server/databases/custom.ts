@@ -772,7 +772,8 @@ export async function deleteDatabase(actor: Actor, databaseId: string): Promise<
 
 // ---- Fields -----------------------------------------------------------------
 
-function checkOptions(type: FieldType, raw: unknown): FieldOptions {
+/** A field's options, checked and trimmed to what its type uses (DatabaseInputError otherwise). */
+export function checkFieldOptions(type: FieldType, raw: unknown): FieldOptions {
   const parsed = fieldOptionsSchema.safeParse(raw ?? {});
   if (!parsed.success) throw new DatabaseInputError("Those field options aren't valid.");
   const out: FieldOptions = {};
@@ -861,7 +862,7 @@ export async function addField(
     where: { organizationId: actor.organizationId, databaseId },
     _max: { sortOrder: true },
   });
-  const options = checkOptions(type, input.options);
+  const options = checkFieldOptions(type, input.options);
   if (type === "RELATION") await checkTarget(actor, options);
   const created = await actor.db.databaseField.create({
     data: {
@@ -966,7 +967,7 @@ export async function updateField(
     );
   }
   const typeChanged = type !== beforeDef.type;
-  let options = input.options !== undefined ? checkOptions(type, input.options) : beforeDef.options;
+  let options = input.options !== undefined ? checkFieldOptions(type, input.options) : beforeDef.options;
   if (type === "RELATION" && input.options !== undefined) await checkTarget(actor, options);
   if (type === "RELATION" && !options.target) {
     throw new DatabaseInputError("Pick what the field links to.");

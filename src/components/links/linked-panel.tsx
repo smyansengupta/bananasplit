@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  Building2,
   CalendarDays,
   CheckSquare,
+  Columns3,
   ClipboardList,
   Database,
   FileText,
@@ -15,6 +17,7 @@ import {
   Plus,
   Search,
   Table,
+  UserRound,
   Users,
   Vote,
   Wallet,
@@ -49,6 +52,9 @@ const ICONS: Record<LinkKind, IconComponent> = {
   poll: Vote,
   decision: MessageCircleQuestion,
   announcement: Megaphone,
+  "crm-person": UserRound,
+  "crm-company": Building2,
+  "crm-deal": Columns3,
 };
 
 /**
@@ -70,6 +76,9 @@ const TONES: Record<LinkKind, string> = {
   poll: "var(--tag-navy)",
   decision: "var(--tag-burgundy)",
   announcement: "var(--tag-rust)",
+  "crm-person": "var(--tag-forest)",
+  "crm-company": "var(--tag-navy)",
+  "crm-deal": "var(--tag-ochre)",
 };
 
 /** A row the page attaches itself (a meeting's notes): opens like a link, can't be unlinked here. */
