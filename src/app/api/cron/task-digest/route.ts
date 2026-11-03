@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { assertCronAuth } from "@/server/cron/auth";
 import { scheduleCrmAi } from "@/server/crm/ai-jobs";
 import { scheduleCrmRefresh } from "@/server/crm/schedule";
+import { scheduleCrmOutreach } from "@/server/crm/outreach/daily";
 import { serviceDb } from "@/server/db/clients";
 import { sanitize } from "@/server/jobs/sanitize";
 import { schedulePulse } from "@/server/pulse/schedule";
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
     try {
       crm += await scheduleCrmRefresh(orgId, now);
       crm += await scheduleCrmAi(orgId, now);
+      crm += await scheduleCrmOutreach(orgId, now);
     } catch (error) {
       failed += 1;
       console.error("[cron] CRM upkeep scheduling failed for one org", sanitize(error));

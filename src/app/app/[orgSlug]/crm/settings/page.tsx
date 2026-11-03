@@ -6,6 +6,7 @@ import { AiSettingsSection } from "@/components/crm/ai/ai-settings-section";
 import { CrmSettings, type FieldGroup, type PipelineRow } from "@/components/crm/crm-settings";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { CrmSettingsLinks } from "@/components/crm/settings/settings-links";
+import { OutreachSettingsSection } from "@/components/crm/outreach/settings-section";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { COMPANY_FIELDS, PERSON_FIELDS } from "@/lib/crm/fields";
@@ -118,6 +119,7 @@ export default async function CrmSettingsPage({ params }: PageProps<"/app/[orgSl
         templates={SETUP_KINDS.filter((k) => PIPELINE_TEMPLATES[k] && !used.has(k))}
       />
       <AiSettingsSection orgId={orgId} orgSlug={orgSlug} admin={shell.access.admin} />
+      <OutreachSettingsSection orgId={orgId} orgSlug={orgSlug} members={shell.members} />
     </div>
   );
 }

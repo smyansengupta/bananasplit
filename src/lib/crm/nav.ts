@@ -31,6 +31,9 @@ export const CRM_TABS: readonly CrmTabEntry[] = [
   // Phase 5: calls (the dialer) and quotes.
   { id: "calls", label: "Calls", icon: "Phone", path: "/calls" },
   { id: "quotes", label: "Quotes", icon: "ReceiptText", path: "/quotes" },
+  // Phase 2, reaching out: templates, sequences, booking pages and bulk email; lists and campaigns.
+  { id: "outreach", label: "Outreach", icon: "Send", path: "/outreach" },
+  { id: "campaigns", label: "Campaigns", icon: "Megaphone", path: "/campaigns" },
   { id: "review", label: "Duplicates", icon: "Merge", path: "/review" },
   { id: "settings", label: "Settings", icon: "Settings", path: "/settings", managersOnly: true },
 ];

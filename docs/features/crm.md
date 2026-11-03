@@ -1378,3 +1378,220 @@ quote flow to won, STOP and START, webhook queueing).
 The learned scoring model, Stripe (a payment closing an item), support
 inbox and chat, a native app, predictive dialing (a gap we accept), and
 e-signatures beyond a typed name.
+
+
+## Phase 2 as built
+
+Reaching out, on `claude/crm-p2`. Everything lives in `src/server/crm/outreach/`
+(server), `src/lib/crm/outreach/` (pure, client-safe, tested in
+`outreach.test.ts`) and `src/components/crm/outreach/`; actions are in
+`src/app/app/[orgSlug]/crm/outreach/actions.ts` (`outreachAction`, the same
+contract as Phase 1's `crmAction`).
+
+### Schema
+
+No tables changed. Migration `20261105110000_crm_outreach` adds two
+SECURITY DEFINER lookups for the public side, both service-role only (RLS
+cases P-CRM-03 and P-CRM-04; both are in `tests.mjs`'s definer list):
+
+- `app.crm_public_target(kind, key)`: which organization and row a public
+  key opens, ids only: `booking` (slug of an active page), `guest` (hash of a
+  live, unexpired link), `self` (hash on a person not in the trash), `bcc`
+  (a member's BCC token), `track` (an email's tracking token, which is also
+  its `reply+{token}@` address).
+- `app.crm_booking_busy(page)`: the busy cells (never rules or labels) of a
+  booking page's hosts who are still members, only in that page's own
+  organization context.
+
+It also widens the `InboxItemState_itemKey_known` check to allow `crm:` keys
+(the follow-up queue's rows, snoozed from the CRM's home or the Inbox alike).
+`app.security_manifest()` was not redefined. Kept without a table: owner
+routing is a `CrmView` row (`objectKind` `routing`); a campaign's form is in
+its `channel` (`form:{formId}`); a bulk send is a campaign with `channel`
+`bulk`.
+
+### Email out: one function
+
+`sendFromMailbox` (`mailbox.ts`) is the only way CRM mail leaves. Today it
+sends from the organization's own verified Resend sender ("Ada at Robotics
+Club" <hello@robotics.org>), or, for one-to-one and sequence mail, the
+platform sender on the organization's behalf. Bulk mail refuses the platform
+sender. `memberMailbox()` is the seam for the email connections project: it
+returns null now; when it returns a member's Gmail or Outlook, every caller
+sends from it unchanged. `EMAIL_DELIVERY` applies (locally, the sink).
+
+`queueEmail` (`send.ts`) writes the message (`QUEUED`), its pending timeline
+row (private to the sender until it goes) and a `crm-send` job. The job
+(`deliver`) checks do-not-contact, unsubscribes, bounces and the daily cap
+again, renders it (a tracking pixel at `/api/crm/t/{token}/o`, links through
+the signed redirect `/api/crm/t/{token}/c`, the member's signature, and for
+sequence, campaign and bulk mail a footer plus `List-Unsubscribe` and
+`List-Unsubscribe-Post`), sends it outside any transaction, and marks it
+`SENT` with its timeline row. Opens are shown as approximate; replies,
+clicks and bookings lead. `src/server/email/transport.ts` gained optional
+`headers`.
+
+### Email in: one function
+
+`ingestEmail(source, message)` (`inbound.ts`) takes every way in: `bcc`
+(log+{token}@{CRM_INBOUND_DOMAIN}), `reply` (the Reply-To of mail we sent)
+and later `gmail`, `outlook`, `imap`. It dedupes on Message-ID, threads by
+In-Reply-To and References, matches people by address and companies by work
+domain, logs only mail with known people or company domains, respects the
+mailbox's share mode (NONE logs nothing, METADATA who and when, FULL the
+message) and never-log list, suggests unknown people from their signature as
+`CrmSuggestion` rows (Outreach, Your mail: Add or Dismiss), pauses sequences
+on an out-of-office until the return date, stops them on a real reply (and
+marks the campaign, tells the member with `CRM_REPLY`, emits
+`email.replied`), and on a bounce flags the address
+(`consent.email.bounced`), stops sequences and emits `email.bounced`.
+
+`/api/crm/inbound` takes the parsed message from a Cloudflare Email Worker,
+with `Authorization: Bearer {CRM_INBOUND_SECRET}` (24 characters or more).
+
+**Setup, once per deployment.** Set `CRM_INBOUND_DOMAIN` (for example
+`in.bananasplit.app`) and `CRM_INBOUND_SECRET` on the app. In Cloudflare,
+add the domain, turn on Email Routing, add a catch-all rule that sends to a
+Worker, and deploy this Worker with `INBOUND_URL`
+(`https://<app>/api/crm/inbound`) and `INBOUND_SECRET` set:
+
+```js
+// npm i postal-mime
+import PostalMime from "postal-mime";
+
+export default {
+  async email(message, env) {
+    const parsed = await PostalMime.parse(message.raw);
+    const headers = {};
+    for (const h of parsed.headers) headers[h.key.toLowerCase()] = h.value;
+    const res = await fetch(env.INBOUND_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${env.INBOUND_SECRET}` },
+      body: JSON.stringify({ from: message.from, to: [message.to], headers, text: parsed.text ?? "", html: parsed.html ?? null }),
+    });
+    if (!res.ok && res.status >= 500) message.setReject("Try again later");
+  },
+};
+```
+
+Without `CRM_INBOUND_DOMAIN`, Reply-To is the member's own address and no
+BCC address is offered.
+
+### The queue, cadences, the Inbox
+
+`followUpQueue` (`queue.ts`) gives one row per person with every reason (a
+reply waiting, a sequence step, a follow-up due, new from a form or a
+booking, your campaign share, keep-in-touch lapsed, going cold), mine or
+everyone's, less what the viewer snoozed. It is the first card on the CRM's
+home (`QueueSection`), with email, text (disabled until Telnyx or Twilio is
+connected; then an `sms:` link), call (`tel:`, then the log dialog), log and
+snooze; and the member's Inbox rows (kind `crm`, `inbox.ts`; cold and
+cadence rows stay on the home). Keep in touch per person (the person page)
+or for a whole list (Campaigns, with Undo). The daily `crm-outreach-daily`
+job (`daily.ts`, queued by `/api/cron/task-digest`) brings lapsed cadences
+back by setting their follow-up to today, writes campaign conversions and
+expires old mail suggestions.
+
+### Templates, sequences, campaigns, bulk
+
+- Merge fields (`src/lib/crm/outreach/merge.ts`): person, company, history
+  (last event, events attended, last talked, last gift) and the sender, with
+  fallbacks (`{{first_name|there}}`); every send is previewed first.
+- Sequences: email, to-do, call, LinkedIn and text steps; delays; a send
+  window in the organization's timezone; the per-mailbox daily cap
+  (`CrmSettings.dailySendCap`, set in Settings); stop on reply, booking,
+  unsubscribe, bounce and do-not-contact; one `crm-sequence` job per step.
+  Steps other than email become open `SEQUENCE_STEP` rows in the sender's
+  queue with a `CRM_FOLLOW_UP` notification (not Tasks: the task service
+  needs a member session, which a job doesn't have).
+- Lists are people views (`lists.ts`). Campaigns (`campaigns.ts`) take a
+  list, a goal, a due date and a way in (a template, a sequence, an event's
+  RSVP page, a form, calls), split it among members (owners first), notify
+  each (`CRM_ASSIGNED`), and count contacted, replied, booked and converted
+  (an RSVP to its event, an answer to its form, or an item won). Members
+  preview and edit each message of their share and send from their own
+  mailbox; anyone moves people between members or splits what's left again.
+- Bulk email (`bulk-email.ts`): owners, admins and CRM managers; the sender
+  check (the organization's own domain verified in Resend, which means SPF
+  and DKIM) must pass; up to 2,000 a send, merged per person at send time,
+  sent 25 a turn by the heavy `crm-bulk` job.
+
+### Booking, forms, handover, partners, self-update, giving
+
+- Booking pages (`booking.ts`, `/book/{slug}`): the hosts' busy hours plus
+  the meetings they're in or host, weekdays 9 to 5 in the organization's
+  timezone, notice and days ahead, round-robin by recent bookings. A booking
+  makes a Bananasplit meeting, finds or adds the person, logs the meeting
+  with the same `event` source the mirror uses, optionally opens an item,
+  stops sequences that stop on booking, marks campaigns booked, notifies
+  the host, confirms to the guest and emits `meeting.booked`.
+- Forms to the CRM (`intake.ts`, called from `/f/{slug}` after each answer):
+  the form's Settings set the destination (a person, or a person and an
+  item, with each question matched to a field), deduped on email, filling
+  only empty fields, the answers on the timeline, and routing (CRM Settings:
+  in turn, or rules then in turn) with `CRM_ASSIGNED`; emits
+  `form.submitted`. Share has an embed snippet: a button that opens the form
+  in a small window (forms can't be framed: every page sends
+  `X-Frame-Options: DENY`).
+- Handover (`handover.ts`, `/crm/handover`): `memberLeft` runs from
+  `untieDepartingMember` (pauses their sequences, takes them off booking
+  pages, tells managers with `CRM_HANDOVER`); `chartHoldersChanging` runs
+  in the chart's publish (tells a position's new holder, or the managers
+  when nobody holds it); a manager hands one member's people, companies,
+  items, campaign shares and sequences to a member or a position in one
+  step; a brief per contact; everyone with no owner, a departed owner or an
+  open position, given an owner in one step.
+- What we owe them (`partners.ts`): deliverables on an item, optionally a
+  Task (a finished task counts as delivered), and guest links (`/g/{token}`,
+  the hash stored, derived so it can be copied again, revocable) showing the
+  agreement, the promises and a recap from the events linked to the item or
+  its company (their check-ins and sign-ups).
+- Self-update (`self-update.ts`, `/c/{token}`): name, email, title,
+  workplace and phone, written to field history; offered in RSVP
+  confirmations (`registered`, `promoted`) and form receipts when the person
+  is in the CRM; members turn it on or off on the person page.
+- Giving (`giving.ts`): Finance income whose counterparty is the person or
+  their company (finance roles only, as in Finance), won items in donor,
+  grant and sponsor pipelines, recurring when the same payer gives at a
+  steady interval, and hours at events from their check-ins.
+
+### Never step on each other
+
+`conflictFor` (`send.ts`): another member emailed, called, met or texted
+them in the last two weeks, has them in a sequence, or has them in their
+campaign share. Compose and enrolling ask first; the person page shows who
+owns them, who talked to them last, and the warning.
+
+### Pages
+
+Outreach (Templates, Sequences, Booking pages, Bulk email, Your mail),
+Campaigns (lists and campaigns), Handover; sections on the person, company
+and item pages and on the CRM's Settings; the queue on the CRM's home and in
+the Inbox; public `/book`, `/g`, `/c` and `/u` (unsubscribe, one button;
+`/api/crm/u/{token}` takes the one-click POST). Every public route finds its
+organization first and is rate-limited.
+
+### Jobs
+
+`crm-send` (fast), `crm-bulk` (heavy), `crm-sequence` (fast) and
+`crm-outreach-daily` (fast, once a day).
+
+### Tests
+
+`src/lib/crm/outreach/outreach.test.ts` (pure),
+`src/server/crm/outreach/outreach.db.test.ts` (sending, conflicts, a reply,
+an out-of-office, a bounce, unsubscribing, a sequence step, a booking,
+cadences, a handover with its brief, guest and self-update links), and
+P-CRM-03 and P-CRM-04 in `prisma/rls/phases.mjs`.
+
+### Known gaps
+
+- Gmail, Outlook and IMAP are the email connections project; their
+  `ingestEmail` sources and `memberMailbox` are ready for it.
+- Booking reads the hosts' Bananasplit availability and meetings, not their
+  Google free/busy, and uses fixed hours (weekdays 9 to 5).
+- Sequence to-do steps are queue rows, not Tasks.
+- The sidebar's Inbox count doesn't include CRM rows yet (the Inbox does).
+- Texting is a disabled button (or an `sms:` link once a phone provider is
+  connected); Phase 5 builds it.
+- AI drafts aren't in compose (Phase 4).

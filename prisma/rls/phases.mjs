@@ -5767,6 +5767,110 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
       },
     },
   );
+  // CRM outreach (20261105110000_crm_outreach): the public links' lookups
+  // run on the service path with no org context, so their rows are
+  // committed by the owner first and removed after.
+  await clients.owner.query(
+    `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_out','org_A','Sponsors',now());
+     INSERT INTO "CrmStage" ("id","organizationId","pipelineId","name") VALUES ('st_out','org_A','pl_out','Prospect');
+     INSERT INTO "CrmDeal" ("id","organizationId","pipelineId","stageId","title","updatedAt")
+       VALUES ('dl_out','org_A','pl_out','st_out','Harbor Light',now());
+     INSERT INTO "CrmGuestLink" ("id","organizationId","dealId","tokenHash","revokedAt","expiresAt")
+       VALUES ('gl_live','org_A','dl_out','${HASH("g1")}',NULL,NULL),
+              ('gl_rev','org_A','dl_out','${HASH("g2")}',now(),NULL),
+              ('gl_old','org_A','dl_out','${HASH("g3")}',NULL,now() - interval '1 day');
+     INSERT INTO "CrmPerson" ("id","organizationId","name","selfUpdateTokenHash","updatedAt","deletedAt")
+       VALUES ('cp_self','org_A','Ada','${HASH("s1")}',now(),NULL),
+              ('cp_gone','org_A','Gone','${HASH("s2")}',now(),now());
+     INSERT INTO "CrmMemberSettings" ("id","organizationId","userId","bccToken","updatedAt")
+       VALUES ('ms_out','org_A','u_memberA','bcctok1',now());
+     INSERT INTO "CrmEmailThread" ("id","organizationId") VALUES ('th_out','org_A');
+     INSERT INTO "CrmEmailMessage" ("id","organizationId","threadId","direction","status","mailbox","fromAddress","trackingToken")
+       VALUES ('em_out','org_A','th_out','OUTBOUND','SENT','ORG_SENDER','a@example.org','trk1');
+     INSERT INTO "CrmBookingPage" ("id","organizationId","slug","title","hostIds","active","updatedAt")
+       VALUES ('bp_on','org_A','meet-ada','Meet','{u_memberA,u_memberB}',true,now()),
+              ('bp_off','org_A','meet-off','Off','{u_memberA}',false,now());
+     INSERT INTO "UserAvailability" ("userId","rules","busy") VALUES ('u_memberA','{}','{0-9}')
+       ON CONFLICT ("userId") DO UPDATE SET "busy" = '{0-9}';`,
+  );
+  try {
+    await tcase(
+      "P-CRM-03",
+      "CRM public links: the lookups answer ids only, for a live booking page, a live unexpired guest link, a person not in the trash, a BCC token and a tracking token; a booking page's busy hours come only for its hosts who are members, only in its own organization's context",
+      "app_service",
+      null,
+      async (q) => {
+        const target = async (kind, key) =>
+          (await q(`SELECT * FROM app.crm_public_target('${kind}', '${key}')`)).rows;
+        const s = {};
+        s.booking = await target("booking", "meet-ada");
+        s.booking_off = (await target("booking", "meet-off")).length;
+        s.guest = await target("guest", HASH("g1"));
+        s.guest_revoked = (await target("guest", HASH("g2"))).length;
+        s.guest_expired = (await target("guest", HASH("g3"))).length;
+        s.self = await target("self", HASH("s1"));
+        s.self_trashed = (await target("self", HASH("s2"))).length;
+        s.bcc = await target("bcc", "bcctok1");
+        s.track = await target("track", "trk1");
+        s.wrong_kind = (await target("guest", "trk1")).length;
+        s.busy_no_context = await count(q, `SELECT count(*) n FROM app.crm_booking_busy('bp_on')`);
+        await q(`SELECT app.set_context(NULL,'org_B')`);
+        s.busy_other_org = await count(q, `SELECT count(*) n FROM app.crm_booking_busy('bp_on')`);
+        await q(`SELECT app.set_context(NULL,'org_A')`);
+        s.busy = (await q(`SELECT * FROM app.crm_booking_busy('bp_on')`)).rows;
+        return s;
+      },
+      {
+        value: {
+          booking: [{ organizationId: "org_A", id: "bp_on" }],
+          booking_off: 0,
+          guest: [{ organizationId: "org_A", id: "gl_live" }],
+          guest_revoked: 0,
+          guest_expired: 0,
+          self: [{ organizationId: "org_A", id: "cp_self" }],
+          self_trashed: 0,
+          bcc: [{ organizationId: "org_A", id: "ms_out" }],
+          track: [{ organizationId: "org_A", id: "em_out" }],
+          wrong_kind: 0,
+          busy_no_context: 0,
+          busy_other_org: 0,
+          busy: [{ userId: "u_memberA", busy: ["0-9"] }],
+        },
+      },
+    );
+    await tcase(
+      "P-CRM-04",
+      "members can't call the CRM's public lookups, and a CRM queue row is a key the Inbox keeps",
+      "app_user",
+      A("u_memberA"),
+      async (q) => ({
+        target: await tryv(q, `SELECT count(*) FROM app.crm_public_target('bcc', 'bcctok1')`),
+        busy: await tryv(q, `SELECT count(*) FROM app.crm_booking_busy('bp_on')`),
+        snooze: await tryq(
+          q,
+          `INSERT INTO "InboxItemState" ("userId","organizationId","itemKey","snoozedUntil","updatedAt")
+           VALUES ('u_memberA','org_A','crm:cp_self',now() + interval '1 day',now())`,
+        ),
+        bad_key: await tryq(
+          q,
+          `INSERT INTO "InboxItemState" ("userId","organizationId","itemKey","snoozedUntil","updatedAt")
+           VALUES ('u_memberA','org_A','crmx:cp_self',now() + interval '1 day',now())`,
+        ),
+      }),
+      { value: { target: "error:42501", busy: "error:42501", snooze: 1, bad_key: "23514" } },
+    );
+  } finally {
+    await clients.owner.query(
+      `DELETE FROM "InboxItemState" WHERE "itemKey" = 'crm:cp_self';
+       DELETE FROM "CrmBookingPage" WHERE "id" IN ('bp_on','bp_off');
+       DELETE FROM "CrmEmailThread" WHERE "id" = 'th_out';
+       DELETE FROM "CrmMemberSettings" WHERE "id" = 'ms_out';
+       DELETE FROM "CrmPerson" WHERE "id" IN ('cp_self','cp_gone');
+       DELETE FROM "CrmDeal" WHERE "id" = 'dl_out';
+       DELETE FROM "CrmPipeline" WHERE "id" = 'pl_out';
+       DELETE FROM "UserAvailability" WHERE "userId" = 'u_memberA';`,
+    );
+  }
   await tcase(
     "P-REPORTS-02",
     "sharing reports outside the organization, and deleting them: only a report's editors see, add and remove its invites or touch its link, only on a report the organization shares, and deleting takes its copies and invites with it",

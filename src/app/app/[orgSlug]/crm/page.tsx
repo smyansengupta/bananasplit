@@ -6,6 +6,7 @@ import { CrmTabs } from "@/components/crm/crm-tabs";
 import { GoalList } from "@/components/crm/forecast";
 import { TodayCalls } from "@/components/crm/phone/today-calls";
 import { CrmTodayKeys } from "@/components/crm/today-keys";
+import { QueueSection } from "@/components/crm/outreach/queue-section";
 import { when } from "@/components/crm/record-page";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
           />
         </Card>
       )}
+      <QueueSection orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} members={shell.members} everyone={everyone} />
       <CrmTodayKeys hrefs={order.map((i) => crmRecordHref(orgSlug, i.targetKind, i.id))} />
       <TodayCalls orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} />
       <div className="grid gap-4 lg:grid-cols-2">

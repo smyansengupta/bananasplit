@@ -6,6 +6,7 @@ import { RecordAi } from "@/components/crm/ai/record-ai";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { PhoneSection } from "@/components/crm/phone/phone-section";
 import { RecordActions } from "@/components/crm/record-actions";
+import { RecordOutreachSection } from "@/components/crm/outreach/record-section";
 import { RecordFields } from "@/components/crm/record-fields";
 import { RecordPage, Section, StrengthBadge, when } from "@/components/crm/record-page";
 import { Timeline } from "@/components/crm/timeline";
@@ -171,6 +172,7 @@ export default async function CrmCompanyPage({ params }: PageProps<"/app/[orgSlu
               </ul>
             </Section>
           )}
+          <RecordOutreachSection orgId={orgId} kind="company" id={company.id} />
           {data.linkedFrom.length > 0 && <LinkedFrom groups={data.linkedFrom} />}
           <PhoneSection orgId={orgId} orgSlug={orgSlug} target={{ kind: "company", id: company.id }} />
           <LinkedSection orgId={orgId} orgSlug={orgSlug} at={{ kind: "crm-company", id: company.id }} title="Linked" />
