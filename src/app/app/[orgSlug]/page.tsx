@@ -507,6 +507,28 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const weekEndKey = addDaysToKey(todayKey, 6);
   const dueThisWeek = myDue.filter((t) => t.dueKey >= todayKey && t.dueKey <= weekEndKey);
 
+  // Personal: your organizations' deadlines and events are in This week too,
+  // each opening in the organization it's from.
+  const hrefOf = new Map<string, string>();
+  const otherDue: DueTask[] = (personalHome?.dueSoon ?? [])
+    .filter((t) => t.space.id !== org.id)
+    .map((t) => {
+      hrefOf.set(t.id, t.href);
+      return { id: t.id, title: t.title, dueKey: t.dueKey };
+    });
+  const otherWeekEvents = (personalHome?.upcoming ?? [])
+    .filter((e) => e.space.id !== org.id && e.startsAt.getTime() - now.getTime() < 7 * DAY_MS)
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      kind: e.kind,
+      allDay: e.allDay,
+      startsAt: e.startsAt,
+      endsAt: e.endsAt,
+    }));
+  const weekDue = [...myDue, ...otherDue];
+  const weekLate = weekDue.filter((t) => t.dueKey < todayKey);
+
   // "This week": the next seven days in the viewer's timezone, each event
   // with its time and who's going, beside the viewer's own deadlines (late
   // ones on today).
@@ -515,11 +537,16 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const key = addDaysToKey(todayKey, i);
     const date = new Date(`${key}T00:00:00Z`);
-    const dayEvents = data.weekEvents.filter((e) => dayKeyOf(e) === key);
+    const dayEvents = [...data.weekEvents, ...otherWeekEvents].filter((e) => dayKeyOf(e) === key);
     const deadlines = [
-      ...(i === 0 ? lateTasks.map((t) => ({ ...t, overdue: true })) : []),
-      ...myDue.filter((t) => t.dueKey === key).map((t) => ({ ...t, overdue: false })),
-    ].map((t) => ({ id: t.id, title: t.title, href: `${base}/tasks/${t.id}`, overdue: t.overdue }));
+      ...(i === 0 ? weekLate.map((t) => ({ ...t, overdue: true })) : []),
+      ...weekDue.filter((t) => t.dueKey === key).map((t) => ({ ...t, overdue: false })),
+    ].map((t) => ({
+      id: t.id,
+      title: t.title,
+      href: hrefOf.get(t.id) ?? `${base}/tasks/${t.id}`,
+      overdue: t.overdue,
+    }));
     const load = dayLoad(
       key,
       dayEvents.map((e) => {
@@ -563,7 +590,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   );
   const weekCounts = {
     events: week.reduce((n, d) => n + d.events.length, 0),
-    due: dueThisWeek.length,
+    due: weekDue.filter((t) => t.dueKey >= todayKey && t.dueKey <= weekEndKey).length,
     // A free day has nothing on at all: no events, nothing due.
     free: week.filter((d) => d.events.length === 0 && d.deadlines.length === 0).length,
   };
