@@ -2497,6 +2497,8 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       crm_sees_all: "us",
       is_finance: "us",
       is_crm_manager: "us",
+      // CRM databases (20261105100000_crm_databases): may CRM managers shape it?
+      is_crm_database: "u",
       is_org_admin: "us",
       is_org_owner: "us",
       lock_org: "us",

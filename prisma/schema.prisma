@@ -3620,6 +3620,9 @@ model CrmStage {
   organizationId String
   pipelineId     String
   name           String
+  /// A stable key for a ready-made stage ("RECEIVED" in Sponsorships), so a
+  /// renamed stage still maps to Finance and the templates.
+  key            String?
   kind           CrmStageKind @default(OPEN)
   sortOrder      Int          @default(0)
   /// Likelihood 0-100 for the weighted forecast.

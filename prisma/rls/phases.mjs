@@ -5677,6 +5677,96 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     },
   );
   await tcase(
+    "P-CRM-02",
+    "CRM databases: their fields are DatabaseField rows but never rows of DatabaseRecord; CRM managers shape the CRM's databases and nothing else; members shape none",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      await q(
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_crm_p','org_A','crm-people-t','People','CRM_PEOPLE'),
+                ('db_cu','org_A','own-t','Own','CUSTOM')`,
+      );
+      s.admin_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_1','org_A','db_crm_p','Shirt size','TEXT',now())`,
+      );
+      s.admin_row = await tryq(
+        q,
+        `INSERT INTO "DatabaseRecord" ("id","organizationId","databaseId","createdById","updatedAt")
+         VALUES ('dr_1','org_A','db_crm_p','u_adminA',now())`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_2','org_A','db_crm_p','Diet','TEXT',now())`,
+      );
+      s.member_pipeline_db = await tryq(
+        q,
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_crm_x','org_A','crm-x','X','CRM_PIPELINE')`,
+      );
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      await q(
+        `INSERT INTO "CrmSettings" ("organizationId","managerIds","updatedAt")
+         VALUES ('org_A',ARRAY['u_memberA'],now())
+         ON CONFLICT ("organizationId") DO UPDATE SET "managerIds" = ARRAY['u_memberA']`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.manager_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_3','org_A','db_crm_p','Diet','TEXT',now())`,
+      );
+      s.manager_renames_field = await rc(
+        q,
+        `UPDATE "DatabaseField" SET "name" = 'Meal' WHERE "id" = 'df_3'`,
+      );
+      s.manager_custom_field = await tryq(
+        q,
+        `INSERT INTO "DatabaseField" ("id","organizationId","databaseId","name","type","updatedAt")
+         VALUES ('df_4','org_A','db_cu','Size','TEXT',now())`,
+      );
+      s.manager_pipeline_db = await tryq(
+        q,
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_crm_y','org_A','crm-y','Y','CRM_PIPELINE')`,
+      );
+      s.manager_custom_db = await tryq(
+        q,
+        `INSERT INTO "DatabaseDefinition" ("id","organizationId","key","name","kind")
+         VALUES ('db_cu2','org_A','own-2','Own 2','CUSTOM')`,
+      );
+      s.manager_renames_custom = await rc(
+        q,
+        `UPDATE "DatabaseDefinition" SET "name" = 'Mine' WHERE "id" = 'db_cu'`,
+      );
+      s.manager_removes_field = await rc(q, `DELETE FROM "DatabaseField" WHERE "id" = 'df_3'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_fields = await count(q, `SELECT count(*) n FROM "DatabaseField" WHERE "databaseId" = 'db_crm_p'`);
+      return s;
+    },
+    {
+      value: {
+        admin_field: 1,
+        admin_row: "23514",
+        member_field: "42501",
+        member_pipeline_db: "42501",
+        manager_field: 1,
+        manager_renames_field: 1,
+        manager_custom_field: "42501",
+        manager_pipeline_db: 1,
+        manager_custom_db: "42501",
+        manager_renames_custom: 0,
+        manager_removes_field: 1,
+        other_org_fields: 0,
+      },
+    },
+  );
+  await tcase(
     "P-REPORTS-02",
     "sharing reports outside the organization, and deleting them: only a report's editors see, add and remove its invites or touch its link, only on a report the organization shares, and deleting takes its copies and invites with it",
     "app_user",
