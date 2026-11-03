@@ -1190,6 +1190,8 @@ function AmbientBand({
         BAND_GRID,
         // Now's widgets are small: each is as tall as what's in it, not the tallest.
         row.band === "now" ? "items-start lg:grid-cols-2 xl:grid-cols-8" : "lg:grid-cols-8",
+        // The lead and what sits beside it are different things: each its own height.
+        row.band === "lead" && "items-start",
       )}
     >
       {row.items.map(render)}

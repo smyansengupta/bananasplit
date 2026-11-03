@@ -161,6 +161,10 @@ describe("the rules", () => {
     expect(scoreHome({ ...calm, decisions: 2 }).get("decisions")?.score).toBe(45);
   });
 
+  it("something merely coming up doesn't lead: a meeting next week keeps its usual spot", () => {
+    expect(lead({ week: { events: 2, due: 0, meetings: 1 } })).toBeNull();
+  });
+
   it("every band still adds up to eight columns", () => {
     for (const r of board({ tomorrowNotStarted: "x" }).rows) {
       expect(r.items.reduce((n, i) => n + i.span, 0)).toBe(8);

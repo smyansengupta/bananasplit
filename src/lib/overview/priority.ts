@@ -62,8 +62,11 @@ export interface HomeSignals {
 }
 
 export const USUAL = 10;
-/** A widget leads only when something is going on: coming up or more. */
-export const LEAD_MIN = 30;
+/**
+ * A widget leads only when something is going on beyond what's merely
+ * coming up (30): the week ahead on a Monday is the least that does.
+ */
+export const LEAD_MIN = 35;
 /** Two at this or more share the lead row. */
 export const SHARE_MIN = 75;
 
