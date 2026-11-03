@@ -1,5 +1,6 @@
 "use client";
 
+import { ListPlus } from "@/components/icons";
 import { updateEvent } from "@/app/app/[orgSlug]/calendar/actions";
 import { agendaWithTask } from "@/lib/ambient/tasks";
 
@@ -40,6 +41,7 @@ export function TaskPageAmbient({
       action: {
         key: "agenda",
         label: "Add to agenda",
+        icon: ListPlus,
         reason,
         ariaLabel: `Add ${task.title} to the agenda of ${meeting.title}`,
         run: () =>

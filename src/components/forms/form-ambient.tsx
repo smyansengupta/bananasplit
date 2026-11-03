@@ -1,5 +1,6 @@
 "use client";
 
+import { ChartColumn, Send } from "@/components/icons";
 import { AmbientActions, type AmbientAction } from "@/components/ambient/ambient-button";
 import { postAnnouncement } from "@/server/announcements/actions";
 
@@ -25,6 +26,7 @@ export function shareAgainAction(
   return {
     key: "share",
     label: "Share again",
+    icon: Send,
     reason: share.reason,
     tone: "solid",
     ariaLabel: `Share ${formTitle} again`,
@@ -55,6 +57,7 @@ export function FormAmbient({
         report && {
           key: "report",
           label: "Make a report",
+          icon: ChartColumn,
           reason: report.reason,
           href: report.href,
         },

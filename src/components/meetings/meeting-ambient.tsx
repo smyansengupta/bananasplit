@@ -19,7 +19,17 @@ import {
 import { createNote } from "@/app/app/[orgSlug]/notes/actions";
 import { createTask } from "@/app/app/[orgSlug]/tasks/actions";
 import { AmbientActions } from "@/components/ambient/ambient-button";
-import { DoorOpen, NotebookText, Video } from "@/components/icons";
+import {
+  Bell,
+  DoorOpen,
+  Link2,
+  ListOrdered,
+  NotebookPen,
+  NotebookText,
+  Redo2,
+  Send,
+  Video,
+} from "@/components/icons";
 import {
   AmbientField,
   AmbientMessage,
@@ -137,6 +147,7 @@ export function MeetingHeaderAmbient({
           action: {
             key,
             label: "Draft from open items",
+            icon: NotebookPen,
             reason,
             tone: "spark",
             run: counted(
@@ -165,6 +176,7 @@ export function MeetingHeaderAmbient({
           action: {
             key,
             label: "Open a waitlist",
+            icon: ListOrdered,
             reason,
             tone: "spark",
             run: () => openRsvpWaitlist(orgId, eventId),
@@ -181,6 +193,7 @@ export function MeetingHeaderAmbient({
               action: {
                 key,
                 label: "Share RSVP link",
+                icon: Link2,
                 reason,
                 run: async () => {
                   try {
@@ -206,6 +219,7 @@ export function MeetingHeaderAmbient({
           action: {
             key,
             label: "Remind members",
+            icon: Bell,
             reason,
             run: counted(
               () => remindMembers(orgId, eventId),
@@ -220,6 +234,7 @@ export function MeetingHeaderAmbient({
           node: (
             <AmbientMessage
               label="Send a thank-you"
+              icon={Send}
               reason={reason}
               hint="Goes to the members who came, in the app and by email as they choose."
               text={`Thanks for coming to ${title}! It was great to see you.`}
@@ -273,6 +288,7 @@ export function RsvpFullAmbient({
           action: {
             key: kind,
             label: "Open a waitlist",
+            icon: ListOrdered,
             reason,
             tone: "spark",
             run: () => openRsvpWaitlist(orgId, eventId),
@@ -304,6 +320,7 @@ export function CarryOver({
         {
           key: "carry-over",
           label: "Carry them over",
+          icon: Redo2,
           reason: `${plural(count, "action item", "action items")} from last time still open`,
           tone: "spark",
           run: counted(
@@ -334,6 +351,7 @@ export function RemindMaybes({
         {
           key: "remind-maybes",
           label: "Remind maybes",
+          icon: Bell,
           reason: `${plural(count, "maybe hasn't", "maybes haven't")} decided`,
           run: counted(
             () => remindMaybes(orgId, eventId),

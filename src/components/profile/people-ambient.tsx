@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail } from "@/components/icons";
+import { Mail, MessageCircle, Send, Users } from "@/components/icons";
 
 import { sendMemberNoteAction } from "@/app/app/[orgSlug]/people/actions";
 import { resendInvitation } from "@/app/app/[orgSlug]/settings/members/actions";
@@ -64,6 +64,7 @@ export function PeopleAmbient({
                 !p.saidHi && {
                   key: "hi",
                   label: "Say hi",
+                  icon: MessageCircle,
                   reason: p.reason,
                   tone: "solid",
                   ariaLabel: `Say hi to ${first}`,
@@ -73,6 +74,7 @@ export function PeopleAmbient({
                 !p.hasTeam && {
                   key: "team",
                   label: "Add to a team",
+                  icon: Users,
                   reason: p.reason,
                   href: `/app/${encodeURIComponent(orgSlug)}/people?view=chart`,
                 },
@@ -93,6 +95,7 @@ export function PeopleAmbient({
               {
                 key: "resend",
                 label: "Resend invite",
+                icon: Send,
                 reason: i.reason,
                 ariaLabel: `Resend the invite to ${i.email}`,
                 run: () => resendInvitation(orgId, i.id),

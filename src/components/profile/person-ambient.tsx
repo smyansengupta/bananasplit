@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRightLeft, Bell, MessageCircle, Users } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
@@ -64,6 +65,7 @@ export function PersonAmbient({
             action={{
               key: "hi",
               label: "Say hi",
+              icon: MessageCircle,
               reason,
               tone: "solid",
               ariaLabel: `Say hi to ${first}`,
@@ -82,6 +84,7 @@ export function PersonAmbient({
             action={{
               key: "team",
               label: "Add to a team",
+              icon: Users,
               reason,
               // A seat is picked on the org chart itself.
               href: `/app/${encodeURIComponent(orgSlug)}/people?view=chart`,
@@ -103,6 +106,7 @@ export function PersonAmbient({
           action={{
             key: "checkin",
             label: "Check in",
+            icon: Bell,
             reason,
             ariaLabel: `Check in with ${first}`,
             run: () => sendMemberNoteAction(orgId, person.id, "checkin"),
@@ -250,7 +254,10 @@ function HandOneOff({
   const to = handOff.to;
   const toFirst = to.name?.trim().split(/\s+/)[0] ?? "them";
   return (
-    <AmbientPopover className="w-80" action={{ key: "handoff", label: "Hand one off", reason }}>
+    <AmbientPopover
+      className="w-80"
+      action={{ key: "handoff", label: "Hand one off", icon: ArrowRightLeft, reason }}
+    >
       {(close) => (
         <div className="space-y-2">
           <p className="text-muted-foreground text-[13px]">

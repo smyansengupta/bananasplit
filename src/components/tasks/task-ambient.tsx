@@ -192,7 +192,13 @@ function itemFor(
             text={text}
             icon={a.kind === "nudge" ? Bell : a.kind === "follow-up" ? MessageCircle : LockOpen}
             send={comment(orgId, task.id, a.personId!, personName, a.kind)}
-            done={a.kind === "follow-up" ? `Followed up with ${who}` : `Asked ${who}`}
+            done={
+              a.kind === "nudge"
+                ? `Nudged ${who}`
+                : a.kind === "follow-up"
+                  ? `Followed up with ${who}`
+                  : `Asked ${who}`
+            }
           />
         ),
       };

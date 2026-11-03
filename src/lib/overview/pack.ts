@@ -72,17 +72,26 @@ export function splitEvenly(
   return best;
 }
 
-/** Shares each column's shortfall out among its widgets, so all end at the tallest. */
+/**
+ * Shares each column's shortfall out among its widgets by their heights, so
+ * all end at the tallest and a small card grows least.
+ */
 function evenUp(columns: readonly number[][], heights: readonly number[], gap: number) {
   const hs = columns.map((c) => columnHeight(c, heights, gap));
   const height = Math.max(0, ...hs);
   const extra = heights.map(() => 0);
   columns.forEach((c, k) => {
     const short = height - hs[k]!;
-    const each = Math.floor(short / c.length);
+    const total = c.reduce((sum, i) => sum + heights[i]!, 0);
+    let given = 0;
     c.forEach((i, j) => {
-      // The last takes the odd pixels.
-      extra[i] = j === c.length - 1 ? short - each * (c.length - 1) : each;
+      // The last takes what rounding left.
+      const share =
+        j === c.length - 1
+          ? short - given
+          : Math.floor(total > 0 ? (short * heights[i]!) / total : short / c.length);
+      extra[i] = share;
+      given += share;
     });
   });
   return { extra, height };
