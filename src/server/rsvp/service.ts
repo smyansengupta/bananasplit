@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 
 import { Prisma } from "@/generated/prisma/client";
 import { placeRegistration, promotableCount, type ClosedReason } from "@/lib/rsvp/format";
-import { queueCrmRefreshFor } from "@/server/crm/schedule";
+import { queueCrmRefreshFor } from "@/server/crm/refresh-queue";
 import { enqueueJob, prepareJob, type EnqueueInput } from "@/server/jobs/enqueue";
 
 /**

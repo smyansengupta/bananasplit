@@ -11,7 +11,7 @@ import { logActivity } from "../activity";
 import { companyByDomain } from "../companies";
 import { createDeal } from "../deals";
 import { emitCrmEvent } from "../events";
-import { queueCrmRefreshFor } from "../schedule";
+import { queueCrmRefreshFor } from "../refresh-queue";
 import { createPerson, updatePerson } from "../people";
 
 /**

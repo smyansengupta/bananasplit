@@ -29,7 +29,7 @@ export const MERGE_FIELDS: readonly MergeField[] = [
   { key: "last_gift", label: "Their last gift", example: "$250", group: "History" },
   { key: "my_name", label: "Your name", example: "Jackson Lamoureux", group: "You" },
   { key: "my_first_name", label: "Your first name", example: "Jackson", group: "You" },
-  { key: "organization", label: "Your organization", example: "Robotics Club", group: "You" },
+  { key: "organization", label: "Your organization", example: "Harbor Robotics", group: "You" },
 ];
 
 const KNOWN = new Set(MERGE_FIELDS.map((f) => f.key));

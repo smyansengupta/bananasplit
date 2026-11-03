@@ -25,7 +25,7 @@ describe("sorting by a custom CRM column", () => {
   });
 
   it("orders choices in the order they're listed, not by their names", () => {
-    const f = field("SELECT", { choices: [{ id: "c_hot", label: "Hot" }, { id: "c_warm", label: "Warm" }, { id: "c_cold", label: "Cold" }] });
+    const f = field("SELECT", { choices: [{ id: "c_hot", label: "Hot", color: "red" }, { id: "c_warm", label: "Warm", color: "orange" }, { id: "c_cold", label: "Cold", color: "blue" }] });
     expect(orderByCustom(rows(["c_cold", "c_hot", "c_warm"]), f, "asc")).toEqual(["r1", "r2", "r0"]);
     expect(customSortValue(f, "gone")).toBeNull();
   });

@@ -2,7 +2,7 @@ import { AttendanceMethod, RecordSource } from "@/generated/prisma/client";
 import type { TxClient } from "@/server/db/context";
 import { findOrCreateContact, newId } from "@/server/databases/admin";
 import { termOf } from "@/server/databases/format";
-import { queueCrmRefreshFor } from "@/server/crm/schedule";
+import { queueCrmRefreshFor } from "@/server/crm/refresh-queue";
 import { afterDataChange } from "@/server/databases/rollups";
 
 /**

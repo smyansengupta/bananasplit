@@ -1,5 +1,5 @@
 import type { RSVPStatus } from "@/generated/prisma/client";
-import { queueCrmRefreshFor } from "@/server/crm/schedule";
+import { queueCrmRefreshFor } from "@/server/crm/refresh-queue";
 import type { MemberContext } from "@/server/db/context";
 
 /**
