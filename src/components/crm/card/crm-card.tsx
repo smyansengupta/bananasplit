@@ -90,6 +90,10 @@ export function CrmCard({
       <DialogContent
         showCloseButton={false}
         className="bg-background flex h-[min(88vh,860px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]"
+        // A toast's Undo sits outside the card: clicking it mustn't close the card.
+        onInteractOutside={(e) => {
+          if (e.target instanceof Element && e.target.closest("[data-toaster]")) e.preventDefault();
+        }}
       >
         <DialogDescription className="sr-only">{description ?? plainTitle}</DialogDescription>
         <header className="border-border/60 flex shrink-0 flex-col gap-4 border-b px-6 pt-5 pb-3.5">
