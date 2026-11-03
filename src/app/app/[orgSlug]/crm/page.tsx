@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { CrmTodayKeys } from "@/components/crm/today-keys";
+import { QueueSection } from "@/components/crm/outreach/queue-section";
 import { when } from "@/components/crm/record-page";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -98,6 +99,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
       {(data.open._sum.amountCents ?? 0) > 0 && (
         <p className="text-muted-foreground text-sm">{formatMoney(data.open._sum.amountCents)} in open items.</p>
       )}
+      <QueueSection orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} members={shell.members} everyone={everyone} />
       <CrmTodayKeys hrefs={order.map((i) => crmRecordHref(orgSlug, i.targetKind, i.id))} />
       <div className="grid gap-4 lg:grid-cols-2">
         {GROUPS.map((g) => {
