@@ -79,7 +79,7 @@ export function TaskCard({
   return (
     <div
       className={cn(
-        "bg-card edge rounded-tile flex w-full flex-col gap-2.5 p-3.5 text-sm transition-[box-shadow,transform] duration-200 ease-(--ease-ink)",
+        "bg-card edge rounded-tile @container flex w-full flex-col gap-2.5 p-3.5 text-sm transition-[box-shadow,transform] duration-200 ease-(--ease-ink)",
         "group-hover:shadow-e2 motion-safe:group-hover:-translate-y-0.5",
         priv && "border border-dashed",
         dragging &&

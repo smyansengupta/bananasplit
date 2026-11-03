@@ -65,26 +65,33 @@ export function TaskAmbientActions({
   page = false,
   only,
   why = false,
+  short = false,
   className,
   align,
 }: {
   task: TaskItem;
   /** The task page (Follow up shows there). */
   page?: boolean;
+  /** A board card: "Nudge" without the name (their face is right beside it). */
+  short?: boolean;
   /** Just these kinds. */
   only?: readonly TaskAmbientKind[];
   why?: boolean;
   className?: string;
   align?: "start" | "end";
 }) {
-  const items = useTaskAmbientItems(task, { page, only });
+  const items = useTaskAmbientItems(task, { page, only, short });
   return <AmbientRow items={items} why={why} className={className} align={align} />;
 }
 
 /** The task's ambient things, as AmbientRow items (the first reason is its why line). */
 export function useTaskAmbientItems(
   task: TaskItem,
-  { page = false, only }: { page?: boolean; only?: readonly TaskAmbientKind[] } = {},
+  {
+    page = false,
+    only,
+    short = false,
+  }: { page?: boolean; only?: readonly TaskAmbientKind[]; short?: boolean } = {},
 ): AmbientItem[] {
   const { org, viewer, actor, memberById } = useTasks();
   const editable = canEditTask(actor, accessSubjectOf(task));
@@ -103,7 +110,7 @@ export function useTaskAmbientItems(
     (id && (memberById.get(id)?.name ?? (id === task.ownerId ? task.owner?.name : null))) ||
     (id === task.createdById ? task.createdBy?.name : null) ||
     null;
-  return found.map((a) => itemFor(a, task, org.id, org.todayKey, nameOf(a.personId)));
+  return found.map((a) => itemFor(a, task, org.id, org.todayKey, nameOf(a.personId), short));
 }
 
 /** The ask as a comment that mentions them: it lands in their Inbox, saying what it is. */
@@ -124,6 +131,7 @@ function itemFor(
   orgId: string,
   todayKey: string,
   personName: string | null,
+  short = false,
 ): AmbientItem {
   const who = firstName(personName);
   const base = { key: a.kind, reason: a.reason };
@@ -175,7 +183,9 @@ function itemFor(
     case "unblock": {
       const label =
         a.kind === "nudge"
-          ? `Nudge ${who}`
+          ? short
+            ? "Nudge"
+            : `Nudge ${who}`
           : a.kind === "follow-up"
             ? "Follow up"
             : "Ask to unblock";
@@ -187,7 +197,7 @@ function itemFor(
           <AmbientMessage
             label={label}
             reason={a.reason}
-            ariaLabel={`${label}: ${task.title}`}
+            ariaLabel={`${a.kind === "nudge" ? `Nudge ${who}` : label}: ${task.title}`}
             hint={`Comments on the task and mentions ${who}.`}
             text={text}
             icon={a.kind === "nudge" ? Bell : a.kind === "follow-up" ? MessageCircle : LockOpen}

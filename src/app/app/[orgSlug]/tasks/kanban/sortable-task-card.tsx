@@ -69,11 +69,13 @@ export function SortableTaskCard({
             todayKey={todayKey}
             showEpic={showEpic}
             ambient={
-              // A card is narrow: the pills tighten so the faces stay on the date's line.
+              // A card is narrow: the pills tighten (and lose their icon on the
+              // narrowest) so the faces stay on the date's line.
               <TaskAmbientActions
                 task={task}
                 align="start"
-                className="min-w-0 [&_a]:px-2.5 [&_button]:px-2.5"
+                short
+                className="min-w-0 [&_a]:px-2.5 [&_button]:px-2.5 @max-[15rem]:[&_svg]:hidden"
               />
             }
             check={
