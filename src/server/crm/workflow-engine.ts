@@ -370,10 +370,18 @@ const TABLE: Record<WorkflowObject, Prisma.Sql> = {
   deal: Prisma.sql`"CrmDeal"`,
 };
 
-const DATE_COLUMNS: Record<WorkflowObject, Record<string, string>> = {
-  person: { nextFollowUpAt: "nextFollowUpAt", lastContactedAt: "lastContactedAt", createdAt: "createdAt" },
-  company: { nextFollowUpAt: "nextFollowUpAt", lastContactedAt: "lastContactedAt", createdAt: "createdAt" },
-  deal: { expectedOn: "expectedOn", nextStepAt: "nextStepAt", closedAt: "closedAt", createdAt: "createdAt" },
+const COLUMN: Record<string, Prisma.Sql> = {
+  nextFollowUpAt: Prisma.sql`t."nextFollowUpAt"`,
+  lastContactedAt: Prisma.sql`t."lastContactedAt"`,
+  createdAt: Prisma.sql`t."createdAt"`,
+  expectedOn: Prisma.sql`t."expectedOn"`,
+  nextStepAt: Prisma.sql`t."nextStepAt"`,
+  closedAt: Prisma.sql`t."closedAt"`,
+};
+const DATE_COLUMNS: Record<WorkflowObject, readonly string[]> = {
+  person: ["nextFollowUpAt", "lastContactedAt", "createdAt"],
+  company: ["nextFollowUpAt", "lastContactedAt", "createdAt"],
+  deal: ["expectedOn", "nextStepAt", "closedAt", "createdAt"],
 };
 
 function utcDay(d: Date): string {
@@ -407,9 +415,8 @@ export async function scheduledTargets(
         LIMIT ${PER_WORKFLOW}`;
       return rows.map((r) => ({ id: r.id, spell: `${p.field}:${r.v.slice(0, 10)}` }));
     }
-    const column = DATE_COLUMNS[object][p.field];
-    if (!column) return [];
-    const col = Prisma.raw(`t."${column}"`);
+    if (!DATE_COLUMNS[object].includes(p.field)) return [];
+    const col = COLUMN[p.field]!;
     const rows = await db.$queryRaw<{ id: string; v: Date }[]>`
       SELECT t.id, ${col} AS v FROM ${TABLE[object]} t
       WHERE t."organizationId" = ${organizationId} AND t."deletedAt" IS NULL ${pipelineSql}

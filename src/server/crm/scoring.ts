@@ -93,11 +93,17 @@ function windowsOf(rules: readonly ScoreRule[]) {
 async function writeScores(db: TxClient, table: "CrmPerson" | "CrmDeal", organizationId: string, changed: { id: string; score: number }[]) {
   if (changed.length === 0) return;
   const values = Prisma.join(changed.map((c) => Prisma.sql`(${c.id}, ${c.score}::int)`));
-  const t = Prisma.raw(`"${table}"`);
-  await db.$executeRaw`
-    UPDATE ${t} AS x SET score = v.score
-    FROM (VALUES ${values}) AS v(id, score)
-    WHERE x.id = v.id AND x."organizationId" = ${organizationId}`;
+  if (table === "CrmPerson") {
+    await db.$executeRaw`
+      UPDATE "CrmPerson" AS x SET score = v.score
+      FROM (VALUES ${values}) AS v(id, score)
+      WHERE x.id = v.id AND x."organizationId" = ${organizationId}`;
+  } else {
+    await db.$executeRaw`
+      UPDATE "CrmDeal" AS x SET score = v.score
+      FROM (VALUES ${values}) AS v(id, score)
+      WHERE x.id = v.id AND x."organizationId" = ${organizationId}`;
+  }
 }
 
 /**

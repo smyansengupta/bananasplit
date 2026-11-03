@@ -847,7 +847,7 @@ export function WorkflowBuilder({
       {dry && (
         <Card className="gap-3 p-5 sm:p-6">
           <h2 className="heading text-lg">Tried on {dry.target ?? "nothing yet"}</h2>
-          {dry.target ? <RunLog log={dry.log} /> : <p className="text-muted-foreground text-sm">There's nothing for it to run on yet.</p>}
+          {dry.target ? <RunLog log={dry.log} /> : <p className="text-muted-foreground text-sm">There&apos;s nothing for it to run on yet.</p>}
           <p className="text-muted-foreground text-xs">Nothing was changed. The try is kept in the run history.</p>
         </Card>
       )}
