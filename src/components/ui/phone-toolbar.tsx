@@ -18,9 +18,9 @@ import {
 /**
  * The one toolbar a list page has on a phone (Tasks, Files, People), so they
  * all work the same way: on the left the page's own switch (whose tasks,
- * grid or list), then Filters with a count (it opens a FilterSheet), and a
- * search icon at the right that turns the row into the search box, with
- * Cancel to put the row back. `middle` (Tasks' layout picker, an icon)
+ * grid or list), then the Filters icon with a count (it opens a FilterSheet),
+ * and a search icon at the right that turns the row into the search box, with
+ * Cancel to put the row back. `middle` (Tasks' layout picker, named)
  * leads the same row. Shown below md only; the desktop keeps its own bar.
  */
 export function PhoneToolbar({
@@ -72,15 +72,22 @@ export function PhoneToolbar({
       {middle}
       {leading}
       <span className="flex-1" />
+      {/* Filters as its icon, like search beside it; the count sits on its corner. */}
       <Button
         variant="outline"
-        className="h-10 shrink-0 gap-1.5 rounded-full px-3"
+        size="icon"
+        className="relative shrink-0"
         onClick={onFilters}
         aria-haspopup="dialog"
+        aria-label={filterCount > 0 ? `Filters, ${filterCount} on` : "Filters"}
+        title="Filters"
       >
         <SlidersHorizontal className="size-4" aria-hidden="true" />
-        Filters
-        {filterCount > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{filterCount}</Badge>}
+        {filterCount > 0 && (
+          <Badge className="absolute -end-1 -top-1 h-4 min-w-4 px-1 text-[10px]">
+            {filterCount}
+          </Badge>
+        )}
       </Button>
       <Button
         variant="outline"
