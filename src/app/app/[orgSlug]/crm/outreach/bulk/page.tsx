@@ -11,8 +11,9 @@ import { crmShell } from "../../shell";
 
 export const metadata = { title: "Bulk email" };
 
-export default async function BulkPage({ params }: PageProps<"/app/[orgSlug]/crm/outreach/bulk">) {
+export default async function BulkPage({ params, searchParams }: PageProps<"/app/[orgSlug]/crm/outreach/bulk">) {
   const { orgSlug } = await params;
+  const { list } = (await searchParams) as Record<string, string | string[] | undefined>;
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const orgId = shell.org.id;
@@ -50,6 +51,7 @@ export default async function BulkPage({ params }: PageProps<"/app/[orgSlug]/crm
         templates={data.templates}
         sender={sender}
         canSend={shell.access.manager}
+        initialList={typeof list === "string" ? list : null}
       />
       {data.recent.length > 0 && (
         <section className="bg-card ring-foreground/6 rounded-card space-y-2 p-5 ring-1">
