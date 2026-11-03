@@ -286,6 +286,8 @@ export async function PlanOverlay({ shell, orgSlug, open }: OverlayProps<"plan">
         ),
         count: counted.length,
         inIt,
+        enrolled: data.enrollments.length,
+        notYet: counted.filter((r) => !r.inIt).length,
         sample: counted.slice(0, 3).map((r) => ({ id: r.personId, name: r.name })),
         excluded: rows
           .filter((r) => r.why)

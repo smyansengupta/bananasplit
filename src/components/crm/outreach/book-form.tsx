@@ -228,7 +228,11 @@ export function BookForm({
               </div>
               <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-2.5">
                 <b className="text-lg">{day ? longDay(day) : "Pick a day"}</b>
-                <div className="flex flex-col gap-2" role="group" aria-label="Times">
+                <div
+                  className="-me-2 flex max-h-[360px] flex-col gap-2 overflow-y-auto pe-2"
+                  role="group"
+                  aria-label="Times"
+                >
                   {daySlots.length === 0 && (
                     <span className="text-muted-foreground text-sm">No times this day.</span>
                   )}

@@ -108,6 +108,10 @@ export interface SequencePlanData {
     offers: AudienceChip[];
     count: number;
     inIt: number;
+    /** Everyone ever put in it. */
+    enrolled: number;
+    /** Match today and are neither in it nor left out. */
+    notYet: number;
     sample: { id: string; name: string }[];
     excluded: { personId: string; name: string; why: string; canInclude: boolean }[];
     excludedCount: number;
@@ -438,7 +442,7 @@ function SequencePlan({ orgId, data }: { orgId: string; data: SequencePlanData }
 
   const who = data.who;
   const sender = extras.from === "owner" ? "sent by each person's owner" : `sent by ${data.me}`;
-  const count = running ? Math.max(who.inIt, 0) : who.count;
+  const count = running || data.status === "paused" ? who.enrolled : who.count;
 
   return (
     <CrmCard
@@ -550,6 +554,23 @@ function SequencePlan({ orgId, data }: { orgId: string; data: SequencePlanData }
                       match today{who.inIt ? `, ${who.inIt} in it now` : ""}
                     </span>
                   </div>
+                  {running && who.notYet > 0 && (
+                    <span className="flex flex-nowrap items-center gap-2.5">
+                      <AmbientButton
+                        action={{
+                          key: "add",
+                          label: `Add the ${who.notYet}`,
+                          tone: "solid",
+                          reason: `${who.notYet} match and aren't in it yet`,
+                          run: () => startPlanAction(orgId, data.id),
+                          done: "Added",
+                        }}
+                      />
+                      <AmbientWhy className="min-w-0 truncate">
+                        {who.notYet} match and aren&apos;t in it yet
+                      </AmbientWhy>
+                    </span>
+                  )}
                   {who.sample.length > 0 && (
                     <div className="flex items-center gap-2.5">
                       <div className="flex">
@@ -610,6 +631,9 @@ function SequencePlan({ orgId, data }: { orgId: string; data: SequencePlanData }
                 </>
               ) : (
                 <p className="text-muted-foreground text-sm">
+                  {who.enrolled > 0
+                    ? `${who.enrolled} ${who.enrolled === 1 ? "person was" : "people were"} added by hand. `
+                    : ""}
                   Pick who it&apos;s for above. People who asked not to be contacted, unsubscribed,
                   bounced or are already in another plan are left out, each with the reason.
                 </p>
