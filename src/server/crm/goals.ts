@@ -37,6 +37,15 @@ function periodLabelOf(start: string, end: string): string {
   return `Q${q} ${y}`;
 }
 
+/** A goal's period as a key ("2026-Q4", or "2026" for a whole year). */
+export function goalPeriodKey(start: Date, end: Date): string {
+  const s = day(start);
+  const year = parsePeriodKey(s.slice(0, 4));
+  if (year && year.start === s && year.end === day(end)) return year.key;
+  const y = start.getUTCFullYear();
+  return `${y}-Q${Math.floor(start.getUTCMonth() / 3) + 1}`;
+}
+
 /** What a goal's metric has reached so far in its period. */
 export async function goalActual(
   db: TxClient,

@@ -9,11 +9,13 @@ import {
   type CrmOpenKind,
 } from "@/lib/crm/overlay";
 
+import { DealOverlay } from "./deal";
+import { GoalOverlay } from "./goal";
 import { LogOverlay } from "./log";
 import { NewOverlay } from "./new";
 import { PersonOverlay } from "./person";
 import { PowerOverlay } from "./power";
-import { CompanyOverlay, DealOverlay } from "./record";
+import { CompanyOverlay } from "./record";
 
 /**
  * What's open over a CRM page (?open=, src/lib/crm/overlay.ts), loaded on
@@ -40,7 +42,7 @@ type OverlayLoader<K extends CrmOpenKind> = (
   props: OverlayProps<K>,
 ) => Promise<ReactNode> | ReactNode;
 
-/** One entry per kind of card. Later cards (ask, goal) register here. */
+/** One entry per kind of card. Later cards (ask) register here. */
 export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   person: PersonOverlay,
   company: CompanyOverlay,
@@ -48,6 +50,7 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   power: PowerOverlay,
   log: LogOverlay,
   new: NewOverlay,
+  goal: GoalOverlay,
 };
 
 export async function CrmOverlays({
