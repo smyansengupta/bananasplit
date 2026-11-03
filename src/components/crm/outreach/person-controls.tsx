@@ -49,7 +49,7 @@ export function PersonOutreachControls({
   };
   return (
     <div className="space-y-4 text-sm">
-      <div className="grid gap-1.5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <span className="text-muted-foreground flex items-center gap-1.5">
           <Repeat className="size-3.5" aria-hidden="true" />
           Keep in touch
@@ -67,7 +67,7 @@ export function PersonOutreachControls({
           ))}
         </div>
       </div>
-      <div className="grid gap-1.5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <span className="text-muted-foreground">Follow up</span>
         <div className="flex flex-wrap gap-1.5">
           {(
@@ -127,7 +127,7 @@ export function PersonOutreachControls({
           ))}
         </ul>
       )}
-      <div className="grid gap-1.5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <span className="text-muted-foreground flex items-center gap-1.5">
           <Link2 className="size-3.5" aria-hidden="true" />
           Their own update link

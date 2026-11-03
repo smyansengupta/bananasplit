@@ -114,7 +114,7 @@ export function recapLines(r: RecapInput): string[] {
     );
   }
   if (r.deliverables.length) {
-    out.push(`${done} of ${r.deliverables.length} things we promised ${done === 1 ? "is" : "are"} done.`);
+    out.push(`${done} of ${r.deliverables.length} ${r.deliverables.length === 1 ? "promise" : "promises"} kept so far.`);
   }
   if (!out.length) out.push(`Thank you for working with ${r.orgName}. This page fills in as things happen.`);
   return out;

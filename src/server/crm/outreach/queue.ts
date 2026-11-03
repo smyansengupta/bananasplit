@@ -205,7 +205,8 @@ export async function followUpQueue(
         { keepInTouchDays: { not: null } },
         { lastContactedAt: { lt: new Date(now.getTime() - days(COLD_AFTER_DAYS)), not: null } },
       ],
-      ...ownedBy,
+      // Theirs too, without replacing the OR above.
+      AND: [ownedBy],
     },
     orderBy: { strength: "desc" },
     take: 300,
@@ -216,7 +217,7 @@ export async function followUpQueue(
       if (cadenceLapsed(p.lastContactedAt, p.keepInTouchDays, now)) {
         add(p.id, { kind: "cadence", label: `Every ${p.keepInTouchDays} days: time to check in`, at: p.lastContactedAt });
       }
-    } else if (p.lastContactedAt) {
+    } else if (p.lastContactedAt && now.getTime() - p.lastContactedAt.getTime() > days(COLD_AFTER_DAYS)) {
       add(p.id, { kind: "cold", label: "Going cold", at: p.lastContactedAt });
     }
   }

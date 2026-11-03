@@ -290,6 +290,6 @@ describe("briefs and recaps", () => {
           { title: "Talk", doneAt: null, dueOn: null },
         ],
       }),
-    ).toEqual(["One event so far, with 80 people checked in and 120 signed up.", "1 of 2 things we promised is done."]);
+    ).toEqual(["One event so far, with 80 people checked in and 120 signed up.", "1 of 2 promises kept so far."]);
   });
 });

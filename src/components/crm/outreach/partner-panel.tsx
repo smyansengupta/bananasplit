@@ -103,13 +103,13 @@ export function PartnerPanel({
           </Button>
         </div>
       </form>
-      <div className="grid gap-1.5 border-t pt-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-1.5 border-t pt-3">
         <span className="text-muted-foreground flex items-center gap-1.5">
           <Link2 className="size-3.5" aria-hidden="true" />
           Their private page
         </span>
         {live.map((l) => (
-          <div key={l.id} className="space-y-1">
+          <div key={l.id} className="min-w-0 space-y-1">
             <CopyLink url={l.url!} label="Copy their link" />
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground flex-1 text-xs">
