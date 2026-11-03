@@ -66,6 +66,10 @@ import type { BoardWidget } from "@/lib/boards";
 import type { Role } from "@/generated/prisma/enums";
 import { HERE_NOW_RECENT } from "@/server/overview/here-now";
 import { loadMainWidgets, loadOwnTxWidgets, readHomeShared } from "@/server/overview/home-widgets";
+import { AmbientButton } from "@/components/ambient/ambient-button";
+import { Network } from "@/components/icons";
+import { placementSummary } from "@/lib/org-chart/self-place";
+import { getAskDraft } from "@/server/org-chart/service";
 import { recapTime } from "@/lib/overview/home-acts";
 import { isNight, scoreHome, type HomeSignals } from "@/lib/overview/priority";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
@@ -827,6 +831,10 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   // Nothing on Home is ever narrower than a square: Here now keeps its size with only you in.
   const compact: string[] = [];
 
+  // The org chart is asking everyone where they sit, and this member hasn't said.
+  const asking = await getAskDraft(org.id, user.id).catch(() => null);
+  const askWhereYouSit = asking !== null && !placementSummary(asking.positions).placed.has(user.id);
+
   // What leads Ambient Home: every widget scored from what's going on now.
   const minutesUntil = (at: Date) => Math.ceil((at.getTime() - now.getTime()) / 60_000);
   const underWay = (e: { startsAt: Date; endsAt: Date }) => e.startsAt <= now && e.endsAt > now;
@@ -1102,6 +1110,23 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
               hiddenCount={data.hiddenUpNext.length}
             />
             {started}
+            {askWhereYouSit && (
+              <p className="bg-muted/60 rounded-tile flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-[14px]">
+                <span className="min-w-0 flex-1 font-medium">
+                  Where do you sit on the org chart? Your best guess is already picked.
+                </span>
+                <AmbientButton
+                  action={{
+                    key: "place-self",
+                    label: "Answer",
+                    icon: <Network />,
+                    tone: "solid",
+                    reason: "The org chart is asking everyone",
+                    href: `${base}/people?view=chart`,
+                  }}
+                />
+              </p>
+            )}
           </div>
         }
       />
