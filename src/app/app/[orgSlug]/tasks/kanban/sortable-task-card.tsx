@@ -68,7 +68,14 @@ export function SortableTaskCard({
             task={{ ...task, status }}
             todayKey={todayKey}
             showEpic={showEpic}
-            ambient={<TaskAmbientActions task={task} align="start" />}
+            ambient={
+              // A card is narrow: the pills tighten so the faces stay on the date's line.
+              <TaskAmbientActions
+                task={task}
+                align="start"
+                className="min-w-0 [&_a]:px-2.5 [&_button]:px-2.5"
+              />
+            }
             check={
               done ? (
                 <TaskCheck

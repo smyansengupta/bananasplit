@@ -123,14 +123,14 @@ export function TaskCard({
         <ProgressBar done={progress.done} total={progress.total} color={color} />
       )}
 
-      <div className="text-muted-foreground flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px]">
-        {/* The date with its ambient buttons right beside it; on a narrow card the faces wrap, not the buttons. */}
-        <span className="flex items-center gap-2.5">
+      {/* One line: the date, its ambient buttons right beside it, then the faces. */}
+      <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-[13px]">
+        <span className="shrink-0">
           <DueLabel dueDate={task.dueDate} todayKey={todayKey} done={done} />
-          {ambient}
         </span>
+        {ambient}
         {task._count.comments > 0 && (
-          <span className="flex items-center gap-1">
+          <span className="flex shrink-0 items-center gap-1">
             <MessageSquare className="size-3.5" aria-hidden="true" />
             {task._count.comments}
           </span>
