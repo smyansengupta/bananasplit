@@ -7,12 +7,14 @@ import {
   viewsFor,
   type SetupKind,
 } from "@/lib/crm/templates";
+import { planOwners, type OwnerMode } from "@/lib/crm/setup-owners";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
 import { CrmError, requireCrm, type CrmActor } from "./access";
 import { ensureCrmDatabases } from "./databases";
 import { createPipelineFrom } from "./pipelines";
 import { moveSponsorsIn, type SponsorsMoveResult } from "./sponsors";
+import { saveOrgRouting } from "./outreach/intake";
 import { ensurePipelineViews, ensureStarterReports } from "./starter";
 
 /**
@@ -132,4 +134,55 @@ export async function applyAlumniCadence(actor: CrmActor): Promise<number> {
     data: { keepInTouchDays: ALUMNI_KEEP_IN_TOUCH_DAYS },
   });
   return r.count;
+}
+
+/** At most this many people are shared out at setup; the rest keep whoever brought them in. */
+const SHARE_OUT_MAX = 5000;
+
+/**
+ * First-time setup, step 2: who looks after the people setup just brought
+ * in (made since `since`, by the person running it or nobody). Split
+ * evenly, by relationship, or nobody yet; the same choice becomes the
+ * routing for people who come in later. Owners and admins; a Personal
+ * space has one person, so nothing changes there.
+ */
+export async function shareOutOwners(
+  actor: CrmActor,
+  mode: OwnerMode,
+  since: Date,
+): Promise<{ shared: number }> {
+  const access = await requireCrm(actor);
+  if (!access.admin) throw new CrmError("Ask an owner or admin to set up the CRM.");
+  if (access.personal) return { shared: 0 };
+  if (mode !== "split" && mode !== "rel" && mode !== "none") throw new CrmError("Pick who looks after them.");
+  const { db, organizationId, userId } = actor;
+  // Setup is minutes, not days: an old or odd `since` is clamped to the last two hours.
+  const floor = new Date(Date.now() - 2 * 3_600_000);
+  const from = Number.isFinite(since.getTime()) && since > floor ? since : floor;
+  const people = await db.crmPerson.findMany({
+    where: { organizationId, deletedAt: null, createdAt: { gte: from }, OR: [{ ownerId: userId }, { ownerId: null }] },
+    select: { id: true, relationship: true, userId: true },
+    take: SHARE_OUT_MAX,
+  });
+  const members = (await db.membership.findMany({ where: { organizationId }, select: { userId: true }, take: 2000 })).map(
+    (m) => m.userId,
+  );
+  // A member brought in as a person looks after themselves.
+  const plan = planOwners(
+    mode,
+    people.map((p) => ({ id: p.id, relationship: p.relationship, knows: p.userId })),
+    members,
+  );
+  const byOwner = new Map<string | null, string[]>();
+  for (const [id, owner] of plan.assign) byOwner.set(owner, [...(byOwner.get(owner) ?? []), id]);
+  for (const [owner, ids] of byOwner) {
+    for (let i = 0; i < ids.length; i += 500) {
+      await db.crmPerson.updateMany({
+        where: { organizationId, id: { in: ids.slice(i, i + 500) } },
+        data: { ownerId: owner },
+      });
+    }
+  }
+  if (plan.routing.mode !== "off" || mode === "none") await saveOrgRouting(actor, access, plan.routing);
+  return { shared: people.length };
 }

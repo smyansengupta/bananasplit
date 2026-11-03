@@ -1,5 +1,13 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { CHOICE_COLORS } from "@/lib/databases/fields";
+import {
+  readAutonomy,
+  readSending,
+  type Autonomy,
+  type SendingPrefs,
+  type TrustItem,
+  type TrustLevel,
+} from "@/lib/crm/settings-prefs";
 import type { RelationshipType } from "@/lib/crm/templates";
 import { writeOrgAuditLog } from "@/server/audit";
 
@@ -101,4 +109,54 @@ export async function setRequired(
     where: { id: def.id },
     data: { columns: next as Prisma.InputJsonArray },
   });
+}
+
+/**
+ * CRM settings > Sending: the window group mail waits for (hours in the
+ * organization's timezone, weekends or not) and the unsubscribe line.
+ * Whoever runs the CRM. Saved cleaned (readSending).
+ */
+export async function saveSending(actor: CrmActor, input: Partial<SendingPrefs>): Promise<SendingPrefs> {
+  requireManager(await requireCrm(actor));
+  const row = await actor.db.crmSettings.findUnique({
+    where: { organizationId: actor.organizationId },
+    select: { sending: true },
+  });
+  const current = readSending(row?.sending);
+  const startHour = input.startHour ?? current.startHour;
+  const endHour = input.endHour ?? current.endHour;
+  if (!Number.isInteger(startHour) || !Number.isInteger(endHour) || startHour < 0 || endHour > 24 || endHour <= startHour) {
+    throw new CrmError("Pick a start before the end.");
+  }
+  const next = readSending({ ...current, ...input, startHour, endHour });
+  await actor.db.crmSettings.update({
+    where: { organizationId: actor.organizationId },
+    data: { sending: next as unknown as Prisma.InputJsonObject },
+  });
+  return next;
+}
+
+/** CRM settings > Automations, how much it may do alone. Whoever runs the CRM. */
+export async function saveAutonomy(
+  actor: CrmActor,
+  input: Partial<Record<TrustItem, TrustLevel>>,
+): Promise<Autonomy> {
+  requireManager(await requireCrm(actor));
+  const row = await actor.db.crmSettings.findUnique({
+    where: { organizationId: actor.organizationId },
+    select: { autonomy: true },
+  });
+  const next = readAutonomy({ ...readAutonomy(row?.autonomy), ...input });
+  await actor.db.crmSettings.update({
+    where: { organizationId: actor.organizationId },
+    data: { autonomy: next as unknown as Prisma.InputJsonObject },
+  });
+  await writeOrgAuditLog(actor.db, {
+    organizationId: actor.organizationId,
+    action: "crm.autonomy_changed",
+    targetType: "CrmSettings",
+    targetId: actor.organizationId,
+    diff: { ...next },
+  });
+  return next;
 }

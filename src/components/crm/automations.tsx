@@ -13,7 +13,6 @@ import {
   saveScoreRuleAction,
   setWorkflowStatusAction,
 } from "@/app/app/[orgSlug]/crm/automation-actions";
-import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,9 +27,9 @@ import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
 
 /**
- * The Automations tab's lists: the organization's workflows (switched on
- * and off right on the row), the ready-made recipes (one click), and the
- * score rules with the learned model's state.
+ * CRM settings > Automations' lists: the organization's workflows
+ * (switched on and off right on the row), the ready-made recipes (one
+ * click), and the score rules with the learned model's state.
  */
 
 export interface WorkflowRow {
@@ -64,56 +63,39 @@ function useAct(orgId: string) {
   return { pending, act, orgId };
 }
 
+/**
+ * The running list in CRM settings > Automations, inside its card: each
+ * automation's name and what it does, a failed count when there is one,
+ * and its switch on the right (off stops it right away).
+ */
 export function WorkflowList({ orgId, orgSlug, rows }: { orgId: string; orgSlug: string; rows: WorkflowRow[] }) {
   const { pending, act } = useAct(orgId);
-  const base = `/app/${orgSlug}/crm/automations`;
+  const base = `/app/${orgSlug}/crm/settings/automations`;
   if (rows.length === 0) {
-    return (
-      <Card>
-        <EmptyState
-          icon={Zap}
-          title="No automations yet"
-          description="Switch on a recipe in one click, describe one in words, or build your own."
-          action={
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button variant="outline" asChild>
-                <Link href={`${base}?view=recipes`}>See recipes</Link>
-              </Button>
-              <Button asChild>
-                <Link href={`${base}/new?describe=1`}>
-                  <Sparkles className="size-4" /> Describe one
-                </Link>
-              </Button>
-            </div>
-          }
-        />
-      </Card>
-    );
+    return <p className="text-muted-foreground py-2 text-sm">None yet. Describe one above, or start from a recipe.</p>;
   }
   return (
-    <Card className="gap-0 p-2">
-      <ul>
-        {rows.map((r) => (
-          <li key={r.id} className="hover:bg-muted/60 rounded-field flex items-center gap-3 px-3 py-3 [li+&]:border-t">
-            <Switch
-              checked={r.status === "ON"}
-              disabled={pending}
-              aria-label={r.status === "ON" ? `Switch off ${r.name}` : `Switch on ${r.name}`}
-              onCheckedChange={(on) => act(() => setWorkflowStatusAction(orgId, r.id, on ? "ON" : "OFF"), on ? "Switched on" : "Switched off")}
-            />
-            <Link href={`${base}/${r.id}`} className="min-w-0 flex-1">
-              <span className="block font-medium">{r.name}</span>
-              <span className="text-muted-foreground block truncate text-[13px]">{r.summary}</span>
-            </Link>
-            {r.failedRecently > 0 && <Badge variant="destructive">{r.failedRecently} failed this week</Badge>}
-            <span className="text-muted-foreground hidden text-right text-xs sm:block">
-              {r.runCount === 0 ? "Hasn't run" : `Ran ${r.runCount.toLocaleString("en-US")} time${r.runCount === 1 ? "" : "s"}`}
-              {r.lastRun && <span className="block">last {when(r.lastRun)}</span>}
+    <ul className="divide-border divide-y">
+      {rows.map((r) => (
+        <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
+          <Link href={`${base}/${r.id}`} className="group min-w-0 flex-[1_1_16rem]">
+            <b className="block text-[15px] font-semibold group-hover:underline">{r.name}</b>
+            <span className="text-muted-foreground block text-sm">
+              {/[.!?]$/.test(r.summary.trim()) ? r.summary : `${r.summary.trim()}.`}
+              {r.runCount > 0 && r.lastRun ? ` Last ran ${when(r.lastRun)}.` : ""}
             </span>
-          </li>
-        ))}
-      </ul>
-    </Card>
+          </Link>
+          {r.failedRecently > 0 && <Badge variant="destructive">{r.failedRecently} failed this week</Badge>}
+          {r.status === "DRAFT" && <Badge variant="secondary">Draft</Badge>}
+          <Switch
+            checked={r.status === "ON"}
+            disabled={pending}
+            aria-label={r.status === "ON" ? `Switch off ${r.name}` : `Switch on ${r.name}`}
+            onCheckedChange={(on) => act(() => setWorkflowStatusAction(orgId, r.id, on ? "ON" : "OFF"), on ? "Switched on" : "Switched off")}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -131,7 +113,7 @@ const RECIPE_ICONS: Record<string, IconComponent> = { AlarmClock, Briefcase, Han
 
 export function RecipeGrid({ orgId, orgSlug, recipes }: { orgId: string; orgSlug: string; recipes: RecipeCard[] }) {
   const { pending, act } = useAct(orgId);
-  const base = `/app/${orgSlug}/crm/automations`;
+  const base = `/app/${orgSlug}/crm/settings/automations`;
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {recipes.map((r) => {

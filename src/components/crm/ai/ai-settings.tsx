@@ -68,6 +68,7 @@ export function AiSettings({
   agents: initialAgents,
   runs,
   fields,
+  showCap = true,
 }: {
   orgId: string;
   orgSlug: string;
@@ -87,6 +88,8 @@ export function AiSettings({
   agents: { researchNew: boolean; followUp: boolean; followUpDays: number };
   runs: Run[];
   fields: { id: string; name: string; database: string; auto: AiAuto; research: boolean; hasPrompt: boolean }[];
+  /** The cap form; off where the organization's keys card already has it (CRM settings > AI). */
+  showCap?: boolean;
 }) {
   const router = useRouter();
   const [cap, setCap] = useState(usage.capCents === null ? "" : String(usage.capCents / 100));
@@ -183,7 +186,7 @@ export function AiSettings({
             )}
           </div>
         </div>
-        {admin ? (
+        {!showCap ? null : admin ? (
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
@@ -233,11 +236,8 @@ export function AiSettings({
           ))}
         </ol>
         <p className="text-muted-foreground text-xs">
-          Connect Tavily, Hunter or Prospeo in{" "}
-          <Link href={`/app/${orgSlug}/integrations`} className="text-foreground underline-offset-2 hover:underline">
-            Integrations and apps
-          </Link>
-          . Claude web search works with your organization&apos;s Claude key.
+          Add a Tavily, Hunter or Prospeo key under Research and lookups above. Claude web search works with your
+          organization&apos;s Claude key.
         </p>
       </Block>
 

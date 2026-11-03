@@ -17,6 +17,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { notifyUsers } from "@/server/notifications";
 import { createTask, loadTaskEnv, type TaskEnv } from "@/server/tasks/service";
 import { AUTOMATION_WINDOW, nextInWindow } from "@/lib/crm/outreach/schedule";
+import { automationEmailReview, readAutonomy } from "@/lib/crm/settings-prefs";
 
 import type { CrmActor } from "./access";
 import { CrmError } from "./access";
@@ -202,7 +203,9 @@ async function automationEmail(
     if (error instanceof CrmError) return { ok: false, detail: error.message };
     throw error;
   }
-  if (input.review) {
+  // CRM settings > Automations: "Suggest" for automation email drafts every one.
+  const prefs = await db.crmSettings.findUnique({ where: { organizationId }, select: { autonomy: true } });
+  if (automationEmailReview(input.review, readAutonomy(prefs?.autonomy))) {
     if (ctx.dryRun) return { ok: true, detail: `Would draft "${rendered.subject}" to ${input.name} for review.` };
     const draft = await saveDraft(db, {
       organizationId,

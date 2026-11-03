@@ -88,6 +88,8 @@ interface LogState {
 interface LogData {
   headers: string[];
   rows: Record<string, string>[];
+  /** A finished import's skipped rows, by row number (as in errors), until fixed or let go. */
+  skipped?: Record<string, Record<string, string>>;
 }
 
 function readState(raw: unknown): LogState {
@@ -607,12 +609,150 @@ export async function runImportTurn(actor: CrmActor, importId: string, max = TUR
     where: { id: row.id },
     data: {
       filters: state as unknown as Prisma.InputJsonObject,
-      // A finished import keeps its log, not its rows.
-      ...(finished ? { columns: { headers: data.headers ?? [], rows: [] } as unknown as Prisma.InputJsonObject } : {}),
+      // A finished import keeps its log, not its rows: only the skipped
+      // ones, so they can be fixed in CRM settings > Import and export.
+      ...(finished
+        ? {
+            columns: {
+              headers: data.headers ?? [],
+              rows: [],
+              skipped: Object.fromEntries(
+                state.errors.filter((e) => rows[e.row - 2]).map((e) => [String(e.row), rows[e.row - 2]!]),
+              ),
+            } as unknown as Prisma.InputJsonObject,
+          }
+        : {}),
     },
   });
   if (finished) {
     await enqueueJob(db, { orgId: organizationId, kind: "crm-refresh", key: organizationId, payload: {} });
   }
   return { left: rows.length - end };
+}
+
+
+// ---- Rows to fix ----------------------------------------------------------------------------
+
+export interface RowToFix {
+  /** The row number in the file (the header is row 1). */
+  row: number;
+  message: string;
+  /** What the row is called: its name, title or email, as written. */
+  label: string;
+  /** No name or email: an email added here brings it in. */
+  needsEmail: boolean;
+}
+
+export interface ImportToFix {
+  id: string;
+  fileName: string;
+  object: CrmObject;
+  created: number;
+  updated: number;
+  rows: RowToFix[];
+}
+
+/** The viewer's finished imports with skipped rows still to look at (newest first). */
+export async function importsToFix(db: TxClient, organizationId: string, userId: string): Promise<ImportToFix[]> {
+  const logs = await db.crmView.findMany({
+    where: { organizationId, objectKind: "import", createdById: userId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { id: true, name: true, filters: true, columns: true },
+  });
+  const out: ImportToFix[] = [];
+  for (const l of logs) {
+    const state = readState(l.filters);
+    if (state.status !== "done") continue;
+    const skipped = ((l.columns ?? {}) as Partial<LogData>).skipped ?? {};
+    const rows: RowToFix[] = [];
+    for (const e of state.errors) {
+      const raw = skipped[String(e.row)];
+      if (!raw) continue;
+      const f = mapRow(raw, state.mapping).fields;
+      const label = f.name || [f.firstName, f.lastName].filter(Boolean).join(" ") || f.title || f.primaryEmail || `Row ${e.row}`;
+      rows.push({ row: e.row, message: e.message, label, needsEmail: state.object === "person" && !f.primaryEmail });
+    }
+    if (rows.length) {
+      out.push({ id: l.id, fileName: l.name, object: state.object, created: state.created, updated: state.updated, rows });
+    }
+  }
+  return out;
+}
+
+async function loadFixable(actor: CrmActor, importId: string, row: number) {
+  const { db, organizationId, userId } = actor;
+  const log = await db.crmView.findFirst({
+    where: { id: importId, organizationId, objectKind: "import", createdById: userId },
+    select: { id: true, filters: true, columns: true },
+  });
+  if (!log) throw new CrmError("That import isn't here any more.");
+  const state = readState(log.filters);
+  const data = (log.columns ?? {}) as Partial<LogData>;
+  const raw = data.skipped?.[String(row)];
+  if (state.status !== "done" || !raw) throw new CrmError("That row is already sorted.");
+  return { log, state, data, raw };
+}
+
+async function dropRow(
+  db: TxClient,
+  logId: string,
+  state: LogState,
+  data: Partial<LogData>,
+  row: number,
+  outcome: RowOutcome | null,
+): Promise<void> {
+  const skipped = { ...(data.skipped ?? {}) };
+  delete skipped[String(row)];
+  const next: LogState = {
+    ...state,
+    errors: state.errors.filter((e) => e.row !== row),
+    ...(outcome && outcome.kind !== "skipped"
+      ? {
+          skipped: Math.max(0, state.skipped - 1),
+          created: state.created + (outcome.kind === "created" ? 1 : 0),
+          updated: state.updated + (outcome.kind === "updated" ? 1 : 0),
+        }
+      : {}),
+  };
+  await db.crmView.update({
+    where: { id: logId },
+    data: {
+      filters: next as unknown as Prisma.InputJsonObject,
+      columns: { headers: data.headers ?? [], rows: [], skipped } as unknown as Prisma.InputJsonObject,
+    },
+  });
+}
+
+/**
+ * Brings in one skipped row, with an email added when it had none. The
+ * person who ran the import, as for the import itself; a row that still
+ * can't come in says why and stays.
+ */
+export async function fixImportRow(
+  actor: CrmActor,
+  importId: string,
+  row: number,
+  patch: { email?: string | null },
+): Promise<RowOutcome> {
+  await requireCrm(actor);
+  const { log, state, data, raw } = await loadFixable(actor, importId, row);
+  const mapped = mapRow(raw, state.mapping);
+  const email = patch.email?.trim();
+  if (email) {
+    if (!normalizeEmail(email)) throw new CrmError("That doesn't look like an email.");
+    mapped.fields.primaryEmail = email;
+  }
+  const ctx = await rowContext(actor, importId, state.object, state.pipelineId);
+  const outcome = await importRow(ctx, state.object, mapped, row - 2);
+  if (outcome.kind === "skipped") throw new CrmError(outcome.reason);
+  await dropRow(actor.db, log.id, state, data, row, outcome);
+  return outcome;
+}
+
+/** Lets a skipped row go: it stays out, and stops asking. */
+export async function letRowGo(actor: CrmActor, importId: string, row: number): Promise<void> {
+  await requireCrm(actor);
+  const { log, state, data } = await loadFixable(actor, importId, row);
+  await dropRow(actor.db, log.id, state, data, row, null);
 }

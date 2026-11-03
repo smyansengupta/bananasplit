@@ -30,8 +30,11 @@ export function CrmHeader({
   title?: string;
   /** The toolbar row under it (CrmToolbar). */
   toolbar?: ReactNode;
-  /** What the create button makes in one click (People's Companies view: a company). */
-  create?: "person" | "company";
+  /**
+   * What the create button makes in one click (People's Companies view: a
+   * company); false hides it on pages that make nothing (CRM settings).
+   */
+  create?: "person" | "company" | false;
 }) {
   const { setOpen } = useCrmOpen();
   const base = `/app/${orgSlug}/crm`;
@@ -40,36 +43,38 @@ export function CrmHeader({
       <div className="flex flex-wrap items-end gap-x-4 gap-y-3 max-md:flex-nowrap max-md:items-center">
         <h1 className="page-title mr-auto max-md:min-w-0">{title}</h1>
         <div className={cn("flex flex-wrap items-center gap-2", PHONE_SMALL_CREATE)}>
-          <CreateSplitButton
-            label={create === "company" ? "New company" : "New person"}
-            title={create === "company" ? "New company" : "New person"}
-            onClick={() => setOpen({ kind: "new", what: create })}
-            menuLabel="More to create"
-          >
-            <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "person" })}>
-              <UserPlus className="size-4" aria-hidden="true" />
-              New person
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "company" })}>
-              <Building2 className="size-4" aria-hidden="true" />
-              New company
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "deal" })}>
-              <Columns3 className="size-4" aria-hidden="true" />
-              New deal
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`${base}/import`}>
-                <FileSpreadsheet className="size-4" aria-hidden="true" />
-                <span className="flex flex-col">
-                  Import a spreadsheet
-                  <span className="text-muted-foreground text-xs">
-                    People, companies or deals from a CSV
+          {create && (
+            <CreateSplitButton
+              label={create === "company" ? "New company" : "New person"}
+              title={create === "company" ? "New company" : "New person"}
+              onClick={() => setOpen({ kind: "new", what: create })}
+              menuLabel="More to create"
+            >
+              <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "person" })}>
+                <UserPlus className="size-4" aria-hidden="true" />
+                New person
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "company" })}>
+                <Building2 className="size-4" aria-hidden="true" />
+                New company
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "deal" })}>
+                <Columns3 className="size-4" aria-hidden="true" />
+                New deal
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href={`${base}/import`}>
+                  <FileSpreadsheet className="size-4" aria-hidden="true" />
+                  <span className="flex flex-col">
+                    Import a spreadsheet
+                    <span className="text-muted-foreground text-xs">
+                      People, companies or deals from a CSV
+                    </span>
                   </span>
-                </span>
-              </Link>
-            </DropdownMenuItem>
-          </CreateSplitButton>
+                </Link>
+              </DropdownMenuItem>
+            </CreateSplitButton>
+          )}
           {settings && (
             <Link
               href={`${base}/settings`}
