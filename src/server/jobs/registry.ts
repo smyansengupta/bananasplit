@@ -526,6 +526,35 @@ export const JOB_KINDS = {
       "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows; enqueued only while a workflow is on (src/server/crm/events.ts).",
   }),
 
+  // ---- CRM AI (Phase 4; handlers in src/server/crm/ai-jobs.ts) ----
+  "crm-ai": kind({
+    payload: z
+      .object({
+        action: z.enum(["fill", "batch-poll", "research", "follow-up", "sweep", "new-record"]),
+        /** The member the work is for (records and suggestions are made as them). */
+        userId: id.optional(),
+        fieldId: id.optional(),
+        onlyEmpty: z.boolean().optional(),
+        /** A column fill: where the last turn stopped. */
+        after: id.optional(),
+        /** A column fill: only rows made since then. */
+        since: isoInstant.optional(),
+        /** The CrmView row (objectKind ai-batch) of a Message Batch. */
+        batchViewId: id.optional(),
+        personId: id.optional(),
+        companyId: id.optional(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 55_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/crm/ai-jobs").then((m) => m.crmAiJob),
+    description:
+      "The CRM's AI work on the organization's own key: an AI field's column a few rows a turn (key crm-ai:fill:{fieldId}:...), a Message Batch poll (crm-ai:batch:{viewId}), the research agent on a new person or company (crm-ai:research:{id}), the follow-up agent for one member (crm-ai:follow-up:{userId}:{day}), a new record's automatic work (crm-ai:new:{id}) and the daily sweep (crm-ai:sweep:{day}, once). Every model call checks the monthly cap and writes AiUsage.",
+  }),
+
   // ---- Platform maintenance (this module) ----
   "purge-unverified": kind({
     payload: z.object({}).strict(),

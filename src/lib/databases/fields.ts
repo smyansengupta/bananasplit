@@ -94,8 +94,18 @@ export const AI_OUTPUT_LABELS: Record<AiOutput, string> = {
   URL: "A link",
 };
 
-/** Why an AI field's Fill button is off for now (filling it is a later phase). */
-export const AI_FILL_PENDING = "Filling AI fields on your organization's own key comes next.";
+/** Why an AI field's Fill button is off outside the CRM (the CRM's databases fill on the organization's own key). */
+export const AI_FILL_PENDING = "Filling with AI works on the CRM's people, companies and pipelines, on your organization's own key.";
+
+/** When an AI field fills itself (the CRM's databases): never, new rows, every day, every week. */
+export const AI_AUTO = ["off", "new", "daily", "weekly"] as const;
+export type AiAuto = (typeof AI_AUTO)[number];
+export const AI_AUTO_LABELS: Record<AiAuto, string> = {
+  off: "When asked",
+  new: "New rows",
+  daily: "Every day",
+  weekly: "Every week",
+};
 
 /** Choice colours: the usual tag palette, legible on light and dark themes alike. */
 export const CHOICE_COLORS = [
@@ -168,6 +178,8 @@ export const fieldOptionsSchema = z
     output: z.enum(AI_OUTPUTS).optional(),
     /** AI: search the web first (on the organization's own Tavily key). */
     research: z.boolean().optional(),
+    /** AI: fill by itself on new rows or on a schedule (absent: only when asked). */
+    auto: z.enum(AI_AUTO).optional(),
   })
   .strict();
 export type FieldOptions = z.infer<typeof fieldOptionsSchema>;
