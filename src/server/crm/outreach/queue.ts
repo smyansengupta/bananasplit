@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { COLD_AFTER_DAYS } from "@/lib/crm/strength";
 import { cadenceLapsed } from "@/lib/crm/outreach/schedule";
-import { withSystemOrgTx, type TxClient } from "@/server/db/context";
+import type { TxClient } from "@/server/db/context";
 
 import { CrmError, type CrmActor } from "../access";
 import { rolesHeldBy, type RoleOwner } from "../owners";
@@ -315,12 +315,3 @@ export async function snoozeQueueItem(actor: CrmActor, id: string, until: Date):
   });
 }
 
-/** A phone provider is connected (texting is Phase 5): admins' row, read on the service path. */
-export async function phoneProviderConnected(organizationId: string): Promise<boolean> {
-  return withSystemOrgTx(organizationId, async ({ db }) => {
-    const n = await db.orgIntegration.count({
-      where: { organizationId, provider: { in: ["TELNYX", "TWILIO"] }, status: "CONNECTED" },
-    });
-    return n > 0;
-  });
-}

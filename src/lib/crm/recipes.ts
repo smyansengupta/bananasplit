@@ -29,19 +29,6 @@ export interface Recipe {
   actions: WorkflowAction[];
 }
 
-export const STARTER_TEMPLATES: Record<string, { name: string; subject: string; body: string }> = {
-  welcome: {
-    name: "Welcome",
-    subject: "Welcome, {{first_name}}",
-    body: "Hi {{first_name}},\n\nThanks for your interest in {{organization}}. We'd love to tell you more: reply to this email with a good time to talk, or come along to our next event.\n\n{{sender_name}}",
-  },
-  receipt: {
-    name: "Thank you and receipt",
-    subject: "Thank you for your gift, {{first_name}}",
-    body: "Hi {{first_name}},\n\nThank you for your generous gift to {{organization}}. This email is your receipt.\n\nWith thanks,\n{{sender_name}}",
-  },
-};
-
 export const RECIPES: readonly Recipe[] = [
   {
     id: "interest-form",

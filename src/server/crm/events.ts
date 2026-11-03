@@ -58,10 +58,15 @@ const QUIET_SOURCES = new Set(["import", "merge"]);
 
 export async function emitCrmEvent(db: TxClient, organizationId: string, event: CrmEvent): Promise<void> {
   if (event.source && QUIET_SOURCES.has(event.source)) return;
-  const on = await db.crmWorkflow.count({ where: { organizationId, status: "ON" } });
-  // Also when an active outgoing webhook listens for what this could be
-  // (CrmSettings.webhookEvents, kept by the webhook settings; Phase 5).
-  if (on === 0 && !(await webhookWants(db, organizationId, event))) return;
+  // A switched-on workflow (CrmSettings.workflowTriggers, kept by the
+  // workflow settings: members can't read CrmWorkflow), or an active
+  // outgoing webhook that listens for what this could be (webhookEvents).
+  const s = await db.crmSettings.findUnique({
+    where: { organizationId },
+    select: { workflowTriggers: true, webhookEvents: true },
+  });
+  if (!s) return;
+  if (s.workflowTriggers.length === 0 && !webhookWants(s.webhookEvents, event)) return;
   const stamp = Date.now().toString(36);
   const scope = automationScope.getStore();
   await enqueueJob(db, {
@@ -81,11 +86,10 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
   });
 }
 
-async function webhookWants(db: TxClient, organizationId: string, event: CrmEvent): Promise<boolean> {
+function webhookWants(listening: readonly string[], event: CrmEvent): boolean {
+  if (listening.length === 0) return false;
   const names = webhookEventsFor({ type: event.type, targetKind: event.targetKind, fields: event.fields ?? [] });
-  if (names.length === 0) return false;
-  const s = await db.crmSettings.findUnique({ where: { organizationId }, select: { webhookEvents: true } });
-  return Boolean(s?.webhookEvents.some((e) => (names as string[]).includes(e)));
+  return names.some((n) => listening.includes(n));
 }
 
 export type CrmEventPayload = {

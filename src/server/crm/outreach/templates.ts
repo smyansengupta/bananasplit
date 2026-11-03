@@ -1,4 +1,5 @@
 import { renderMerge } from "@/lib/crm/outreach/merge";
+import { EVERYDAY_STARTERS } from "@/lib/crm/outreach/starters";
 
 import { CrmError, type CrmActor } from "../access";
 import { contactable, mergeValuesFor } from "./send";
@@ -98,30 +99,8 @@ export async function previewFor(
   return out.sort((a, b) => ids.indexOf(a.personId) - ids.indexOf(b.personId));
 }
 
-/** Starter templates, made the first time someone opens Outreach. */
-export const STARTERS: TemplateInput[] = [
-  {
-    name: "Quick hello",
-    category: "follow-up",
-    subject: "Catching up",
-    body: "Hi {{first_name|there}},\n\nIt's been {{last_contacted|a while}} since we talked. How are things at {{company|your end}}?\n\n{{my_first_name}}",
-  },
-  {
-    name: "Thanks for coming",
-    category: "thank-you",
-    subject: "Thanks for coming to {{last_event|our event}}",
-    body: "Hi {{first_name|there}},\n\nThank you for coming to {{last_event|our event}}. It was good to see you there.\n\nWe'd love to have you at the next one.\n\n{{my_first_name}}\n{{organization}}",
-  },
-  {
-    name: "Sponsorship ask",
-    category: "invite",
-    subject: "{{organization}} and {{company|you}}",
-    body: "Hi {{first_name|there}},\n\nI'm {{my_first_name}} from {{organization}}. We're planning our next events and would love {{company|your team}} to be part of them.\n\nWould you have 20 minutes to talk this month?\n\n{{my_first_name}}",
-  },
-];
-
 export async function ensureStarters(actor: CrmActor): Promise<void> {
   const any = await actor.db.crmTemplate.count({ where: { organizationId: actor.organizationId } });
   if (any > 0) return;
-  for (const t of STARTERS) await createTemplate(actor, t);
+  for (const t of EVERYDAY_STARTERS) await createTemplate(actor, t);
 }

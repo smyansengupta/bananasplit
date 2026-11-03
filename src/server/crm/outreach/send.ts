@@ -133,6 +133,8 @@ export interface QueueEmailInput {
   templateId?: string | null;
   campaignId?: string | null;
   enrollmentId?: string | null;
+  /** Sent by an automation (a workflow step): counts toward the daily cap and carries the unsubscribe footer. */
+  workflowId?: string | null;
   /** Continue a thread: its id and the Message-ID to answer. */
   threadId?: string | null;
   inReplyTo?: string | null;
@@ -189,6 +191,8 @@ export async function queueEmail(db: TxClient, input: QueueEmailInput): Promise<
       templateId: input.templateId ?? null,
       campaignId: input.campaignId ?? null,
       enrollmentId: input.enrollmentId ?? null,
+      workflowId: input.workflowId ?? null,
+      personId: person.id,
       scheduledFor: input.scheduledFor ?? null,
       createdById: input.createdById,
       error: input.track === false ? "untracked" : null,
@@ -326,6 +330,89 @@ export interface ComposeInput {
   /** They saw who else is talking to this person and still want to send. */
   confirmConflict?: boolean;
   track?: boolean;
+  /** The unsent draft this was written from (an AI draft): it goes away once this is queued. */
+  draftId?: string | null;
+}
+
+// ---- Drafts (unsent, waiting in compose) ----------------------------------------------------
+
+export interface DraftView {
+  id: string;
+  personId: string | null;
+  subject: string;
+  body: string;
+  createdAt: Date;
+  /** Who it's for (the member whose compose it opens in). */
+  ownerId: string | null;
+}
+
+/**
+ * Saves an unsent draft for one person, in one member's compose: a DRAFT
+ * CrmEmailMessage in its own thread. Nothing ever sends it; the member opens
+ * it in compose, previews it and sends it (composeEmail with draftId).
+ */
+export async function saveDraft(
+  db: TxClient,
+  input: { organizationId: string; ownerId: string; personId: string; subject: string; body: string; createdById: string | null },
+): Promise<{ draftId: string; threadId: string }> {
+  const person = await db.crmPerson.findFirst({
+    where: { id: input.personId, organizationId: input.organizationId },
+    select: { id: true, primaryEmail: true },
+  });
+  if (!person) throw new CrmError("That person isn't in the CRM any more.");
+  const subject = input.subject.trim().slice(0, 300);
+  const thread = await db.crmEmailThread.create({
+    data: { organizationId: input.organizationId, subject },
+    select: { id: true },
+  });
+  const draft = await db.crmEmailMessage.create({
+    data: {
+      organizationId: input.organizationId,
+      threadId: thread.id,
+      direction: "OUTBOUND",
+      status: "DRAFT",
+      mailbox: "ORG_SENDER",
+      mailboxUserId: input.ownerId,
+      fromAddress: "draft",
+      toAddresses: person.primaryEmail ? [person.primaryEmail] : [],
+      subject,
+      bodyText: input.body.trim().slice(0, 50_000),
+      personId: person.id,
+      createdById: input.createdById,
+    },
+    select: { id: true },
+  });
+  return { draftId: draft.id, threadId: thread.id };
+}
+
+/** The unsent drafts waiting for a person (the viewer's own, under RLS). */
+export async function draftsFor(db: TxClient, organizationId: string, personId: string, ownerId: string): Promise<DraftView[]> {
+  const rows = await db.crmEmailMessage.findMany({
+    where: { organizationId, status: "DRAFT", personId, mailboxUserId: ownerId },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: { id: true, subject: true, bodyText: true, createdAt: true, mailboxUserId: true },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    personId,
+    subject: r.subject ?? "",
+    body: r.bodyText ?? "",
+    createdAt: r.createdAt,
+    ownerId: r.mailboxUserId,
+  }));
+}
+
+/** Throws a draft away (its own thread goes with it). */
+export async function discardDraft(db: TxClient, organizationId: string, draftId: string): Promise<void> {
+  const d = await db.crmEmailMessage.findFirst({
+    where: { id: draftId, organizationId, status: "DRAFT" },
+    select: { id: true, threadId: true },
+  });
+  if (!d) return;
+  const others = await db.crmEmailMessage.count({ where: { organizationId, threadId: d.threadId, id: { not: d.id } } });
+  if (others === 0) await db.crmEmailThread.deleteMany({ where: { id: d.threadId, organizationId } });
+  else await db.crmEmailMessage.updateMany({ where: { id: d.id, organizationId }, data: { status: "FAILED", error: "discarded" } });
 }
 
 export type ComposeResult = { messageId: string } | { conflict: Conflict & { name: string } };
@@ -362,7 +449,7 @@ export async function composeEmail(actor: CrmActor, input: ComposeInput): Promis
     if (Number.isNaN(sendAt.getTime())) throw new CrmError("Pick a real time.");
     if (sendAt.getTime() < Date.now()) sendAt = null;
   }
-  return queueEmail(db, {
+  const queued = await queueEmail(db, {
     organizationId,
     senderId: userId,
     createdById: userId,
@@ -376,6 +463,15 @@ export async function composeEmail(actor: CrmActor, input: ComposeInput): Promis
     scheduledFor: sendAt,
     track: input.track,
   });
+  if (input.draftId) {
+    // The draft went: it leaves compose, and a Review suggestion for it is done.
+    await discardDraft(db, organizationId, input.draftId);
+    await db.crmSuggestion.updateMany({
+      where: { organizationId, kind: "DRAFT_EMAIL", status: "PENDING", payload: { path: ["draftId"], equals: input.draftId } },
+      data: { status: "ACCEPTED", reviewedById: userId, reviewedAt: new Date() },
+    });
+  }
+  return queued;
 }
 
 /** Cancels a message still waiting to go (sent later, or a sequence step). */
@@ -394,9 +490,9 @@ export async function cancelEmail(actor: CrmActor, messageId: string): Promise<v
 
 // ---- Sending (the job) -----------------------------------------------------------------------
 
-function purposeOf(m: { enrollmentId: string | null; campaignId: string | null }, bulk: boolean): MailPurpose {
+function purposeOf(m: { enrollmentId: string | null; campaignId: string | null; workflowId: string | null }, bulk: boolean): MailPurpose {
   if (bulk) return "bulk";
-  if (m.enrollmentId || m.campaignId) return "sequence";
+  if (m.enrollmentId || m.campaignId || m.workflowId) return "sequence";
   return "one-to-one";
 }
 
@@ -406,7 +502,7 @@ function startOfUtcDay(now: Date): Date {
   return d;
 }
 
-/** Sequence and campaign mail a member's mailbox has sent today (and is about to). */
+/** Sequence, campaign and automation mail a member's mailbox has sent today (and is about to). */
 export async function sentToday(db: TxClient, organizationId: string, userId: string, now: Date = new Date()): Promise<number> {
   return db.crmEmailMessage.count({
     where: {
@@ -415,7 +511,7 @@ export async function sentToday(db: TxClient, organizationId: string, userId: st
       direction: "OUTBOUND",
       status: "SENT",
       sentAt: { gte: startOfUtcDay(now) },
-      OR: [{ enrollmentId: { not: null } }, { campaignId: { not: null } }],
+      OR: [{ enrollmentId: { not: null } }, { campaignId: { not: null } }, { workflowId: { not: null } }],
     },
   });
 }
@@ -454,6 +550,7 @@ async function prepare(db: TxClient, organizationId: string, messageId: string, 
       messageIdHeader: true,
       enrollmentId: true,
       campaignId: true,
+      workflowId: true,
       scheduledFor: true,
       error: true,
       activityId: true,
@@ -582,7 +679,7 @@ async function markSent(
   if (updated.count === 0) return;
   const m = await db.crmEmailMessage.findFirst({
     where: { id: p.messageId, organizationId: p.organizationId },
-    select: { subject: true, bodyText: true, enrollmentId: true, campaignId: true, templateId: true, threadId: true },
+    select: { subject: true, bodyText: true, enrollmentId: true, campaignId: true, templateId: true, threadId: true, workflowId: true },
   });
   const person = await db.crmPerson.findFirst({
     where: { id: p.personId, organizationId: p.organizationId },
@@ -610,6 +707,7 @@ async function markSent(
       ...(m?.enrollmentId ? { enrollmentId: m.enrollmentId } : {}),
       ...(m?.campaignId ? { campaignId: m.campaignId } : {}),
       ...(m?.templateId ? { templateId: m.templateId } : {}),
+      ...(m?.workflowId ? { workflowId: m.workflowId } : {}),
     },
   });
   await db.crmEmailMessage.update({ where: { id: p.messageId }, data: { activityId } });

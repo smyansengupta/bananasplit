@@ -402,7 +402,7 @@ export async function runFollowUpAgent(
         feature: "crm.follow_up_agent",
         job: options.auto,
       });
-      log.suggestions.push(r.suggestionId);
+      if (r.suggestionId) log.suggestions.push(r.suggestionId);
       drafted++;
       log.note(`Drafted a follow-up to ${person.name}.`);
     }

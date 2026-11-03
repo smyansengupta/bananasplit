@@ -1,11 +1,15 @@
 "use client";
 
-import { AlarmClock, Check, MessageSquare, NotebookText, Phone } from "@/components/icons";
+import { AlarmClock, Check, MessageSquare, NotebookText } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { closeStepAction, logCallAction, logTouchAction, snoozeAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
+import { closeStepAction, logTouchAction, snoozeAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
+import { LogCallForm } from "@/components/crm/phone/call-log";
+import { CallPerson } from "@/components/crm/phone/call-person";
+import type { PhoneCaps } from "@/components/crm/phone/softphone";
+import { TextDialog } from "@/components/crm/phone/texts";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,9 +27,11 @@ import { ComposeButton, type ComposeTemplate } from "./compose";
 
 /**
  * Who to reach out to today, worked down one person at a time: each row
- * says why they're here and has the one-click ways in: email, text (once a
- * phone provider is connected), call (dials, then logs it), log something,
- * or snooze. A step a sequence left for you is done from here too.
+ * says why they're here and has the one-click ways in: email, text (the
+ * organization's number, with Phase 5's consent rules, once a phone
+ * provider is connected), call (the softphone, or the phone's dialer, then
+ * how it went, Phase 5's call log), log something, or snooze. A step a
+ * sequence left for you is done from here too.
  */
 
 export interface QueueRow {
@@ -67,7 +73,7 @@ export function FollowUpQueue({
   orgSlug: string;
   rows: QueueRow[];
   templates: ComposeTemplate[];
-  phone: boolean;
+  phone: PhoneCaps & { texting: boolean };
   title?: string;
   description?: string;
   empty?: string;
@@ -111,11 +117,12 @@ function QueueLine({
   orgSlug: string;
   row: QueueRow;
   templates: ComposeTemplate[];
-  phone: boolean;
+  phone: PhoneCaps & { texting: boolean };
   onGone: () => void;
 }) {
   const router = useRouter();
-  const [logging, setLogging] = useState<"call" | "note" | null>(null);
+  const [logging, setLogging] = useState<"note" | null>(null);
+  const [texting, setTexting] = useState(false);
   const reply = row.reasons.find((r) => r.kind === "reply");
   const step = row.reasons.find((r) => r.kind === "step");
   const person = row.targetKind === "person";
@@ -169,28 +176,31 @@ function QueueLine({
           />
         )}
         {person &&
-          (phone && row.phone && !row.blocked ? (
-            <Button asChild variant="ghost" size="icon-sm" title={`Text ${row.phone}`}>
-              <a href={`sms:${row.phone}`} aria-label="Text" onClick={() => setLogging("note")}>
-                <MessageSquare className="size-4" aria-hidden="true" />
-              </a>
+          (phone.texting && row.phone && !row.blocked ? (
+            <Button variant="ghost" size="icon-sm" title={`Text ${row.phone}`} aria-label="Text" onClick={() => setTexting(true)}>
+              <MessageSquare className="size-4" aria-hidden="true" />
             </Button>
           ) : (
-            <Button variant="ghost" size="icon-sm" disabled title="Texting needs a phone provider (Integrations and apps)" aria-label="Text">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled
+              title={!phone.texting ? "Texting needs a phone provider (Integrations and apps)" : row.blocked ?? "No phone number"}
+              aria-label="Text"
+            >
               <MessageSquare className="size-4" aria-hidden="true" />
             </Button>
           ))}
-        {row.phone && !row.blocked ? (
-          <Button asChild variant="ghost" size="icon-sm" title={`Call ${row.phone}`}>
-            <a href={`tel:${row.phone}`} aria-label="Call" onClick={() => person && setLogging("call")}>
-              <Phone className="size-4" aria-hidden="true" />
-            </a>
-          </Button>
-        ) : (
-          <Button variant="ghost" size="icon-sm" disabled title="No phone number" aria-label="Call">
-            <Phone className="size-4" aria-hidden="true" />
-          </Button>
-        )}
+        {person ? (
+          <CallPerson
+            orgId={orgId}
+            person={{ id: row.id, name: row.name, phone: row.phone, doNotContact: Boolean(row.blocked) }}
+            caps={phone}
+            target={{ stepId: step?.ref ?? null }}
+            compact
+            onLogged={() => router.refresh()}
+          />
+        ) : null}
         {person && (
           <Button variant="ghost" size="icon-sm" title="Log what happened" aria-label="Log" onClick={() => setLogging("note")}>
             <NotebookText className="size-4" aria-hidden="true" />
@@ -216,6 +226,7 @@ function QueueLine({
           </PopoverContent>
         </Popover>
       </div>
+      {texting && person && <TextDialog orgId={orgId} personId={row.id} name={row.name} onClose={() => setTexting(false)} />}
       {logging && person && (
         <LogDialog
           orgId={orgId}
@@ -241,7 +252,10 @@ const FOLLOW = [
   { days: 30, label: "In a month" },
 ] as const;
 
-/** Log a call (after the tel: link) or anything else, with the next follow-up in the same step. */
+/**
+ * Log a call (after the tel: link: Phase 5's call log, one CrmCall and its
+ * timeline row) or anything else, with the next follow-up in the same step.
+ */
 export function LogDialog({
   orgId,
   personId,
@@ -259,18 +273,13 @@ export function LogDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [outcome, setOutcome] = useState<"talked" | "voicemail" | "no-answer">("talked");
   const [what, setWhat] = useState<"NOTE" | "EMAIL" | "TEXT" | "MEETING">("NOTE");
   const [note, setNote] = useState("");
   const [follow, setFollow] = useState<number | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
   const save = async () => {
     setPending(true);
-    const r = await runAction(() =>
-      kind === "call"
-        ? logCallAction(orgId, { personId, outcome, note, followUpDays: follow, stepId })
-        : logTouchAction(orgId, { personId, kind: what, note, followUpDays: follow }),
-    );
+    const r = await runAction(() => logTouchAction(orgId, { personId, kind: what, note, followUpDays: follow }));
     setPending(false);
     if (!r) return;
     if (!r.ok) return toast({ title: r.error, tone: "error" });
@@ -284,21 +293,13 @@ export function LogDialog({
           <DialogTitle>{kind === "call" ? `How did the call with ${name} go?` : `Log something with ${name}`}</DialogTitle>
           <DialogDescription>It goes on their timeline and counts as being in touch.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="What happened">
-            {kind === "call"
-              ? (
-                  [
-                    ["talked", "Talked"],
-                    ["voicemail", "Voicemail"],
-                    ["no-answer", "No answer"],
-                  ] as const
-                ).map(([v, l]) => (
-                  <button key={v} type="button" className={cn(chipClass(outcome === v), "h-8 px-3")} onClick={() => setOutcome(v)}>
-                    {l}
-                  </button>
-                ))
-              : (
+        {kind === "call" ? (
+          <LogCallForm orgId={orgId} target={{ personId, stepId: stepId ?? null }} compact onSaved={onDone} onCancel={onClose} />
+        ) : (
+          <>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="What happened">
+                {(
                   [
                     ["NOTE", "Note"],
                     ["EMAIL", "Email"],
@@ -310,29 +311,31 @@ export function LogDialog({
                     {l}
                   </button>
                 ))}
-          </div>
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} placeholder={kind === "call" ? "What you talked about (optional)" : "What happened"} />
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Follow up">
-            {FOLLOW.map((f) => (
-              <button
-                key={f.label}
-                type="button"
-                className={cn(chipClass(follow === f.days), "h-8 px-3")}
-                onClick={() => setFollow(follow === f.days ? undefined : f.days)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={pending || (kind === "note" && !note.trim())} onClick={save}>
-            Log it
-          </Button>
-        </DialogFooter>
+              </div>
+              <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} placeholder="What happened" />
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Follow up">
+                {FOLLOW.map((f) => (
+                  <button
+                    key={f.label}
+                    type="button"
+                    className={cn(chipClass(follow === f.days), "h-8 px-3")}
+                    onClick={() => setFollow(follow === f.days ? undefined : f.days)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button disabled={pending || !note.trim()} onClick={save}>
+                Log it
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

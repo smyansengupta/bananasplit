@@ -29,48 +29,25 @@ export function CallPerson({
   target,
   caps,
   size = "sm",
+  compact = false,
+  onLogged,
 }: {
   orgId: string;
   person: { id: string; name: string; phone: string | null; doNotContact: boolean };
-  /** The item and company to log it on too. */
+  /** The item and company to log it on too (and a sequence's call step it does). */
   target?: CallTarget;
   caps: PhoneCaps;
   size?: "sm" | "default";
+  /** One icon button (the follow-up queue's row): Call, then how it went. */
+  compact?: boolean;
+  onLogged?: () => void;
 }) {
   const [logOpen, setLogOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [record, setRecord] = useState(false);
   const phone = useSoftphone(orgId, caps);
   const callTarget: CallTarget = { ...target, personId: person.id };
-
-  if (person.doNotContact) {
-    return <p className="text-muted-foreground text-sm">They asked not to be contacted.</p>;
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {person.phone ? (
-        caps.softphone ? (
-          <Button type="button" size={size} onClick={() => setOpen(true)}>
-            <Phone className="size-4" aria-hidden="true" />
-            Call
-          </Button>
-        ) : (
-          <Button asChild size={size}>
-            <a href={`tel:${person.phone}`} onClick={() => setTimeout(() => setLogOpen(true), 400)}>
-              <Phone className="size-4" aria-hidden="true" />
-              Call {formatNumber(person.phone)}
-            </a>
-          </Button>
-        )
-      ) : (
-        <span className="text-muted-foreground text-sm">No number yet.</span>
-      )}
-      <Button type="button" size={size} variant="outline" onClick={() => setLogOpen(true)}>
-        <NotebookPen className="size-4" aria-hidden="true" />
-        Log a call
-      </Button>
-      <LogCallDialog orgId={orgId} target={callTarget} name={person.name} open={logOpen} onOpenChange={setLogOpen} />
-      {caps.softphone && (
+  const softphoneDialog = (
         <Dialog
           open={open}
           onOpenChange={(next) => {
@@ -116,6 +93,7 @@ export function CallPerson({
                     onSaved={() => {
                       setOpen(false);
                       phone.reset();
+                      onLogged?.();
                     }}
                   />
                 )}
@@ -123,7 +101,60 @@ export function CallPerson({
             )}
           </DialogContent>
         </Dialog>
+  );
+
+  if (person.doNotContact && !compact) {
+    return <p className="text-muted-foreground text-sm">They asked not to be contacted.</p>;
+  }
+  if (compact) {
+    const can = Boolean(person.phone) && !person.doNotContact;
+    return (
+      <>
+        {!can ? (
+          <Button variant="ghost" size="icon-sm" disabled title={person.doNotContact ? "They asked not to be contacted" : "No phone number"} aria-label="Call">
+            <Phone className="size-4" aria-hidden="true" />
+          </Button>
+        ) : caps.softphone ? (
+          <Button variant="ghost" size="icon-sm" title={`Call ${formatNumber(person.phone)}`} aria-label="Call" onClick={() => setOpen(true)}>
+            <Phone className="size-4" aria-hidden="true" />
+          </Button>
+        ) : (
+          <Button asChild variant="ghost" size="icon-sm" title={`Call ${formatNumber(person.phone)}`}>
+            <a href={`tel:${person.phone}`} aria-label="Call" onClick={() => setTimeout(() => setLogOpen(true), 400)}>
+              <Phone className="size-4" aria-hidden="true" />
+            </a>
+          </Button>
+        )}
+        <LogCallDialog orgId={orgId} target={callTarget} name={person.name} open={logOpen} onOpenChange={setLogOpen} onSaved={onLogged} />
+        {caps.softphone && softphoneDialog}
+      </>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {person.phone ? (
+        caps.softphone ? (
+          <Button type="button" size={size} onClick={() => setOpen(true)}>
+            <Phone className="size-4" aria-hidden="true" />
+            Call
+          </Button>
+        ) : (
+          <Button asChild size={size}>
+            <a href={`tel:${person.phone}`} onClick={() => setTimeout(() => setLogOpen(true), 400)}>
+              <Phone className="size-4" aria-hidden="true" />
+              Call {formatNumber(person.phone)}
+            </a>
+          </Button>
+        )
+      ) : (
+        <span className="text-muted-foreground text-sm">No number yet.</span>
       )}
+      <Button type="button" size={size} variant="outline" onClick={() => setLogOpen(true)}>
+        <NotebookPen className="size-4" aria-hidden="true" />
+        Log a call
+      </Button>
+      <LogCallDialog orgId={orgId} target={callTarget} name={person.name} open={logOpen} onOpenChange={setLogOpen} />
+      {caps.softphone && softphoneDialog}
     </div>
   );
 }

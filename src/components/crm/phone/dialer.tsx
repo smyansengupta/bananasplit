@@ -29,6 +29,8 @@ export interface DialerPerson {
   phone: string;
   sub: string | null;
   lastContacted: string | null;
+  /** A sequence's call step: logging the call closes it. */
+  stepId?: string | null;
 }
 
 export function Dialer({
@@ -131,7 +133,7 @@ export function Dialer({
               <LogCallForm
                 key={`${current.id}:${phone.callId ?? "manual"}`}
                 orgId={orgId}
-                target={{ personId: current.id }}
+                target={{ personId: current.id, stepId: current.stepId ?? null }}
                 callId={phone.callId}
                 durationSec={phone.seconds || null}
                 defaultOutcome={phone.callId ? (phone.seconds > 0 ? "connected" : "no-answer") : "connected"}

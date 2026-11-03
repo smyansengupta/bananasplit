@@ -1,14 +1,18 @@
 import type { CrmStepKind, Prisma } from "@/generated/prisma/client";
 import { renderMerge } from "@/lib/crm/outreach/merge";
 import { nextInWindow, readWindow, type SendWindow } from "@/lib/crm/outreach/schedule";
-import { withSystemOrgTx, type TxClient } from "@/server/db/context";
+import { localDateKey } from "@/lib/tasks/dates";
+import { withSystemOrgTx, type SystemContext, type TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 import { notifyUser } from "@/server/notifications";
+import { createTask, loadTaskEnv } from "@/server/tasks/service";
 
 import { CrmError, requireMember, type CrmActor } from "../access";
 import { logActivity } from "../activity";
 import { emitCrmEvent } from "../events";
+import { queueText } from "../phone/texts";
+import { actAs } from "../system-actor";
 import { conflictFor, contactable, mergeValuesFor, queueEmail, sentToday } from "./send";
 
 /**
@@ -17,7 +21,11 @@ import { conflictFor, contactable, mergeValuesFor, queueEmail, sentToday } from 
  * job queue, one `crm-sequence` job per enrollment step at its time. Email
  * steps go out from the enrolling member's mailbox inside the sequence's
  * send window (the organization's timezone) and under the member's daily
- * cap; the other steps land in that member's follow-up queue and Inbox.
+ * cap; a to-do step becomes a real Task for that member (made as the
+ * sequence's maker), a text step goes out on the organization's number when
+ * they agreed to texts (Phase 5's texting rules), and a call, a LinkedIn
+ * note, or a text that can't go waits in the member's follow-up queue and
+ * Inbox (calls also on the dialer).
  * A reply, a booking, an unsubscribe or a bounce stops it (inbound.ts,
  * booking.ts, unsubscribe.ts); an out-of-office pauses it until they're
  * back. Follow-up emails answer the first one, in the same thread.
@@ -114,7 +122,7 @@ export async function saveSequence(actor: CrmActor, sequenceId: string, input: S
         delayHours,
         templateId,
         subject: s.kind === "EMAIL" ? (s.subject?.trim().slice(0, 300) ?? "") : null,
-        body: s.kind === "EMAIL" ? (s.body?.slice(0, 20_000) ?? "") : null,
+        body: s.kind === "EMAIL" ? (s.body?.slice(0, 20_000) ?? "") : s.kind === "TEXT" ? (s.body?.trim().slice(0, 1_000) || null) : null,
         taskTitle: s.kind === "EMAIL" ? null : (s.taskTitle?.trim().slice(0, 200) || null),
       };
     });
@@ -257,7 +265,8 @@ export async function stopEnrollment(actor: CrmActor, enrollmentId: string): Pro
 
 type StepOutcome = "done" | "skipped" | "later" | "finished";
 
-async function runStep(db: TxClient, organizationId: string, enrollmentId: string, stepIndex: number, now: Date): Promise<StepOutcome> {
+async function runStep(sys: SystemContext, organizationId: string, enrollmentId: string, stepIndex: number, now: Date): Promise<StepOutcome> {
+  const db = sys.db;
   const e = await db.crmEnrollment.findFirst({
     where: { id: enrollmentId, organizationId },
     select: {
@@ -274,6 +283,7 @@ async function runStep(db: TxClient, organizationId: string, enrollmentId: strin
           status: true,
           archivedAt: true,
           sendWindow: true,
+          createdById: true,
           steps: { orderBy: { sortOrder: "asc" } },
         },
       },
@@ -367,36 +377,99 @@ async function runStep(db: TxClient, organizationId: string, enrollmentId: strin
       inReplyTo: prior?.messageIdHeader ?? null,
     });
   } else {
-    // A to-do for the sender, in their queue and Inbox.
-    const what =
-      step.taskTitle?.trim() ||
-      (step.kind === "CALL"
-        ? `Call ${person.name}`
-        : step.kind === "LINKEDIN"
-          ? `Connect with ${person.name} on LinkedIn`
-          : step.kind === "TEXT"
-            ? `Text ${person.name}`
-            : `Follow up with ${person.name}`);
-    await logActivity(db, {
-      organizationId,
-      kind: "SEQUENCE_STEP",
-      subject: what,
-      targets: [{ kind: "person", id: person.id }],
-      actorId: e.senderId,
-      // The sender may close it from their queue (activity edits are their maker's).
-      createdById: e.senderId,
-      sourceKind: "crm-step",
-      sourceId: `${e.id}-${stepIndex}`,
-      meta: { open: true, step: step.kind, enrollmentId: e.id, sequence: e.sequence.name, ownerId: e.senderId },
-    });
-    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { slug: true } });
-    await notifyUser(db, organizationId, e.senderId, {
-      type: "CRM_FOLLOW_UP",
-      title: what,
-      body: `Step ${stepIndex + 1} of ${e.sequence.name}.`,
-      linkUrl: org ? `/app/${org.slug}/crm/people/${person.id}` : null,
-      dedupeKey: `crm-step:${e.id}:${stepIndex}`,
-    });
+    // A to-do becomes a real Task (made the way a workflow makes one: as the
+    // sequence's maker, else the sender, for the sender, linked to the
+    // person); a text goes out on the organization's number (Phase 5) when
+    // it can. A call, a LinkedIn note, and anything that couldn't happen on
+    // its own waits for the sender in their queue (calls on the dialer too).
+    let done = false;
+    let note: string | null = null;
+    const values = await mergeValuesFor(db, organizationId, person.id, e.senderId, now);
+    if (step.kind === "TASK") {
+      const maker =
+        (e.sequence.createdById ? await actAs(sys, organizationId, e.sequence.createdById) : null) ??
+        (await actAs(sys, organizationId, e.senderId));
+      if (maker) {
+        const env = await loadTaskEnv(maker.orgCtx, now);
+        const title = step.taskTitle?.trim() ? renderMerge(step.taskTitle.trim(), values).text : `Follow up with ${person.name}`;
+        const made = await createTask(env, {
+          title: title.slice(0, 200),
+          description: `Step ${stepIndex + 1} of the sequence "${e.sequence.name}".`,
+          dueDate: localDateKey(now, tz),
+          ...(env.memberIds.has(e.senderId) ? { ownerId: e.senderId } : {}),
+          confirmFlagged: true,
+        });
+        if (made.taskId) {
+          await db.itemLink.upsert({
+            where: {
+              organizationId_fromKind_fromId_toKind_toId: {
+                organizationId,
+                fromKind: "task",
+                fromId: made.taskId,
+                toKind: "crm-person",
+                toId: person.id,
+              },
+            },
+            create: { organizationId, fromKind: "task", fromId: made.taskId, toKind: "crm-person", toId: person.id, createdById: maker.actor.userId },
+            update: {},
+          });
+          done = true;
+        } else {
+          note = made.error ?? "the task couldn't be made";
+        }
+      }
+    } else if (step.kind === "TEXT" && step.body?.trim()) {
+      const sender = await actAs(sys, organizationId, e.senderId);
+      if (sender) {
+        try {
+          await queueText(sender.actor, { personId: person.id, body: renderMerge(step.body.trim(), values).text });
+          done = true;
+        } catch (error) {
+          if (!(error instanceof CrmError)) throw error;
+          note = error.message;
+        }
+      }
+    }
+    if (!done) {
+      const what =
+        (step.taskTitle?.trim() ? renderMerge(step.taskTitle.trim(), values).text : null) ||
+        (step.kind === "CALL"
+          ? `Call ${person.name}`
+          : step.kind === "LINKEDIN"
+            ? `Connect with ${person.name} on LinkedIn`
+            : step.kind === "TEXT"
+              ? `Text ${person.name}`
+              : `Follow up with ${person.name}`);
+      await logActivity(db, {
+        organizationId,
+        kind: "SEQUENCE_STEP",
+        subject: what,
+        body: note ? `It couldn't happen on its own: ${note}` : null,
+        targets: [{ kind: "person", id: person.id }],
+        actorId: e.senderId,
+        // The sender may close it from their queue (activity edits are their maker's).
+        createdById: e.senderId,
+        sourceKind: "crm-step",
+        sourceId: `${e.id}-${stepIndex}`,
+        meta: {
+          open: true,
+          step: step.kind,
+          enrollmentId: e.id,
+          sequence: e.sequence.name,
+          ownerId: e.senderId,
+          ...(step.kind === "TEXT" && step.body ? { text: renderMerge(step.body, values).text.slice(0, 1000) } : {}),
+        },
+      });
+      const org = await db.organization.findUnique({ where: { id: organizationId }, select: { slug: true } });
+      await notifyUser(db, organizationId, e.senderId, {
+        type: "CRM_FOLLOW_UP",
+        title: what,
+        body: `Step ${stepIndex + 1} of ${e.sequence.name}.`,
+        // A call waits on the dialer; anything else on their page.
+        linkUrl: org ? (step.kind === "CALL" ? `/app/${org.slug}/crm/calls` : `/app/${org.slug}/crm/people/${person.id}`) : null,
+        dedupeKey: `crm-step:${e.id}:${stepIndex}`,
+      });
+    }
   }
   await db.crmEnrollment.update({
     where: { id: e.id },
@@ -437,7 +510,12 @@ async function finish(db: TxClient, organizationId: string, enrollmentId: string
 export const crmSequenceJob: JobHandler<{ enrollmentId: string; step: number }> = async (run) => {
   const orgId = run.organizationId;
   if (!orgId) throw new PermanentJobError("crm-sequence needs an organization");
-  await withSystemOrgTx(orgId, ({ db }) => runStep(db, orgId, run.payload.enrollmentId, run.payload.step, new Date()));
+  // The step runs as its sender (the audit trail names them; a to-do is made the way a member makes one).
+  const who = await withSystemOrgTx(orgId, ({ db }) =>
+    db.crmEnrollment.findFirst({ where: { id: run.payload.enrollmentId, organizationId: orgId }, select: { senderId: true } }),
+  );
+  if (!who) return;
+  await withSystemOrgTx(orgId, { userId: who.senderId }, (sys) => runStep(sys, orgId, run.payload.enrollmentId, run.payload.step, new Date()));
 };
 
 /** Closes an open sequence to-do (logged, or done by hand). */

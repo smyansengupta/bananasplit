@@ -1,7 +1,10 @@
+import Link from "next/link";
+
 import { MailSettings, Suggestions } from "@/components/crm/outreach/mail-settings";
 import { OutreachHeader } from "@/components/crm/outreach/outreach-header";
 import { inboundDomain } from "@/server/crm/outreach/mailbox";
 import { ensureMemberSettings } from "@/server/crm/outreach/member";
+import { listQueue } from "@/server/crm/review";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmShell } from "../../shell";
@@ -11,7 +14,9 @@ export const metadata = { title: "Your mail" };
 /**
  * A member's own CRM settings (docs/features/crm.md, "Email connections"):
  * their BCC address, share mode, never-log list and signature, and the
- * people the CRM noticed in their mail, waiting for a yes.
+ * people the CRM noticed in their mail, waiting for a yes. Those are the
+ * Review queue's own suggestions (source EMAIL), shown here filtered: one
+ * queue, two ways in.
  */
 export default async function MailPage({ params }: PageProps<"/app/[orgSlug]/crm/outreach/mail">) {
   const { orgSlug } = await params;
@@ -20,12 +25,7 @@ export default async function MailPage({ params }: PageProps<"/app/[orgSlug]/crm
   const orgId = shell.org.id;
   const data = await withOrgTx(orgId, async ({ db, userId }) => ({
     settings: await ensureMemberSettings(db, orgId, userId),
-    suggestions: await db.crmSuggestion.findMany({
-      where: { organizationId: orgId, source: "EMAIL", kind: "CREATE_PERSON", status: "PENDING", OR: [{ assigneeId: userId }, { assigneeId: null }] },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: { id: true, title: true, summary: true, targetId: true },
-    }),
+    suggestions: (await listQueue(db, orgId, userId, { source: "EMAIL", mine: true, take: 50 })).filter((s) => s.kind === "CREATE_PERSON"),
   }));
   return (
     <div className="space-y-6">
@@ -46,7 +46,22 @@ export default async function MailPage({ params }: PageProps<"/app/[orgSlug]/crm
           signature: data.settings.signature,
         }}
       />
-      <Suggestions orgId={orgId} rows={data.suggestions.map((s) => ({ id: s.id, title: s.title, summary: s.summary, from: s.targetId }))} />
+      <Suggestions
+        orgId={orgId}
+        rows={data.suggestions.map((s) => {
+          const person = (s.payload.person ?? {}) as { primaryEmail?: string | null };
+          return { id: s.id, title: s.title, summary: s.summary, from: person.primaryEmail ?? null };
+        })}
+      />
+      {data.suggestions.length > 0 && (
+        <p className="text-muted-foreground max-w-4xl text-sm">
+          These wait in{" "}
+          <Link href={`/app/${orgSlug}/crm/queue`} className="text-foreground underline-offset-2 hover:underline">
+            Review
+          </Link>{" "}
+          too, with everything else the CRM suggests.
+        </p>
+      )}
     </div>
   );
 }

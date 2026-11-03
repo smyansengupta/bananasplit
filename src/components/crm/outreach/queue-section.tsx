@@ -1,5 +1,6 @@
 import type { RoleOwner } from "@/server/crm/owners";
-import { followUpQueue, phoneProviderConnected } from "@/server/crm/outreach/queue";
+import { followUpQueue } from "@/server/crm/outreach/queue";
+import { phoneStatus } from "@/server/crm/phone/connection";
 import { composeTemplates, queueRows } from "@/server/crm/outreach/view";
 import { withOrgTx } from "@/server/db/context";
 
@@ -25,7 +26,15 @@ export async function QueueSection({
   members: readonly { id: string; name: string }[];
   everyone: boolean;
 }) {
-  const phone = await phoneProviderConnected(orgId).catch(() => false);
+  // Phase 5's phone: the softphone when it's set up, texting on the organization's number.
+  const status = await phoneStatus(orgId).catch(() => null);
+  const phone = {
+    softphone: Boolean(status?.active && (status.active === "telnyx" ? status.telnyx.softphone : status.twilio.softphone) && status.number),
+    provider: status?.active ?? null,
+    canRecord: status ? status.settings.recording !== "never" : false,
+    voicemail: Boolean(status?.settings.voicemailKey),
+    texting: Boolean(status?.active && status.number),
+  };
   const data = await withOrgTx(orgId, async ({ db }) => {
     let items = await followUpQueue(db, orgId, userId, roles, { mine: !everyone });
     const mine = !everyone && items.length > 0;

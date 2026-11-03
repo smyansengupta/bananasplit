@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { sendTextAction, setConsentAction } from "@/app/app/[orgSlug]/crm/phone-actions";
+import { sendTextAction, setConsentAction, textThreadAction } from "@/app/app/[orgSlug]/crm/phone-actions";
 import { Send } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { chipClass } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
@@ -33,9 +34,12 @@ export function TextThread({
   texts,
   consent,
   enabled,
+  onChange,
 }: {
   orgId: string;
   personId: string;
+  /** Called after a send or a consent change (a window reloads its thread). */
+  onChange?: () => void;
   texts: TextRow[];
   /** granted, opted-out (texted STOP), or none yet. */
   consent: "granted" | "opted-out" | "none";
@@ -62,6 +66,7 @@ export function TextThread({
         : "Sending.",
     });
     router.refresh();
+    onChange?.();
   }
 
   async function grant() {
@@ -74,6 +79,7 @@ export function TextThread({
       return;
     }
     router.refresh();
+    onChange?.();
   }
 
   return (
@@ -147,5 +153,49 @@ export function TextThread({
         </form>
       )}
     </div>
+  );
+}
+
+/** Texting one person in a window (the follow-up queue's text button): their thread, consent and the box. */
+export function TextDialog({ orgId, personId, name, onClose }: { orgId: string; personId: string; name: string; onClose: () => void }) {
+  const [data, setData] = useState<{ texts: TextRow[]; consent: "granted" | "opted-out" | "none"; enabled: boolean } | null>(null);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void textThreadAction(orgId, personId)
+      .catch(() => null)
+      .then((r) => {
+        if (!live) return;
+        if (!r || !r.ok) {
+          toast({ title: r && !r.ok ? r.error : "That didn't load.", tone: "error" });
+          return;
+        }
+        setData({ texts: r.texts, consent: r.consent, enabled: r.enabled });
+      });
+    return () => {
+      live = false;
+    };
+  }, [orgId, personId, version]);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Text {name}</DialogTitle>
+          <DialogDescription>From your organization&apos;s number. It lands on their timeline.</DialogDescription>
+        </DialogHeader>
+        {data ? (
+          <TextThread
+            orgId={orgId}
+            personId={personId}
+            texts={data.texts}
+            consent={data.consent}
+            enabled={data.enabled}
+            onChange={() => setVersion((v) => v + 1)}
+          />
+        ) : (
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

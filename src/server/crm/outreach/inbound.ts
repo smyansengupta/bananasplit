@@ -19,6 +19,7 @@ import { notifyUser } from "@/server/notifications";
 
 import { logActivity, type ActivityTarget } from "../activity";
 import { emitCrmEvent } from "../events";
+import { proposeChange } from "../review";
 import { inboundDomain } from "./mailbox";
 import { SOURCE_KIND } from "./send";
 
@@ -279,32 +280,33 @@ export async function ingestEmail(source: InboundSource, m: InboundMessage, now:
     for (const a of suggest.slice(0, 5)) {
       const fromThem = a === from;
       const sig = fromThem ? signatureOf(m.text, displayNameOf(m.from)) : { name: null, title: null, company: null, phone: null };
+      // One review queue: a new person waits in Review (and Outreach, Your mail) like any other suggestion.
       const pending = await db.crmSuggestion.findFirst({
-        where: { organizationId, kind: "CREATE_PERSON", status: "PENDING", targetKind: "email", targetId: a },
+        where: { organizationId, kind: "CREATE_PERSON", status: "PENDING", payload: { path: ["person", "primaryEmail"], equals: a } },
         select: { id: true },
       });
       if (pending) continue;
-      await db.crmSuggestion.create({
-        data: {
-          organizationId,
-          kind: "CREATE_PERSON",
-          source: "EMAIL",
-          title: `Add ${sig.name ?? a}`,
-          summary: [sig.title, sig.company, sig.phone].filter(Boolean).join(", ") || `From an email: ${m.subject.slice(0, 120)}`,
-          payload: {
-            email: a,
-            name: sig.name,
+      const known = !sig.company && companyIds[0]
+        ? await db.crmCompany.findFirst({ where: { id: companyIds[0], organizationId }, select: { name: true } })
+        : null;
+      await proposeChange(db, {
+        organizationId,
+        kind: "CREATE_PERSON",
+        source: "EMAIL",
+        title: `Add ${sig.name ?? a}`,
+        summary: [sig.title, sig.company, sig.phone].filter(Boolean).join(", ") || `From an email: ${m.subject.slice(0, 120)}`,
+        payload: {
+          person: {
+            name: sig.name ?? a,
+            primaryEmail: a,
             title: sig.title,
-            company: sig.company,
             phone: sig.phone,
-            companyId: companyIds[0] ?? null,
+            companyName: sig.company ?? known?.name ?? null,
           },
-          targetKind: "email",
-          targetId: a,
-          citation: { kind: "email", label: m.subject.slice(0, 200) },
-          assigneeId: mailboxUserId,
-          expiresAt: new Date(now.getTime() + 30 * 86_400_000),
         },
+        citation: { kind: "email", label: m.subject.slice(0, 200) || "an email" },
+        assigneeId: mailboxUserId,
+        expiresAt: new Date(now.getTime() + 30 * 86_400_000),
       });
     }
     if (peopleIds.length === 0 && companyIds.length === 0) {

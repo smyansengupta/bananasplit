@@ -3412,6 +3412,10 @@ model CrmSettings {
   /// webhook settings, so a member's change knows to queue an event
   /// without reading CrmWebhook (owners' and admins' only).
   webhookEvents     String[]  @default([])
+  /// The trigger types of the switched-on workflows, kept by the workflow
+  /// settings, so a member's change knows to queue an event without reading
+  /// CrmWorkflow (owners, admins and CRM managers only).
+  workflowTriggers  String[]  @default([])
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -3809,6 +3813,11 @@ model CrmEmailMessage {
   templateId        String?
   enrollmentId      String?
   campaignId        String?
+  /// Sent by a workflow step (an automation): counts toward the daily cap
+  /// and carries the unsubscribe footer.
+  workflowId        String?
+  /// Who it is to or from, when known (a draft has no timeline row yet).
+  personId          String?
   scheduledFor      DateTime?
   sentAt            DateTime?
   createdById       String?
@@ -3820,6 +3829,7 @@ model CrmEmailMessage {
   @@index([organizationId, threadId])
   @@index([organizationId, status, scheduledFor])
   @@index([organizationId, mailboxUserId, sentAt])
+  @@index([organizationId, personId, status])
 }
 
 model CrmTemplate {

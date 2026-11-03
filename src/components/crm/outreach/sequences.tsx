@@ -326,11 +326,34 @@ export function SequenceEditor({
                       </>
                     )}
                   </div>
+                ) : s.kind === "TEXT" ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground flex-1 text-xs">
+                        Sent from your organization&apos;s number to people who agreed to texts. Anyone else lands in your queue to text by hand.
+                      </span>
+                      <MergeMenu onPick={(k) => change(i, { body: `${s.body}{{${k}}}` })} />
+                    </div>
+                    <Textarea
+                      value={s.body}
+                      rows={3}
+                      maxLength={1000}
+                      onChange={(e) => change(i, { body: e.target.value })}
+                      placeholder="Hi {{first_name|there}}, it's {{my_first_name}}. Still up for coffee this week?"
+                      aria-label="The text"
+                    />
+                  </div>
                 ) : (
                   <Input
                     value={s.taskTitle}
                     onChange={(e) => change(i, { taskTitle: e.target.value })}
-                    placeholder={Look.label === "Call" ? "Call {name}" : Look.label === "LinkedIn" ? "Connect on LinkedIn" : "What to do"}
+                    placeholder={
+                      Look.label === "Call"
+                        ? "Call {{first_name}}"
+                        : Look.label === "LinkedIn"
+                          ? "Connect on LinkedIn"
+                          : "What to do (a task for you, due that day)"
+                    }
                     aria-label="What to do"
                   />
                 )}

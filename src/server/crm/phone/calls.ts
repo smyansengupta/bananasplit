@@ -6,6 +6,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { CrmError, type CrmActor } from "../access";
 import { logActivity, type ActivityTarget } from "../activity";
 import { emitCrmEvent } from "../events";
+import { closeStep } from "../outreach/sequences";
 import { readPhoneStatus } from "./connection";
 
 /**
@@ -65,6 +66,8 @@ export interface LogCallInput extends CallTargets {
   occurredAt?: Date | string | null;
   /** Follow up again on this day (the person's next follow-up). */
   followUpAt?: Date | string | null;
+  /** The sequence's call step this call does (its open row in the follow-up queue closes). */
+  stepId?: string | null;
 }
 
 function subjectOf(outcome: string | null, direction: CrmDirection): string {
@@ -218,6 +221,20 @@ export async function logCall(actor: CrmActor, input: LogCallInput): Promise<{ c
     const when = new Date(input.followUpAt);
     if (Number.isNaN(when.getTime())) throw new CrmError("Pick a real follow-up day.");
     await db.crmPerson.updateMany({ where: { id: personId, organizationId }, data: { nextFollowUpAt: when, updatedById: userId } });
+  } else if (personId && input.outcome === "connected") {
+    // Reached them: a follow-up that was due is done.
+    await db.crmPerson.updateMany({
+      where: { id: personId, organizationId, nextFollowUpAt: { lte: new Date() } },
+      data: { nextFollowUpAt: null, updatedById: userId },
+    });
+  }
+  if (input.stepId) {
+    // The step may have been closed by hand already: the call still counts.
+    const open = await db.crmActivity.findFirst({
+      where: { id: input.stepId, organizationId, kind: "SEQUENCE_STEP" },
+      select: { id: true },
+    });
+    if (open) await closeStep(db, organizationId, open.id);
   }
   await emitLogged(db, organizationId, targets, callId, userId);
   return { callId, activityId };

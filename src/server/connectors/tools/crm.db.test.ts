@@ -110,7 +110,10 @@ describe("the CRM tools", () => {
 
     const draft = await crmDraftEmailTool(session, { id, subject: "Spring", body: "Hi Mara, ..." });
     expect(draft.status).toBe("queued");
-    expect(await ownerDb.crmEmailMessage.count({ where: { organizationId: club.id } })).toBe(0);
+    // Nothing sent: an unsent draft waits in compose (and in Review).
+    const mail = await ownerDb.crmEmailMessage.findMany({ where: { organizationId: club.id }, select: { status: true, personId: true } });
+    expect(mail).toEqual([{ status: "DRAFT", personId }]);
+    expect(await ownerDb.crmSuggestion.count({ where: { organizationId: club.id, kind: "DRAFT_EMAIL", status: "PENDING" } })).toBe(1);
     await fx.call(session, "crm_add_note", { id, text: "Prefers email." });
   });
 

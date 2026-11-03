@@ -1,5 +1,6 @@
 import type { CrmRunStatus, CrmWorkflowStatus, Prisma } from "@/generated/prisma/client";
-import { RECIPES, recipeById, refsIn, resolveRefs, STARTER_TEMPLATES, type Recipe, type RecipeRef } from "@/lib/crm/recipes";
+import { RECIPES, recipeById, refsIn, resolveRefs, type Recipe, type RecipeRef } from "@/lib/crm/recipes";
+import { starterFor } from "@/lib/crm/outreach/starters";
 import { PIPELINE_TEMPLATES, SETUP_KIND_INFO, type SetupKind } from "@/lib/crm/templates";
 import {
   describeWorkflow,
@@ -206,6 +207,7 @@ export async function saveWorkflow(
       where: { id: found.id },
       data: { ...data, ...(input.status ? { status: input.status } : {}) },
     });
+    await syncWorkflowTriggers(db, organizationId);
     return { id: found.id };
   }
   const count = await db.crmWorkflow.count({ where: { organizationId } });
@@ -221,7 +223,25 @@ export async function saveWorkflow(
     },
     select: { id: true },
   });
+  await syncWorkflowTriggers(db, organizationId);
   return created;
+}
+
+/**
+ * Keeps CrmSettings.workflowTriggers (the trigger types of the switched-on
+ * workflows) in step, so a member's change can tell whether to queue an
+ * event without reading CrmWorkflow, which only managers can.
+ */
+export async function syncWorkflowTriggers(db: TxClient, organizationId: string): Promise<void> {
+  const on = await db.crmWorkflow.findMany({ where: { organizationId, status: "ON" }, select: { trigger: true } });
+  const types = [
+    ...new Set(
+      on
+        .map((w) => (w.trigger && typeof w.trigger === "object" ? (w.trigger as { type?: unknown }).type : null))
+        .filter((t): t is string => typeof t === "string"),
+    ),
+  ].sort();
+  await db.crmSettings.updateMany({ where: { organizationId }, data: { workflowTriggers: types } });
 }
 
 export async function setWorkflowStatus(actor: CrmActor, id: string, status: "ON" | "OFF"): Promise<void> {
@@ -237,12 +257,14 @@ export async function setWorkflowStatus(actor: CrmActor, id: string, status: "ON
     if (!parsed.trigger || parsed.actions.length === 0) throw new CrmError("Finish its When and Then first.");
   }
   await db.crmWorkflow.update({ where: { id: row.id }, data: { status } });
+  await syncWorkflowTriggers(db, organizationId);
 }
 
 export async function deleteWorkflow(actor: CrmActor, id: string): Promise<void> {
   requireManager(await requireCrm(actor));
   const gone = await actor.db.crmWorkflow.deleteMany({ where: { id, organizationId: actor.organizationId } });
   if (gone.count === 0) throw new CrmError("That automation is already gone.");
+  await syncWorkflowTriggers(actor.db, actor.organizationId);
 }
 
 // ---- Recipes ---------------------------------------------------------------------------
@@ -339,7 +361,7 @@ export async function enableRecipe(actor: CrmActor, recipeId: string): Promise<{
   if (missing) throw new CrmError(`This one needs ${missing}. Add it in CRM settings first.`);
   for (const ref of refsIn(recipe)) {
     if (ref.kind !== "template" || resolveOne(r, ref)) continue;
-    const starter = STARTER_TEMPLATES[ref.category];
+    const starter = starterFor(ref.category);
     if (!starter) throw new CrmError("A template it needs isn't there.");
     const t = await db.crmTemplate.create({
       data: {

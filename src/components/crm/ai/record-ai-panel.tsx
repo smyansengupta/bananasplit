@@ -42,6 +42,7 @@ import { toast } from "@/components/ui/toaster";
 import type { BriefData } from "@/lib/crm/ai-outputs";
 import { cn } from "@/lib/utils";
 
+import { OpenDraftDialog } from "../outreach/compose";
 import { PasteConversation } from "./ai-bar";
 
 type Kind = "person" | "company" | "deal";
@@ -94,6 +95,8 @@ export function RecordAiPanel({
   const [summary, setSummary] = useState(initial);
   const [busy, setBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ subject: string; body: string; to: string[]; notes: string[] } | null>(null);
+  /** The draft, opened in compose (a person in the CRM with an address). */
+  const [composeDraft, setComposeDraft] = useState<{ id: string; note: string | null } | null>(null);
   const [purposeOpen, setPurposeOpen] = useState(false);
   const [purpose, setPurpose] = useState("");
   const [brief, setBrief] = useState<(BriefData & { at: string }) | null>(null);
@@ -114,7 +117,8 @@ export function RecordAiPanel({
     setBusy(null);
     setPurposeOpen(false);
     if (!r || !r.ok) return failToast(r as Fail | null);
-    setDraft({ subject: r.subject, body: r.body, to: r.to, notes: r.notes });
+    if (r.draftId) setComposeDraft({ id: r.draftId, note: r.notes.join(" ") || null });
+    else setDraft({ subject: r.subject, body: r.body, to: r.to, notes: r.notes });
     router.refresh();
   };
 
@@ -275,7 +279,7 @@ export function RecordAiPanel({
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{draft?.subject}</DialogTitle>
-            <DialogDescription>{draft?.to.length ? `To ${draft.to.join(", ")}. ` : ""}Saved in Review too, so you can come back to it.</DialogDescription>
+            <DialogDescription>{draft?.to.length ? `To ${draft.to.join(", ")}. ` : ""}They have no email address in the CRM, so copy it or open it in your own email.</DialogDescription>
           </DialogHeader>
           <pre className="bg-muted/45 max-h-80 overflow-auto rounded-2xl p-4 font-sans text-sm whitespace-pre-wrap">{draft?.body}</pre>
           {draft?.notes.length ? <p className="text-muted-foreground text-xs">{draft.notes.join(" ")}</p> : null}
@@ -301,6 +305,10 @@ export function RecordAiPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {composeDraft && (
+        <OpenDraftDialog orgId={orgId} draftId={composeDraft.id} note={composeDraft.note} onClose={() => setComposeDraft(null)} />
+      )}
 
       <Dialog open={brief !== null} onOpenChange={(o) => !o && setBrief(null)}>
         <DialogContent className="sm:max-w-xl">

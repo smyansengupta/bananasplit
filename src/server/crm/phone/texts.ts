@@ -19,7 +19,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { CrmError, type CrmActor } from "../access";
 import { logActivity } from "../activity";
 import { writeHistory } from "../history";
-import { readPhoneStatus } from "./connection";
+import { phoneStatus } from "./connection";
 
 /**
  * Two-way texting (docs/features/crm.md module 5, "Texting", and
@@ -88,7 +88,8 @@ export async function queueText(
   const body = input.body.trim();
   if (!body) throw new CrmError("Write the text first.");
   if (body.length > MAX_TEXT) throw new CrmError(`Keep a text under ${MAX_TEXT} characters.`);
-  const status = await readPhoneStatus(db, organizationId);
+  // Which provider and number: the service path (members can't read integrations).
+  const status = await phoneStatus(organizationId);
   if (!status.active) throw new CrmError("Connect Telnyx or Twilio on Integrations and apps to text from here.");
   if (!status.number) throw new CrmError("Pick the number texts go out from on Integrations and apps.");
   const person = await db.crmPerson.findFirst({

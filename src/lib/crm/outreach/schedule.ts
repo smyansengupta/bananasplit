@@ -15,6 +15,13 @@ export interface SendWindow {
 
 export const DEFAULT_WINDOW: SendWindow = { days: [1, 2, 3, 4, 5], startHour: 9, endHour: 17 };
 
+/**
+ * When an automation's email may go (a welcome after a form, a receipt):
+ * any day, waking hours in the organization's timezone, so nobody gets one
+ * at 3 AM and a weekend sign-up still hears back the same day.
+ */
+export const AUTOMATION_WINDOW: SendWindow = { days: [1, 2, 3, 4, 5, 6, 7], startHour: 8, endHour: 21 };
+
 /** A stored window, cleaned; anything odd falls back to weekdays 9 to 5. */
 export function readWindow(raw: unknown): SendWindow {
   const w = (raw && typeof raw === "object" ? raw : {}) as Partial<SendWindow>;

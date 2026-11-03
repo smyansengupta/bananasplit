@@ -2,9 +2,9 @@
 
 import { Clock, Code, Eye, Mail, Send } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { composeEmailAction, previewAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
+import { composeEmailAction, discardDraftAction, openDraftAction, previewAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,7 +22,8 @@ import { cn } from "@/lib/utils";
  * template or start blank, merge fields from a menu, see exactly what they
  * will get, then send now or tomorrow morning. It goes from the member's
  * own mailbox once one is connected, the organization's sender until then.
- * If another member is talking to them, it asks first.
+ * If another member is talking to them, it asks first. An AI draft opens
+ * here too (draftId), straight on its preview; it's sent only from here.
  */
 
 export interface ComposePerson {
@@ -52,6 +53,7 @@ export function ComposeButton({
   replyTo,
   subject: initialSubject,
   body: initialBody,
+  draftId,
 }: {
   orgId: string;
   people: ComposePerson[];
@@ -64,6 +66,8 @@ export function ComposeButton({
   replyTo?: { messageId: string; subject: string | null } | null;
   subject?: string;
   body?: string;
+  /** Opens this unsent draft (on its preview). */
+  draftId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const can = people.some((p) => p.email && !p.blocked);
@@ -90,6 +94,7 @@ export function ComposeButton({
           replyTo={replyTo ?? null}
           initialSubject={initialSubject}
           initialBody={initialBody}
+          draftId={draftId}
           onClose={() => setOpen(false)}
         />
       )}
@@ -114,6 +119,8 @@ export function ComposeDialog({
   replyTo,
   initialSubject,
   initialBody,
+  draftId,
+  note,
   onClose,
   onSent,
 }: {
@@ -124,6 +131,10 @@ export function ComposeDialog({
   replyTo: { messageId: string; subject: string | null } | null;
   initialSubject?: string;
   initialBody?: string;
+  /** An unsent draft (an AI draft): opens on its preview, and goes away once sent. */
+  draftId?: string | null;
+  /** A line to check before sending (what the AI flagged). */
+  note?: string | null;
   onClose: () => void;
   onSent?: () => void;
 }) {
@@ -135,7 +146,9 @@ export function ComposeDialog({
     replyTo?.subject ? `Re: ${replyTo.subject.replace(/^re:\s*/i, "")}` : (initialSubject ?? ""),
   );
   const [body, setBody] = useState(replyTo ? "" : (initialBody ?? "Hi {{first_name|there}},\n\n\n\n{{my_first_name}}"));
-  const [stage, setStage] = useState<Stage>({ kind: "write" });
+  const [stage, setStage] = useState<Stage>(
+    draftId && initialSubject && initialBody ? { kind: "preview", subject: initialSubject, body: initialBody, missing: [] } : { kind: "write" },
+  );
   const [pending, setPending] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);
   const person = people.find((p) => p.id === to);
@@ -184,6 +197,7 @@ export function ComposeDialog({
         replyToMessageId: replyTo?.messageId ?? null,
         sendAt: later ? tomorrowMorning() : null,
         confirmConflict,
+        draftId: draftId ?? null,
       }),
     );
     setPending(false);
@@ -202,11 +216,23 @@ export function ComposeDialog({
     router.refresh();
   };
 
+  const discard = async () => {
+    if (!draftId) return;
+    setPending(true);
+    const r = await runAction(() => discardDraftAction(orgId, draftId));
+    setPending(false);
+    if (!r) return;
+    if (!r.ok) return toast({ title: r.error, tone: "error" });
+    toast({ title: "Draft thrown away" });
+    onClose();
+    router.refresh();
+  };
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{replyTo ? "Reply" : `Email ${person?.name ?? ""}`.trim()}</DialogTitle>
+          <DialogTitle>{replyTo ? "Reply" : `${draftId ? "Draft to" : "Email"} ${person?.name ?? ""}`.trim()}</DialogTitle>
           <DialogDescription>
             {person?.email ? `To ${person.email}. ` : ""}It goes from your organization&apos;s address with your name, and lands on their timeline.
           </DialogDescription>
@@ -231,6 +257,7 @@ export function ComposeDialog({
               <p className="text-sm font-semibold">{stage.subject || "(no subject)"}</p>
               <p className="text-[15px] whitespace-pre-wrap">{stage.body}</p>
             </div>
+            {note && <p className="text-muted-foreground text-xs">{note}</p>}
             {stage.missing.length > 0 && (
               <p className="text-sm">
                 <Badge variant="accent">Missing</Badge>{" "}
@@ -239,6 +266,11 @@ export function ComposeDialog({
               </p>
             )}
             <DialogFooter>
+              {draftId && (
+                <Button variant="ghost" className="sm:me-auto" disabled={pending} onClick={discard}>
+                  Throw away
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setStage({ kind: "write" })}>
                 Edit
               </Button>
@@ -348,4 +380,76 @@ function relative(iso: string): string {
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   return `${days} days ago`;
+}
+
+/**
+ * An unsent draft (an AI draft, or one an automation left for review),
+ * loaded and opened in compose on its preview.
+ */
+export function OpenDraftDialog({
+  orgId,
+  draftId,
+  note,
+  onClose,
+  onSent,
+}: {
+  orgId: string;
+  draftId: string;
+  note?: string | null;
+  onClose: () => void;
+  onSent?: () => void;
+}) {
+  const [loaded, setLoaded] = useState<{
+    draft: { id: string; subject: string; body: string };
+    person: ComposePerson;
+    templates: ComposeTemplate[];
+  } | null>(null);
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    let live = true;
+    void runAction(() => openDraftAction(orgId, draftId)).then((r) => {
+      if (!live) return;
+      if (!r || !r.ok) {
+        if (r && !r.ok) toast({ title: r.error, tone: "error" });
+        close.current();
+        return;
+      }
+      setLoaded({ draft: r.draft, person: r.person, templates: r.templates });
+    });
+    return () => {
+      live = false;
+    };
+  }, [orgId, draftId]);
+  if (!loaded || loaded.draft.id !== draftId) return null;
+  return (
+    <ComposeDialog
+      orgId={orgId}
+      people={[loaded.person]}
+      templates={loaded.templates}
+      replyTo={null}
+      initialSubject={loaded.draft.subject}
+      initialBody={loaded.draft.body}
+      draftId={loaded.draft.id}
+      note={note}
+      onClose={onClose}
+      onSent={onSent}
+    />
+  );
+}
+
+/** "Open" on a draft waiting for someone: the button and its compose. */
+export function OpenDraftButton({ orgId, draftId, label = "Open" }: { orgId: string; draftId: string; label?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Mail className="size-4" aria-hidden="true" />
+        {label}
+      </Button>
+      {open && <OpenDraftDialog orgId={orgId} draftId={draftId} onClose={() => setOpen(false)} />}
+    </>
+  );
 }

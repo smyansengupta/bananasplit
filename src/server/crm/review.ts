@@ -181,8 +181,16 @@ async function targetNames(
   return out;
 }
 
+/**
+ * What the Review tab lists: every queue kind, except the CRM's signals
+ * (source SIGNAL), which are the Inbox's "To review" rows.
+ */
+export const REVIEW_WHERE = { kind: { in: [...QUEUE_KINDS] }, source: { not: "SIGNAL" } } satisfies Prisma.CrmSuggestionWhereInput;
+
 export interface QueueQuery {
   status?: "PENDING" | "DONE";
+  /** Only what came from here (Outreach's Your mail: EMAIL). */
+  source?: SuggestionSource;
   /** Only what's assigned to the viewer (or to nobody). */
   mine?: boolean;
   target?: TargetRef;
@@ -204,7 +212,8 @@ export async function listQueue(
   const rows = await db.crmSuggestion.findMany({
     where: {
       organizationId,
-      kind: { in: [...QUEUE_KINDS] },
+      ...REVIEW_WHERE,
+      ...(query.source ? { source: query.source } : {}),
       status: query.status === "DONE" ? { in: ["ACCEPTED", "REJECTED"] } : "PENDING",
       ...(query.mine ? { OR: [{ assigneeId: viewerId }, { assigneeId: null }] } : {}),
       ...(query.target ? { targetKind: query.target.kind, targetId: query.target.id } : {}),
@@ -251,7 +260,7 @@ export async function queueCount(db: TxClient, organizationId: string, viewerId:
   return db.crmSuggestion.count({
     where: {
       organizationId,
-      kind: { in: [...QUEUE_KINDS] },
+      ...REVIEW_WHERE,
       status: "PENDING",
       OR: [{ assigneeId: viewerId }, { assigneeId: null }],
     },
@@ -415,6 +424,20 @@ async function followUpOn(
 }
 
 async function makeDraft(ctx: OrgContext, draft: PayloadOf<"DRAFT_EMAIL">): Promise<string> {
+  // The draft already waits in compose: accepting keeps it there.
+  if (draft.draftId) {
+    const existing = await ctx.db.crmEmailMessage.findFirst({
+      where: { id: draft.draftId, organizationId: ctx.organizationId, status: "DRAFT" },
+      select: { threadId: true },
+    });
+    if (existing) {
+      await ctx.db.crmEmailMessage.updateMany({
+        where: { id: draft.draftId, organizationId: ctx.organizationId },
+        data: { subject: draft.subject, bodyText: draft.body, mailboxUserId: ctx.userId },
+      });
+      return existing.threadId;
+    }
+  }
   const me = await ctx.db.user.findUnique({ where: { id: ctx.userId }, select: { email: true } });
   const thread = await ctx.db.crmEmailThread.create({
     data: { organizationId: ctx.organizationId, subject: draft.subject },
@@ -529,7 +552,9 @@ async function apply(ctx: OrgContext, row: Row, kind: QueueKind, payload: unknow
     }
     case "DRAFT_EMAIL": {
       const d = parsePayload("DRAFT_EMAIL", payload);
-      applied.threadId = await makeDraft(ctx, d);
+      const threadId = await makeDraft(ctx, d);
+      // Undo throws away only a draft accepting made, never the one already in compose.
+      if (!d.draftId) applied.threadId = threadId;
       return applied;
     }
     case "CREATE_TASK": {

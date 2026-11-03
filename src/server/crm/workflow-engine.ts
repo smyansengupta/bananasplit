@@ -14,9 +14,9 @@ import {
 } from "@/lib/crm/workflows";
 import { withSystemOrgTx, type OrgContext, type TxClient } from "@/server/db/context";
 
-import type { CrmActor } from "./access";
 import { withAutomationScope, type CrmEventPayload } from "./events";
 import { rolePositions, type RoleOwner } from "./owners";
+import { actAs } from "./system-actor";
 import { runAction, type ActionContext } from "./workflow-actions";
 import { loadTarget, type WorkflowTarget } from "./workflow-target";
 
@@ -210,15 +210,9 @@ export async function runWorkflowOn(
         select: { id: true },
       });
       const info = await orgInfo(db, organizationId);
-      const actor: CrmActor = { db, organizationId, userId: acting.userId, role: acting.role };
-      const orgCtx: OrgContext = {
-        ...sys,
-        kind: "system",
-        userId: acting.userId,
-        organizationId,
-        role: acting.role,
-        user: { id: acting.userId, email: acting.email, name: acting.name },
-      };
+      const member = await actAs(sys, organizationId, acting.userId);
+      if (!member) throw new Error("The member it acts as left.");
+      const { actor, orgCtx } = member;
       const ctx: ActionContext = {
         actor,
         orgCtx,

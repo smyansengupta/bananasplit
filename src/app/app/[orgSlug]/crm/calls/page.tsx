@@ -74,7 +74,7 @@ export default async function CrmCallsPage({ params, searchParams }: PageProps<"
     voicemail: Boolean(status.settings.voicemailKey),
   };
   const base = `/app/${orgSlug}/crm/calls`;
-  const lists = [{ id: "due", name: "Follow-ups due", href: base, active: !data.picked }].concat(
+  const lists = [{ id: "due", name: "Calls and follow-ups due", href: base, active: !data.picked }].concat(
     data.views
       // The ready-made "Follow-ups due" view is the first list already.
       .filter((v) => v.name !== "Follow-ups due")
@@ -110,6 +110,7 @@ export default async function CrmCallsPage({ params, searchParams }: PageProps<"
           phone: p.phone,
           sub: [p.title, p.companyName].filter(Boolean).join(" at ") || null,
           lastContacted: p.lastContactedAt ? when(p.lastContactedAt) : null,
+          stepId: p.stepId,
         }))}
       />
       <div className="grid gap-4 lg:grid-cols-2">

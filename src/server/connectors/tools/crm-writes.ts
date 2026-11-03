@@ -359,7 +359,7 @@ export async function crmDraftEmailTool(session: ConnectorSession, raw: z.input<
     });
     if (!person) throw new NotFoundError();
     if (person.doNotContact || person.unsubscribedAt) throw new CrmToolError(`${person.name} asked not to be contacted.`);
-    const { suggestionId } = await deliverDraft(ctx.db, {
+    const delivered = await deliverDraft(ctx.db, {
       organizationId: space.id,
       target,
       to: person.primaryEmail ? [person.primaryEmail] : [],
@@ -372,8 +372,9 @@ export async function crmDraftEmailTool(session: ConnectorSession, raw: z.input<
       proposedById: ctx.userId,
       assigneeId: ctx.userId,
     });
+    const suggestionId = delivered.suggestionId ?? "";
     return {
-      output: queued(space, suggestionId, { id: crmItemId(space, target), name: person.name, url: recordUrl(space, target) }, "The draft waits in the CRM's Review tab. Nothing was sent."),
+      output: queued(space, suggestionId, { id: crmItemId(space, target), name: person.name, url: recordUrl(space, target) }, "The draft waits in the CRM's Review tab and in compose on their page. Nothing was sent."),
       target: { type: "CrmSuggestion", id: suggestionId },
     };
   });

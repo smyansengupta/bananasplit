@@ -8,7 +8,8 @@ import type { BookingQuestion } from "@/lib/crm/outreach/booking";
 import { CrmError, requireManager } from "@/server/crm/access";
 import { logActivity } from "@/server/crm/activity";
 import { newBatchId } from "@/server/crm/history";
-import { createPerson, updatePerson } from "@/server/crm/people";
+import { updatePerson } from "@/server/crm/people";
+import { acceptSuggestion, rejectSuggestion } from "@/server/crm/review";
 import { rolePositions } from "@/server/crm/owners";
 import { createBookingPage, updateBookingPage, type BookingPageInput } from "@/server/crm/outreach/booking";
 import { planBulk, sendBulk } from "@/server/crm/outreach/bulk-email";
@@ -39,7 +40,8 @@ import {
 } from "@/server/crm/outreach/partners";
 import { snoozeQueueItem } from "@/server/crm/outreach/queue";
 import { ensureSelfUpdateLink, turnOffSelfUpdate } from "@/server/crm/outreach/self-update";
-import { cancelEmail, composeEmail, type ComposeInput } from "@/server/crm/outreach/send";
+import { cancelEmail, composeEmail, contactable, discardDraft, type ComposeInput } from "@/server/crm/outreach/send";
+import { composeTemplates } from "@/server/crm/outreach/view";
 import {
   archiveSequence,
   closeStep,
@@ -66,6 +68,32 @@ import { outreachAction } from "./crm-action";
 export const composeEmailAction = outreachAction(async (ctx, _access, input: ComposeInput) => {
   const r = await composeEmail(ctx, input);
   return "conflict" in r ? { conflict: { ...r.conflict, at: r.conflict.at?.toISOString() ?? null } } : { messageId: r.messageId };
+});
+
+/** Throws an unsent draft away. */
+export const discardDraftAction = outreachAction(async (ctx, _a, draftId: string) => {
+  await discardDraft(ctx.db, ctx.organizationId, draftId);
+  return {};
+});
+
+/** An unsent draft, ready for compose: its words, who it's for and the templates. */
+export const openDraftAction = outreachAction(async (ctx, _a, draftId: string) => {
+  const d = await ctx.db.crmEmailMessage.findFirst({
+    where: { id: draftId, organizationId: ctx.organizationId, status: "DRAFT" },
+    select: { id: true, subject: true, bodyText: true, personId: true },
+  });
+  if (!d?.personId) throw new CrmError("That draft was sent or thrown away.");
+  const p = await ctx.db.crmPerson.findFirst({
+    where: { id: d.personId, organizationId: ctx.organizationId },
+    select: { id: true, name: true, primaryEmail: true, doNotContact: true, unsubscribedAt: true, consent: true, deletedAt: true },
+  });
+  if (!p) throw new CrmError("That person isn't in the CRM any more.");
+  const can = contactable(p);
+  return {
+    draft: { id: d.id, subject: d.subject ?? "", body: d.bodyText ?? "" },
+    person: { id: p.id, name: p.name, email: p.primaryEmail, blocked: can.ok ? null : can.reason },
+    templates: await composeTemplates(ctx.db, ctx.organizationId),
+  };
 });
 
 export const cancelEmailAction = outreachAction(async (ctx, _a, messageId: string) => {
@@ -205,41 +233,6 @@ export const snoozeAction = outreachAction(async (ctx, _a, id: string, choice: S
   return { until: until.toISOString() };
 });
 
-/** A call, logged in one step from the queue or a record (the tel: link already dialled). */
-export const logCallAction = outreachAction(
-  async (ctx, _a, input: { personId: string; outcome: "talked" | "voicemail" | "no-answer"; note?: string; followUpDays?: number | null; stepId?: string | null }) => {
-    const p = await ctx.db.crmPerson.findFirst({
-      where: { id: input.personId, organizationId: ctx.organizationId },
-      select: { id: true, companyId: true },
-    });
-    if (!p) throw new CrmError("That person isn't in the CRM any more.");
-    const words = { talked: "Talked", voicemail: "Left a voicemail", "no-answer": "No answer" } as const;
-    await logActivity(ctx.db, {
-      organizationId: ctx.organizationId,
-      kind: "CALL",
-      direction: "OUTBOUND",
-      subject: words[input.outcome] ?? "Call",
-      body: input.note?.trim().slice(0, 5000) || null,
-      targets: [{ kind: "person", id: p.id }, ...(p.companyId ? [{ kind: "company" as const, id: p.companyId }] : [])],
-      actorId: ctx.userId,
-      createdById: ctx.userId,
-      meta: { outcome: input.outcome },
-    });
-    if (input.followUpDays !== undefined) {
-      const at = input.followUpDays ? new Date(Date.now() + input.followUpDays * 86_400_000) : null;
-      await updatePerson(ctx, p.id, { nextFollowUpAt: at }, { trusted: true });
-    } else {
-      // Reached them: a follow-up that was due is done.
-      const person = await ctx.db.crmPerson.findFirst({ where: { id: p.id, organizationId: ctx.organizationId }, select: { nextFollowUpAt: true } });
-      if (person?.nextFollowUpAt && person.nextFollowUpAt <= new Date() && input.outcome === "talked") {
-        await updatePerson(ctx, p.id, { nextFollowUpAt: null }, { trusted: true });
-      }
-    }
-    if (input.stepId) await closeStep(ctx.db, ctx.organizationId, input.stepId).catch(() => undefined);
-    return {};
-  },
-);
-
 /** A note or an email sent elsewhere, logged from the queue: it also clears a follow-up that was due. */
 export const logTouchAction = outreachAction(
   async (ctx, _a, input: { personId: string; kind: "NOTE" | "EMAIL" | "TEXT" | "MEETING"; note: string; followUpDays?: number | null }) => {
@@ -318,33 +311,14 @@ export const saveFormDestinationAction = outreachAction(async (ctx, access, form
   return {};
 });
 
-/** Accepts a person suggested from email: adds them (or turns it down). */
+/** A person suggested from email (one review queue: the same suggestion as in Review). */
 export const resolveSuggestionAction = outreachAction(async (ctx, _a, suggestionId: string, accept: boolean) => {
-  const s = await ctx.db.crmSuggestion.findFirst({
-    where: { id: suggestionId, organizationId: ctx.organizationId, status: "PENDING", kind: "CREATE_PERSON" },
-    select: { id: true, payload: true },
-  });
-  if (!s) throw new CrmError("Someone already dealt with that.");
-  let personId: string | null = null;
-  if (accept) {
-    const p = (s.payload ?? {}) as { email?: string; name?: string | null; title?: string | null; company?: string | null; phone?: string | null; companyId?: string | null };
-    personId = (
-      await createPerson(ctx, {
-        name: p.name ?? null,
-        primaryEmail: p.email ?? null,
-        title: p.title ?? null,
-        phone: p.phone ?? null,
-        companyId: p.companyId ?? undefined,
-        companyName: p.companyId ? undefined : (p.company ?? undefined),
-        source: "email",
-      })
-    ).id;
+  if (!accept) {
+    await rejectSuggestion(ctx, suggestionId);
+    return { personId: null };
   }
-  await ctx.db.crmSuggestion.update({
-    where: { id: s.id },
-    data: { status: accept ? "ACCEPTED" : "REJECTED", reviewedById: ctx.userId, reviewedAt: new Date() },
-  });
-  return { personId };
+  const r = await acceptSuggestion(ctx, suggestionId);
+  return { personId: r.applied.createdKind === "person" ? (r.applied.createdId ?? null) : null };
 });
 
 // ---- Handover -------------------------------------------------------------------------------

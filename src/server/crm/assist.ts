@@ -154,10 +154,15 @@ export interface DraftResult {
   body: string;
   to: string[];
   notes: string[];
-  suggestionId: string;
+  /** The unsent draft in compose (null when they have no address in the CRM). */
+  draftId: string | null;
+  /** Who it's for, so compose opens on them. */
+  personId: string | null;
+  /** In Review instead, when an agent wrote it for someone. */
+  suggestionId: string | null;
 }
 
-/** Drafts a follow-up and puts it in the review queue (never sends). */
+/** Drafts a follow-up: an unsent draft in compose (and Review, for an agent's). Never sends. */
 export async function draftFollowUp(
   who: AiWho,
   target: TargetRef,
@@ -187,7 +192,7 @@ export async function draftFollowUp(
   const body = cleanText(r.data.body, 5000) ?? "";
   if (!body) throw new CrmError("The model didn't write a draft. Try again.");
   const to = ctx.email ? [ctx.email] : [];
-  const { suggestionId } = await who.tx((actor) =>
+  const delivered = await who.tx((actor) =>
     deliverDraft(actor.db, {
       organizationId: who.organizationId,
       target,
@@ -200,9 +205,10 @@ export async function draftFollowUp(
       citation: options.citation ?? recordCitation(ctx, "the record and its timeline"),
       proposedById: who.userId,
       assigneeId: who.userId,
+      inCompose: !options.job && options.feature !== "crm.follow_up_agent",
     }),
   );
-  return { subject, body, to, notes: cleanList(r.data.notes, 6), suggestionId };
+  return { subject, body, to, notes: cleanList(r.data.notes, 6), ...delivered };
 }
 
 // ---------------------------------------------------------------- meeting brief

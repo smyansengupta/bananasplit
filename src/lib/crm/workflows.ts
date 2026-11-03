@@ -295,9 +295,15 @@ export const actionSchema = z.discriminatedUnion("type", [
       params: z.object({ pipelineId: id, stageId: id.optional(), title: text(200).optional() }).strict(),
     })
     .strict(),
-  z.object({ type: z.literal("template.send"), params: z.object({ templateId: id }).strict() }).strict(),
+  z
+    .object({
+      type: z.literal("template.send"),
+      /** review: the email waits as a draft in Review for the owner instead of sending. */
+      params: z.object({ templateId: id, review: z.boolean().optional() }).strict(),
+    })
+    .strict(),
   z.object({ type: z.literal("sequence.enroll"), params: z.object({ sequenceId: id }).strict() }).strict(),
-  z.object({ type: z.literal("event.invite"), params: z.object({ eventId: id }).strict() }).strict(),
+  z.object({ type: z.literal("event.invite"), params: z.object({ eventId: id, review: z.boolean().optional() }).strict() }).strict(),
   z
     .object({
       type: z.literal("notify"),

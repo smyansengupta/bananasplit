@@ -1,4 +1,4 @@
-import { QUEUE_KINDS } from "@/lib/crm/suggestions";
+import { REVIEW_WHERE } from "@/server/crm/review";
 import { crmConnectionLabel } from "@/server/crm/ai";
 import { builtinField } from "@/lib/crm/fields";
 import { customFieldsFor } from "@/server/crm/databases";
@@ -33,7 +33,7 @@ export async function RecordAi({
     withOrgTx(orgId, async ({ db }) => {
       const enrichment = await readEnrichment(db, orgId, { kind, id });
       const waiting = await db.crmSuggestion.count({
-        where: { organizationId: orgId, status: "PENDING", kind: { in: [...QUEUE_KINDS] }, targetKind: kind, targetId: id },
+        where: { organizationId: orgId, status: "PENDING", ...REVIEW_WHERE, targetKind: kind, targetId: id },
       });
       const email =
         kind === "person"

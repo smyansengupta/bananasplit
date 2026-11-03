@@ -30,6 +30,8 @@ export interface CallTarget {
   personId?: string | null;
   companyId?: string | null;
   dealId?: string | null;
+  /** A sequence's call step this call does (it closes in the queue). */
+  stepId?: string | null;
 }
 
 const FOLLOW_UPS = [
@@ -173,12 +175,14 @@ export function LogCallDialog({
   name,
   open,
   onOpenChange,
+  onSaved,
 }: {
   orgId: string;
   target: CallTarget;
   name: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSaved?: () => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -187,7 +191,14 @@ export function LogCallDialog({
           <DialogTitle>Log a call with {name}</DialogTitle>
           <DialogDescription>It goes on the timeline and counts as being in touch.</DialogDescription>
         </DialogHeader>
-        <LogCallForm orgId={orgId} target={target} onSaved={() => onOpenChange(false)} />
+        <LogCallForm
+          orgId={orgId}
+          target={target}
+          onSaved={() => {
+            onOpenChange(false);
+            onSaved?.();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

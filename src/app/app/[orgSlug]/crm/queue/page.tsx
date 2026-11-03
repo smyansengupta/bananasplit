@@ -2,8 +2,8 @@ import { CrmAiBar } from "@/components/crm/ai/ai-bar";
 import { ReviewQueue, type QueueItemView } from "@/components/crm/ai/review-queue";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { PageHeader } from "@/components/page-header";
-import { QUEUE_KINDS } from "@/lib/crm/suggestions";
-import { listQueue } from "@/server/crm/review";
+
+import { listQueue, REVIEW_WHERE } from "@/server/crm/review";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmShell } from "../shell";
@@ -26,9 +26,9 @@ export default async function CrmQueuePage({ params, searchParams }: PageProps<"
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
   const data = await withOrgTx(orgId, async ({ db }) => {
     const items = await listQueue(db, orgId, shell.user.id, { status: status === "done" ? "DONE" : "PENDING", mine });
-    const waiting = await db.crmSuggestion.count({ where: { organizationId: orgId, status: "PENDING", kind: { in: [...QUEUE_KINDS] } } });
+    const waiting = await db.crmSuggestion.count({ where: { organizationId: orgId, status: "PENDING", ...REVIEW_WHERE } });
     const forMe = await db.crmSuggestion.count({
-      where: { organizationId: orgId, status: "PENDING", kind: { in: [...QUEUE_KINDS] }, assigneeId: shell.user.id },
+      where: { organizationId: orgId, status: "PENDING", ...REVIEW_WHERE, assigneeId: shell.user.id },
     });
     return { items, waiting, forMe };
   });
@@ -53,6 +53,7 @@ export default async function CrmQueuePage({ params, searchParams }: PageProps<"
         : i.kind === "CREATE_TASK"
           ? { title: String(i.payload.title ?? ""), dueDate: typeof i.payload.dueDate === "string" ? i.payload.dueDate : null }
           : null,
+    draftId: i.kind === "DRAFT_EMAIL" && typeof i.payload.draftId === "string" ? i.payload.draftId : null,
   }));
   return (
     <div className="space-y-6">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ExternalLink, Inbox, Pencil, Sparkles, Undo2, X } from "@/components/icons";
+import { Check, ExternalLink, Inbox, Mail, Pencil, Sparkles, Undo2, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -23,6 +23,8 @@ import { toast } from "@/components/ui/toaster";
 import { crmRecordHref } from "@/lib/crm/href";
 import { KIND_LABELS, SOURCE_LABELS, type Citation, type DiffRow, type QueueKind, type SuggestionSource, type TargetKind } from "@/lib/crm/suggestions";
 import { cn } from "@/lib/utils";
+
+import { OpenDraftDialog } from "../outreach/compose";
 
 /**
  * The review queue (docs/features/crm.md, differentiator 6): every change
@@ -49,6 +51,8 @@ export interface QueueItemView {
   undoable: boolean;
   /** Drafts and tasks: what can be edited before accepting. */
   edit: { subject?: string; body?: string; title?: string; dueDate?: string | null } | null;
+  /** An email draft waiting in compose: it opens there, previewed, and is sent from there. */
+  draftId?: string | null;
 }
 
 function ago(iso: string): string {
@@ -199,6 +203,7 @@ export function ReviewQueue({
             <li key={item.id}>
               <SuggestionCard
                 item={item}
+                orgId={orgId}
                 orgSlug={orgSlug}
                 busy={busy === item.id || busy === "all"}
                 onAccept={(edits) =>
@@ -217,6 +222,7 @@ export function ReviewQueue({
 
 function SuggestionCard({
   item,
+  orgId,
   orgSlug,
   busy,
   onAccept,
@@ -224,13 +230,16 @@ function SuggestionCard({
   onUndo,
 }: {
   item: QueueItemView;
+  orgId: string;
   orgSlug: string;
   busy: boolean;
   onAccept: (edits?: Record<string, unknown>) => void;
   onReject: () => void;
   onUndo: () => void;
 }) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState(item.edit ?? {});
   const waiting = item.status === "PENDING";
   return (
@@ -318,7 +327,21 @@ function SuggestionCard({
         </p>
       )}
 
-      {waiting ? (
+      {waiting && item.draftId ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" disabled={busy} onClick={() => setComposing(true)}>
+            <Mail className="size-4" aria-hidden="true" />
+            Open in compose
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={onReject}>
+            <X className="size-4" aria-hidden="true" />
+            Reject
+          </Button>
+          {composing && (
+            <OpenDraftDialog orgId={orgId} draftId={item.draftId} onClose={() => setComposing(false)} onSent={() => router.refresh()} />
+          )}
+        </div>
+      ) : waiting ? (
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" disabled={busy} onClick={() => onAccept(editing ? draft : undefined)}>
             <Check className="size-4" aria-hidden="true" />

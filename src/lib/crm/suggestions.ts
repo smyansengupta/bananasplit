@@ -175,6 +175,8 @@ export const PAYLOADS = {
     body: shortText(20_000),
     /** Why it was drafted ("No reply in 40 days"). */
     why: optionalText(500),
+    /** The unsent draft waiting in compose (src/server/crm/drafts.ts). */
+    draftId: ID.nullish().transform((v) => v ?? null),
   }),
   CREATE_TASK: taskPayload,
 } satisfies Record<QueueKind, z.ZodType>;

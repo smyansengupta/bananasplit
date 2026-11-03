@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2, Phone, Repeat } from "@/components/icons";
+import { Link2, Repeat } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 
 import { CopyLink } from "./booking";
 import { ComposeButton, type ComposeTemplate } from "./compose";
-import { LogDialog } from "./queue";
 import { EnrollDialog } from "./sequences";
 
 /** The person page's reaching-out controls: cadence, follow-up, sequences, invites, their self-update link, a call. */
@@ -39,7 +38,6 @@ export function PersonOutreachControls({
 }) {
   const router = useRouter();
   const [enrolling, setEnrolling] = useState(false);
-  const [calling, setCalling] = useState(false);
   const [link, setLink] = useState(selfUpdateUrl);
   const ok = (r: { ok: boolean; error?: string } | undefined, msg: string) => {
     if (!r) return;
@@ -85,14 +83,6 @@ export function PersonOutreachControls({
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        {person.phone && !person.blocked && (
-          <Button asChild variant="outline" size="sm">
-            <a href={`tel:${person.phone}`} onClick={() => setCalling(true)}>
-              <Phone className="size-4" aria-hidden="true" />
-              Call and log
-            </a>
-          </Button>
-        )}
         <Button variant="outline" size="sm" disabled={sequences.length === 0 || Boolean(person.blocked)} title={sequences.length ? undefined : "No sequence is on"} onClick={() => setEnrolling(true)}>
           <Repeat className="size-4" aria-hidden="true" />
           Add to a sequence
@@ -164,7 +154,6 @@ export function PersonOutreachControls({
       {enrolling && (
         <EnrollDialog orgId={orgId} sequences={sequences} personIds={[person.id]} onClose={() => setEnrolling(false)} onDone={() => router.refresh()} />
       )}
-      {calling && <LogDialog orgId={orgId} personId={person.id} name={person.name} kind="call" onClose={() => setCalling(false)} onDone={() => { setCalling(false); router.refresh(); }} />}
     </div>
   );
 }
