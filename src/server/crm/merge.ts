@@ -12,8 +12,8 @@ import { writeHistory } from "./history";
  * "merges keep history, sequences and automations"). Everything that
  * pointed at the duplicate moves to the record you keep: addresses, items
  * and their roles, the timeline, sequence enrollments, campaign targets,
- * calls, texts, job history, field history, and Relation links in every
- * database. Empty fields are filled from the duplicate; where both had a
+ * calls, texts, job history and Relation links in every database; its
+ * field history stays its own and reads as part of the kept record's. Empty fields are filled from the duplicate; where both had a
  * value the kept one stays and the other is written to field history. The
  * duplicate goes to the trash, marked as merged, so it can be looked at.
  */
@@ -207,12 +207,11 @@ export async function mergePeople(
       data: { personId: keepId, current: false },
     })
   ).count;
-  moved.history = (
-    await db.crmFieldHistory.updateMany({
-      where: { organizationId, targetKind: "person", targetId: dropId },
-      data: { targetId: keepId },
-    })
-  ).count;
+  // Field history is append-only: the duplicate keeps its own rows, and the
+  // kept record's history reads them through its "mergedInto" row.
+  moved.history = await db.crmFieldHistory.count({
+    where: { organizationId, targetKind: "person", targetId: dropId },
+  });
   moved.links = await repointRelations(db, organizationId, "person", dropId, keepId);
 
   // The keeper's own values, filled from the duplicate. Its primary
@@ -305,12 +304,9 @@ export async function mergeCompanies(
   ).count;
   await db.crmQuote.updateMany({ where: { organizationId, companyId: dropId }, data: { companyId: keepId } });
   moved.timeline = await moveActivityTargets(db, organizationId, "company", dropId, keepId);
-  moved.history = (
-    await db.crmFieldHistory.updateMany({
-      where: { organizationId, targetKind: "company", targetId: dropId },
-      data: { targetId: keepId },
-    })
-  ).count;
+  moved.history = await db.crmFieldHistory.count({
+    where: { organizationId, targetKind: "company", targetId: dropId },
+  });
   moved.links = await repointRelations(db, organizationId, "company", dropId, keepId);
   // The sponsor link is unique: free it on the duplicate before the keeper takes it.
   await db.crmCompany.update({

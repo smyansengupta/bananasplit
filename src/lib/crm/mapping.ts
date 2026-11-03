@@ -76,9 +76,11 @@ export function detectSource(headers: readonly string[], fileName = ""): ImportS
   if (has("account name", "mailing city", "mailing street", "lead source", "contact id", "account id")) {
     return "salesforce";
   }
-  if (lower.includes("airtable") || has("record id airtable", "created time")) return "airtable";
-  if (lower.includes("notion") || has("created time", "last edited time", "tags")) {
-    return keys.has("last edited time") ? "notion" : "csv";
+  // Notion stamps every export with "Last edited time"; Airtable names its
+  // files after the base and view ("Contacts-Grid view.csv").
+  if (lower.includes("notion") || has("last edited time", "last edited by")) return "notion";
+  if (lower.includes("airtable") || /-grid view.csv$/i.test(fileName) || has("created time", "last modified time")) {
+    return "airtable";
   }
   return "csv";
 }

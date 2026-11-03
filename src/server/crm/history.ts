@@ -116,8 +116,15 @@ export async function historyOf(
   targetId: string,
   take = 200,
 ): Promise<HistoryEntry[]> {
+  // Records merged into this one bring their history along.
+  const merged = await db.crmFieldHistory.findMany({
+    where: { organizationId, targetKind, field: "mergedInto", newValue: { equals: targetId } },
+    select: { targetId: true },
+    take: 50,
+  });
+  const ids = [targetId, ...merged.map((m) => m.targetId)];
   return db.crmFieldHistory.findMany({
-    where: { organizationId, targetKind, targetId },
+    where: { organizationId, targetKind, targetId: { in: ids } },
     orderBy: [{ changedAt: "desc" }, { id: "desc" }],
     take,
     select: {

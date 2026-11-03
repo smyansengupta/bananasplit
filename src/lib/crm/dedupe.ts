@@ -6,6 +6,8 @@
  *
  * Scoring (0-100):
  *   same email address                     100 (certain)
+ *   the same full name                      +70 (+45 when their work
+ *                                           addresses are at different places)
  *   same phone number (last 10 digits)      +45
  *   names alike (Jaro-Winkler on a normal form, nicknames folded)
  *                                          up to +45
@@ -237,8 +239,14 @@ export function scorePeople(a: DedupePerson, b: DedupePerson): MatchScore {
 
   let score = 0;
   const sim = nameSimilarity(a.name, b.name);
+  const fullName = normalizeName(a.name).split(" ").length >= 2;
+  const domainsA = new Set(a.emails.map(workDomain).filter((d): d is string => Boolean(d)));
+  const domainsB = b.emails.map(workDomain).filter((d): d is string => Boolean(d));
+  // Two work addresses at different places: probably two people who share a name.
+  const otherPlaces = domainsA.size > 0 && domainsB.length > 0 && !domainsB.some((d) => domainsA.has(d));
   if (sim >= 0.999) {
-    score += 45;
+    // The same full name is worth a look on its own; a one-word name isn't.
+    score += fullName && !otherPlaces ? 70 : 45;
     reasons.push("Same name");
   } else if (sim >= 0.9) {
     score += Math.round(45 * ((sim - 0.8) / 0.2));
