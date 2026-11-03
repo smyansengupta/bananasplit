@@ -15,9 +15,12 @@ import { getOrgMembersForPicker } from "@/server/members";
 import { loadVersion } from "@/server/org-chart/service";
 import { planGate } from "@/server/billing/plan-gate";
 
-export const metadata: Metadata = { title: "Edit org chart draft" };
+export const metadata: Metadata = { title: "Edit the org chart" };
 
-/** The draft editor (any member: orgchart.write). */
+/**
+ * The draft editor (any member: orgchart.write). A document still being
+ * read shows its progress first; an imported draft says where it came from.
+ */
 export default async function DraftPage({
   params,
 }: PageProps<"/app/[orgSlug]/org-chart/drafts/[versionId]">) {
@@ -27,15 +30,7 @@ export default async function DraftPage({
   const { organization, role } = await getOrgContextBySlug(orgSlug);
   if (!can({ role }, "orgchart.write")) notFound();
 
-  const [detail, live] = await Promise.all([
-    withOrgTx(organization.id, (ctx) => loadVersion(ctx, versionId)),
-    withOrgTx(organization.id, ({ db }) =>
-      db.orgChartVersion.findFirst({
-        where: { organizationId: organization.id, status: "PUBLISHED" },
-        select: { id: true },
-      }),
-    ),
-  ]);
+  const detail = await withOrgTx(organization.id, (ctx) => loadVersion(ctx, versionId));
   if (!detail) notFound();
   const { version } = detail;
   const base = `/app/${orgSlug}/org-chart`;
@@ -43,27 +38,25 @@ export default async function DraftPage({
     ? `/api/orgs/${organization.id}/org-chart/imports/${version.id}/source`
     : null;
 
+  const imported =
+    version.source === "UPLOAD" && version.sourceFilename ? (
+      <p className="text-muted-foreground text-[15px]">
+        Imported from{" "}
+        {sourceHref ? (
+          <a href={sourceHref} className="underline underline-offset-4">
+            {version.sourceFilename}
+          </a>
+        ) : (
+          version.sourceFilename
+        )}
+        . Check every position before publishing.
+      </p>
+    ) : null;
   const header = (
     <div className="space-y-3">
-      <BackLink href={base} label="Org chart" />
-      <h1 className="page-title">Draft v{version.number}</h1>
-      <p className="text-muted-foreground text-[15px]">
-        {version.source === "UPLOAD" && version.sourceFilename ? (
-          <>
-            Imported from{" "}
-            {sourceHref ? (
-              <a href={sourceHref} className="underline underline-offset-4">
-                {version.sourceFilename}
-              </a>
-            ) : (
-              version.sourceFilename
-            )}
-            . Check every position before publishing.
-          </>
-        ) : (
-          "Drafts save as you go."
-        )}
-      </p>
+      <BackLink href={`/app/${orgSlug}/people?view=chart`} label="People" />
+      <h1 className="page-title">Org chart</h1>
+      {imported}
     </div>
   );
 
@@ -126,43 +119,49 @@ export default async function DraftPage({
   }));
 
   return (
-    <div className="space-y-4">
-      {header}
-      <ParseReportPanel
-        method={version.parseMethod}
-        report={version.parseReport}
-        model={version.parseModel}
-        costUsd={version.parseCostUsd}
-        confidence={version.parseConfidence}
+    <Suspense>
+      <DraftEditor
+        key={version.editVersion}
+        orgId={organization.id}
+        orgSlug={orgSlug}
+        version={{
+          id: version.id,
+          number: version.number,
+          source: version.source,
+          sourceFilename: version.sourceFilename,
+          editVersion: version.editVersion,
+          warnings: version.warnings,
+          openItems: version.openItems,
+          teams: version.teams,
+        }}
+        positions={positions}
+        canInvite={can({ role }, "members.invite")}
+        members={members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          image: m.image,
+          avatar: m.avatar,
+          title: m.title,
+        }))}
+        notice={
+          version.parseMethod &&
+          version.parseMethod !== "MANUAL" &&
+          version.parseMethod !== "TEMPLATE" ? (
+            <div className="space-y-3">
+              {imported}
+              <ParseReportPanel
+                method={version.parseMethod}
+                report={version.parseReport}
+                model={version.parseModel}
+                costUsd={version.parseCostUsd}
+                confidence={version.parseConfidence}
+              />
+            </div>
+          ) : (
+            imported
+          )
+        }
       />
-      <Suspense>
-        <DraftEditor
-          key={version.editVersion}
-          orgId={organization.id}
-          orgSlug={orgSlug}
-          version={{
-            id: version.id,
-            number: version.number,
-            source: version.source,
-            sourceFilename: version.sourceFilename,
-            editVersion: version.editVersion,
-            warnings: version.warnings,
-            openItems: version.openItems,
-            teams: version.teams,
-          }}
-          positions={positions}
-          canInvite={can({ role }, "members.invite")}
-          canSetTitles={can({ role }, "members.setTitle")}
-          publishedVersionId={live?.id ?? null}
-          members={members.map((m) => ({
-            id: m.id,
-            name: m.name,
-            image: m.image,
-            avatar: m.avatar,
-            title: m.title,
-          }))}
-        />
-      </Suspense>
-    </div>
+    </Suspense>
   );
 }

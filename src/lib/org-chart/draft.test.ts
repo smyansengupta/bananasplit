@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addBeside,
   addPosition,
   canDrop,
   confirmAllExact,
@@ -10,6 +11,7 @@ import {
   removePosition,
   setManager,
   siblingsOf,
+  toOpenRole,
   unlinkMember,
   type DraftPosition,
 } from "./draft";
@@ -98,6 +100,28 @@ describe("draft operations", () => {
       userId: null,
       matchState: "SUGGESTED",
       personName: "Jackson Lamoureux",
+    });
+  });
+
+  it("adds a position beside another, right after it under the same manager", () => {
+    const next = addBeside(chart, "ops", "new-1")!;
+    expect(order(next, "pres")).toEqual(["adv", "ops", "new-1", "growth"]);
+    expect(addBeside(chart, "missing")).toBeNull();
+  });
+
+  it("makes a position an open role, dropping the person and any suggestion", () => {
+    const held = P("x", null, "a0", {
+      personName: "Ana",
+      userId: "u1",
+      matchState: "CONFIRMED",
+      suggestedUserIds: ["u1"],
+    });
+    expect(toOpenRole(held)).toMatchObject({
+      isOpen: true,
+      personName: null,
+      userId: null,
+      matchState: "UNMATCHED",
+      suggestedUserIds: [],
     });
   });
 });

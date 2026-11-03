@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { startDraftAction } from "@/app/app/[orgSlug]/org-chart/actions";
+import { MessageCircle } from "@/components/icons";
 import { DropZone } from "@/components/org-chart/drop-zone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,8 @@ import { cn } from "@/lib/utils";
  * The org chart's empty state for someone who can edit it (no published
  * chart, no open draft): three ways in. "Draft my chart" drafts from the
  * members' titles and opens the review; a shape opens the seat screen; a
- * dropped file or pasted text goes through the existing import.
+ * dropped file or pasted text goes through the existing import. Or ask
+ * everyone where they sit: members answer on this page, an admin approves.
  */
 
 export interface StartPreviewPerson {
@@ -107,6 +109,20 @@ export function StartChart({
       setError("error" in result ? result.error : "The draft couldn't be started.");
     });
 
+  /** Starts the draft members place themselves on; the question shows right here. */
+  const ask = () =>
+    startTransition(async () => {
+      setError(null);
+      setBusy("ask");
+      const result = await startDraftAction(orgId, "ask");
+      setBusy(null);
+      if (result.ok && "versionId" in result) {
+        router.refresh();
+        return;
+      }
+      setError("error" in result ? result.error : "Couldn't ask everyone.");
+    });
+
   const [head, ...below] = preview;
 
   return (
@@ -146,7 +162,7 @@ export function StartChart({
           </div>
           <p className="text-muted-foreground text-sm leading-relaxed">
             We place your {memberCount} {memberCount === 1 ? "member" : "members"} using the titles
-            they already have, and ask you about anyone we&apos;re not sure of.
+            and roles they already have, and ask you about anyone we&apos;re not sure of.
           </p>
           <Button
             type="button"
@@ -186,11 +202,30 @@ export function StartChart({
             Bring what you have
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            A document with your roles. We turn it into a chart you can check.
+            A doc or a spreadsheet with your roles. We turn it into a chart you can check.
           </p>
           <DropZone orgId={orgId} orgSlug={orgSlug} variant="tile" disabled={pending} />
         </section>
       </div>
+
+      <button
+        type="button"
+        disabled={pending}
+        onClick={ask}
+        className="focus-glow flex items-center gap-2.5 self-start rounded-full pr-2 text-left text-sm outline-none disabled:opacity-60"
+      >
+        <span className="bg-tint-success text-tint-success-foreground grid size-6 shrink-0 place-items-center rounded-full">
+          <MessageCircle className="size-3" aria-hidden="true" />
+        </span>
+        <span>
+          <b className="font-semibold">
+            {busy === "ask" ? "Asking…" : "Or ask everyone where they sit."}
+          </b>{" "}
+          <span className="text-muted-foreground">
+            Each member picks their position; you approve the chart.
+          </span>
+        </span>
+      </button>
 
       {error && (
         <p role="alert" className="text-destructive text-sm">

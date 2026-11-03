@@ -15,9 +15,10 @@ import {
   useNodesInitialized,
   useReactFlow,
   type Edge,
+  type NodeChange,
 } from "@xyflow/react";
 import { ChevronsDownUp, ChevronsUpDown, Download, Printer } from "@/components/icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toaster";
@@ -40,6 +41,9 @@ import { PositionNode, subtitleFor, type PositionFlowNode } from "./position-nod
  * folds away with the toggle under its lead. Extra managers are dashed
  * curves from the extra manager to the position. With `exportName` the corner
  * offers Download PNG and Print (Save as PDF). `focus` centers a node.
+ * With `onReparent` the chart is the editor: drag a position onto another
+ * and it reports to that one. `nodeActions` puts buttons under a position
+ * (the editor's Add under and Beside, an empty seat's Invite someone).
  */
 
 export interface ChartCanvasProps {
@@ -67,6 +71,10 @@ export interface ChartCanvasProps {
   exportName?: string;
   /** The heading printed on the exported chart. */
   exportTitle?: string;
+  /** Drag a position onto another to make it report there. */
+  onReparent?: (dragId: string, targetId: string) => void;
+  /** Buttons under a position, or null for none. */
+  nodeActions?: (node: ChartNodeDTO) => ReactNode;
 }
 
 const nodeTypes = { position: PositionNode };
@@ -98,9 +106,14 @@ function Canvas({
   flagUnknown = false,
   exportName,
   exportTitle,
+  onReparent,
+  nodeActions,
 }: ChartCanvasProps) {
   const flow = useReactFlow();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /** The position being dragged (where it is now) and what it would land on. */
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [dropOn, setDropOn] = useState<string | null>(null);
 
   // Teams (colour slots) and each position's descendants, on the whole chart.
   const { colorOf, descendantsOf, parents, teamLeads } = useMemo(() => {
@@ -171,10 +184,10 @@ function Canvas({
     return layout.nodes.map((p) => ({
       id: p.id,
       type: "position",
-      position: { x: p.x, y: p.y },
+      position: drag?.id === p.id ? { x: drag.x, y: drag.y } : { x: p.x, y: p.y },
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
-      draggable: false,
+      draggable: Boolean(onReparent),
       connectable: false,
       selectable: false,
       data: {
@@ -185,9 +198,37 @@ function Canvas({
         collapsed: collapsed.has(p.id),
         onToggle: collapsible ? toggle : undefined,
         flagUnknown,
+        dropTarget: p.id === dropOn,
+        actions: nodeActions?.(byId.get(p.id) as ChartNodeDTO) ?? null,
       },
     }));
-  }, [layout, nodes, selectedId, colorOf, descendantsOf, collapsed, collapsible, toggle, flagUnknown]);
+  }, [
+    layout,
+    nodes,
+    selectedId,
+    colorOf,
+    descendantsOf,
+    collapsed,
+    collapsible,
+    toggle,
+    flagUnknown,
+    drag,
+    dropOn,
+    onReparent,
+    nodeActions,
+  ]);
+
+  // Dragging only moves the one position; letting go puts it back in the
+  // layout, under its new manager when it was dropped on one.
+  const onNodesChange = useCallback((changes: NodeChange<PositionFlowNode>[]) => {
+    for (const c of changes) {
+      if (c.type === "position" && c.dragging && c.position) {
+        setDrag({ id: c.id, x: c.position.x, y: c.position.y });
+      }
+    }
+  }, []);
+  const hitOf = (node: PositionFlowNode) =>
+    flow.getIntersectingNodes(node).find((n) => n.id !== node.id)?.id ?? null;
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -281,11 +322,23 @@ function Canvas({
         // A click handler gives the (unselectable) nodes pointer events; the
         // node's inner button reaches it by keyboard too (Enter clicks it).
         onNodeClick={(_, node) => onSelect?.(node.id)}
+        onNodesChange={onReparent ? onNodesChange : undefined}
+        onNodeDrag={onReparent ? (_, node) => setDropOn(hitOf(node)) : undefined}
+        onNodeDragStop={
+          onReparent
+            ? (_, node) => {
+                const target = hitOf(node);
+                setDrag(null);
+                setDropOn(null);
+                if (target) onReparent(node.id, target);
+              }
+            : undefined
+        }
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 1.1 }}
         minZoom={0.15}
         maxZoom={2}
-        nodesDraggable={false}
+        nodesDraggable={Boolean(onReparent)}
         nodesConnectable={false}
         nodesFocusable={false}
         edgesFocusable={false}
