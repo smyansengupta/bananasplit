@@ -99,6 +99,7 @@ export default async function CrmDealsPage({
     <div>
       <CrmHeader
         orgSlug={orgSlug}
+        create="deal"
         settings={shell.access.manager}
         toolbar={
           <DealsToolbar

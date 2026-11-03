@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
  * button for whoever may change the CRM. Creating opens a card over the
  * page (?open=new:...), never a new page.
  */
+const CREATE_LABEL = { person: "New person", company: "New company", deal: "New deal" } as const;
+
 export function CrmHeader({
   orgSlug,
   settings,
@@ -32,10 +34,10 @@ export function CrmHeader({
   toolbar?: ReactNode;
   /**
    * What the create button makes in one click (People's Companies view: a
-   * company), a tab's own create in its place (Outreach's New plan), or
+   * company; Deals: a deal), a tab's own create in its place (Outreach's New plan), or
    * false on pages that make nothing (CRM settings).
    */
-  create?: "person" | "company" | false | ReactElement;
+  create?: "person" | "company" | "deal" | false | ReactElement;
 }) {
   const { setOpen } = useCrmOpen();
   const base = `/app/${orgSlug}/crm`;
@@ -48,8 +50,8 @@ export function CrmHeader({
             create
           ) : create ? (
             <CreateSplitButton
-              label={create === "company" ? "New company" : "New person"}
-              title={create === "company" ? "New company" : "New person"}
+              label={CREATE_LABEL[create]}
+              title={CREATE_LABEL[create]}
               onClick={() => setOpen({ kind: "new", what: create })}
               menuLabel="More to create"
             >
