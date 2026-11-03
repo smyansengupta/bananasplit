@@ -978,6 +978,37 @@ removed.
 - Prompts wrap everything members and contacts wrote as data (`dataRule`,
   `fenced`); no tools beyond web search for research.
 
+### Email drafts: writing rules
+
+Every AI-written email to a person follows one rule set,
+`EMAIL_STYLE_RULES` in `src/lib/crm/email-style.ts` (33 short rules
+distilled from the "humanizer" and "sepia" writing skills): one clear ask,
+real dates, numbers and names from the timeline, nothing invented, the
+sender's own voice (matching their past emails on the timeline) and first
+name, plain words, no "I hope this email finds you well" openers or "Let me
+know if you have any questions" closers, no em dashes, no stacked threes, no
+significance claims or vague praise, plain text, short. `withEmailStyle`
+appends them to a prompt; it is used by `draftSystemPrompt` (the record's
+Draft a follow-up and the follow-up agent's check-ins, both through
+`draftFollowUp`) and by the `crm_draft_email` tool's description, so a
+member's own Claude gets the same rules.
+
+The post-check is `emailTells`: a short list of the most obvious tells
+(dashes, the opener and closer phrases, "reaching out", "don't hesitate",
+a handful of AI words, "not just X, it's Y", "plays a vital role",
+"lasting impact", "continued support", bracket or `{{ }}` placeholders,
+markdown, emoji). `styleCheckedDraft` asks once more when a draft trips one,
+naming them and passing the first draft back as data, and keeps whichever has
+fewer; each try is its own `runCrmAi` call (cap, limits, an `AiUsage` row,
+no transaction open), and a second try refused by the cap, a limit or the
+model keeps the first. Tells that remain become a note for the sender. A
+`crm_draft_email` draft is saved as written, and the tool's answer names any
+tells for the app to fix. The stand-in's draft passes the check.
+
+Workflow "owner reviews first" drafts are the organization's own templates
+(no model), and describing an automation only picks templates by name, so
+neither writes email text.
+
 ### Features
 
 | What | Where |
