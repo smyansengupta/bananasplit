@@ -140,6 +140,8 @@ const baseFields = {
     .optional(),
   parentTaskId: idSchema.nullable().optional(),
   ownerId: idSchema.nullable().optional(),
+  /** No owner on purpose: anyone can take it, even where every task needs an owner. */
+  openToAnyone: z.boolean().optional(),
   assigneeIds: z.array(idSchema).max(50).optional(),
   labelIds: z.array(idSchema).max(50).optional(),
   /** C4: ORG (the open board) or PRIVATE. A subtask follows its parent. */
@@ -782,7 +784,7 @@ export async function createTask(env: TaskEnv, input: unknown): Promise<TaskActi
   const startKey = d.startDate ?? null;
   assertStartBeforeDue(startKey, dueKey);
   if (!parent) {
-    if (env.org.taskRequireOwner && !d.ownerId) {
+    if (env.org.taskRequireOwner && !d.ownerId && !d.openToAnyone) {
       throw new TaskError("Every task needs an owner.");
     }
     if (env.org.taskRequireDueDate && !dueKey) throw new TaskError("Every task needs a due date.");
@@ -1074,7 +1076,13 @@ async function applyUpdate(
   if (flagged.length > 0 && !d.confirmFlagged) return confirmationFor(env, flagged);
 
   const topLevel = nextParentId === null;
-  if (topLevel && env.org.taskRequireOwner && plan?.ownerChange && !plan.ownerChange.ownerId) {
+  if (
+    topLevel &&
+    env.org.taskRequireOwner &&
+    plan?.ownerChange &&
+    !plan.ownerChange.ownerId &&
+    !d.openToAnyone
+  ) {
     throw new TaskError("Every task needs an owner.");
   }
   if (topLevel && env.org.taskRequireDueDate && dueChanged && !d.dueDate) {

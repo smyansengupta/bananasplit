@@ -291,13 +291,16 @@ export function AmbientRow({
   why = false,
   className,
   align = "end",
+  max = MAX_AMBIENT,
 }: {
   items: readonly (AmbientItem | null | false | undefined)[];
   why?: boolean;
   className?: string;
   align?: "start" | "end";
+  /** At most this many (a board card shows one). */
+  max?: number;
 }) {
-  const shown = items.filter((i): i is AmbientItem => Boolean(i)).slice(0, MAX_AMBIENT);
+  const shown = items.filter((i): i is AmbientItem => Boolean(i)).slice(0, max);
   if (shown.length === 0) return null;
   return (
     <span

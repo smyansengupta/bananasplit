@@ -262,6 +262,7 @@ export function TaskEditor({
         : {}),
       ...(type === "EPIC" ? { color } : {}),
       ownerId,
+      openToAnyone: ownerId === null,
       assigneeIds: assigneeIds.filter((id) => id !== ownerId),
       labelIds: finalLabelIds,
       ...(isNew || type !== task?.type ? { type } : {}),
@@ -487,13 +488,7 @@ export function TaskEditor({
           <FieldLabel htmlFor="task-owner" required={ownerRequired}>
             Owner
           </FieldLabel>
-          <OwnerField
-            id="task-owner"
-            value={ownerId}
-            onChange={setOwnerId}
-            disabled={readOnly}
-            allowNone={!ownerRequired}
-          />
+          <OwnerField id="task-owner" value={ownerId} onChange={setOwnerId} disabled={readOnly} />
           {ownerId &&
             relationFor(viewer.chart, ownerId) === "ABOVE" &&
             ownerId !== task?.ownerId && (

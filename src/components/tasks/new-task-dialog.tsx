@@ -122,7 +122,6 @@ function NewTaskForm({
   const isEpic = type === "EPIC";
   const hasStart = type === "EPIC" || type === "STORY";
   const isTopLevel = isEpic || parentTaskId === null;
-  const ownerRequired = org.requireOwner && isTopLevel;
   const dueRequired = org.requireDueDate && isTopLevel;
   const parentChoices = parents.filter((p) =>
     parentTypesFor(type).includes(p.type as "EPIC" | "STORY"),
@@ -186,6 +185,7 @@ function NewTaskForm({
       ...(isEpic ? { color } : {}),
       parentTaskId: isEpic ? null : parentTaskId,
       ownerId,
+      openToAnyone: ownerId === null,
       assigneeIds: assigneeIds.filter((id) => id !== ownerId),
       labelIds: finalLabelIds,
       ...(isTopLevel ? { visibility } : {}),
@@ -303,12 +303,7 @@ function NewTaskForm({
                   The same picker as Who else, so both read the same: faces,
                   names and how each person relates to you in the org chart.
                 */}
-                <OwnerField
-                  id="task-owner"
-                  value={ownerId}
-                  onChange={setOwnerId}
-                  allowNone={!ownerRequired}
-                />
+                <OwnerField id="task-owner" value={ownerId} onChange={setOwnerId} />
                 {ownerAbove && (
                   <p className="text-warning text-xs">Above your level: this will be flagged.</p>
                 )}

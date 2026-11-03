@@ -9,6 +9,7 @@ import {
   Globe,
   Lock,
   TriangleAlert,
+  Users,
   X,
 } from "@/components/icons";
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
@@ -328,20 +329,19 @@ export function useMemberSearch(
  * the same well, heading, search box, rows and footer — because on the task
  * form they sit side by side, and two pickers of people that look different
  * read as two different kinds of thing. The only difference is what they
- * mean: one person here, any number there.
+ * mean: one person here, any number there. No owner means anyone can take
+ * it, and that's a choice of its own at the top of the list.
  */
 export function OwnerField({
   id,
   value,
   onChange,
   disabled,
-  allowNone = true,
 }: {
   id?: string;
   value: string | null;
   onChange: (id: string | null) => void;
   disabled?: boolean;
-  allowNone?: boolean;
 }) {
   const { members, memberById } = useTasks();
   const [open, setOpen] = useState(false);
@@ -352,7 +352,7 @@ export function OwnerField({
       onChange(m.id);
       setOpen(false);
     },
-    onRemoveLast: () => allowNone && onChange(null),
+    onRemoveLast: () => onChange(null),
   });
 
   return (
@@ -370,7 +370,8 @@ export function OwnerField({
               <UserAvatar user={owner} size="xs" className="ring-card -me-1.5 ring-2" />
             </span>
           )}
-          <span className="truncate">{owner ? firstName(owner) : "No owner"}</span>
+          {!owner && <Users className="size-3.5 shrink-0" aria-hidden="true" />}
+          <span className="truncate">{owner ? firstName(owner) : "Anyone"}</span>
           <UpDown />
         </button>
       </PopoverTrigger>
@@ -388,20 +389,18 @@ export function OwnerField({
             <span className="bg-muted inline-flex h-6 items-center gap-1 rounded-md ps-0.5 pe-0.5 text-xs font-medium">
               <UserAvatar user={owner} size="xs" />
               {firstName(owner)}
-              {allowNone && (
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={`Remove ${owner.name ?? "member"}`}
-                  onClick={() => {
-                    onChange(null);
-                    search.focus();
-                  }}
-                  className="text-muted-foreground hover:text-foreground hover:bg-background rounded p-0.5"
-                >
-                  <X className="size-3" aria-hidden="true" />
-                </button>
-              )}
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={`Remove ${owner.name ?? "member"}`}
+                onClick={() => {
+                  onChange(null);
+                  search.focus();
+                }}
+                className="text-muted-foreground hover:text-foreground hover:bg-background rounded p-0.5"
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
             </span>
           </div>
         )}
@@ -412,6 +411,22 @@ export function OwnerField({
           aria-label="Owner"
           className="flex max-h-72 flex-col gap-px overflow-y-auto"
         >
+          <button
+            type="button"
+            role="option"
+            aria-selected={value === null}
+            className={menuItemClass(value === null)}
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+          >
+            <Users className="size-4 shrink-0" aria-hidden="true" />
+            <span className="truncate">Anyone can take it</span>
+            {value === null && (
+              <Check className="text-primary ms-auto size-3.5 shrink-0" aria-hidden="true" />
+            )}
+          </button>
           {search.filtered.length === 0 && (
             <p className="text-muted-foreground px-2 py-2 text-[13px]">Nobody by that name.</p>
           )}

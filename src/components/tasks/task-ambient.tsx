@@ -66,6 +66,7 @@ export function TaskAmbientActions({
   only,
   why = false,
   short = false,
+  max,
   className,
   align,
 }: {
@@ -74,6 +75,8 @@ export function TaskAmbientActions({
   page?: boolean;
   /** A board card: "Nudge" without the name (their face is right beside it). */
   short?: boolean;
+  /** At most this many (a board card shows one). */
+  max?: number;
   /** Just these kinds. */
   only?: readonly TaskAmbientKind[];
   why?: boolean;
@@ -81,7 +84,7 @@ export function TaskAmbientActions({
   align?: "start" | "end";
 }) {
   const items = useTaskAmbientItems(task, { page, only, short });
-  return <AmbientRow items={items} why={why} className={className} align={align} />;
+  return <AmbientRow items={items} why={why} className={className} align={align} max={max} />;
 }
 
 /** The task's ambient things, as AmbientRow items (the first reason is its why line). */
