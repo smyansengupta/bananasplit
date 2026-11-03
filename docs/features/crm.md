@@ -1609,7 +1609,7 @@ written the same thing, one stayed and the other now calls it.
 | Workflow email | `sendTemplateAction` and `inviteToEventAction` render with outreach's merge renderer (`renderFor`) and go through `queueEmail` and `crm-send` from the record owner's name: do-not-contact, unsubscribes, bounces, the daily cap (`CrmEmailMessage.workflowId` counts) and waking hours (`AUTOMATION_WINDOW`, 8 AM to 9 PM any day, the organization's timezone) all apply, with the unsubscribe footer. A step set to "Owner reviews first" (`params.review`) leaves an unsent draft and a Review suggestion instead. Invites to people outside the organization email the event's RSVP link (outreach's `inviteLink`). |
 | Workflow sequences | `enrollInSequenceAction` calls outreach's `enroll` from the owner's mailbox, conflicts respected. |
 | Starter templates | One list, `src/lib/crm/outreach/starters.ts`, in outreach's merge fields (`{{first_name|there}}`, `{{my_first_name}}`); Outreach makes the everyday three, a recipe makes the one it names. |
-| Merge renderers | Email is rendered only by outreach's `renderMerge`. The workflow's `{name}` renderer stays for task titles, notices and Slack text, which read record fields (stage, owner, link) that emails don't have. |
+| Merge renderers | One syntax and one renderer: outreach's `renderMerge`. Emails use its person fields; workflow text (task titles, notices, Slack and Discord, Finance descriptions, project names) uses the same `{{field}}` / `{{field\|fallback}}` syntax over the record's fields (`WORKFLOW_MERGE_FIELDS`: name, title, company, stage, pipeline, amount, owner, days, link, workflow). See "Gaps closed". |
 | Sequence steps | To-do steps make real Tasks (as the sequence's maker, else the sender, owned by the sender, linked to the person, due that day), through the Tasks service in a system transaction (`actAs`, system-actor.ts, which the workflow engine uses too). Text steps send through Phase 5's `queueText` when the person agreed to texts; otherwise, and for calls and LinkedIn, an open step waits in the sender's queue saying why. Call steps are on the dialer and Calls to make (`openCallSteps`), first; logging the call (`logCall` with `stepId`) closes the step. |
 | The queue's buttons | Text opens Phase 5's thread in a window (`TextDialog`, `textThreadAction`); Call is Phase 5's softphone or the phone's dialer then Phase 5's call log (`CallPerson compact`). Phase 2's own call logger is gone; "Call and log" on the person page is gone (the Calls section has it). |
 | One review queue | Email-sourced new people are `CREATE_PERSON` suggestions with Phase 4's payload (`proposeChange`); Outreach, Your mail lists them filtered (`listQueue` with `source: "EMAIL"`) and accepts through `acceptSuggestion`. Signals (`source: SIGNAL`) stay out of Review (`REVIEW_WHERE`); they're the Inbox's To review rows. |
@@ -1621,7 +1621,7 @@ written the same thing, one stayed and the other now calls it.
 | Outgoing calls | Slack, Discord and webhook steps use the outgoing webhooks' guarded transport: the address is checked in the connection's own DNS lookup, so it's the address connected to. One blocked-address list. |
 | Time zones | Forecasts count a close on its day in the organization's timezone; goals count over their period's local days; signal dates and the renewal year too. |
 | Unknown texters | Calls lists one row per number not in the CRM with Add as person: their texts move onto the new person's timeline (a STOP among them is kept). |
-| Booking hours | A host who set their availability is bookable whenever it doesn't say they're busy, 8 AM to 11 PM any day; one who never set it, weekdays 9 to 5. |
+| Booking hours | A host who set their availability is bookable whenever it doesn't say they're busy, 8 AM to 11 PM any day; one who never set it, weekdays 9 to 5. One-off dates hold too (see "Gaps closed"). |
 
 ### "That change is not allowed" on forms
 
@@ -1637,7 +1637,10 @@ action failed with "That change is not allowed." (pinning a form did too).
 `20261105160000_crm_workflows_private` (policies, `CrmSettings.workflowTriggers`
 with a backfill), `20261105170000_crm_integration` (`CrmEmailMessage.workflowId`
 and `personId`, an index) and `20261105180000_pin_form_kind` ('form' in the
-Pin and RecentVisit kind checks). `app.security_manifest()` is unchanged.
+Pin and RecentVisit kind checks). Then `20261105190000_crm_thread_delete`
+(the thread DELETE policy, and `app.security_manifest()` without
+`CrmEmailThread:DELETE` in its allowlist) and
+`20261105200000_crm_booking_dates` (`app.crm_booking_busy` returns dates).
 
 ### Found and fixed in the browser walkthrough
 
@@ -1668,6 +1671,41 @@ On the way:
 - Enter didn't make a new sequence; signature and merge-field examples named
   a club.
 
+### Gaps closed
+
+- **Booking honors one-off dates.** A host's availability stores one-off
+  dates as "One date you can't make" rules (all day, or some hours), in
+  `UserAvailability.rules`; there are no "available instead" overrides.
+  Migration `20261105200000_crm_booking_dates` makes `app.crm_booking_busy`
+  also return `dates` (upcoming date rules as `{date, start, end}`, never
+  the label). `bookingSlots` drops a host's all-day date entirely and,
+  for a ranged one, the hours it covers that date on top of the weekly
+  busy cells; other hosts on the page stay bookable. P-CRM-03 covers the
+  function; `src/lib/crm/integration.test.ts` and
+  `src/server/crm/integration.db.test.ts` the slots.
+- **Workflow text uses the emails' merge fields.** `renderMessage`
+  (src/lib/crm/workflows.ts) renders through `renderMerge` with the
+  workflow's own field list. Old `{name}` tokens are translated at read
+  time (`readWorkflow`, `toMergeSyntax`; only the workflow's own keys, so a
+  literal `{draft}` stays) rather than by a data migration, and rewritten
+  as `{{name}}` on the next save; saving refuses an unknown field. Recipes,
+  the describe-it defaults and prompt, and the builder (its hint and an Add
+  a field menu on each text) use `{{...}}`.
+- **Deleting an email thread is for owners, admins and CRM managers.**
+  Migration `20261105190000_crm_thread_delete` narrows `CrmEmailThread`'s
+  app_user DELETE policy and redefines `app.security_manifest()` without
+  `CrmEmailThread:DELETE` in the tenant-only allowlist (the policy names
+  `is_org_admin`, so it isn't a tenant-only write; T27i dropped it too).
+  No screen deletes a thread; discarding a draft and undoing an accepted
+  draft still work for members, marking the draft discarded when the
+  thread can't go (`dropThread`, send.ts). RLS P-CRM-07.
+- **Forms' interest template** asks "How did you hear about us?" (a friend
+  or colleague, one of our events, social media, our website, email or a
+  newsletter, Other) instead of a school year; the application asks for
+  "Your email", response notes say "owners and admins only", and the
+  responses assistant's prompt and a CRM mailbox example no longer say
+  student, officers or club.
+
 ### Still open
 
 - The person and item pages render slowly in a background browser pane (the
@@ -1675,18 +1713,15 @@ On the way:
   pane), so hidden-pane screenshots are unreliable. Visual checks were done
   at desktop and phone width on Today, People, a person, Calls, booking and
   the public pages.
-- Booking ignores one-off date rules in a host's availability (the
-  definer function returns weekly busy cells only).
-- The workflow `{name}` renderer still writes task titles and notices;
-  emails use outreach's `{{...}}` fields only.
-- A member can delete any of the organization's email threads under RLS
-  (`CrmEmailThread` app_user DELETE checks the organization only); worth
-  narrowing to drafts they own.
-- Forms' interest template asks "What year are you?" with school years;
-  it's a Forms template, not the CRM's, and was left as is.
+- Outside the CRM and Forms, school wording remains in starter content:
+  the Databases templates (`src/lib/databases/templates.ts`, a "First
+  year" option) and the availability editor's examples ("Midterm", "a
+  class, a lab").
 
 ### Tests
 
 `src/server/crm/integration.db.test.ts`, `src/server/forms/forms.db.test.ts`,
 `src/lib/crm/integration.test.ts`, `src/server/databases/sources/crm-sort.test.ts`,
-and P-CRM-05 and P-CRM-06 in `prisma/rls/phases.mjs`.
+`src/lib/crm/automation.test.ts`, `src/server/crm/automation.db.test.ts`,
+`src/lib/forms/forms.test.ts`, and P-CRM-03, P-CRM-05, P-CRM-06 and
+P-CRM-07 in `prisma/rls/phases.mjs`.
