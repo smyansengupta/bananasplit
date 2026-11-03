@@ -6,7 +6,7 @@ import { phoneStatus } from "@/server/crm/phone/connection";
 import { CrmError } from "@/server/crm/access";
 import { logCall, startCall, type LogCallInput, type StartedCall } from "@/server/crm/phone/calls";
 import { dropVoicemail, softphoneToken, startRecording, type SoftphoneToken } from "@/server/crm/phone/live";
-import { queueText, setConsent } from "@/server/crm/phone/texts";
+import { addTextSender, queueText, setConsent } from "@/server/crm/phone/texts";
 
 import { crmAction, crmGate, toResult, type CrmResult } from "./run";
 
@@ -86,6 +86,11 @@ export const textThreadAction = crmAction(async (ctx, _access, personId: string)
     enabled: Boolean(status.active && status.number) && !p.doNotContact && Boolean(p.phone),
   };
 });
+
+/** Adds whoever texted from a number not in the CRM, their texts moving onto their timeline. */
+export const addTextSenderAction = crmAction(async (ctx, _access, textId: string, name: string | null) =>
+  addTextSender(ctx, String(textId), typeof name === "string" ? name : null),
+);
 
 export const sendTextAction = crmAction(async (ctx, _access, personId: string, body: string) => {
   const r = await queueText(ctx, { personId, body: String(body ?? "") });

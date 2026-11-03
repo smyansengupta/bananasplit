@@ -270,7 +270,14 @@ describe("reaching out against the local database", () => {
 
     // Guest link: the partner sees their item and what we owe them.
     const pipeline = await ownerDb.crmPipeline.findFirstOrThrow({ where: { organizationId: org } });
-    const deal = await as(owner, async (ctx) => (await import("../deals")).createDeal(ctx, { pipelineId: pipeline.id, title: "Harbor sponsorship" }));
+    // A Sponsorships item is a Finance sponsorship too: it needs its company and an amount.
+    const harbor = await as(owner, async (ctx) => (await import("../companies")).createCompany(ctx, { name: "Harbor Light" }));
+    const deal = await as(owner, async (ctx) =>
+      (await import("../deals")).createDeal(ctx, { pipelineId: pipeline.id, title: "Harbor sponsorship", companyId: harbor.id, amount: 500 }),
+    );
+    const made = await ownerDb.crmDeal.findUniqueOrThrow({ where: { id: deal.id } });
+    expect(made.sponsorshipId).not.toBeNull();
+    expect(await ownerDb.sponsorship.findUniqueOrThrow({ where: { id: made.sponsorshipId! } })).toMatchObject({ amountCents: 50000, status: "PROSPECT" });
     await as(owner, (ctx) => addDeliverable(ctx, deal.id, { title: "Logo on shirts" }));
     const link = await as(owner, (ctx) => createGuestLink(ctx, deal.id, null));
     const token = link.url.split("/g/")[1]!;

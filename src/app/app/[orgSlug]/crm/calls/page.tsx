@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
+import { AddTextSender } from "@/components/crm/phone/add-text-sender";
 import { Dialer } from "@/components/crm/phone/dialer";
 import type { PhoneCaps } from "@/components/crm/phone/softphone";
 import { when } from "@/components/crm/record-page";
@@ -58,12 +59,19 @@ export default async function CrmCallsPage({ params, searchParams }: PageProps<"
         person: { select: { id: true, name: true } },
       },
     });
-    const unmatched = await db.crmTextMessage.findMany({
+    const recent = await db.crmTextMessage.findMany({
       where: { organizationId: orgId, direction: "INBOUND", personId: null },
       orderBy: { sentAt: "desc" },
-      take: 10,
+      take: 50,
       select: { id: true, fromNumber: true, body: true, sentAt: true },
     });
+    // One row per number: its latest text, and how many came in.
+    const unmatched: ((typeof recent)[number] & { count: number })[] = [];
+    for (const t of recent) {
+      const seen = unmatched.find((u) => u.fromNumber === t.fromNumber);
+      if (seen) seen.count++;
+      else if (unmatched.length < 10) unmatched.push({ ...t, count: 1 });
+    }
     const org = await db.organization.findUnique({ where: { id: orgId }, select: { timezone: true } });
     return { views, picked: picked?.id ?? null, queue, calls, unmatched, timezone: org?.timezone ?? "UTC" };
   });
@@ -156,9 +164,11 @@ export default async function CrmCallsPage({ params, searchParams }: PageProps<"
                 <li key={t.id} className="py-2">
                   <div className="flex items-baseline gap-2">
                     <b className="tabular-nums">{formatNumber(t.fromNumber)}</b>
+                    {t.count > 1 && <span className="text-muted-foreground text-xs">{t.count} texts</span>}
                     <span className="text-muted-foreground ms-auto text-xs">{when(t.sentAt)}</span>
                   </div>
                   <p className="text-muted-foreground line-clamp-2">{t.body}</p>
+                  <AddTextSender orgId={orgId} orgSlug={orgSlug} textId={t.id} />
                 </li>
               ))}
             </ul>

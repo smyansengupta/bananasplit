@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import {
   canText,
+  formatNumber,
   inQuietHours,
   localMinutes,
   maskNumber,
@@ -19,6 +20,7 @@ import { enqueueJob } from "@/server/jobs/enqueue";
 import { CrmError, type CrmActor } from "../access";
 import { logActivity } from "../activity";
 import { writeHistory } from "../history";
+import { createPerson } from "../people";
 import { phoneStatus } from "./connection";
 
 /**
@@ -266,4 +268,69 @@ export async function textStatus(
   const s = status.toLowerCase().replace(/[^a-z_-]/g, "").slice(0, 30);
   if (!s) return;
   await db.crmTextMessage.updateMany({ where: { organizationId, providerMessageId }, data: { status: s } });
+}
+
+/**
+ * A number that texted the organization and isn't in the CRM, added as a
+ * person in one step (the Calls tab): their number, the name given (or the
+ * number), and every text from that number until now moved onto their
+ * timeline. A STOP among them is kept: they stay not to be texted.
+ */
+export async function addTextSender(actor: CrmActor, textId: string, name: string | null): Promise<{ personId: string }> {
+  const { db, organizationId } = actor;
+  const text = await db.crmTextMessage.findFirst({
+    where: { id: textId, organizationId, direction: "INBOUND" },
+    select: { id: true, fromNumber: true, personId: true },
+  });
+  if (!text) throw new CrmError("That text isn't here any more.");
+  if (text.personId) return { personId: text.personId };
+  const known = await personByNumber(db, organizationId, text.fromNumber);
+  const personId =
+    known?.id ??
+    (
+      await createPerson(actor, {
+        name: name?.trim().slice(0, 200) || formatNumber(text.fromNumber),
+        phone: text.fromNumber,
+        source: "text",
+        sourceDetail: "Texted the organization's number",
+      })
+    ).id;
+  const person = await db.crmPerson.findFirst({
+    where: { id: personId, organizationId },
+    select: { id: true, companyId: true, consent: true, doNotContact: true },
+  });
+  if (!person) throw new CrmError("That person isn't in the CRM any more.");
+  const key = phoneKey(text.fromNumber);
+  const texts = await db.crmTextMessage.findMany({
+    where: { organizationId, direction: "INBOUND", personId: null, ...(key ? { fromNumber: { endsWith: key } } : { id: text.id }) },
+    orderBy: { sentAt: "asc" },
+    take: 200,
+    select: { id: true, body: true, sentAt: true },
+  });
+  let last: Keyword = null;
+  for (const t of texts) {
+    const keyword = textKeyword(t.body);
+    if (keyword === "stop" || keyword === "start") last = keyword;
+    const activityId = await logActivity(db, {
+      organizationId,
+      kind: "TEXT",
+      direction: "INBOUND",
+      subject: keyword === "stop" ? "Texted STOP" : keyword === "start" ? "Texted START" : keyword === "help" ? "Texted HELP" : "Text in",
+      body: t.body,
+      occurredAt: t.sentAt,
+      sourceKind: "text",
+      sourceId: t.id,
+      targets: [{ kind: "person", id: person.id }, ...(person.companyId ? [{ kind: "company" as const, id: person.companyId }] : [])],
+      meta: { textId: t.id, keyword },
+    });
+    await db.crmTextMessage.updateMany({ where: { id: t.id, organizationId }, data: { personId: person.id, activityId } });
+  }
+  if (last === "stop") {
+    const value: ChannelConsent = { granted: false, how: "texted STOP", at: new Date().toISOString(), by: null };
+    await db.crmPerson.update({
+      where: { id: person.id },
+      data: { consent: withConsent(person.consent, "text", value) as Prisma.InputJsonObject, doNotContact: true },
+    });
+  }
+  return { personId: person.id };
 }

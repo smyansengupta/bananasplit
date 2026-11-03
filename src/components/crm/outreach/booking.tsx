@@ -78,7 +78,7 @@ export function BookingList({ orgId, orgSlug, pages }: { orgId: string; orgSlug:
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New booking page</DialogTitle>
-            <DialogDescription>Thirty minutes with you, on weekdays 9 to 5, unless you change it.</DialogDescription>
+            <DialogDescription>Thirty minutes with you, when your availability says you&apos;re free (weekdays 9 to 5 if you haven&apos;t set it).</DialogDescription>
           </DialogHeader>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Coffee chat" autoFocus maxLength={120} />
           <DialogFooter>

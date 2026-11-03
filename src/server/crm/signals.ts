@@ -3,6 +3,8 @@ import { formatMoney } from "@/lib/crm/fields";
 import type { TxClient } from "@/server/db/context";
 
 import { effectiveOwnerId, type RoleOwner } from "./owners";
+import { localDateKey } from "@/lib/tasks/dates";
+import { orgTimeZone } from "./forecast";
 
 /**
  * Signals from inside the organization (docs/features/crm.md, module 9 and
@@ -49,7 +51,8 @@ function daysAgo(now: Date, n: number): Date {
   return new Date(now.getTime() - n * DAY);
 }
 
-const short = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+/** A calendar date (an expected-by date, stored at noon UTC). */
+const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** Everything that deserves a look today. */
 export async function findSignals(
@@ -60,6 +63,9 @@ export async function findSignals(
 ): Promise<Found[]> {
   const out: Found[] = [];
   const owner = (r: { ownerId: string | null; ownerRoleKey: string | null }) => effectiveOwnerId(r, roles);
+  // Moments (a close, a check-in) read in the organization's timezone, years too.
+  const tz = await orgTimeZone(db, organizationId);
+  const short = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: tz });
 
   // Stuck items, and items with no next step.
   const open = await db.crmDeal.findMany({
@@ -112,7 +118,7 @@ export async function findSignals(
         key: `pledge:${d.id}:${d.expectedOn.toISOString().slice(0, 10)}`,
         kind: "pledge",
         title: `${d.title} is overdue`,
-        summary: `${d.amountCents ? `${formatMoney(d.amountCents, d.currency)} ` : ""}${d.stage.name.toLowerCase()}, expected by ${short.format(d.expectedOn)}.`,
+        summary: `${d.amountCents ? `${formatMoney(d.amountCents, d.currency)} ` : ""}${d.stage.name.toLowerCase()}, expected by ${shortDate.format(d.expectedOn)}.`,
         targetKind: "deal",
         targetId: d.id,
         assigneeId: who,
@@ -164,7 +170,7 @@ export async function findSignals(
     const who = owner(d);
     if (!who || !d.closedAt) continue;
     out.push({
-      key: `renewal:${d.id}:${d.closedAt.getUTCFullYear()}`,
+      key: `renewal:${d.id}:${localDateKey(d.closedAt, tz).slice(0, 4)}`,
       kind: "renewal",
       title: `Renewal coming up: ${d.company?.name ?? d.title}`,
       summary: `${d.title} closed ${short.format(d.closedAt)} last year. Time to ask again.`,

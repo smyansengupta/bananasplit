@@ -12,6 +12,8 @@ import {
   type SnapshotData,
   type Trend,
 } from "@/lib/crm/forecast";
+import { safeTimeZone } from "@/lib/calendar/dates";
+import { localDateKey } from "@/lib/tasks/dates";
 import type { TxClient } from "@/server/db/context";
 
 import { CrmError, requireCrm, requireManager, type CrmActor } from "./access";
@@ -21,9 +23,19 @@ import { CrmError, requireCrm, requireManager, type CrmActor } from "./access";
  * the items as the forecast reads them, the weekly snapshot (crm-daily)
  * and a manager's own call. Snapshots are CrmForecastSnapshot rows; a
  * manager's call is one too (data.kind "call"), the newest one standing.
+ * Quarters and years are the organization's: a close is counted on its day
+ * in the organization's timezone.
  */
 
-const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+/** A moment's day in the organization's timezone (an item closed late on March 31 in New York is Q1's). */
+const dayIn = (d: Date | null | undefined, tz: string) => (d ? localDateKey(d, tz) : null);
+/** An expected date is a calendar date already (stored at noon UTC). */
+const dateOnly = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+
+export async function orgTimeZone(db: TxClient, organizationId: string): Promise<string> {
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+  return safeTimeZone(org?.timezone ?? "UTC");
+}
 
 export async function forecastItems(
   db: TxClient,
@@ -32,6 +44,7 @@ export async function forecastItems(
   options: { ownerId?: string | null; since?: Date } = {},
 ): Promise<ForecastItem[]> {
   const since = options.since ?? new Date(Date.now() - 2 * 365 * 86_400_000);
+  const tz = await orgTimeZone(db, organizationId);
   const rows = await db.crmDeal.findMany({
     where: {
       organizationId,
@@ -54,8 +67,8 @@ export async function forecastItems(
   return rows.map((r) => ({
     id: r.id,
     amountCents: r.amountCents,
-    expectedOn: day(r.expectedOn),
-    closedOn: day(r.closedAt),
+    expectedOn: dateOnly(r.expectedOn),
+    closedOn: dayIn(r.closedAt, tz),
     stageKind: r.stage.kind,
     probability: r.stage.kind === "OPEN" ? r.stage.probability : r.stage.kind === "WON" ? 100 : 0,
     category: r.forecastCategory,
@@ -64,6 +77,7 @@ export async function forecastItems(
 }
 
 async function closedHistory(db: TxClient, organizationId: string, pipelineId: string, ownerId?: string | null) {
+  const tz = await orgTimeZone(db, organizationId);
   const rows = await db.crmDeal.findMany({
     where: {
       organizationId,
@@ -77,8 +91,8 @@ async function closedHistory(db: TxClient, organizationId: string, pipelineId: s
     take: 20_000,
   });
   return rows.map((r) => ({
-    createdOn: day(r.createdAt)!,
-    closedOn: day(r.closedAt)!,
+    createdOn: dayIn(r.createdAt, tz)!,
+    closedOn: dayIn(r.closedAt, tz)!,
     won: r.stage.kind === "WON",
     amountCents: r.amountCents,
   }));

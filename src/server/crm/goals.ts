@@ -1,13 +1,16 @@
 import { attainment, GOAL_LABELS, GOAL_METRICS, parsePeriodKey, type Attainment, type GoalMetric } from "@/lib/crm/forecast";
+import { dayBounds } from "@/lib/tasks/dates";
 import type { TxClient } from "@/server/db/context";
 
 import { CrmError, requireCrm, requireManager, requireMember, type CrmActor } from "./access";
+import { orgTimeZone } from "./forecast";
 
 /**
  * Goals (docs/features/crm.md, module 8): a target per member, or for the
  * whole team, per quarter or year, on amount won, items won, people
  * reached, replies or meetings, optionally in one pipeline. Attainment is
- * read live from the CRM's own tables (Phase 2 fills the email ones).
+ * read live from the CRM's own tables (Phase 2 fills the email ones),
+ * over the period's days in the organization's timezone.
  */
 
 export interface GoalView {
@@ -25,7 +28,6 @@ export interface GoalView {
 }
 
 const day = (d: Date) => d.toISOString().slice(0, 10);
-const endOf = (d: Date) => new Date(d.getTime() + 86_400_000);
 
 function periodLabelOf(start: string, end: string): string {
   const year = parsePeriodKey(start.slice(0, 4));
@@ -41,7 +43,9 @@ export async function goalActual(
   organizationId: string,
   goal: { metric: string; pipelineId: string | null; ownerId: string | null; periodStart: Date; periodEnd: Date },
 ): Promise<number> {
-  const range = { gte: goal.periodStart, lt: endOf(goal.periodEnd) };
+  // The period's days in the organization's timezone, start to end.
+  const tz = await orgTimeZone(db, organizationId);
+  const range = { gte: dayBounds(day(goal.periodStart), tz).start, lt: dayBounds(day(goal.periodEnd), tz).end };
   const owner = goal.ownerId;
   switch (goal.metric as GoalMetric) {
     case "amount_won":

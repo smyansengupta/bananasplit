@@ -154,6 +154,8 @@ async function slotsFor(db: TxClient, organizationId: string, page: { id: string
     hosts: hosts.map((h) => ({
       userId: h,
       busy: busy.find((b) => b.userId === h)?.busy ?? [],
+      // Set their availability: bookable when it doesn't say they're busy, not only weekdays 9 to 5.
+      ownHours: (busy.find((b) => b.userId === h)?.busy.length ?? 0) > 0,
       events: [
         ...attending.filter((a) => a.userId === h && !a.event.allDay).map((a) => ({ start: a.event.startsAt, end: a.event.endsAt })),
         ...hosting.filter((e) => e.hostUserId === h && !e.allDay).map((e) => ({ start: e.startsAt, end: e.endsAt })),
