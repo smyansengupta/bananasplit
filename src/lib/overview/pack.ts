@@ -3,14 +3,15 @@
  * every column ending at the same line, so there's never a hole. Wide
  * widgets (the week, the pulse) take a whole row; the ones between them are
  * one segment, split into columns so the columns come out as even as they
- * can. What's left over is shared out among the shorter columns' widgets, a
- * little each; when that would be more than SLACK for any one, fewer,
- * wider columns are tried, down to one, which is always even. Pure: the
+ * can. What's left over is shared out among the shorter columns' widgets by
+ * their heights; when that would make any one more than SLACK taller than
+ * its content, fewer, wider columns are tried, down to one, which is
+ * always even. Pure: the
  * board measures, this decides.
  */
 
-/** The most a widget may grow past its content to even its column up, in pixels. */
-export const SLACK = 56;
+/** The most a widget may grow past its content to even its column up, as a share of its height. */
+export const SLACK = 0.18;
 
 export interface Segment {
   /** Columns used, 1 to the most asked for. */
@@ -114,7 +115,7 @@ export function packSegment(
     const columns = splitEvenly(heights, cols, gap);
     if (!columns) continue;
     const { extra, height } = evenUp(columns, heights, gap);
-    if (Math.max(...extra) <= slack) return { cols, columns, extra, height };
+    if (extra.every((e, i) => e <= slack * heights[i]!)) return { cols, columns, extra, height };
   }
   const heights = heightsAt(1);
   const all = heights.map((_, i) => i);

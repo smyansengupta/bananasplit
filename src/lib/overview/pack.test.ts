@@ -33,7 +33,7 @@ describe("packSegment", () => {
     const ends = seg.columns.map((c) => sum(c, h) + c.reduce((s, i) => s + seg.extra[i]!, 0));
     expect(new Set(ends).size).toBe(1);
     expect(ends[0]).toBe(seg.height);
-    expect(Math.max(...seg.extra)).toBeLessThanOrEqual(SLACK);
+    seg.extra.forEach((e, i) => expect(e).toBeLessThanOrEqual(SLACK * h[i]!));
   });
 
   it("goes down to one column rather than stretch a widget far past its content", () => {
