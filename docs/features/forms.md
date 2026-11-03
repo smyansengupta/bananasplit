@@ -7,7 +7,7 @@ Forms replaces the Polls section. It is one place for quick polls, applications,
 - `Form` holds the questions (JSON, validated by `src/lib/forms/questions.ts`) and the settings: who can answer, one each, anonymous, review, notify, closing time, response cap.
 - Every form owns a club database (`DatabaseDefinition`, kind `CUSTOM`, visible to owners and admins by default). A "Response" column names each row. Each question that takes an answer is a column, kept in step as questions are renamed, reordered or given new choices. A removed question keeps its column, so no answer is lost.
 - Answers use the existing field types: choices are select choices (an "Other" answer becomes a new choice), checkboxes are multi-select, yes or no is a checkbox, ratings and scales are numbers, a ranking is the choices in order (one per line), uploads are links to the file in Files.
-- `FormResponse` holds who answered (unless anonymous) and the review: status (New, Accepted, Waitlisted, Declined), a 1 to 5 rating and officers' notes. Owners and admins only.
+- `FormResponse` holds who answered (unless anonymous) and the review: status (New, Accepted, Waitlisted, Declined), a 1 to 5 rating and reviewers' notes. Owners and admins only.
 
 ## Answering
 

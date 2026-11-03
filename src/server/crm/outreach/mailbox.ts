@@ -16,7 +16,7 @@ import { getSecret } from "@/server/secrets";
  * inside a transaction.
  *
  * Today a member has no connected mailbox, so mail goes out from the
- * organization's own verified Resend sender ("Ada at Robotics Club"
+ * organization's own verified Resend sender ("Ada at Harbor Robotics"
  * <hello@robotics.org>), or for one-to-one mail the platform sender on
  * the organization's behalf. Bulk mail never uses the platform sender: a
  * bad list must never hurt our sending reputation. When the email
@@ -47,7 +47,7 @@ export interface SentEmail {
 /** The sender check bulk email needs: the organization's own domain, verified (SPF and DKIM) in Resend. */
 export interface SenderCheck {
   ok: boolean;
-  /** "Robotics Club <hello@robotics.org>" when there's one. */
+  /** "Harbor Robotics <hello@harborrobotics.org>" when there's one. */
   from: string | null;
   domain: string | null;
   /** What to fix, in words, when not ok. */
