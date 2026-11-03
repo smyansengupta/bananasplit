@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
+import { PhoneSection } from "@/components/crm/phone/phone-section";
 import { RecordActions } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
 import { RecordPage, Section, StrengthBadge, when } from "@/components/crm/record-page";
@@ -195,6 +196,7 @@ export default async function CrmPersonPage({ params }: PageProps<"/app/[orgSlug
             </Section>
           )}
           {data.linkedFrom.length > 0 && <LinkedFrom groups={data.linkedFrom} />}
+          <PhoneSection orgId={orgId} orgSlug={orgSlug} target={{ kind: "person", id: person.id }} />
           <LinkedSection orgId={orgId} orgSlug={orgSlug} at={{ kind: "crm-person", id: person.id }} title="Linked" />
         </>
       }
