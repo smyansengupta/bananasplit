@@ -53,6 +53,49 @@ const GRANTS = {
   // Who a report is shared with outside the organization: its editors read,
   // add and remove them; nobody edits one.
   ReportInvite: ["SID", "SD", ""],
+  // CRM (20261105090000_crm): members add and edit people, companies and
+  // items and run outreach; core records and activity are trashed, never
+  // deleted by a member; pipelines, workflows and settings are admins' and
+  // CRM managers'; API keys and webhooks admins' alone.
+  CrmPerson: ["SIU", "SIUD", ""],
+  CrmCompany: ["SIU", "SIUD", ""],
+  CrmDeal: ["SIU", "SIUD", ""],
+  CrmPersonEmail: ["SIUD", "SIUD", ""],
+  CrmJob: ["SIUD", "SIUD", ""],
+  CrmDealPerson: ["SIUD", "SIUD", ""],
+  CrmActivityTarget: ["SIUD", "SIUD", ""],
+  CrmEmailThread: ["SIUD", "SIUD", ""],
+  CrmCampaign: ["SIUD", "SIUD", ""],
+  CrmCampaignTarget: ["SIUD", "SIUD", ""],
+  CrmEnrollment: ["SIUD", "SIUD", ""],
+  CrmDeliverable: ["SIUD", "SIUD", ""],
+  CrmQuote: ["SIUD", "SIUD", ""],
+  CrmQuoteLine: ["SIUD", "SIUD", ""],
+  CrmBookingPage: ["SIUD", "SIUD", ""],
+  CrmGuestLink: ["SIUD", "SIUD", ""],
+  CrmSequence: ["SIUD", "SIUD", ""],
+  CrmSequenceStep: ["SIUD", "SIUD", ""],
+  CrmCall: ["SIU", "SIUD", ""],
+  CrmTextMessage: ["SIU", "SIUD", ""],
+  CrmActivity: ["SIU", "SIUD", ""],
+  CrmEmailMessage: ["SIU", "SIUD", ""],
+  CrmView: ["SIUD", "SIUD", ""],
+  CrmTemplate: ["SIUD", "SIUD", ""],
+  CrmSuggestion: ["SIU", "SIUD", ""],
+  CrmFieldHistory: ["SI", "SIUD", ""],
+  CrmForecastSnapshot: ["SI", "SIUD", ""],
+  CrmSettings: ["SIU", "SIUD", ""],
+  CrmPipeline: ["SIUD", "SIUD", ""],
+  CrmStage: ["SIUD", "SIUD", ""],
+  CrmWorkflow: ["SIUD", "SIUD", ""],
+  CrmScoreRule: ["SIUD", "SIUD", ""],
+  CrmGoal: ["SIUD", "SIUD", ""],
+  CrmWorkflowRun: ["SI", "SIUD", ""],
+  CrmMemberSettings: ["SIU", "SIUD", ""],
+  CrmApiKey: ["SIU", "SIUD", ""],
+  CrmWebhook: ["SIUD", "SIUD", ""],
+  CrmWebhookDelivery: ["S", "SIUD", ""],
+  AiUsage: ["SI", "SIUD", ""],
   // Databases: members read; owners and admins make and edit them. An
   // organization's own (CUSTOM, no form) is deleted for good by owners and
   // admins, or by members who can edit it while
@@ -241,6 +284,45 @@ const NEW_TENANT_TABLES = [
   "Report",
   "ReportSnapshot",
   "ReportInvite",
+  "CrmPerson",
+  "CrmCompany",
+  "CrmDeal",
+  "CrmPersonEmail",
+  "CrmJob",
+  "CrmDealPerson",
+  "CrmActivityTarget",
+  "CrmEmailThread",
+  "CrmCampaign",
+  "CrmCampaignTarget",
+  "CrmEnrollment",
+  "CrmDeliverable",
+  "CrmQuote",
+  "CrmQuoteLine",
+  "CrmBookingPage",
+  "CrmGuestLink",
+  "CrmSequence",
+  "CrmSequenceStep",
+  "CrmCall",
+  "CrmTextMessage",
+  "CrmActivity",
+  "CrmEmailMessage",
+  "CrmView",
+  "CrmTemplate",
+  "CrmSuggestion",
+  "CrmFieldHistory",
+  "CrmForecastSnapshot",
+  "CrmSettings",
+  "CrmPipeline",
+  "CrmStage",
+  "CrmWorkflow",
+  "CrmScoreRule",
+  "CrmGoal",
+  "CrmWorkflowRun",
+  "CrmMemberSettings",
+  "CrmApiKey",
+  "CrmWebhook",
+  "CrmWebhookDelivery",
+  "AiUsage",
   "Form",
   "FormResponse",
   "DatabaseField",
@@ -474,6 +556,12 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
           "FORM_RESPONSE",
           // A saved report on its schedule (20261102180000_report_join_schedule).
           "REPORT_SENT",
+          // The CRM (20261105090000_crm).
+          "CRM_ASSIGNED",
+          "CRM_FOLLOW_UP",
+          "CRM_REPLY",
+          "CRM_REVIEW",
+          "CRM_HANDOVER",
         ],
         task_status: ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED"],
         // Home's Decisions (20261102100000_home_widgets).
@@ -4893,7 +4981,7 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     {
       value: {
         extension: "public",
-        indexes: ["Membership_title_idx", "User_name_idx"],
+        indexes: ["CrmPerson_name_trgm", "Membership_title_idx", "User_name_idx"],
         plans: ["FREE", "PERSONAL_PLUS", "TRIAL", "TEAM_FREE", "CLUB", "SOCIETY"],
         task_types: ["EPIC", "STORY", "TASK"],
       },
@@ -5501,6 +5589,89 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
         admin_edits_private: 0,
         admin_makes_private: "42501",
         maker_archives: 1,
+        other_org_reads: 0,
+      },
+    },
+  );
+  await tcase(
+    "P-CRM-01",
+    "CRM: members add people as themselves and never hard-delete them; pipelines and settings are admins' and CRM managers'; OWN access hides others' records; API keys are admins' alone",
+    "app_user",
+    A("u_memberA"),
+    async (q) => {
+      const s = {};
+      s.person_make = await tryq(
+        q,
+        `INSERT INTO "CrmPerson" ("id","organizationId","name","createdById","updatedAt")
+         VALUES ('cp_1','org_A','Ada','u_memberA',now())`,
+      );
+      s.person_make_as_other = await tryq(
+        q,
+        `INSERT INTO "CrmPerson" ("id","organizationId","name","createdById","updatedAt")
+         VALUES ('cp_x','org_A','X','u_adminA',now())`,
+      );
+      s.person_delete = await tryq(q, `DELETE FROM "CrmPerson" WHERE "id" = 'cp_1'`);
+      s.person_trash = await tryq(q, `UPDATE "CrmPerson" SET "deletedAt" = NULL WHERE "id" = 'cp_1'`);
+      s.member_pipeline = await tryq(
+        q,
+        `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_m','org_A','M',now())`,
+      );
+      s.member_settings = await tryq(
+        q,
+        `INSERT INTO "CrmSettings" ("organizationId","updatedAt") VALUES ('org_A',now())`,
+      );
+      s.member_api_keys = await count(q, `SELECT count(*) n FROM "CrmApiKey"`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_settings = await tryq(
+        q,
+        `INSERT INTO "CrmSettings" ("organizationId","memberAccess","updatedAt") VALUES ('org_A','OWN',now())`,
+      );
+      s.admin_pipeline = await tryq(
+        q,
+        `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_a','org_A','A',now())`,
+      );
+      await q(
+        `INSERT INTO "CrmPerson" ("id","organizationId","name","createdById","updatedAt")
+         VALUES ('cp_2','org_A','Grace','u_adminA',now())`,
+      );
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.own_mode_other_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      s.own_mode_other_edits = await rc(q, `UPDATE "CrmPerson" SET "title" = 'x'`);
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.own_mode_maker_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      await q(`UPDATE "CrmSettings" SET "managerIds" = ARRAY['u_bothAB'] WHERE "organizationId" = 'org_A'`);
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.manager_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      s.manager_pipeline = await tryq(
+        q,
+        `INSERT INTO "CrmPipeline" ("id","organizationId","name","updatedAt") VALUES ('pl_b','org_A','B',now())`,
+      );
+      s.manager_api_keys = await tryq(
+        q,
+        `INSERT INTO "CrmApiKey" ("id","organizationId","name","prefix","keyHash") VALUES ('k1','org_A','k','p','h')`,
+      );
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_reads = await count(q, `SELECT count(*) n FROM "CrmPerson"`);
+      return s;
+    },
+    {
+      value: {
+        person_make: 1,
+        person_make_as_other: "42501",
+        person_delete: "42501",
+        person_trash: 1,
+        member_pipeline: "42501",
+        member_settings: "42501",
+        member_api_keys: 0,
+        admin_settings: 1,
+        admin_pipeline: 1,
+        own_mode_other_reads: 0,
+        own_mode_other_edits: 0,
+        own_mode_maker_reads: 1,
+        manager_reads: 2,
+        manager_pipeline: 1,
+        manager_api_keys: "42501",
         other_org_reads: 0,
       },
     },
