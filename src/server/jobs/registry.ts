@@ -525,6 +525,53 @@ export const JOB_KINDS = {
     description:
       "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows; enqueued only while a workflow is on (src/server/crm/events.ts).",
   }),
+  // ---- CRM outreach (Phase 2; handlers in src/server/crm/outreach/) ----
+  "crm-send": kind({
+    payload: z.object({ messageId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 25_000,
+    leaseSeconds: 75,
+    tier: "fast",
+    afterEligible: true,
+    sendsEmail: true,
+    handler: () => import("@/server/crm/outreach/send").then((m) => m.crmSendJob),
+    description:
+      "One CRM email (1:1, sequence step or campaign share) through sendFromMailbox; key crm-send:{messageId}, runAt for sent-later mail and the daily cap.",
+  }),
+  "crm-bulk": kind({
+    payload: z.object({ campaignId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 240_000,
+    leaseSeconds: 330,
+    tier: "heavy",
+    afterEligible: false,
+    sendsEmail: true,
+    handler: () => import("@/server/crm/outreach/send").then((m) => m.crmBulkJob),
+    description:
+      "A bulk email's messages, 25 a turn, through the organization's own sender only; continues itself. Key crm-bulk:{campaignId}.",
+  }),
+  "crm-sequence": kind({
+    payload: z.object({ enrollmentId: id, step: z.number().int().min(0).max(50) }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    handler: () => import("@/server/crm/outreach/sequences").then((m) => m.crmSequenceJob),
+    description:
+      "One sequence step for one enrollment at its time (send window, daily cap, stop on reply); key crm-sequence:{enrollmentId}:{step}.",
+  }),
+  "crm-outreach-daily": kind({
+    payload: z.object({}).strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/crm/outreach/daily").then((m) => m.crmOutreachDailyJob),
+    description:
+      "Daily: lapsed keep-in-touch cadences back to the queue, campaign conversions, expired mail suggestions. Key crm-outreach-daily:{orgId}:{date}.",
+  }),
 
   // ---- Platform maintenance (this module) ----
   "purge-unverified": kind({
