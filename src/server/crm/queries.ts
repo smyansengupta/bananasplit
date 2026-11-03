@@ -24,6 +24,8 @@ export interface ListQuery {
   /** due: follow-up today or earlier; cold: going cold; new: added this week. */
   due?: "due" | "cold" | "new";
   companyId?: string;
+  /** Only these records (a hand-picked list, the ones that look like duplicates). */
+  ids?: readonly string[];
   trash?: boolean;
   sort?: string;
   dir?: "asc" | "desc";
@@ -113,6 +115,7 @@ export function peopleWhere(
   if (!query.trash && query.status !== "all") and.push({ status: query.status ?? "ACTIVE" });
   if (query.relationship) and.push({ relationship: query.relationship });
   if (query.companyId) and.push({ companyId: query.companyId });
+  if (query.ids) and.push({ id: { in: [...query.ids] } });
   if (query.owner) and.push(ownerWhere(query.owner, viewerId, roles));
   if (query.due === "due") and.push({ nextFollowUpAt: { lte: endOfToday(now) } });
   if (query.due === "cold") {
@@ -255,6 +258,7 @@ export function companiesWhere(
   const and: Prisma.CrmCompanyWhereInput[] = [{ organizationId }];
   and.push(query.trash ? { deletedAt: { not: null } } : { deletedAt: null });
   if (!query.trash && query.status !== "all") and.push({ status: query.status ?? "ACTIVE" });
+  if (query.ids) and.push({ id: { in: [...query.ids] } });
   if (query.owner) and.push(ownerWhere(query.owner, viewerId, roles));
   if (query.due === "due") and.push({ nextFollowUpAt: { lte: endOfToday(now) } });
   if (query.due === "cold") {

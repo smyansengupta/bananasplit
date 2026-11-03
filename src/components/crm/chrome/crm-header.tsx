@@ -22,6 +22,7 @@ export function CrmHeader({
   settings,
   title = "CRM",
   toolbar,
+  create = "person",
 }: {
   orgSlug: string;
   /** The viewer may open CRM settings (owners, admins and CRM managers). */
@@ -29,6 +30,8 @@ export function CrmHeader({
   title?: string;
   /** The toolbar row under it (CrmToolbar). */
   toolbar?: ReactNode;
+  /** What the create button makes in one click (People's Companies view: a company). */
+  create?: "person" | "company";
 }) {
   const { setOpen } = useCrmOpen();
   const base = `/app/${orgSlug}/crm`;
@@ -38,9 +41,9 @@ export function CrmHeader({
         <h1 className="page-title mr-auto max-md:min-w-0">{title}</h1>
         <div className={cn("flex flex-wrap items-center gap-2", PHONE_SMALL_CREATE)}>
           <CreateSplitButton
-            label="New person"
-            title="New person"
-            onClick={() => setOpen({ kind: "new", what: "person" })}
+            label={create === "company" ? "New company" : "New person"}
+            title={create === "company" ? "New company" : "New person"}
+            onClick={() => setOpen({ kind: "new", what: create })}
             menuLabel="More to create"
           >
             <DropdownMenuItem onSelect={() => setOpen({ kind: "new", what: "person" })}>

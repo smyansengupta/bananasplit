@@ -1,20 +1,9 @@
-import { CardScan } from "@/components/crm/ai/card-scan";
-import { CrmTabs } from "@/components/crm/crm-tabs";
-import { PageHeader } from "@/components/page-header";
+import { redirect } from "next/navigation";
 
-import { crmShell } from "../shell";
+import { hrefWithOpen } from "@/lib/crm/overlay";
 
-export const metadata = { title: "Scan a card" };
-
-/** Business cards and badges at events, from a phone: a photo becomes a person to review. */
+/** Scanning a card is part of New person now: the New card reads a photo and fills itself in. */
 export default async function CrmScanPage({ params }: PageProps<"/app/[orgSlug]/crm/scan">) {
   const { orgSlug } = await params;
-  const { gate, shell } = await crmShell(orgSlug);
-  if (!shell) return gate;
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Scan a card" description="A photo of a business card or badge becomes a person, waiting in Review." tabs={<CrmTabs tabs={shell.tabs} />} />
-      <CardScan orgId={shell.org.id} orgSlug={orgSlug} />
-    </div>
-  );
+  redirect(hrefWithOpen(`/app/${orgSlug}/crm/people`, "", { kind: "new", what: "person" }));
 }

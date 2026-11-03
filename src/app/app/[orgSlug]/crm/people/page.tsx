@@ -1,75 +1,91 @@
+import { redirect } from "next/navigation";
+
+import { CrmHeader } from "@/components/crm/chrome/crm-header";
 import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
-import { CrmList, type ListRow } from "@/components/crm/crm-list";
-import { CrmTabs } from "@/components/crm/crm-tabs";
-import { ownerLabel } from "@/server/crm/owners";
-import {
-  listPeople,
-  parseListQuery,
-  peopleStatusCounts,
-  PAGE,
-  PERSON_SORT_LABELS,
-} from "@/server/crm/queries";
+import { PeopleEmpty } from "@/components/crm/people/people-empty";
+import { PeopleTable } from "@/components/crm/people/people-table";
+import { PeopleToolbar } from "@/components/crm/people/people-toolbar";
+import { hrefWithOpen } from "@/lib/crm/overlay";
+import { peoplePage } from "@/server/crm/people-view";
+import { PAGE } from "@/server/crm/queries";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmShell } from "../shell";
-import { savedViews, toSearch } from "../views";
 
 export const metadata = { title: "People" };
 
-/** Everyone the organization reaches out to, filtered and searched on the server. */
-export default async function CrmPeoplePage({
-  params,
-  searchParams,
-}: PageProps<"/app/[orgSlug]/crm/people">) {
+type Search = Record<string, string | string[] | undefined>;
+
+/**
+ * The CRM's People tab (docs/features/crm.md, "Redesign"; People.dc.html):
+ * the header and toolbar, "{list} {count}", then everyone (or every
+ * company, ?view=companies) in one table. A row opens its card over the
+ * page (?open=); Filters picks a list (?list=), an owner and a
+ * relationship. A brand-new CRM shows what can come in instead.
+ */
+export default async function CrmPeoplePage({ params, searchParams }: PageProps<"/app/[orgSlug]/crm/people">) {
   const { orgSlug } = await params;
-  const sp = (await searchParams) as Record<string, string | string[] | undefined>;
+  const sp = (await searchParams) as Search;
+  // Old "New person" links (?new=1) open the New card.
+  if (sp.new === "1") {
+    const rest = { ...sp };
+    delete rest.new;
+    redirect(
+      hrefWithOpen(`/app/${orgSlug}/crm/people`, rest, {
+        kind: "new",
+        what: sp.view === "companies" ? "company" : "person",
+      }),
+    );
+  }
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
-  const query = parseListQuery(sp);
-  const today = new Date();
+  const relationships = shell.access.settings?.relationshipTypes ?? [];
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
-  const types = shell.access.settings?.relationshipTypes ?? [];
-  const base = `/app/${orgSlug}/crm/people`;
-  const data = await withOrgTx(shell.org.id, async ({ db }) => ({
-    list: await listPeople(db, shell.org.id, query, shell.user.id, shell.roles),
-    counts: await peopleStatusCounts(db, shell.org.id, query, shell.user.id, shell.roles),
-    views: await savedViews(db, shell.org.id, "people", base, toSearch(sp)),
-  }));
-  const rows: ListRow[] = data.list.rows.map((p) => ({
-    id: p.id,
-    name: p.name,
-    sub: [p.title, p.companyName].filter(Boolean).join(", ") || null,
-    email: p.primaryEmail,
-    badge: p.relationship
-      ? { label: types.find((t) => t.id === p.relationship)?.label ?? p.relationship }
-      : null,
-    owner: ownerLabel(p, shell.roles, names),
-    lastContactedAt: p.lastContactedAt?.toISOString() ?? null,
-    nextFollowUpAt: p.nextFollowUpAt?.toISOString() ?? null,
-    overdue: Boolean(p.nextFollowUpAt && p.nextFollowUpAt < today),
-    strength: p.strength,
-    deleted: Boolean(p.deletedAt),
-  }));
+  const data = await withOrgTx(shell.org.id, ({ db }) =>
+    peoplePage(db, shell.org.id, shell.user.id, shell.roles, sp, { names, relationships }),
+  );
+
   return (
-    <>
-    <CrmList
-      tabs={<CrmTabs tabs={shell.tabs} />}
-      orgId={shell.org.id}
-      orgSlug={orgSlug}
-      kind="person"
-      title="People"
-      rows={rows}
-      total={data.list.total}
-      page={query.page ?? 1}
-      pageSize={PAGE}
-      counts={data.counts}
-      relationshipTypes={types.map((t) => ({ value: t.id, label: t.label }))}
-      members={shell.members}
-      sortLabels={PERSON_SORT_LABELS}
-      views={data.views}
-      exportHref={`/app/${orgSlug}/crm/export?kind=people`}
-    />
+    <div>
+      <CrmHeader
+        orgSlug={orgSlug}
+        settings={shell.access.manager}
+        create={data.companies ? "company" : "person"}
+        toolbar={
+          <PeopleToolbar
+            tabs={shell.tabs}
+            companies={data.companies}
+            lists={data.lists}
+            trash={data.trash}
+            members={shell.members}
+            relationships={relationships.map((r) => ({ id: r.id, label: r.label }))}
+          />
+        }
+      />
+      {data.empty ? (
+        <PeopleEmpty
+          orgId={shell.org.id}
+          orgSlug={orgSlug}
+          members={data.empty.members}
+          contacts={data.empty.contacts}
+        />
+      ) : (
+        <PeopleTable
+          orgId={shell.org.id}
+          orgSlug={orgSlug}
+          companies={data.companies}
+          rows={data.rows}
+          total={data.total}
+          page={data.page}
+          pageSize={PAGE}
+          listId={data.listId}
+          listName={data.listName}
+          trash={sp.trash === "1"}
+          pickedLists={data.lists.filter((l) => l.picked).map((l) => ({ id: l.id, label: l.label }))}
+          members={shell.members}
+        />
+      )}
       <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
-    </>
+    </div>
   );
 }

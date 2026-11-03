@@ -10,7 +10,8 @@ import { withOrgTx, withUserTx } from "@/server/db/context";
 /**
  * CSV export of the CRM (docs/features/crm.md: "Export to CSV anytime",
  * timeline included): ?kind=people | companies | items (&pipeline=) |
- * timeline. Read as the viewer through RLS, so OWN access exports only
+ * timeline, and &ids= (comma-separated) for only the picked people or
+ * companies. Read as the viewer through RLS, so OWN access exports only
  * what the member can see. Formula-safe (src/lib/csv.ts) and rate-limited.
  */
 export const maxDuration = 60;
@@ -39,7 +40,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ orgSlug: st
   try {
     const out = await withOrgTx(orgId, async (octx) => {
       await requireCrm(octx);
-      return exportCsv(octx.db, orgId, kind, { pipelineId: url.searchParams.get("pipeline") });
+      const ids = (url.searchParams.get("ids") ?? "")
+        .split(",")
+        .filter((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v))
+        .slice(0, 500);
+      return exportCsv(octx.db, orgId, kind, { pipelineId: url.searchParams.get("pipeline"), ids });
     });
     return new NextResponse(out.csv, {
       headers: {

@@ -17,6 +17,15 @@ describe("the ?open= contract", () => {
     expect(parseOpen("new:deal")).toEqual({ kind: "new", what: "deal" });
     expect(parseOpen("goal")).toEqual({ kind: "goal", id: null });
     expect(parseOpen("goal:g1")).toEqual({ kind: "goal", id: "g1" });
+    expect(parseOpen("merge:a1,b2")).toEqual({ kind: "merge", ids: ["a1", "b2"] });
+  });
+
+  it("merges exactly two different records", () => {
+    expect(parseOpen("merge")).toBeNull();
+    expect(parseOpen("merge:a1")).toBeNull();
+    expect(parseOpen("merge:a1,a1")).toBeNull();
+    expect(parseOpen("merge:a1,b2,c3")).toBeNull();
+    expect(parseOpen("merge:a1,<b>")).toBeNull();
   });
 
   it("opens nothing for what it doesn't know", () => {
@@ -46,6 +55,7 @@ describe("the ?open= contract", () => {
       "new:company",
       "goal",
       "goal:g2",
+      "merge:a1,b2",
     ]) {
       expect(formatOpen(parseOpen(v)!)).toBe(v);
     }

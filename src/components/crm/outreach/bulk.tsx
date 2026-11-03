@@ -3,7 +3,7 @@
 import { AlertTriangle, Send, ShieldCheck } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { planBulkAction, sendBulkAction } from "@/app/app/[orgSlug]/crm/outreach/actions";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export function BulkComposer({
   templates,
   sender,
   canSend,
+  initialList = null,
 }: {
   orgId: string;
   orgSlug: string;
@@ -37,9 +38,12 @@ export function BulkComposer({
   templates: { id: string; name: string; subject: string | null; body: string }[];
   sender: { ok: boolean; from: string | null; problem: string | null };
   canSend: boolean;
+  /** A list to start on (People's "Email them" makes one and lands here with ?list=). */
+  initialList?: string | null;
 }) {
   const router = useRouter();
-  const [viewId, setViewId] = useState<string | null>(null);
+  const startList = initialList && lists.some((l) => l.id === initialList) ? initialList : null;
+  const [viewId, setViewId] = useState<string | null>(startList);
   const [plan, setPlan] = useState<{ recipients: number; left: { reason: string; count: number }[] } | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [subject, setSubject] = useState("");
@@ -49,6 +53,19 @@ export function BulkComposer({
     const v = exampleValues();
     return { subject: renderMerge(subject, v).text, body: renderMerge(body, v).text };
   }, [subject, body]);
+
+  useEffect(() => {
+    if (!startList) return;
+    let live = true;
+    void planBulkAction(orgId, startList)
+      .then((r) => {
+        if (live && r.ok) setPlan(r.plan);
+      })
+      .catch(() => null);
+    return () => {
+      live = false;
+    };
+  }, [orgId, startList]);
 
   const pick = async (id: string) => {
     setViewId(id);

@@ -37,6 +37,25 @@ export function viewParams(filters: unknown): Record<string, string> {
   return out;
 }
 
+/**
+ * A hand-picked list's people (People's "Add to list" writes
+ * `{ col: "people", op: "in", value: [ids] }`), or undefined for a list
+ * made of filters only. A list holding nobody yet holds nobody, not everyone.
+ */
+export function viewIds(filters: unknown): string[] | undefined {
+  for (const f of (Array.isArray(filters) ? filters : []) as { col?: string; value?: unknown }[]) {
+    if (f.col === "people") {
+      return Array.isArray(f.value) ? f.value.filter((v): v is string => typeof v === "string") : [];
+    }
+  }
+  return undefined;
+}
+
+/** A list's stored filters as a People query (its own filters plus its hand-picked people). */
+export function viewListQuery(filters: unknown) {
+  return { ...parseListQuery(viewParams(filters)), ids: viewIds(filters) };
+}
+
 export function filtersToView(f: ListFilters): ViewFilter[] {
   const out: ViewFilter[] = [];
   if (f.owner) out.push({ col: "owner", op: "eq", value: f.owner });
@@ -59,7 +78,7 @@ export async function listWhere(
     select: { filters: true },
   });
   if (!view) throw new CrmError("That list isn't here any more.");
-  return peopleWhere(organizationId, parseListQuery(viewParams(view.filters)), viewerId, roles);
+  return peopleWhere(organizationId, viewListQuery(view.filters), viewerId, roles);
 }
 
 export interface ListSummary {
@@ -85,7 +104,7 @@ export async function listsWithCounts(
   });
   const out: ListSummary[] = [];
   for (const v of views) {
-    const where = peopleWhere(organizationId, parseListQuery(viewParams(v.filters)), viewerId, roles);
+    const where = peopleWhere(organizationId, viewListQuery(v.filters), viewerId, roles);
     out.push({
       id: v.id,
       name: v.name,

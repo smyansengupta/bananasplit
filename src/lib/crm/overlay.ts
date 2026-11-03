@@ -9,6 +9,7 @@
  *   ?open=power          ?open=log             ?open=ask
  *   ?open=new:person     ?open=new:company     ?open=new:deal
  *   ?open=goal           ?open=goal:<id>
+ *   ?open=merge:<idA>,<idB>   (two people, or two companies)
  *
  * Pure, so the server (CrmOverlays) and the client (useCrmOpen) read and
  * write it the same way.
@@ -26,7 +27,8 @@ export type CrmOpen =
   | { kind: "log" }
   | { kind: "ask" }
   | { kind: "new"; what: CrmNewKind }
-  | { kind: "goal"; id: string | null };
+  | { kind: "goal"; id: string | null }
+  | { kind: "merge"; ids: [string, string] };
 
 export type CrmOpenKind = CrmOpen["kind"];
 
@@ -60,6 +62,12 @@ export function parseOpen(raw: string | readonly string[] | null | undefined): C
     case "goal":
       if (rest === null) return { kind: "goal", id: null };
       return ID.test(rest) ? { kind: "goal", id: rest } : null;
+    case "merge": {
+      const ids = (rest ?? "").split(",");
+      if (ids.length !== 2) return null;
+      const [a, b] = ids as [string, string];
+      return ID.test(a) && ID.test(b) && a !== b ? { kind: "merge", ids: [a, b] } : null;
+    }
     default:
       return null;
   }
@@ -76,6 +84,8 @@ export function formatOpen(open: CrmOpen): string {
       return `new:${open.what}`;
     case "goal":
       return open.id ? `goal:${open.id}` : "goal";
+    case "merge":
+      return `merge:${open.ids[0]},${open.ids[1]}`;
     default:
       return open.kind;
   }
