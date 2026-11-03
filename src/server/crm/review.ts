@@ -481,7 +481,7 @@ async function apply(ctx: OrgContext, row: Row, kind: QueueKind, payload: unknow
         });
       }
       if (p.task) applied.taskId = await makeTask(ctx, p.task, { kind: "person", id });
-      if (citation) await recordEnrichment(ctx.db, ctx.organizationId, { kind: "person", id }, Object.keys(p.person), source, citation, ctx.userId);
+      if (citation) await recordEnrichment(ctx.db, ctx.organizationId, { kind: "person", id }, Object.keys(p.person).filter((k) => p.person[k as keyof typeof p.person]), source, citation, ctx.userId);
       return applied;
     }
     case "CREATE_COMPANY": {

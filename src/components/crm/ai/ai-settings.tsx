@@ -192,7 +192,7 @@ export function AiSettings({
             }}
           >
             <label className="space-y-1.5 text-sm">
-              <span className="font-medium">Hard monthly cap, in dollars</span>
+              <span className="block font-medium">Hard monthly cap, in dollars</span>
               <Input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="decimal" placeholder="No cap" className="h-10 w-40" />
             </label>
             <Button type="submit" variant="outline" disabled={busy === "cap"}>

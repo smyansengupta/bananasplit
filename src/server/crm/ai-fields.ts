@@ -213,7 +213,7 @@ async function writeAnswer(
   const storedNow = ref.field.options.output === "SELECT" ? (ref.field.options.choices ?? []).find((c) => c.id === current)?.label : current;
   if (storedNow !== undefined && String(storedNow).toLowerCase() === String(value).toLowerCase()) return { ...out, result: "same" };
   const citations = [
-    ...(data.sources.includes("record") || results.length === 0 ? [{ label: "The record and its timeline" }] : []),
+    ...(data.sources.includes("record") || results.length === 0 ? [{ label: "the record and its timeline" }] : []),
     ...data.sources
       .map((s) => results[Number(s.replace(/\D/g, "")) - 1])
       .filter((r): r is WebResult => Boolean(r))
@@ -229,7 +229,7 @@ async function writeAnswer(
       summary: "Someone filled this in by hand, so it wasn't changed.",
       payload: { changes: [{ field: key, label: ref.field.name, before: storedNow ?? null, after: value }] },
       target,
-      citation: { kind: citations[1] ? "web" : "record", label: citations[1]?.label ?? "The record and its timeline", url: (citations[1] as { url?: string } | undefined)?.url ?? null },
+      citation: { kind: citations[1] ? "web" : "record", label: citations[1]?.label ?? "the record and its timeline", url: (citations[1] as { url?: string } | undefined)?.url ?? null },
       proposedById: actor.userId,
     });
     return { ...out, result: "suggested" };

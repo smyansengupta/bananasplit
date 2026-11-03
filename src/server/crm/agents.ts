@@ -299,7 +299,7 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
     const source = (n: string): WebResult | undefined => results[Number(n.replace(/\D/g, "")) - 1];
     const cited = (n: string): Citation => {
       const r = source(n);
-      return r ? { kind: "web", label: r.title.slice(0, 200), url: r.url } : { kind: "agent", label: "Research agent" };
+      return r ? { kind: "web", label: r.title.slice(0, 200), url: r.url } : { kind: "agent", label: "the research agent" };
     };
     const assignee = ctx.ownerId ?? who.userId;
     await who.tx(async (actor) => {
@@ -319,7 +319,7 @@ export async function runResearchAgent(who: AiWho, target: TargetRef, options: {
         summary: cleanText(data.summary, 300),
         payload: { kind: "NOTE", subject: `Research brief on ${ctx.name}`, body, targets: [target] },
         target,
-        citation: results[0] ? { kind: "web", label: `${results.length} web pages`, url: results[0].url } : { kind: "agent", label: "Research agent" },
+        citation: results[0] ? { kind: "web", label: `${results.length} web pages`, url: results[0].url } : { kind: "agent", label: "the research agent" },
         proposedById: who.userId,
         assigneeId: assignee,
       });
@@ -380,6 +380,8 @@ export async function runFollowUpAgent(
 ): Promise<{ status: AgentRun["status"]; drafted: number }> {
   const days = Math.max(7, Math.min(365, options.days ?? 60));
   const limit = Math.max(1, Math.min(options.limit ?? 5, 20));
+  // A member of an organization with the CRM, before the run log is written.
+  await who.tx(async () => null);
   const log = await startRun(who.organizationId, who.userId, "follow-up", null, options.auto === true);
   try {
     const cold = await who.tx(async (actor) => {
@@ -395,7 +397,7 @@ export async function runFollowUpAgent(
     let drafted = 0;
     for (const person of cold.slice(0, limit)) {
       const r = await draftFollowUp(who, { kind: "person", id: person.id }, `It's been more than ${days} days since anyone was in touch. A short, friendly check-in.`, {
-        citation: { kind: "agent", label: `Follow-up agent: no contact in ${days} days` },
+        citation: { kind: "agent", label: `the follow-up agent: no contact in ${days} days` },
         title: `Follow up with ${person.name}`,
         feature: "crm.follow_up_agent",
         job: options.auto,

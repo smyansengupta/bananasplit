@@ -65,6 +65,15 @@ function longDay(key: string): string {
   });
 }
 
+const PLATFORM_WORD: Record<string, string> = { whatsapp: "WhatsApp", linkedin: "LinkedIn", instagram: "Instagram", email: "email", text: "text", other: "pasted" };
+
+/** A day as an instant: now when it's today (so "last contacted" moves), else noon UTC that day. */
+export function dayInstant(day: string | null | undefined, today: string): string {
+  const d = cleanDay(day);
+  if (!d || d >= today) return new Date().toISOString();
+  return new Date(`${d}T12:00:00Z`).toISOString();
+}
+
 function recordCitation(ctx: RecordContext, label: string): Citation {
   return { kind: "record", label, id: ctx.target.id };
 }
@@ -188,7 +197,7 @@ export async function draftFollowUp(
       why: cleanText(purpose, 300) ?? "A follow-up you asked for.",
       title: options.title ?? `Email draft to ${ctx.name}`,
       source: "AI",
-      citation: options.citation ?? recordCitation(ctx, "Drafted from the record and its timeline"),
+      citation: options.citation ?? recordCitation(ctx, "the record and its timeline"),
       proposedById: who.userId,
       assigneeId: who.userId,
     }),
@@ -397,7 +406,7 @@ export async function readTranscript(
     notes: cleanList(r.data.notes, 8),
   };
   const label = cleanText(input.title, 150) ?? `${input.kind === "CALL" ? "Call" : "Meeting"} on ${meetingDay}`;
-  const citation: Citation = { kind: "transcript", label: `${label} (${SOURCE_WORD[input.source]})` };
+  const citation: Citation = { kind: "transcript", label: `${lower(label)} (${SOURCE_WORD[input.source]})` };
   const queued = await who.tx(async (actor) => {
     let n = 0;
     const body = [
@@ -418,7 +427,7 @@ export async function readTranscript(
         kind: input.kind ?? "MEETING",
         subject: label,
         body,
-        occurredAt: new Date(`${meetingDay}T12:00:00Z`).toISOString(),
+        occurredAt: dayInstant(meetingDay, ctx.today),
         targets: [input.target],
       },
       target: input.target,
@@ -567,17 +576,17 @@ export async function readConversation(
   const reading = r.data;
   const citation: Citation = {
     kind: "conversation",
-    label: `A ${reading.platform === "other" ? "pasted" : reading.platform === "text" ? "text" : reading.platform} conversation${input.image ? " (screenshot)" : ""}`,
+    label: `a ${reading.platform === "other" ? "pasted" : reading.platform === "text" ? "text" : PLATFORM_WORD[reading.platform]} conversation${input.image ? " (screenshot)" : ""}`,
   };
   return who.tx(async (actor) => {
     const db = actor.db;
     const matched = input.personId
       ? await db.crmPerson.findFirst({ where: { id: input.personId, organizationId: who.organizationId, deletedAt: null }, select: { id: true, name: true } })
       : await matchPerson(db, who.organizationId, reading.person);
-    const occurredAt = cleanDay(reading.lastMessageOn) ? new Date(`${cleanDay(reading.lastMessageOn)}T12:00:00Z`).toISOString() : new Date().toISOString();
+    const occurredAt = dayInstant(reading.lastMessageOn, env.today);
     const activity = {
       kind: reading.platform === "email" ? ("EMAIL" as const) : ("TEXT" as const),
-      subject: citation.label,
+      subject: `${citation.label.charAt(0).toUpperCase()}${citation.label.slice(1)}`,
       body: cleanText(reading.summary, 3000),
       occurredAt,
       direction: reading.lastFrom === "them" ? ("INBOUND" as const) : reading.lastFrom === "us" ? ("OUTBOUND" as const) : null,
@@ -711,6 +720,8 @@ export interface CardResult {
 
 /** A card or badge photo into a new-person suggestion (or changes to the one who's already in). */
 export async function scanCard(who: AiWho, input: { image: AiImage; metAt?: string | null }): Promise<CardResult> {
+  // A member of an organization with the CRM, before anything reaches the model.
+  await who.tx(async () => null);
   const r = await runCrmAi({
     organizationId: who.organizationId,
     userId: who.userId,
@@ -740,7 +751,7 @@ export async function scanCard(who: AiWho, input: { image: AiImage; metAt?: stri
   if (!name) throw new CrmError("Couldn't read a name on that. Try a sharper photo.");
   const email = normalizeEmail(reading.email ?? "") ?? null;
   const metAt = cleanText(input.metAt, 200);
-  const citation: Citation = { kind: "card", label: metAt ? `A card from ${metAt}` : "A scanned card or badge" };
+  const citation: Citation = { kind: "card", label: metAt ? `a card from ${metAt}` : "a scanned card or badge" };
   const linkedin = cleanText(reading.linkedin, 300);
   const values = {
     name,
