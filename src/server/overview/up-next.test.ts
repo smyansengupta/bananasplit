@@ -208,4 +208,26 @@ describe("an event's life on Up next", () => {
     expect(card?.live).toBeUndefined();
     expect(card?.kicker).not.toMatch(/^In /);
   });
+
+  it("takes over two columns on event day, with check-ins against RSVPs, and leaves room for two more", () => {
+    const live = event("w8", min(-20));
+    const slots = build({
+      events: [live, event("later", min(600)), event("next", min(900)), event("after", min(1200))],
+      context: { turnout: new Map([["w8", { rsvps: 38, checkIns: 31 }]]) },
+    });
+    const card = slots[0]?.item;
+    expect(card?.wide).toBe(true);
+    expect(card?.figure).toBe("31");
+    expect(card?.figureLabel).toBe("checked in, of 38 RSVPs");
+    expect(slots).toHaveLength(3);
+  });
+
+  it("shows an event's turnout once it's over", () => {
+    const card = only({
+      ended: [event("w8", min(-120))],
+      context: { turnout: new Map([["w8", { rsvps: 38, checkIns: 33 }]]) },
+    });
+    expect(card?.figure).toBe("33");
+    expect(card?.figureLabel).toBe("came, of 38 who said yes");
+  });
 });

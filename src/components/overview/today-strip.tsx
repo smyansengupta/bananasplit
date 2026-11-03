@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Stat, StatStrip } from "@/components/ui/stat";
 import type { TodayCell } from "@/lib/overview/today-strip";
 
+import { TickNumber } from "./fresh";
+
 const ICONS: Record<TodayCell["key"], IconComponent> = {
   overdue: CircleAlert,
   waiting: Inbox,
@@ -30,7 +32,14 @@ const ICONS: Record<TodayCell["key"], IconComponent> = {
  * name. A client component so it can hand icon components to Stat. The
  * Personal home keeps its own strip (OverviewStats).
  */
-export function TodayStrip({ cells }: { cells: readonly TodayCell[] }) {
+export function TodayStrip({
+  cells,
+  scope,
+}: {
+  cells: readonly TodayCell[];
+  /** Whose last-seen numbers these are (the organization's id): a changed one rolls to its new value. */
+  scope?: string;
+}) {
   return (
     <section aria-label="Today">
       <StatStrip>
@@ -44,7 +53,15 @@ export function TodayStrip({ cells }: { cells: readonly TodayCell[] }) {
           >
             <Stat
               icon={ICONS[c.key]}
-              value={c.value ?? "–"}
+              value={
+                c.value === null ? (
+                  "–"
+                ) : scope ? (
+                  <TickNumber value={c.value} storageKey={`bs.tick:${scope}:${c.key}`} />
+                ) : (
+                  c.value
+                )
+              }
               label={c.label}
               chip={c.chip ? <Badge variant={c.chip.tone}>{c.chip.text}</Badge> : undefined}
             />

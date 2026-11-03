@@ -338,6 +338,7 @@ export function UpNext({
                 }
                 className={cn(
                   "min-h-0 w-[82%] shrink-0 snap-start sm:w-auto",
+                  item.wide && "sm:col-span-2",
                   "max-md:w-full",
                   index > 0 && "max-md:hidden",
                 )}

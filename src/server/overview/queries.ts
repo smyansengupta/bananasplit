@@ -494,8 +494,14 @@ export async function loadEventTurnout(
     isAdmin: boolean;
     tier: ReportTier;
     now: Date;
+    /** Events under way or just ended: their check-ins so far against RSVPs. */
+    live?: readonly string[];
   },
-): Promise<{ seats: Map<string, number>; rates: Map<string, CheckInRate> }> {
+): Promise<{
+  seats: Map<string, number>;
+  rates: Map<string, CheckInRate>;
+  live: Map<string, Turnout>;
+}> {
   return withSystemOrgTx(organizationId, async ({ db }) => {
     const shown = input.upcoming.filter((e) => e.rsvpEnabled && (input.isAdmin || !e.hideCount));
     const seats = new Map<string, number>();
@@ -509,8 +515,20 @@ export async function loadEventTurnout(
         seats.set(e.id, rows.find((r) => r.eventId === e.id)?._count._all ?? 0);
     }
     const rates = new Map<string, CheckInRate>();
+    const live = new Map<string, Turnout>();
     const visible = await queryDatabaseVisibility(db, organizationId, input.tier, ["ATTENDANCE"]);
-    if (!visible.ATTENDANCE) return { seats, rates };
+    if (!visible.ATTENDANCE) return { seats, rates, live };
+    if (input.live && input.live.length > 0) {
+      const now = await db.event.findMany({
+        where: {
+          organizationId,
+          id: { in: [...input.live] },
+          ...(input.isAdmin ? {} : { rsvpHideCount: false }),
+        },
+        select: { id: true, rsvpEnabled: true, attendanceCount: true },
+      });
+      for (const [id, t] of await turnoutOf(db, organizationId, now)) live.set(id, t);
+    }
     const past = await db.event.findMany({
       where: {
         organizationId,
@@ -539,7 +557,7 @@ export async function loadEventTurnout(
       if (s.events >= MIN_RATE_EVENTS)
         rates.set(kind, { rate: s.checkIns / s.rsvps, events: s.events });
     }
-    return { seats, rates };
+    return { seats, rates, live };
   });
 }
 

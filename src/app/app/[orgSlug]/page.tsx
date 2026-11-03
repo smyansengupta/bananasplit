@@ -442,7 +442,16 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     isAdmin,
     tier: reportTier(role) ?? "MEMBER",
     now,
-  }).catch(() => ({ seats: new Map<string, number>(), rates: new Map() }));
+    // Under way now, or just ended: their check-ins for Up next.
+    live: [
+      ...data.events.filter((e) => e.startsAt <= now && e.endsAt > now).map((e) => e.id),
+      ...data.ended.map((e) => e.id),
+    ],
+  }).catch(() => ({
+    seats: new Map<string, number>(),
+    rates: new Map(),
+    live: new Map<string, { rsvps: number; checkIns: number }>(),
+  }));
 
   const dayKeyOf = (e: { startsAt: Date; allDay: boolean }) =>
     localDateKey(e.startsAt, e.allDay ? orgZone : timeZone);
@@ -518,6 +527,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const ahead = data.weekEvents.filter((e) => e.startsAt < upcomingUntil);
   const todayBar = (
     <TodayStrip
+      scope={org.id}
       cells={todayStrip({
         base,
         todayKey,
@@ -581,7 +591,13 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     polls: data.polls,
     ended: data.ended,
     hidden: new Set(data.hiddenUpNext),
-    context: { links: data.links, details: data.details, lastActions, seats: turnout.seats },
+    context: {
+      links: data.links,
+      details: data.details,
+      lastActions,
+      seats: turnout.seats,
+      turnout: turnout.live,
+    },
   });
 
   // Meetings: a repeating meeting shows once, its next time, not every week ahead.

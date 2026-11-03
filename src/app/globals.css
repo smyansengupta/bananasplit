@@ -231,6 +231,8 @@
   --fill-hackathon:var(--tag-forest);
   --fill-social:var(--tag-ochre);
   --fill-board:var(--tag-plum);
+  /* Waiting on you, or due very soon: banana in dark mode, the ochre tag in light. */
+  --attention:var(--tag-ochre);
   --radius: 0.875rem;
   --radius-scale: 1;
   /* The glow as light: the corona behind the page top, halos, focus. */
@@ -346,6 +348,7 @@
   --fill-hackathon:#d55181;
   --fill-social:#d95926;
   --fill-board:#8748a9;
+  --attention:#f2c230;
   --glow-strength: 16%;
   --haze-strength: 5%;
   --elevation-1: 0 18px 40px -24px rgb(0 0 0 / 0.8);
@@ -584,6 +587,68 @@
 .home-glow[data-time="night"],
 .home-glow[data-time="weekend"] {
   background: radial-gradient(60% 70% at 50% 0%, color-mix(in oklab, #5369a9 14%, transparent), transparent 70%);
+}
+
+/*
+ * A number that changed since your last look rolls to its new value once
+ * (TickNumber), and a row you haven't seen slides in with a tint that fades
+ * (Arrive). Still with reduced motion.
+ */
+.tick-roll {
+  display: inline-block;
+  height: 1lh;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+.tick-roll > span {
+  display: flex;
+  flex-direction: column;
+  animation: tick-roll 0.7s 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.tick-roll > span[data-dir="down"] {
+  animation-direction: reverse;
+}
+@keyframes tick-roll {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+.row-arrive {
+  border-radius: 12px;
+  animation: row-arrive 4.5s ease-out both;
+}
+@keyframes row-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+    background: color-mix(in oklab, var(--fill-workshop) 18%, transparent);
+  }
+  12% {
+    opacity: 1;
+    transform: none;
+    background: color-mix(in oklab, var(--fill-workshop) 18%, transparent);
+  }
+  60% {
+    background: color-mix(in oklab, var(--fill-workshop) 18%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tick-roll > span {
+    animation: none;
+    transform: translateY(-50%);
+  }
+  .tick-roll > span[data-dir="down"] {
+    transform: none;
+  }
+  .row-arrive {
+    animation: none;
+  }
 }
 
 @keyframes corona {

@@ -25,7 +25,8 @@ export interface DeadlineItem {
   notStarted: boolean;
 }
 
-export type DeadlineTone = "soon" | "later" | "warn";
+/** Warms as the day nears: later (grey), soon (this week), close (two days or less), warn. */
+export type DeadlineTone = "close" | "soon" | "later" | "warn";
 
 export interface DeadlineRow extends DeadlineItem {
   /** "Wed" within the week, else "Nov 8". */
@@ -77,6 +78,11 @@ export function warningText(item: DeadlineItem, todayKey: string): string {
   return `${item.title} ${when} with no answers yet.`;
 }
 
+function toneOf(days: number): DeadlineTone {
+  if (days <= 2) return "close";
+  return days < 7 ? "soon" : "later";
+}
+
 export function buildDeadlines(
   items: readonly DeadlineItem[],
   todayKey: string,
@@ -89,7 +95,7 @@ export function buildDeadlines(
   const rows = sorted.slice(0, limit).map((i): DeadlineRow => ({
     ...i,
     tag: deadlineTag(i.dayKey, todayKey),
-    tone: warn?.key === i.key ? "warn" : daysBetweenKeys(todayKey, i.dayKey) < 7 ? "soon" : "later",
+    tone: warn?.key === i.key ? "warn" : toneOf(daysBetweenKeys(todayKey, i.dayKey)),
   }));
   // The warned one stays in the list even past the first few.
   if (warn && !rows.some((r) => r.key === warn.key)) {

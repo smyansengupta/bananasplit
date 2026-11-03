@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
-import { tagToken } from "@/lib/tag-colors";
 import { cn } from "@/lib/utils";
 import type { Deadlines as DeadlinesData, DeadlineTone } from "@/lib/overview/deadlines-text";
 
@@ -10,11 +9,14 @@ import { Insight } from "./connections";
 /**
  * Deadlines (one column): the hard dates of the next three weeks from
  * every source, soonest first, each with a date tag, its title and where
- * it comes from, and a warning for one that's close and not started.
+ * it comes from, and a warning for one that's close and not started. The
+ * tag warms as the day nears: grey, a banana tint this week, solid banana
+ * within two days, and brick for the warning.
  * Data from loadDeadlines.
  */
 
 const TONE: Record<DeadlineTone, string> = {
+  close: "bg-(--attention) text-[oklch(from_var(--attention)_clamp(0,(0.62_-_l)*1000,1)_0_0)]",
   soon: "bg-[color-mix(in_oklab,var(--k)_18%,var(--card))] text-[color-mix(in_oklab,var(--k)_72%,var(--foreground))]",
   later: "bg-muted text-muted-foreground",
   warn: "bg-tint-danger text-tint-danger-foreground",
@@ -31,7 +33,7 @@ export function Deadlines({ data }: { data: DeadlinesData }) {
           <li key={row.key}>
             <Link href={row.href} className="group/deadline flex items-start gap-3 py-3">
               <span
-                style={{ "--k": `var(${tagToken("ochre")})` } as CSSProperties}
+                style={{ "--k": "var(--attention)" } as CSSProperties}
                 className={cn(
                   "mt-px inline-flex h-6 min-w-11 shrink-0 items-center justify-center rounded-full px-2 text-[12px] font-semibold whitespace-nowrap tabular-nums",
                   TONE[row.tone],
