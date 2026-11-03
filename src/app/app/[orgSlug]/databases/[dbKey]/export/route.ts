@@ -9,7 +9,7 @@ import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { writeOrgAuditLog } from "@/server/audit";
 import { listPolls, loadPollResults } from "@/server/databases/ballot-results";
 import { csvLines, exportColumns, resultsCsv } from "@/server/databases/export";
-import { sourceFor } from "@/server/databases/sources";
+import { loadSourceFor } from "@/server/databases/sources";
 import {
   canViewBallotRows,
   getDatabase,
@@ -136,7 +136,9 @@ export async function GET(request: Request, ctx: RouteContext<"/app/[orgSlug]/da
     });
   }
 
-  const source = sourceFor(database.kind, setup.sourceView);
+  const source = await withOrgTx(orgId, ({ db }) =>
+    loadSourceFor(db, orgId, database, setup.sourceView),
+  );
   if (!source) return new NextResponse("Not found", { status: 404 });
   const columns = viewerColumns(source, database.columns, vctx.tier);
   const visible = visibleColumnKeys(columns, sp);
