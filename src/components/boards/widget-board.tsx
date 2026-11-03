@@ -197,11 +197,11 @@ const PACKED_GRID =
   "grid grid-cols-1 items-start gap-x-4.5 gap-y-4.5 [grid-auto-flow:row_dense] sm:grid-cols-2 lg:grid-cols-8 data-[packed]:gap-y-0 data-[packed]:[grid-auto-rows:2px] sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
 
 /**
- * Sizes each packed widget's rows to its height, and again whenever it
- * changes. Then any hole left (a short widget beside a tall one, above a
- * full-width one or the end of the board) is filled by the widget above it
- * growing down to meet what's below: no gap anywhere, and only the widget
- * that has room grows.
+ * Places each packed widget (masonry): in its order, each goes into the
+ * columns where it can sit highest, spanning as many PACK_ROW rows as it is
+ * tall. Then any hole left (above a full-width widget, or at the end) is
+ * filled by the widget above it growing down to meet what's below: no gap
+ * anywhere, and only a widget with room grows. Again whenever one changes size.
  */
 function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
   useEffect(() => {
@@ -209,50 +209,66 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
     if (!el) return;
     const items = () =>
       Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
+    const PLACED = [
+      "grid-column-start",
+      "grid-row-start",
+      "grid-row-end",
+      "align-self",
+      "max-height",
+    ];
+    const reset = (item: HTMLElement) => PLACED.forEach((p) => item.style.removeProperty(p));
     let frame = 0;
     // Fitting twice gives the same sizes, so the observer seeing our own
     // growing settles after one more frame.
     const fit = () => {
       frame = 0;
       const list = items();
+      list.forEach(reset);
+      const cols = getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length;
+      const placed: { item: HTMLElement; col: number; span: number; top: number; rows: number }[] =
+        [];
+      const tops = Array<number>(cols).fill(0);
       for (const item of list) {
-        item.style.removeProperty("align-self");
-        item.style.removeProperty("margin-bottom");
-      }
-      const heights = list.map((item) => item.getBoundingClientRect().height);
-      list.forEach((item, i) =>
-        item.style.setProperty(
-          "grid-row-end",
-          heights[i] > 0 ? `span ${Math.ceil((heights[i] + PACK_GAP) / PACK_ROW)}` : "auto",
-        ),
-      );
-      el.setAttribute("data-packed", "");
-      const rects = list.map((item) => item.getBoundingClientRect());
-      const end = Math.max(...rects.map((r) => r.bottom));
-      list.forEach((item, i) => {
-        const r = rects[i];
-        if (r.height === 0) return;
-        // The nearest widget below that shares a column, or the board's end.
-        const below = rects
-          .filter(
-            (o, j) =>
-              j !== i &&
-              o.height > 0 &&
-              o.top >= r.bottom - 1 &&
-              o.left < r.right - 2 &&
-              o.right > r.left + 2,
-          )
-          .map((o) => o.top - PACK_GAP);
-        const target = below.length > 0 ? Math.min(...below) : end;
-        const extra = target - r.bottom;
-        if (extra < PACK_ROW) return;
-        item.style.setProperty(
-          "grid-row-end",
-          `span ${Math.round((r.height + extra + PACK_GAP) / PACK_ROW)}`,
+        const h = item.getBoundingClientRect().height;
+        if (h === 0) continue;
+        const span = Math.min(
+          cols,
+          Number(/span (\d+)/.exec(getComputedStyle(item).gridColumnEnd)?.[1] ?? 1),
         );
-        item.style.setProperty("align-self", "stretch");
-        item.style.setProperty("margin-bottom", `${PACK_GAP}px`);
-      });
+        // The start column where it sits highest; the leftmost on a tie.
+        let col = 0;
+        let top = Infinity;
+        for (let c = 0; c + span <= cols; c++) {
+          const t = Math.max(...tops.slice(c, c + span));
+          if (t < top) {
+            top = t;
+            col = c;
+          }
+        }
+        const rows = Math.ceil((h + PACK_GAP) / PACK_ROW);
+        placed.push({ item, col, span, top, rows });
+        for (let c = col; c < col + span; c++) tops[c] = top + rows;
+      }
+      const end = Math.max(0, ...tops);
+      for (const p of placed) {
+        // Down to the next widget in any of its columns, or the end.
+        const next = placed
+          .filter(
+            (o) => o.top >= p.top + p.rows && o.col < p.col + p.span && o.col + o.span > p.col,
+          )
+          .map((o) => o.top);
+        const to = next.length > 0 ? Math.min(...next) : end;
+        const rows = Math.max(p.rows, to - p.top);
+        p.item.style.setProperty("grid-column-start", String(p.col + 1));
+        p.item.style.setProperty("grid-row-start", String(p.top + 1));
+        p.item.style.setProperty("grid-row-end", `span ${rows}`);
+        if (rows > p.rows) {
+          p.item.style.setProperty("align-self", "stretch");
+          p.item.style.setProperty("max-height", "none");
+        }
+        p.item.style.setProperty("margin-bottom", `${PACK_GAP}px`);
+      }
+      el.setAttribute("data-packed", "");
     };
     fit();
     const watch = new ResizeObserver(() => {
@@ -264,8 +280,7 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
       watch.disconnect();
       el.removeAttribute("data-packed");
       for (const item of items()) {
-        item.style.removeProperty("grid-row-end");
-        item.style.removeProperty("align-self");
+        reset(item);
         item.style.removeProperty("margin-bottom");
       }
     };
