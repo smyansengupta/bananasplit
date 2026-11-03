@@ -61,6 +61,10 @@ import { loadHomeMode, loadSavedBoard } from "@/server/boards";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { homeWidgetCards } from "@/components/overview/home-widget-cards";
 import { HereNowAlone } from "@/components/overview/here-now";
+import { AppsFeed } from "@/components/overview/apps-feed";
+import { loadAppsFeed } from "@/server/overview/apps-feed";
+import type { BoardWidget } from "@/lib/boards";
+import type { Role } from "@/generated/prisma/enums";
 import { HERE_NOW_RECENT } from "@/server/overview/here-now";
 import { loadMainWidgets, loadOwnTxWidgets, readHomeShared } from "@/server/overview/home-widgets";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
@@ -138,6 +142,28 @@ function minutesOfDay(at: Date, timeZone: string): number {
   return part("hour") * 60 + part("minute");
 }
 
+/**
+ * What Ambient adds to anyone's Home, and what each role brings into You
+ * (right after My tasks): a treasurer's Waiting on you, where reimbursements
+ * are approved; an owner's or admin's Decisions. Each rests when it has
+ * nothing, like any widget.
+ */
+function roleExtras(role: Role, addOns: readonly string[] | null | undefined): BoardWidget[] {
+  const extras: BoardWidget[] = [{ id: "apps", type: "apps", w: 2, h: 1 }];
+  const finance = addOns?.includes("finance") ?? true;
+  if (role === "TREASURER" && finance)
+    extras.push({ id: "waiting-on-you", type: "waiting-on-you", w: 2, h: 1 });
+  if (role === "OWNER" || role === "ADMIN")
+    extras.push({ id: "decisions", type: "decisions", w: 2, h: 1 });
+  return extras;
+}
+
+function rolePromoted(role: Role, addOns: readonly string[] | null | undefined): string[] {
+  return roleExtras(role, addOns)
+    .map((w) => w.type)
+    .filter((t) => t !== "apps");
+}
+
 /** The part of the day Home's top light follows (.home-glow in globals.css). */
 function timeOfDay(now: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -205,6 +231,10 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
     const homeMode = await loadHomeMode(db, org.id, user.id);
     const placed = new Set(resolveOverview(saved, isAdmin, settings?.addOns).map((w) => w.type));
+    // Ambient also shows From your apps and what the viewer's role is for,
+    // whether or not they're on the member's board: load them too.
+    if (homeMode === "ambient")
+      for (const w of roleExtras(role, settings?.addOns)) placed.add(w.type);
     const me = await db.user.findUnique({
       where: { id: user.id },
       select: { timezone: true, name: true, image: true, avatar: true },
@@ -767,6 +797,14 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ...(data.events.length === 0 ? ["events"] : []),
     ...(data.recent.length === 0 ? ["recent"] : []),
   ];
+  // From your apps, read when Ambient shows it or it's on the board.
+  const apps = placed.has("apps")
+    ? await loadAppsFeed({ orgId: org.id, orgSlug, userId: user.id, role, now }).catch(
+        () => undefined,
+      )
+    : undefined;
+  if (apps && apps.rows.length === 0) resting.push("apps");
+  if (w.decisions && w.decisions.total === 0) resting.push("decisions");
   const alone = online !== null && online.count <= 1;
   const compact = alone ? ["here-now"] : [];
 
@@ -840,6 +878,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       />
     ),
     ...newer.bodies,
+    ...(apps ? { apps: <AppsFeed data={apps} /> } : {}),
     ...(alone && data.homeMode === "ambient"
       ? {
           "here-now": (
@@ -926,6 +965,11 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ),
     pinned: <CardControls count={data.pins.length || undefined} />,
     ...newer.headers,
+    apps: (
+      <CardControls>
+        <OpenLink href={`${base}/integrations`} label="Integrations" />
+      </CardControls>
+    ),
     // A one-column Here now has room for its title only.
     ...(alone && data.homeMode === "ambient" ? { "here-now": null } : {}),
   };
@@ -948,6 +992,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         mode={data.homeMode}
         resting={resting}
         compact={compact}
+        extras={roleExtras(role, settings?.addOns)}
+        promoted={rolePromoted(role, settings?.addOns)}
         bodies={bodies}
         headerActions={headerActions}
         intro={greetingBlock}

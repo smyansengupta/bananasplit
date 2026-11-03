@@ -173,6 +173,13 @@ export interface AmbientProps {
   resting: readonly string[];
   /** Widget types that need only one column right now (Here now with just you). */
   compact: readonly string[];
+  /**
+   * Widgets Ambient shows whether or not they're on the member's board
+   * (From your apps, what their role is for). Never saved to Custom.
+   */
+  extras?: readonly BoardWidget[];
+  /** Widget types the member's role brings into You, right after My tasks. */
+  promoted?: readonly string[];
   onMode: (mode: BoardMode) => Promise<{ ok: boolean; error?: string }>;
 }
 
@@ -578,10 +585,17 @@ export function WidgetBoard({
   }
   const bands =
     ambient && mode === "ambient"
-      ? ambientLayout(layout, {
-          resting: new Set(ambient.resting),
-          compact: new Set(ambient.compact),
-        })
+      ? ambientLayout(
+          [
+            ...layout,
+            ...(ambient.extras ?? []).filter((x) => !layout.some((w) => w.type === x.type)),
+          ],
+          {
+            resting: new Set(ambient.resting),
+            compact: new Set(ambient.compact),
+            promoted: new Set(ambient.promoted ?? []),
+          },
+        )
       : null;
 
   const body = (w: BoardWidget) =>

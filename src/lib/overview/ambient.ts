@@ -11,6 +11,10 @@ import type { BoardWidget } from "@/lib/boards";
  *
  * A band is eight columns on a wide screen. Each widget asks for a width;
  * a compact one (Here now with only you in) takes one column.
+ *
+ * Your role can promote a widget into You, right after My tasks (a
+ * treasurer's Waiting on you, an owner's Decisions): the same bands, but
+ * what leads in them is what your role is for.
  */
 
 export type Band = "you" | "now" | "calendar" | "week" | "organization";
@@ -34,6 +38,7 @@ const BAND_OF: Record<string, Band> = {
   events: "calendar",
   week: "week",
   "weekly-pulse": "organization",
+  apps: "organization",
   decisions: "organization",
   "who-owns-what": "organization",
 };
@@ -55,7 +60,8 @@ const WANTS: Record<string, number> = {
 };
 const DEFAULT_WANT = 4;
 
-export function bandOf(type: string): Band {
+export function bandOf(type: string, promoted?: ReadonlySet<string>): Band {
+  if (promoted?.has(type)) return "you";
   return BAND_OF[type] ?? "organization";
 }
 
@@ -64,6 +70,8 @@ export interface AmbientState {
   resting: ReadonlySet<string>;
   /** Widget types that need only one column right now. */
   compact: ReadonlySet<string>;
+  /** Widget types your role brings into You, right after My tasks. */
+  promoted?: ReadonlySet<string>;
 }
 
 export interface AmbientItem {
@@ -78,7 +86,9 @@ export interface AmbientRow {
   items: AmbientItem[];
 }
 
-function spotOf(type: string): number {
+function spotOf(type: string, promoted?: ReadonlySet<string>): number {
+  // A promoted widget sits right after My tasks.
+  if (promoted?.has(type)) return SPOT.indexOf("my-tasks") + 0.5;
   const at = SPOT.indexOf(type);
   return at < 0 ? SPOT.length : at;
 }
@@ -123,7 +133,9 @@ export function ambientLayout(
   const rows = BAND_ORDER.flatMap((band) =>
     packBand(
       band,
-      shown.filter((w) => bandOf(w.type) === band).sort((a, b) => spotOf(a.type) - spotOf(b.type)),
+      shown
+        .filter((w) => bandOf(w.type, state.promoted) === band)
+        .sort((a, b) => spotOf(a.type, state.promoted) - spotOf(b.type, state.promoted)),
       state.compact,
     ),
   );

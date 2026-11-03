@@ -73,6 +73,17 @@ describe("ambientLayout", () => {
     ]);
   });
 
+  it("brings what your role is for into You, right after My tasks", () => {
+    const more: BoardWidget[] = [...home, { id: "decisions", type: "decisions", w: 2, h: 1 }];
+    const { rows } = ambientLayout(more, {
+      resting: new Set(),
+      compact: new Set(),
+      promoted: new Set(["decisions"]),
+    });
+    expect(spans(rows).slice(0, 2)).toEqual(["my-tasks:4 decisions:4", "since-you-were-here:8"]);
+    expect(spans(rows)).not.toContain("decisions:8");
+  });
+
   it("sends a type it doesn't know to Organization", () => {
     expect(bandOf("something-new")).toBe("organization");
   });

@@ -786,6 +786,28 @@ describe("the Moonstone Overview", () => {
     expect(html).toContain('id="up-next-heading"');
   });
 
+  it("brings an owner's open decisions into You, right after My tasks, in Ambient", async () => {
+    mocks.loadHomeMode.mockResolvedValue("ambient");
+    mocks.getOrgContextBySlug.mockResolvedValue({ user: viewer, organization: org, role: "OWNER" });
+    mocks.loadDecisions.mockResolvedValue({
+      rows: [],
+      total: 1,
+      todayKey: "2026-10-05",
+      timeZone: "America/Los_Angeles",
+    });
+    const html = await render();
+    const you = html.indexOf('data-band="you"');
+    const decisions = html.indexOf('aria-label="Decisions"');
+    expect(decisions).toBeGreaterThan(you);
+    expect(decisions).toBeLessThan(html.indexOf('data-band="now"'));
+  });
+
+  it("leaves a member's You band to their own work", async () => {
+    mocks.loadHomeMode.mockResolvedValue("ambient");
+    const html = await render();
+    expect(html).not.toContain('aria-label="Decisions"');
+  });
+
   it("shows the latest pulse's figure and tiles, and keeps a saved board's order", async () => {
     mocks.latestSentPulse.mockResolvedValue({
       id: "pi_1",

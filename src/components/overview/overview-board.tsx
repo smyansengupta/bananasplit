@@ -24,6 +24,8 @@ export function OverviewBoard({
   mode,
   resting,
   compact,
+  extras,
+  promoted,
 }: {
   orgId: string;
   types: WidgetMeta[];
@@ -46,6 +48,10 @@ export function OverviewBoard({
   resting: string[];
   /** Widget types that need only one column right now. */
   compact: string[];
+  /** Widgets Ambient shows even when they aren't on the member's board. */
+  extras?: BoardWidget[];
+  /** Widget types the member's role brings into You. */
+  promoted?: string[];
 }) {
   return (
     <WidgetBoard
@@ -64,6 +70,8 @@ export function OverviewBoard({
         mode,
         resting,
         compact,
+        extras,
+        promoted,
         onMode: (next) => saveHomeModeAction(orgId, next),
       }}
     />

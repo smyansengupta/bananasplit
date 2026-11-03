@@ -125,6 +125,15 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     h: null,
   },
   {
+    type: "apps",
+    title: "From your apps",
+    description: "Calls going on now, the website sync, Google Calendar and your AI apps.",
+    group: "Organization",
+    icon: "Link2",
+    w: 2,
+    h: 1,
+  },
+  {
     type: "polls",
     title: "Open forms",
     description: "Forms and quick polls still taking answers.",
