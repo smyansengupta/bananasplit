@@ -255,6 +255,27 @@ describe("an event's life on Up next", () => {
     expect(card?.figureLabel).toBe("said they'd go");
   });
 
+  it("offers Join on a call about to start, only to a secure link", () => {
+    const joinUrls = new Map([["w8", "https://zoom.us/j/1"]]);
+    const card = only({ events: [event("w8", min(10))], context: { joinUrls } });
+    expect(card?.acts?.[0]).toMatchObject({
+      kind: "join",
+      href: "https://zoom.us/j/1",
+      external: true,
+    });
+    const unsafe = only({
+      events: [event("w8", min(10))],
+      context: { joinUrls: new Map([["w8", "javascript:alert(1)"]]) },
+    });
+    expect(unsafe?.acts).toBeUndefined();
+  });
+
+  it("opens the door check-in while an event is on, and asks for notes once a meeting ends", () => {
+    expect(only({ events: [event("w8", min(-20))] })?.acts?.[0]?.kind).toBe("check-in");
+    const ended = { ...event("sync", min(-90)), title: "Weekly exec sync meeting" };
+    expect(only({ ended: [ended] })?.acts?.[0]?.kind).toBe("add-notes");
+  });
+
   it("shows an event's turnout once it's over", () => {
     const card = only({
       ended: [event("w8", min(-120))],

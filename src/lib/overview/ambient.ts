@@ -1,5 +1,7 @@
 import type { BoardWidget } from "@/lib/boards";
 
+import { LEAD_MIN, NIGHT_MIN, SHARE_MIN, scoreOf, type WidgetScore } from "./priority";
+
 /**
  * Ambient Home: the member's widgets arranged by Home itself, in bands that
  * always come in the same order, so a widget always has the same spot (My
@@ -15,9 +17,16 @@ import type { BoardWidget } from "@/lib/boards";
  * Your role can promote a widget into You, right after My tasks (a
  * treasurer's Waiting on you, an owner's Decisions): the same bands, but
  * what leads in them is what your role is for.
+ *
+ * What's going on moves things up (./priority.ts scores each widget): the
+ * highest score leads in its own row above the bands, five columns of
+ * eight, with My tasks beside it, or a second widget that also scores 75
+ * or more. A third at 75 or more goes first in its own band. Everything
+ * else keeps its usual spot. Late at night, whatever scores under 30
+ * rests until morning.
  */
 
-export type Band = "you" | "now" | "calendar" | "week" | "organization";
+export type Band = "lead" | "you" | "now" | "calendar" | "week" | "organization";
 
 export const BAND_COLUMNS = 8;
 
@@ -43,7 +52,7 @@ const BAND_OF: Record<string, Band> = {
   "who-owns-what": "organization",
 };
 
-const BAND_ORDER: readonly Band[] = ["you", "now", "calendar", "week", "organization"];
+const BAND_ORDER: readonly Band[] = ["lead", "you", "now", "calendar", "week", "organization"];
 
 /** The fixed spot of each widget within its band, first to last. */
 const SPOT = Object.keys(BAND_OF);
@@ -72,6 +81,10 @@ export interface AmbientState {
   compact: ReadonlySet<string>;
   /** Widget types your role brings into You, right after My tasks. */
   promoted?: ReadonlySet<string>;
+  /** What's going on, by widget type (scoreHome). Without it, nothing leads. */
+  scores?: ReadonlyMap<string, WidgetScore>;
+  /** Late at night: what scores under NIGHT_MIN rests. */
+  night?: boolean;
 }
 
 export interface AmbientItem {
@@ -79,6 +92,8 @@ export interface AmbientItem {
   /** Columns of BAND_COLUMNS. */
   span: number;
   compact: boolean;
+  /** Leading: why, in one line. */
+  lead?: string;
 }
 
 export interface AmbientRow {
@@ -92,6 +107,9 @@ function spotOf(type: string, promoted?: ReadonlySet<string>): number {
   const at = SPOT.indexOf(type);
   return at < 0 ? SPOT.length : at;
 }
+
+/** Leading alone, these take the whole row: a catch-up story or the week's wrap reads across. */
+const FULL_LEAD = new Set(["since-you-were-here", "weekly-pulse"]);
 
 /** Packs one band's widgets into rows of eight; the spare columns go round the full-size ones. */
 function packBand(band: Band, widgets: readonly BoardWidget[], compact: AmbientState["compact"]) {
@@ -128,16 +146,60 @@ export function ambientLayout(
   layout: readonly BoardWidget[],
   state: AmbientState,
 ): { rows: AmbientRow[]; resting: BoardWidget[] } {
-  const resting = layout.filter((w) => state.resting.has(w.type));
-  const shown = layout.filter((w) => !state.resting.has(w.type));
-  const rows = BAND_ORDER.flatMap((band) =>
+  const score = (w: BoardWidget) => scoreOf(state.scores, w.type);
+  const rests = (w: BoardWidget) =>
+    state.resting.has(w.type) || (state.night === true && score(w) < NIGHT_MIN);
+  const resting = layout.filter(rests);
+  const shown = layout.filter((w) => !rests(w));
+
+  // The lead row: the highest score, if anything is going on.
+  const ranked = [...shown].sort(
+    (a, b) =>
+      score(b) - score(a) || spotOf(a.type, state.promoted) - spotOf(b.type, state.promoted),
+  );
+  const first = state.scores && ranked[0] && score(ranked[0]) >= LEAD_MIN ? ranked[0] : null;
+  const lead: AmbientItem[] = [];
+  if (first) {
+    const second =
+      ranked[1] && score(first) >= SHARE_MIN && score(ranked[1]) >= SHARE_MIN ? ranked[1] : null;
+    const partner =
+      second ??
+      (FULL_LEAD.has(first.type)
+        ? null
+        : shown.find((w) => w.type === "my-tasks" && w !== first)) ??
+      null;
+    const why = (w: BoardWidget) => state.scores?.get(w.type)?.why;
+    lead.push({
+      widget: first,
+      span: partner ? 5 : BAND_COLUMNS,
+      compact: false,
+      lead: why(first),
+    });
+    if (partner) {
+      lead.push({
+        widget: partner,
+        span: 3,
+        compact: false,
+        ...(partner === second ? { lead: why(partner) } : {}),
+      });
+    }
+  }
+  const inLead = new Set(lead.map((i) => i.widget));
+  const rest = shown.filter((w) => !inLead.has(w));
+  // Within a band, anything else at SHARE_MIN or more goes first.
+  const urgent = (w: BoardWidget) => (score(w) >= SHARE_MIN ? -score(w) : 0);
+  const rows = BAND_ORDER.filter((b) => b !== "lead").flatMap((band) =>
     packBand(
       band,
-      shown
+      rest
         .filter((w) => bandOf(w.type, state.promoted) === band)
-        .sort((a, b) => spotOf(a.type, state.promoted) - spotOf(b.type, state.promoted)),
+        .sort(
+          (a, b) =>
+            urgent(a) - urgent(b) ||
+            spotOf(a.type, state.promoted) - spotOf(b.type, state.promoted),
+        ),
       state.compact,
     ),
   );
-  return { rows, resting };
+  return { rows: lead.length > 0 ? [{ band: "lead", items: lead }, ...rows] : rows, resting };
 }

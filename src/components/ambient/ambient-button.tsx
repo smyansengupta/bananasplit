@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { isValidElement, useState, useTransition, type ReactElement, type ReactNode } from "react";
 
 import type { IconComponent } from "@/components/icons";
 import { toast } from "@/components/ui/toaster";
@@ -28,7 +28,11 @@ export interface AmbientAction {
   /** Stable within the row. */
   key: string;
   label: string;
-  icon?: IconComponent;
+  /**
+   * Its icon. From a server component pass an element (`<Users />`): a
+   * component can't cross to the client. A client component may pass either.
+   */
+  icon?: IconComponent | ReactElement;
   /** Why it's here ("Due tomorrow, not started"). Shown on hover, and under the row by AmbientActions. */
   reason: string;
   tone?: AmbientTone;
@@ -79,7 +83,7 @@ export function AmbientButton({
   const look = cn(AMBIENT_BUTTON, TONE[tone], className);
   const inner = (
     <>
-      {Icon && <Icon aria-hidden="true" />}
+      {isValidElement(Icon) ? Icon : Icon ? <Icon aria-hidden="true" /> : null}
       {action.label}
     </>
   );

@@ -12,6 +12,8 @@ import type { UpNextSlot } from "@/lib/overview/up-next";
 import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/enums";
 import { KIND_META } from "@/components/calendar/kinds";
 import { PushBackButton } from "@/components/tasks/overdue-actions";
+
+import { HomeActCardLink } from "./home-act";
 import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
 
@@ -255,6 +257,11 @@ export function UpNext({
           </button>
         </>
       );
+    }
+    if ((item.kind === "meeting" || item.kind === "event") && item.acts?.length) {
+      return item.acts.map((act) => (
+        <HomeActCardLink key={act.kind} act={act} className={cn(ACT, "first:bg-current/10")} />
+      ));
     }
     if (item.kind === "poll" && onVote && item.choices?.length) {
       return item.choices.map((c) => (

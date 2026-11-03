@@ -44,7 +44,7 @@ vi.mock("@/server/overview/queries", async (actual) => ({
   loadPickUpChanges: vi.fn(async () => new Map()),
   loadPinStates: vi.fn(async () => ({})),
   loadFormResponsesSince: vi.fn(async () => new Map()),
-  loadEventTurnout: vi.fn(async () => ({ seats: new Map(), rates: new Map() })),
+  loadEventTurnout: vi.fn(async () => ({ seats: new Map(), rates: new Map(), live: new Map() })),
 }));
 // The Inbox's Needs you, as the sidebar badge counts it (its own tests).
 vi.mock("@/server/inbox/counts", () => ({ sidebarCounts: mocks.sidebarCounts }));

@@ -6,11 +6,12 @@ import type { EventKind } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
 
 /**
- * Home's "This week" (the plan's mockup): the next seven days as columns.
+ * Home's "This week" (the Home canvas): the next seven days as columns.
  * Each event is a block in its kind's colour (the calendar's own colours)
- * with its time and how many are going; each of the viewer's deadlines is a
- * dashed box beside them ("Due: room request"), and an overdue one sits on
- * today in the danger tint. A day with nothing on says "Free evening". A
+ * with its time and how many are going, its whole title; each of the
+ * viewer's deadlines is an outlined block beside them ("Due: room
+ * request"), and an overdue one sits on today in the danger tint. A line
+ * marks now in today's column, between what's been and what's next. A day with nothing on says "Free evening". A
  * crowded day, or one where two events overlap, is outlined and says
  * "Busy" beside its date, and the page puts the one finding about it under
  * the columns. Each block names its kind for screen readers, not by colour
@@ -46,6 +47,8 @@ export interface WeekDay {
   deadlines: WeekDeadline[];
   /** Crowded, or two events overlap: outlined. */
   busy: boolean;
+  /** Today only: the time now, and how many of its events have started. */
+  now?: { label: string; before: number };
 }
 
 function kindVars(kind: EventKind): CSSProperties {
@@ -55,6 +58,19 @@ function kindVars(kind: EventKind): CSSProperties {
 /** Beside a busy day's date: the outline's meaning in words. */
 function BusyWord() {
   return <span className="text-tint-danger-foreground text-[11.5px] font-semibold">Busy</span>;
+}
+
+/** The now line: a dot and a rule across today's column, with the time. */
+function NowLine({ label }: { label: string }) {
+  return (
+    <span className="relative -mx-3 flex items-center py-1" aria-label={`Now, ${label}`}>
+      <span className="bg-foreground size-2.5 shrink-0 rounded-full" aria-hidden="true" />
+      <span className="bg-foreground h-0.5 flex-1" aria-hidden="true" />
+      <span className="bg-muted absolute -top-1.5 right-1.5 rounded-[6px] px-1 text-[11px] font-bold tabular-nums">
+        {label}
+      </span>
+    </span>
+  );
 }
 
 function eventLine(e: WeekEvent): string {
@@ -73,61 +89,64 @@ export function WeekTimeline({
   insight?: ReactNode;
 }) {
   const href = (id: string) => `/app/${orgSlug}/calendar/${id}`;
-  const blocks = (d: WeekDay) => (
+  const event = (e: WeekEvent) => (
+    <Link
+      key={e.id}
+      href={href(e.id)}
+      title={`${e.title}, ${e.time}, ${KIND_META[e.kind].label}`}
+      style={{ ...kindVars(e.kind), color: KIND_INK }}
+      className="block rounded-[10px] bg-(--kind) px-2.5 py-[7px] text-[12px] leading-[1.3] font-semibold break-words transition-[filter] hover:brightness-110"
+    >
+      <span className="sr-only">{KIND_META[e.kind].label}: </span>
+      {eventLine(e)}
+    </Link>
+  );
+  const blocks = (d: WeekDay, phone = false) => (
     <>
-      {d.events.map((e) => (
-        <Link
-          key={e.id}
-          href={href(e.id)}
-          title={`${e.title}, ${e.time}, ${KIND_META[e.kind].label}`}
-          style={{ ...kindVars(e.kind), color: KIND_INK }}
-          className="block rounded-[9px] bg-(--kind) px-2 py-1.5 text-[12px] leading-tight font-semibold transition-[filter] hover:brightness-110"
-        >
-          <span className="line-clamp-2">
-            <span className="sr-only">{KIND_META[e.kind].label}: </span>
-            {eventLine(e)}
-          </span>
-        </Link>
-      ))}
+      {d.now && !phone ? (
+        <>
+          {d.events.slice(0, d.now.before).map(event)}
+          <NowLine label={d.now.label} />
+          {d.events.slice(d.now.before).map(event)}
+        </>
+      ) : (
+        d.events.map(event)
+      )}
       {d.deadlines.map((t) => (
         <Link
           key={t.id}
           href={t.href}
           className={cn(
-            "block rounded-[9px] px-2 py-1.5 text-[12px] leading-tight font-medium",
+            "block rounded-[10px] px-2.5 py-[7px] text-[12px] leading-[1.3] font-semibold break-words",
             t.overdue
               ? "bg-tint-danger text-tint-danger-foreground"
-              : "border-border hover:border-foreground/30 border border-dashed",
+              : "bg-card ring-border hover:ring-foreground/30 ring-1 ring-inset",
           )}
         >
-          <span className="line-clamp-2">
-            {t.overdue ? `${t.title}, overdue` : `Due: ${t.title}`}
-          </span>
+          {t.overdue ? `${t.title}, overdue` : `Due: ${t.title}`}
         </Link>
       ))}
-      {d.events.length === 0 && d.deadlines.length === 0 && (
-        <p className="text-muted-foreground text-[12px]">Free evening</p>
-      )}
+      {d.events.length === 0 && <p className="text-muted-foreground text-[12.5px]">Free evening</p>}
     </>
   );
 
   return (
     <div className="space-y-4">
       {/* Desktop and tablet: seven columns. */}
-      <ol className="grid grid-cols-7 gap-2 max-sm:hidden">
+      <ol className="grid grid-cols-7 gap-2.5 max-sm:hidden">
         {days.map((d) => (
           <li
             key={d.key}
             aria-current={d.isToday ? "date" : undefined}
             className={cn(
-              "rounded-tile min-w-0 space-y-1.5 p-2.5",
-              d.isToday && "bg-muted/60",
+              "flex min-h-[7.5rem] min-w-0 flex-col gap-2 rounded-[18px] p-3",
+              d.isToday && "bg-muted",
               d.busy && "ring-tint-danger-foreground/45 ring-[1.5px] ring-inset",
             )}
           >
-            <p className="flex flex-wrap items-baseline gap-x-1.5 pb-1">
-              <span className="text-[14px] font-semibold">{d.isToday ? "Today" : d.weekday}</span>
-              <span className="text-muted-foreground numeral text-[14px]">{d.date}</span>
+            <p className="flex flex-wrap items-baseline gap-x-1.5 text-[13.5px]">
+              <span className="font-semibold">{d.isToday ? "Today" : d.weekday}</span>
+              <span className="text-muted-foreground font-medium tabular-nums">{d.date}</span>
               {d.busy && <BusyWord />}
             </p>
             {blocks(d)}
@@ -152,7 +171,7 @@ export function WeekTimeline({
               <span className="text-muted-foreground numeral text-[13px]">{d.date}</span>
               {d.busy && <BusyWord />}
             </p>
-            <div className="min-w-0 flex-1 space-y-1.5 self-center">{blocks(d)}</div>
+            <div className="min-w-0 flex-1 space-y-1.5 self-center">{blocks(d, true)}</div>
           </li>
         ))}
       </ol>

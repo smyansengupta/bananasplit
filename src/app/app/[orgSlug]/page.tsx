@@ -66,6 +66,8 @@ import type { BoardWidget } from "@/lib/boards";
 import type { Role } from "@/generated/prisma/enums";
 import { HERE_NOW_RECENT } from "@/server/overview/here-now";
 import { loadMainWidgets, loadOwnTxWidgets, readHomeShared } from "@/server/overview/home-widgets";
+import { recapTime } from "@/lib/overview/home-acts";
+import { isNight, scoreHome, type HomeSignals } from "@/lib/overview/priority";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
 import { sidebarCounts } from "@/server/inbox/counts";
 import { getOrCreateJoinCode } from "@/server/onboarding/join-code";
@@ -517,6 +519,15 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       })),
       deadlines,
       busy: load.clash !== null || load.crowded,
+      // Today's now line sits after what has started (all-day ones first).
+      ...(i === 0
+        ? {
+            now: {
+              label: timeWord(now, timeZone),
+              before: dayEvents.filter((e) => e.allDay || e.startsAt <= now).length,
+            },
+          }
+        : {}),
     };
     return { day, load, name: i === 0 ? "Today" : weekdayLong.format(date) };
   });
@@ -590,6 +601,21 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     });
   }
 
+  // The call links of what starts within a quarter of an hour or is on now, for Join.
+  const soonIds = [...data.meetings, ...data.events]
+    .filter((e) => !e.allDay && e.startsAt.getTime() - now.getTime() <= 15 * 60_000)
+    .map((e) => e.id);
+  const joinUrls =
+    soonIds.length > 0
+      ? await withOrgTx(org.id, ({ db }) =>
+          db.event.findMany({
+            where: { organizationId: org.id, id: { in: soonIds }, conferenceUrl: { not: null } },
+            select: { id: true, conferenceUrl: true },
+          }),
+        )
+          .then((rows) => new Map(rows.map((r) => [r.id, r.conferenceUrl ?? ""])))
+          .catch(() => new Map<string, string>())
+      : new Map<string, string>();
   const upNext = buildUpNext({
     orgSlug,
     now,
@@ -610,6 +636,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       lastActions,
       seats: turnout.seats,
       turnout: turnout.live,
+      joinUrls,
     },
   });
 
@@ -800,6 +827,68 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   // Nothing on Home is ever narrower than a square: Here now keeps its size with only you in.
   const compact: string[] = [];
 
+  // What leads Ambient Home: every widget scored from what's going on now.
+  const minutesUntil = (at: Date) => Math.ceil((at.getTime() - now.getTime()) / 60_000);
+  const underWay = (e: { startsAt: Date; endsAt: Date }) => e.startsAt <= now && e.endsAt > now;
+  const nextMeeting = nextMeetings.find((m) => !m.allDay) ?? null;
+  const nextEvent = data.events.find((e) => !e.allDay) ?? null;
+  const tomorrowKey = addDaysToKey(todayKey, 1);
+  const clock = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    hourCycle: "h23",
+    weekday: "short",
+    timeZone,
+  }).formatToParts(now);
+  const weekdayOf = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const signals: HomeSignals = {
+    hour: Number(clock.find((p) => p.type === "hour")?.value ?? 12),
+    weekday: weekdayOf.indexOf(clock.find((p) => p.type === "weekday")?.value ?? "Wed"),
+    role,
+    meeting: nextMeeting
+      ? {
+          title: nextMeeting.title,
+          startsInMin: minutesUntil(nextMeeting.startsAt),
+          underWay: underWay(nextMeeting),
+        }
+      : null,
+    meetingJustEnded:
+      data.ended.find((e) => e.kind === "BOARD_MEETING" || /meeting|sync/i.test(e.title)) ?? null,
+    event: nextEvent
+      ? {
+          title: nextEvent.title,
+          startsInMin: minutesUntil(nextEvent.startsAt),
+          underWay: underWay(nextEvent),
+          checkIns: turnout.live.get(nextEvent.id)?.checkIns ?? 0,
+        }
+      : null,
+    overdue: data.stats.overdue,
+    dueToday: myDue.filter((t) => t.dueKey === todayKey).length,
+    tomorrowNotStarted:
+      w.deadlines?.rows.find((r) => r.dayKey === tomorrowKey && r.notStarted)?.title ?? null,
+    deadlinesToday: w.deadlines?.rows.filter((r) => r.dayKey === todayKey).length ?? 0,
+    waiting: data.needsYou
+      ? { count: data.needsYou.inbox, requests: data.needsYou.needsYou.requests }
+      : { count: 0, requests: 0 },
+    voteClosing:
+      w.votes?.cards.find(
+        (c) => c.mine === false && /^Closes (today|tomorrow)$/.test(c.closes ?? ""),
+      )?.title ?? null,
+    formsClosing: data.openForms.filter(
+      (f) => f.closesAt && f.closesAt.getTime() - now.getTime() < DAY_MS && f.closesAt > now,
+    ).length,
+    decisions: w.decisions?.total ?? 0,
+    changes: w.since?.rows.length ?? 0,
+    daysAway: data.since ? Math.floor((now.getTime() - data.since.getTime()) / DAY_MS) : 0,
+    othersOnline: online ? Math.max(0, online.count - 1) : 0,
+    week: {
+      events: weekCounts.events,
+      due: weekCounts.due,
+      meetings: nextMeetings.filter((m) => m.startsAt.getTime() - now.getTime() < 7 * DAY_MS)
+        .length,
+    },
+  };
+  const scores = Object.fromEntries(scoreHome(signals));
+
   // Open forms' chips, by form id.
   const formLinks = new Map(
     data.openForms.map((f) => [f.id, chipsOf(data.links.get(`form:${f.id}`), 2)]),
@@ -865,6 +954,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         issueHref={data.pulse ? `${pulseHref}/${data.pulse.weekStart}` : null}
         nextSend={pulseOn ? nextPulseLabel(now, orgZone, pulseDay, pulseHour) : null}
         draftHref={data.draft && !data.draft.sentAt ? `${pulseHref}/${data.draft.weekStart}` : null}
+        recap={recapTime(signals.weekday, signals.hour)}
         insight={<FindingLine finding={pulseInsight} />}
         chips={pulseChips}
       />
@@ -976,6 +1066,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         compact={compact}
         extras={roleExtras(role, settings?.addOns)}
         promoted={rolePromoted(role, settings?.addOns)}
+        scores={scores}
+        night={isNight(signals.hour)}
         bodies={bodies}
         headerActions={headerActions}
         intro={greetingBlock}

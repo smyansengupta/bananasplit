@@ -75,6 +75,7 @@ import {
   type RefObject,
 } from "react";
 
+import { AmbientWhy } from "@/components/ambient/ambient-button";
 import { ShapeIcon, ShapePicker } from "@/components/boards/shape-picker";
 import { Badge } from "@/components/ui/badge";
 import { InBar } from "@/components/ui/bar-slot";
@@ -104,6 +105,7 @@ import {
   type AmbientItem,
   type AmbientRow,
 } from "@/lib/overview/ambient";
+import type { WidgetScore } from "@/lib/overview/priority";
 import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -208,6 +210,10 @@ export interface AmbientProps {
   extras?: readonly BoardWidget[];
   /** Widget types the member's role brings into You, right after My tasks. */
   promoted?: readonly string[];
+  /** What's going on, by widget type (scoreHome): the highest leads. */
+  scores?: Readonly<Record<string, WidgetScore>>;
+  /** Late at night: what scores low rests until morning. */
+  night?: boolean;
   onMode: (mode: BoardMode) => Promise<{ ok: boolean; error?: string }>;
 }
 
@@ -397,6 +403,20 @@ export function WidgetBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
   const [mode, setMode] = useState<BoardMode>(ambient?.mode ?? "custom");
+  // Nothing moves while you're looking: what leads is held from when the
+  // page opened, and takes the latest only when you come back to the tab.
+  const [scores, setScores] = useState(ambient?.scores);
+  const latestScores = useRef(ambient?.scores);
+  useEffect(() => {
+    latestScores.current = ambient?.scores;
+  }, [ambient?.scores]);
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState === "visible") setScores(latestScores.current);
+    };
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, []);
   const grid = useRef<HTMLDivElement>(null);
   const beforeDrag = useRef<BoardWidget[] | null>(null);
   const lastSwap = useRef<string | null>(null);
@@ -618,6 +638,8 @@ export function WidgetBoard({
             resting: new Set(ambient.resting),
             compact: new Set(ambient.compact),
             promoted: new Set(ambient.promoted ?? []),
+            scores: new Map(Object.entries(scores ?? {})),
+            night: ambient.night,
           },
         )
       : null;
@@ -773,6 +795,7 @@ export function WidgetBoard({
                               span: item.span,
                               square: row.band === "now",
                               compact: item.compact,
+                              lead: item.lead,
                               full:
                                 row.band !== "now" || n === 1 || (n % 2 === 1 && index === n - 1),
                             }}
@@ -786,6 +809,7 @@ export function WidgetBoard({
                   {/* Only what's on their board: an extra Home added isn't theirs to miss. */}
                   {bands.resting.some((w) => layout.some((l) => l.id === w.id)) && (
                     <RestingLine
+                      night={ambient?.night}
                       titles={bands.resting
                         .filter((w) => layout.some((l) => l.id === w.id))
                         .map((w) => meta.get(w.type)?.title ?? w.type)}
@@ -939,10 +963,11 @@ function BoardItem({
   onNudge: (by: number) => void;
   onRemove: () => void;
   /**
-   * Laid out by Ambient: its columns of the band, whether the band is at
-   * least a square tall (Now), and whether it takes both columns on a tablet.
+   * Laid out by Ambient: its columns of the band, whether it's in Now (two
+   * across until the widest screens), and whether it takes both columns on
+   * a tablet.
    */
-  band?: { span: number; square: boolean; compact: boolean; full: boolean };
+  band?: { span: number; square: boolean; compact: boolean; full: boolean; lead?: string };
   children: ReactNode;
 }) {
   const { setNodeRef, listeners } = useSortable({ id: w.id, disabled: !editing });
@@ -1015,7 +1040,6 @@ function BoardItem({
       style={!band && w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
       className={cn(
         band ? bandSpan(band) : (SPAN[w.w] ?? SPAN[1]),
-        band?.square && "sm:min-h-[var(--board-row)]",
         hiddenOnPhone && "max-md:hidden",
         "group/widget relative flex min-w-0 flex-col transition-[opacity,outline-color,box-shadow]",
         bare
@@ -1033,6 +1057,9 @@ function BoardItem({
         editing && resizing && "outline-foreground outline-solid",
         dragging && "bg-muted/50 outline-foreground opacity-50",
         fresh && "ring-foreground/40 ring-2",
+        // Leading (Ambient): a banana edge, and why in the header.
+        band?.lead &&
+          "outline-[1.5px] -outline-offset-[1.5px] outline-[color-mix(in_oklab,var(--attention)_60%,transparent)] outline-solid",
       )}
     >
       {!editing && !readOnly && (
@@ -1083,6 +1110,7 @@ function BoardItem({
         <h2 className={cn("heading min-w-0 text-[17px] break-words", editing && "truncate")}>
           {m.title}
         </h2>
+        {band?.lead && <AmbientWhy className="text-[12.5px]">{band.lead}</AmbientWhy>}
         {actions && <div className="flex min-w-0 flex-1 items-center gap-1.5">{actions}</div>}
         {editing && (
           // Pressing a control here is a click, not the start of a drag.
@@ -1160,7 +1188,8 @@ function AmbientBand({
       data-band={row.band}
       className={cn(
         BAND_GRID,
-        row.band === "now" ? "lg:grid-cols-2 xl:grid-cols-8" : "lg:grid-cols-8",
+        // Now's widgets are small: each is as tall as what's in it, not the tallest.
+        row.band === "now" ? "items-start lg:grid-cols-2 xl:grid-cols-8" : "lg:grid-cols-8",
       )}
     >
       {row.items.map(render)}
@@ -1169,7 +1198,7 @@ function AmbientBand({
 }
 
 /** The widgets resting in Ambient, named in one quiet line so they read as resting, not lost. */
-function RestingLine({ titles }: { titles: string[] }) {
+function RestingLine({ titles, night }: { titles: string[]; night?: boolean }) {
   const list =
     titles.length === 1
       ? titles[0]
@@ -1178,8 +1207,9 @@ function RestingLine({ titles }: { titles: string[] }) {
     <p className="text-muted-foreground rounded-tile ring-border flex items-center gap-2.5 px-4 py-3 text-[13px] ring-1 ring-inset">
       <Eye className="size-4 shrink-0" aria-hidden="true" />
       <span>
-        {list} {titles.length === 1 ? "is" : "are"} resting until there&apos;s something new to
-        show.
+        {night
+          ? `${list} ${titles.length === 1 ? "rests" : "rest"} until morning.`
+          : `${list} ${titles.length === 1 ? "is" : "are"} resting until there's something new to show.`}
       </span>
     </p>
   );

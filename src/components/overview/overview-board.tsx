@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { saveBoardAction, saveHomeModeAction } from "@/app/app/[orgSlug]/_shell/board-actions";
 import { WidgetBoard, type BoardMode } from "@/components/boards/widget-board";
 import type { BoardWidget, WidgetMeta } from "@/lib/boards";
+import type { WidgetScore } from "@/lib/overview/priority";
 
 /**
  * The Overview as the member's own board of widgets (the shared WidgetBoard),
@@ -26,6 +27,8 @@ export function OverviewBoard({
   compact,
   extras,
   promoted,
+  scores,
+  night,
 }: {
   orgId: string;
   types: WidgetMeta[];
@@ -52,6 +55,10 @@ export function OverviewBoard({
   extras?: BoardWidget[];
   /** Widget types the member's role brings into You. */
   promoted?: string[];
+  /** What's going on, by widget type: the highest leads Ambient. */
+  scores?: Record<string, WidgetScore>;
+  /** Late at night: what scores low rests until morning. */
+  night?: boolean;
 }) {
   return (
     <WidgetBoard
@@ -72,6 +79,8 @@ export function OverviewBoard({
         compact,
         extras,
         promoted,
+        scores,
+        night,
         onMode: (next) => saveHomeModeAction(orgId, next),
       }}
     />

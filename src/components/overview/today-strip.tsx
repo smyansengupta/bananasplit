@@ -14,6 +14,7 @@ import { Stat, StatStrip } from "@/components/ui/stat";
 import type { TodayCell } from "@/lib/overview/today-strip";
 
 import { TickNumber } from "./fresh";
+import { HomeActButton } from "./home-act";
 
 const ICONS: Record<TodayCell["key"], IconComponent> = {
   overdue: CircleAlert,
@@ -44,28 +45,30 @@ export function TodayStrip({
     <section aria-label="Today">
       <StatStrip>
         {cells.map((c) => (
-          <Link
-            key={c.key}
-            href={c.href}
-            title={c.sub}
-            aria-label={`${c.value ?? "Unknown"} ${c.label.toLowerCase()}: ${c.sub}`}
-            className="focus-glow rounded-tile hover:bg-muted/60 -m-1.5 p-1.5 transition-colors outline-none"
-          >
-            <Stat
-              icon={ICONS[c.key]}
-              value={
-                c.value === null ? (
-                  "–"
-                ) : scope ? (
-                  <TickNumber value={c.value} storageKey={`bs.tick:${scope}:${c.key}`} />
-                ) : (
-                  c.value
-                )
-              }
-              label={c.label}
-              chip={c.chip ? <Badge variant={c.chip.tone}>{c.chip.text}</Badge> : undefined}
-            />
-          </Link>
+          <div key={c.key} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Link
+              href={c.href}
+              title={c.sub}
+              aria-label={`${c.value ?? "Unknown"} ${c.label.toLowerCase()}: ${c.sub}`}
+              className="focus-glow rounded-tile hover:bg-muted/60 -m-1.5 p-1.5 transition-colors outline-none"
+            >
+              <Stat
+                icon={ICONS[c.key]}
+                value={
+                  c.value === null ? (
+                    "–"
+                  ) : scope ? (
+                    <TickNumber value={c.value} storageKey={`bs.tick:${scope}:${c.key}`} />
+                  ) : (
+                    c.value
+                  )
+                }
+                label={c.label}
+                chip={c.chip ? <Badge variant={c.chip.tone}>{c.chip.text}</Badge> : undefined}
+              />
+            </Link>
+            {c.act && <HomeActButton act={c.act} />}
+          </div>
         ))}
       </StatStrip>
     </section>

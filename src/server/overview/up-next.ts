@@ -2,6 +2,7 @@ import type { ItemRef } from "@/lib/overview/types";
 import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/client";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { dayWordOfKey, dueLabel, whenWord } from "@/lib/overview/format";
+import { joinable, type HomeAct } from "@/lib/overview/home-acts";
 import { agendaItems } from "@/lib/overview/insights";
 import {
   UP_NEXT_LIMIT,
@@ -53,6 +54,8 @@ export interface UpNextContext {
   seats?: ReadonlyMap<string, number>;
   /** Check-ins so far against RSVPs, for events under way or just ended (where the viewer may see them). */
   turnout?: ReadonlyMap<string, { rsvps: number; checkIns: number }>;
+  /** Call links of meetings and events about to start or under way, by id. */
+  joinUrls?: ReadonlyMap<string, string>;
 }
 
 /** At most this many chips on a card: it's a card, not the Linked panel. */
@@ -86,6 +89,8 @@ export interface UpNextBlock extends UpNextCandidate {
   choices?: { id: string; label: string }[];
   /** What it's linked to, as chips. */
   chips?: ItemRef[];
+  /** Its ambient buttons right now (Join, Open check-in, Add notes), two at most. */
+  acts?: HomeAct[];
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -245,6 +250,33 @@ export function buildUpNext(input: {
               wide: true,
             }
           : null;
+      // Ambient buttons: the call's Join once it's close, the door once an
+      // event is on, an agenda for tomorrow's meeting that has none.
+      const acts: HomeAct[] = [];
+      const url = ctx.joinUrls?.get(event.id);
+      if (live && joinable(url))
+        acts.push({ kind: "join", href: url, reason: when, external: true });
+      if (underWay && kind === "event") {
+        acts.push({
+          kind: "check-in",
+          href: `${base}/calendar/${event.id}/rsvp/door`,
+          reason: "Happening now",
+        });
+      }
+      const tomorrow = addDaysToKey(input.todayKey, 1);
+      if (
+        kind === "meeting" &&
+        detail &&
+        agendaItems(detail.description ?? null).length === 0 &&
+        (dayOf(event) === tomorrow || dayOf(event) === input.todayKey) &&
+        !underWay
+      ) {
+        acts.push({
+          kind: "draft-agenda",
+          href: `${base}/meetings/${event.id}`,
+          reason: "No agenda yet",
+        });
+      }
       // Its linked tasks are its own business; Up next shows the rest.
       chips.push(...linked(`event:${event.id}`).filter((c) => c.ref.kind !== "task"));
       blocks.push({
@@ -269,6 +301,7 @@ export function buildUpNext(input: {
         faces: going?.faces ?? [],
         facesTotal: count,
         href: `${base}/calendar/${event.id}`,
+        ...(acts.length > 0 ? { acts: acts.slice(0, 2) } : {}),
       });
     }
   }
@@ -306,6 +339,11 @@ export function buildUpNext(input: {
       faces: input.going.get(event.id)?.faces ?? [],
       facesTotal: count,
       href: meeting ? `${base}/meetings/${event.id}` : `${base}/calendar/${event.id}`,
+      acts: [
+        meeting
+          ? { kind: "add-notes", href: `${base}/meetings/${event.id}`, reason: "Just ended" }
+          : { kind: "thank-you", href: `${base}/calendar/${event.id}`, reason: "Just ended" },
+      ],
     });
   }
 
