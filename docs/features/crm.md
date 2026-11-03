@@ -1856,6 +1856,7 @@ named by one search param (`src/lib/crm/overlay.ts`):
 | `ask` | Ask (not built yet) |
 | `new:person`, `new:company`, `new:deal` | New |
 | `goal`, `goal:<id>` | a goal (not built yet) |
+| `merge:<idA>,<idB>` | Merge two people (or two companies) |
 
 - **Opening and closing.** `useCrmOpen()` (client) gives the open card,
   `hrefFor(open)`, `setOpen(open)` (a push, so Back closes it) and
@@ -1919,7 +1920,47 @@ named by one search param (`src/lib/crm/overlay.ts`):
   since), an automation's other steps, and what was held back (Send anyway
   for a draft an automation held for review). Kinds with no real undo show
   no button.
-- **Company and deal cards** are a plain first cut (facts, people, deals,
-  timeline, details) until their own designs land; **New** makes a person,
-  company or deal and opens its card. `/crm/deals` lists the pipelines for
-  now.
+- **People** (`/crm/people`, `src/server/crm/people-view.ts`,
+  `src/components/crm/people/`, pure parts in `src/lib/crm/people-view.ts`):
+  People and Companies are round buttons (`?view=companies`; the old
+  `/crm/companies` redirects there). Filters holds Lists (`?list=`: Everyone,
+  Follow-ups due, Going cold, New this week, Look like duplicates, then the
+  organization's own lists, each with its count, and In the trash), Owner
+  and Relationship. "{list} {count}" sits over one table: relationship as a
+  tinted pill with a dot, strength as four bars, last talked, and the next
+  step as one ambient button with its reason beside it (Merge a likely
+  duplicate, Reply to someone who wrote, Follow up when it's due, Check in
+  when it's gone quiet, Add a next step when someone you've talked to has
+  none; otherwise the next step in words). Picking rows brings the
+  selection bar: Start a deal (`?open=new:deal&with=person:<ids>`), Add to
+  list, Change owner, Email them (a list of exactly them, opened in
+  Outreach's bulk email with `?list=`), and "…" with Merge (two picked),
+  Export (`/crm/export?ids=`) and Move to trash, each with Undo. A CRM with
+  nobody in it shows "Nobody here yet": bring in members and event guests,
+  a spreadsheet (Import), or one person (New).
+- **Lists** are CrmViews. One made of filters holds whoever matches; a
+  hand-picked one (Add to list) stores `{ col: "people", op: "in", value:
+  [ids] }`, and every reader (People, bulk email, the dialer) honours it
+  (`viewIds` in `src/server/crm/outreach/lists.ts`).
+- **Company card** (`src/components/crm/cards/company-card.tsx`): Overview
+  (the soonest next step among the company, its people and its open deals,
+  with Open; what they are; money; the open deal; someone nobody has talked
+  to in 60 days with "Ask {who knows them} for an intro"), People (Add a
+  person here opens New with the company filled in), Deals and Details.
+- **Merge card** (`?open=merge:<a>,<b>`): the two side by side with a pick
+  per field (the record whose name you keep is kept; the other side's
+  picks are written over it after `mergePeople`), what both share and what
+  moves. Keep both turns the suggestion down (or writes one turned down),
+  so the scan never pairs them again. `/crm/review` redirects to People's
+  "Look like duplicates" list.
+- **New card**: Person, Company and Deal as a switch. For a person, paste
+  an email signature or a card photo (or drop one) and the organization's
+  own AI reads it (`readContact`, nothing proposed or kept; the image route's
+  `purpose=fill`); with no AI connected, a pasted signature is read without
+  it (`parseSignature`). A line under the name says who's already here, with
+  Open (`likelyExisting`, scored like the duplicate scan). Relationship and
+  Owner as chips; a deal takes pipeline, stage, amount, close date and the
+  people it started with. Create opens the new card; Create and open
+  another keeps the card blank for the next. `/crm/scan` opens it.
+- **Deal card** is a plain first cut (facts, people, timeline, details)
+  until its own design lands. `/crm/deals` lists the pipelines for now.
