@@ -53,3 +53,7 @@ next-env.d.ts
 
 # Local screenshot checks (never committed)
 .shots/
+
+# Cloudflare Workers (workers/*): their own installs and local state
+/workers/*/node_modules
+/workers/*/.wrangler

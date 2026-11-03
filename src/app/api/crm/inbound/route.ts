@@ -16,8 +16,8 @@ import { publicTarget } from "@/server/crm/outreach/public";
  * POSTs it here with the shared secret (CRM_INBOUND_SECRET) as a bearer
  * token. The recipients say whose it is: log+{token}@ is a member's BCC
  * address, reply+{token}@ the Reply-To of an email the CRM sent. Each goes
- * to ingestEmail in its own organization. The Worker script and setup are
- * in docs/features/crm.md, "Phase 2 as built".
+ * to ingestEmail in its own organization. The Worker and its setup steps are
+ * in workers/crm-inbound/ (README.md).
  */
 
 export const maxDuration = 30;
