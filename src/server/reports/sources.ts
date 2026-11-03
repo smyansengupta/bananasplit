@@ -6,6 +6,7 @@ import { dbViewHref } from "@/lib/databases/href";
 import { sourceKind, type ReportField, type SourceSummary } from "@/lib/reports/catalog";
 import type { LoadedSource, ReportRow } from "@/lib/reports/compute";
 import { loadFields } from "@/server/databases/custom";
+import { crmReportFields, crmReportRows, isCrmDatabaseKind } from "@/server/crm/reports";
 import { listDatabases } from "@/server/databases/views";
 import type { TxClient } from "@/server/db/context";
 
@@ -184,6 +185,34 @@ async function readSources(v: SourceViewer): Promise<SourceSummary[]> {
     orderBy: { createdAt: "asc" },
   });
   for (const d of defs) {
+    // The CRM's databases read like any database (the CRM add-on).
+    if (isCrmDatabaseKind(d.kind)) {
+      if (v.addOns && !v.addOns.includes("crm")) continue;
+      const fields = (await crmReportFields(db, organizationId, d)).map((f) =>
+        f.choices && !f.done
+          ? withDone({ id: f.id, name: f.name, type: f.type, options: { choices: f.choices }, isPrimary: false })
+          : f,
+      );
+      const where = { organizationId, deletedAt: null };
+      const rows =
+        d.kind === "CRM_PEOPLE"
+          ? await db.crmPerson.count({ where })
+          : d.kind === "CRM_COMPANIES"
+            ? await db.crmCompany.count({ where })
+            : await db.crmDeal.count({ where: { ...where, pipeline: { databaseId: d.id } } });
+      out.push({
+        key: `custom:${d.id}`,
+        kind: "custom",
+        name: d.name,
+        icon: d.icon ?? "Handshake",
+        description: d.kind === "CRM_PIPELINE" ? "A CRM pipeline" : (d.description ?? "The CRM"),
+        href: dbViewHref(slug, d.key),
+        fields,
+        rows,
+        form: null,
+      });
+      continue;
+    }
     if (d.kind !== "CUSTOM") continue;
     const fields = (await loadFields(db, organizationId, d.id)).map(withDone);
     const rows = await db.databaseRecord.count({
@@ -296,6 +325,14 @@ export async function loadSource(
   switch (sourceKind(key)) {
     case "custom": {
       const databaseId = key.slice("custom:".length);
+      const def = await db.databaseDefinition.findFirst({
+        where: { id: databaseId, organizationId },
+        select: { id: true, kind: true },
+      });
+      if (def && isCrmDatabaseKind(def.kind)) {
+        records = await crmReportRows(db, organizationId, slug, def, take);
+        break;
+      }
       const fields = await loadFields(db, organizationId, databaseId);
       const primary = fields.find((f) => f.isPrimary) ?? fields[0];
       const rows = await db.databaseRecord.findMany({
