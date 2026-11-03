@@ -145,7 +145,10 @@ export function MeetingsList({
                   label: "Join",
                   icon: <Video />,
                   tone: "solid",
-                  reason: "Starting now",
+                  reason:
+                    next.startsAt <= now
+                      ? "On now"
+                      : `Starts in ${Math.ceil((next.startsAt.getTime() - now.getTime()) / 60_000)} min`,
                   href: joinUrl,
                   external: true,
                 }}
