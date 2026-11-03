@@ -9,8 +9,9 @@ import { withOrgTx, withSystemOrgTx } from "@/server/db/context";
  * viewer (RLS: only events they may see, only their own connections).
  * Integrations aren't readable by members, so their health and the website
  * sync's last runs are read as the service, and only as much as the row
- * says: which app, which stream, when. What needs fixing goes to owners
- * and admins; Google Calendar's misses to whoever can edit events.
+ * says: which app, which stream, when. What needs fixing and the website
+ * sync go to owners and admins; Google Calendar's misses to whoever can
+ * edit events.
  */
 export async function loadAppsFeed(viewer: {
   orgId: string;
@@ -31,6 +32,7 @@ export async function loadAppsFeed(viewer: {
         mergedIntoId: null,
         conferenceProvider: { not: "NONE" },
         conferenceUrl: { not: null },
+        allDay: false,
         startsAt: { lte: soon },
         endsAt: { gt: now },
       },
@@ -94,12 +96,15 @@ export async function loadAppsFeed(viewer: {
               : [],
           )
         : [],
-      syncs: (website?.syncStates ?? []).map((s) => ({
-        stream: s.stream,
-        lastSyncedAt: s.lastSyncedAt,
-        // Only admins hear that a stream failed; nobody sees the error itself.
-        failed: admin && s.lastError !== null,
-      })),
+      // The website sync is admins' business: what it brought in, or that it
+      // couldn't (never the error itself).
+      syncs: admin
+        ? (website?.syncStates ?? []).map((s) => ({
+            stream: s.stream,
+            lastSyncedAt: s.lastSyncedAt,
+            failed: s.lastError !== null,
+          }))
+        : [],
     };
   });
 

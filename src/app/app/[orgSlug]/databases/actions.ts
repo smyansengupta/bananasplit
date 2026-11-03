@@ -17,6 +17,7 @@ import {
   addManualSignup,
   assertCanEdit,
   DatabaseEditError,
+  closePoll,
   deleteAttendance,
   deletePoll,
   deleteSignup,
@@ -466,9 +467,7 @@ export async function deletePollAction(organizationId: string, id: string) {
   });
 }
 
-const closePollTx = databasesAction((ctx, id: string) =>
-  updateBallotDefinition(ctx, id, { closesAt: new Date() }),
-);
+const closePollTx = databasesAction((ctx, id: string) => closePoll(ctx, id));
 
 /** "Close now": the poll stops counting votes cast from now on. */
 export async function closePollAction(organizationId: string, id: string) {

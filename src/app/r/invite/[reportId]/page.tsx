@@ -10,7 +10,12 @@ import { Button } from "@/components/ui/button";
 import { signInPath } from "@/lib/auth/callback-url";
 import { getUserIdentity } from "@/lib/auth/email-verification";
 import { getSession } from "@/lib/auth/session";
-import { inviteTarget, loadSharedReport, sharedViewLimit } from "@/server/reports/shared-view";
+import {
+  inviteTarget,
+  loadSharedReport,
+  sharedViewIpLimit,
+  sharedViewShareLimit,
+} from "@/server/reports/shared-view";
 
 export const metadata: Metadata = { title: "Shared report", robots: { index: false } };
 
@@ -35,15 +40,22 @@ export default async function InvitedReportPage({
           title="Sign in to open this report"
           body="It was shared with you by email. Sign in with that email to see it."
         >
-          <Button asChild className="w-fit">
-            <Link href={signInPath(here)}>Sign in</Link>
-          </Button>
+          <span className="flex flex-wrap gap-2">
+            <Button asChild className="w-fit">
+              <Link href={signInPath(here)}>Sign in</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-fit">
+              <Link href={`/sign-up?callbackUrl=${encodeURIComponent(here)}`}>
+                Create an account
+              </Link>
+            </Button>
+          </span>
         </SharedNotice>
       </PublicThemeRoot>
     );
   }
 
-  const wait = await sharedViewLimit(`invite:${reportId}`);
+  const wait = await sharedViewIpLimit();
   if (wait) {
     return (
       <PublicThemeRoot>
@@ -67,6 +79,17 @@ export default async function InvitedReportPage({
   }
 
   const target = await inviteTarget(reportId, identity.email);
+  // Counted per invited person, only once the invite checks out.
+  const shareWait = target
+    ? await sharedViewShareLimit(`invite:${reportId}:${session.user.id}`)
+    : null;
+  if (shareWait) {
+    return (
+      <PublicThemeRoot>
+        <SharedNotice title="Too many visits" body={`Try again ${shareWait}.`} />
+      </PublicThemeRoot>
+    );
+  }
   const report = target ? await loadSharedReport(target) : null;
   if (!report) {
     return (

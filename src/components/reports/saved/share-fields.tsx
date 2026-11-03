@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useId, useState, useTransition } from "react";
 
 import {
   addReportInvitesAction,
@@ -80,7 +80,12 @@ export function CopyField({ value, label }: { value: string; label: string }) {
         onFocus={(e) => e.currentTarget.select()}
         className="min-w-0 flex-1 text-[13px]"
       />
-      <Button type="button" variant="outline" onClick={() => copy(value)}>
+      <Button
+        type="button"
+        variant="outline"
+        aria-label={`Copy the ${label[0].toLowerCase()}${label.slice(1)}`}
+        onClick={() => copy(value)}
+      >
         <Copy className="size-4" aria-hidden="true" />
         Copy
       </Button>
@@ -103,6 +108,7 @@ export function OutsideSharing({
   onRemove,
   inviteUrl,
   pending,
+  canShare = true,
 }: {
   link: boolean;
   /** The link to copy, when it was just made (it's shown once). */
@@ -117,9 +123,16 @@ export function OutsideSharing({
   /** Where invited people open it, to send them. */
   inviteUrl?: string;
   pending?: boolean;
+  /**
+   * Only the maker opens it up outside; anyone else who can edit it may
+   * still turn the link off and remove people.
+   */
+  canShare?: boolean;
 }) {
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [renewing, setRenewing] = useState(false);
+  const hintId = useId();
 
   async function add() {
     if (!typed.trim()) return;
@@ -133,32 +146,68 @@ export function OutsideSharing({
       <div className="grid gap-1">
         <span className="text-sm font-semibold">Outside the organization</span>
         <span className="text-muted-foreground text-[13px]">{SHARE_NOTE}</span>
+        {!canShare && (
+          <span className="text-muted-foreground text-[13px]">
+            Only whoever made it can share it outside the organization. You can stop sharing it.
+          </span>
+        )}
       </div>
 
       <div className="grid gap-2.5">
         <label className="flex items-center gap-3 text-sm">
-          <Switch checked={link} disabled={pending} onCheckedChange={onLink} />
+          <Switch
+            checked={link}
+            disabled={pending || (!canShare && !link)}
+            onCheckedChange={onLink}
+          />
           <span>Anyone with the link can view it</span>
         </label>
         {link &&
           (url ? (
             <CopyField value={url} label="View-only link" />
-          ) : onNewLink ? (
+          ) : onNewLink && canShare ? (
+            // A new link stops the old one for everyone who has it: asked first.
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-muted-foreground text-[13px]">
-                The link shows only when it&apos;s made. A new one stops the old one.
+                {renewing
+                  ? "Make a new link? The old one stops working for everyone who has it."
+                  : "The link shows only when it's made. A new one stops the old one."}
               </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={onNewLink}
-              >
-                New link
-              </Button>
+              {renewing ? (
+                <span className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRenewing(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => {
+                      setRenewing(false);
+                      onNewLink();
+                    }}
+                  >
+                    Make a new link
+                  </Button>
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => setRenewing(true)}
+                >
+                  New link
+                </Button>
+              )}
             </div>
-          ) : (
+          ) : onNewLink ? null : (
             <span className="text-muted-foreground text-[13px]">
               You get the link when you save.
             </span>
@@ -166,26 +215,34 @@ export function OutsideSharing({
       </div>
 
       <div className="grid gap-2.5">
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void add();
-          }}
-        >
-          <Input
-            type="text"
-            inputMode="email"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder="Invite by email"
-            aria-label="Invite by email"
-            className="min-w-0 flex-1"
-          />
-          <Button type="submit" variant="outline" disabled={pending || !typed.trim()}>
-            Invite
-          </Button>
-        </form>
+        {canShare && (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void add();
+            }}
+          >
+            <Input
+              type="text"
+              inputMode="email"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder="Add people by email"
+              aria-label="Add people by email"
+              aria-describedby={hintId}
+              className="min-w-0 flex-1"
+            />
+            <Button type="submit" variant="outline" disabled={pending || !typed.trim()}>
+              Add
+            </Button>
+          </form>
+        )}
+        {canShare && (
+          <span id={hintId} className="text-muted-foreground -mt-1 text-[13px]">
+            Separate several with commas. They sign in with that email to open it.
+          </span>
+        )}
         {error && (
           <p role="alert" className="text-tint-danger-foreground text-[13px]">
             {error}
@@ -211,9 +268,6 @@ export function OutsideSharing({
                 </li>
               ))}
             </ul>
-            <span className="text-muted-foreground text-[13px]">
-              They sign in with that email to open it.
-            </span>
             {inviteUrl && <CopyField value={inviteUrl} label="Link for invited people" />}
           </>
         )}
@@ -341,6 +395,7 @@ export function ShareDialog({
               invites={state.invites}
               inviteUrl={state.inviteUrl}
               pending={pending}
+              canShare={isOwner}
               onAdd={async (typed) => {
                 const result = await addReportInvitesAction(orgId, reportId, typed);
                 if (!result.ok) return result.error;

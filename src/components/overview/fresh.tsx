@@ -43,12 +43,16 @@ export function TickNumber({ value, storageKey }: { value: number; storageKey: s
   if (from === null) return <span className="tabular-nums">{value}</span>;
   const up = value > from;
   return (
-    <span className="tick-roll tabular-nums" aria-label={String(value)}>
-      <span aria-hidden="true" data-dir={up ? "up" : "down"}>
-        <span>{up ? from : value}</span>
-        <span>{up ? value : from}</span>
+    <>
+      {/* A span can't carry a label; screen readers read this instead of the roll. */}
+      <span className="sr-only">{value}</span>
+      <span className="tick-roll tabular-nums" aria-hidden="true">
+        <span data-dir={up ? "up" : "down"}>
+          <span>{up ? from : value}</span>
+          <span>{up ? value : from}</span>
+        </span>
       </span>
-    </span>
+    </>
   );
 }
 

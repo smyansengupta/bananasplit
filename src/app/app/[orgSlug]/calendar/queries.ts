@@ -111,6 +111,8 @@ export function getRecentlyEnded(
       organizationId,
       deletedAt: null,
       mergedIntoId: null,
+      // An all-day event "ends" at midnight; there's nothing just over to follow up.
+      allDay: false,
       endsAt: { gt: new Date(now.getTime() - withinMs), lte: now },
     },
     select: calendarEventSelect,

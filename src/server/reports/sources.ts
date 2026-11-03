@@ -274,7 +274,8 @@ async function memberNames(v: SourceViewer): Promise<Record<string, string>> {
     select: { user: { select: { id: true, name: true, email: true } } },
   });
   return Object.fromEntries(
-    rows.map((m) => [m.user.id, m.user.name ?? m.user.email?.split("@")[0] ?? "Member"]),
+    // A member without a name is "Member", never part of their address.
+    rows.map((m) => [m.user.id, m.user.name?.trim() || "Member"]),
   );
 }
 

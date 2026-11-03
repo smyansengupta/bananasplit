@@ -24,24 +24,30 @@ export interface ShareTarget {
 
 const REPORT_ID = /^[a-z0-9]{8,40}$/i;
 
-/** Opens of shared reports an hour, per visitor's address and per link or report. */
+/** Opens of shared reports an hour, per visitor's address and per share that resolved. */
 const OPENS_PER_IP = 120;
-const OPENS_PER_SHARE = 600;
+const OPENS_PER_SHARE = 3000;
 
 /**
- * Counts one open of a shared report (each one computes the report). Null
- * when it's within the limits, else when to try again ("in 5 minutes").
+ * Counts one open from this visitor's address, before anything is looked
+ * up (each open computes a report). Null when it's within the limit, else
+ * when to try again ("in 5 minutes").
  */
-export async function sharedViewLimit(share: string): Promise<string | null> {
+export async function sharedViewIpLimit(): Promise<string | null> {
   const ip = await getClientIp();
-  for (const [key, limit] of [
-    [rateLimitKey("report-share-ip", ip), OPENS_PER_IP],
-    [rateLimitKey("report-share", share), OPENS_PER_SHARE],
-  ] as const) {
-    const hit = await checkRateLimit(key, limit, 60 * 60);
-    if (!hit.allowed) return retryAfterText(hit);
-  }
-  return null;
+  const hit = await checkRateLimit(rateLimitKey("report-share-ip", ip), OPENS_PER_IP, 60 * 60);
+  return hit.allowed ? null : retryAfterText(hit);
+}
+
+/**
+ * Counts one open of a share that resolved: a working link, or one invited
+ * person (keyed on them, so nobody else can use up their opens). Counted
+ * only once the lookup succeeded, so guessing can't lock a share for the
+ * people it's for.
+ */
+export async function sharedViewShareLimit(share: string): Promise<string | null> {
+  const hit = await checkRateLimit(rateLimitKey("report-share", share), OPENS_PER_SHARE, 60 * 60);
+  return hit.allowed ? null : retryAfterText(hit);
 }
 
 /** The live, organization-shared report a link's token opens, if any. */

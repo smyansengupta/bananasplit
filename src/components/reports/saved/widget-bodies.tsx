@@ -454,6 +454,7 @@ export function WidgetBody({
                   orgId={taskActions.orgId}
                   taskId={r.id}
                   person={{ id: r.ownerId, name: r.owner }}
+                  size="icon-sm"
                 />
               )}
               {late && (

@@ -187,8 +187,12 @@ export function buildUpNext(input: {
       seen.add(event.id);
       const rsvp = input.rsvps.get(event.id) ?? null;
       const going = input.going.get(event.id);
-      const mins = Math.round((event.startsAt.getTime() - input.now.getTime()) / MINUTE_MS);
-      const underWay = !event.allDay && mins <= 0 && event.endsAt.getTime() > input.now.getTime();
+      // Rounded up, so a card never says "In 0 min" before it starts.
+      const mins = Math.ceil((event.startsAt.getTime() - input.now.getTime()) / MINUTE_MS);
+      const underWay =
+        !event.allDay &&
+        event.startsAt.getTime() <= input.now.getTime() &&
+        event.endsAt.getTime() > input.now.getTime();
       const live: UpNextLive | undefined = event.allDay
         ? undefined
         : underWay
@@ -230,11 +234,11 @@ export function buildUpNext(input: {
         if (seats !== undefined && detail?.capacity)
           reasons.push(`${seats} of ${detail.capacity} seats taken.`);
       }
-      // Event day: under way, an event shows its check-ins counting up
-      // against its RSVPs, across two columns.
+      // Event day: under way, once people start checking in, an event shows
+      // its check-ins counting up against its RSVPs, across two columns.
       const t = underWay && kind === "event" ? ctx.turnout?.get(event.id) : undefined;
       const takeover =
-        t && (t.checkIns > 0 || t.rsvps > 0)
+        t && t.checkIns > 0
           ? {
               figure: String(t.checkIns),
               figureLabel: t.rsvps > 0 ? `checked in, of ${t.rsvps} RSVPs` : "checked in so far",
@@ -297,7 +301,7 @@ export function buildUpNext(input: {
             figureLabel: came.rsvps > 0 ? `came, of ${came.rsvps} who said yes` : "came",
           }
         : count > 0
-          ? { figure: String(count), figureLabel: "went" }
+          ? { figure: String(count), figureLabel: "said they'd go" }
           : {}),
       faces: input.going.get(event.id)?.faces ?? [],
       facesTotal: count,
@@ -339,9 +343,19 @@ export function buildUpNext(input: {
   const live = blocks.filter((b) => !isPast(b, input.now));
   const hidden = input.hidden ?? new Set<string>();
   const shown = live.filter((b) => !hidden.has(`${b.kind}:${b.id}`));
-  const slots = arrangeUpNext(shown);
-  // An event-day card takes two columns, so the row holds three cards, not four.
-  return slots.some((s) => s.item.wide) ? arrangeUpNext(shown, UP_NEXT_LIMIT - 1) : slots;
+  // One event-day card at most: two would leave no room for anything else.
+  const firstWide = shown.find((b) => b.wide);
+  const single = shown.map((b) => (b.wide && b !== firstWide ? { ...b, wide: false } : b));
+  const slots = arrangeUpNext(single);
+  if (!slots.some((s) => s.item.wide)) return slots.map(narrow);
+  // It takes two columns, so the row holds three cards, not four. If the
+  // trim drops it, the rest go back to one column each.
+  const three = arrangeUpNext(single, UP_NEXT_LIMIT - 1);
+  return three.some((s) => s.item.wide) ? three : slots.map(narrow);
+}
+
+function narrow<S extends { item: UpNextBlock }>(slot: S): S {
+  return slot.item.wide ? { ...slot, item: { ...slot.item, wide: false } } : slot;
 }
 
 /** How long an open poll with no closing date stays in Up next. */

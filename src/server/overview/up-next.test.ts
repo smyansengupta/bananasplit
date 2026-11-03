@@ -222,6 +222,39 @@ describe("an event's life on Up next", () => {
     expect(slots).toHaveLength(3);
   });
 
+  it("doesn't take over two columns before anyone has checked in", () => {
+    const card = only({
+      events: [event("w8", min(-5))],
+      context: { turnout: new Map([["w8", { rsvps: 38, checkIns: 0 }]]) },
+    });
+    expect(card?.wide).toBeFalsy();
+  });
+
+  it("never shows two wide cards, and narrows one that the row can't fit", () => {
+    const turnout = new Map([
+      ["a", { rsvps: 10, checkIns: 4 }],
+      ["b", { rsvps: 12, checkIns: 6 }],
+    ]);
+    const slots = build({
+      events: [event("a", min(-20)), event("b", min(-10)), event("c", min(600))],
+      context: { turnout },
+    });
+    expect(slots.filter((s) => s.item.wide)).toHaveLength(1);
+  });
+
+  it('says someone is about to start, never "In 0 min"', () => {
+    const card = only({ events: [event("w8", new Date(NOW.getTime() + 20_000))] });
+    expect(card?.kicker).toBe("In 1 min");
+  });
+
+  it("says how many said they'd go when an event ends without check-ins", () => {
+    const card = only({
+      ended: [event("w8", min(-120))],
+      going: new Map([["w8", { going: 9, faces: [] }]]),
+    });
+    expect(card?.figureLabel).toBe("said they'd go");
+  });
+
   it("shows an event's turnout once it's over", () => {
     const card = only({
       ended: [event("w8", min(-120))],

@@ -1,4 +1,5 @@
 import { Prisma } from "@/generated/prisma/client";
+import { writeOrgAuditLog } from "@/server/audit";
 import type { ReportAccess, Role } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/auth/errors";
 import { can } from "@/lib/auth/permissions";
@@ -388,6 +389,15 @@ export async function createReport(
       skipDuplicates: true,
     });
   }
+  if (linkToken || outside.invites.length > 0) {
+    await writeOrgAuditLog(v.db, {
+      organizationId: v.organizationId,
+      action: "report.shared_outside",
+      targetType: "Report",
+      targetId: report.id,
+      diff: { link: linkToken !== null, invites: outside.invites.length },
+    });
+  }
   return { id: report.id, linkToken };
 }
 
@@ -527,8 +537,23 @@ export async function updateReportDetails(
 }
 
 export async function archiveReport(v: SourceViewer, id: string): Promise<void> {
-  await editable(v, id);
-  await v.db.report.update({ where: { id }, data: { archivedAt: new Date() } });
+  const report = await editable(v, id);
+  // Archiving ends outside access: the link stops working and the invites
+  // go, so bringing it back doesn't quietly re-open it.
+  await v.db.report.update({
+    where: { id },
+    data: { archivedAt: new Date(), linkTokenHash: null, linkCreatedAt: null },
+  });
+  await v.db.reportInvite.deleteMany({ where: { organizationId: v.organizationId, reportId: id } });
+  if (report.linkOn) {
+    await writeOrgAuditLog(v.db, {
+      organizationId: v.organizationId,
+      action: "report.link_off",
+      targetType: "Report",
+      targetId: id,
+      diff: { reason: "archived" },
+    });
+  }
 }
 
 /**
@@ -549,6 +574,12 @@ export async function deleteReport(v: SourceViewer, id: string): Promise<void> {
   }
   const done = await v.db.report.deleteMany({ where: { organizationId: v.organizationId, id } });
   if (done.count === 0) throw new NotFoundError();
+  await writeOrgAuditLog(v.db, {
+    organizationId: v.organizationId,
+    action: "report.deleted",
+    targetType: "Report",
+    targetId: id,
+  });
 }
 
 /** Archive's Undo: the report back, if this person may change it (RLS decides). */

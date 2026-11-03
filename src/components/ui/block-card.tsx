@@ -56,7 +56,7 @@ const ON_KIND = "oklch(from var(--kind) clamp(0, (0.62 - l) * 1000, 1) 0 0)";
 const ACCENT_STYLE: React.CSSProperties = {
   background: "var(--kind)",
   color: ON_KIND,
-  ["--meta" as string]: `color-mix(in oklab, ${ON_KIND} 74%, var(--kind))`,
+  ["--meta" as string]: `color-mix(in oklab, ${ON_KIND} 88%, var(--kind))`,
   ["--ring-bg" as string]: "var(--kind)",
 };
 
@@ -167,7 +167,7 @@ export function BlockCard({
       )}
       {title && kicker && (
         <p className="flex items-center gap-2 text-[13px] font-medium text-(--meta)">
-          {live && <span aria-hidden="true" className="live-dot" />}
+          {live === "now" && <span aria-hidden="true" className="live-dot" />}
           {kicker}
         </p>
       )}

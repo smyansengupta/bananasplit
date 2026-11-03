@@ -98,7 +98,12 @@ import {
   type BoardWidget,
   type WidgetMeta,
 } from "@/lib/boards";
-import { ambientLayout, type AmbientItem, type AmbientRow } from "@/lib/overview/ambient";
+import {
+  BAND_COLUMNS,
+  ambientLayout,
+  type AmbientItem,
+  type AmbientRow,
+} from "@/lib/overview/ambient";
 import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -149,20 +154,41 @@ const SPAN: Record<number, string> = {
   4: "col-span-1 sm:col-span-2 lg:col-span-4",
 };
 
-/** Ambient bands are eight columns on a wide screen, two on a tablet, one on a phone. */
-const BAND_SPAN: Record<number, string> = {
-  1: "col-span-1 lg:col-span-1",
-  2: "col-span-1 lg:col-span-2",
-  3: "col-span-1 lg:col-span-3",
-  4: "col-span-1 sm:col-span-2 lg:col-span-4",
-  5: "col-span-1 sm:col-span-2 lg:col-span-5",
-  6: "col-span-1 sm:col-span-2 lg:col-span-6",
-  7: "col-span-1 sm:col-span-2 lg:col-span-7",
-  8: "col-span-1 sm:col-span-2 lg:col-span-8",
+/**
+ * Ambient bands are eight columns on a wide screen, two on a tablet, one on
+ * a phone. Now's widgets are small, so that band stays two across until the
+ * widest screens. On two columns each widget takes one, and a lone one (or
+ * the last of an odd count) both, so no band leaves a hole.
+ */
+const BAND_SPAN_LG: Record<number, string> = {
+  1: "lg:col-span-1",
+  2: "lg:col-span-2",
+  3: "lg:col-span-3",
+  4: "lg:col-span-4",
+  5: "lg:col-span-5",
+  6: "lg:col-span-6",
+  7: "lg:col-span-7",
+  8: "lg:col-span-8",
 };
+const BAND_SPAN_XL: Record<number, string> = {
+  1: "xl:col-span-1",
+  2: "xl:col-span-2",
+  3: "xl:col-span-3",
+  4: "xl:col-span-4",
+  5: "xl:col-span-5",
+  6: "xl:col-span-6",
+  7: "xl:col-span-7",
+  8: "xl:col-span-8",
+};
+function bandSpan(band: { span: number; square: boolean; full: boolean }): string {
+  const two = band.full ? "sm:col-span-2" : "sm:col-span-1";
+  return band.square
+    ? cn("col-span-1", two, band.full ? "lg:col-span-2" : "lg:col-span-1", BAND_SPAN_XL[band.span])
+    : cn("col-span-1", two, BAND_SPAN_LG[band.span]);
+}
 /** One band: widgets in it share its height, so their bottoms line up. --board-row as GRID has it. */
 const BAND_GRID =
-  "grid grid-cols-1 items-stretch gap-4.5 sm:grid-cols-2 lg:grid-cols-8 sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
+  "grid grid-cols-1 items-stretch gap-4.5 sm:grid-cols-2 sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
 
 /** Home's two layouts: Ambient arranges itself, Custom is the member's own. */
 export type BoardMode = "ambient" | "custom";
@@ -637,7 +663,7 @@ export function WidgetBoard({
                   <Button
                     type="button"
                     size="icon"
-                    aria-label="Done customizing"
+                    aria-label={ambient ? "Done editing" : "Done customizing"}
                     title="Done"
                     onClick={() => setEditing(false)}
                   >
@@ -686,7 +712,7 @@ export function WidgetBoard({
 
       {notice}
 
-      {layout.length === 0 ? (
+      {(bands ? bands.rows.length === 0 && bands.resting.length === 0 : layout.length === 0) ? (
         <div className="text-muted-foreground rounded-block border-border flex flex-col items-center gap-3 border-[1.5px] border-dashed p-10 text-sm">
           <span className="bg-muted grid size-14 place-items-center rounded-full">
             <LayoutGrid className="size-6" aria-hidden="true" />
@@ -721,8 +747,9 @@ export function WidgetBoard({
                     <AmbientBand
                       key={`${row.band}-${i}`}
                       row={row}
-                      render={(item) => {
+                      render={(item, index) => {
                         const m = meta.get(item.widget.type);
+                        const n = row.items.length;
                         if (!m) return null;
                         return (
                           <BoardItem
@@ -745,6 +772,7 @@ export function WidgetBoard({
                               span: item.span,
                               square: row.band === "now",
                               compact: item.compact,
+                              full: n === 1 || (n % 2 === 1 && index === n - 1),
                             }}
                           >
                             {body(item.widget)}
@@ -753,9 +781,12 @@ export function WidgetBoard({
                       }}
                     />
                   ))}
-                  {bands.resting.length > 0 && (
+                  {/* Only what's on their board: an extra Home added isn't theirs to miss. */}
+                  {bands.resting.some((w) => layout.some((l) => l.id === w.id)) && (
                     <RestingLine
-                      titles={bands.resting.map((w) => meta.get(w.type)?.title ?? w.type)}
+                      titles={bands.resting
+                        .filter((w) => layout.some((l) => l.id === w.id))
+                        .map((w) => meta.get(w.type)?.title ?? w.type)}
                     />
                   )}
                 </div>
@@ -905,8 +936,11 @@ function BoardItem({
   onShape: (w: number, h: number | null) => void;
   onNudge: (by: number) => void;
   onRemove: () => void;
-  /** Laid out by Ambient: its columns of the band, and whether the band is at least a square tall. */
-  band?: { span: number; square: boolean; compact: boolean };
+  /**
+   * Laid out by Ambient: its columns of the band, whether the band is at
+   * least a square tall (Now), and whether it takes both columns on a tablet.
+   */
+  band?: { span: number; square: boolean; compact: boolean; full: boolean };
   children: ReactNode;
 }) {
   const { setNodeRef, listeners } = useSortable({ id: w.id, disabled: !editing });
@@ -978,14 +1012,18 @@ function BoardItem({
       onPointerDown={coarse ? undefined : drag}
       style={!band && w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
       className={cn(
-        band ? (BAND_SPAN[band.span] ?? BAND_SPAN[2]) : (SPAN[w.w] ?? SPAN[1]),
+        band ? bandSpan(band) : (SPAN[w.w] ?? SPAN[1]),
         band?.square && "sm:min-h-[var(--board-row)]",
         hiddenOnPhone && "max-md:hidden",
         "group/widget relative flex min-w-0 flex-col transition-[opacity,outline-color,box-shadow]",
         bare
           ? "rounded-block"
           : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
-        band ? null : w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
+        band
+          ? !bare && band.span < BAND_COLUMNS && "lg:max-h-[34rem]"
+          : w.h
+            ? ROWS_TALL
+            : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
         editing &&
           "outline-border cursor-grab outline-[1.5px] outline-offset-[3px] outline-dashed select-none active:cursor-grabbing",
         editing && !coarse && "touch-none",
@@ -1113,10 +1151,16 @@ function AmbientBand({
   render,
 }: {
   row: AmbientRow;
-  render: (item: AmbientItem) => ReactNode;
+  render: (item: AmbientItem, index: number) => ReactNode;
 }) {
   return (
-    <div data-band={row.band} className={BAND_GRID}>
+    <div
+      data-band={row.band}
+      className={cn(
+        BAND_GRID,
+        row.band === "now" ? "lg:grid-cols-2 xl:grid-cols-8" : "lg:grid-cols-8",
+      )}
+    >
       {row.items.map(render)}
     </div>
   );
@@ -1158,10 +1202,25 @@ function ModeSwitch({
       hint: "Arrange it yourself",
     },
   ];
+  // One tab stop; the arrow keys move between the two, as a radio group does.
+  // While a switch is saving, clicks are ignored rather than the buttons
+  // greyed out, so focus stays put.
+  const pick = (value: BoardMode) => {
+    if (!disabled) onChange(value);
+  };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const next = mode === "ambient" ? "custom" : "ambient";
+    e.currentTarget.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`)?.focus();
+    pick(next);
+  };
   return (
     <div
       role="radiogroup"
       aria-label="Layout"
+      aria-busy={disabled || undefined}
+      onKeyDown={onKeyDown}
       className="bg-card ring-border inline-flex h-9 items-center rounded-full p-[3px] ring-1 ring-inset"
     >
       {options.map(({ value, label, Icon, hint }) => {
@@ -1172,9 +1231,10 @@ function ModeSwitch({
             type="button"
             role="radio"
             aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            data-mode={value}
             title={hint}
-            disabled={disabled}
-            onClick={() => onChange(value)}
+            onClick={() => pick(value)}
             className={cn(
               "focus-glow inline-flex h-full items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors outline-none",
               on ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",

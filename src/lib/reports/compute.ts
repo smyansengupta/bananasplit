@@ -159,7 +159,8 @@ export interface OverduePayload {
 }
 
 export interface TablePayload {
-  columns: { id: string; name: string; numeric: boolean }[];
+  /** `personal`: an email or phone column, which a view shared outside the organization hides. */
+  columns: { id: string; name: string; numeric: boolean; personal?: boolean }[];
   rows: { id: string; href: string | null; cells: string[] }[];
   total: number;
   filterLabel: string | null;
@@ -885,6 +886,7 @@ function computeTable(w: ReportWidget, s: LoadedSource): TablePayload {
       id: f.id,
       name: f.name,
       numeric: f.type === "NUMBER" || f.type === "CURRENCY",
+      personal: f.type === "EMAIL" || f.type === "PHONE",
     })),
     rows: [...rows]
       .reverse()

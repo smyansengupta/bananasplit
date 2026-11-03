@@ -3,7 +3,7 @@
 import { ArrowUpRight, CalendarCheck2, Check, EyeOff, RotateCcw, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 
 import { ContextActions } from "@/components/context-actions";
 import { BlockCard } from "@/components/ui/block-card";
@@ -271,6 +271,15 @@ export function UpNext({
     }
     return null;
   };
+  // While a card counts down ("In 12 min") or is live, keep it current.
+  const ticking = slots.some(
+    ({ item }) => item.live !== undefined || /^In \d+ min/.test(item.kicker),
+  );
+  useEffect(() => {
+    if (!ticking) return;
+    const id = window.setInterval(() => router.refresh(), 60_000);
+    return () => window.clearInterval(id);
+  }, [ticking, router]);
   const showAll = () =>
     start(async () => {
       await onShowAll?.();
@@ -304,7 +313,7 @@ export function UpNext({
           Nothing this week.
         </div>
       ) : (
-        <div className="-mx-1 flex snap-x snap-mandatory [scrollbar-width:none] gap-3.5 overflow-x-auto px-1 pb-1.5 max-sm:-mx-4 max-sm:scroll-px-4 max-sm:px-4 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-1 flex snap-x snap-mandatory [scrollbar-width:none] gap-3.5 overflow-x-auto px-1 pb-1.5 max-sm:-mx-4 max-sm:scroll-px-4 max-sm:px-4 max-sm:pt-1.5 sm:grid sm:grid-cols-2 sm:overflow-visible xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
           {/* A phone: just the next one, full width (the ↗ opens the rest). */}
           {slots.map(({ item, moreAlerts }, index) => (
             // Right-click a card for the same two things its "…" offers.

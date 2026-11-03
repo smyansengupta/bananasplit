@@ -17,7 +17,9 @@ export async function websiteSyncConnected(
       where: {
         organizationId,
         provider: IntegrationProvider.SUPABASE_SOURCE,
-        status: IntegrationStatus.CONNECTED,
+        // A sync that's failing or needs signing in again is still set up:
+        // its data is only stale until it's fixed.
+        status: { not: IntegrationStatus.DISCONNECTED },
       },
       select: { id: true },
     });

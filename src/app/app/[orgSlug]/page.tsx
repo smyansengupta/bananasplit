@@ -208,7 +208,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const now = new Date();
   // Website polls (elections) come from the website data sync; without it
   // they're stale leftovers nobody can update or remove, so Home leaves them out.
-  const websitePolls = await websiteSyncConnected(org.id, user.id).catch(() => false);
+  // If the check fails, show them: hiding real polls is worse than a stale one.
+  const websitePolls = await websiteSyncConnected(org.id, user.id).catch(() => true);
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
     const homeMode = await loadHomeMode(db, org.id, user.id);
@@ -613,8 +614,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   });
 
   // Meetings: a repeating meeting shows once, its next time, not every week ahead.
-  const seriesKey = (m: { id: string; title: string }) =>
-    data.details.get(m.id)?.seriesId ?? m.title;
+  // One without a series is its own: two different meetings can share a title.
+  const seriesKey = (m: { id: string }) => data.details.get(m.id)?.seriesId ?? m.id;
   const nextMeetings = data.meetings.filter(
     (m, i, all) => all.findIndex((o) => seriesKey(o) === seriesKey(m)) === i,
   );
