@@ -123,20 +123,20 @@ export function TaskCard({
         <ProgressBar done={progress.done} total={progress.total} color={color} />
       )}
 
-      <div className="text-muted-foreground flex items-center gap-2.5 text-[13px]">
-        {/* The date with its ambient buttons beside it; the faces keep the right edge. */}
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px]">
+        {/* The date with its ambient buttons right beside it; on a narrow card the faces wrap, not the buttons. */}
+        <span className="flex items-center gap-2.5">
           <DueLabel dueDate={task.dueDate} todayKey={todayKey} done={done} />
           {ambient}
-          {task._count.comments > 0 && (
-            <span className="flex items-center gap-1">
-              <MessageSquare className="size-3.5" aria-hidden="true" />
-              {task._count.comments}
-            </span>
-          )}
         </span>
+        {task._count.comments > 0 && (
+          <span className="flex items-center gap-1">
+            <MessageSquare className="size-3.5" aria-hidden="true" />
+            {task._count.comments}
+          </span>
+        )}
         {people.length > 0 && (
-          <span className="flex shrink-0 items-center">
+          <span className="ms-auto flex shrink-0 items-center">
             {people.slice(0, 3).map((u, i) => (
               <UserAvatar
                 key={u.id}
