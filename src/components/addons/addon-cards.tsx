@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 /**
  * Integrations and apps' add-on cards: a small picture of what each does,
  * its name, one line, and the one thing to do next (Add, or Open once it's
- * there). CRM is shown as coming later.
+ * there).
  */
 
 function Preview({ tint, children }: { tint: string; children: ReactNode }) {
@@ -178,18 +178,7 @@ export function AddOnCards({
     <ul className="grid gap-[18px] md:grid-cols-2 xl:grid-cols-3">
       {card("forms", FORMS_PREVIEW)}
       {card("finance", FINANCE_PREVIEW)}
-      <Card
-        preview={CRM_PREVIEW}
-        name="CRM"
-        tag={<Pill>Coming later</Pill>}
-        body="Sponsors, partners and contacts in one place, with every email and meeting you've had with them."
-        foot="Not ready to add yet"
-        actions={
-          <Button asChild variant="ghost">
-            <Link href={`${base}/integrations/crm`}>Details</Link>
-          </Button>
-        }
-      />
+      {card("crm", CRM_PREVIEW)}
     </ul>
   );
 }

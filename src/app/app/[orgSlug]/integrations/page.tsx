@@ -21,8 +21,8 @@ import { isPanelApp, loadPanel } from "./panels";
 
 /**
  * Integrations and apps. First the add-ons (src/lib/addons.ts): Forms and
- * Finance, which an organization adds when it wants them, and CRM, coming
- * later; each has its own page (/integrations/forms, …). Then the apps it
+ * Finance and the CRM, which an organization adds when it wants them;
+ * each has its own page (/integrations/forms, …). Then the apps it
  * can connect: what's connected first, then what can be connected today,
  * and one line naming what's coming. Setting an app up, testing it and
  * disconnecting it happen in a window over this page (`?app=<key>`,
