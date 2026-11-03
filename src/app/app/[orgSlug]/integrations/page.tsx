@@ -18,6 +18,7 @@ import { resolveOrgMailRouting } from "@/server/email/mailer";
 import { loadIntegrations } from "@/server/integrations/service";
 
 import { isPanelApp, loadPanel } from "./panels";
+import { phoneTiles } from "./phone-panels";
 
 /**
  * Integrations and apps. First the add-ons (src/lib/addons.ts): Forms and
@@ -96,10 +97,11 @@ export default async function IntegrationsPage({
   }
   const canManage = can({ role: ctx.role }, "integrations.write");
 
-  const [dtos, meetings, mail] = await Promise.all([
+  const [dtos, meetings, mail, phone] = await Promise.all([
     loadIntegrations(org.id),
     loadMeetingConnections(org.id),
     resolveOrgMailRouting(org.id),
+    phoneTiles(org.id),
   ]);
   const dtoOf = (provider: string) => dtos.find((d) => d.provider === provider);
   const stateOf = (provider: string): State => {
@@ -224,6 +226,8 @@ export default async function IntegrationsPage({
         } satisfies Tile;
       }),
     },
+    // Calls and texts: the CRM's Telnyx, Twilio and Deepgram (phone-panels.tsx).
+    { name: "Calls and texts", tiles: phone },
     {
       name: "Notes, AI and data",
       tiles: [

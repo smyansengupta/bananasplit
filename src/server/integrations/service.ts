@@ -27,6 +27,7 @@ import {
 import { revokeToken as revokeConferenceToken } from "@/server/conference/oauth";
 import { markConferenceNeedsReauth } from "@/server/conference/reauth";
 import { ConferenceReauthError } from "@/server/conference/types";
+import { testPhoneIntegration } from "@/server/crm/phone/connect";
 import {
   getSecret,
   removeSecret,
@@ -616,12 +617,13 @@ export async function testProvider(
       return testConference(orgId, provider);
     // The CRM's bring-your-own-key connectors (docs/features/crm.md): their
     // connect cards come with the phases that use them.
-    case "TAVILY":
-    case "HUNTER":
-    case "PROSPEO":
     case "TELNYX":
     case "TWILIO":
     case "DEEPGRAM":
+      return testPhoneIntegration(orgId, actor, provider);
+    case "TAVILY":
+    case "HUNTER":
+    case "PROSPEO":
       return fail("This connection can't be tested yet.");
   }
 }

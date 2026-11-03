@@ -3404,6 +3404,10 @@ model CrmSettings {
   enrichmentOrder   String[]  @default([])
   /// Most emails one member's mailbox sends a day from sequences and campaigns.
   dailySendCap      Int       @default(150)
+  /// Calls and texts (Phase 5): {provider, recording: "ask"|"never",
+  /// notice, quietStart, quietEnd, callStart, callEnd, voicemailKey}.
+  /// Owners and admins set it (src/server/crm/phone/settings.ts).
+  phone             Json      @default("{}")
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -4089,26 +4093,37 @@ model CrmScoreRule {
 }
 
 model CrmQuote {
-  id              String         @id @default(cuid())
-  organizationId  String
-  dealId          String?
-  companyId       String?
-  personId        String?
-  number          String
-  title           String
-  status          CrmQuoteStatus @default(DRAFT)
-  currency        String         @default("USD")
-  notes           String?
-  validUntil      DateTime?
-  totalCents      Int            @default(0)
+  id                   String         @id @default(cuid())
+  organizationId       String
+  dealId               String?
+  companyId            String?
+  personId             String?
+  number               String
+  title                String
+  status               CrmQuoteStatus @default(DRAFT)
+  currency             String         @default("USD")
+  notes                String?
+  validUntil           DateTime?
+  totalCents           Int            @default(0)
+  /// quote | invoice (Phase 5). Numbered per kind: Q-0001, INV-0001.
+  kind                 String         @default("quote")
+  /// Tax on the subtotal in basis points (825 is 8.25%).
+  taxBps               Int            @default(0)
   /// The public accept page is /q/{token}; only the hash is kept.
-  publicTokenHash String?        @unique
-  acceptedName    String?
-  acceptedAt      DateTime?
-  sentAt          DateTime?
-  createdById     String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  publicTokenHash      String?        @unique
+  acceptedName         String?
+  acceptedAt           DateTime?
+  /// sha256 of the accepting browser's IP with the org id, never the IP.
+  acceptedIpHash       String?
+  declinedAt           DateTime?
+  declineReason        String?
+  paidAt               DateTime?
+  /// The Finance income transaction booked when it was marked paid.
+  financeTransactionId String?
+  sentAt               DateTime?
+  createdById          String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   deal         CrmDeal?       @relation(fields: [dealId], references: [id], onDelete: SetNull)
