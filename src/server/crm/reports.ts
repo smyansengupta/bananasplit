@@ -59,6 +59,7 @@ export async function crmReportFields(
       { id: "lastContacted", name: "Last contacted", type: "DATE" },
       { id: "followUp", name: "Next follow-up", type: "DATE" },
       { id: "strength", name: "Relationship strength", type: "NUMBER" },
+      { id: "score", name: "Score", type: "NUMBER" },
       ...custom,
     ];
   }
@@ -95,6 +96,7 @@ export async function crmReportFields(
     { id: "company", name: "Company", type: "TEXT" },
     { id: "expected", name: "Expected", type: "DATE" },
     { id: "closed", name: "Closed on", type: "DATE" },
+    { id: "score", name: "Score", type: "NUMBER" },
     ...custom,
   ];
 }
@@ -127,6 +129,7 @@ export async function crmReportRows(
         ...(p.lastContactedAt ? { lastContacted: day(p.lastContactedAt) } : {}),
         ...(p.nextFollowUpAt ? { followUp: day(p.nextFollowUpAt) } : {}),
         strength: p.strength,
+        score: p.score,
       },
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
@@ -177,6 +180,7 @@ export async function crmReportRows(
       ...(d.company ? { company: d.company.name } : {}),
       ...(d.expectedOn ? { expected: day(d.expectedOn) } : {}),
       ...(d.closedAt ? { closed: day(d.closedAt) } : {}),
+      score: d.score,
     },
     createdAt: d.createdAt.toISOString(),
     updatedAt: d.updatedAt.toISOString(),

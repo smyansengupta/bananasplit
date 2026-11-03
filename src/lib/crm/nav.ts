@@ -25,6 +25,8 @@ export const CRM_TABS: readonly CrmTabEntry[] = [
   { id: "people", label: "People", icon: "Users", path: "/people" },
   { id: "companies", label: "Companies", icon: "Building2", path: "/companies" },
   { id: "pipelines" },
+  { id: "forecast", label: "Forecast", icon: "ChartLine", path: "/forecast" },
+  { id: "automations", label: "Automations", icon: "Zap", path: "/automations", managersOnly: true },
   { id: "review", label: "Duplicates", icon: "Merge", path: "/review" },
   { id: "settings", label: "Settings", icon: "Settings", path: "/settings", managersOnly: true },
 ];

@@ -24,6 +24,8 @@ import { reportTier } from "./tier";
 import type { AttendanceReport, RetentionReport } from "./types";
 import { getVisibleReports } from "./visibility";
 import { loadSource, type SourceViewer } from "./sources";
+import { isCrmWidget } from "@/lib/reports/crm-widgets";
+import { crmWidgetPayload } from "@/server/crm/report-widgets";
 
 /** The viewer of a report, from a transaction's member context. */
 export async function reportViewer(ctx: {
@@ -118,6 +120,13 @@ export async function runReport(
         if (seesNames) c.payload = { type: "stopped", data: await queryStopped(v.db, args) };
         break;
       default:
+        // The CRM's outreach and pipeline widgets read the CRM's own tables, as this viewer.
+        if (isCrmWidget(c.widget.type) && source.crm) {
+          c.payload = await crmWidgetPayload(
+            { db: v.db, organizationId: v.organizationId, slug: v.slug, tz: v.tz, range: { from: range.from, to: range.to }, crm: source.crm },
+            c.widget.type,
+          );
+        }
         break;
     }
   }

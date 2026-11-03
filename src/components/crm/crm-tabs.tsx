@@ -3,6 +3,7 @@
 import {
   Briefcase,
   Building2,
+  ChartLine,
   Columns3,
   Handshake,
   HandCoins,
@@ -14,6 +15,7 @@ import {
   Sunrise,
   UserPlus,
   Users,
+  Zap,
   type IconComponent,
 } from "@/components/icons";
 
@@ -24,6 +26,7 @@ import type { ResolvedCrmTab } from "@/lib/crm/nav";
 export const CRM_ICONS: Record<string, IconComponent> = {
   Briefcase,
   Building2,
+  ChartLine,
   Columns3,
   Handshake,
   HandCoins,
@@ -35,6 +38,7 @@ export const CRM_ICONS: Record<string, IconComponent> = {
   Sunrise,
   UserPlus,
   Users,
+  Zap,
 };
 
 /** The CRM's tab bar: the same switch bar as every section's pages. */
