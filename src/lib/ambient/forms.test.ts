@@ -33,6 +33,12 @@ describe("Share again", () => {
 
   it("says why", () => {
     expect(shareAgain(form, NOW)?.reason).toBe("4 answers, closes in 2 days");
+    expect(shareAgain({ ...form, closesAt: inHours(30) }, NOW)?.reason).toBe(
+      "4 answers, closes tomorrow",
+    );
+    expect(shareAgain({ ...form, closesAt: inHours(5) }, NOW)?.reason).toBe(
+      "4 answers, closes in 5 hours",
+    );
     expect(shareAgain({ ...form, responses: 12, lastTime: 30 }, NOW)?.reason).toBe(
       "12 answers, fewer than last time",
     );

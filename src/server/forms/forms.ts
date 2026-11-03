@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { SHARE_AGAIN_HOURS } from "@/lib/ambient/forms";
 import type { FormAccess, FormKind, FormResponseStatus } from "@/generated/prisma/enums";
 import { can } from "@/lib/auth/permissions";
 import { CHOICE_COLORS, readOptions, type Choice, type FieldType } from "@/lib/databases/fields";
@@ -173,6 +174,27 @@ export async function listForms(db: TxClient, organizationId: string): Promise<F
     databaseKey: database.key,
     members: form.access === "MEMBERS" ? memberCount : null,
   }));
+}
+
+/**
+ * The bodies of announcements posted in the last SHARE_AGAIN_HOURS that
+ * carry a form link, so Share again doesn't offer to post the same link twice.
+ */
+export async function recentFormShares(
+  db: TxClient,
+  organizationId: string,
+  now: Date,
+): Promise<string[]> {
+  const rows = await db.announcement.findMany({
+    where: {
+      organizationId,
+      deletedAt: null,
+      createdAt: { gte: new Date(now.getTime() - SHARE_AGAIN_HOURS * 3_600_000) },
+      body: { contains: "/f/" },
+    },
+    select: { body: true },
+  });
+  return rows.map((r) => r.body);
 }
 
 export async function loadForm(db: TxClient, organizationId: string, formId: string) {

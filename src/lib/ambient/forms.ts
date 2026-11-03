@@ -51,9 +51,25 @@ export function shareAgain(f: FormFacts, now: Date): { reason: string } | null {
   const hours = closingWithin(f, now);
   if (hours === null || !fewAnswers(f)) return null;
   const answers = f.responses === 1 ? "1 answer" : `${f.responses} answers`;
-  const when = hours <= 24 ? "closes in a day" : `closes in ${Math.ceil(hours / 24)} days`;
+  // Plain words, never rounded up: 30 hours is "closes tomorrow", not "in 2 days".
+  const when =
+    hours < 1
+      ? "closes within the hour"
+      : hours < 12
+        ? `closes in ${Math.round(hours)} hours`
+        : hours <= 36
+          ? "closes tomorrow"
+          : "closes in 2 days";
   const behind = !f.outOf && f.lastTime != null && f.responses < f.lastTime;
   return { reason: behind ? `${answers}, fewer than last time` : `${answers}, ${when}` };
+}
+
+/** After Share again posts a form's link, this long before it's offered again. */
+export const SHARE_AGAIN_HOURS = 24;
+
+/** Whether an announcement in `bodies` (posted lately) already shared the form at `slug`. */
+export function sharedLately(slug: string, bodies: readonly string[]): boolean {
+  return bodies.some((b) => b.includes(`/f/${slug}`));
 }
 
 /** What Share again posts to everyone. */

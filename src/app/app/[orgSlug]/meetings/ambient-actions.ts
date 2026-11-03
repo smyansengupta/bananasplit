@@ -6,7 +6,7 @@ import { NotificationType } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { draftAgenda, matchOwner, todosWithoutTasks } from "@/lib/ambient/meetings";
-import { localDateKey } from "@/lib/tasks/dates";
+import { addDaysToKey, localDateKey } from "@/lib/tasks/dates";
 import { writeOrgAuditLog } from "@/server/audit";
 import { withOrgAction, type OrgContext } from "@/server/db/context";
 import * as events from "@/server/events/service";
@@ -211,14 +211,18 @@ export const turnTodosIntoTasks = hosted(async (ctx, event) => {
   });
   const people = members.map((m) => m.user);
   const env = await tasks.loadTaskEnv(ctx);
+  // Where every task needs a due date, a week out: the notes don't give one.
+  const due = env.org.taskRequireDueDate
+    ? { dueDate: addDaysToKey(localDateKey(new Date(), env.org.timezone), 7) }
+    : {};
   const made: string[] = [];
   for (const todo of todos) {
     const title = todo.title.slice(0, 200);
     const ownerId = matchOwner(todo.ownerName, people);
-    let result = await tasks.createTask(env, { title, ownerId });
+    let result = await tasks.createTask(env, { title, ownerId, ...due });
     // Above them on the chart (it would ask first) or refused: make it unowned.
     if (ownerId && (result.confirm || result.error)) {
-      result = await tasks.createTask(env, { title, ownerId: null });
+      result = await tasks.createTask(env, { title, ownerId: null, ...due });
     }
     if (result.error) return { error: result.error };
     if (result.taskId) made.push(result.taskId);

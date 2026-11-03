@@ -38,6 +38,12 @@ import { todoLabel, type MeetingAmbientKind } from "@/lib/ambient/meetings";
  * each job in place. Their actions check again that the job still applies.
  */
 
+/** A week from today in the browser's own calendar, as a date key. */
+function weekFromToday(): string {
+  const d = new Date(Date.now() + 7 * 86_400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export type HeaderKind = EventAmbientKind | MeetingAmbientKind;
 
 /** A count job: toast how many it reached, then step aside. */
@@ -375,10 +381,16 @@ export function MeetingNotesAmbient({
               initial=""
               submitLabel="Add"
               submit={async (title) => {
-                const made = (await createTask(orgId, { title })) as {
-                  error?: string;
-                  taskId?: string;
-                };
+                const make = async (extra: { dueDate?: string }) =>
+                  (await createTask(orgId, { title, ...extra })) as {
+                    error?: string;
+                    taskId?: string;
+                  };
+                let made = await make({});
+                // An organization that wants a date on every task: a week out.
+                if (made.error && /due date/i.test(made.error)) {
+                  made = await make({ dueDate: weekFromToday() });
+                }
                 if (made.error || !made.taskId)
                   return { error: made.error ?? "The task couldn't be made." };
                 return addLinkAction(

@@ -8,7 +8,7 @@ import { LinkedSection } from "@/components/links/linked-section";
 import { FormPublish } from "@/components/forms/form-publish";
 import { FormResponses } from "@/components/forms/form-responses";
 import { PageTabs } from "@/components/ui/page-tabs";
-import { makeReport, shareAgain, shareAgainPost } from "@/lib/ambient/forms";
+import { makeReport, shareAgain, shareAgainPost, sharedLately } from "@/lib/ambient/forms";
 import { appUrl } from "@/lib/app-url";
 import { spaceIncludes } from "@/lib/billing/space";
 import { safeTimeZone } from "@/lib/calendar/dates";
@@ -18,7 +18,7 @@ import { readDesign } from "@/lib/forms/design";
 import { readQuestions } from "@/lib/forms/questions";
 import { summarize } from "@/lib/forms/summary";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
-import { isFormOpen, loadForm, loadResponses } from "@/server/forms/forms";
+import { isFormOpen, loadForm, loadResponses, recentFormShares } from "@/server/forms/forms";
 import { planGate } from "@/server/billing/plan-gate";
 import { reportTier } from "@/server/reports/tier";
 
@@ -105,16 +105,19 @@ export default async function FormPage({
   const fresh = rows.filter((r) => r.status === "NEW").length;
   const databaseHref = `${base}/databases/${form.database.key}`;
   const draft = form.publishedAt === null;
-  const share = shareAgain(
-    {
-      open,
-      draft,
-      closesAt: form.closesAt,
-      responses: rows.length,
-      outOf: form.access === "MEMBERS" ? members.length : null,
-    },
-    new Date(),
-  );
+  const shares = await withOrgTx(org.id, ({ db }) => recentFormShares(db, org.id, new Date()));
+  const share = sharedLately(form.slug, shares)
+    ? null
+    : shareAgain(
+        {
+          open,
+          draft,
+          closesAt: form.closesAt,
+          responses: rows.length,
+          outOf: form.access === "MEMBERS" ? members.length : null,
+        },
+        new Date(),
+      );
   const report =
     reports === null
       ? null

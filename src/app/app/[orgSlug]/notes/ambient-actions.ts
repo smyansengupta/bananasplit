@@ -58,16 +58,27 @@ const linkTasks = filesAction(async (ctx, noteId: string, taskIds: string[]) => 
   });
 });
 
+/** A week from today, as a date key (the server's own date is close enough for a default). */
+function weekOut(): string {
+  return new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+}
+
 /** "Turn 3 to-dos into tasks": one task per unchecked to-do, linked back to the note. */
 export async function turnTodosIntoTasksAction(orgId: string, noteId: string): Promise<Result> {
   const found = await todosOf(orgId, String(noteId ?? "").slice(0, 64));
   if ("error" in found && found.error) return { ok: false, error: found.error };
   const todos = "todos" in found ? (found.todos ?? []) : [];
   if (todos.length === 0) return { ok: false, error: "Every to-do here is a task already." };
-  const { results } = await createTasksFromImport(
-    orgId,
-    todos.slice(0, 50).map((title, i) => ({ key: String(i), input: { title } })),
-  );
+  const make = (input: Record<string, string>) =>
+    createTasksFromImport(
+      orgId,
+      todos.slice(0, 50).map((title, i) => ({ key: String(i), input: { title, ...input } })),
+    );
+  let { results } = await make({});
+  // An organization that wants a date on every task: a week out, since the note gives none.
+  if (results.every((r) => !r.taskId) && results.some((r) => /due date/i.test(r.error ?? ""))) {
+    ({ results } = await make({ dueDate: weekOut() }));
+  }
   const made = results.map((r) => r.taskId).filter((id): id is string => Boolean(id));
   if (made.length === 0) {
     return { ok: false, error: results.find((r) => r.error)?.error ?? "No tasks were made." };

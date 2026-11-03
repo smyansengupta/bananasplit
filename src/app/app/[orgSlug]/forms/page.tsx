@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { PageTabs } from "@/components/ui/page-tabs";
 import { NewFormButton, TemplateRow } from "@/components/forms/new-form";
 import { FormList, type FormListRow } from "@/components/forms/form-list";
-import { shareAgain, shareAgainPost } from "@/lib/ambient/forms";
+import { shareAgain, shareAgainPost, sharedLately } from "@/lib/ambient/forms";
 import { appUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { safeTimeZone } from "@/lib/calendar/dates";
@@ -14,7 +14,13 @@ import { isPollOpen } from "@/lib/polls/question-poll";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { describeQuestions } from "@/lib/forms/describe";
 import { readQuestions } from "@/lib/forms/questions";
-import { isFormOpen, isWebsitePollOpen, listForms, listWebsitePolls } from "@/server/forms/forms";
+import {
+  isFormOpen,
+  isWebsitePollOpen,
+  listForms,
+  listWebsitePolls,
+  recentFormShares,
+} from "@/server/forms/forms";
 import { listQuestionPolls } from "@/server/polls/question-polls";
 import { planGate } from "@/server/billing/plan-gate";
 
@@ -41,10 +47,11 @@ export default async function FormsPage({
   const timeZone = safeTimeZone(org.timezone);
   const now = new Date();
 
-  const { forms, polls, website } = await withOrgTx(org.id, async ({ db }) => ({
+  const { forms, polls, website, shares } = await withOrgTx(org.id, async ({ db }) => ({
     forms: await listForms(db, org.id),
     polls: await listQuestionPolls(db, org.id),
     website: await listWebsitePolls(db, org.id),
+    shares: await recentFormShares(db, org.id, now),
   }));
 
   // Share again compares with the organization's form before it ("fewer than last time").
@@ -104,7 +111,7 @@ export default async function FormsPage({
         databaseHref: canMake ? `${base}/databases/${databaseKey}` : null,
         canTrash: canMake,
         shareAgain:
-          share && form.closesAt
+          share && form.closesAt && !sharedLately(form.slug, shares)
             ? {
                 reason: share.reason,
                 ...shareAgainPost(form.title, form.closesAt, appUrl(`/f/${form.slug}`), timeZone),

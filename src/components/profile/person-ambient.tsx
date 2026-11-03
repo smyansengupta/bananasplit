@@ -18,6 +18,7 @@ import {
   tooMuchOnPlate,
 } from "@/lib/ambient/people";
 import { runAction } from "@/lib/run-action";
+import { addDaysToKey } from "@/lib/tasks/dates";
 import type { PersonSheet } from "@/server/profiles/directory";
 
 /**
@@ -173,6 +174,7 @@ function GiveATask({
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [pending, start] = useTransition();
+  const due = addDaysToKey(person.todayKey, 7);
   return (
     <AmbientPopover
       action={{
@@ -191,7 +193,8 @@ function GiveATask({
             if (!text || pending) return;
             start(async () => {
               const result = await runAction(() =>
-                createTask(orgId, { title: text, ownerId: person.id }),
+                // Due in a week: an organization may require a date on every task.
+                createTask(orgId, { title: text, ownerId: person.id, dueDate: due }),
               );
               if (!result) return;
               if ("error" in result && result.error) {
@@ -220,6 +223,9 @@ function GiveATask({
             placeholder="What needs doing"
             aria-label="Task title"
           />
+          <p className="text-muted-foreground text-[12.5px]">
+            Due in a week. Change it on the task.
+          </p>
           <Button type="submit" size="sm" className="w-full" disabled={!title.trim() || pending}>
             {isSelf ? "Add it" : `Give it to ${first}`}
           </Button>
