@@ -1,10 +1,13 @@
 import { withSystemOrgTx } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
+import { scheduleCrmDaily } from "./daily";
+
 /**
  * The CRM's nightly upkeep: once a day per organization that has the CRM
  * set up, a crm-refresh (mirror the workspace onto timelines, recompute
- * relationship strength, look for duplicates). Called by the daily cron
+ * relationship strength, look for duplicates), and a crm-daily (scheduled
+ * workflows, scores, signals, forecast snapshots). Called by the daily cron
  * (/api/cron/task-digest); the once key makes a second call that day a
  * no-op.
  */
@@ -25,6 +28,8 @@ export async function scheduleCrmRefresh(orgId: string, now: Date = new Date()):
       once: true,
       noKick: true,
     });
+    // Automation and numbers: scheduled workflows, scores, signals, forecast snapshots.
+    await scheduleCrmDaily(db, orgId, now);
     return id ? 1 : 0;
   });
 }

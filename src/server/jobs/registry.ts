@@ -514,6 +514,9 @@ export const JOB_KINDS = {
         userId: id.nullable(),
         sourceId: id.nullable(),
         source: z.string().max(40).nullable(),
+        /** The workflow whose own step made the change (loop protection), and how deep. */
+        workflowId: id.optional(),
+        depth: z.number().int().min(0).max(20).optional(),
       })
       .strict(),
     scope: "org",
@@ -524,6 +527,39 @@ export const JOB_KINDS = {
     handler: () => import("@/server/crm/events").then((m) => m.crmEventJob),
     description:
       "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows; enqueued only while a workflow is on (src/server/crm/events.ts).",
+  }),
+  "crm-workflow-call": kind({
+    payload: z.object({ runId: id, index: z.number().int().min(0).max(50) }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    maxAttempts: 3,
+    handler: () => import("@/server/crm/workflow-calls").then((m) => m.crmWorkflowCallJob),
+    description:
+      "One workflow step that leaves Bananasplit (Slack, Discord, a webhook): https only, no private addresses, a 10s timeout, redirects refused; writes the outcome into the run's log. Key crm-workflow-call:{runId}:{index}.",
+  }),
+  "crm-daily": kind({
+    payload: z
+      .object({
+        /** Where the last run stopped, for a continuation. */
+        step: z.enum(["schedules", "scores", "model", "signals", "forecast"]).optional(),
+        /** Scores: the last record done (p:{personId} or d:{dealId}), for a continuation. */
+        cursor: z
+          .string()
+          .regex(/^[pd]:[A-Za-z0-9_-]{0,100}$/)
+          .optional(),
+      })
+      .strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    handler: () => import("@/server/crm/daily").then((m) => m.crmDailyJob),
+    description:
+      "The CRM's daily automation and numbers: date, idle and stuck workflow triggers, score rules, the learned model (nightly, once there are enough closed items), Inbox signals, and the weekly forecast snapshot. Key crm-daily:{orgId}:{date} (once=true), enqueued with crm-refresh by /api/cron/task-digest.",
   }),
 
   // ---- CRM AI (Phase 4; handlers in src/server/crm/ai-jobs.ts) ----

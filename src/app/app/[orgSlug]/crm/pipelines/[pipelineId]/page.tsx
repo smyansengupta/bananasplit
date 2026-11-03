@@ -7,6 +7,11 @@ import { customFieldsFor } from "@/server/crm/databases";
 import { ownerLabel } from "@/server/crm/owners";
 import { daysInStage, DEAL_SORT_LABELS, isStuck, listDeals, parseDealQuery } from "@/server/crm/queries";
 import { withOrgTx } from "@/server/db/context";
+import { pipelineViews } from "@/server/crm/starter";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+
+import { toSearch } from "../../views";
 
 import { crmShell } from "../../shell";
 
@@ -23,9 +28,11 @@ export default async function CrmPipelinePage({ params, searchParams }: PageProp
   const query = parseDealQuery(sp);
   const limits = new Map(pipeline.stages.map((s) => [s.id, s.stuckAfterDays] as const));
   const now = new Date();
-  const { deals, fields } = await withOrgTx(shell.org.id, async ({ db }) => ({
+  const base = `/app/${orgSlug}/crm/pipelines/${pipeline.id}`;
+  const { deals, fields, views } = await withOrgTx(shell.org.id, async ({ db }) => ({
     deals: await listDeals(db, shell.org.id, pipeline.id, query, shell.user.id, shell.roles, limits, now),
     fields: await customFieldsFor(db, shell.org.id, "deal", pipeline.id),
+    views: await pipelineViews(db, shell.org.id, pipeline.id, base, toSearch(sp), shell.user.id),
   }));
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
   const cards: CardView[] = deals.map((d) => ({
@@ -75,7 +82,28 @@ export default async function CrmPipelinePage({ params, searchParams }: PageProp
       members={shell.members}
       sortLabels={DEAL_SORT_LABELS}
       stageFields={stageFields}
-      tabs={<CrmTabs tabs={shell.tabs} />}
+      tabs={
+        <>
+          <CrmTabs tabs={shell.tabs} />
+          {views.length > 0 && (
+            <nav aria-label="Saved views" className="flex flex-wrap gap-2">
+              {views.map((v) => (
+                <Link
+                  key={v.name}
+                  href={v.active ? base : v.href}
+                  aria-current={v.active ? "page" : undefined}
+                  className={cn(
+                    "inline-flex h-8 items-center rounded-full border px-3.5 text-[13px] font-medium transition-colors",
+                    v.active ? "bg-primary text-primary-foreground border-transparent" : "border-input hover:bg-muted",
+                  )}
+                >
+                  {v.name}
+                </Link>
+              ))}
+            </nav>
+          )}
+        </>
+      }
     />
   );
 }

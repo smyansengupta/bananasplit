@@ -7,6 +7,7 @@ import { sourceKind, type ReportField, type SourceSummary } from "@/lib/reports/
 import type { LoadedSource, ReportRow } from "@/lib/reports/compute";
 import { loadFields } from "@/server/databases/custom";
 import { crmReportFields, crmReportRows, isCrmDatabaseKind } from "@/server/crm/reports";
+import { crmSourceInfo } from "@/server/crm/report-widgets";
 import { listDatabases } from "@/server/databases/views";
 import type { TxClient } from "@/server/db/context";
 
@@ -210,6 +211,7 @@ async function readSources(v: SourceViewer): Promise<SourceSummary[]> {
         fields,
         rows,
         form: null,
+        crm: (await crmSourceInfo(db, organizationId, d)) ?? undefined,
       });
       continue;
     }

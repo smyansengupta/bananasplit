@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import type { TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
@@ -36,6 +38,18 @@ export interface CrmEvent {
   source?: string;
 }
 
+/**
+ * The automation whose step is running now (src/server/crm/workflow-engine.ts
+ * sets it around each step), so the changes a step makes carry its workflow
+ * id and depth: that workflow never fires on its own change, and a chain of
+ * automations stops (MAX_CHAIN_DEPTH in src/lib/crm/workflows.ts).
+ */
+const automationScope = new AsyncLocalStorage<{ workflowId: string; depth: number }>();
+
+export function withAutomationScope<T>(scope: { workflowId: string; depth: number }, fn: () => Promise<T>): Promise<T> {
+  return automationScope.run(scope, fn);
+}
+
 /** Sources whose changes never fire workflows. */
 const QUIET_SOURCES = new Set(["import", "merge"]);
 
@@ -44,6 +58,7 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
   const on = await db.crmWorkflow.count({ where: { organizationId, status: "ON" } });
   if (on === 0) return;
   const stamp = Date.now().toString(36);
+  const scope = automationScope.getStore();
   await enqueueJob(db, {
     orgId: organizationId,
     kind: "crm-event",
@@ -56,6 +71,7 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
       userId: event.userId ?? null,
       sourceId: event.sourceId ?? null,
       source: event.source ?? null,
+      ...(scope ? { workflowId: scope.workflowId, depth: scope.depth } : {}),
     },
   });
 }
@@ -68,10 +84,14 @@ export type CrmEventPayload = {
   userId: string | null;
   sourceId: string | null;
   source: string | null;
+  /** The workflow whose step made this change (it never fires on it again). */
+  workflowId?: string;
+  /** How many automations deep the change is. */
+  depth?: number;
 };
 
-/** Listeners other modules register (workflows). Each gets the event in the job's organization. */
-type Listener = (organizationId: string, event: CrmEventPayload) => Promise<void>;
+/** Listeners other modules register. Each gets the event in the job's organization, and the job's key. */
+type Listener = (organizationId: string, event: CrmEventPayload, meta: { jobKey: string }) => Promise<void>;
 const listeners: (() => Promise<Listener>)[] = [];
 
 /** Registers a lazily loaded listener (keeps this module free of their imports). */
@@ -82,8 +102,11 @@ export function onCrmEvent(load: () => Promise<Listener>): void {
 export const crmEventJob: JobHandler<CrmEventPayload> = async (run) => {
   const orgId = run.organizationId;
   if (!orgId) throw new PermanentJobError("crm-event needs an organization");
+  // The workflows, imported here so they run wherever jobs run.
+  const engine = await import("./workflow-engine");
+  await engine.handleCrmEvent(orgId, run.payload, { jobKey: run.dedupeKey });
   for (const load of listeners) {
     const listener = await load();
-    await listener(orgId, run.payload);
+    await listener(orgId, run.payload, { jobKey: run.dedupeKey });
   }
 };

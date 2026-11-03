@@ -7,6 +7,7 @@ import { NudgeButton, PushBackButton } from "@/components/tasks/overdue-actions"
 import { Stat } from "@/components/reports/stat";
 import { CHOICE_COLOR_CLASS } from "@/lib/databases/fields";
 import { formatValue, shortDay, type WidgetPayload } from "@/lib/reports/compute";
+import { formatCrmValue, type CrmListPayload, type CrmStatPayload } from "@/lib/reports/crm-widgets";
 import { cn } from "@/lib/utils";
 
 /**
@@ -76,6 +77,91 @@ function Spark({ values, label }: { values: number[]; label: string }) {
         vectorEffect="non-scaling-stroke"
       />
     </svg>
+  );
+}
+
+/** A CRM stat: the number, its change, its parts, and a few rows behind it. */
+function CrmStat({ d }: { d: CrmStatPayload }) {
+  if (d.empty && (d.value === null || d.value === 0)) {
+    return (
+      <div className="flex h-full flex-col justify-between gap-3">
+        <span className="numeral text-muted-foreground text-[40px] leading-none">{d.value === 0 ? "0" : "None"}</span>
+        <span className="text-muted-foreground text-xs">{d.empty}</span>
+        {d.parts.length > 0 && (
+          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {d.parts.map((p) => (
+              <div key={p.label} className="flex gap-1.5">
+                <dt className="text-muted-foreground">{p.label}</dt>
+                <dd className="font-semibold tabular-nums">{p.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="numeral text-[40px] leading-none">{formatCrmValue(d.value, d.format)}</span>
+        <Delta pct={d.deltaPct} label="on the period before" />
+      </div>
+      <span className="text-muted-foreground text-xs">
+        {d.previous !== null ? `${formatCrmValue(d.previous, d.format)} the period before. ` : ""}
+        {d.caption}
+      </span>
+      {d.parts.length > 0 && (
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {d.parts.map((p) => (
+            <div key={p.label} className="rounded-tile bg-muted/50 px-3 py-2">
+              <dt className="text-muted-foreground text-[11px]">{p.label}</dt>
+              <dd className="text-sm font-semibold tabular-nums">{p.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {d.rows.length > 0 && (
+        <ul className="divide-border -mx-1 divide-y">
+          {d.rows.map((r) => (
+            <li key={r.key}>
+              {r.href ? (
+                <Link href={r.href} className="hover:bg-muted/60 rounded-field flex items-baseline gap-2 px-1 py-1.5 text-sm">
+                  <b className="min-w-0 flex-1 truncate font-medium">{r.label}</b>
+                  {r.detail && <span className="text-muted-foreground shrink-0 text-xs">{r.detail}</span>}
+                </Link>
+              ) : (
+                <span className="flex items-baseline gap-2 px-1 py-1.5 text-sm">
+                  <b className="min-w-0 flex-1 truncate font-medium">{r.label}</b>
+                  {r.detail && <span className="text-muted-foreground shrink-0 text-xs">{r.detail}</span>}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** A CRM ranked list: one bar per row, its value as text. */
+function CrmList({ d }: { d: CrmListPayload }) {
+  if (d.rows.length === 0) return <Empty>{d.empty}</Empty>;
+  return (
+    <div className="flex flex-col gap-2">
+      {d.caption && <p className="text-muted-foreground text-xs">{d.caption}</p>}
+      <BarList
+        label={d.caption ?? "CRM"}
+        max={d.max ?? undefined}
+        items={d.rows.map((r) => ({
+          key: r.key,
+          label: r.label,
+          value: r.value,
+          display: r.display,
+          detail: r.detail ?? null,
+          href: r.href ?? null,
+        }))}
+      />
+    </div>
   );
 }
 
@@ -686,6 +772,21 @@ export function WidgetBody({
         </div>
       );
     }
+    case "crm-reached":
+    case "crm-reply-rate":
+    case "crm-first-reply":
+    case "crm-overdue":
+    case "crm-cold":
+    case "crm-velocity":
+      return <CrmStat d={payload.data} />;
+    case "crm-by-member":
+    case "crm-campaigns":
+    case "crm-conversion":
+    case "crm-time-in-stage":
+    case "crm-by-source":
+    case "crm-raised-by-source":
+    case "crm-goals":
+      return <CrmList d={payload.data} />;
     case "journey": {
       const d = payload.data;
       const first = d.steps[0]?.count ?? 0;

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   AlarmClock,
   AtSign,
   Bell,
@@ -61,7 +62,7 @@ import { DeclineButton, ReplyBox } from "./row-actions";
 export type InboxView = "needs" | "updates" | "snoozed";
 
 export type InboxCategory =
-  "meeting" | "task" | "approval" | "form" | "mention" | "comment" | "assigned" | "alert" | "other";
+  "meeting" | "task" | "approval" | "form" | "mention" | "comment" | "assigned" | "alert" | "signal" | "other";
 
 /** One row of the Inbox, whatever it is. */
 export interface InboxRow {
@@ -108,6 +109,7 @@ const CATEGORY_LABEL: Record<InboxCategory, string> = {
   comment: "Comments",
   assigned: "Assigned",
   alert: "Alerts",
+  signal: "CRM signals",
   other: "Other",
 };
 
@@ -119,6 +121,7 @@ const CATEGORY_ORDER: InboxCategory[] = [
   "meeting",
   "approval",
   "form",
+  "signal",
   "alert",
   "other",
 ];
@@ -133,6 +136,7 @@ const LOOK: Record<InboxCategory, { icon: IconComponent; tint: string }> = {
   comment: { icon: MessageSquare, tint: "bg-tint-info text-tint-info-foreground" },
   assigned: { icon: UserPlus, tint: "bg-tint-success text-tint-success-foreground" },
   alert: { icon: ShieldAlert, tint: "bg-tint-danger text-tint-danger-foreground" },
+  signal: { icon: Activity, tint: "bg-tint-accent text-tint-accent-foreground" },
   other: { icon: Bell, tint: "bg-muted text-muted-foreground" },
 };
 
@@ -426,7 +430,7 @@ export function InboxView({
   const finish = useCallback(
     (row: InboxRow) => {
       if (row.kind === "task") finishTask(row);
-      else if (row.kind === "update") finishUpdate(row);
+      else if (row.kind === "update" || row.kind === "signal") finishUpdate(row);
     },
     [finishTask, finishUpdate],
   );
@@ -775,7 +779,12 @@ function Row({
                 Reply
               </Button>
             )}
-            {row.kind === "update" && (
+            {row.kind === "signal" && row.href && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={row.href}>Open</Link>
+              </Button>
+            )}
+            {(row.kind === "update" || row.kind === "signal") && (
               <Button
                 variant="ghost"
                 size="icon-sm"

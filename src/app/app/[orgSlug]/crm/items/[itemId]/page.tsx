@@ -7,6 +7,7 @@ import { DealPeople } from "@/components/crm/deal-people";
 import { RecordActions } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
 import { RecordPage, Section, when } from "@/components/crm/record-page";
+import { ScoreReasons } from "@/components/crm/score";
 import { Timeline } from "@/components/crm/timeline";
 import { LinkedFrom } from "@/components/databases/linked-from";
 import { LinkedSection } from "@/components/links/linked-section";
@@ -18,6 +19,7 @@ import { ownerLabel } from "@/server/crm/owners";
 import { presentHistory, presentTimeline } from "@/server/crm/present";
 import { daysInStage, isStuck } from "@/server/crm/queries";
 import { loadDeal } from "@/server/crm/records";
+import { scoreReasons } from "@/server/crm/scoring";
 import { withOrgTx } from "@/server/db/context";
 
 import { crmShell } from "../../shell";
@@ -46,7 +48,8 @@ export default async function CrmItemPage({ params }: PageProps<"/app/[orgSlug]/
       orgId,
       dealForm({ ...loaded.deal, personName: person ?? null }, loaded.deal.pipeline, loaded.fields, fctx),
     );
-    return { ...loaded, form, timelineItems: await presentTimeline(db, orgId, loaded.timeline) };
+    const score = await scoreReasons(db, orgId, "deal", loaded.deal.id);
+    return { ...loaded, form, score, timelineItems: await presentTimeline(db, orgId, loaded.timeline) };
   });
   if (!data) notFound();
   const { deal } = data;
@@ -127,6 +130,11 @@ export default async function CrmItemPage({ params }: PageProps<"/app/[orgSlug]/
             />
           </Section>
           {data.linkedFrom.length > 0 && <LinkedFrom groups={data.linkedFrom} />}
+          {(deal.score > 0 || data.score.by !== "none") && (
+            <Section title="Score">
+              <ScoreReasons score={deal.score} {...data.score} />
+            </Section>
+          )}
           <LinkedSection orgId={orgId} orgSlug={orgSlug} at={{ kind: "crm-deal", id: deal.id }} title="Linked" />
         </>
       }

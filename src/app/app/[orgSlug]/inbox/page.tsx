@@ -38,6 +38,8 @@ import {
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
+import { signalsFor } from "@/server/crm/signals";
+import { crmRecordHref } from "@/lib/crm/href";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
 import { loadInboxState } from "@/server/inbox/state";
 import { RECAP_TITLE } from "@/server/overview/recap-week-text";
@@ -129,6 +131,8 @@ export default async function InboxPage({
         select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
       }),
     ]);
+    // The CRM's signals for this member (stuck items, someone gone quiet...), when the CRM is added.
+    const signals = addOns.includes("crm") ? await signalsFor(db, org.id, user.id) : [];
     // Announcements, one query after the other (a transaction has one connection).
     const posts = await listAnnouncements(db, org.id, user.id, {
       limit: allPosts ? ANNOUNCEMENTS_ALL : INBOX_LIMIT,
@@ -175,6 +179,7 @@ export default async function InboxPage({
       toReview,
       notifications,
       forms,
+      signals,
       nextEvent,
     };
   });
@@ -246,6 +251,20 @@ export default async function InboxPage({
       peek: { kind: "form", id: f.id },
     })),
   ];
+
+  needs.push(
+    ...data.signals.map((s): InboxRow => ({
+      key: inboxKey("signal", s.id),
+      kind: "signal",
+      id: s.id,
+      title: s.title,
+      meta: [s.label, s.summary].filter(Boolean).join(": "),
+      group: "review",
+      category: "signal",
+      href: s.targetKind && s.targetId ? crmRecordHref(orgSlug, s.targetKind, s.targetId) : `${base}/crm`,
+      peek: null,
+    })),
+  );
 
   const updates: InboxRow[] = data.notifications.map((n): InboxRow => {
     const category = CATEGORY[n.type] ?? "other";

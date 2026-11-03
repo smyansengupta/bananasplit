@@ -124,7 +124,8 @@ const GRANTS = {
   InboxItemState: ["SIuD", "SD", ""],
   // Links between things: members link and unlink; the service path reads
   // and clears links when an item goes away.
-  ItemLink: ["SID", "SD", ""],
+  // CRM workflows (20261105120000_crm_automation) link what they make, from a job.
+  ItemLink: ["SID", "SID", ""],
   // Forms: every member reads them, owners and admins make and review them
   // (row policy); the public page reads on the service path, and answers
   // arrive there. Nobody writes an answer directly.

@@ -16,7 +16,7 @@ export interface SidebarCounts {
   /** Reimbursement requests waiting on a treasurer. */
   finance: number;
   /** What `inbox` is made of, for Home's Today strip. */
-  needsYou: { invites: number; tasks: number; requests: number; reviews: number };
+  needsYou: { invites: number; tasks: number; requests: number; reviews: number; signals?: number };
 }
 
 /**
@@ -45,7 +45,7 @@ export async function sidebarCounts(
   const tz = effectiveTimezone(me, input.org);
   const weekEnd = fromDateKey(addDaysToKey(localDateKey(now, tz), INBOX_TASK_DAYS));
   // Snoozed rows stay out of the count until they come back.
-  const { snoozed } = await loadInboxState(db, input.orgId, input.userId, now);
+  const { snoozed, done } = await loadInboxState(db, input.orgId, input.userId, now);
   const keys = [...snoozed.keys()];
   const not = (kind: string) => {
     const ids = idsOfKind(keys, kind);
@@ -84,12 +84,24 @@ export async function sidebarCounts(
       ? toReviewForOwner(db, input.orgId, input.userId)
       : Promise.resolve([] as { id: string; count: number }[]),
   ]);
+  // The CRM's signals waiting on this member, less what they snoozed or finished.
+  const hidden = [...idsOfKind(keys, "signal"), ...idsOfKind(done, "signal")];
+  const signals = await db.crmSuggestion.count({
+    where: {
+      organizationId: input.orgId,
+      source: "SIGNAL",
+      status: "PENDING",
+      assigneeId: input.userId,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      ...(hidden.length > 0 ? { id: { notIn: hidden } } : {}),
+    },
+  });
   const formResponses = forms.reduce((n, f) => n + f.count, 0);
   const formsWaiting = forms.filter((f) => !snoozedForms.has(f.id)).length;
   return {
-    inbox: invites + tasks + finance + formsWaiting,
+    inbox: invites + tasks + finance + formsWaiting + signals,
     forms: formResponses,
     finance,
-    needsYou: { invites, tasks, requests: finance, reviews: formsWaiting },
+    needsYou: { invites, tasks, requests: finance, reviews: formsWaiting, signals },
   };
 }

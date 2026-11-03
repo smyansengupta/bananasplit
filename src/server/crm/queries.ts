@@ -87,6 +87,7 @@ const PERSON_SORTS: Record<string, (dir: "asc" | "desc") => Prisma.CrmPersonOrde
   lastContacted: (dir) => [{ lastContactedAt: { sort: dir, nulls: "last" } }],
   followUp: (dir) => [{ nextFollowUpAt: { sort: dir, nulls: "last" } }],
   strength: (dir) => [{ strength: dir }],
+  score: (dir) => [{ score: dir }],
   added: (dir) => [{ createdAt: dir }],
 };
 
@@ -96,6 +97,7 @@ export const PERSON_SORT_LABELS: Record<string, string> = {
   lastContacted: "Last contacted",
   followUp: "Next follow-up",
   strength: "Relationship strength",
+  score: "Score",
   added: "Date added",
 };
 
@@ -229,6 +231,7 @@ const COMPANY_SORTS: Record<string, (dir: "asc" | "desc") => Prisma.CrmCompanyOr
   name: (dir) => [{ name: dir }],
   lastContacted: (dir) => [{ lastContactedAt: { sort: dir, nulls: "last" } }],
   strength: (dir) => [{ strength: dir }],
+  score: (dir) => [{ score: dir }],
   people: (dir) => [{ people: { _count: dir } }],
   added: (dir) => [{ createdAt: dir }],
 };
@@ -237,6 +240,7 @@ export const COMPANY_SORT_LABELS: Record<string, string> = {
   name: "Name",
   lastContacted: "Last contacted",
   strength: "Relationship strength",
+  score: "Score",
   people: "People",
   added: "Date added",
 };
@@ -384,6 +388,7 @@ export const DEAL_SORT_LABELS: Record<string, string> = {
   expected: "Expected",
   added: "Date added",
   title: "Title",
+  score: "Score",
 };
 
 export async function listDeals(
@@ -422,7 +427,9 @@ export async function listDeals(
           ? [{ createdAt: dir }]
           : query.sort === "title"
             ? [{ title: query.dir ?? "asc" }]
-            : [{ rank: "asc" }];
+            : query.sort === "score"
+              ? [{ score: dir }]
+              : [{ rank: "asc" }];
   const rows = await db.crmDeal.findMany({
     where: { AND: and },
     orderBy: [...orderBy, { id: "asc" }],
