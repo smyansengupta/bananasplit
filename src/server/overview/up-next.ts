@@ -93,6 +93,11 @@ export interface UpNextBlock extends UpNextCandidate {
   acts?: HomeAct[];
   /** A task nobody owns: the card offers Take it instead of Done. */
   grabs?: boolean;
+  /**
+   * The organization it's from, when that isn't the page's own (Personal
+   * Home gathers your organizations' cards): its buttons act there.
+   */
+  orgId?: string;
 }
 
 /** The open task nobody owns that's due soonest: anyone can take it. */
@@ -130,6 +135,8 @@ export function buildUpNext(input: {
   hidden?: ReadonlySet<string>;
   /** A task nobody owns yet, offered with Take it. */
   upForGrabs?: UpForGrabs | null;
+  /** Cards from other spaces, ordered in with these (Personal Home's organizations). */
+  others?: readonly UpNextBlock[];
   context?: UpNextContext;
 }) {
   const base = `/app/${input.orgSlug}`;
@@ -414,6 +421,8 @@ export function buildUpNext(input: {
       ...(poll.choices ? { choices: poll.choices } : {}),
     });
   }
+
+  blocks.push(...(input.others ?? []));
 
   // Nothing that has already happened. Each kind has its own reason to have
   // slipped through (an event that ran, a poll that closed, a task whose due

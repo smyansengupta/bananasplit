@@ -13,7 +13,25 @@ import { parseBoard, type BoardWidget, type WidgetMeta } from "@/lib/boards";
  * The week, recapped: it's in the Inbox's Announcements now).
  */
 
-type OverviewWidgetMeta = WidgetMeta & { admin?: boolean };
+type OverviewWidgetMeta = WidgetMeta & {
+  admin?: boolean;
+  /** Only a Personal space's Home has it. */
+  personalOnly?: boolean;
+};
+
+/**
+ * Widgets about a team, which a Personal space (one person) has no use for:
+ * who's here, who owns what, the team's decisions and pulse, member votes
+ * and what you're waiting on from others.
+ */
+const TEAM_ONLY: ReadonlySet<string> = new Set([
+  "here-now",
+  "decisions",
+  "who-owns-what",
+  "weekly-pulse",
+  "votes",
+  "waiting-on-others",
+]);
 
 export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
   {
@@ -170,6 +188,16 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidgetMeta[] = [
     h: 1,
   },
   {
+    type: "focus-time",
+    title: "Focus time",
+    description: "The free hours in your week across every space, and what's due to fill them.",
+    group: "You",
+    icon: "Timer",
+    w: 2,
+    h: 1,
+    personalOnly: true,
+  },
+  {
     type: "pinned",
     title: "Pinned",
     description: "Your pinned pages, notes, files and more, with how each is doing.",
@@ -188,8 +216,10 @@ const ADD_ON_WIDGETS: Partial<Record<string, string>> = { polls: "forms" };
 export function overviewWidgetsFor(
   isAdmin: boolean,
   addOns?: readonly string[] | null,
+  personal = false,
 ): OverviewWidgetMeta[] {
   return OVERVIEW_WIDGETS.filter((w) => {
+    if (personal ? TEAM_ONLY.has(w.type) : w.personalOnly) return false;
     const addOn = ADD_ON_WIDGETS[w.type];
     if (addOn && addOns != null && !addOns.includes(addOn)) return false;
     return isAdmin || !w.admin;
@@ -220,6 +250,22 @@ const DEFAULT_LAYOUT: readonly BoardWidget[] = [
 ];
 
 /**
+ * A Personal space's Home: what's next for you and your week first, then
+ * your free hours, meetings and events, forms and what you had open.
+ */
+const PERSONAL_LAYOUT: readonly BoardWidget[] = [
+  { id: "my-tasks", type: "my-tasks", w: 2, h: 2 },
+  { id: "deadlines", type: "deadlines", w: 2, h: 1 },
+  { id: "focus-time", type: "focus-time", w: 2, h: 1 },
+  { id: "week", type: "week", w: 4, h: null },
+  { id: "meetings", type: "meetings", w: 2, h: 1 },
+  { id: "events", type: "events", w: 2, h: 1 },
+  { id: "polls", type: "polls", w: 1, h: 1 },
+  { id: "recent", type: "recent", w: 2, h: 1 },
+  { id: "since-you-were-here", type: "since-you-were-here", w: 2, h: 1 },
+];
+
+/**
  * The member's saved Overview, or the default one. A saved board keeps its
  * own order: widgets added since are offered in Add widget, never pushed
  * onto it, and widgets that are gone drop out (parseBoard keeps only known
@@ -229,11 +275,12 @@ export function resolveOverview(
   saved: unknown,
   isAdmin: boolean,
   addOns?: readonly string[] | null,
+  personal = false,
 ): BoardWidget[] {
-  const allowed = overviewWidgetsFor(isAdmin, addOns).map((w) => w.type);
+  const allowed = overviewWidgetsFor(isAdmin, addOns, personal).map((w) => w.type);
   if (saved != null) {
     const parsed = parseBoard(saved, allowed);
     if (parsed) return parsed;
   }
-  return DEFAULT_LAYOUT.filter((w) => allowed.includes(w.type));
+  return (personal ? PERSONAL_LAYOUT : DEFAULT_LAYOUT).filter((w) => allowed.includes(w.type));
 }

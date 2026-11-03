@@ -44,6 +44,7 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
+import { loadElsewhereUpdates } from "@/server/inbox/elsewhere";
 import { loadInboxState } from "@/server/inbox/state";
 import { RECAP_TITLE } from "@/server/overview/recap-week-text";
 import { getMyOpenTasks } from "@/server/tasks/queries";
@@ -76,6 +77,10 @@ const EVENT_CHOICES = 20;
  * from. The composer also drafts this
  * week's recap on demand (the recap isn't loaded here); from Friday to Sunday
  * (the organization's time) it nudges to post it until one goes out.
+ *
+ * A Personal space has no announcements (there's nobody to tell). Its
+ * Updates gather your organizations' too (loadElsewhereUpdates), each
+ * saying which organization it's from and opening there.
  */
 export default async function InboxPage({
   params,
@@ -91,7 +96,8 @@ export default async function InboxPage({
   // An add-on that isn't added keeps its rows out of Inbox (src/lib/addons.ts).
   const addOns = readAddOns(ctx.settings?.addOns);
   const canReview = can(ctx, "finance.manage") && addOns.includes("finance");
-  const canManagePosts = can(ctx, "events.write");
+  const personal = org.kind === "PERSONAL";
+  const canManagePosts = can(ctx, "events.write") && !personal;
   const now = new Date();
   // The end of the week, when the composer nudges to post the recap (null other days).
   const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
@@ -132,15 +138,17 @@ export default async function InboxPage({
       }),
     ]);
     // Announcements, one query after the other (a transaction has one connection).
-    // Just the latest: it shows until the next one goes out.
-    const posts = await listAnnouncements(db, org.id, user.id, { limit: 1, orgSlug });
-    const postCount = await countAnnouncements(db, org.id);
+    // Just the latest: it shows until the next one goes out. None on Personal.
+    const posts = personal
+      ? []
+      : await listAnnouncements(db, org.id, user.id, { limit: 1, orgSlug });
+    const postCount = personal ? 0 : await countAnnouncements(db, org.id);
     // Sign-ups are for owners and admins to read, so only they get the fact.
     const insights = canManagePosts ? await signupInsights(db, org.id, posts, now) : new Map();
     // Friday to Sunday: is this week's recap still to go out? (One posted since Friday is it.)
     const recapDue = recapIsDue(
       recapFrom,
-      recapFrom
+      recapFrom && !personal
         ? await db.announcement.count({
             where: {
               organizationId: org.id,
@@ -151,17 +159,19 @@ export default async function InboxPage({
           })
         : 0,
     );
-    const eventChoices = await db.event.findMany({
-      where: {
-        organizationId: org.id,
-        deletedAt: null,
-        mergedIntoId: null,
-        startsAt: { gte: new Date(now.getTime() - 86_400_000) },
-      },
-      orderBy: { startsAt: "asc" },
-      take: EVENT_CHOICES,
-      select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
-    });
+    const eventChoices = personal
+      ? []
+      : await db.event.findMany({
+          where: {
+            organizationId: org.id,
+            deletedAt: null,
+            mergedIntoId: null,
+            startsAt: { gte: new Date(now.getTime() - 86_400_000) },
+          },
+          orderBy: { startsAt: "asc" },
+          take: EVENT_CHOICES,
+          select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
+        });
     return {
       tz,
       todayKey,
@@ -181,6 +191,8 @@ export default async function InboxPage({
   });
 
   const { tz, todayKey, state } = data;
+  // Personal: your organizations' updates as well.
+  const elsewhere = personal ? await loadElsewhereUpdates(user.id, org.id).catch(() => []) : [];
 
   const weekEnd = addDaysToKey(todayKey, TASK_DAYS);
 
@@ -296,6 +308,35 @@ export default async function InboxPage({
     };
   });
 
+  // Your organizations' updates on Personal: they open where they're from,
+  // and Reply and the side peek stay there too.
+  for (const n of elsewhere) {
+    updates.push({
+      key: inboxKey("update", n.id),
+      kind: "update",
+      id: n.id,
+      title: n.title,
+      meta: n.body ?? "",
+      space: n.org.name,
+      group: groupForPast(n.createdAt, now, tz),
+      category: CATEGORY[n.type as NotificationType] ?? "other",
+      href: n.linkUrl ?? `/app/${n.org.slug}/inbox`,
+      peek: null,
+      actor: n.actor,
+      when: ago(n.createdAt, now),
+      unread: n.readAt === null,
+      replyTaskId: null,
+      replyWhy: null,
+      canWait: true,
+    });
+  }
+  // Newest first, whichever space it's from.
+  const at = new Map<string, number>([
+    ...data.notifications.map((n) => [n.id, n.createdAt.getTime()] as const),
+    ...elsewhere.map((n) => [n.id, n.createdAt.getTime()] as const),
+  ]);
+  updates.sort((a, b) => (at.get(b.id) ?? 0) - (at.get(a.id) ?? 0));
+
   function snoozedAt(r: Pick<InboxRow, "key">) {
     return state.snoozed.get(r.key);
   }
@@ -373,13 +414,15 @@ export default async function InboxPage({
         }
       />
 
-      <InboxAnnouncements
-        orgId={org.id}
-        items={announcements}
-        events={eventChoices}
-        total={data.postCount}
-        recapDue={data.recapDue}
-      />
+      {!personal && (
+        <InboxAnnouncements
+          orgId={org.id}
+          items={announcements}
+          events={eventChoices}
+          total={data.postCount}
+          recapDue={data.recapDue}
+        />
+      )}
 
       <InboxView
         key={view}

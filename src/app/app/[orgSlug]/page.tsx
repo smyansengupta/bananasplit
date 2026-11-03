@@ -3,7 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
-import { PersonalHome } from "@/components/personal/personal-home";
+import { OrganizationsStrip } from "@/components/personal/organizations-strip";
+import { FocusTime } from "@/components/overview/focus-time";
 import { KIND_META } from "@/components/calendar/kinds";
 import { CardControls, OpenLink } from "@/components/overview/bits";
 import { Insight, LinkChip, type ItemRef } from "@/components/overview/connections";
@@ -105,6 +106,7 @@ import { websiteSyncConnected } from "@/server/integrations/website-sync";
 import { onlineNow } from "@/server/presence";
 import { OnlineNow } from "@/components/overview/online-now";
 import { loadPersonalHome } from "@/server/personal/home";
+import { otherSpacesUpNext } from "@/lib/personal/up-next";
 import { getMyOpenTasks, taskFilterWhere } from "@/server/tasks/queries";
 
 const MY_TASKS_LIMIT = 8;
@@ -191,12 +193,13 @@ function greeting(now: Date, timeZone: string): string {
 export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSlug]">) {
   const { orgSlug } = await params;
   const { organization: org, user, role, settings } = await getOrgContextBySlug(orgSlug);
-  // A Personal space's home is the Personal dashboard, not an organization's board.
-  if (org.kind === "PERSONAL") {
-    return <PersonalHome data={await loadPersonalHome(user.id)} orgSlug={org.slug} />;
-  }
+  // A Personal space runs the same Home, as one person's: no team widgets,
+  // its own default board, and your organizations (their Up next cards and
+  // the strip under it) from loadPersonalHome.
+  const personal = org.kind === "PERSONAL";
+  const personalHome = personal ? await loadPersonalHome(user.id).catch(() => null) : null;
   // An organization whose plan has no Overview board lands on its events.
-  if (!spaceIncludes(org, "overview")) {
+  if (!personal && !spaceIncludes(org, "overview")) {
     if (!can({ role }, "events.write")) redirect(`/app/${org.slug}/calendar`);
     redirect(`/app/${org.slug}/meetings`);
   }
@@ -215,14 +218,18 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   // Website polls (elections) come from the website data sync; without it
   // they're stale leftovers nobody can update or remove, so Home leaves them out.
   // If the check fails, show them: hiding real polls is worse than a stale one.
-  const websitePolls = await websiteSyncConnected(org.id, user.id).catch(() => true);
+  const websitePolls = personal
+    ? false
+    : await websiteSyncConnected(org.id, user.id).catch(() => true);
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
     const homeMode = await loadHomeMode(db, org.id, user.id);
-    const placed = new Set(resolveOverview(saved, isAdmin, settings?.addOns).map((w) => w.type));
+    const placed = new Set(
+      resolveOverview(saved, isAdmin, settings?.addOns, personal).map((w) => w.type),
+    );
     // Ambient also shows From your apps and what the viewer's role is for,
     // whether or not they're on the member's board: load them too.
-    if (homeMode === "ambient")
+    if (homeMode === "ambient" && !personal)
       for (const w of roleExtras(role, settings?.addOns)) placed.add(w.type);
     const me = await db.user.findUnique({
       where: { id: user.id },
@@ -394,10 +401,12 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         openForms.filter((f) => f.kind === "form" || f.kind === "poll").map((f) => f.id),
         new Date(now.getTime() - 7 * DAY_MS),
       ),
-      pulse: await latestSentPulse(db, org.id),
-      trend: await weeklyDoneTrend(db, org.id, { timeZone: orgZone, pulseDay, now }),
+      pulse: personal ? null : await latestSentPulse(db, org.id),
+      trend: personal
+        ? []
+        : await weeklyDoneTrend(db, org.id, { timeZone: orgZone, pulseDay, now }),
       draft:
-        isAdmin && pulseOn
+        isAdmin && pulseOn && !personal
           ? await getPulseIssue(db, org.id, upcomingSend.weekStart, { drafts: true })
           : null,
       memberCount,
@@ -406,23 +415,25 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       placed,
       shared,
       viewer,
-      started: isAdmin
-        ? {
-            picture: org.logo != null,
-            members: memberCount > 1,
-            event:
-              (await db.event.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
-            types: settings?.eventTypes != null,
-            teams: (await db.orgChartVersion.count({ where: { organizationId: org.id } })) > 0,
-            // Epics and stories are tasks too.
-            task: (await db.task.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
-            budget: (await db.budgetPeriod.count({ where: { organizationId: org.id } })) > 0,
-            database:
-              (await db.databaseDefinition.count({
-                where: { organizationId: org.id, kind: "CUSTOM" },
-              })) > 0,
-          }
-        : null,
+      started:
+        isAdmin && !personal
+          ? {
+              picture: org.logo != null,
+              members: memberCount > 1,
+              event:
+                (await db.event.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+              types: settings?.eventTypes != null,
+              teams: (await db.orgChartVersion.count({ where: { organizationId: org.id } })) > 0,
+              // Epics and stories are tasks too.
+              task:
+                (await db.task.count({ where: { organizationId: org.id, deletedAt: null } })) > 0,
+              budget: (await db.budgetPeriod.count({ where: { organizationId: org.id } })) > 0,
+              database:
+                (await db.databaseDefinition.count({
+                  where: { organizationId: org.id, kind: "CUSTOM" },
+                })) > 0,
+            }
+          : null,
     };
     // Last on this transaction, each caught on its own: the cheap widgets,
     // who's here now (beside the date and in Here now; the shell's
@@ -558,8 +569,20 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   };
 
   // The Today strip: overdue, waiting on you, due this week, events ahead.
+  // On Personal it counts your organizations' too.
   const upcomingUntil = new Date(now.getTime() + UPCOMING_DAYS * DAY_MS);
-  const ahead = data.weekEvents.filter((e) => e.startsAt < upcomingUntil);
+  const elsewhere = {
+    tasks: (personalHome?.dueSoon ?? []).filter((t) => t.space.id !== org.id),
+    events: (personalHome?.upcoming ?? []).filter(
+      (e) => e.space.id !== org.id && e.startsAt < upcomingUntil,
+    ),
+  };
+  const ahead = [
+    ...data.weekEvents.filter((e) => e.startsAt < upcomingUntil),
+    ...elsewhere.events,
+  ].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const lateElsewhere = elsewhere.tasks.filter((t) => t.bucket === "overdue");
+  const dueElsewhere = elsewhere.tasks.filter((t) => t.bucket !== "overdue");
   const todayBar = (
     <TodayStrip
       scope={org.id}
@@ -567,11 +590,17 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         base,
         todayKey,
         zones,
-        overdue: { count: data.stats.overdue, first: lateTasks[0] ?? null },
+        overdue: {
+          count: data.stats.overdue + lateElsewhere.length,
+          first: lateTasks[0] ?? lateElsewhere[0] ?? null,
+        },
         waiting: data.needsYou
           ? { count: data.needsYou.inbox, parts: data.needsYou.needsYou }
           : null,
-        dueThisWeek: { count: data.stats.dueSoon, titles: dueThisWeek.map((t) => t.title) },
+        dueThisWeek: {
+          count: data.stats.dueSoon + dueElsewhere.length,
+          titles: [...dueThisWeek, ...dueElsewhere].map((t) => t.title),
+        },
         events: {
           count: ahead.length,
           days: UPCOMING_DAYS,
@@ -642,6 +671,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ended: data.ended,
     hidden: new Set(data.hiddenUpNext),
     upForGrabs: data.upForGrabs,
+    others: personalHome ? otherSpacesUpNext(personalHome, now, org.id) : undefined,
     context: {
       links: data.links,
       details: data.details,
@@ -840,7 +870,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const compact: string[] = [];
 
   // The org chart is asking everyone where they sit, and this member hasn't said.
-  const asking = await getAskDraft(org.id, user.id).catch(() => null);
+  const asking = personal ? null : await getAskDraft(org.id, user.id).catch(() => null);
   const askWhereYouSit = asking !== null && !placementSummary(asking.positions).placed.has(user.id);
 
   // What leads Ambient Home: every widget scored from what's going on now.
@@ -993,6 +1023,9 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ),
     ...newer.bodies,
     ...(apps ? { apps: <AppsFeed data={apps} /> } : {}),
+    ...(personalHome?.focus
+      ? { "focus-time": <FocusTime orgId={org.id} data={personalHome.focus} /> }
+      : {}),
   };
 
   // Shown until every step is done or checked off, then gone by itself.
@@ -1090,14 +1123,14 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     <div className="space-y-6">
       <OverviewBoard
         orgId={org.id}
-        types={overviewWidgetsFor(isAdmin, settings?.addOns)}
-        initialLayout={resolveOverview(data.saved, isAdmin, settings?.addOns)}
+        types={overviewWidgetsFor(isAdmin, settings?.addOns, personal)}
+        initialLayout={resolveOverview(data.saved, isAdmin, settings?.addOns, personal)}
         customized={data.saved !== null}
         mode={data.homeMode}
         resting={resting}
         compact={compact}
-        extras={roleExtras(role, settings?.addOns)}
-        promoted={rolePromoted(role, settings?.addOns)}
+        extras={personal ? [] : roleExtras(role, settings?.addOns)}
+        promoted={personal ? [] : rolePromoted(role, settings?.addOns)}
         scores={scores}
         night={isNight(signals.hour)}
         bodies={bodies}
@@ -1105,8 +1138,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         intro={greetingBlock}
         introDescription={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span>{`${dateLine}, ${org.name}`}</span>
-            {online && (
+            <span>{personal ? dateLine : `${dateLine}, ${org.name}`}</span>
+            {online && !personal && (
               <OnlineNow orgId={org.id} orgSlug={org.slug} you={data.you} initial={online} />
             )}
           </span>
@@ -1125,8 +1158,11 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
               onTake={takeTask.bind(null, org.id)}
               onRsvp={rsvpToEvent.bind(null, org.id)}
               onVote={voteOnQuestionPoll.bind(null, org.id)}
+              elsewhere={personal ? { onDone: setTaskStatus, onRsvp: rsvpToEvent } : undefined}
               hiddenCount={data.hiddenUpNext.length}
             />
+            {/* Personal: your organizations, always right under Up next. */}
+            {personalHome && <OrganizationsStrip data={personalHome} now={now} />}
             {started}
             {askWhereYouSit && (
               <p className="bg-muted/60 rounded-tile flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-[14px]">

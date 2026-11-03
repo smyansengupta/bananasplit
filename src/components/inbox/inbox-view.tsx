@@ -112,6 +112,8 @@ export interface InboxRow {
   review?: { label: string; reason: string } | null;
   /** A mention left about a day: Reply comes forward as an ambient button. */
   replyWhy?: string | null;
+  /** On Personal: the organization it's from, before its second line. */
+  space?: string;
 }
 
 /** Approve all: a run of small reimbursements, at the top of Needs you. */
@@ -751,7 +753,7 @@ function Row({
 }) {
   const snoozed = view === "snoozed";
   const look = LOOK[row.category];
-  const second = snoozed ? [row.backAt, row.meta].filter(Boolean).join(", ") : row.meta;
+  const second = [snoozed ? row.backAt : null, row.space, row.meta].filter(Boolean).join(", ");
 
   // The row's ambient buttons, two at most (src/lib/ambient/inbox.ts says when).
   const ambient: AmbientAction[] = [];

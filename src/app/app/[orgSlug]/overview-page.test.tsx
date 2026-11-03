@@ -75,6 +75,7 @@ vi.mock("@/server/overview/who-owns-what", () => ({ loadWhoOwnsWhat: vi.fn(async
 // Actions the widgets' buttons call.
 vi.mock("@/app/app/[orgSlug]/tasks/actions", () => ({
   setTaskStatus: vi.fn(),
+  takeTask: vi.fn(),
   createTask: vi.fn(),
   updateTask: vi.fn(),
   selfAssignTask: vi.fn(),
@@ -122,6 +123,8 @@ const db = {
   task: {
     count: vi.fn(),
     findMany: vi.fn(async (): Promise<{ id: string; title: string; dueDate: Date }[]> => []),
+    // Up for grabs: the open task nobody owns.
+    findFirst: vi.fn(async () => null),
   },
   event: { count: vi.fn() },
   availabilityPoll: { findMany: vi.fn() },
@@ -197,11 +200,25 @@ vi.mock("@/server/setup/progress", () => ({ loadSetupState: mocks.loadSetupState
 vi.mock("@/server/onboarding/join-code", () => ({ getOrCreateJoinCode: vi.fn() }));
 vi.mock("@/components/onboarding/join-code-card", () => ({ JoinCodeCard: () => null }));
 vi.mock("@/server/personal/home", () => ({
-  loadPersonalHome: vi.fn(async () => ({ firstName: "Viewer", clubs: [], pendingInvites: [] })),
+  loadPersonalHome: vi.fn(async () => ({
+    firstName: "Viewer",
+    timeZone: "America/Los_Angeles",
+    todayKey: "2026-11-03",
+    clubs: [],
+    moreClubs: 0,
+    pendingInvites: [],
+    dueSoon: [],
+    upcoming: [],
+    pollsWaiting: [],
+    focus: null,
+    profileGaps: [],
+    finishProfileHref: null,
+  })),
 }));
-vi.mock("@/components/personal/personal-home", () => ({
-  PersonalHome: ({ orgSlug }: { orgSlug: string }) => <p>Personal home of {orgSlug}</p>,
-}));
+
+// Personal Home's pieces that reach the server actions (and next-auth with them).
+vi.mock("@/app/onboarding/pending-invite-card", () => ({ PendingInviteCard: () => null }));
+vi.mock("@/components/overview/focus-time", () => ({ FocusTime: () => null }));
 
 const { default: OverviewPage } = await import("./page");
 
@@ -289,16 +306,22 @@ afterEach(() => {
 });
 
 describe("a Personal space's home", () => {
-  it("is the Personal dashboard, not an organization's board", async () => {
+  it("is the same Home as an organization's, with your organizations under Up next", async () => {
     mocks.getOrgContextBySlug.mockResolvedValue({
       user: viewer,
       organization: { ...org, slug: "me-abc", kind: "PERSONAL", plan: "FREE" },
       role: "OWNER",
     });
     const html = await render();
-    expect(html).toContain("Personal home of me-abc");
-    expect(mocks.getMyOpenTasks).not.toHaveBeenCalled();
-    expect(mocks.loadSavedBoard).not.toHaveBeenCalled();
+    // Your own board, Today strip and Up next, as in an organization.
+    expect(mocks.loadSavedBoard).toHaveBeenCalled();
+    expect(html).toContain("Good morning, Viewer");
+    // Your organizations always sit under Up next, with a way to join one.
+    expect(html).toContain("Your organizations");
+    expect(html).toContain("Join your first organization");
+    // Nothing about a team: no organization name beside the date, no setup checklist.
+    expect(html).not.toContain("Claude Builders Club");
+    expect(html).not.toContain("Get your organization started");
   });
 });
 
