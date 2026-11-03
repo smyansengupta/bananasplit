@@ -5,6 +5,7 @@ import { SNOOZES, type SnoozeKey } from "@/lib/crm/outreach/schedule";
 import type { CrmDestination } from "@/lib/crm/outreach/form-map";
 import type { Routing } from "@/lib/crm/outreach/assign";
 import type { BookingQuestion } from "@/lib/crm/outreach/booking";
+import type { Audience, PlanFrom } from "@/lib/crm/outreach/plans";
 import { CrmError, requireManager } from "@/server/crm/access";
 import { logActivity } from "@/server/crm/activity";
 import { newBatchId } from "@/server/crm/history";
@@ -29,6 +30,7 @@ import { handOver } from "@/server/crm/outreach/handover";
 import { saveFormDestination, saveOrgRouting } from "@/server/crm/outreach/intake";
 import { listPeople, saveList, type ListFilters } from "@/server/crm/outreach/lists";
 import { checkSender } from "@/server/crm/outreach/mailbox";
+import { savePlanExtras, startPlan } from "@/server/crm/outreach/plans";
 import { saveMemberSettings } from "@/server/crm/outreach/member";
 import {
   addDeliverable,
@@ -148,6 +150,40 @@ export const stopEnrollmentAction = outreachAction(async (ctx, _a, enrollmentId:
   await stopEnrollment(ctx, enrollmentId);
   return {};
 });
+
+// ---- Plans (a sequence as the Outreach tab shows it) ---------------------------------
+
+/** A new plan: a draft sequence with an email and a follow-up, ready to edit. */
+export const createPlanAction = outreachAction(async (ctx, _a, name?: string) => createSequence(ctx, name?.trim() || "New plan"));
+
+export interface PlanSettingsInput {
+  from?: PlanFrom;
+  dailyCap?: number | null;
+  who?: Audience;
+  include?: string[];
+  stopOnReply?: boolean;
+}
+
+/** A plan's settings and who it's for (its sender, daily cap, stop on reply, audience). */
+export const savePlanSettingsAction = outreachAction(async (ctx, _a, id: string, input: PlanSettingsInput) => {
+  if (input.dailyCap !== undefined && input.dailyCap !== null && (!Number.isInteger(input.dailyCap) || input.dailyCap < 1 || input.dailyCap > 2000)) {
+    throw new CrmError("Pick between 1 and 2,000 a day.");
+  }
+  if (input.from !== undefined && input.from !== "owner" && input.from !== "me") throw new CrmError("Pick who sends it.");
+  const patch: Parameters<typeof savePlanExtras>[2] = {};
+  if (input.from !== undefined) patch.from = input.from;
+  if (input.dailyCap !== undefined) patch.dailyCap = input.dailyCap;
+  if (input.who !== undefined) patch.who = input.who;
+  if (input.include !== undefined) patch.include = input.include;
+  const extras = await savePlanExtras(ctx, id, patch);
+  if (input.stopOnReply !== undefined) {
+    await saveSequence(ctx, id, { stopOnReply: input.stopOnReply, stopOnBooking: input.stopOnReply });
+  }
+  return { extras };
+});
+
+/** Starts a plan: on, and everyone it's for who isn't left out goes in. */
+export const startPlanAction = outreachAction(async (ctx, _a, id: string) => startPlan(ctx, id, await rolePositions(ctx.organizationId)));
 
 // ---- Lists and campaigns ----------------------------------------------------------------
 

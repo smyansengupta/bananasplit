@@ -25,6 +25,11 @@ export function crmRecordHref(orgSlug: string, kind: CrmTargetKind, id: string):
   return hrefWithOpen(`${base}/deals`, "", { kind: "deal", id });
 }
 
+/** An outreach plan: Outreach with its card open. */
+export function crmPlanHref(orgSlug: string, type: "sequence" | "campaign", id: string): string {
+  return hrefWithOpen(`${crmBase(orgSlug)}/outreach`, "", { kind: "plan", type, id });
+}
+
 /** A pipeline's board (or table with ?view=table). */
 export function crmPipelineHref(orgSlug: string, pipelineId: string): string {
   return `${crmBase(orgSlug)}/pipelines/${pipelineId}`;

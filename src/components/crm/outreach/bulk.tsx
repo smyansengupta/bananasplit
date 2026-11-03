@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { chipClass } from "@/components/ui/segmented";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/toaster";
+import { crmPlanHref } from "@/lib/crm/href";
 import { exampleValues, renderMerge } from "@/lib/crm/outreach/merge";
 import { runAction } from "@/lib/run-action";
 import { cn } from "@/lib/utils";
@@ -67,7 +68,7 @@ export function BulkComposer({
     if (!r) return;
     if (!r.ok) return toast({ title: r.error, tone: "error" });
     toast({ title: `Sending to ${r.recipients.toLocaleString("en-US")}`, tone: "success" });
-    router.push(`/app/${orgSlug}/crm/campaigns/${r.campaignId}`);
+    router.push(crmPlanHref(orgSlug, "campaign", r.campaignId));
   };
 
   return (
@@ -93,7 +94,7 @@ export function BulkComposer({
           <h2 className="heading text-base">To</h2>
           {lists.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              Make a list first, on <Link href={`/app/${orgSlug}/crm/campaigns`} className="underline underline-offset-4">Campaigns</Link>.
+              Save a view of people first, on <Link href={`/app/${orgSlug}/crm/people`} className="underline underline-offset-4">People</Link>.
             </p>
           ) : (
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="List">

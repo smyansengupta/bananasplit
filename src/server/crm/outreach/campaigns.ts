@@ -2,6 +2,7 @@ import type { CrmTargetStatus } from "@/generated/prisma/client";
 import { appUrl } from "@/lib/app-url";
 import { campaignNumbers, splitAmong, type CampaignNumbers } from "@/lib/crm/outreach/assign";
 import { normalizeEmail } from "@/lib/crm/dedupe";
+import { crmPlanHref } from "@/lib/crm/href";
 import type { TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { notifyUsers } from "@/server/notifications";
@@ -139,7 +140,7 @@ async function tellAssignees(db: TxClient, organizationId: string, campaignId: s
       type: "CRM_ASSIGNED",
       title: `${c._count._all} ${c._count._all === 1 ? "person" : "people"} to reach in ${name}`,
       body: "They're in your queue on the CRM's home.",
-      linkUrl: org ? `/app/${org.slug}/crm/campaigns/${campaignId}` : null,
+      linkUrl: org ? crmPlanHref(org.slug, "campaign", campaignId) : null,
       actorId,
       dedupeKey: `crm-campaign:${campaignId}:${c.assigneeId}:${c._count._all}`,
     });

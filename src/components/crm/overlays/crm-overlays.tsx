@@ -11,6 +11,7 @@ import {
 
 import { LogOverlay } from "./log";
 import { NewOverlay } from "./new";
+import { PlanOverlay } from "./plan";
 import { PersonOverlay } from "./person";
 import { PowerOverlay } from "./power";
 import { CompanyOverlay, DealOverlay } from "./record";
@@ -48,6 +49,7 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   power: PowerOverlay,
   log: LogOverlay,
   new: NewOverlay,
+  plan: PlanOverlay,
 };
 
 export async function CrmOverlays({

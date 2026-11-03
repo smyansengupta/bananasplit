@@ -347,7 +347,7 @@ function MoveDialog({
 }
 
 /** Every message of your share, previewed and editable one by one, then sent. */
-function ShareSender({
+export function ShareSender({
   orgId,
   campaignId,
   targets,

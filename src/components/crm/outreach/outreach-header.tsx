@@ -37,11 +37,10 @@ export function OutreachHeader({
         value={view}
         className="max-w-full overflow-x-auto"
         options={[
-          { value: "templates", label: "Templates", href: base },
-          { value: "sequences", label: "Sequences", href: `${base}/sequences` },
+          { value: "sequences", label: "Plans", href: base },
+          { value: "templates", label: "Templates", href: `${base}?view=templates` },
           { value: "booking", label: "Booking pages", href: `${base}/booking` },
-          { value: "bulk", label: "Bulk email", href: `${base}/bulk` },
-          { value: "mail", label: "Your mail", href: `${base}/mail` },
+          { value: "mail", label: "Your mail", href: `${base}?view=mail` },
         ]}
       />
     </div>
