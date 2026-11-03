@@ -338,9 +338,10 @@ const SETTABLE: Record<TargetKind, ReadonlySet<string>> = {
     "keepInTouchDays",
     "doNotContact",
     "source",
+    "ownerId",
   ]),
-  company: new Set(["name", "domain", "website", "industry", "size", "phone", "address", "description", "status", "nextFollowUpAt"]),
-  deal: new Set(["title", "amount", "expectedOn", "nextStep", "nextStepAt", "forecastCategory", "closeReason", "source", "companyId", "primaryPersonId"]),
+  company: new Set(["name", "domain", "website", "industry", "size", "phone", "address", "description", "status", "nextFollowUpAt", "ownerId"]),
+  deal: new Set(["title", "amount", "expectedOn", "nextStep", "nextStepAt", "forecastCategory", "closeReason", "source", "companyId", "primaryPersonId", "ownerId"]),
 };
 
 /** A change's fields as the core's input: built-ins by key, custom ones under `custom`. */

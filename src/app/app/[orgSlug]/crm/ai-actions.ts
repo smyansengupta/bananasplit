@@ -13,6 +13,7 @@ import { fillAiField, startColumnFill, type ColumnStart, type FillOutcome } from
 import { memberWho } from "@/server/crm/ai-tx";
 import { runFollowUpAgent, runResearchAgent, saveAgentSettings, type AgentSettings } from "@/server/crm/agents";
 import { askCrm, type AskResponse } from "@/server/crm/ask";
+import { tellCrm, type TellResponse } from "@/server/crm/tell";
 import {
   draftFollowUp,
   meetingBrief,
@@ -194,6 +195,60 @@ export async function conversationTextAction(
   return run(async () => {
     const r = await readConversation(await who(orgId), { text: z.string().max(20_000).parse(text), personId: personId ? id.parse(personId) : null });
     return { matched: r.matched, queued: r.queued, summary: r.reading.summary, notes: r.reading.notes };
+  });
+}
+
+/** A change said in words, queued (not applied) for the Ask card to preview: Apply, Cancel, Undo. */
+export async function tellAction(orgId: string, text: string): Promise<AiResult<TellResponse>> {
+  return run(async () => tellCrm(await who(orgId), z.string().max(500).parse(text)));
+}
+
+export interface PastedItem {
+  id: string;
+  kind: "person" | "timeline" | "step";
+  title: string;
+  text: string;
+}
+
+/** A pasted chat, read into suggestions the Ask card lists with checkboxes (Add N people). */
+export async function pasteAction(
+  orgId: string,
+  text: string,
+): Promise<AiResult<{ matched: { id: string; name: string } | null; summary: string; items: PastedItem[] }>> {
+  return run(async () => {
+    const w = await who(orgId);
+    const r = await readConversation(w, { text: z.string().max(20_000).parse(text) });
+    const rows = await w.tx((actor) =>
+      actor.db.crmSuggestion.findMany({
+        where: { organizationId: w.organizationId, id: { in: r.ids }, status: "PENDING" },
+        select: { id: true, kind: true, title: true, summary: true, payload: true },
+      }),
+    );
+    const items: PastedItem[] = [];
+    for (const id of r.ids) {
+      const s = rows.find((x) => x.id === id);
+      if (!s) continue;
+      const p = (s.payload ?? {}) as Record<string, unknown>;
+      if (s.kind === "CREATE_PERSON") {
+        const person = (p.person ?? {}) as { name?: string; title?: string | null; companyName?: string | null; primaryEmail?: string | null };
+        const task = p.task as { title?: string; dueDate?: string | null } | null | undefined;
+        const role = [person.title, person.companyName].filter(Boolean).join(", ");
+        items.push({
+          id: s.id,
+          kind: "person",
+          title: person.name ?? s.title,
+          text: [role ? `${role}.` : null, person.primaryEmail ?? null, task?.title ? `Next step: ${task.title}${task.dueDate ? `, by ${task.dueDate}` : ""}` : null]
+            .filter(Boolean)
+            .join(" "),
+        });
+      } else if (s.kind === "CREATE_TASK") {
+        const due = typeof p.dueDate === "string" ? p.dueDate : null;
+        items.push({ id: s.id, kind: "step", title: String(p.title ?? s.title), text: due ? `For you, by ${due}` : "For you" });
+      } else {
+        items.push({ id: s.id, kind: "timeline", title: s.title, text: s.summary ?? "" });
+      }
+    }
+    return { matched: r.matched, summary: r.reading.summary, items };
   });
 }
 

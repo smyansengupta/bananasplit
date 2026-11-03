@@ -9,6 +9,7 @@ import {
   type CrmOpenKind,
 } from "@/lib/crm/overlay";
 
+import { AskOverlay } from "./ask";
 import { LogOverlay } from "./log";
 import { NewOverlay } from "./new";
 import { PlanOverlay } from "./plan";
@@ -41,7 +42,7 @@ type OverlayLoader<K extends CrmOpenKind> = (
   props: OverlayProps<K>,
 ) => Promise<ReactNode> | ReactNode;
 
-/** One entry per kind of card. Later cards (ask, goal) register here. */
+/** One entry per kind of card. Later cards (goal) register here. */
 export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   person: PersonOverlay,
   company: CompanyOverlay,
@@ -50,6 +51,7 @@ export const CRM_CARDS: { [K in CrmOpenKind]?: OverlayLoader<K> } = {
   log: LogOverlay,
   new: NewOverlay,
   plan: PlanOverlay,
+  ask: AskOverlay,
 };
 
 export async function CrmOverlays({

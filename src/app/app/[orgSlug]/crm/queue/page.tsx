@@ -1,4 +1,6 @@
-import { CrmAiBar } from "@/components/crm/ai/ai-bar";
+import Link from "next/link";
+
+import { chipClass } from "@/components/ui/segmented";
 import { ReviewQueue, type QueueItemView } from "@/components/crm/ai/review-queue";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { PageHeader } from "@/components/page-header";
@@ -62,7 +64,9 @@ export default async function CrmQueuePage({ params, searchParams }: PageProps<"
         description="Nothing AI or a connected app suggests changes the CRM until someone accepts it."
         tabs={<CrmTabs tabs={shell.tabs} />}
       />
-      <CrmAiBar orgId={orgId} orgSlug={orgSlug} />
+      <Link href={`/app/${orgSlug}/crm?open=ask`} className={chipClass(false)}>
+        Ask or tell the CRM
+      </Link>
       <ReviewQueue orgId={orgId} orgSlug={orgSlug} items={views} status={status} mine={mine} counts={{ waiting: data.waiting, mine: data.forMe }} />
     </div>
   );
