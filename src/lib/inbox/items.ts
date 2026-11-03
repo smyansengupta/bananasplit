@@ -13,13 +13,13 @@ import {
  */
 
 /** What an Inbox row is. Needs: invite, task, request, review. Updates: update. */
-export const INBOX_KINDS = ["invite", "task", "request", "review", "update"] as const;
+export const INBOX_KINDS = ["invite", "task", "request", "review", "update", "crm"] as const;
 export type InboxKind = (typeof INBOX_KINDS)[number];
 
 /** The kinds that need you (the Needs you list and the sidebar count). */
-export const NEED_KINDS: readonly InboxKind[] = ["invite", "task", "request", "review"];
+export const NEED_KINDS: readonly InboxKind[] = ["invite", "task", "request", "review", "crm"];
 
-const KEY = /^(invite|task|request|review|update):([A-Za-z0-9_-]{1,64})$/;
+const KEY = /^(invite|task|request|review|update|crm):([A-Za-z0-9_-]{1,64})$/;
 
 /** "task:abc", the key InboxItemState stores (the migration checks the same shape). */
 export function inboxKey(kind: InboxKind, id: string): string {

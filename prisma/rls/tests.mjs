@@ -2119,6 +2119,10 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         // AI connectors: the caller's own spaces with each club's switch
         // (OrgSettings is readable only in the current org).
         "connector_spaces",
+        // CRM outreach: which org a public link opens (ids only), and a
+        // booking page's hosts' busy hours in the caller's org context.
+        "crm_booking_busy",
+        "crm_public_target",
         "enqueue_job",
         "event_defaults",
         // Budgets for finance: a member's category list, without the amounts.
@@ -2495,6 +2499,9 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
       invitation_by_token_hash: "s",
       join_code_org_id: "s",
       crm_sees_all: "us",
+      // CRM outreach (20261105110000_crm_outreach): the public links' lookups.
+      crm_public_target: "s",
+      crm_booking_busy: "s",
       is_finance: "us",
       is_crm_manager: "us",
       // CRM databases (20261105100000_crm_databases): may CRM managers shape it?
