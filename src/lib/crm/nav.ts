@@ -25,6 +25,9 @@ export const CRM_TABS: readonly CrmTabEntry[] = [
   { id: "people", label: "People", icon: "Users", path: "/people" },
   { id: "companies", label: "Companies", icon: "Building2", path: "/companies" },
   { id: "pipelines" },
+  // Phase 5: calls (the dialer) and quotes.
+  { id: "calls", label: "Calls", icon: "Phone", path: "/calls" },
+  { id: "quotes", label: "Quotes", icon: "ReceiptText", path: "/quotes" },
   { id: "review", label: "Duplicates", icon: "Merge", path: "/review" },
   { id: "settings", label: "Settings", icon: "Settings", path: "/settings", managersOnly: true },
 ];

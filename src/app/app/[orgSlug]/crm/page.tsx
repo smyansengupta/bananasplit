@@ -2,6 +2,7 @@ import { AlarmClock, Flag, Hourglass, Sparkles, Trophy, Users, type IconComponen
 import Link from "next/link";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
+import { TodayCalls } from "@/components/crm/phone/today-calls";
 import { CrmTodayKeys } from "@/components/crm/today-keys";
 import { when } from "@/components/crm/record-page";
 import { PageHeader } from "@/components/page-header";
@@ -99,6 +100,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
         <p className="text-muted-foreground text-sm">{formatMoney(data.open._sum.amountCents)} in open items.</p>
       )}
       <CrmTodayKeys hrefs={order.map((i) => crmRecordHref(orgSlug, i.targetKind, i.id))} />
+      <TodayCalls orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} />
       <div className="grid gap-4 lg:grid-cols-2">
         {GROUPS.map((g) => {
           const items = data.lists[g.kind];
