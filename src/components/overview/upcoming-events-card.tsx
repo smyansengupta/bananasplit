@@ -3,17 +3,17 @@ import {
   CircleQuestionMark,
   CircleX,
   Mail,
-  Users,
   type IconComponent,
 } from "@/components/icons";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
-import { KIND_META, RSVP_META } from "@/components/calendar/kinds";
+import { KIND_INK, KIND_META, RSVP_META } from "@/components/calendar/kinds";
 import { Button } from "@/components/ui/button";
 import type { EventKind, RSVPStatus } from "@/generated/prisma/enums";
 import type { CalendarEventSummary } from "@/app/app/[orgSlug]/calendar/queries";
 import { formatEventWhen } from "@/lib/calendar/format";
+import { daysBetweenKeys, localDateKey } from "@/lib/tasks/dates";
 
 import { FaceStack } from "./bits";
 import { LinkChips, type ItemRef } from "./connections";
@@ -64,6 +64,21 @@ function kindVars(kind: EventKind): CSSProperties {
   return { ["--kind" as string]: `var(${KIND_META[kind].token})` };
 }
 
+/** "Today", "Tomorrow", "In 6 days": how soon, for the next meeting. */
+function soonWord(at: Date, now: Date, timeZone: string): string {
+  const days = daysBetweenKeys(localDateKey(now, timeZone), localDateKey(at, timeZone));
+  if (days <= 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return `In ${days} days`;
+}
+
+const MONTH = (timeZone: string) => new Intl.DateTimeFormat("en-US", { month: "short", timeZone });
+
+/**
+ * Meetings, read like a calendar: the next one large (its day as a block in
+ * its kind's colour, the time and how soon, where, its agenda and who's
+ * going), then the others as short rows.
+ */
 export function MeetingsList({
   orgSlug,
   meetings,
@@ -87,62 +102,93 @@ export function MeetingsList({
   insight?: ReactNode;
 }) {
   if (meetings.length === 0) return <>{empty}</>;
+  const [next, ...rest] = meetings;
+  const extra = extras.get(next.id);
+  const href = `/app/${orgSlug}/meetings/${next.id}`;
+  const zone = next.allDay ? zones.org : zones.viewer;
+  const noAgenda = extra?.agendaItems === null;
   return (
-    <div className="space-y-4">
-      <ul className="divide-border/70 divide-y">
-        {meetings.map((m) => {
-          const extra = extras.get(m.id);
-          const href = `/app/${orgSlug}/meetings/${m.id}`;
-          const noAgenda = extra?.agendaItems === null;
-          return (
-            <li key={m.id} className="relative flex items-start gap-3.5 py-3.5 first:pt-0">
+    <div className="flex h-full flex-col gap-4">
+      <div className="flex items-start gap-4">
+        <Link
+          href={href}
+          aria-hidden="true"
+          tabIndex={-1}
+          style={{ ["--kind" as string]: `var(${KIND_META[next.kind].fill})`, color: KIND_INK }}
+          className="flex w-16 shrink-0 flex-col items-center rounded-[16px] bg-(--kind) py-2.5 leading-none"
+        >
+          <span className="text-[11px] font-semibold uppercase opacity-80">
+            {DAY_WEEKDAY(zone).format(next.startsAt)}
+          </span>
+          <span className="numeral mt-1 text-[28px]">{DAY_NUMBER(zone).format(next.startsAt)}</span>
+          <span className="mt-1 text-[11px] font-semibold opacity-80">
+            {MONTH(zone).format(next.startsAt)}
+          </span>
+        </Link>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-start justify-between gap-2">
+            <Link href={href} className="text-[16px] font-semibold break-words hover:underline">
+              {next.title}
+            </Link>
+            <RsvpMark rsvp={rsvps.get(next.id)} />
+          </div>
+          <p className="text-muted-foreground text-[13px]">
+            <b className="text-foreground font-semibold">{soonWord(next.startsAt, now, zone)}</b>
+            {", "}
+            {formatEventWhen(next, zones, now)}
+          </p>
+          {next.location && <p className="text-muted-foreground text-[13px]">{next.location}</p>}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {extra?.agendaItems != null && extra.agendaItems > 0 && (
+          <span className="bg-muted rounded-full px-2.5 py-1 text-[12.5px] font-semibold">
+            Agenda, {extra.agendaItems} {extra.agendaItems === 1 ? "item" : "items"}
+          </span>
+        )}
+        {noAgenda && (
+          <span className="text-tint-danger-foreground flex items-center gap-2 text-[13px] font-medium">
+            No agenda yet.
+            {canEdit && (
+              <Button asChild size="xs" variant="outline">
+                <Link href={href}>Write agenda</Link>
+              </Button>
+            )}
+          </span>
+        )}
+        {extra && <LinkChips items={extra.chips} />}
+      </div>
+
+      {extra && extra.faces.length > 0 && (
+        <div className="text-muted-foreground flex items-center gap-2.5 text-[13px]">
+          <FaceStack people={extra.faces} total={extra.going} />
+          {extra.going} going
+        </div>
+      )}
+
+      {rest.length > 0 && (
+        <ul className="divide-border/70 border-border/70 mt-auto divide-y border-t">
+          {rest.map((m) => (
+            <li key={m.id} className="flex items-center gap-3 py-2.5">
               <span
                 aria-hidden="true"
                 style={kindVars(m.kind)}
-                className="grid size-9 shrink-0 place-items-center rounded-[11px] bg-[color-mix(in_oklab,var(--kind)_14%,var(--card))] text-(--kind)"
+                className="size-2.5 shrink-0 rounded-full bg-(--kind)"
+              />
+              <Link
+                href={`/app/${orgSlug}/meetings/${m.id}`}
+                className="min-w-0 flex-1 truncate text-[14px] font-semibold hover:underline"
               >
-                <Users className="size-4" />
+                {m.title}
+              </Link>
+              <span className="text-muted-foreground shrink-0 text-[12.5px]">
+                {formatEventWhen(m, zones, now)}
               </span>
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-start justify-between gap-2">
-                  <Link
-                    href={href}
-                    className="text-[15px] font-semibold break-words hover:underline"
-                  >
-                    {m.title}
-                  </Link>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <RsvpMark rsvp={rsvps.get(m.id)} />
-                    {extra && extra.faces.length > 0 && (
-                      <FaceStack people={extra.faces} total={extra.going} />
-                    )}
-                  </span>
-                </div>
-                <p className="text-muted-foreground text-[13px]">
-                  {formatEventWhen(m, zones, now)}
-                  {m.location ? `, ${m.location}` : ""}
-                </p>
-                {extra?.agendaItems != null && extra.agendaItems > 0 && (
-                  <p className="text-[13px] font-semibold">
-                    Agenda written, {extra.agendaItems} {extra.agendaItems === 1 ? "item" : "items"}
-                  </p>
-                )}
-                {noAgenda && (
-                  <p className="text-tint-danger-foreground flex flex-wrap items-center gap-2 text-[13px] font-medium">
-                    No agenda yet.
-                    {canEdit && (
-                      <Button asChild size="xs" variant="outline">
-                        <Link href={href}>Write agenda</Link>
-                      </Button>
-                    )}
-                  </p>
-                )}
-                {extra && <LinkChips items={extra.chips} className="pt-1" />}
-              </div>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
       {insight}
     </div>
   );

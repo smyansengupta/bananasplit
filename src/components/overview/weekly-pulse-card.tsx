@@ -180,6 +180,10 @@ export function WeeklyPulseCard({
               />
               Average
             </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-0.5 w-4 rounded-full bg-(--attention)" />
+              Trend
+            </span>
           </div>
           <PulseBars
             bars={trend.map((w) => ({ label: w.label, value: w.done }))}

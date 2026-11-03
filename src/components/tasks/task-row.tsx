@@ -1,5 +1,7 @@
 "use client";
 
+import { NudgeButton, PushBackButton } from "@/components/tasks/overdue-actions";
+import { dueDateKey } from "@/lib/tasks/dates";
 import { MessageSquare } from "@/components/icons";
 
 import { PinToggle } from "@/components/pins/pins-context";
@@ -58,6 +60,9 @@ export function TaskRow({
   const access = accessSubjectOf(task);
   const editable = canEditTask(actor, access);
   const done = task.status === "COMPLETED";
+  // Late: due before today and not done. Its row offers Push or Nudge.
+  const late =
+    !done && task.type !== "EPIC" && !!task.dueDate && dueDateKey(task.dueDate) < org.todayKey;
   const priv = isTaskPrivate(task);
   const flagged = isTaskFlagged(task);
   const involvedOnly =
@@ -143,6 +148,12 @@ export function TaskRow({
       </button>
 
       <div className="flex shrink-0 items-center gap-2">
+        {late && task.ownerId === viewer.userId && editable && (
+          <PushBackButton orgId={org.id} taskId={task.id} title={task.title} size="icon-sm" />
+        )}
+        {late && task.owner && task.ownerId !== viewer.userId && (
+          <NudgeButton orgId={org.id} taskId={task.id} person={task.owner} />
+        )}
         {task.priority === "HIGH" && !done && (
           <Badge variant="accent" className="max-sm:hidden">
             High

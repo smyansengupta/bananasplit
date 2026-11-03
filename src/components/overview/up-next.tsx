@@ -11,6 +11,7 @@ import { toast } from "@/components/ui/toaster";
 import type { UpNextSlot } from "@/lib/overview/up-next";
 import type { EventKind, RSVPStatus, TaskStatus } from "@/generated/prisma/enums";
 import { KIND_META } from "@/components/calendar/kinds";
+import { PushBackButton } from "@/components/tasks/overdue-actions";
 import { cn } from "@/lib/utils";
 import type { UpNextBlock } from "@/server/overview/up-next";
 
@@ -90,6 +91,7 @@ export function UpNext({
   onShowAll,
   /** Done on a task card, bound to the space like onHide. */
   onDone,
+  orgId,
   /** Going / Can't go on an invitation card, bound to the space like onHide. */
   onRsvp,
   onVote,
@@ -102,6 +104,8 @@ export function UpNext({
   onUnhide?: (kind: string, refId: string) => Promise<unknown>;
   onShowAll?: () => Promise<unknown>;
   onDone?: (taskId: string, status: TaskStatus) => Promise<unknown>;
+  /** The space, for Push on a task that's due today or late. */
+  orgId?: string;
   onRsvp?: (eventId: string, rsvp: RSVPStatus) => Promise<unknown>;
   /** Votes on a one-choice poll from its card ([] takes the vote back). */
   onVote?: (pollId: string, optionIds: string[]) => Promise<unknown>;
@@ -213,10 +217,21 @@ export function UpNext({
     const working = pending && busy === item.id;
     if (item.kind === "task" && onDone) {
       return (
-        <button type="button" disabled={working} onClick={() => done(item)} className={ACT}>
-          <Check className="size-3.5" aria-hidden="true" />
-          Done
-        </button>
+        <>
+          <button type="button" disabled={working} onClick={() => done(item)} className={ACT}>
+            <Check className="size-3.5" aria-hidden="true" />
+            Done
+          </button>
+          {/* Due today or late: push it back without opening it. */}
+          {item.tone === "alert" && orgId && (
+            <PushBackButton
+              orgId={orgId}
+              taskId={item.id}
+              title={item.title}
+              triggerClassName={ACT}
+            />
+          )}
+        </>
       );
     }
     if (item.kind === "rsvp" && onRsvp) {

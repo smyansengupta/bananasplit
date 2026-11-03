@@ -38,6 +38,7 @@ import {
   Link2,
   ListChecks,
   NotebookText,
+  Pencil,
   PiggyBank,
   Pin,
   Plus,
@@ -560,16 +561,12 @@ export function WidgetBoard({
     setFresh(id);
   };
 
-  /** Ambient or Custom. Custom opens ready to arrange; choosing it again while on rearranges. */
+  /** Ambient or Custom. Custom shows the member's own board; Edit arranges it. */
   function switchMode(next: BoardMode) {
-    if (!ambient) return;
-    if (next === mode) {
-      if (next === "custom") setEditing(true);
-      return;
-    }
+    if (!ambient || next === mode) return;
     const was = mode;
     setMode(next);
-    setEditing(next === "custom");
+    setEditing(false);
     setError(null);
     start(async () => {
       const result = await ambient.onMode(next);
@@ -611,17 +608,19 @@ export function WidgetBoard({
           <InBar>
             {/* + stays put; Customize becomes Reset and Done (a check) while on. */}
             <div className={cn("flex items-center gap-2 max-md:hidden", readOnly && "hidden")}>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                aria-label="Add a widget"
-                title="Add a widget"
-                disabled={layout.length >= MAX_WIDGETS}
-                onClick={() => setAdding(true)}
-              >
-                <Plus className="size-4" aria-hidden="true" />
-              </Button>
+              {!(ambient && mode === "ambient") && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  aria-label="Add a widget"
+                  title="Add a widget"
+                  disabled={layout.length >= MAX_WIDGETS}
+                  onClick={() => setAdding(true)}
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                </Button>
+              )}
               {editing ? (
                 <>
                   <Button
@@ -645,7 +644,14 @@ export function WidgetBoard({
                     <Check className="size-4" aria-hidden="true" />
                   </Button>
                 </>
-              ) : ambient ? null : (
+              ) : ambient ? (
+                mode === "custom" && (
+                  <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+                    <Pencil className="size-4" aria-hidden="true" />
+                    Edit
+                  </Button>
+                )
+              ) : (
                 <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                   <SlidersHorizontal className="size-4" aria-hidden="true" />
                   Customize
@@ -723,7 +729,7 @@ export function WidgetBoard({
                             key={item.widget.id}
                             widget={item.widget}
                             meta={m}
-                            readOnly={readOnly}
+                            readOnly
                             editing={false}
                             dragging={false}
                             fresh={fresh === item.widget.id}
@@ -1166,7 +1172,7 @@ function ModeSwitch({
             type="button"
             role="radio"
             aria-checked={on}
-            title={on && value === "custom" ? "Rearrange" : hint}
+            title={hint}
             disabled={disabled}
             onClick={() => onChange(value)}
             className={cn(

@@ -60,7 +60,6 @@ import {
 import { loadHomeMode, loadSavedBoard } from "@/server/boards";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { homeWidgetCards } from "@/components/overview/home-widget-cards";
-import { HereNowAlone } from "@/components/overview/here-now";
 import { AppsFeed } from "@/components/overview/apps-feed";
 import { loadAppsFeed } from "@/server/overview/apps-feed";
 import type { BoardWidget } from "@/lib/boards";
@@ -162,23 +161,6 @@ function rolePromoted(role: Role, addOns: readonly string[] | null | undefined):
   return roleExtras(role, addOns)
     .map((w) => w.type)
     .filter((t) => t !== "apps");
-}
-
-/** The part of the day Home's top light follows (.home-glow in globals.css). */
-function timeOfDay(now: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    hourCycle: "h23",
-    weekday: "short",
-    timeZone,
-  }).formatToParts(now);
-  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 12);
-  const weekday = parts.find((p) => p.type === "weekday")?.value;
-  if (weekday === "Sat" || weekday === "Sun") return "weekend";
-  if (hour >= 5 && hour < 12) return "morning";
-  if (hour >= 12 && hour < 17) return "afternoon";
-  if (hour >= 17 && hour < 22) return "evening";
-  return "night";
 }
 
 function greeting(now: Date, timeZone: string): string {
@@ -805,8 +787,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     : undefined;
   if (apps && apps.rows.length === 0) resting.push("apps");
   if (w.decisions && w.decisions.total === 0) resting.push("decisions");
-  const alone = online !== null && online.count <= 1;
-  const compact = alone ? ["here-now"] : [];
+  // Nothing on Home is ever narrower than a square: Here now keeps its size with only you in.
+  const compact: string[] = [];
 
   // Open forms' chips, by form id.
   const formLinks = new Map(
@@ -879,13 +861,6 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ),
     ...newer.bodies,
     ...(apps ? { apps: <AppsFeed data={apps} /> } : {}),
-    ...(alone && data.homeMode === "ambient"
-      ? {
-          "here-now": (
-            <HereNowAlone orgId={org.id} orgSlug={orgSlug} you={data.you} initial={online} />
-          ),
-        }
-      : {}),
   };
 
   // Shown until every step is done or checked off, then gone by itself.
@@ -970,8 +945,6 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         <OpenLink href={`${base}/integrations`} label="Integrations" />
       </CardControls>
     ),
-    // A one-column Here now has room for its title only.
-    ...(alone && data.homeMode === "ambient" ? { "here-now": null } : {}),
   };
 
   const greetingBlock = (
@@ -982,8 +955,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   );
 
   return (
-    <div className="relative isolate space-y-6">
-      <div aria-hidden="true" className="home-glow" data-time={timeOfDay(now, timeZone)} />
+    <div className="space-y-6">
       <OverviewBoard
         orgId={org.id}
         types={overviewWidgetsFor(isAdmin, settings?.addOns)}
@@ -1009,6 +981,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
           <div className="space-y-[30px]">
             {todayBar}
             <UpNext
+              orgId={org.id}
               slots={upNext}
               calendarHref={calendarHref}
               onHide={hideUpNextCard.bind(null, org.id)}

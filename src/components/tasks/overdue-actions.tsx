@@ -30,16 +30,22 @@ import { mentionToken } from "@/lib/tasks/mentions";
 
 const NUDGE_TEXT = "Checking in on this. Any update?";
 
+/** What Follow up says: for something you're waiting on that isn't late yet. */
+export const FOLLOW_UP_TEXT = "Following up on this. Where does it stand?";
+
 export function NudgeButton({
   orgId,
   taskId,
   person,
   text = NUDGE_TEXT,
+  label = "Nudge",
 }: {
   orgId: string;
   taskId: string;
   person: { id: string; name: string | null };
   text?: string;
+  /** "Nudge" for something late, "Follow up" for something that isn't yet. */
+  label?: "Nudge" | "Follow up";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -63,15 +69,15 @@ export function NudgeButton({
         return;
       }
       setOpen(false);
-      toast({ title: `Nudged ${who}` });
+      toast({ title: label === "Nudge" ? `Nudged ${who}` : `Followed up with ${who}` });
       router.refresh();
     });
   };
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" aria-label={`Nudge ${who}`}>
-          Nudge
+        <Button variant="outline" size="sm" aria-label={`${label} ${who}`}>
+          {label}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80">
@@ -119,11 +125,14 @@ export function PushBackButton({
   taskId,
   title,
   size = "sm",
+  triggerClassName,
 }: {
   orgId: string;
   taskId: string;
   title: string;
   size?: "sm" | "icon-sm";
+  /** A plain trigger with these classes, for a card with its own colours (Up next). */
+  triggerClassName?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -156,16 +165,29 @@ export function PushBackButton({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size={size}
-          disabled={pending}
-          aria-label={`Push back ${title}`}
-          title="Push back the due date"
-        >
-          <CalendarClock aria-hidden="true" />
-          {size === "sm" && "Push back"}
-        </Button>
+        {triggerClassName ? (
+          <button
+            type="button"
+            disabled={pending}
+            aria-label={`Push back ${title}`}
+            title="Push back the due date"
+            className={triggerClassName}
+          >
+            <CalendarClock className="size-3.5" aria-hidden="true" />
+            Push
+          </button>
+        ) : (
+          <Button
+            variant="outline"
+            size={size}
+            disabled={pending}
+            aria-label={`Push back ${title}`}
+            title="Push back the due date"
+          >
+            <CalendarClock aria-hidden="true" />
+            {size === "sm" && "Push back"}
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {choices.map((c) => (
