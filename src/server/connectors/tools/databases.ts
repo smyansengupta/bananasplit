@@ -7,7 +7,8 @@ import type { DatabaseKind } from "@/generated/prisma/client";
 import { displayText, type FieldDef } from "@/lib/databases/fields";
 import { DB_FILTER_OPS, dbViewQuery, type DbViewFilter } from "@/lib/databases/href";
 import { loadFields, loadRecords } from "@/server/databases/custom";
-import { sourceFor } from "@/server/databases/sources";
+import { isCrmKind, loadSourceFor } from "@/server/databases/sources";
+import { CrmError, requireCrm } from "@/server/crm/access";
 import {
   canViewBallotRows,
   columnViews,
@@ -71,7 +72,7 @@ const databaseSummary = z.object({
   kind: z
     .string()
     .describe(
-      "attendance, ballots, signups, sessions or people (built in), or custom (organization-made).",
+      "attendance, ballots, signups, sessions or people (built in), crm_people, crm_companies or crm_pipeline (the CRM's), or custom (organization-made).",
     ),
   description: z.string().nullable(),
   url: urlField,
@@ -277,10 +278,27 @@ function viewContext(ctx: OrgContext, space: ToolSpace, database: DatabaseSummar
   );
 }
 
-/** A built-in database's source and the columns this member sees of it. */
-function builtInView(ctx: OrgContext, space: ToolSpace, database: DatabaseSummary) {
+/**
+ * The CRM's databases (People, Companies, each pipeline) read like built-in
+ * ones, with their custom fields as columns, once the space has the CRM
+ * added and on its plan; RLS shows the member only the records they may see.
+ */
+async function crmGate(ctx: OrgContext, space: ToolSpace, database: DatabaseSummary): Promise<void> {
+  if (!isCrmKind(database.kind)) return;
+  space.requireSection("crm");
+  try {
+    await requireCrm(ctx);
+  } catch (error) {
+    if (error instanceof CrmError) throw new ConnectorInputError(error.message);
+    throw error;
+  }
+}
+
+/** A built-in (or CRM) database's source and the columns this member sees of it. */
+async function builtInView(ctx: OrgContext, space: ToolSpace, database: DatabaseSummary) {
   const vctx = viewContext(ctx, space, database);
-  const source = sourceFor(database.kind);
+  await crmGate(ctx, space, database);
+  const source = await loadSourceFor(ctx.db, space.id, database);
   if (!source) throw new ConnectorInputError("This database can't be read here.");
   const configs = viewerColumns(source, database.columns, vctx.tier);
   const columns = columnViews(
@@ -307,7 +325,7 @@ async function builtInRows(
   position: CursorPosition,
 ): Promise<Rows> {
   if (!(await ballotRowsOpen(ctx, space, database))) throw new BallotRowsHiddenError(space.name);
-  const { vctx, source, columns } = builtInView(ctx, space, database);
+  const { vctx, source, columns } = await builtInView(ctx, space, database);
   const { built, where } = queryFor(source, vctx, viewParams(args));
   const refused = built.rejected[0];
   if (refused) {
@@ -451,7 +469,7 @@ async function describeDatabase(ctx: OrgContext, space: ToolSpace, key: string) 
     });
     return { database, columns: customColumns(fields), total };
   }
-  const { vctx, source, columns } = builtInView(ctx, space, database);
+  const { vctx, source, columns } = await builtInView(ctx, space, database);
   if (!(await ballotRowsOpen(ctx, space, database))) {
     return { database, columns: columns.map(columnOf), total: null };
   }
@@ -505,7 +523,7 @@ export const registerDatabaseTools: ToolRegistrar = (server, session) => {
     {
       title: "List databases",
       description:
-        "Lists the databases in one space that the member can open: the organization's built-in ones (sessions, attendance, sign-ups, ballots, people) and the ones it made.",
+        "Lists the databases in one space that the member can open: the organization's built-in ones (sessions, attendance, sign-ups, ballots, people), the CRM's (people, companies, each pipeline) and the ones it made.",
       inputSchema: listInput,
       outputSchema: listOutput,
       annotations: READ_ONLY,

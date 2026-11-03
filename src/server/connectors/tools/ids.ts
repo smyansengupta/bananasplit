@@ -20,6 +20,10 @@ export const ITEM_KINDS = [
   "person",
   "database",
   "expense",
+  // The CRM's people, companies and pipeline items (tools/crm.ts).
+  "crmperson",
+  "crmcompany",
+  "crmitem",
 ] as const;
 
 export type ItemKind = (typeof ITEM_KINDS)[number];
