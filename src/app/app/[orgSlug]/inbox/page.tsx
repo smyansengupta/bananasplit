@@ -39,6 +39,8 @@ import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { readAddOns } from "@/lib/addons";
 import { toReviewForOwner } from "@/server/forms/forms";
 import { listOpenInvites, listRequestsToReview } from "@/server/inbox/lists";
+import { crmInboxItems } from "@/server/crm/outreach/inbox";
+import { rolePositions } from "@/server/crm/owners";
 import { loadInboxState } from "@/server/inbox/state";
 import { RECAP_TITLE } from "@/server/overview/recap-week-text";
 import { getMyOpenTasks } from "@/server/tasks/queries";
@@ -93,6 +95,8 @@ export default async function InboxPage({
   const now = new Date();
   // The end of the week, when the composer nudges to post the recap (null other days).
   const recapFrom = recapWindowStart(now, effectiveTimezone(null, org));
+  // The CRM's follow-up queue (its positions read before the transaction).
+  const crmRoles = addOns.includes("crm") ? await rolePositions(org.id) : null;
 
   const data = await withOrgTx(org.id, async ({ db }) => {
     const me = await db.user.findUnique({ where: { id: user.id }, select: { timezone: true } });
@@ -161,7 +165,9 @@ export default async function InboxPage({
       take: EVENT_CHOICES,
       select: { id: true, title: true, startsAt: true, endsAt: true, allDay: true },
     });
+    const crm = crmRoles ? await crmInboxItems(db, org.id, user.id, orgSlug, crmRoles, now).catch(() => []) : [];
     return {
+      crm,
       tz,
       todayKey,
       state,
@@ -245,6 +251,8 @@ export default async function InboxPage({
       href: `${base}/forms/${f.id}?tab=responses&view=review`,
       peek: { kind: "form", id: f.id },
     })),
+    // People the CRM says to reach today (replies, steps, follow-ups, new ones).
+    ...data.crm.map((c): InboxRow => ({ ...c, kind: "crm", category: "assigned", peek: null })),
   ];
 
   const updates: InboxRow[] = data.notifications.map((n): InboxRow => {

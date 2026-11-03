@@ -305,6 +305,13 @@ export const saveRoutingAction = outreachAction(async (ctx, access, routing: Rou
   return {};
 });
 
+export const saveDailyCapAction = outreachAction(async (ctx, access, cap: number) => {
+  requireManager(access);
+  if (!Number.isInteger(cap) || cap < 10 || cap > 2000) throw new CrmError("Pick between 10 and 2,000.");
+  await ctx.db.crmSettings.update({ where: { organizationId: ctx.organizationId }, data: { dailySendCap: cap } });
+  return {};
+});
+
 export const saveFormDestinationAction = outreachAction(async (ctx, access, formId: string, dest: CrmDestination | null) => {
   if (!access.admin) throw new CrmError("Owners and admins set where a form's responses go.");
   await saveFormDestination(ctx, formId, dest);

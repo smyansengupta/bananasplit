@@ -51,6 +51,7 @@ export function ComposeButton({
   variant = "outline",
   replyTo,
   subject: initialSubject,
+  body: initialBody,
 }: {
   orgId: string;
   people: ComposePerson[];
@@ -62,6 +63,7 @@ export function ComposeButton({
   variant?: "outline" | "default" | "ghost" | "secondary";
   replyTo?: { messageId: string; subject: string | null } | null;
   subject?: string;
+  body?: string;
 }) {
   const [open, setOpen] = useState(false);
   const can = people.some((p) => p.email && !p.blocked);
@@ -87,6 +89,7 @@ export function ComposeButton({
           dealId={dealId}
           replyTo={replyTo ?? null}
           initialSubject={initialSubject}
+          initialBody={initialBody}
           onClose={() => setOpen(false)}
         />
       )}
@@ -110,6 +113,7 @@ export function ComposeDialog({
   dealId,
   replyTo,
   initialSubject,
+  initialBody,
   onClose,
   onSent,
 }: {
@@ -119,6 +123,7 @@ export function ComposeDialog({
   dealId?: string;
   replyTo: { messageId: string; subject: string | null } | null;
   initialSubject?: string;
+  initialBody?: string;
   onClose: () => void;
   onSent?: () => void;
 }) {
@@ -129,7 +134,7 @@ export function ComposeDialog({
   const [subject, setSubject] = useState(
     replyTo?.subject ? `Re: ${replyTo.subject.replace(/^re:\s*/i, "")}` : (initialSubject ?? ""),
   );
-  const [body, setBody] = useState(replyTo ? "" : "Hi {{first_name|there}},\n\n\n\n{{my_first_name}}");
+  const [body, setBody] = useState(replyTo ? "" : (initialBody ?? "Hi {{first_name|there}},\n\n\n\n{{my_first_name}}"));
   const [stage, setStage] = useState<Stage>({ kind: "write" });
   const [pending, setPending] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);

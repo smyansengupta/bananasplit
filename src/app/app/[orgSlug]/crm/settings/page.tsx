@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { CrmSettings, type FieldGroup, type PipelineRow } from "@/components/crm/crm-settings";
 import { CrmTabs } from "@/components/crm/crm-tabs";
+import { OutreachSettingsSection } from "@/components/crm/outreach/settings-section";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { COMPANY_FIELDS, PERSON_FIELDS } from "@/lib/crm/fields";
@@ -114,6 +115,7 @@ export default async function CrmSettingsPage({ params }: PageProps<"/app/[orgSl
         groups={data.groups}
         templates={SETUP_KINDS.filter((k) => PIPELINE_TEMPLATES[k] && !used.has(k))}
       />
+      <OutreachSettingsSection orgId={orgId} orgSlug={orgSlug} members={shell.members} />
     </div>
   );
 }

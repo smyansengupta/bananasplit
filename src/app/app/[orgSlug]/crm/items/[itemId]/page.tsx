@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { DealPeople } from "@/components/crm/deal-people";
 import { RecordActions } from "@/components/crm/record-actions";
+import { RecordOutreachSection } from "@/components/crm/outreach/record-section";
 import { RecordFields } from "@/components/crm/record-fields";
 import { RecordPage, Section, when } from "@/components/crm/record-page";
 import { Timeline } from "@/components/crm/timeline";
@@ -124,6 +125,7 @@ export default async function CrmItemPage({ params }: PageProps<"/app/[orgSlug]/
               people={data.people.map((p) => ({ id: p.person.id, name: p.person.name, role: p.role, sub: p.person.title }))}
             />
           </Section>
+          <RecordOutreachSection orgId={orgId} kind="deal" id={deal.id} />
           {data.linkedFrom.length > 0 && <LinkedFrom groups={data.linkedFrom} />}
           <LinkedSection orgId={orgId} orgSlug={orgSlug} at={{ kind: "crm-deal", id: deal.id }} title="Linked" />
         </>

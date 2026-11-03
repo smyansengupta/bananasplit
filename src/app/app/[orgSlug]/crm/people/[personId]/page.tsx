@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { RecordActions } from "@/components/crm/record-actions";
+import { PersonOutreachSection } from "@/components/crm/outreach/person-section";
 import { RecordFields } from "@/components/crm/record-fields";
 import { RecordPage, Section, StrengthBadge, when } from "@/components/crm/record-page";
 import { Timeline } from "@/components/crm/timeline";
@@ -135,6 +136,7 @@ export default async function CrmPersonPage({ params }: PageProps<"/app/[orgSlug
             />
             {others.length > 0 && <p className="text-muted-foreground text-sm">Also: {others.join(", ")}</p>}
           </Section>
+          <PersonOutreachSection orgId={orgId} personId={person.id} viewerId={shell.user.id} roles={shell.roles} members={shell.members} />
           {data.deals.length > 0 && (
             <Section title="Items">
               <ul className="space-y-2 text-sm">
