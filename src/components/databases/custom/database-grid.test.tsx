@@ -85,6 +85,7 @@ function db(overrides: Partial<CustomDatabase> = {}): CustomDatabase {
     canDelete: true,
     deleteBlocked: null,
     reportCount: 0,
+    labels: {},
     ...overrides,
   };
 }

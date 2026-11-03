@@ -16,6 +16,11 @@ import { normalizePhone } from "@/lib/rsvp/format";
  *   SELECT                                a choice id
  *   MULTI_SELECT                          choice ids, in choice order
  *   MEMBER                                a member's user id
+ *   RELATION                              [{kind, id}]: CRM people, companies,
+ *                                         pipeline items, or rows of another
+ *                                         database (kind "record")
+ *   AI                                    what its output type stores (text,
+ *                                         a number, a choice id or a link)
  */
 
 export const FIELD_TYPES = [
@@ -31,6 +36,8 @@ export const FIELD_TYPES = [
   "EMAIL",
   "PHONE",
   "URL",
+  "RELATION",
+  "AI",
 ] as const;
 
 export type FieldType = (typeof FIELD_TYPES)[number];
@@ -48,7 +55,47 @@ export const FIELD_TYPE_META: Record<FieldType, { label: string; icon: string; h
   EMAIL: { label: "Email", icon: "Mail", hint: "An email address." },
   PHONE: { label: "Phone", icon: "Phone", hint: "A phone number." },
   URL: { label: "Link", icon: "Link", hint: "A web address." },
+  RELATION: {
+    label: "Relation",
+    icon: "Link2",
+    hint: "Points at people, companies, pipeline items or rows of another database.",
+  },
+  AI: { label: "AI", icon: "Sparkles", hint: "Filled by AI from a prompt, row by row." },
 };
+
+/** What a RELATION field points at (FieldOptions.target.kind). */
+export const RELATION_KINDS = ["person", "company", "deal", "record"] as const;
+export type RelationKind = (typeof RELATION_KINDS)[number];
+
+export const RELATION_KIND_LABELS: Record<RelationKind, string> = {
+  person: "People",
+  company: "Companies",
+  deal: "Pipeline items",
+  record: "Rows of a database",
+};
+
+/** One link in a RELATION value. */
+export type RelationRef = {
+  kind: RelationKind;
+  id: string;
+};
+
+/** Most links one RELATION cell holds. */
+export const MAX_RELATION_LINKS = 50;
+
+/** What an AI field writes. */
+export const AI_OUTPUTS = ["TEXT", "SELECT", "NUMBER", "URL"] as const;
+export type AiOutput = (typeof AI_OUTPUTS)[number];
+
+export const AI_OUTPUT_LABELS: Record<AiOutput, string> = {
+  TEXT: "Text",
+  SELECT: "One of a list",
+  NUMBER: "A number",
+  URL: "A link",
+};
+
+/** Why an AI field's Fill button is off for now (filling it is a later phase). */
+export const AI_FILL_PENDING = "Filling AI fields on your organization's own key comes next.";
 
 /** Choice colours: the usual tag palette, legible on light and dark themes alike. */
 export const CHOICE_COLORS = [
@@ -98,6 +145,29 @@ export const fieldOptionsSchema = z
   .object({
     choices: z.array(choiceSchema).max(LIMITS.choicesPerField).optional(),
     decimals: z.number().int().min(0).max(4).optional(),
+    /**
+     * RELATION: what it links to. `databaseId` names the database for
+     * "record" (any database of the organization) and narrows "deal" to one
+     * pipeline's database.
+     */
+    target: z
+      .object({
+        kind: z.enum(RELATION_KINDS),
+        databaseId: z
+          .string()
+          .regex(/^[A-Za-z0-9_-]{1,64}$/)
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    /** RELATION: one link only (default: many). */
+    single: z.boolean().optional(),
+    /** AI: what to ask for each row. */
+    prompt: z.string().trim().max(2000).optional(),
+    /** AI: the kind of value it writes. */
+    output: z.enum(AI_OUTPUTS).optional(),
+    /** AI: search the web first (on the organization's own Tavily key). */
+    research: z.boolean().optional(),
   })
   .strict();
 export type FieldOptions = z.infer<typeof fieldOptionsSchema>;
@@ -130,7 +200,42 @@ export function choiceId(): string {
 }
 
 export type CellResult = { ok: true; value: StoredValue | null } | { ok: false; error: string };
-export type StoredValue = string | number | boolean | string[];
+export type StoredValue = string | number | boolean | string[] | RelationRef[];
+
+const REF_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * A RELATION value as stored: links in order, each once. Anything malformed
+ * is left out (never throws), so a stale or hand-edited value still reads.
+ */
+export function readRelation(value: unknown): RelationRef[] {
+  const raw = Array.isArray(value) ? value : value && typeof value === "object" ? [value] : [];
+  const out: RelationRef[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const { kind, id } = item as { kind?: unknown; id?: unknown };
+    if (typeof kind !== "string" || !(RELATION_KINDS as readonly string[]).includes(kind)) continue;
+    if (typeof id !== "string" || !REF_ID.test(id)) continue;
+    const key = `${kind}:${id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ kind: kind as RelationKind, id });
+  }
+  return out;
+}
+
+/** The field type an AI field's value is stored as. */
+export function aiStoredType(options: FieldOptions): FieldType {
+  const output = options.output ?? "TEXT";
+  return output === "SELECT"
+    ? "SELECT"
+    : output === "NUMBER"
+      ? "NUMBER"
+      : output === "URL"
+        ? "URL"
+        : "TEXT";
+}
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -285,6 +390,31 @@ export function parseCell(
         ? { ok: true, value: s }
         : { ok: false, error: "Enter a link like example.com." };
     }
+    case "RELATION": {
+      // Links are picked, never typed: a pasted name can't say which record it means.
+      if (typeof input !== "object") return { ok: false, error: "Pick what it links to." };
+      const refs = readRelation(input);
+      if (refs.length === 0) return { ok: false, error: "Pick what it links to." };
+      const target = field.options.target?.kind;
+      if (target && refs.some((r) => r.kind !== target)) {
+        return { ok: false, error: "Pick from what this field links to." };
+      }
+      const max = field.options.single ? 1 : MAX_RELATION_LINKS;
+      if (refs.length > max) {
+        return {
+          ok: false,
+          error: max === 1 ? "This field links to one record." : `Link at most ${max}.`,
+        };
+      }
+      return { ok: true, value: refs };
+    }
+    case "AI":
+      // Whatever its output type would store (a person can also type it in).
+      return parseCell(
+        { type: aiStoredType(field.options), options: field.options },
+        input,
+        members,
+      );
   }
 }
 
@@ -302,6 +432,12 @@ export function convertValue(
   members?: ReadonlyMap<string, string>,
 ): StoredValue | null {
   const memberIds = members ? new Set(members.keys()) : undefined;
+  // Links mean nothing as text, and text can't say which record it means.
+  if (from.type === "RELATION" || to.type === "RELATION") {
+    if (from.type !== to.type) return null;
+    const same = parseCell(to, value);
+    return same.ok ? same.value : null;
+  }
   // Between single and multi-select the choices carry over, ids and all.
   if (hasChoices(from.type) && hasChoices(to.type)) {
     const same = parseCell(to, value, memberIds);
@@ -392,6 +528,16 @@ export function displayText(
       return memberNames.get(String(value)) ?? "";
     case "CURRENCY":
       return typeof value === "number" ? `$${value.toFixed(2)}` : "";
+    case "RELATION": {
+      const n = readRelation(value).length;
+      return n === 0 ? "" : n === 1 ? "1 link" : `${n} links`;
+    }
+    case "AI":
+      return displayText(
+        { type: aiStoredType(field.options), options: field.options },
+        value,
+        memberNames,
+      );
     default:
       return String(value);
   }
