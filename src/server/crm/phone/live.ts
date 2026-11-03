@@ -1,4 +1,5 @@
 import { appUrl } from "@/lib/app-url";
+import { missingKeyMessage } from "@/lib/crm/org-keys";
 import { maskNumber } from "@/lib/crm/phone";
 import { withSystemOrgTx } from "@/server/db/context";
 
@@ -29,7 +30,7 @@ export type SoftphoneToken =
 /** A token for this member's browser (Telnyx: a login token on the org's credential; Twilio: a signed access token). */
 export async function softphoneToken(organizationId: string, userId: string): Promise<SoftphoneToken> {
   const conn = await loadPhoneConnection(organizationId);
-  if (!conn) throw new CrmError("Connect Telnyx or Twilio on Integrations and apps to call from here.");
+  if (!conn) throw new CrmError(missingKeyMessage("Telnyx or Twilio"));
   if (!conn.number) throw new CrmError("Pick the number calls go out from on Integrations and apps.");
   try {
     if (conn.provider === "telnyx") {

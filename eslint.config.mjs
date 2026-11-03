@@ -442,6 +442,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Claude Code's local worktrees (each a full checkout with its own lint).
     ".claude/**",
+    // Cloudflare Workers (workers/*): their own package, runtime and deploy.
+    "workers/**",
   ]),
 ]);
 

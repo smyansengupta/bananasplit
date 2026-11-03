@@ -1,4 +1,5 @@
 import type { CrmCallStatus, CrmDirection, Prisma } from "@/generated/prisma/client";
+import { missingKeyMessage } from "@/lib/crm/org-keys";
 import { CALL_OUTCOMES, formatDuration, outcomeLabel, toE164 } from "@/lib/crm/phone";
 import type { TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
@@ -7,6 +8,7 @@ import { CrmError, type CrmActor } from "../access";
 import { logActivity, type ActivityTarget } from "../activity";
 import { emitCrmEvent } from "../events";
 import { closeStep } from "../outreach/sequences";
+import { billedMinutes, meterUseIn } from "../spend";
 import { readPhoneStatus } from "./connection";
 
 /**
@@ -259,7 +261,7 @@ export interface StartedCall {
 export async function startCall(actor: CrmActor, input: { personId: string; record?: boolean; dealId?: string | null }): Promise<StartedCall> {
   const { db, organizationId, userId } = actor;
   const status = await readPhoneStatus(db, organizationId);
-  if (!status.active) throw new CrmError("Connect Telnyx or Twilio on Integrations and apps to call from here.");
+  if (!status.active) throw new CrmError(missingKeyMessage("Telnyx or Twilio"));
   const prov = status.active === "telnyx" ? status.telnyx : status.twilio;
   if (!prov.softphone) throw new CrmError("Calling from the browser isn't set up yet. An admin finishes it on Integrations and apps.");
   if (!status.number) throw new CrmError("Pick the number calls go out from on Integrations and apps.");
@@ -346,6 +348,12 @@ export async function applyCallEvent(
     if (outcome) data.outcome = outcome;
   }
   if (Object.keys(data).length > 0) await db.crmCall.update({ where: { id: call.id }, data });
+  // The provider bills the organization's own account by the minute: meter
+  // it once, the first time the provider tells us how long the call was.
+  const minutes = call.durationSec === null && typeof data.durationSec === "number" ? billedMinutes(data.durationSec) : 0;
+  if (minutes > 0 && (call.provider === "telnyx" || call.provider === "twilio")) {
+    await meterUseIn(db, { organizationId, userId: call.userId, feature: "crm.call", provider: call.provider, what: "call.minute", units: minutes });
+  }
   if (FINAL.has(status) && (!call.activityId || data.durationSec !== undefined || data.outcome !== undefined)) {
     const first = !call.activityId;
     await syncCallActivity(db, organizationId, call.id);

@@ -7,12 +7,12 @@ import { mapDescribed, type DescribeContext } from "@/lib/crm/describe";
 import { parsePeriodKey } from "@/lib/crm/forecast";
 import { STARTER_RULES } from "@/lib/crm/scoring";
 import type { WorkflowObject } from "@/lib/crm/workflows";
+import { ORG_KEYS_PLACE } from "@/lib/crm/org-keys";
 import { CrmValidationError } from "@/lib/crm/validate";
 import { checkRateLimit, rateLimitKey, retryAfterText } from "@/lib/rate-limit";
-import { resolveAiCredentials } from "@/server/ai/connections";
 import { AiImportError } from "@/server/ai/generate";
 import { CrmError, requireCrm, requireManager } from "@/server/crm/access";
-import { checkAiCap, crmGenerate, recordAiUsage } from "@/server/crm/ai";
+import { assertUnderCap, crmCredentials, crmGenerate, paidByOf, providerOf, recordAiUsage } from "@/server/crm/ai";
 import { updateDeal } from "@/server/crm/deals";
 import { describeContext, describeRequest } from "@/server/crm/describe";
 import { saveForecastCall } from "@/server/crm/forecast";
@@ -21,7 +21,7 @@ import { deleteScoreRule, saveScoreRule } from "@/server/crm/scoring";
 import { dryRunWorkflow, type DryRunResult } from "@/server/crm/workflow-engine";
 import { deleteWorkflow, enableRecipe, parseWorkflowInput, saveWorkflow, setWorkflowStatus } from "@/server/crm/workflows";
 import { AppError } from "@/server/db/errors";
-import { SpaceRefusedError, withOrgAction, type OrgContext } from "@/server/db/context";
+import { SpaceRefusedError, withOrgAction, withSystemOrgTx, type OrgContext } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 
 /**
@@ -115,7 +115,6 @@ export async function describeWorkflowAction(
     context = await withOrgAction(
       async (ctx) => {
         requireManager(await requireCrm(ctx));
-        await checkAiCap(ctx.db, organizationId);
         return describeContext(ctx.db, organizationId);
       },
       { feature: "crm" },
@@ -126,35 +125,34 @@ export async function describeWorkflowAction(
   const user = await requireUser();
   const hit = await checkRateLimit(rateLimitKey("crm-describe", organizationId, user.id), DESCRIBE_PER_HOUR, 60 * 60);
   if (!hit.allowed) return { ok: false, error: `That's a lot of automations described. Try again ${retryAfterText(hit)}.` };
-  const creds = await resolveAiCredentials(organizationId, null);
+  // The organization's own key only (never Bananasplit's), and the cap on
+  // the service path so it counts everyone's spend.
+  const creds = await crmCredentials(organizationId);
   if (!creds) {
     return {
       ok: false,
       noAi: true,
-      error:
-        "Connect an AI model (Claude or another) under Integrations and apps, and this turns a sentence into the steps for you, on your organization's own key. Until then, build it with the steps below.",
+      error: `Add your organization's Claude or OpenAI key in ${ORG_KEYS_PLACE}, and this turns a sentence into the steps for you, on your own key. Until then, build it with the steps below.`,
     };
   }
   let result;
   try {
+    await assertUnderCap(organizationId);
     result = await crmGenerate(creds, describeRequest(sentence, context));
   } catch (error) {
     return { ok: false, error: words(error) };
   }
   try {
-    await withOrgAction(
-      async (ctx) => {
-        await recordAiUsage(ctx.db, {
-          organizationId,
-          userId: ctx.userId,
-          feature: "crm.describe-workflow",
-          provider: creds.id,
-          result,
-          paidBy: creds.id === "platform" ? "PLATFORM" : "ORG_KEY",
-        });
-      },
-      { feature: "crm" },
-    )(organizationId);
+    await withSystemOrgTx(organizationId, ({ db }) =>
+      recordAiUsage(db, {
+        organizationId,
+        userId: user.id,
+        feature: "crm.describe-workflow",
+        provider: providerOf(creds),
+        result,
+        paidBy: paidByOf(creds),
+      }),
+    );
   } catch {
     // The meter is best effort here; the draft is still shown.
   }

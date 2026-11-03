@@ -1,0 +1,10 @@
+# Cloudflare Email Worker for the CRM's inbound mail (see README.md).
+# No secrets here: INBOUND_SECRET is set with `wrangler secret put INBOUND_SECRET`.
+
+name = "bananasplit-crm-inbound"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+[vars]
+# Your app's inbound endpoint. Replace the host with your deployment's.
+INBOUND_URL = "https://your-app.example.com/api/crm/inbound"

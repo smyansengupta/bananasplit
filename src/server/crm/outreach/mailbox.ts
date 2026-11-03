@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { CrmMailbox } from "@/generated/prisma/client";
+import { ORG_KEYS_PLACE } from "@/lib/crm/org-keys";
 import { assertNoTx } from "@/server/db/context";
 import { domainOf, platformFrom } from "@/server/email/config";
 import { displayName } from "@/server/email/escape";
@@ -42,6 +43,8 @@ export interface SentEmail {
   mailbox: CrmMailbox;
   providerId: string | null;
   from: string;
+  /** Whose account sent it: the organization's own Resend key, or ours (one-to-one fallback). */
+  paidBy: "ORG_KEY" | "PLATFORM";
 }
 
 /** The sender check bulk email needs: the organization's own domain, verified (SPF and DKIM) in Resend. */
@@ -68,7 +71,7 @@ export function senderCheckOf(routing: OrgMailRouting): SenderCheck {
     from: null,
     domain: null,
     problem:
-      "Bulk email goes out only from your organization's own domain. Connect an email sender in Integrations and apps and verify its domain in Resend (that sets up SPF and DKIM).",
+      `Bulk email goes out only from your organization's own domain. Add your Resend key and sender in ${ORG_KEYS_PLACE} and verify the domain in Resend (that sets up SPF and DKIM).`,
   };
 }
 
@@ -111,6 +114,7 @@ export async function sendFromMailbox(input: {
   const person = input.senderName?.trim();
   let from: string;
   let apiKey: string | null | undefined;
+  let paidBy: SentEmail["paidBy"] = "ORG_KEY";
   if (routing.mode === "org" && routing.integrationId && routing.sender) {
     apiKey = await getSecret({ orgId: input.organizationId, integrationId: routing.integrationId, kind: "API_KEY" });
     const org = routing.sender.fromName ?? routing.orgName;
@@ -119,7 +123,11 @@ export async function sendFromMailbox(input: {
     if (input.purpose === "bulk") {
       throw new EmailConfigError("bulk email needs the organization's own verified sender");
     }
+    // The documented fallback (docs/features/crm.md, "Whose keys pay for
+    // what"): one-to-one and sequence mail may go from our sender on the
+    // organization's behalf until it verifies its own. Bulk never does.
     apiKey = process.env.RESEND_API_KEY;
+    paidBy = "PLATFORM";
     const label = person ? `${person} at ${routing.orgName} via Bananasplit` : `${routing.orgName} via Bananasplit`;
     from = `"${displayName(label)}" <${platformNoReplyAddress()}>`;
   }
@@ -137,7 +145,7 @@ export async function sendFromMailbox(input: {
     },
     { idempotencyKey: `crm:${input.idempotencyKey}`, signal: input.signal },
   );
-  return { mailbox: "ORG_SENDER", providerId: result.id, from };
+  return { mailbox: "ORG_SENDER", providerId: result.id, from, paidBy };
 }
 
 /** Where replies come back: CRM_INBOUND_DOMAIN (the Cloudflare Email Worker's domain), if set. */

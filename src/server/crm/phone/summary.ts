@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { resolveAiCredentials } from "@/server/ai/connections";
+import { NO_AI_KEY_MESSAGE } from "@/lib/crm/org-keys";
 import { AiImportError } from "@/server/ai/generate";
 import { withSystemOrgTx } from "@/server/db/context";
 
-import { checkAiCap, crmGenerate, recordAiUsage } from "../ai";
+import { checkAiCap, crmCredentials, crmGenerate, paidByOf, providerOf, recordAiUsage } from "../ai";
 
 /**
  * A call's or voice note's transcript summed up into notes and next steps,
@@ -55,10 +55,9 @@ export async function summarizeTranscript(
     if (error instanceof AiImportError) return { ok: false, reason: "cap", message: error.message };
     throw error;
   }
-  const creds = await resolveAiCredentials(organizationId, null);
-  if (!creds) {
-    return { ok: false, reason: "no-ai", message: "Connect Claude or another model on Integrations and apps for summaries." };
-  }
+  // The organization's own key only, never Bananasplit's.
+  const creds = await crmCredentials(organizationId);
+  if (!creds) return { ok: false, reason: "no-ai", message: NO_AI_KEY_MESSAGE };
   try {
     const result = await crmGenerate(creds, {
       system: SYSTEM,
@@ -79,9 +78,9 @@ export async function summarizeTranscript(
         organizationId,
         userId: input.userId ?? null,
         feature: input.kind === "call" ? "crm.call-summary" : "crm.voice-note-summary",
-        provider: creds.id,
+        provider: providerOf(creds),
         result,
-        paidBy: creds.id === "platform" ? "PLATFORM" : "ORG_KEY",
+        paidBy: paidByOf(creds),
       }),
     );
     return { ok: true, summary: result.data };

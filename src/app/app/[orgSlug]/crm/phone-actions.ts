@@ -7,6 +7,7 @@ import { CrmError } from "@/server/crm/access";
 import { logCall, startCall, type LogCallInput, type StartedCall } from "@/server/crm/phone/calls";
 import { dropVoicemail, softphoneToken, startRecording, type SoftphoneToken } from "@/server/crm/phone/live";
 import { addTextSender, queueText, setConsent } from "@/server/crm/phone/texts";
+import { assertCanSpend, costOf, textSegments } from "@/server/crm/spend";
 
 import { crmAction, crmGate, toResult, type CrmResult } from "./run";
 
@@ -19,15 +20,27 @@ import { crmAction, crmGate, toResult, type CrmResult } from "./run";
 
 export const logCallAction = crmAction(async (ctx, _access, input: LogCallInput) => logCall(ctx, input));
 
-export const startCallAction = crmAction(
+const startCallTx = crmAction(
   async (ctx, _access, input: { personId: string; record?: boolean }): Promise<{ call: StartedCall }> => ({
     call: await startCall(ctx, input),
   }),
 );
 
+/** A call on the organization's own provider: refused past the monthly spending cap. */
+export async function startCallAction(orgId: string, input: { personId: string; record?: boolean }): Promise<CrmResult<{ call: StartedCall }>> {
+  try {
+    await crmGate(orgId);
+    await assertCanSpend(orgId, costOf("call.minute"));
+  } catch (error) {
+    return toResult(error);
+  }
+  return startCallTx(orgId, input);
+}
+
 export async function softphoneTokenAction(orgId: string): Promise<CrmResult<{ phone: SoftphoneToken }>> {
   try {
     const me = await crmGate(orgId);
+    await assertCanSpend(orgId, costOf("call.minute"));
     return { ok: true, phone: await softphoneToken(orgId, me.userId) };
   } catch (error) {
     return toResult(error);
@@ -92,10 +105,25 @@ export const addTextSenderAction = crmAction(async (ctx, _access, textId: string
   addTextSender(ctx, String(textId), typeof name === "string" ? name : null),
 );
 
-export const sendTextAction = crmAction(async (ctx, _access, personId: string, body: string) => {
+const sendTextTx = crmAction(async (ctx, _access, personId: string, body: string) => {
   const r = await queueText(ctx, { personId, body: String(body ?? "") });
   return { textId: r.textId, waiting: r.waiting, sendAt: r.sendAt.toISOString() };
 });
+
+/** A text on the organization's own number: refused past the monthly spending cap. */
+export async function sendTextAction(
+  orgId: string,
+  personId: string,
+  body: string,
+): Promise<CrmResult<{ textId: string; waiting: boolean; sendAt: string }>> {
+  try {
+    await crmGate(orgId);
+    await assertCanSpend(orgId, costOf("text.segment", textSegments(String(body ?? ""))));
+  } catch (error) {
+    return toResult(error);
+  }
+  return sendTextTx(orgId, personId, body);
+}
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
