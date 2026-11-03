@@ -40,6 +40,7 @@ export function CrmCard({
   actions,
   menu,
   menuLabel = "More",
+  strip,
   tabs,
   tab,
   defaultTab,
@@ -60,6 +61,8 @@ export function CrmCard({
   /** DropdownMenuItems for the round "…" (none, no "…"). */
   menu?: ReactNode;
   menuLabel?: string;
+  /** A row between the title and the tabs (a deal's stage pills). */
+  strip?: ReactNode;
   tabs?: readonly CrmCardTab[];
   tab?: string;
   defaultTab?: string;
@@ -119,6 +122,7 @@ export function CrmCard({
               </Button>
             </div>
           </div>
+          {strip}
           {tabs && tabs.length > 0 && (
             <Segmented
               label={`${plainTitle}: sections`}

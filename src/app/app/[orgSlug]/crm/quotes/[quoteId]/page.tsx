@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { CrmTabs } from "@/components/crm/crm-tabs";
@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { readAddOns } from "@/lib/addons";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
+import { crmRecordHref } from "@/lib/crm/href";
 import { effectiveStatus, KIND_WORD, type QuoteKind } from "@/lib/crm/quotes";
 import { withOrgTx } from "@/server/db/context";
 
@@ -14,8 +15,14 @@ import { crmShell } from "../../shell";
 
 export const metadata = { title: "Quote" };
 
-export default async function CrmQuotePage({ params }: PageProps<"/app/[orgSlug]/crm/quotes/[quoteId]">) {
+/**
+ * A quote or invoice with every detail (tax, notes, dates, copy, move, mark
+ * paid). One that belongs to a deal opens on the deal card's Quote tab
+ * instead; that tab's "All details" comes back here with ?edit=1.
+ */
+export default async function CrmQuotePage({ params, searchParams }: PageProps<"/app/[orgSlug]/crm/quotes/[quoteId]">) {
   const { orgSlug, quoteId } = await params;
+  const sp = await searchParams;
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const orgId = shell.org.id;
@@ -37,6 +44,7 @@ export default async function CrmQuotePage({ params }: PageProps<"/app/[orgSlug]
   });
   if (!data) notFound();
   const { q, person } = data;
+  if (q.dealId && sp.edit !== "1") redirect(`${crmRecordHref(orgSlug, "deal", q.dealId)}&tab=quote`);
   const kind: QuoteKind = q.kind === "invoice" ? "invoice" : "quote";
   const view: QuoteView = {
     id: q.id,
@@ -65,7 +73,10 @@ export default async function CrmQuotePage({ params }: PageProps<"/app/[orgSlug]
   return (
     <div className="space-y-6">
       <CrmTabs tabs={shell.tabs} />
-      <BackLink href={`/app/${orgSlug}/crm/quotes`} label="Quotes" />
+      <BackLink
+        href={q.deal ? `${crmRecordHref(orgSlug, "deal", q.deal.id)}&tab=quote` : `/app/${orgSlug}/crm/quotes`}
+        label={q.deal ? q.deal.title : "Quotes"}
+      />
       <PageHeader title={`${KIND_WORD[kind].title} ${q.number}`} />
       <QuoteEditor orgId={orgId} orgSlug={orgSlug} quote={view} canBook={canBook} />
     </div>
