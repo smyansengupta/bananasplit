@@ -20,7 +20,7 @@ export async function LogOverlay({ shell, orgSlug }: OverlayProps<"log">) {
   return (
     <LogCard
       orgId={orgId}
-      settingsHref={`/app/${orgSlug}/crm/automations`}
+      settingsHref={`/app/${orgSlug}/crm/settings/automations`}
       entries={entries.map((e) => ({
         id: e.id,
         kind: e.kind,
