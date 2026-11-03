@@ -57,7 +57,7 @@ export function TemplatesView({ orgId, templates, canEditAll }: { orgId: string;
       {templates.length === 0 ? (
         <EmptyState icon={FileText} title="No templates yet" description="Write one message once, then send it to anyone with their own name and history in it." />
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
           {templates.map((t) => (
             <li key={t.id} className="bg-card ring-foreground/6 rounded-card flex flex-col gap-2 p-4 ring-1">
               <div className="flex items-start gap-2">
@@ -158,7 +158,7 @@ function TemplateDialog({
           <DialogTitle>{template ? "Edit template" : "New template"}</DialogTitle>
           <DialogDescription>Fields in double braces fill in for each person. Add a fallback after a bar: {"{{first_name|there}}"}.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
           <div className="space-y-3">
             <label className="grid gap-1.5 text-sm">
               <span className="text-muted-foreground">Name</span>

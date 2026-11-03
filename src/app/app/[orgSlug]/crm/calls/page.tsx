@@ -121,7 +121,7 @@ export default async function CrmCallsPage({ params, searchParams }: PageProps<"
           stepId: p.stepId,
         }))}
       />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
         <Card className="gap-3 p-5">
           <h2 className="heading text-base">Your recent calls</h2>
           {data.calls.length === 0 ? (

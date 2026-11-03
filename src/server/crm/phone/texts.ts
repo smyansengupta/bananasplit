@@ -318,6 +318,8 @@ export async function addTextSender(actor: CrmActor, textId: string, name: strin
       subject: keyword === "stop" ? "Texted STOP" : keyword === "start" ? "Texted START" : keyword === "help" ? "Texted HELP" : "Text in",
       body: t.body,
       occurredAt: t.sentAt,
+      // Added by the member, under their row-level rules (the text itself is from the person).
+      createdById: actor.userId,
       sourceKind: "text",
       sourceId: t.id,
       targets: [{ kind: "person", id: person.id }, ...(person.companyId ? [{ kind: "company" as const, id: person.companyId }] : [])],

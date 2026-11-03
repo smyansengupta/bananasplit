@@ -144,7 +144,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
       <QueueSection orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} members={shell.members} everyone={everyone} />
       <CrmTodayKeys hrefs={order.map((i) => crmRecordHref(orgSlug, i.targetKind, i.id))} />
       <TodayCalls orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
         {GROUPS.map((g) => {
           const items = data.lists[g.kind];
           const Icon = g.icon;

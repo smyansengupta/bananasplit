@@ -76,7 +76,7 @@ function SourceCard({
         <span className="bg-muted grid size-8 shrink-0 place-items-center rounded-full">
           <ReportIcon name={source.icon} className="size-4" />
         </span>
-        <b className="min-w-0 flex-1 truncate">{source.name}</b>
+        <b className="min-w-0 flex-1 leading-snug break-words">{source.name}</b>
         {on && <Check className="size-4" aria-hidden="true" />}
       </span>
       <span className="text-muted-foreground line-clamp-2 text-[13px]">

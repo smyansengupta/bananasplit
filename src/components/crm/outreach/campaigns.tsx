@@ -132,7 +132,7 @@ export function ListsAndCampaigns({
         {active.length === 0 ? (
           <EmptyState icon={Megaphone} title="No campaigns running" description="Pick a list, a goal and a date, and split it among members. Everyone gets their share in their queue." />
         ) : (
-          <ul className="grid gap-3 md:grid-cols-2">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             {active.map((c) => (
               <CampaignTile key={c.id} orgSlug={orgSlug} c={c} />
             ))}
@@ -192,7 +192,7 @@ export function ListsAndCampaigns({
       {past.length > 0 && (
         <section className="space-y-3">
           <h2 className="heading text-lg">Done and bulk sends</h2>
-          <ul className="grid gap-3 md:grid-cols-2">
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             {past.map((c) => (
               <CampaignTile key={c.id} orgSlug={orgSlug} c={c} />
             ))}

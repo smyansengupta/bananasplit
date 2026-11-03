@@ -68,7 +68,7 @@ export function SequencesList({ orgId, orgSlug, sequences }: { orgId: string; or
       {sequences.length === 0 ? (
         <EmptyState icon={Repeat} title="No sequences yet" description="A first email, a nudge three days later, a call a week on. It stops the moment they reply." />
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
           {sequences.map((s) => {
             const started = s.active + s.replied + s.finished;
             return (

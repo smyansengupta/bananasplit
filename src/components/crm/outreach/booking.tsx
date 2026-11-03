@@ -56,7 +56,7 @@ export function BookingList({ orgId, orgSlug, pages }: { orgId: string; orgSlug:
       {pages.length === 0 ? (
         <EmptyState icon={CalendarClock} title="No booking pages yet" description="Share one link and people pick a time you're free. It lands in Meetings and on their timeline." />
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
           {pages.map((p) => (
             <li key={p.id} className="bg-card ring-foreground/6 rounded-card flex flex-col gap-2 p-4 ring-1">
               <div className="flex items-center gap-2">
@@ -182,7 +182,7 @@ export function BookingEditor({
     router.refresh();
   };
   return (
-    <div className="grid max-w-4xl gap-5 lg:grid-cols-2">
+    <div className="grid max-w-4xl grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
       <section className="bg-card ring-foreground/6 rounded-card space-y-3 p-5 ring-1">
         <label className="grid gap-1.5 text-sm">
           <span className="text-muted-foreground">Title</span>
@@ -230,7 +230,7 @@ export function BookingEditor({
               </button>
             ))}
           </div>
-          <p className="text-muted-foreground text-xs">Times come from each host&apos;s availability on their profile and the meetings on their calendar.</p>
+          <p className="text-muted-foreground text-xs">Times come from each host&apos;s availability on their profile (weekdays 9 to 5 for anyone who hasn&apos;t set it) and the meetings on their calendar.</p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-sm">
           <label className="grid gap-1">

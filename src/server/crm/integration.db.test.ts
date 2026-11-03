@@ -46,6 +46,7 @@ import { createSequence, crmSequenceJob, enroll, saveSequence, setSequenceStatus
 import { createTemplate } from "./outreach/templates";
 import { createPerson } from "./people";
 import { logCall } from "./phone/calls";
+import { addTextSender } from "./phone/texts";
 import { openCallSteps } from "./phone/queue";
 import { listQueue } from "./review";
 import { runSetup } from "./setup";
@@ -317,6 +318,21 @@ describe("the CRM's phases together", () => {
     // Kai's reply waits on the owner, the Review row, and the signal.
     expect(counts.needsYou.crm).toBeGreaterThanOrEqual(2);
     expect(counts.needsYou.signals).toBe(1);
+  });
+
+  it("adds someone who texted from an unknown number as a person, their texts on their timeline", async () => {
+    if (!reachable) return;
+    await ownerDb.crmTextMessage.createMany({
+      data: [
+        { id: `tx1_${tag}`, organizationId: org, direction: "INBOUND", fromNumber: "+15555550188", toNumber: "+15555550100", body: "Is build night on?", provider: "twilio", status: "received", sentAt: new Date(Date.now() - 60_000) },
+        { id: `tx2_${tag}`, organizationId: org, direction: "INBOUND", fromNumber: "+15555550188", toNumber: "+15555550100", body: "STOP", provider: "twilio", status: "received", sentAt: new Date() },
+      ],
+    });
+    const { personId } = await as(member, (ctx) => addTextSender(ctx, `tx1_${tag}`, "Sam Ortiz"));
+    const sam = await ownerDb.crmPerson.findUniqueOrThrow({ where: { id: personId } });
+    expect(sam).toMatchObject({ name: "Sam Ortiz", phone: "+15555550188", doNotContact: true });
+    expect(await ownerDb.crmTextMessage.count({ where: { organizationId: org, personId } })).toBe(2);
+    expect(await ownerDb.crmActivity.count({ where: { organizationId: org, kind: "TEXT", sourceKind: "text", targets: { some: { targetId: personId } } } })).toBe(2);
   });
 
   it("reads a close on its day in the organization's timezone", async () => {

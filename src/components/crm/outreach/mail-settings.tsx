@@ -52,7 +52,7 @@ export function MailSettings({
     router.refresh();
   };
   return (
-    <div className="grid max-w-4xl gap-5 lg:grid-cols-2">
+    <div className="grid max-w-4xl grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
       <section className="bg-card ring-foreground/6 rounded-card space-y-3 p-5 ring-1">
         <h2 className="heading text-base">Your logging address</h2>
         {initial.bccAddress ? (

@@ -100,7 +100,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
           {data.left.length > 0 && (
             <section className="space-y-3">
               <h2 className="heading text-lg">Members who left</h2>
-              <ul className="grid gap-3 md:grid-cols-2">
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
                 {data.left.map((l) => (
                   <HandOverCard key={l.userId} orgId={orgId} from={{ ...l, left: true }} choices={choices} />
                 ))}
@@ -115,7 +115,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
             <section className="space-y-3">
               <h2 className="heading text-lg">Changing roles</h2>
               <p className="text-muted-foreground text-sm">Hand someone&apos;s relationships to whoever takes over, or to a position so they follow it.</p>
-              <ul className="grid gap-3 md:grid-cols-2">
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
                 {data.members.map((m) => (
                   <HandOverCard key={m.userId} orgId={orgId} from={{ ...m, left: false }} choices={choices} />
                 ))}
@@ -126,7 +126,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
       ) : data.briefs.length === 0 ? (
         <p className="text-muted-foreground text-[15px]">Nobody has been handed to you lately.</p>
       ) : (
-        <ul className="grid gap-3 lg:grid-cols-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
           {data.briefs.map((b) => (
             <li key={b.id} className="bg-card ring-foreground/6 rounded-card space-y-2 p-5 ring-1">
               <Link href={`/app/${orgSlug}/crm/people/${b.id}`} className="heading text-[15px] hover:underline">

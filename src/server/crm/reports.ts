@@ -27,6 +27,13 @@ function day(d: Date | null | undefined): string | undefined {
   return d ? d.toISOString().slice(0, 10) : undefined;
 }
 
+/**
+ * When a row was added, as a date field and first among them, so a report's
+ * suggested widgets ("New members added", "by week") count rows by when they
+ * came in rather than by a date most rows leave empty (Expected).
+ */
+const ADDED: ReportField = { id: "added", name: "Added", type: "DATE" };
+
 export function isCrmDatabaseKind(kind: DatabaseKind): boolean {
   return kind === "CRM_PEOPLE" || kind === "CRM_COMPANIES" || kind === "CRM_PIPELINE";
 }
@@ -46,6 +53,7 @@ export async function crmReportFields(
     const settings = await db.crmSettings.findUnique({ where: { organizationId }, select: { relationshipTypes: true } });
     const types = (Array.isArray(settings?.relationshipTypes) ? settings.relationshipTypes : []) as { id: string; label: string }[];
     return [
+      ADDED,
       { id: "status", name: "Status", type: "SELECT", choices: STATUS_CHOICES },
       {
         id: "relationship",
@@ -65,6 +73,7 @@ export async function crmReportFields(
   }
   if (def.kind === "CRM_COMPANIES") {
     return [
+      ADDED,
       { id: "status", name: "Status", type: "SELECT", choices: STATUS_CHOICES },
       { id: "owner", name: "Owner", type: "MEMBER" },
       { id: "industry", name: "Industry", type: "TEXT" },
@@ -79,6 +88,7 @@ export async function crmReportFields(
   });
   const stages = pipeline?.stages ?? [];
   return [
+    ADDED,
     {
       id: "stage",
       name: "Stage",
@@ -121,6 +131,7 @@ export async function crmReportRows(
       title: p.name,
       values: {
         ...merge(p.custom),
+        added: day(p.createdAt),
         status: p.status,
         ...(p.relationship ? { relationship: p.relationship } : {}),
         ...(p.ownerId ? { owner: p.ownerId } : {}),
@@ -147,6 +158,7 @@ export async function crmReportRows(
       title: c.name,
       values: {
         ...merge(c.custom),
+        added: day(c.createdAt),
         status: c.status,
         ...(c.ownerId ? { owner: c.ownerId } : {}),
         ...(c.industry ? { industry: c.industry } : {}),
@@ -174,6 +186,7 @@ export async function crmReportRows(
     title: d.title,
     values: {
       ...merge(d.custom),
+      added: day(d.createdAt),
       stage: d.stageId,
       ...(d.amountCents !== null ? { amount: d.amountCents / 100 } : {}),
       ...(d.ownerId ? { owner: d.ownerId } : {}),

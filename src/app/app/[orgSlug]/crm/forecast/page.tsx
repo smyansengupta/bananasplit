@@ -179,7 +179,7 @@ export default async function CrmForecastPage({ params, searchParams }: PageProp
           : `The trend shows once ${noun} have closed for a while (${f.trend.closed} in the four quarters before).`}
       </p>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
         <Card className="gap-3 p-5 sm:p-6">
           <h2 className="heading text-lg">By member</h2>
           {f.byOwner.length === 0 ? (

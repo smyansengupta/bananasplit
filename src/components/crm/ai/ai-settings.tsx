@@ -204,7 +204,7 @@ export function AiSettings({
           <p className="text-muted-foreground text-sm">Owners and admins set the monthly cap.</p>
         )}
         {(usage.byFeature.length > 0 || usage.byMember.length > 0) && (
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-2">
             <UsageTable title="By feature" lines={usage.byFeature} />
             <UsageTable title="By member" lines={usage.byMember} />
           </div>
