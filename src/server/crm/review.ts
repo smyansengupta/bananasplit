@@ -30,6 +30,7 @@ import { moveDeal, updateDeal, type DealInput } from "./deals";
 import { newBatchId } from "./history";
 import { createPerson, personByEmail, trashPeople, updatePerson, type PersonInput } from "./people";
 import { recordEnrichment } from "./enrichment-store";
+import { dropThread } from "./outreach/send";
 
 /**
  * The review queue (docs/features/crm.md, differentiator 6): one place where
@@ -691,8 +692,12 @@ export async function undoSuggestion(ctx: OrgContext, id: string): Promise<void>
   }
   if (applied.createdKind === "person" && applied.createdId) await trashPeople(ctx, [applied.createdId]);
   if (applied.createdKind === "company" && applied.createdId) await trashCompanies(ctx, [applied.createdId]);
-  if (applied.threadId) {
-    await ctx.db.crmEmailThread.deleteMany({ where: { id: applied.threadId, organizationId: ctx.organizationId } });
+  if (applied.threadId && !(await dropThread(ctx.db, ctx.organizationId, applied.threadId))) {
+    // A member can't delete threads: the draft accepting made is discarded instead.
+    await ctx.db.crmEmailMessage.updateMany({
+      where: { threadId: applied.threadId, organizationId: ctx.organizationId, status: "DRAFT" },
+      data: { status: "FAILED", error: "discarded" },
+    });
   }
   await ctx.db.crmSuggestion.update({
     where: { id: row.id },

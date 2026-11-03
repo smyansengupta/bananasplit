@@ -43,7 +43,7 @@ import type { CrmEventPayload } from "./events";
 import { forecastItems } from "./forecast";
 import { ingestEmail } from "./outreach/inbound";
 import { book, createBookingPage, loadBooking, updateBookingPage } from "./outreach/booking";
-import { composeEmail, deliver } from "./outreach/send";
+import { composeEmail, deliver, discardDraft, draftsFor } from "./outreach/send";
 import { createSequence, crmSequenceJob, enroll, saveSequence, setSequenceStatus } from "./outreach/sequences";
 import { createTemplate } from "./outreach/templates";
 import { createPerson } from "./people";
@@ -392,4 +392,36 @@ describe("the CRM's phases together", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("lets a member discard their draft though only owners, admins and CRM managers delete threads", async () => {
+    if (!reachable) return;
+    const p = await as(member, (ctx) => createPerson(ctx, { name: "Tess Draft", primaryEmail: `tess-${tag}@draft.example` }));
+    const draft = (who: U) =>
+      as(who, (ctx) =>
+        deliverDraft(ctx.db, {
+          organizationId: org,
+          target: { kind: "person", id: p.id },
+          to: [`tess-${tag}@draft.example`],
+          subject: "Hello",
+          body: "Hi Tess",
+          title: "Email draft to Tess",
+          source: "AI",
+          proposedById: who.id,
+          assigneeId: who.id,
+          inCompose: true,
+        }),
+      );
+    const mine = await draft(member);
+    const mineRow = await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: mine.draftId! } });
+    await as(member, (ctx) => discardDraft(ctx.db, org, mine.draftId!));
+    // Out of compose, though the member's delete of its thread matched nothing.
+    expect((await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: mine.draftId! } })).status).toBe("FAILED");
+    expect(await ownerDb.crmEmailThread.count({ where: { id: mineRow.threadId } })).toBe(1);
+    expect(await as(member, (ctx) => draftsFor(ctx.db, org, p.id, member.id))).toEqual([]);
+    // The owner's goes with its thread.
+    const theirs = await draft(owner);
+    const theirsRow = await ownerDb.crmEmailMessage.findUniqueOrThrow({ where: { id: theirs.draftId! } });
+    await as(owner, (ctx) => discardDraft(ctx.db, org, theirs.draftId!));
+    expect(await ownerDb.crmEmailThread.count({ where: { id: theirsRow.threadId } })).toBe(0);
+    expect(await ownerDb.crmEmailMessage.count({ where: { id: theirs.draftId! } })).toBe(0);
+  });
 });

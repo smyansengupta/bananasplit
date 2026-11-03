@@ -2329,7 +2329,6 @@ runSuite("rls-tests", async ({ clients, tcase, record }) => {
         "CrmDeliverable:UPDATE",
         "CrmEmailMessage:INSERT",
         "CrmEmailMessage:UPDATE",
-        "CrmEmailThread:DELETE",
         "CrmEmailThread:INSERT",
         "CrmEmailThread:UPDATE",
         "CrmEnrollment:DELETE",

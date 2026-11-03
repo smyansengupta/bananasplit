@@ -5959,6 +5959,46 @@ runSuite("rls-phases", async ({ tcase, clients }) => {
     { value: { writes: 1, own_org: 1, runs: 1, logs: 1, other_org: 0, other_org_runs: 0 } },
   );
   await tcase(
+    "P-CRM-07",
+    "deleting a CRM email thread (20261105190000_crm_thread_delete): members still start and update threads, but only owners, admins and CRM managers delete one, and only in their own organization",
+    "app_user",
+    A("u_adminA"),
+    async (q) => {
+      const s = {};
+      await q(
+        `INSERT INTO "CrmSettings" ("organizationId","managerIds","updatedAt")
+         VALUES ('org_A',ARRAY['u_bothAB'],now())
+         ON CONFLICT ("organizationId") DO UPDATE SET "managerIds" = ARRAY['u_bothAB']`,
+      );
+      await q(`SELECT app.set_context('u_memberA','org_A')`);
+      s.member_starts = await tryq(
+        q,
+        `INSERT INTO "CrmEmailThread" ("id","organizationId") VALUES ('th_d1','org_A'),('th_d2','org_A'),('th_d3','org_A')`,
+      );
+      s.member_updates = await rc(q, `UPDATE "CrmEmailThread" SET "subject" = 'Hello' WHERE "id" = 'th_d1'`);
+      s.member_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" = 'th_d1'`);
+      await q(`SELECT app.set_context('u_memberB','org_B')`);
+      s.other_org_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" LIKE 'th_d%'`);
+      await q(`SELECT app.set_context('u_bothAB','org_A')`);
+      s.manager_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" = 'th_d1'`);
+      await q(`SELECT app.set_context('u_adminA','org_A')`);
+      s.admin_deletes = await rc(q, `DELETE FROM "CrmEmailThread" WHERE "id" = 'th_d2'`);
+      s.left = await count(q, `SELECT count(*) n FROM "CrmEmailThread" WHERE "id" LIKE 'th_d%'`);
+      return s;
+    },
+    {
+      value: {
+        member_starts: 3,
+        member_updates: 1,
+        member_deletes: 0,
+        other_org_deletes: 0,
+        manager_deletes: 1,
+        admin_deletes: 1,
+        left: 1,
+      },
+    },
+  );
+  await tcase(
     "P-REPORTS-02",
     "sharing reports outside the organization, and deleting them: only a report's editors see, add and remove its invites or touch its link, only on a report the organization shares, and deleting takes its copies and invites with it",
     "app_user",

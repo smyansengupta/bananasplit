@@ -403,7 +403,12 @@ export async function draftsFor(db: TxClient, organizationId: string, personId: 
   }));
 }
 
-/** Throws a draft away (its own thread goes with it). */
+/**
+ * Throws a draft away. Its own thread goes with it when the caller may
+ * delete threads (owners, admins and CRM managers, under RLS); otherwise,
+ * or when the thread has other messages, the draft is marked discarded and
+ * leaves compose all the same.
+ */
 export async function discardDraft(db: TxClient, organizationId: string, draftId: string): Promise<void> {
   const d = await db.crmEmailMessage.findFirst({
     where: { id: draftId, organizationId, status: "DRAFT" },
@@ -411,8 +416,18 @@ export async function discardDraft(db: TxClient, organizationId: string, draftId
   });
   if (!d) return;
   const others = await db.crmEmailMessage.count({ where: { organizationId, threadId: d.threadId, id: { not: d.id } } });
-  if (others === 0) await db.crmEmailThread.deleteMany({ where: { id: d.threadId, organizationId } });
-  else await db.crmEmailMessage.updateMany({ where: { id: d.id, organizationId }, data: { status: "FAILED", error: "discarded" } });
+  if (others === 0 && (await dropThread(db, organizationId, d.threadId))) return;
+  await db.crmEmailMessage.updateMany({ where: { id: d.id, organizationId }, data: { status: "FAILED", error: "discarded" } });
+}
+
+/**
+ * Deletes a thread and its messages if the caller may (owners, admins and
+ * CRM managers; a member's delete matches no row under RLS). True when it
+ * went.
+ */
+export async function dropThread(db: TxClient, organizationId: string, threadId: string): Promise<boolean> {
+  const { count } = await db.crmEmailThread.deleteMany({ where: { id: threadId, organizationId } });
+  return count > 0;
 }
 
 export type ComposeResult = { messageId: string } | { conflict: Conflict & { name: string } };
