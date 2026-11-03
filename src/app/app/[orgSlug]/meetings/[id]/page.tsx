@@ -155,6 +155,7 @@ export default async function MeetingPage({
       },
       checkedIn: facts.checkedIn,
       thankedAt: facts.thankedAt,
+      remindedAt: facts.remindedAt,
     },
     now,
   );
@@ -163,7 +164,11 @@ export default async function MeetingPage({
     ...whenEvent,
     ...whenMeeting.filter((a) => a.kind === "draft-agenda"),
   ];
-  const maybes = undecidedMaybes(event.attendees, { startsAt: event.startsAt, canEdit }, now);
+  const maybes = undecidedMaybes(
+    event.attendees,
+    { startsAt: event.startsAt, canEdit, remindedAt: facts.maybesRemindedAt },
+    now,
+  );
   const meetingOn = underWay(event, now);
   const members = canEdit ? await getOrgMembersForPicker(org.id) : [];
   // "Edit" sends people here with the form already open, as on the Calendar.

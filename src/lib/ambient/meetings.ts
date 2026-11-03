@@ -215,10 +215,11 @@ export function matchOwner(
 /** Maybes on a meeting still to come: Remind maybes. */
 export function undecidedMaybes(
   attendees: readonly { rsvp: string }[],
-  m: { startsAt: Date; canEdit: boolean },
+  m: { startsAt: Date; canEdit: boolean; remindedAt?: Date | null },
   now: Date,
 ): number {
-  if (!m.canEdit || m.startsAt <= now) return 0;
+  // Reminded once already: it's done its job.
+  if (!m.canEdit || m.startsAt <= now || m.remindedAt) return 0;
   return attendees.filter((a) => a.rsvp === "MAYBE").length;
 }
 

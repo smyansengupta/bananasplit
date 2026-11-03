@@ -15,6 +15,8 @@ export const BLOCKED_DAYS = 2;
 export const STALE_DAYS = 14;
 /** Waiting on someone and quiet this long, the task page offers Follow up. */
 const QUIET_DAYS = 5;
+/** After a comment, this long before anyone is offered to ask again. */
+const ASK_AGAIN_MS = 24 * 60 * 60 * 1000;
 /** Due this soon (not late yet), the task page offers Follow up. */
 const SOON_DAYS = 2;
 
@@ -50,6 +52,8 @@ export interface TaskAmbientInput {
   subtasks: readonly { status: string; subtasks?: readonly { status: string }[] }[];
   /** Its last change (updatedAt); the made date when it has none. */
   updatedAt?: Date | string | null;
+  /** Its latest comment: someone asked lately, so Nudge, Follow up and Ask to unblock wait. */
+  comments?: readonly { createdAt: Date | string }[];
   createdAt: Date | string;
 }
 
@@ -99,6 +103,10 @@ export function nextMondayKey(todayKey: string): string {
 /** What a task's ambient buttons are right now, most useful first. */
 export function taskAmbient(task: TaskAmbientInput, ctx: TaskAmbientContext): TaskAmbient[] {
   if (task.status === "COMPLETED") return [];
+  // A comment in the last day means someone just asked: no asking again yet.
+  const lastSaid = task.comments?.[0]?.createdAt;
+  const askedLately =
+    lastSaid !== undefined && ctx.now.getTime() - at(lastSaid).getTime() < ASK_AGAIN_MS;
   const out: TaskAmbient[] = [];
   const me = ctx.viewerId;
   const late = task.type === "EPIC" ? 0 : daysLate(task.dueDate, ctx.todayKey);
@@ -120,7 +128,7 @@ export function taskAmbient(task: TaskAmbientInput, ctx: TaskAmbientContext): Ta
   if (late > 0 && task.ownerId === me && ctx.editable) {
     out.push({ kind: "push", reason: `Yours, ${dayWords(late)} late` });
   }
-  if (late > 0 && task.ownerId && task.ownerId !== me) {
+  if (late > 0 && task.ownerId && task.ownerId !== me && !askedLately) {
     out.push({
       kind: "nudge",
       reason: `${firstName(task.owner)}, ${dayWords(late)} late`,
@@ -137,7 +145,7 @@ export function taskAmbient(task: TaskAmbientInput, ctx: TaskAmbientContext): Ta
         : task.createdById !== me
           ? { id: task.createdById, person: task.createdBy }
           : null;
-    if (days >= BLOCKED_DAYS && ask) {
+    if (days >= BLOCKED_DAYS && ask && !askedLately) {
       const on = task.blockedReason?.trim();
       out.push({
         kind: "unblock",
@@ -152,7 +160,14 @@ export function taskAmbient(task: TaskAmbientInput, ctx: TaskAmbientContext): Ta
     if (ctx.editable) out.push({ kind: "assign", reason: "No owner" });
   }
 
-  if (ctx.page && late === 0 && task.ownerId && task.ownerId !== me && task.createdById === me) {
+  if (
+    ctx.page &&
+    late === 0 &&
+    task.ownerId &&
+    task.ownerId !== me &&
+    task.createdById === me &&
+    !askedLately
+  ) {
     const due = task.dueDate ? daysBetweenKeys(ctx.todayKey, keyOf(task.dueDate)) : null;
     const quiet = wholeDaysSince(task.updatedAt ?? task.createdAt, ctx.now);
     const who = firstName(task.owner);

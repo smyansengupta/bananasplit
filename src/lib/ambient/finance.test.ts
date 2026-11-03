@@ -33,6 +33,10 @@ describe("Ask for receipt", () => {
     expect(needsReceipt(expense, "me", NOW)).toBe(true);
     expect(needsReceipt({ ...expense, receipts: 1 }, "me", NOW)).toBe(false);
     expect(needsReceipt(expense, "alex", NOW)).toBe(false);
+    // Asked lately: it waits three days before offering to ask again.
+    const asked = (days: number) => new Date(NOW.getTime() - days * 86_400_000);
+    expect(needsReceipt({ ...expense, receiptAskedAt: asked(1) }, "me", NOW)).toBe(false);
+    expect(needsReceipt({ ...expense, receiptAskedAt: asked(4) }, "me", NOW)).toBe(true);
     expect(needsReceipt({ ...expense, status: "DRAFT" }, "me", NOW)).toBe(false);
     expect(needsReceipt({ ...expense, occurredAt: NOW }, "me", NOW)).toBe(false);
     expect(needsReceipt({ ...expense, direction: "IN" }, "me", NOW)).toBe(false);

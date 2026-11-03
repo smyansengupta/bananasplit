@@ -48,6 +48,8 @@ describe("eventAmbient", () => {
     const [a] = eventAmbient(event(), now);
     expect(a).toEqual({ kind: "share-rsvp", reason: "Starts in 2 days, 3 signed up" });
     expect(kinds(event())).toEqual(["share-rsvp", "remind-members"]);
+    // Once members were reminded, only sharing the link is left.
+    expect(kinds(event({ remindedAt: new Date() }))).toEqual(["share-rsvp"]);
     expect(kinds(event({}, { going: 12 }))).toEqual([]);
     expect(kinds(event({ startsAt: h(60), endsAt: h(62) }))).toEqual([]);
     expect(kinds(event({}, { enabled: false }))).toEqual([]);

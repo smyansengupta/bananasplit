@@ -138,6 +138,9 @@ export interface MeetingAmbientFacts {
   checkedIn: number;
   /** Hosts only: when a thank-you went out. */
   thankedAt: Date | null;
+  /** Hosts only: when members, and the maybes, were last reminded. */
+  remindedAt: Date | null;
+  maybesRemindedAt: Date | null;
 }
 
 export async function loadMeetingAmbient(
@@ -162,6 +165,8 @@ export async function loadMeetingAmbient(
   );
   let checkedIn = event.attendanceCount;
   let thankedAt: Date | null = null;
+  let remindedAt: Date | null = null;
+  let maybesRemindedAt: Date | null = null;
   if (canEdit) {
     checkedIn += await db.eventRegistration.count({
       where: { organizationId, eventId: event.id, checkedInAt: { not: null } },
@@ -173,6 +178,16 @@ export async function loadMeetingAmbient(
       select: { createdAt: true },
     });
     thankedAt = thanked?.createdAt ?? null;
+    const last = (action: string) =>
+      db.orgAuditLog
+        .findFirst({
+          where: { organizationId, action, targetId: event.id },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true },
+        })
+        .then((row) => row?.createdAt ?? null);
+    remindedAt = await last("event.members_reminded");
+    maybesRemindedAt = await last("event.maybes_reminded");
   }
   return {
     openTasks,
@@ -182,5 +197,7 @@ export async function loadMeetingAmbient(
     noteId: notes.noteIds[0] ?? null,
     checkedIn,
     thankedAt,
+    remindedAt,
+    maybesRemindedAt,
   };
 }

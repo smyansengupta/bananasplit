@@ -35,6 +35,13 @@ export const taskListSelect = {
   createdAt: true,
   // Its last change: a row asks "Still needed?" after two quiet weeks.
   updatedAt: true,
+  // Its latest comment: Nudge and Ask to unblock wait a day after someone asked.
+  comments: {
+    where: { deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    select: { createdAt: true },
+  },
   completedAt: true,
   blockedAt: true,
   blockedReason: true,

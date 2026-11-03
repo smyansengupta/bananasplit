@@ -99,6 +99,13 @@ export const transactionInclude = {
   approvedBy: { select: { id: true, name: true, email: true } },
   reconciledBy: { select: { id: true, name: true, email: true } },
   receipts: true,
+  // The last time someone asked for its receipt: Ask for it waits a few days after.
+  auditLogs: {
+    where: { action: "RECEIPT_REQUESTED" },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    select: { createdAt: true },
+  },
 } satisfies Prisma.TransactionInclude;
 
 export type TransactionWithRelations = Prisma.TransactionGetPayload<{

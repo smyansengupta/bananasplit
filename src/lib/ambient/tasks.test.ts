@@ -37,6 +37,24 @@ const kinds = (t: TaskAmbientInput, page = false, editable = true) =>
   taskAmbient(t, { viewerId: me, todayKey, now, editable, page }).map((a) => a.kind);
 
 describe("taskAmbient", () => {
+  it("waits a day after someone commented before offering Nudge or Ask to unblock again", () => {
+    const late = { dueDate: "2026-10-31", ownerId: "u_lucas", owner: { name: "Lucas" } };
+    const hourAgo = new Date(now.getTime() - 3_600_000);
+    const twoDaysAgo = new Date(now.getTime() - 2 * 86_400_000);
+    expect(kinds(task({ ...late, comments: [{ createdAt: hourAgo }] }))).not.toContain("nudge");
+    expect(kinds(task({ ...late, comments: [{ createdAt: twoDaysAgo }] }))).toContain("nudge");
+    const blocked = {
+      status: "BLOCKED",
+      blockedAt: "2026-10-30",
+      blockedReason: "Room",
+      ownerId: "u_lucas",
+      owner: { name: "Lucas" },
+    };
+    expect(kinds(task({ ...blocked, comments: [{ createdAt: hourAgo }] }))).not.toContain(
+      "unblock",
+    );
+  });
+
   it("offers nothing on a done task", () => {
     expect(kinds(task({ status: "COMPLETED", dueDate: "2026-11-01", ownerId: null }))).toEqual([]);
   });

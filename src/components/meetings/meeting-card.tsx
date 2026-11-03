@@ -128,6 +128,7 @@ export function MeetingCard({
   mine,
   myRsvp,
   crowd,
+  reminded = false,
 }: {
   /** For answering an invitation on the card. */
   orgId?: string;
@@ -159,6 +160,8 @@ export function MeetingCard({
   myRsvp: RSVPStatus | null;
   /** Who is coming, or null when nobody was invited. */
   crowd: MeetingCrowd | null;
+  /** Members were already reminded about it (hosts). */
+  reminded?: boolean;
 }) {
   const integration = conferenceIntegration(e.conferenceProvider);
   const hasCover = Boolean(rsvpCover(e.rsvpCover));
@@ -191,6 +194,7 @@ export function MeetingCard({
             },
             checkedIn: 0,
             thankedAt: null,
+            remindedAt: reminded ? now : null,
           },
           now,
         ).filter((a) => a.kind === "share-rsvp" || a.kind === "remind-members")

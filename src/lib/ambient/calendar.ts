@@ -47,6 +47,8 @@ export interface EventAmbientInput {
   checkedIn: number;
   /** A thank-you already went out for it. */
   thankedAt: Date | null;
+  /** Members were already reminded about it: Remind members has done its job. */
+  remindedAt?: Date | null;
 }
 
 function dayKey(at: Date, timeZone: string): string {
@@ -97,7 +99,7 @@ export function eventAmbient(e: EventAmbientInput, now: Date): EventAmbient[] {
   ) {
     const reason = `Starts in ${start - t <= DAY_MS ? "a day" : "2 days"}, ${rsvp.going} signed up`;
     if (rsvp.url) out.push({ kind: "share-rsvp", reason });
-    out.push({ kind: "remind-members", reason });
+    if (!e.remindedAt) out.push({ kind: "remind-members", reason });
   }
 
   if (t >= end && t - end <= AFTER_DAYS * DAY_MS && rsvp.enabled && rsvp.going > 0) {

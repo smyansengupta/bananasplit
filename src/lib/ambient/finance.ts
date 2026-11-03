@@ -42,7 +42,12 @@ export interface LedgerFacts {
   approvedAt?: Date | string | null;
   submittedById: string;
   receipts: number;
+  /** When someone last asked for its receipt. */
+  receiptAskedAt?: Date | string | null;
 }
+
+/** After asking for a receipt, this many days before Ask for it comes back. */
+const ASK_AGAIN_DAYS = 3;
 
 /**
  * Ask for receipt: money that went out on an expense, a day or more ago,
@@ -55,6 +60,7 @@ export function needsReceipt(t: LedgerFacts, viewerId: string, now: Date): boole
     t.direction === "OUT" &&
     !t.voidedAt &&
     t.receipts === 0 &&
+    (!t.receiptAskedAt || daysSince(t.receiptAskedAt, now) >= ASK_AGAIN_DAYS) &&
     t.submittedById !== viewerId &&
     ["APPROVED", "REIMBURSED", "NOT_APPLICABLE"].includes(t.status) &&
     daysSince(t.occurredAt, now) >= 1

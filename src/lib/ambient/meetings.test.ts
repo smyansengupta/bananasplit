@@ -146,6 +146,9 @@ describe("to-dos and decisions", () => {
     const people = [{ rsvp: "MAYBE" }, { rsvp: "YES" }, { rsvp: "MAYBE" }];
     expect(undecidedMaybes(people, { startsAt: m(60), canEdit: true }, now)).toBe(2);
     expect(undecidedMaybes(people, { startsAt: m(-60), canEdit: true }, now)).toBe(0);
+    expect(undecidedMaybes(people, { startsAt: m(60), canEdit: true, remindedAt: now }, now)).toBe(
+      0,
+    );
     expect(undecidedMaybes(people, { startsAt: m(60), canEdit: false }, now)).toBe(0);
   });
 

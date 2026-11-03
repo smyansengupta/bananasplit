@@ -218,7 +218,11 @@ export function TransactionTable({
    * The row's ambient buttons (src/lib/ambient/finance.ts): Mark paid on an
    * approved request, Ask for receipt on money out with none attached.
    */
-  const facts = (t: TransactionWithRelations) => ({ ...t, receipts: t.receipts.length });
+  const facts = (t: TransactionWithRelations) => ({
+    ...t,
+    receipts: t.receipts.length,
+    receiptAskedAt: t.auditLogs[0]?.createdAt ?? null,
+  });
   const markPaid = (t: TransactionWithRelations) => isFinance && approvedNotPaid(facts(t), currentUserId);
   const ambientFor = (t: TransactionWithRelations): AmbientAction[] => {
     if (!isFinance) return [];
