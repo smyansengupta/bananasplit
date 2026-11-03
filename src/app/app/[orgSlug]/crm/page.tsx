@@ -1,6 +1,7 @@
 import { AlarmClock, Flag, Hourglass, Sparkles, Trophy, Users, type IconComponent } from "@/components/icons";
 import Link from "next/link";
 
+import { CrmAiBar } from "@/components/crm/ai/ai-bar";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { CrmTodayKeys } from "@/components/crm/today-keys";
 import { when } from "@/components/crm/record-page";
@@ -77,6 +78,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
         }
         tabs={<CrmTabs tabs={shell.tabs} />}
       />
+      <CrmAiBar orgId={orgId} orgSlug={orgSlug} />
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {(
           [

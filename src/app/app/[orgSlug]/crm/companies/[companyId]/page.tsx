@@ -2,6 +2,7 @@ import { Globe } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { RecordAi } from "@/components/crm/ai/record-ai";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { RecordActions } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
@@ -107,6 +108,7 @@ export default async function CrmCompanyPage({ params }: PageProps<"/app/[orgSlu
       }
       side={
         <>
+          <RecordAi orgId={orgId} orgSlug={orgSlug} kind="company" id={company.id} name={company.name} readOnly={Boolean(company.deletedAt)} />
           <Section title="Details">
             <RecordFields
               orgId={orgId}

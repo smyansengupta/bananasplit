@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AI_AUTO,
+  AI_AUTO_LABELS,
   AI_FILL_PENDING,
   AI_OUTPUT_LABELS,
   AI_OUTPUTS,
@@ -294,6 +296,25 @@ export function FieldOptionsEditor({
             }
           />
         </label>
+        <div className="space-y-1.5">
+          <p id={`${idPrefix}-auto`} className="text-sm font-medium">
+            When it fills itself
+          </p>
+          <div role="radiogroup" aria-labelledby={`${idPrefix}-auto`} className="grid grid-cols-2 gap-1">
+            {AI_AUTO.map((a) => (
+              <button
+                key={a}
+                type="button"
+                role="radio"
+                aria-checked={(options.auto ?? "off") === a}
+                onClick={() => onChange({ ...options, auto: a === "off" ? undefined : a })}
+                className={optionButton((options.auto ?? "off") === a)}
+              >
+                {AI_AUTO_LABELS[a]}
+              </button>
+            ))}
+          </div>
+        </div>
         <p className="text-muted-foreground text-xs">{AI_FILL_PENDING}</p>
       </div>
     );

@@ -177,10 +177,10 @@ export async function crmCredentials(
 }
 
 /** What the CRM would use, by label only (for the settings and the buttons). */
-export async function crmConnectionLabel(organizationId: string): Promise<{ label: string; sentTo: string } | null> {
+export async function crmConnectionLabel(organizationId: string): Promise<{ id: string; label: string; sentTo: string } | null> {
   const list = await listAiConnections(organizationId);
   const c = list.find((x) => x.id !== "platform" || bananasplitAiEnabled());
-  return c ? { label: c.label, sentTo: c.sentTo } : null;
+  return c ? { id: c.id, label: c.label, sentTo: c.sentTo } : null;
 }
 
 /** The connection with this job's model: a small fast Claude for "fast" jobs on a Claude key. */

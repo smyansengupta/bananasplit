@@ -2,6 +2,7 @@ import { Plus } from "@/components/icons";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AiSettingsSection } from "@/components/crm/ai/ai-settings-section";
 import { CrmSettings, type FieldGroup, type PipelineRow } from "@/components/crm/crm-settings";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { PageHeader } from "@/components/page-header";
@@ -114,6 +115,7 @@ export default async function CrmSettingsPage({ params }: PageProps<"/app/[orgSl
         groups={data.groups}
         templates={SETUP_KINDS.filter((k) => PIPELINE_TEMPLATES[k] && !used.has(k))}
       />
+      <AiSettingsSection orgId={orgId} orgSlug={orgSlug} admin={shell.access.admin} />
     </div>
   );
 }

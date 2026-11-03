@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { resolveCrmTabs, type ResolvedCrmTab } from "@/lib/crm/nav";
 import { planGate } from "@/server/billing/plan-gate";
 import { crmAccess, type CrmAccess } from "@/server/crm/access";
+import { queueCount } from "@/server/crm/review";
 import { rolePositions, type RoleOwner } from "@/server/crm/owners";
 import { listPipelines, type PipelineView } from "@/server/crm/pipelines";
 import { getOrgContextBySlug, withOrgTx, type OrgContextBySlug } from "@/server/db/context";
@@ -49,10 +50,12 @@ export async function crmShell(
     const duplicates = access.settings
       ? await ctx.db.crmSuggestion.count({ where: { organizationId: org.id, kind: "MERGE", status: "PENDING" } })
       : 0;
+    const queue = access.settings ? await queueCount(ctx.db, org.id, user.id) : 0;
     return {
       access,
       pipelines,
       duplicates,
+      queue,
       members: members
         .map((m) => ({ id: m.userId, name: m.user.name ?? "Member" }))
         .sort((a, b) => a.name.localeCompare(b.name)),
@@ -122,7 +125,7 @@ export async function crmShell(
       members: loaded.members,
       tabs: resolveCrmTabs(orgSlug, loaded.pipelines, {
         manager: access.manager,
-        counts: { review: loaded.duplicates },
+        counts: { review: loaded.duplicates, queue: loaded.queue },
       }),
     },
   };

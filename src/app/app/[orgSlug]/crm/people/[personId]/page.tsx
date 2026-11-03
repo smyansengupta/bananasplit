@@ -2,6 +2,7 @@ import { Mail, Phone } from "@/components/icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { RecordAi } from "@/components/crm/ai/record-ai";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { RecordActions } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
@@ -124,6 +125,7 @@ export default async function CrmPersonPage({ params }: PageProps<"/app/[orgSlug
       }
       side={
         <>
+          <RecordAi orgId={orgId} orgSlug={orgSlug} kind="person" id={person.id} name={person.name} readOnly={Boolean(person.deletedAt)} />
           <Section title="Details">
             <RecordFields
               orgId={orgId}

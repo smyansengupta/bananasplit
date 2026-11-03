@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AddOnCards } from "@/components/addons/addon-cards";
+import { DataConnectorsSection } from "@/components/crm/ai/data-connectors-section";
 import { IntegrationDialog } from "@/components/integrations/integration-dialog";
 import { BrandMark } from "@/components/marketing/brand-mark";
 import type { Brand } from "@/components/marketing/brands";
@@ -325,6 +326,8 @@ export default async function IntegrationsPage({
           </p>
         )}
       </section>
+
+      <DataConnectorsSection orgSlug={orgSlug} />
 
       {panel && (
         <IntegrationDialog
