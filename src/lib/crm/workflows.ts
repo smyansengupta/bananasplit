@@ -381,7 +381,7 @@ export function readWorkflow(row: { trigger: unknown; conditions: unknown; actio
 
 /** What the engine knows about an event when it matches triggers (events.ts payload, plus a little). */
 export interface MatchEvent {
-  type: "record.changed" | "email.replied" | "email.bounced" | "meeting.booked" | "form.submitted" | "sequence.finished" | "call.logged";
+  type: "record.changed" | "email.replied" | "email.bounced" | "meeting.booked" | "form.submitted" | "sequence.finished" | "call.logged" | "activity.logged";
   targetKind: WorkflowObject;
   fields: readonly string[];
   /** The workflow whose own action made this change, if one did. */
