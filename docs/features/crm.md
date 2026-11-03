@@ -1,7 +1,7 @@
 # CRM add-on: plan
 
-Status: plan only, 2026-11-02. Nothing built yet beyond the "Coming later"
-page at `/integrations/crm`. Source material: the CRM teardown PDF (seven
+Status: Phase 1 built on `claude/crm` (see "Phase 1 as built" at the
+end); phases 2 to 6 are plan. Source material: the CRM teardown PDF (seven
 CRMs, 12 modules, rebuild costs), read against this repo on `claude/fc-all`,
 plus three research passes on 2026-11-02: user complaints (about 80
 sources), 53 newer CRMs and tools, and the facts on self-hosted models,
@@ -783,3 +783,135 @@ Not decisions, and nothing per customer:
   just need one "Bananasplit" app registered for that consent screen. It's
   the same one the coming email connections and Google Calendar use, so the
   CRM adds nothing here.
+
+
+## Phase 1 as built
+
+People, pipelines and Databases, on `claude/crm`. What exists, where it
+lives, and what's left.
+
+### Schema
+
+- Every CRM table, with RLS and grants: `20261105090000_crm` (P-CRM-01).
+- `20261105100000_crm_databases`: `CrmStage.key` (a stable key for a
+  ready-made stage, so a renamed "Received" still maps to Finance);
+  `DatabaseField` rows may belong to the CRM's databases (rows stay
+  club-made only); CRM managers make and edit the CRM's
+  `DatabaseDefinition`s and fields (`app.is_crm_database`). P-CRM-02.
+
+### The add-on
+
+- `crm` in `ADD_ONS` (`src/lib/addons.ts`), the `crm` plan feature on
+  `SOCIETY` (`src/lib/billing/features.ts`), a sidebar section under
+  Integrations and apps (`PINNED_PLACE`), and New person, New company and
+  New item in New (`src/components/shell/nav-config.ts`).
+- `/integrations/crm` is the real add-on page; Add goes to the setup.
+- Every page starts at `crmShell` (`src/app/app/[orgSlug]/crm/shell.tsx`):
+  plan, add-on, setup. Every action goes through `crmAction`
+  (`src/app/app/[orgSlug]/crm/actions.ts`): `withOrgAction` with the `crm`
+  feature and `requireCrm`; a refusal throws, so the whole action rolls
+  back.
+
+### Setup (`src/server/crm/setup.ts`, `src/components/crm/setup.tsx`)
+
+"What do you mostly reach out to?" (`SETUP_KINDS`,
+`src/lib/crm/templates.ts`) makes CrmSettings, the relationship types,
+one pipeline per answer (alumni get a keep-in-touch cadence instead), the
+People, Companies and pipeline databases, and the saved views. Finance
+sponsors bring the Sponsorships pipeline even when not picked, and move in
+(`src/server/crm/sponsors.ts`). Run again, it adds only what's missing.
+Then: bring in members, check-in contacts and form respondents
+(`src/server/crm/bring-in.ts`, a job over 200), or a file.
+
+### Server API for later phases (`src/server/crm/`)
+
+| Need | Call |
+|---|---|
+| Gate a page or action | `requireCrm(actor)`, `crmAccess(actor)`, `requireManager(access)` (access.ts) |
+| People | `createPerson`, `updatePerson`, `trashPeople`, `restorePeople`, `setPersonEmails`, `personByEmail`, `workspaceMatch` (people.ts) |
+| Companies | `createCompany`, `updateCompany`, `trashCompanies`, `restoreCompanies`, `companyByDomain` (companies.ts) |
+| Pipeline items | `createDeal`, `updateDeal`, `moveDeal` (returns `needs` when a stage wants fields), `addDealPerson`, `removeDealPerson`, `trashDeals`, `restoreDeals`, `stageMissing` (deals.ts) |
+| The timeline | `logActivity(db, input)` (idempotent with sourceKind/sourceId; moves "last contacted"), `timeline(db, orgId, target, options)`, `touchContacted`, `moveActivityTargets` (activity.ts) |
+| Field history | `writeHistory`, `historyOf` (includes records merged in), `valuesAt`, `diffFields`, `diffCustom`, `newBatchId` (history.ts) |
+| Bulk and undo | `bulkUpdate`, `bulkTrash`, `undoBatch`, `restoreToPoint` (bulk.ts) |
+| Duplicates | `scanDuplicates`, `pendingDuplicates`, `resolveDuplicate` (dedupe.ts); `mergePeople`, `mergeCompanies`, `repointRelations` (merge.ts) |
+| Custom fields | `addCrmField`, `updateCrmField`, `deleteCrmField`, `customFieldsFor`, `checkCustomValues`, `crmDatabaseIds`, `ensureCrmDatabases` (databases.ts) |
+| Pipelines | `createPipeline`, `createPipelineFrom`, `updatePipeline`, `archivePipeline`, `saveStages`, `listPipelines` (pipelines.ts) |
+| Role owners | `rolePositions(orgId)`, `ownerLabel`, `effectiveOwnerId`, `rolesHeldBy` (owners.ts) |
+| Workspace mirroring | `mirrorWorkspace(db, orgId, { personId? })` (mirror.ts); strength: `recomputeStrength`, `touchpointsOf` (strength.ts) |
+| Sponsorships | `syncDealFromSponsorship`, `dropDealForSponsorship`, `companyForSponsor`, `sponsorshipsPipeline` (sponsor-sync.ts); `moveSponsorsIn` (sponsors.ts). Finance's `setSponsorshipStatus` now lives in `src/server/finance/sponsorship-status.ts` |
+| Import and export | `createImportLog`, `startImport`, `runImportTurn`, `importRow` (import.ts); `previewConvert`, `convertDatabase` (convert.ts); `exportCsv` (export.ts) |
+| Lists and pages | `listPeople`, `listCompanies`, `listDeals`, `todayList`, `parseListQuery` (queries.ts); `loadPerson`, `loadCompany`, `loadDeal` (records.ts); the record form: `personForm`, `companyForm`, `dealForm`, `saveForm` (forms.ts) |
+
+Pure, client-safe helpers are in `src/lib/crm/`: templates, built-in
+fields, dedupe scoring, merge plans, import mapping (with the vCard
+reader), validation, strength, the record form's types and the tab list
+(`nav.ts`: a later phase adds a tab by adding an entry).
+
+### Jobs (`src/server/jobs/registry.ts`, handlers in `src/server/crm/jobs.ts`)
+
+- `crm-refresh` (fast): mirror the workspace, recompute strength, look
+  for duplicates; one step per turn, continuing itself. Enqueued at setup,
+  after imports and bring-ins, for each new person (`p:{id}`), and nightly
+  from `/api/cron/task-digest` (`scheduleCrmRefresh`).
+- `crm-import` (heavy): a big import or bring-in, 60 rows a turn, each turn
+  its own transaction, each row in a savepoint.
+
+### Databases and Reports
+
+- `src/server/databases/sources/crm.ts`: People, Companies and each
+  pipeline as database sources with their custom fields as columns
+  (filterable; not sortable, since Prisma can't order by a JSON path).
+  `loadSourceFor` (sources/index.ts) builds them per definition; the
+  database page and its export use it. A row opens the record's own
+  fields (`src/server/crm/row-panel.ts`), saved through the same
+  `saveForm` as the record page.
+- Relation and AI fields for every database (`src/lib/databases/fields.ts`,
+  `src/server/databases/relations.ts`, `src/components/databases/custom/`):
+  links are `[{kind, id}]`, checked to exist in the organization; "Linked
+  from", with sums and latest dates, on the linked record
+  (`src/components/databases/linked-from.tsx`). AI fields keep their
+  prompt, output and research switch; Fill is disabled until Phase 4.
+- Reports read the CRM's databases like any database
+  (`src/server/crm/reports.ts`): Stage is a choice field in stage order,
+  won and lost counted as done.
+- Tasks, notes and meetings link to CRM records through `ItemLink` kinds
+  `crm-person`, `crm-company` and `crm-deal` (`src/lib/links.ts`), and the
+  link lands on the timeline.
+
+### Pages (`src/app/app/[orgSlug]/crm/`)
+
+Today (follow-ups due, going cold, new from forms, stuck, no next step),
+People and Companies (the Tasks bar, saved views, bulk edits with Undo,
+the trash), each pipeline as a board (drag, counts and amounts, amber when
+stuck, flagged with no next step, a reason on won and lost, what a stage
+needs) and a table, record pages (fields, timeline, items, job history,
+"Linked from", Linked, history with putting back, merge, trash), the
+duplicates review, import (and turning a database into records), CSV
+export (`/crm/export?kind=people|companies|items|timeline`) and settings.
+Keys: j and k, Enter, x, n, /.
+
+### Tests
+
+`src/lib/crm/crm.test.ts` (pure logic), `src/server/crm/crm.db.test.ts`
+(the core against the database, skipped without one), P-CRM-02 in
+`prisma/rls/phases.mjs`, and the Relation and AI cases in
+`src/lib/databases/fields.test.ts` and `src/server/databases/custom.db.test.ts`.
+
+### Known gaps
+
+- Hooks into the workspace are light: a new person mirrors at once, the
+  rest waits for the nightly crm-refresh (or the next setup or import).
+  Form submissions, RSVPs and check-ins don't enqueue a refresh themselves.
+- The MCP database tools still read only built-in and club-made databases
+  (`src/server/connectors/tools/databases.ts`); CRM tools are Phase 4.
+- The CRM's custom columns don't sort in Databases.
+- Remembered import mappings and import logs are CrmView rows (objectKind
+  `import-mapping` and `import`), so no table was added; a dedicated
+  import table would let an admin see everyone's imports.
+- Role ownership resolves holders from the published chart; there is no
+  handover step yet (Phase 2).
+- A sponsorship's amount and date edited in the CRM need a finance role,
+  as in Finance; its stage moves only through Finance's rules.
+- The intake forms and starter report from setup come with Forms to CRM
+  (Phase 2) and the CRM's own widgets (Phase 3).

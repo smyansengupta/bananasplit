@@ -45,6 +45,15 @@ Field types (`src/lib/databases/fields.ts`):
 - text, long text, number, money, date, checkbox
 - single select and multi-select, with coloured choices
 - member (someone in the club), email, phone and link
+- relation: links to CRM people, companies, pipeline items or rows of
+  another database, shown both ways ("Linked from" on the other side, with
+  sums and latest dates)
+- AI: a prompt, an output and a research switch (filling it comes with the
+  CRM's Phase 4)
+
+The CRM's People, Companies and pipelines are databases too (kinds
+`CRM_PEOPLE`, `CRM_COMPANIES`, `CRM_PIPELINE`; docs/features/crm.md): their
+rows are the CRM's own records, and their fields are DatabaseField rows.
 
 Values are checked on the server on every write: an email must be an
 email, a choice must exist, a member must be in the club.
