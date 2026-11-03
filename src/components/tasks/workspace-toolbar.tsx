@@ -808,8 +808,8 @@ function GroupMenu() {
       <DropdownMenuTrigger asChild>
         <button type="button" className={chipClass(lanes)} aria-label="Group the board">
           <Rows3 className="size-3.5" aria-hidden="true" />
-          {lanes ? "Grouped by epic" : "Group"}
-          <ChevronDown className="size-3.5 opacity-70" aria-hidden="true" />
+          <span className="max-w-36 truncate">{lanes ? "By epic" : "No groups"}</span>
+          <ChevronDown className="size-3 opacity-60" aria-hidden="true" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
