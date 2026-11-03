@@ -60,6 +60,9 @@ const KIND_OUT: Record<DatabaseKind, string> = {
   SESSIONS: "sessions",
   PEOPLE: "people",
   CUSTOM: "custom",
+  CRM_PEOPLE: "crm_people",
+  CRM_COMPANIES: "crm_companies",
+  CRM_PIPELINE: "crm_pipeline",
 };
 
 const databaseSummary = z.object({

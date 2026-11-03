@@ -614,6 +614,15 @@ export async function testProvider(
     case "ZOOM":
     case "MICROSOFT_TEAMS":
       return testConference(orgId, provider);
+    // The CRM's bring-your-own-key connectors (docs/features/crm.md): their
+    // connect cards come with the phases that use them.
+    case "TAVILY":
+    case "HUNTER":
+    case "PROSPEO":
+    case "TELNYX":
+    case "TWILIO":
+    case "DEEPGRAM":
+      return fail("This connection can't be tested yet.");
   }
 }
 

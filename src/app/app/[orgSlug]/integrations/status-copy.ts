@@ -30,6 +30,12 @@ export const PROVIDER_ICONS: Record<IntegrationProvider, string> = {
   GOOGLE_MEET: "Video",
   ZOOM: "Video",
   MICROSOFT_TEAMS: "Video",
+  TAVILY: "Plug",
+  HUNTER: "Plug",
+  PROSPEO: "Plug",
+  TELNYX: "Plug",
+  TWILIO: "Plug",
+  DEEPGRAM: "Plug",
 };
 
 const checkedFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });

@@ -240,6 +240,11 @@ export const NOTIFICATION_TYPE_META: Record<
     group: "org",
     audience: "Owners",
   },
+  CRM_ASSIGNED: { label: "A person or item in the CRM is given to me", group: "org" },
+  CRM_FOLLOW_UP: { label: "A follow-up in the CRM is due", group: "org" },
+  CRM_REPLY: { label: "Someone in the CRM replies to me", group: "org" },
+  CRM_REVIEW: { label: "A CRM suggestion waits for my review", group: "org" },
+  CRM_HANDOVER: { label: "CRM relationships are handed to me", group: "org" },
 };
 
 export const NOTIFICATION_GROUP_LABELS: Record<NotificationGroup, string> = {
