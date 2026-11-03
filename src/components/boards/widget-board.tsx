@@ -210,8 +210,8 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
     const items = () =>
       Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
     let frame = 0;
-    // Our own growing resizes the widgets too: the observer skips that round.
-    let ours = false;
+    // Fitting twice gives the same sizes, so the observer seeing our own
+    // growing settles after one more frame.
     const fit = () => {
       frame = 0;
       const list = items();
@@ -252,15 +252,10 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
         );
         item.style.setProperty("align-self", "stretch");
         item.style.setProperty("margin-bottom", `${PACK_GAP}px`);
-        ours = true;
       });
     };
     fit();
     const watch = new ResizeObserver(() => {
-      if (ours) {
-        ours = false;
-        return;
-      }
       if (!frame) frame = requestAnimationFrame(fit);
     });
     for (const item of items()) watch.observe(item);
