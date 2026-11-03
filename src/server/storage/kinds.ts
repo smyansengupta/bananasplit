@@ -42,6 +42,9 @@ export const LARGEST_PLAN_FILE_BYTES = Math.max(
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
+/** Call recordings and voice notes (src/server/crm/phone/audio.ts sniffs the bytes). */
+export const AUDIO_TYPES = ["audio/webm", "audio/ogg", "audio/mpeg", "audio/wav", "audio/mp4"] as const;
+
 /** What the Notes page takes (after sniffing; see src/lib/files/types.ts). */
 export const NOTE_FILE_TYPES = [
   "application/pdf",
@@ -109,6 +112,14 @@ export const STORAGE_KINDS = {
     contentTypes: IMAGE_TYPES,
     description:
       "RSVP page cover images, re-encoded square WebP crops: event-covers/{orgId}/{randomId}/s{size}.webp",
+  },
+  "crm-audio": {
+    store: "private",
+    scope: "org",
+    maxUploadBytes: MAX_UPLOAD_BYTES,
+    contentTypes: AUDIO_TYPES,
+    description:
+      "CRM call recordings (server-made), voice notes and the voicemail to drop: crm-audio/{orgId}/{calls|notes|voicemail}/{randomId}",
   },
   avatars: {
     store: "public",

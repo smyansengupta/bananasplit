@@ -84,6 +84,14 @@ export function sentryOrigin(env: NodeJS.ProcessEnv = process.env): string | nul
 /** Vercel Blob's public store (logos, avatars) and Google profile photos. */
 const IMAGE_HOSTS = ["https://*.public.blob.vercel-storage.com", "https://*.googleusercontent.com"];
 
+/** Where the CRM's softphone SDKs connect (signalling and their own APIs). */
+const SOFTPHONE_HOSTS = [
+  "wss://rtc.telnyx.com",
+  "https://rtc.telnyx.com",
+  "wss://*.twilio.com",
+  "https://*.twilio.com",
+];
+
 /** The map on a public RSVP page (/e/[slug]) is Google Maps' keyless embed. */
 const FRAME_SOURCES = ["https://www.google.com"];
 
@@ -117,6 +125,9 @@ function sharedDirectives(env: NodeJS.ProcessEnv): string[] {
     // The live-collaboration WebSocket, only while collaboration is on
     // (docs/features/collaboration.md).
     collabConfig(env)?.origin,
+    // The CRM's browser softphone (Telnyx WebRTC, Twilio Voice), on the
+    // organization's own account (docs/features/crm.md, Phase 5).
+    ...SOFTPHONE_HOSTS,
   ].filter(Boolean);
   return [
     "default-src 'self'",
@@ -124,6 +135,9 @@ function sharedDirectives(env: NodeJS.ProcessEnv): string[] {
     `img-src 'self' blob: data: ${IMAGE_HOSTS.join(" ")}`,
     // FullCalendar ships its icon font inline as a data: URI in its CSS.
     "font-src 'self' data:",
+    // Call recordings and voice notes play from our own routes, and a
+    // recording in progress plays back from the browser.
+    "media-src 'self' blob:",
     `frame-src ${FRAME_SOURCES.join(" ")}`,
     `connect-src ${connect.join(" ")}`,
     `form-action 'self' ${[...FORM_TARGETS, authkitOrigin(env)].filter(Boolean).join(" ")}`,
@@ -188,6 +202,18 @@ export const DOOR_MODE_SOURCES = ["/app/:orgSlug/meetings/:id/rsvp/door"] as con
 export const DOOR_PERMISSIONS_HEADER = {
   key: "Permissions-Policy",
   value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()",
+};
+
+/**
+ * The CRM records voice notes and places calls in the browser, so its pages
+ * let this origin use the microphone; everywhere else keeps microphone=().
+ * next.config.ts lists these after the static headers, and the later value
+ * wins.
+ */
+export const CRM_MIC_SOURCES = ["/app/:orgSlug/crm", "/app/:orgSlug/crm/:path*"] as const;
+export const CRM_MIC_PERMISSIONS_HEADER = {
+  key: "Permissions-Policy",
+  value: "camera=(), microphone=(self), geolocation=(), payment=(), usb=(), browsing-topics=()",
 };
 
 /**

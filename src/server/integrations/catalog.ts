@@ -217,8 +217,44 @@ export const MEETING_PROVIDER_INFO: readonly ProviderInfo[] = [
   },
 ];
 
+/**
+ * The CRM's calls, texts and transcription (docs/features/crm.md, Phase 5):
+ * cards in their own "Calls and texts" group on Integrations and apps
+ * (src/app/app/[orgSlug]/integrations/phone-panels.tsx), so not in PROVIDERS.
+ */
+export const PHONE_PROVIDER_INFO: readonly ProviderInfo[] = [
+  {
+    provider: "TELNYX",
+    segment: "telnyx",
+    label: "Telnyx",
+    description: "Calls and texts from the CRM on the organization's own Telnyx account.",
+    secretKind: "API_KEY",
+    configKeys: ["number", "numbers", "publicKey", "connectionId"],
+  },
+  {
+    provider: "TWILIO",
+    segment: "twilio",
+    label: "Twilio",
+    description: "Calls and texts from the CRM on the organization's own Twilio account.",
+    secretKind: "API_KEY",
+    configKeys: ["accountSid", "number", "numbers", "twimlAppSid", "apiKeySid"],
+  },
+  {
+    provider: "DEEPGRAM",
+    segment: "deepgram",
+    label: "Deepgram",
+    description: "Writes out recorded calls and voice notes.",
+    secretKind: "API_KEY",
+    configKeys: [],
+  },
+];
+
 /** Every provider that has an OrgIntegration row, listed or not. */
-export const ALL_PROVIDER_INFO: readonly ProviderInfo[] = [...PROVIDERS, ...MEETING_PROVIDER_INFO];
+export const ALL_PROVIDER_INFO: readonly ProviderInfo[] = [
+  ...PROVIDERS,
+  ...MEETING_PROVIDER_INFO,
+  ...PHONE_PROVIDER_INFO,
+];
 
 export function providerInfo(provider: IntegrationProvider): ProviderInfo {
   const info = ALL_PROVIDER_INFO.find((p) => p.provider === provider);

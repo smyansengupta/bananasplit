@@ -1,6 +1,8 @@
 import type { CrmActivityKind, CrmDirection, Prisma } from "@/generated/prisma/client";
 import type { TxClient } from "@/server/db/context";
 
+import { emitCrmEvent } from "./events";
+
 /**
  * The timeline (docs/features/crm.md, module 3). Every later phase writes
  * here: logActivity for anything that happened with people, companies or
@@ -41,6 +43,9 @@ export interface LogActivityInput {
   privateToId?: string | null;
 }
 
+/** Rows mirrored from the workspace: not "activity.logged" (Phase 5's webhooks). */
+const MIRRORED_SOURCES: ReadonlySet<string> = new Set(["event", "rsvp", "check-in", "form-response", "transaction", "task", "link", "import"]);
+
 /** Kinds that count as being in touch. */
 const OUTREACH: ReadonlySet<CrmActivityKind> = new Set(["EMAIL", "CALL", "TEXT", "MEETING"]);
 
@@ -69,6 +74,7 @@ export async function logActivity(db: TxClient, input: LogActivityInput): Promis
     privateToId: input.privateToId ?? null,
   };
   let id: string;
+  let created = false;
   if (input.sourceKind && input.sourceId) {
     const existing = await db.crmActivity.findFirst({
       where: {
@@ -94,6 +100,7 @@ export async function logActivity(db: TxClient, input: LogActivityInput): Promis
           select: { id: true },
         })
       ).id;
+      created = true;
     }
   } else {
     id = (
@@ -106,6 +113,7 @@ export async function logActivity(db: TxClient, input: LogActivityInput): Promis
         select: { id: true },
       })
     ).id;
+    created = true;
   }
   if (targets.length > 0) {
     await db.crmActivityTarget.createMany({
@@ -125,6 +133,16 @@ export async function logActivity(db: TxClient, input: LogActivityInput): Promis
   }
   if (OUTREACH.has(input.kind) && occurredAt.getTime() <= Date.now() + 60_000) {
     await touchContacted(db, input.organizationId, targets, occurredAt);
+  }
+  const first = targets.find((t) => t.kind === "person") ?? targets[0];
+  if (created && first && !(input.sourceKind && MIRRORED_SOURCES.has(input.sourceKind)) && !input.privateToId) {
+    await emitCrmEvent(db, input.organizationId, {
+      type: "activity.logged",
+      targetKind: first.kind,
+      targetId: first.id,
+      userId: input.createdById ?? null,
+      sourceId: id,
+    });
   }
   return id;
 }

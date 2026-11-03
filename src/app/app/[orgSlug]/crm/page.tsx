@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CrmAiBar } from "@/components/crm/ai/ai-bar";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { GoalList } from "@/components/crm/forecast";
+import { TodayCalls } from "@/components/crm/phone/today-calls";
 import { CrmTodayKeys } from "@/components/crm/today-keys";
 import { when } from "@/components/crm/record-page";
 import { PageHeader } from "@/components/page-header";
@@ -140,6 +141,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
         </Card>
       )}
       <CrmTodayKeys hrefs={order.map((i) => crmRecordHref(orgSlug, i.targetKind, i.id))} />
+      <TodayCalls orgId={orgId} orgSlug={orgSlug} userId={shell.user.id} roles={shell.roles} />
       <div className="grid gap-4 lg:grid-cols-2">
         {GROUPS.map((g) => {
           const items = data.lists[g.kind];

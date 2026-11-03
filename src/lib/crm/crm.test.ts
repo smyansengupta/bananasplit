@@ -338,7 +338,7 @@ describe("small helpers", () => {
 
   it("puts each pipeline in the tab list where pipelines go, settings for managers only", () => {
     const tabs = resolveCrmTabs("o", [{ id: "p1", name: "Donations" }], { manager: false, counts: { review: 3 } });
-    expect(tabs.map((t) => t.label)).toEqual(["Today", "People", "Companies", "Donations", "Review", "Forecast", "Duplicates"]);
+    expect(tabs.map((t) => t.label)).toEqual(["Today", "People", "Companies", "Donations", "Review", "Forecast", "Calls", "Quotes", "Duplicates"]);
     expect(tabs.find((t) => t.id === "review")?.count).toBe(3);
     expect(resolveCrmTabs("o", [], { manager: true }).map((t) => t.id)).toEqual(expect.arrayContaining(["settings", "automations"]));
   });

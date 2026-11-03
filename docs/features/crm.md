@@ -1210,3 +1210,171 @@ and a widget against the database).
   pipeline); there's no grouping of members into teams.
 - Periods are calendar quarters and years by UTC dates, not the
   organization's time zone.
+
+## Phase 5 as built
+
+Phone, quotes and the API, on `claude/crm-p5`. Every provider is the
+organization's own account; with none connected the CRM still works
+(calls through the phone's own dialer, logged by hand).
+
+### Schema
+
+One migration, `20261105140000_crm_phone_api`, columns only (no table,
+policy or function, so `app.security_manifest()` is unchanged):
+`CrmSettings.phone` (provider, recording policy and notice, quiet hours,
+calling hours, the voicemail to drop) and `CrmSettings.webhookEvents` (the
+events some active webhook listens for, rewritten with every webhook
+change, so a member's change can tell whether to queue an event without
+reading `CrmWebhook`, which RLS keeps from members); on `CrmQuote`, `kind`
+(quote or invoice), `taxBps`, `acceptedIpHash`, `declinedAt`,
+`declineReason`, `paidAt` and `financeTransactionId`. Storage kind
+`crm-audio` (private, org-scoped, purged with the org).
+
+### Integrations (`src/server/crm/phone/connect.ts`, `.../integrations/phone-panels.tsx`)
+
+A "Calls and texts" group with Telnyx, Twilio and Deepgram cards: keys as
+`OrgSecret`s through the secrets module (owners and admins, audited, owners
+alerted), tested at once, the number picked from the account's own list or
+typed, and the webhook addresses to paste. Twilio's save also makes the
+softphone's TwiML app and signing API key in the account; that key's
+secret is the integration's second secret (kind `REFRESH_TOKEN`, the only
+other slot). Telnyx needs the account's public key (webhook signatures)
+and, for the browser, a credential connection id; the telephony credential
+is made on first use. Members never read integrations: what the CRM needs
+(which provider, the number, the settings) comes from `readPhoneStatus` on
+the service path, non-secret only.
+
+### Calls (`src/server/crm/phone/calls.ts`, `live.ts`, `inbound.ts`)
+
+- Every call is one `CrmCall` and one CALL row on the timeline (sourceKind
+  `call`, so the provider's events and the member's outcome update the
+  same row); `call.logged` is emitted. Log a call (outcome buttons, length,
+  notes, follow-up) on person, company and item pages
+  (`src/components/crm/phone/phone-section.tsx`, one line on each page), on
+  Today's "Calls to make", and between dialer calls.
+- The softphone (`softphone.tsx`) loads `@telnyx/webrtc` or
+  `@twilio/voice-sdk` only when a call starts; the token is minted on the
+  server for that member. The browser names the call row, never a number,
+  so a token can only dial who the CRM says.
+- Recording only after the all-party notice: Telnyx speaks it on the call
+  and starts recording on `call.speak.ended`; Twilio plays it to the person
+  as they answer (`<Number url>`) and records from the answer. A recording
+  without `recordingConsent` is never fetched. Owners and admins can switch
+  recording off for good. Recordings are fetched into `crm-audio` by
+  `crm-call-audio`.
+- Voicemail drop: the organization records one in Phone settings; Leave
+  voicemail plays it into the call through a ten-minute signed link and
+  hangs up.
+- The power dialer (`/crm/calls`) works down the follow-ups due or any
+  saved view of people, skipping do-not-contact and people without a
+  number, with the outcome between calls and a calling-hours hint.
+- Provider webhooks: `/api/crm/phone/telnyx/{orgId}` (ed25519 over
+  `timestamp|body`, five-minute window) and
+  `/api/crm/phone/twilio/{orgId}/{voice|notice|status|recording|sms}`
+  (HMAC-SHA1 of our configured URL and the form). Signature first, then a
+  per-organization rate limit, then that organization only.
+
+### Transcription and summaries (`src/server/crm/phone/jobs.ts`, `summary.ts`)
+
+`crm-transcribe` writes out a recording or voice note on the
+organization's Deepgram key (Nova, speakers labelled), then
+`summarizeTranscript` sums it up into notes and next steps through
+`src/server/crm/ai.ts` (the monthly cap is checked first; usage metered).
+Without AI the transcript still lands; without Deepgram nothing is sent.
+
+### Voice notes (`voice-note.tsx`, `/api/orgs/{orgId}/crm/audio`)
+
+Recorded in the browser (up to ten minutes, under the 4 MB upload cap),
+the type taken from the bytes, stored in `crm-audio`, one NOTE row with
+the audio on the timeline. Without Deepgram it says so and stays audio.
+The same route plays recordings back after reading the row as the member.
+CRM pages get `microphone=(self)` (`CRM_MIC_SOURCES`,
+`src/lib/security/csp.ts`); connect-src gains the softphones' hosts.
+
+### Texting (`src/server/crm/phone/texts.ts`)
+
+Two-way SMS on the organization's number: the action writes the text and
+its TEXT row, and `crm-text-send` sends it through the SMS module
+(`sendOrgSms`: live in production, the sink locally and on previews).
+Consent is required before the first text and records how it was given
+(`CrmPerson.consent.text`); do-not-contact always wins; quiet hours hold a
+text until they end. Incoming texts match the person by the last ten
+digits; STOP sets consent off and do-not-contact on, START turns texting
+back on (and clears only the do-not-contact a STOP set), HELP is logged.
+The providers send the carriers' required replies themselves.
+
+### Quotes and invoices (`src/server/crm/quotes.ts`, `quote-pdf.tsx`)
+
+On an item, a company or a person: lines in cents, tax in basis points,
+currency, notes, valid-until (due on an invoice), numbered per kind
+(Q-0001, INV-0001) under a transaction-scoped advisory lock. Send makes
+`/q/{orgId}.{secret}` (only the hash is kept; sending again makes a new
+link). The recipient reads it in the organization's theme, downloads the
+PDF (react-pdf, the org's colour and logo), and accepts by typing their
+name (name, time and a hash of the IP with the org are kept) or declines;
+past its date it can't be accepted. Acceptance moves the item to its first
+won stage through `moveDeal` (a sponsorship still moves only through
+Finance's rules). Copy, make an invoice from a quote, move to another
+item, and mark paid (a finance role can book it as Finance income in the
+active period, audited).
+
+### Public API (`src/server/crm/api/`, `/api/crm/v1/...`)
+
+People, companies, items, activities (read and write) and pipelines with
+stages (read): list with cursor pagination and filters, get, POST, PATCH,
+`trashed: true|false` instead of delete. `Authorization: Bearer
+bsk_{orgId}.{secret}`; keys stored as SHA-256 with a short prefix, read or
+read-and-write, last used, revoke. 300 requests a minute per key, 60 of
+them writes; bad keys limited per IP. Each request is one service
+transaction in the key's organization, as the organization (no member;
+history source `api`). JSON errors; OpenAPI at `/api/crm/v1/openapi.json`;
+a how-to on CRM settings, API keys.
+
+### Outgoing webhooks (`src/server/crm/webhooks/`)
+
+Events person.created, person.updated, company.created, deal.created,
+deal.stage_changed, deal.closed, activity.logged, call.logged. The listener
+is registered on the CRM event bus with `onCrmEvent` (like the workflow
+engine), and `emitCrmEvent`'s guard now also queues when
+`CrmSettings.webhookEvents` names one of the event's possible webhook
+events. `logActivity` emits `activity.logged` for new rows that aren't
+mirrored from the workspace. Each delivery is a `CrmWebhookDelivery` and a
+`crm-webhook` job: JSON, `X-Bananasplit-Signature: t=..,v1=HMAC-SHA256(t.body)`,
+https only, private and reserved addresses refused at connect (DNS
+rebinding included), no redirects, a ten-second timeout, eight tries with
+backoff (a 4xx stops it). Send test, the delivery log, and show or rotate
+the secret on CRM settings, Webhooks. Local receivers: `http://localhost`
+only off production, or with `CRM_WEBHOOKS_ALLOW_LOCAL=1` off Vercel.
+
+### Settings and tabs
+
+CRM settings links to Phone, API keys and Webhooks (owners and admins).
+Tabs Calls and Quotes (`src/lib/crm/nav.ts`).
+
+### Tests
+
+`src/lib/crm/phase5.test.ts` (STOP words, consent, quiet hours, numbers,
+quote totals, numbering, tokens, typed signatures),
+`src/server/crm/phase5.test.ts` (Telnyx and Twilio signatures, API keys
+and pagination, webhook signing, the SSRF guard, providers behind
+`phoneHttp`), `src/server/crm/phase5.db.test.ts` (the API end to end, the
+quote flow to won, STOP and START, webhook queueing).
+
+### Not finished or not verified
+
+- No real Telnyx, Twilio or Deepgram call was made (no keys here): the
+  softphone, recording, voicemail drop, provider webhooks and transcription
+  follow the providers' documented APIs and are tested only behind the
+  seam. In particular, whether Telnyx's `speak` on a WebRTC call reaches
+  both parties needs checking on a real account.
+- Inbound calls to the organization's number aren't routed to members'
+  browsers (outbound only).
+- Audio in `crm-audio` doesn't count toward storage used.
+- Texts from numbers not in the CRM are listed on Calls but can't yet be
+  turned into a person in one click.
+
+### Later (notes only)
+
+The learned scoring model, Stripe (a payment closing an item), support
+inbox and chat, a native app, predictive dialing (a gap we accept), and
+e-signatures beyond a typed name.

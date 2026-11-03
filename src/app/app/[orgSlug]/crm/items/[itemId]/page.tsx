@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { RecordAi } from "@/components/crm/ai/record-ai";
 import { CrmTabs } from "@/components/crm/crm-tabs";
+import { PhoneSection } from "@/components/crm/phone/phone-section";
 import { DealPeople } from "@/components/crm/deal-people";
 import { RecordActions } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
@@ -135,6 +136,7 @@ export default async function CrmItemPage({ params }: PageProps<"/app/[orgSlug]/
               <ScoreReasons score={deal.score} {...data.score} />
             </Section>
           )}
+          <PhoneSection orgId={orgId} orgSlug={orgSlug} target={{ kind: "deal", id: deal.id }} />
           <LinkedSection orgId={orgId} orgSlug={orgSlug} at={{ kind: "crm-deal", id: deal.id }} title="Linked" />
         </>
       }

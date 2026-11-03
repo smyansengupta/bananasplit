@@ -20,6 +20,7 @@ import {
 import { SetupHelp } from "./integration-header";
 import { StatusPanel, TestAndRemove } from "./integration-ui";
 import { loadIntegrationPage } from "./load";
+import { PHONE_APPS, phonePanel } from "./phone-panels";
 import {
   AiModelForm,
   ClaudeForm,
@@ -50,6 +51,7 @@ export const PANEL_APPS = [
   "zoom",
   "google-meet",
   "microsoft-teams",
+  ...PHONE_APPS,
 ] as const;
 export type PanelApp = (typeof PANEL_APPS)[number];
 
@@ -76,6 +78,10 @@ export async function loadPanel(
     case "google-meet":
     case "microsoft-teams":
       return videoPanel(app, orgSlug);
+    case "telnyx":
+    case "twilio":
+    case "deepgram":
+      return phonePanel(app, orgSlug);
     case "email":
       return withIntegration(orgSlug, "EMAIL_RESEND", "integrations", "Email", async (p) => {
         const { organization, dto, canWrite, canRemove } = p;

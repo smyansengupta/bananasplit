@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs/config";
 
 import {
+  CRM_MIC_PERMISSIONS_HEADER,
+  CRM_MIC_SOURCES,
   DOOR_MODE_SOURCES,
   DOOR_PERMISSIONS_HEADER,
   buildStaticCsp,
@@ -24,6 +26,8 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: STATIC_SECURITY_HEADERS },
       // Door mode scans tickets with the camera (the later header wins).
       ...DOOR_MODE_SOURCES.map((source) => ({ source, headers: [DOOR_PERMISSIONS_HEADER] })),
+      // The CRM records voice notes and calls from the browser (the microphone).
+      ...CRM_MIC_SOURCES.map((source) => ({ source, headers: [CRM_MIC_PERMISSIONS_HEADER] })),
       // Every path but the Notes files route (its PDFs preview in a same-origin frame).
       { source: NOT_FRAMABLE_SOURCE, headers: [FRAME_DENY_HEADER] },
       {

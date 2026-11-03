@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { RecordAi } from "@/components/crm/ai/record-ai";
 import { CrmTabs } from "@/components/crm/crm-tabs";
+import { PhoneSection } from "@/components/crm/phone/phone-section";
 import { RecordActions } from "@/components/crm/record-actions";
 import { RecordFields } from "@/components/crm/record-fields";
 import { RecordPage, Section, StrengthBadge, when } from "@/components/crm/record-page";
@@ -205,6 +206,7 @@ export default async function CrmPersonPage({ params }: PageProps<"/app/[orgSlug
               <ScoreReasons score={person.score} {...data.score} />
             </Section>
           )}
+          <PhoneSection orgId={orgId} orgSlug={orgSlug} target={{ kind: "person", id: person.id }} />
           <LinkedSection orgId={orgId} orgSlug={orgSlug} at={{ kind: "crm-person", id: person.id }} title="Linked" />
         </>
       }
