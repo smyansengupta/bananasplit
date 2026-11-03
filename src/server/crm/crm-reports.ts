@@ -82,8 +82,8 @@ export async function dealsReport(
   const b = bounds(c);
   const prev = before(c, b);
   const today = localDateKey(c.now, c.tz);
-  const [deals, fields, goals] = await Promise.all([
-    c.db.crmDeal.findMany({
+  // One query at a time: they share the viewer's transaction.
+  const deals = await c.db.crmDeal.findMany({
       where: { organizationId: c.organizationId, pipelineId: pipeline.id, deletedAt: null },
       take: 5000,
       select: {
@@ -100,10 +100,9 @@ export async function dealsReport(
         custom: true,
         stage: { select: { kind: true } },
       },
-    }),
-    customFieldsFor(c.db, c.organizationId, "deal", pipeline.id),
-    listGoals(c.db, c.organizationId, today, { current: true }),
-  ]);
+    });
+  const fields = await customFieldsFor(c.db, c.organizationId, "deal", pipeline.id);
+  const goals = await listGoals(c.db, c.organizationId, today, { current: true });
   const typeField = dealTypeField(fields);
   const amount = (d: { amountCents: number | null }) => d.amountCents ?? 0;
   const won = deals.filter((d) => d.stage.kind === "WON" && inside(d.closedAt, b));
@@ -321,12 +320,10 @@ export async function outreachReport(c: ReportCtx): Promise<OutreachReport> {
     c.db.crmActivity.count({
       where: { organizationId: org, kind: "TEXT", direction: "OUTBOUND", deletedAt: null, occurredAt: { gte: x.start, lt: x.end } },
     });
-  const [emails, bounced, replied, texts] = await Promise.all([
-    c.db.crmEmailMessage.count({ where: sentWhere(b) }),
-    c.db.crmEmailMessage.count({ where: { ...sentWhere(b), status: "BOUNCED" } }),
-    c.db.crmEmailMessage.count({ where: { ...sentWhere(b), repliedAt: { not: null } } }),
-    textsIn(b),
-  ]);
+  const emails = await c.db.crmEmailMessage.count({ where: sentWhere(b) });
+  const bounced = await c.db.crmEmailMessage.count({ where: { ...sentWhere(b), status: "BOUNCED" } });
+  const replied = await c.db.crmEmailMessage.count({ where: { ...sentWhere(b), repliedAt: { not: null } } });
+  const texts = await textsIn(b);
   const previous = prev ? (await c.db.crmEmailMessage.count({ where: sentWhere(prev) })) + (await textsIn(prev)) : null;
 
   const rate = await crmWidgetPayload(

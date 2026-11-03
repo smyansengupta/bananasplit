@@ -195,7 +195,16 @@ export function GoalCard({ orgId, data }: { orgId: string; data: GoalCardData | 
       <div className="space-y-5">
         <Row label="What">
           {GOAL_WHATS.map((m) => (
-            <Chip key={m} on={metric === m} disabled={!edit} onClick={() => change(setMetric)(m)}>
+            <Chip
+              key={m}
+              on={metric === m}
+              disabled={!edit}
+              onClick={() => {
+                change(setMetric)(m);
+                // Money and counts read differently: "$5,000" or "5000".
+                if (target !== null) setText(fmtTarget(m, target));
+              }}
+            >
               {GOAL_WHAT[m].label}
             </Chip>
           ))}

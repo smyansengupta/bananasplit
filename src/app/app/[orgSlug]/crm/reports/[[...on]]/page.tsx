@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { CrmAvatar } from "@/components/crm/card/crm-card";
 import { QuietButton } from "@/components/crm/reports/quiet-button";
+import { CrmReportTabs } from "@/components/crm/reports/report-tabs";
 import {
   choiceTone,
   Figure,
@@ -12,7 +13,6 @@ import {
   SERIES,
   StackBar,
 } from "@/components/crm/reports/report-bits";
-import { ChartColumn, Database } from "@/components/icons";
 import { BarList } from "@/components/reports/bar-list";
 import { RangePicker } from "@/components/reports/range-picker";
 import { ReportCard, ReportEmpty } from "@/components/reports/report-card";
@@ -137,6 +137,8 @@ export default async function CrmReportsPage({
         lead = `${pct} of the way to the ${formatMoney(r.won.goal.target)} goal${
           r.likelyCents > 0 ? `, with ${formatMoney(r.likelyCents)} more likely before it ends` : ""
         }.`;
+      } else if (r.won.count === 0) {
+        lead = `Nothing won ${words.now} yet${r.open.count ? `, with ${r.open.count} ${r.open.count === 1 ? "deal" : "deals"} still open` : ""}.`;
       } else {
         lead = `${wonFig} won ${words.now}${
           r.won.previousCents !== null && words.before
@@ -167,7 +169,7 @@ export default async function CrmReportsPage({
             <Figure
               value={wonFig}
               detail={
-                diff !== null && words.before && r.pipeline.hasAmount
+                diff !== null && diff !== 0 && words.before && r.pipeline.hasAmount
                   ? `${diff >= 0 ? "+" : "-"}${formatMoney(Math.abs(diff))} on ${words.before}`
                   : `${r.won.count} ${r.won.count === 1 ? "deal" : "deals"}`
               }
@@ -446,12 +448,9 @@ export default async function CrmReportsPage({
           <PageTabs label="Report on" tabs={sourceTabs} />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <PageTabs
-            label="Databases sections"
-            tabs={[
-              { href: databasesHref, label: "Databases", icon: Database, active: false },
-              { href: sourceTabs.find((t) => t.active)!.href, label: "Reports", icon: ChartColumn, active: true },
-            ]}
+          <CrmReportTabs
+            databasesHref={databasesHref}
+            reportsHref={sourceTabs.find((t) => t.active)?.href ?? reportBase}
           />
           <RangePicker preset={range.preset} from={range.from} to={range.to} label={range.label} span={range.span} />
         </div>

@@ -5,7 +5,13 @@ import { useState } from "react";
 
 import { moveDealAction, saveRecordAction } from "@/app/app/[orgSlug]/crm/actions";
 import { makeDealQuoteAction, pushDealStepAction, setDealStepAtAction, setDealTypeAction } from "@/app/app/[orgSlug]/crm/deal-actions";
-import { AmbientButton, AmbientWhy, MAX_AMBIENT, type AmbientAction } from "@/components/ambient/ambient-button";
+import {
+  AMBIENT_BUTTON,
+  AmbientButton,
+  AmbientWhy,
+  MAX_AMBIENT,
+  type AmbientAction,
+} from "@/components/ambient/ambient-button";
 import { CrmCard } from "@/components/crm/card/crm-card";
 import { dueWords } from "@/components/crm/card/next-step";
 import { useCrmOpen } from "@/components/crm/card/use-crm-open";
@@ -67,6 +73,8 @@ export interface DealCardData {
 }
 
 const TABS = ["overview", "quote", "timeline", "details"] as const;
+const UNDO =
+  "text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,currentColor_28%,transparent)] hover:bg-muted";
 const shortDay = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
@@ -92,6 +100,7 @@ export function DealCard({
     needs: { keys: string[]; labels: string[] };
     reason?: string;
   } | null>(null);
+  const [moved, setMoved] = useState<{ from: string; name: string } | null>(null);
 
   // Closing takes `tab` with it, so the next card opens on its overview.
   const close = () => {
@@ -133,17 +142,16 @@ export function DealCard({
       setMoving({ stage: to, needs: r.needs });
       return;
     }
-    toast({
-      title: `Moved to ${to.name}.`,
-      action: {
-        label: "Undo",
-        run: async () => {
-          const u = await moveDealAction(orgId, data.id, { stageId: from }).catch(() => null);
-          if (!u || !u.ok || u.needs) toast({ title: "It couldn't go back. Pick the stage again.", tone: "error" });
-          router.refresh();
-        },
-      },
-    });
+    // Undo sits in the card: a toast outside it would close the card when clicked.
+    setMoved({ from, name: to.name });
+    router.refresh();
+  };
+
+  const undoMove = async () => {
+    if (!moved) return;
+    setMoved(null);
+    const u = await moveDealAction(orgId, data.id, { stageId: moved.from }).catch(() => null);
+    if (!u || !u.ok || u.needs) toast({ title: "It couldn't go back. Pick the stage again.", tone: "error" });
     router.refresh();
   };
 
@@ -194,7 +202,10 @@ export function DealCard({
             type="button"
             aria-pressed={on}
             disabled={data.deleted}
-            onClick={() => pick(s)}
+            onClick={() => {
+              setMoved(null);
+              pick(s);
+            }}
             className={cn(
               "focus-glow inline-flex h-[30px] items-center rounded-full px-3.5 text-[13px] whitespace-nowrap transition-colors outline-none disabled:opacity-60",
               on
@@ -212,6 +223,14 @@ export function DealCard({
           </button>
         );
       })}
+      {moved && (
+        <span className="ms-1 flex items-center gap-2">
+          <span className="text-muted-foreground text-[13px]">Moved to {moved.name}.</span>
+          <button type="button" className={cn(AMBIENT_BUTTON, UNDO)} onClick={() => void undoMove()}>
+            Undo
+          </button>
+        </span>
+      )}
     </div>
   );
 
@@ -355,6 +374,7 @@ function NextBar({ orgId, data, onQuote }: { orgId: string; data: DealCardData; 
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
   const [when, setWhen] = useState("");
+  const [pushed, setPushed] = useState<{ before: string | null } | null>(null);
   const step = data.nextStep?.trim() || null;
   const due = data.nextStepAt ? dueWords(new Date(data.nextStepAt)) : null;
   const quote = data.quote;
@@ -362,12 +382,12 @@ function NextBar({ orgId, data, onQuote }: { orgId: string; data: DealCardData; 
   const actions: AmbientAction[] = [];
   let why: string | null = null;
   if (!step) {
-    why = "No next step";
+    // The bar already says there's none: no reason beside the button.
     actions.push({
       key: "add",
       label: "Add a next step",
       tone: "solid",
-      reason: why,
+      reason: "No next step",
       run: async () => {
         setAdding(true);
         return {};
@@ -382,18 +402,7 @@ function NextBar({ orgId, data, onQuote }: { orgId: string; data: DealCardData; 
       reason: "Moves the next step a day",
       run: async () => {
         const r = await pushDealStepAction(orgId, data.id, 1);
-        if (r.ok) {
-          toast({
-            title: "Pushed a day.",
-            action: {
-              label: "Undo",
-              run: async () => {
-                await runAction(() => setDealStepAtAction(orgId, data.id, r.before));
-                router.refresh();
-              },
-            },
-          });
-        }
+        if (r.ok) setPushed({ before: r.before });
         return r;
       },
     });
@@ -427,6 +436,30 @@ function NextBar({ orgId, data, onQuote }: { orgId: string; data: DealCardData; 
     why = why ?? `Quote sent ${shortDay(quote.sentAt)}`;
   }
   const shown = actions.slice(0, MAX_AMBIENT);
+
+  if (pushed) {
+    return (
+      <div className="bg-muted flex flex-nowrap items-center gap-3 rounded-2xl px-4 py-3">
+        <span className="min-w-0 flex-1 truncate text-[15px]">
+          <b>Next:</b> {step}
+          {due && <span className="text-muted-foreground">, {due.words}</span>}
+        </span>
+        <span className="text-muted-foreground shrink-0 text-sm">Pushed a day.</span>
+        <button
+          type="button"
+          className={cn(AMBIENT_BUTTON, UNDO)}
+          onClick={async () => {
+            const before = pushed.before;
+            setPushed(null);
+            await runAction(() => setDealStepAtAction(orgId, data.id, before));
+            router.refresh();
+          }}
+        >
+          Undo
+        </button>
+      </div>
+    );
+  }
 
   if (adding) {
     return (
