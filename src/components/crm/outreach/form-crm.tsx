@@ -146,7 +146,7 @@ export function FormCrmEditor({
           <div className="flex items-start justify-between gap-4">
             <div>
               <Label htmlFor="f-crm-route">Give new people an owner</Label>
-              <p className="text-muted-foreground mt-0.5 text-[12px]">By your CRM's routing: in turn, or by rules. They're told, and it's in their Inbox.</p>
+              <p className="text-muted-foreground mt-0.5 text-[12px]">By your CRM&apos;s routing: in turn, or by rules. They&apos;re told, and it&apos;s in their Inbox.</p>
             </div>
             <Switch id="f-crm-route" checked={route} onCheckedChange={setRoute} />
           </div>
@@ -162,12 +162,14 @@ export function FormCrmEditor({
 /** The form on your own website: a button that opens it, no frame needed. */
 export function FormEmbed({ link, title }: { link: string; title: string }) {
   const safe = title.replace(/[<>&"]/g, "");
+  // The snippet goes on their own site, outside the app's theme: its colours are literal.
+  // eslint-disable-next-line theme/no-raw-colors
   const snippet = `<a href="${link}" target="_blank" rel="noopener" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#1f1f1f;color:#fff;font:600 15px system-ui,sans-serif;text-decoration:none" onclick="window.open(this.href,'bananasplit-form','width=560,height=760');return false;">${safe}</a>`;
   return (
     <section className="bg-card edge rounded-card max-w-2xl space-y-3 p-5">
       <div>
         <h2 className="heading text-base">Put it on your website</h2>
-        <p className="text-muted-foreground text-sm">Paste this where the button should go. It opens the form in a small window; forms can't sit inside another site's frame, for your visitors' safety.</p>
+        <p className="text-muted-foreground text-sm">Paste this where the button should go. It opens the form in a small window; forms can&apos;t sit inside another site&apos;s frame, for your visitors&apos; safety.</p>
       </div>
       <pre className="bg-muted overflow-x-auto rounded-xl p-3 text-xs whitespace-pre-wrap">{snippet}</pre>
       <Button

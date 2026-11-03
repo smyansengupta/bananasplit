@@ -200,7 +200,7 @@ function TemplateDialog({
               <p className="text-sm font-semibold">{shown.subject || "(no subject)"}</p>
               <p className="text-[15px] whitespace-pre-wrap">{shown.body}</p>
             </div>
-            {unknown.length > 0 && <p className="text-tint-danger-foreground text-sm">There's no field called {unknown.map((u) => `{{${u}}}`).join(", ")}.</p>}
+            {unknown.length > 0 && <p className="text-tint-danger-foreground text-sm">There&apos;s no field called {unknown.map((u) => `{{${u}}}`).join(", ")}.</p>}
             {real && real.missing.length > 0 && <p className="text-muted-foreground text-sm">Empty for them: {real.missing.join(", ")}.</p>}
           </div>
         </div>

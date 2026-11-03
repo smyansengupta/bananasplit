@@ -102,7 +102,7 @@ export function PersonOutreachControls({
             key={i.url}
             orgId={orgId}
             people={[{ id: person.id, name: person.name, email: person.email, blocked: person.blocked }]}
-            templates={[]}
+            templates={templates}
             label={`Invite to ${i.label}`}
             size="sm"
             icon={false}

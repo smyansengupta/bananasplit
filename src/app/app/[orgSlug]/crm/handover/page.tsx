@@ -11,6 +11,10 @@ import { crmShell } from "../shell";
 
 export const metadata = { title: "Handover" };
 
+function daysAgo(n: number): Date {
+  return new Date(Date.now() - n * 86_400_000);
+}
+
 /**
  * Handover (docs/features/crm.md, "What makes ours better" 5): for
  * managers, members who left (or anyone) and the people they looked after,
@@ -54,7 +58,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
           targetKind: "person",
           field: "ownerId",
           newValue: { equals: userId },
-          changedAt: { gte: new Date(Date.now() - 90 * 86_400_000) },
+          changedAt: { gte: daysAgo(90) },
         },
         select: { targetId: true },
         take: 500,
@@ -110,7 +114,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
           {data.members.length > 0 && (
             <section className="space-y-3">
               <h2 className="heading text-lg">Changing roles</h2>
-              <p className="text-muted-foreground text-sm">Hand someone's relationships to whoever takes over, or to a position so they follow it.</p>
+              <p className="text-muted-foreground text-sm">Hand someone&apos;s relationships to whoever takes over, or to a position so they follow it.</p>
               <ul className="grid gap-3 md:grid-cols-2">
                 {data.members.map((m) => (
                   <HandOverCard key={m.userId} orgId={orgId} from={{ ...m, left: false }} choices={choices} />

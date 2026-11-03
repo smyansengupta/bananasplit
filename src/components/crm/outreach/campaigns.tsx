@@ -273,7 +273,7 @@ function NewListDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New list</DialogTitle>
-          <DialogDescription>It's a saved view: whoever matches it today. It also shows on People.</DialogDescription>
+          <DialogDescription>It&apos;s a saved view: whoever matches it today. It also shows on People.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alumni to catch up with" autoFocus />

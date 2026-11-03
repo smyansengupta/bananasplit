@@ -189,7 +189,7 @@ export function BookingEditor({
           <Input value={s.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} />
         </label>
         <label className="grid gap-1.5 text-sm">
-          <span className="text-muted-foreground">What it's for</span>
+          <span className="text-muted-foreground">What it&apos;s for</span>
           <Textarea value={s.description} onChange={(e) => set({ description: e.target.value })} rows={3} />
         </label>
         <label className="grid gap-1.5 text-sm">
@@ -230,7 +230,7 @@ export function BookingEditor({
               </button>
             ))}
           </div>
-          <p className="text-muted-foreground text-xs">Times come from each host's availability on their profile and the meetings on their calendar.</p>
+          <p className="text-muted-foreground text-xs">Times come from each host&apos;s availability on their profile and the meetings on their calendar.</p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-sm">
           <label className="grid gap-1">

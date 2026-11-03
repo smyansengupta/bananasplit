@@ -24,7 +24,7 @@ export function UnsubscribeForm({ token, orgName, initial }: { token: string; or
     <div className="bg-card ring-foreground/6 rounded-card space-y-3 p-5 ring-1">
       {out ? (
         <>
-          <p className="text-[15px]">You won't get these emails from {orgName} any more. That covers everyone there.</p>
+          <p className="text-[15px]">You won&apos;t get these emails from {orgName} any more. That covers everyone there.</p>
           <Button variant="outline" disabled={pending} onClick={() => set(true)}>
             Subscribe again
           </Button>
@@ -37,7 +37,7 @@ export function UnsubscribeForm({ token, orgName, initial }: { token: string; or
           </Button>
         </>
       )}
-      {failed && <p className="text-tint-danger-foreground text-sm">That didn't go through. Try again.</p>}
+      {failed && <p className="text-tint-danger-foreground text-sm">That didn&apos;t go through. Try again.</p>}
     </div>
   );
 }

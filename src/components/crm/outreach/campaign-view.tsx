@@ -148,7 +148,7 @@ export function CampaignView({
                 }}
               >
                 <RotateCcw className="size-4" aria-hidden="true" />
-                Add who's new on the list
+                Add who&apos;s new on the list
               </Button>
             )}
           </>
@@ -205,7 +205,7 @@ export function CampaignView({
           )}
           {tab === "all" && picked.size === 0 && !isBulk && (
             <Button variant="ghost" onClick={() => setMoving(true)}>
-              Split what's left again
+              Split what&apos;s left again
             </Button>
           )}
         </div>

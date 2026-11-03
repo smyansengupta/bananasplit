@@ -57,7 +57,7 @@ export function OutreachSettings({
     <section className="bg-card ring-foreground/6 rounded-card space-y-4 p-5 ring-1">
       <div>
         <h2 className="heading text-base">New people get an owner</h2>
-        <p className="text-muted-foreground text-sm">For forms set to give new people an owner. They're told, and it's in their Inbox.</p>
+        <p className="text-muted-foreground text-sm">For forms set to give new people an owner. They&apos;re told, and it&apos;s in their Inbox.</p>
       </div>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Routing">
         {(
@@ -148,7 +148,7 @@ export function OutreachSettings({
           </Button>
         </div>
         <p className="text-muted-foreground text-xs">
-          Past it, the rest wait for tomorrow. Handing someone's relationships over is on{" "}
+          Past it, the rest wait for tomorrow. Handing someone&apos;s relationships over is on{" "}
           <Link href={`/app/${orgSlug}/crm/handover`} className="underline underline-offset-4">
             Handover
           </Link>

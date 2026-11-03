@@ -208,7 +208,7 @@ export function ComposeDialog({
         <DialogHeader>
           <DialogTitle>{replyTo ? "Reply" : `Email ${person?.name ?? ""}`.trim()}</DialogTitle>
           <DialogDescription>
-            {person?.email ? `To ${person.email}. ` : ""}It goes from your organization's address with your name, and lands on their timeline.
+            {person?.email ? `To ${person.email}. ` : ""}It goes from your organization&apos;s address with your name, and lands on their timeline.
           </DialogDescription>
         </DialogHeader>
         {stage.kind === "conflict" ? (

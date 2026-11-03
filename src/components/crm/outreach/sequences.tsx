@@ -223,7 +223,7 @@ export function SequenceEditor({
     router.refresh();
   };
 
-  let elapsed = 0;
+  const elapsedAt = steps.map((_, i) => steps.slice(0, i + 1).reduce((n, x) => n + x.delayDays, 0));
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
       <div className="space-y-4">
@@ -249,7 +249,6 @@ export function SequenceEditor({
         </div>
         <ol className="space-y-3">
           {steps.map((s, i) => {
-            elapsed += s.delayDays;
             const Look = KIND_LOOK[s.kind];
             return (
               <li key={i} className="bg-card ring-foreground/6 rounded-card space-y-3 p-4 ring-1">
@@ -291,7 +290,7 @@ export function SequenceEditor({
                     className="h-8 w-20"
                     aria-label="Days to wait"
                   />
-                  <span className="text-muted-foreground">days{i === 0 ? " after they're added" : ""}, day {elapsed}</span>
+                  <span className="text-muted-foreground">days{i === 0 ? " after they're added" : ""}, day {elapsedAt[i]}</span>
                 </div>
                 {s.kind === "EMAIL" ? (
                   <div className="space-y-2">
@@ -420,14 +419,14 @@ export function SequenceEditor({
         </section>
         <section className="bg-card ring-foreground/6 rounded-card space-y-3 p-4 ring-1">
           <div className="flex items-center gap-2">
-            <h2 className="heading flex-1 text-base">Who's in it</h2>
+            <h2 className="heading flex-1 text-base">Who&apos;s in it</h2>
             <Button size="sm" variant="outline" disabled={sequence.status !== "ON"} onClick={() => setAdding(true)} title={sequence.status === "ON" ? undefined : "Turn it on first"}>
               <Users className="size-4" aria-hidden="true" />
               Add people
             </Button>
           </div>
           {enrollments.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Nobody yet. Add people here, from a person's page, or from a campaign.</p>
+            <p className="text-muted-foreground text-sm">Nobody yet. Add people here, from a person&apos;s page, or from a campaign.</p>
           ) : (
             <ul className="space-y-1.5 text-sm">
               {enrollments.map((e) => (
@@ -495,7 +494,7 @@ export function EnrollDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add to a sequence</DialogTitle>
-          <DialogDescription>The steps go out from your mailbox, inside the sequence's hours.</DialogDescription>
+          <DialogDescription>The steps go out from your mailbox, inside the sequence&apos;s hours.</DialogDescription>
         </DialogHeader>
         {skipped ? (
           <div className="space-y-2 text-sm">

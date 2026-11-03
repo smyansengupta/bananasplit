@@ -158,7 +158,7 @@ export function BulkComposer({
         <div className="bg-muted/50 space-y-2 rounded-2xl p-4">
           <p className="text-sm font-semibold">{preview.subject || "(no subject)"}</p>
           <p className="text-[15px] whitespace-pre-wrap">{preview.body}</p>
-          <p className="text-muted-foreground border-t pt-2 text-xs">Don't want these emails? Unsubscribe.</p>
+          <p className="text-muted-foreground border-t pt-2 text-xs">Don&apos;t want these emails? Unsubscribe.</p>
         </div>
         <p className="text-muted-foreground text-xs">With example values; each person gets their own.</p>
       </aside>

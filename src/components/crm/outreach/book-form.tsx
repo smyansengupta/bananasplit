@@ -53,7 +53,7 @@ export function BookForm({
       <div className="bg-card ring-foreground/6 rounded-card space-y-2 p-6 ring-1">
         <p className="heading flex items-center gap-2 text-lg">
           <Check className="size-5" aria-hidden="true" />
-          You're booked
+          You&apos;re booked
         </p>
         <p className="text-[15px]">
           {done.when}, with {done.hostName}. A confirmation is on its way to {email}.
