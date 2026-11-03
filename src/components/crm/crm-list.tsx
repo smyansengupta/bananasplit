@@ -76,6 +76,8 @@ export interface ListRow {
   owner: string | null;
   lastContactedAt: string | null;
   nextFollowUpAt: string | null;
+  /** The follow-up date has passed. */
+  overdue?: boolean;
   strength: number;
   extra?: string | null;
   deleted: boolean;
@@ -123,7 +125,8 @@ export function CrmList(props: ListProps) {
   const pathname = usePathname();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [active, setActive] = useState(0);
-  const [creating, setCreating] = useState(false);
+  // New from anywhere (New › New person) lands here with ?new=1: the form starts open.
+  const [creating, setCreating] = useState(() => searchParams.get("new") === "1");
   const [, start] = useTransition();
   const searchRef = useRef<HTMLInputElement>(null);
   const trash = url.get("trash") === "1";
@@ -131,17 +134,21 @@ export function CrmList(props: ListProps) {
   const noun = kind === "person" ? "person" : "company";
   const nouns = kind === "person" ? "people" : "companies";
 
-  // New from anywhere (New › New person) lands here with ?new=1.
+  // Drop ?new=1 so a reload or Back doesn't open it again.
   const startNew = searchParams.get("new") === "1";
   useEffect(() => {
     if (!startNew) return;
-    setCreating(true);
     const next = new URLSearchParams(searchParams.toString());
     next.delete("new");
     router.replace(next.toString() ? `${pathname}?${next}` : pathname, { scroll: false });
   }, [startNew, searchParams, router, pathname]);
 
-  useEffect(() => setSelected(new Set()), [rows]);
+  // New rows (a page, a filter, a refresh): nothing stays picked.
+  const [shown, setShown] = useState(rows);
+  if (shown !== rows) {
+    setShown(rows);
+    setSelected(new Set());
+  }
 
   const open = useCallback(
     (id: string) => router.push(crmRecordHref(orgSlug, kind, id)),
@@ -581,8 +588,7 @@ export function CrmList(props: ListProps) {
             <tbody>
               {rows.map((r, i) => {
                 const band = strengthBand(r.strength);
-                const overdue =
-                  r.nextFollowUpAt && new Date(r.nextFollowUpAt).getTime() < Date.now();
+                const overdue = r.overdue;
                 return (
                   <tr
                     key={r.id}

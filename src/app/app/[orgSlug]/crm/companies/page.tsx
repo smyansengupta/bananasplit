@@ -25,6 +25,7 @@ export default async function CrmCompaniesPage({
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const query = parseListQuery(sp);
+  const today = new Date();
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
   const base = `/app/${orgSlug}/crm/companies`;
   const data = await withOrgTx(shell.org.id, async ({ db }) => ({
@@ -41,6 +42,7 @@ export default async function CrmCompaniesPage({
     owner: ownerLabel(c, shell.roles, names),
     lastContactedAt: c.lastContactedAt?.toISOString() ?? null,
     nextFollowUpAt: c.nextFollowUpAt?.toISOString() ?? null,
+    overdue: Boolean(c.nextFollowUpAt && c.nextFollowUpAt < today),
     strength: c.strength,
     deleted: Boolean(c.deletedAt),
   }));

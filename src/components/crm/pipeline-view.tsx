@@ -116,7 +116,10 @@ export function PipelineView(props: PipelineProps) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [cards, setCards] = useState(props.cards);
-  const [creating, setCreating] = useState<string | null>(null);
+  // New › New item lands here with ?new=1: the form starts open.
+  const [creating, setCreating] = useState<string | null>(() =>
+    searchParams.get("new") === "1" ? (props.stages[0]?.id ?? "") : null,
+  );
   const [pendingMove, setPendingMove] = useState<{
     card: CardView;
     stage: StageView;
@@ -132,12 +135,16 @@ export function PipelineView(props: PipelineProps) {
   const flag = url.get("flag");
   const sort = url.get("sort") ?? "board";
 
-  useEffect(() => setCards(props.cards), [props.cards]);
+  // A refresh brings the server's cards.
+  const [shownCards, setShownCards] = useState(props.cards);
+  if (shownCards !== props.cards) {
+    setShownCards(props.cards);
+    setCards(props.cards);
+  }
 
   const startNew = searchParams.get("new") === "1";
   useEffect(() => {
     if (!startNew) return;
-    setCreating(stages[0]?.id ?? "");
     const next = new URLSearchParams(searchParams.toString());
     next.delete("new");
     router.replace(next.toString() ? `${pathname}?${next}` : pathname, { scroll: false });

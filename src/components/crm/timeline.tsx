@@ -18,7 +18,7 @@ import {
 } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { loadTimelineAction, logActivityAction } from "@/app/app/[orgSlug]/crm/actions";
 import { Button } from "@/components/ui/button";
@@ -116,10 +116,12 @@ export function Timeline({
   const [open, setOpen] = useState<string | null>(null);
 
   // A refresh brings new server data: show it.
-  useEffect(() => {
+  const [shown, setShown] = useState(initial);
+  if (shown !== initial) {
+    setShown(initial);
     setItems(initial);
     setMore(initial.length >= 50);
-  }, [initial]);
+  }
 
   return (
     <div className="space-y-4">

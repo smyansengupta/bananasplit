@@ -25,6 +25,7 @@ export default async function CrmPeoplePage({
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const query = parseListQuery(sp);
+  const today = new Date();
   const names = new Map(shell.members.map((m) => [m.id, m.name]));
   const types = shell.access.settings?.relationshipTypes ?? [];
   const base = `/app/${orgSlug}/crm/people`;
@@ -44,6 +45,7 @@ export default async function CrmPeoplePage({
     owner: ownerLabel(p, shell.roles, names),
     lastContactedAt: p.lastContactedAt?.toISOString() ?? null,
     nextFollowUpAt: p.nextFollowUpAt?.toISOString() ?? null,
+    overdue: Boolean(p.nextFollowUpAt && p.nextFollowUpAt < today),
     strength: p.strength,
     deleted: Boolean(p.deletedAt),
   }));

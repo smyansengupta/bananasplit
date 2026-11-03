@@ -17,6 +17,12 @@ import { crmShell } from "./shell";
 
 export const metadata = { title: "CRM" };
 
+function daysAgo(days: number): Date {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d;
+}
+
 const GROUPS: { kind: TodayItem["kind"]; title: string; empty: string; icon: IconComponent }[] = [
   { kind: "followup", title: "Follow-ups due", empty: "Nobody to follow up with today.", icon: AlarmClock },
   { kind: "cold", title: "Going cold", empty: "Nobody's gone quiet.", icon: Hourglass },
@@ -37,6 +43,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
   if (!shell) return gate;
   const orgId = shell.org.id;
   const everyone = sp.who === "all";
+  const since = daysAgo(90);
   const data = await withOrgTx(orgId, async ({ db }) => {
     const mine = await todayList(db, orgId, shell.user.id, shell.roles, { mine: true });
     const anyMine = Object.values(mine).some((l) => l.length > 0);
@@ -52,7 +59,7 @@ export default async function CrmHomePage({ params, searchParams }: PageProps<"/
         organizationId: orgId,
         deletedAt: null,
         stage: { kind: "WON" },
-        closedAt: { gte: new Date(Date.now() - 90 * 86_400_000) },
+        closedAt: { gte: since },
       },
     });
     return { lists, showingMine: !everyone && anyMine, people, open, won };

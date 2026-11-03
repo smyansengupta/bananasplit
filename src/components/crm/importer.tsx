@@ -114,7 +114,7 @@ export function Importer({
     <div className="space-y-7">
       <Card className="gap-5 p-6">
         <div className="space-y-2">
-          <h2 className="display-title text-[20px]">What's in the file?</h2>
+          <h2 className="display-title text-[20px]">What&apos;s in the file?</h2>
           <div className="flex flex-wrap gap-1.5">
             {OBJECTS.map((o) => (
               <button

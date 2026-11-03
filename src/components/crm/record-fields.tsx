@@ -3,7 +3,7 @@
 import { ChevronDown, Sparkles, X } from "@/components/icons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { saveRecordAction } from "@/app/app/[orgSlug]/crm/actions";
 import { Badge } from "@/components/ui/badge";
@@ -236,10 +236,15 @@ export function FieldEditor({
   const initial = f.value ?? (f.kind === "CHECKBOX" ? false : "");
   const [value, setValue] = useState<unknown>(initial);
   const [display, setDisplay] = useState<string | null | undefined>(f.display);
-  useEffect(() => {
+  // A refresh with a new saved value shows it.
+  const [shownValue, setShownValue] = useState(f.value);
+  const [shownDisplay, setShownDisplay] = useState(f.display);
+  if (shownValue !== f.value || shownDisplay !== f.display) {
+    setShownValue(f.value);
+    setShownDisplay(f.display);
     setValue(f.value ?? (f.kind === "CHECKBOX" ? false : ""));
     setDisplay(f.display);
-  }, [f.value, f.display, f.kind]);
+  }
 
   const commit = async (next: unknown) => {
     if (onLocal) {
