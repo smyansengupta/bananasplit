@@ -1623,11 +1623,67 @@ written the same thing, one stayed and the other now calls it.
 | Unknown texters | Calls lists one row per number not in the CRM with Add as person: their texts move onto the new person's timeline (a STOP among them is kept). |
 | Booking hours | A host who set their availability is bookable whenever it doesn't say they're busy, 8 AM to 11 PM any day; one who never set it, weekdays 9 to 5. |
 
+### "That change is not allowed" on forms
+
+Not the CRM's: `src/lib/pins/pages.ts` has had "form" in `PIN_KINDS` since
+forms got their own titles in Recently visited, but the `Pin_kind_known`
+and `RecentVisit_kind_known` checks never learned it. Opening any form page
+recorded the visit, the check refused it (23514), and the page's visit
+action failed with "That change is not allowed." (pinning a form did too).
+`Form.crmDestination` was fine: `Form`'s grants are table-wide.
+
 ### Migrations
 
 `20261105160000_crm_workflows_private` (policies, `CrmSettings.workflowTriggers`
-with a backfill) and `20261105170000_crm_integration` (`CrmEmailMessage.workflowId`
-and `personId`, an index). `app.security_manifest()` is unchanged.
+with a backfill), `20261105170000_crm_integration` (`CrmEmailMessage.workflowId`
+and `personId`, an index) and `20261105180000_pin_form_kind` ('form' in the
+Pin and RecentVisit kind checks). `app.security_manifest()` is unchanged.
+
+### Found and fixed in the browser walkthrough
+
+The story ran end to end on the seeded organization: an interest form
+answered on `/f` made the person; the "Someone fills in the interest form"
+recipe added the item, gave it an owner, queued the welcome (in waking
+hours; it landed in the mail sink), set the follow-up and made the task; a
+reply posted to `/api/crm/inbound` stopped the sequence and showed on the
+timeline; the stand-in summed the person up and drafted a follow-up into
+compose; the quote was accepted on `/q` and the item moved to Joined (won).
+On the way:
+
+- A workflow's later steps didn't see the owner an earlier step assigned,
+  so "a task for the owner" was refused ("Every task needs an owner") and
+  the welcome went from the wrong member; the run log said only "Something
+  went wrong" for the Tasks service's own refusals.
+- Adding a texter as a person failed for members (the timeline rows had no
+  maker, which their row rules require).
+- Email that came in read as "Email, {member}" on the timeline; it now says
+  "Email in, to {member}".
+- The quote's "Email it" was a `mailto:`; it opens compose now, so it's
+  tracked and on the timeline.
+- The public quote had its status and number as a label above the title.
+- The booking page editor and Your mail spilled past a phone's width; every
+  two-column grid on the CRM's pages now keeps to it.
+- Report source cards cut database names off; CRM rows in Reports now carry
+  "Added", so suggested counts don't read an Expected date most rows lack.
+- Enter didn't make a new sequence; signature and merge-field examples named
+  a club.
+
+### Still open
+
+- The person and item pages render slowly in a background browser pane (the
+  server answers in about a third of a second; the reveal waits on the
+  pane), so hidden-pane screenshots are unreliable. Visual checks were done
+  at desktop and phone width on Today, People, a person, Calls, booking and
+  the public pages.
+- Booking ignores one-off date rules in a host's availability (the
+  definer function returns weekly busy cells only).
+- The workflow `{name}` renderer still writes task titles and notices;
+  emails use outreach's `{{...}}` fields only.
+- A member can delete any of the organization's email threads under RLS
+  (`CrmEmailThread` app_user DELETE checks the organization only); worth
+  narrowing to drafts they own.
+- Forms' interest template asks "What year are you?" with school years;
+  it's a Forms template, not the CRM's, and was left as is.
 
 ### Tests
 
