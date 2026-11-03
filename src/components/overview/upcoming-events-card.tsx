@@ -3,8 +3,10 @@ import {
   CircleQuestionMark,
   CircleX,
   Mail,
+  Video,
   type IconComponent,
 } from "@/components/icons";
+import { AmbientButton } from "@/components/ambient/ambient-button";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -89,6 +91,7 @@ export function MeetingsList({
   canEdit,
   empty,
   insight,
+  joinUrl,
 }: {
   orgSlug: string;
   meetings: readonly CalendarEventSummary[];
@@ -98,6 +101,8 @@ export function MeetingsList({
   now: Date;
   /** Whoever may edit meetings gets "Write agenda" where there's none. */
   canEdit: boolean;
+  /** The next one's call link, once it's within a quarter of an hour (https only). */
+  joinUrl?: string | null;
   empty: ReactNode;
   insight?: ReactNode;
 }) {
@@ -133,7 +138,21 @@ export function MeetingsList({
             <Link href={href} className="text-[16px] font-semibold break-words hover:underline">
               {next.title}
             </Link>
-            <RsvpMark rsvp={rsvps.get(next.id)} />
+            {joinUrl ? (
+              <AmbientButton
+                action={{
+                  key: "join",
+                  label: "Join",
+                  icon: <Video />,
+                  tone: "solid",
+                  reason: "Starting now",
+                  href: joinUrl,
+                  external: true,
+                }}
+              />
+            ) : (
+              <RsvpMark rsvp={rsvps.get(next.id)} />
+            )}
           </div>
           <p className="text-muted-foreground text-[13px]">
             {soon && (

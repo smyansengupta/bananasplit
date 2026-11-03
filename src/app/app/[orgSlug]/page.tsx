@@ -70,7 +70,7 @@ import { AmbientButton } from "@/components/ambient/ambient-button";
 import { Network } from "@/components/icons";
 import { placementSummary } from "@/lib/org-chart/self-place";
 import { getAskDraft } from "@/server/org-chart/service";
-import { recapTime } from "@/lib/overview/home-acts";
+import { joinable, recapTime } from "@/lib/overview/home-acts";
 import { isNight, scoreHome, type HomeSignals } from "@/lib/overview/priority";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
 import { sidebarCounts } from "@/server/inbox/counts";
@@ -936,6 +936,11 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         zones={zones}
         now={now}
         canEdit={canAddEvents}
+        joinUrl={
+          nextMeetings[0] && joinable(joinUrls.get(nextMeetings[0].id))
+            ? joinUrls.get(nextMeetings[0].id)
+            : null
+        }
         empty={eventEmpty("No meetings coming up", "Schedule a meeting")}
         insight={meetingsInsight}
       />
