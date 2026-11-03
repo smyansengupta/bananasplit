@@ -38,6 +38,14 @@ const BOARD = [
   ["Joined", [["Sam Okafor", "Welcome sent"]]],
 ] as const;
 
+/** A Personal space's board: one person's clients. */
+const PERSONAL_BOARD = [
+  ["Lead", [["Priya Raman", "Met at the fair"], ["Jonah Ellis", "Intro from Ava"]]],
+  ["Qualified", [["Ava Moreno", "Coffee on Oct 14"]]],
+  ["Proposal", [["Leo Park", "No next step"]]],
+  ["Won", [["Sam Okafor", "Invoice sent"]]],
+] as const;
+
 /**
  * The CRM add-on (docs/features/crm.md): what it does, in exact rows, with
  * a preview of each part, and Add or Turn off for owners and admins. Add
@@ -118,7 +126,7 @@ export default async function CrmAddOnPage({
       <Hero
         preview={
           <div className="bg-[color-mix(in_oklab,var(--chart-5)_16%,var(--card))] dark:bg-avatar-5 rounded-card flex h-full gap-3 overflow-hidden p-6 sm:p-8">
-            {BOARD.map(([stage, cards]) => (
+            {(personal ? PERSONAL_BOARD : BOARD).map(([stage, cards]) => (
               <div key={stage} className="flex min-w-0 flex-1 flex-col gap-2">
                 <span className="flex items-center gap-1.5 text-[12.5px] font-bold">
                   {stage}
@@ -169,7 +177,10 @@ export default async function CrmAddOnPage({
         }
         details={[
           ["You pick", kinds.map(label).join(", ")],
-          ["You get", `${Object.keys(PIPELINE_TEMPLATES).length} ready-made pipelines, each renameable, with their own words`],
+          [
+            "You get",
+            `${kinds.filter((k) => PIPELINE_TEMPLATES[k]).length} ready-made pipelines, each renameable, with their own words`,
+          ],
           [
             "Bring in",
             personal
@@ -195,7 +206,11 @@ export default async function CrmAddOnPage({
       <FeatureCard
         id="c-pipelines"
         title="A pipeline for every kind of relationship"
-        lead="Each pipeline names what it tracks, so a card is an applicant, a donation or a deal, and closing reads Joined or Didn't join."
+        lead={
+          personal
+            ? "Each pipeline names what it tracks, so a card is a deal, a grant or a booking, and closing reads Won or Lost."
+            : "Each pipeline names what it tracks, so a card is an applicant, a donation or a deal, and closing reads Joined or Didn't join."
+        }
         extra={
           <Steps
             label={example?.label ?? "New members"}
@@ -219,9 +234,13 @@ export default async function CrmAddOnPage({
         panel="pink"
         preview={
           <Mini className="gap-2.5 p-5">
-            <b className="text-[13.5px]">Move to Didn&apos;t join</b>
-            <span className="text-muted-foreground text-[12.5px]">Why didn&apos;t they join?</span>
-            <span className="bg-muted/60 text-muted-foreground rounded-xl px-3 py-2 text-[12.5px]">Joined another group this year</span>
+            <b className="text-[13.5px]">{personal ? "Move to Lost" : <>Move to Didn&apos;t join</>}</b>
+            <span className="text-muted-foreground text-[12.5px]">
+              {personal ? "Why was it lost?" : <>Why didn&apos;t they join?</>}
+            </span>
+            <span className="bg-muted/60 text-muted-foreground rounded-xl px-3 py-2 text-[12.5px]">
+              {personal ? "Went with a bigger studio" : "Joined another group this year"}
+            </span>
             <span className="bg-primary text-primary-foreground inline-flex h-8 w-fit items-center rounded-full px-3.5 text-[12.5px] font-semibold">
               Move it
             </span>
@@ -249,12 +268,20 @@ export default async function CrmAddOnPage({
         panel="info"
         preview={
           <Mini className="gap-3 p-5">
-            {[
-              ["Checked in at Fall Showcase", "Oct 14"],
-              ["RSVP'd to Demo Night", "Oct 9"],
-              ["Answered Volunteer interest", "Sep 30"],
-              ["Paid $1,500", "Sep 12"],
-            ].map(([t, d]) => (
+            {(personal
+              ? [
+                  ["Met for coffee", "Oct 14"],
+                  ["RSVP'd to Demo Night", "Oct 9"],
+                  ["Replied to your proposal", "Sep 30"],
+                  ["Paid $1,500", "Sep 12"],
+                ]
+              : [
+                  ["Checked in at Fall Showcase", "Oct 14"],
+                  ["RSVP'd to Demo Night", "Oct 9"],
+                  ["Answered Volunteer interest", "Sep 30"],
+                  ["Paid $1,500", "Sep 12"],
+                ]
+            ).map(([t, d]) => (
               <span key={t} className="border-border flex items-center gap-2.5 border-t pt-2.5 text-[13px] first:border-0 first:pt-0">
                 <span className="size-2 rounded-full bg-[var(--chart-3)]" />
                 <span className="flex-1">{t}</span>

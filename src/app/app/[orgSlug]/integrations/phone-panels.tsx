@@ -32,7 +32,7 @@ const PROVIDER: Record<PhoneApp, "TELNYX" | "TWILIO" | "DEEPGRAM"> = {
 
 const COPY: Record<PhoneApp, { name: string; body: string }> = {
   telnyx: { name: "Telnyx", body: "Calls and texts from the CRM on your own number." },
-  twilio: { name: "Twilio", body: "The same, for organizations on Twilio." },
+  twilio: { name: "Twilio", body: "The same, if you use Twilio." },
   deepgram: { name: "Deepgram", body: "Writes out recorded calls and voice notes." },
 };
 

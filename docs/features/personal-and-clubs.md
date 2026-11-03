@@ -14,7 +14,7 @@ plan from a9b3141 and the old free /rsvp pages.
   and Databases in Personal" below). No members, invitations, roles,
   people, org chart, finance or reports. It is on **Personal Free** (`FREE`)
   or **Personal Plus** (`PERSONAL_PLUS`, $8 a month or $72 a year: themes,
-  integrations, AI imports, more storage); its owner switches in Settings ›
+  integrations, AI imports, the CRM for one person, more storage); its owner switches in Settings ›
   Plan and storage. A new account's space gets a **14-day free trial** of
   Personal Plus, no card: plan `FREE` with a `trialEndsAt`, read as Personal
   Plus until then. There is no student price for Personal.
@@ -226,9 +226,22 @@ person:
   built-in Sessions, Attendance, Signups, Ballots and People definitions at
   creation (`app.ensure_org_defaults`), but a Personal space never lists
   them: `LISTED_DEFINITIONS` (`src/server/databases/types.ts`) filters the
-  index, opening one by URL (404), search and pin search. No data source
-  (Personal Plus's data connection is for calendar sync), no Reports tab,
-  and the settings dialog doesn't ask who can see or edit it.
+  index, opening one by URL (404), search and pin search. Once the CRM is
+  added (Personal Plus), its People, Companies and pipelines list there too,
+  fed by the CRM's integrations. No data source (the website's Supabase
+  export fills a club's built-in databases), no Reports tab, and the
+  settings dialog doesn't ask who can see or edit it.
 - **Into a club**: Send to a club copies a note or file; Move to a club
   moves notes, folders and uploads, originals and all ("Bring anything
   in", above). Moving a Personal database into a club isn't built yet.
+
+## Integrations and the CRM in Personal
+
+Added 2026-11-03 (docs/features/crm.md, "Personal CRM"). Personal's
+sidebar is Home, Inbox, Tasks, Calendar, Meetings, Files, Databases, then
+Integrations, and the CRM under it once it's added. Integrations is on
+Personal Plus (Personal Free sees it locked) and shows only what makes
+sense for one person: email, Google Calendar, video calls, calls and
+texts, Claude and other AI models, and, with the CRM, its data connectors.
+Team chat, the website build hook and the website's Supabase export stay
+an organization's. The CRM is Personal's one add-on.

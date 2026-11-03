@@ -809,6 +809,10 @@ like Deals (feature key `sponsorships`): a `crm` entry in `PLAN_FEATURES` set to
 and `crm` added to `ADD_ONS`. A 14-day trial includes it, as it includes
 everything on Team Advanced.
 
+A Personal space gets it on **Personal Plus** (`crm` in
+`PERSONAL_PLUS_EXTRAS`), so a new account's 14-day trial includes it too;
+Personal Free sees it locked. See "Personal CRM" at the end.
+
 ## One-time setup on our side
 
 Not decisions, and nothing per customer:
@@ -1923,3 +1927,48 @@ named by one search param (`src/lib/crm/overlay.ts`):
   timeline, details) until their own designs land; **New** makes a person,
   company or deal and opens its card. `/crm/deals` lists the pipelines for
   now.
+
+## Personal CRM
+
+Built 2026-11-03 on `claude/crm` (152a250e). Every account's Personal space
+(Organization kind `PERSONAL`, one member) can add the CRM and run it for
+one person: people, companies, deals and outreach, nobody else sees it.
+
+- **Plan.** `crm` is in `PERSONAL_PLUS_EXTRAS` (`src/lib/billing/features.ts`),
+  next to integrations, themes and AI, so Personal Plus and a new
+  account's trial have it. Personal Free sees the add-on card and the
+  sidebar links locked (See plans), and every action refuses with "The CRM
+  comes with Personal Plus." (`requireCrm` uses `featureRefusal`).
+- **Where it lives.** Personal's sidebar (`PERSONAL_NAV`,
+  `src/components/shell/nav-config.ts`) ends with Integrations and, once
+  added, CRM under it. Integrations and apps offers the CRM as Personal's
+  one add-on (`ADD_ON_INFO.crm.personal`, `personalAddOns()`); adding Forms
+  or Finance there is refused ("That add-on is for organizations.").
+- **Access.** `CrmAccess.personal` (`src/server/crm/access.ts`). The owner
+  is admin and manager. Who sees what, CRM managers, lead routing (only the
+  daily send cap is left) and Handover (redirects to People) don't show.
+  The org chart is empty, so nothing is owned by a role.
+- **Setup.** `setupKindsFor(true)` (`src/lib/crm/templates.ts`): Clients,
+  Partners and deals, Mentors and guests, Press, venues and vendors,
+  Grants, Donors. No members or alumni, and no Member relationship type.
+  Bring in is only the people who RSVP'd to your event pages, or a file.
+- **Databases.** `LISTED_DEFINITIONS` lists the CRM's People, Companies and
+  pipelines in Personal's Databases (not the built-in club ones), so the
+  CRM's integrations (email in, calls and texts, meetings) feed them as an
+  organization's do.
+- **Integrations for one person.** Email, Google Calendar, video calls,
+  calls and texts, Claude, other AI models and the CRM's data connectors
+  (Tavily, Hunter, Prospeo) are offered. Team chat (Slack, Discord, GroupMe),
+  the website build hook and the website's Supabase export are not
+  (`ORG_ONLY_APPS`, `integrations/panels.tsx`). The Supabase export fills
+  an organization's built-in check-in, sign-up and ballot databases, which
+  Personal doesn't list. The CRM's public API works in Personal too.
+- **Tests.** `src/server/crm/personal.db.test.ts` (Plus sets up with its
+  own answers, people and deals, the databases listed, Free refused), the
+  Personal sidebar cases in `nav-config.test.ts`, the templates cases in
+  `src/lib/crm/crm.test.ts`.
+- **Not built.** A database fed straight from a Google Sheet or a CSV link.
+  Pages written for a team (record owner pickers, "Mine and Everyone's" on
+  Today, the redesign's cards) still show their team controls with one
+  name in them. The redesign session carries the Personal rules into the
+  new Settings and Setup.
