@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { removeDataKeyAction, saveDataKeyAction, testDataKeyAction } from "@/app/app/[orgSlug]/crm/ai-actions";
-import { BrandMark } from "@/components/marketing/brand-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
-import { DATA_CONNECTOR_MARKS } from "@/lib/crm/connector-marks";
+import type { ReactNode } from "react";
 
 export interface DataConnectionView {
   id: "tavily" | "hunter" | "prospeo";
@@ -34,7 +33,8 @@ export interface DataConnectionView {
   creditsLimit: number | null;
 }
 
-const MARKS = DATA_CONNECTOR_MARKS;
+/** Each connector's tile, drawn on the server (BrandMark reads the logo files): small for the row, smaller for the window. */
+export type ConnectorMarks = Record<DataConnectionView["id"], { row: ReactNode; title: ReactNode }>;
 
 const WHAT: Record<DataConnectionView["id"], string> = {
   tavily: "Tavily's free plan includes 1,000 credits a month: a basic search is 1 credit. It powers the research agent, enrichment and AI fields that search the web.",
@@ -53,11 +53,13 @@ export function DataConnectors({
   canManage,
   canRemove,
   connections,
+  marks,
 }: {
   orgId: string;
   canManage: boolean;
   canRemove: boolean;
   connections: DataConnectionView[];
+  marks: ConnectorMarks;
 }) {
   const [open, setOpen] = useState<DataConnectionView["id"] | null>(null);
   const current = connections.find((c) => c.id === open) ?? null;
@@ -73,7 +75,7 @@ export function DataConnectors({
         {connections.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-2 py-3">
             <span className="shrink-0">
-              <BrandMark brand={MARKS[c.id]} size={36} />
+              {marks[c.id].row}
             </span>
             <div className="min-w-0 flex-[1_1_150px]">
               <p className="text-[14.5px] font-semibold">{c.label}</p>
@@ -89,12 +91,12 @@ export function DataConnectors({
           </li>
         ))}
       </ul>
-      {current && <ConnectorWindow key={current.id} orgId={orgId} c={current} canRemove={canRemove} onClose={() => setOpen(null)} />}
+      {current && <ConnectorWindow key={current.id} orgId={orgId} c={current} mark={marks[current.id].title} canRemove={canRemove} onClose={() => setOpen(null)} />}
     </section>
   );
 }
 
-function ConnectorWindow({ orgId, c, canRemove, onClose }: { orgId: string; c: DataConnectionView; canRemove: boolean; onClose: () => void }) {
+function ConnectorWindow({ orgId, c, mark, canRemove, onClose }: { orgId: string; c: DataConnectionView; mark: ReactNode; canRemove: boolean; onClose: () => void }) {
   const router = useRouter();
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -125,7 +127,7 @@ function ConnectorWindow({ orgId, c, canRemove, onClose }: { orgId: string; c: D
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <BrandMark brand={MARKS[c.id]} size={32} />
+            {mark}
             <DialogTitle>{c.label}</DialogTitle>
           </div>
           <DialogDescription>{WHAT[c.id]}</DialogDescription>

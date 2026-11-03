@@ -1,9 +1,11 @@
+import { BrandMark } from "@/components/marketing/brand-mark";
 import { readAddOns } from "@/lib/addons";
+import { DATA_CONNECTOR_MARKS } from "@/lib/crm/connector-marks";
 import { can } from "@/lib/auth/permissions";
 import { loadDataConnections } from "@/server/crm/data-connectors";
 import { getOrgContextBySlug } from "@/server/db/context";
 
-import { DataConnectors } from "./data-connectors";
+import { DataConnectors, type ConnectorMarks } from "./data-connectors";
 
 /**
  * Integrations and apps: the CRM's bring-your-own data connectors (Tavily,
@@ -23,6 +25,12 @@ export async function DataConnectorsSection({ orgSlug }: { orgSlug: string }) {
       canManage={can({ role: ctx.role }, "integrations.write")}
       canRemove={can({ role: ctx.role }, "integrations.remove")}
       connections={connections}
+      marks={Object.fromEntries(
+        (Object.keys(DATA_CONNECTOR_MARKS) as (keyof typeof DATA_CONNECTOR_MARKS)[]).map((id) => [
+          id,
+          { row: <BrandMark brand={DATA_CONNECTOR_MARKS[id]} size={36} />, title: <BrandMark brand={DATA_CONNECTOR_MARKS[id]} size={32} /> },
+        ]),
+      ) as ConnectorMarks}
     />
   );
 }
