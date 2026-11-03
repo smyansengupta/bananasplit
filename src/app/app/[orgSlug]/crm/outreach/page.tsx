@@ -1,3 +1,4 @@
+import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
 import { OutreachHeader } from "@/components/crm/outreach/outreach-header";
 import { TemplatesView } from "@/components/crm/outreach/templates";
 import { ensureStarters } from "@/server/crm/outreach/templates";
@@ -11,8 +12,9 @@ export const metadata = { title: "Outreach" };
  * Outreach (docs/features/crm.md, module 5): templates first. The first
  * visit adds three starters to edit (a hello, a thank-you, an ask).
  */
-export default async function OutreachPage({ params }: PageProps<"/app/[orgSlug]/crm/outreach">) {
+export default async function OutreachPage({ params, searchParams }: PageProps<"/app/[orgSlug]/crm/outreach">) {
   const { orgSlug } = await params;
+  const sp = (await searchParams) as Record<string, string | string[] | undefined>;
   const { gate, shell } = await crmShell(orgSlug);
   if (!shell) return gate;
   const orgId = shell.org.id;
@@ -36,6 +38,7 @@ export default async function OutreachPage({ params }: PageProps<"/app/[orgSlug]
     }));
   });
   return (
+    <>
     <div className="space-y-6">
       <OutreachHeader
         orgSlug={orgSlug}
@@ -46,5 +49,7 @@ export default async function OutreachPage({ params }: PageProps<"/app/[orgSlug]
       />
       <TemplatesView orgId={orgId} templates={templates} canEditAll={shell.access.admin} />
     </div>
+      <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
+    </>
   );
 }

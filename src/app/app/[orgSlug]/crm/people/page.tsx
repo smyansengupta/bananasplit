@@ -1,3 +1,4 @@
+import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
 import { CrmList, type ListRow } from "@/components/crm/crm-list";
 import { CrmTabs } from "@/components/crm/crm-tabs";
 import { ownerLabel } from "@/server/crm/owners";
@@ -50,6 +51,7 @@ export default async function CrmPeoplePage({
     deleted: Boolean(p.deletedAt),
   }));
   return (
+    <>
     <CrmList
       tabs={<CrmTabs tabs={shell.tabs} />}
       orgId={shell.org.id}
@@ -67,5 +69,7 @@ export default async function CrmPeoplePage({
       views={data.views}
       exportHref={`/app/${orgSlug}/crm/export?kind=people`}
     />
+      <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
+    </>
   );
 }

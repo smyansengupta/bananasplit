@@ -1,3 +1,4 @@
+import { CrmOverlays } from "@/components/crm/overlays/crm-overlays";
 import { notFound } from "next/navigation";
 
 import { CrmTabs } from "@/components/crm/crm-tabs";
@@ -67,6 +68,7 @@ export default async function CrmPipelinePage({ params, searchParams }: PageProp
     ...fields.map((f) => ({ key: `custom.${f.id}`, label: f.name, kind: "CUSTOM" as const, value: null, field: f })),
   ];
   return (
+    <>
     <PipelineView
       orgId={shell.org.id}
       orgSlug={orgSlug}
@@ -105,5 +107,7 @@ export default async function CrmPipelinePage({ params, searchParams }: PageProp
         </>
       }
     />
+      <CrmOverlays shell={shell} orgSlug={orgSlug} searchParams={sp} />
+    </>
   );
 }
