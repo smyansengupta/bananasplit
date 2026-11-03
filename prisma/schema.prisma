@@ -195,6 +195,9 @@ model MemberPrefs {
   financeWidgets  Json?
   /// Overview widget layout, same shape (src/lib/overview/widgets.ts).
   overviewWidgets Json?
+  /// Home's layout mode: AMBIENT (null, the default) arranges and sizes the
+  /// widgets itself; CUSTOM keeps the member's own arrangement.
+  homeMode        String?
   /// When they last opened Home, and the visit before that: "Since you were
   /// here" counts what changed after homePrevVisitAt.
   homeVisitAt     DateTime?

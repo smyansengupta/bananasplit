@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   listRecent: vi.fn(),
   loadSetupState: vi.fn(),
   loadSavedBoard: vi.fn(),
+  loadHomeMode: vi.fn(),
   latestSentPulse: vi.fn(),
   weeklyDoneTrend: vi.fn(),
   loadLinkedChips: vi.fn(),
@@ -165,14 +166,21 @@ vi.mock("@/server/tasks/queries", () => ({
 }));
 vi.mock("@/app/app/[orgSlug]/calendar/queries", () => ({
   getUpcomingEvents: mocks.getUpcomingEvents,
+  getRecentlyEnded: async () => [],
   getViewerRsvps: mocks.getViewerRsvps,
 }));
 vi.mock("@/server/pins", () => ({ listPins: mocks.listPins, listRecent: mocks.listRecent }));
-vi.mock("@/server/boards", () => ({ loadSavedBoard: mocks.loadSavedBoard }));
+vi.mock("@/server/boards", () => ({
+  loadSavedBoard: mocks.loadSavedBoard,
+  loadHomeMode: mocks.loadHomeMode,
+}));
 vi.mock("@/server/presence", () => ({
   onlineNow: vi.fn().mockResolvedValue({ count: 3, faces: [], ids: ["u_a", "u_b"] }),
 }));
-vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({ saveBoardAction: vi.fn() }));
+vi.mock("@/app/app/[orgSlug]/_shell/board-actions", () => ({
+  saveBoardAction: vi.fn(),
+  saveHomeModeAction: vi.fn(),
+}));
 vi.mock("@/app/app/[orgSlug]/_shell/pin-actions", () => ({
   pinPathAction: vi.fn(),
   reorderPinsAction: vi.fn(),
@@ -232,6 +240,8 @@ beforeEach(() => {
   mocks.listPins.mockResolvedValue([]);
   mocks.listRecent.mockResolvedValue([]);
   mocks.loadSavedBoard.mockResolvedValue(null);
+  // These tests read the board as the member arranged it; Ambient has its own below.
+  mocks.loadHomeMode.mockResolvedValue("custom");
   db.form.findMany.mockResolvedValue([]);
   db.formResponse.groupBy.mockResolvedValue([]);
   db.ballotDefinition.findMany.mockResolvedValue([]);
@@ -757,6 +767,23 @@ describe("the Moonstone Overview", () => {
       html.indexOf('aria-label="My tasks"'),
     );
     expect(html).toContain("The first pulse goes out Fri, Oct 9 at 5:00 PM.");
+  });
+
+  it("lays Home out in Ambient by default, resting what has nothing to show", async () => {
+    mocks.loadHomeMode.mockResolvedValue("ambient");
+    const html = await render();
+    // The switch replaces Customize, with Ambient on.
+    expect(html).toContain('role="radiogroup" aria-label="Layout"');
+    expect(html).toMatch(/aria-checked="true"[^>]*>.*?Ambient/);
+    expect(html).not.toContain(">Customize<");
+    // Widgets sit in bands; My tasks leads the first.
+    expect(html).toContain('data-band="you"');
+    expect(html.indexOf('data-band="you"')).toBeLessThan(html.indexOf('data-band="week"'));
+    // Nothing coming up and no votes open: those rest, named in one line.
+    expect(html).not.toContain('aria-label="Meetings"');
+    expect(html).toMatch(/Meetings.*resting until there&#x27;s something new to show/);
+    // The greeting, the Today strip and Up next stay whatever the layout.
+    expect(html).toContain('id="up-next-heading"');
   });
 
   it("shows the latest pulse's figure and tiles, and keeps a saved board's order", async () => {

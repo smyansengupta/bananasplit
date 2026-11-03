@@ -51,7 +51,16 @@ export interface UpNextContext {
 /** At most this many chips on a card: it's a card, not the Linked panel. */
 const CARD_CHIPS = 3;
 
+/** An event's moment on Up next: about to start, or under way. */
+export type UpNextLive = "soon" | "now";
+
 export interface UpNextBlock extends UpNextCandidate {
+  /** Starting within a quarter of an hour ("soon") or under way ("now"): the card goes live. */
+  live?: UpNextLive;
+  /** When a meeting or event ends; it stays on Up next until then. */
+  until?: Date;
+  /** A meeting or event that ended in the last two hours (notes, photos, thanks). */
+  ended?: boolean;
   /** The event's kind, so its card can take that kind's colour. */
   eventKind?: EventKind | null;
   /** A task's status now, so Done on the card can be undone back to it. */
@@ -71,6 +80,12 @@ export interface UpNextBlock extends UpNextCandidate {
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+/** A meeting or event counts down for its last hour, and goes live for the last quarter. */
+const COUNTDOWN_MIN = 60;
+const LIVE_MIN = 15;
+/** How long a meeting or event stays on Up next after it ends. */
+export const JUST_ENDED_MS = 2 * 60 * 60 * 1000;
 
 export function buildUpNext(input: {
   orgSlug: string;
@@ -84,6 +99,8 @@ export function buildUpNext(input: {
   rsvps: ReadonlyMap<string, RSVPStatus>;
   going: ReadonlyMap<string, EventGoing>;
   polls: readonly PollStat[];
+  /** Meetings and events that ended in the last JUST_ENDED_MS (getRecentlyEnded). */
+  ended?: readonly CalendarEventSummary[];
   /** "{kind}:{id}" of the cards this member hid (UpNextDismissal). */
   hidden?: ReadonlySet<string>;
   context?: UpNextContext;
@@ -161,7 +178,20 @@ export function buildUpNext(input: {
       seen.add(event.id);
       const rsvp = input.rsvps.get(event.id) ?? null;
       const going = input.going.get(event.id);
-      const when = whenWord(event.startsAt, event.allDay, input.zones, input.now);
+      const mins = Math.round((event.startsAt.getTime() - input.now.getTime()) / MINUTE_MS);
+      const underWay = !event.allDay && mins <= 0 && event.endsAt.getTime() > input.now.getTime();
+      const live: UpNextLive | undefined = event.allDay
+        ? undefined
+        : underWay
+          ? "now"
+          : mins <= LIVE_MIN
+            ? "soon"
+            : undefined;
+      const when = underWay
+        ? "Happening now"
+        : !event.allDay && mins > 0 && mins <= COUNTDOWN_MIN
+          ? `In ${mins} min`
+          : whenWord(event.startsAt, event.allDay, input.zones, input.now);
       const waiting = rsvp === "PENDING";
       const count = going?.going ?? 0;
       const detail = ctx.details?.get(event.id);
@@ -199,6 +229,8 @@ export function buildUpNext(input: {
         tone: waiting ? "answer" : "quiet",
         eventKind: event.kind,
         at: event.startsAt,
+        until: event.endsAt,
+        ...(live ? { live } : {}),
         kicker: event.location ? `${when}, ${event.location}` : when,
         title: event.title,
         subtitle: reasons.length > 0 ? reasons.join(" ") : null,
@@ -214,6 +246,33 @@ export function buildUpNext(input: {
         href: `${base}/calendar/${event.id}`,
       });
     }
+  }
+
+  // Just ended: for two hours, the notes and action items (a meeting) or
+  // photos and thanks (an event), while it's fresh.
+  for (const event of input.ended ?? []) {
+    if (seen.has(event.id)) continue;
+    seen.add(event.id);
+    const meeting = input.meetings.some((m) => m.id === event.id) || isMeeting(event);
+    const count = input.going.get(event.id)?.going ?? 0;
+    blocks.push({
+      id: event.id,
+      kind: meeting ? "meeting" : "event",
+      tone: "quiet",
+      eventKind: event.kind,
+      at: event.endsAt,
+      until: event.endsAt,
+      ended: true,
+      kicker: "Just ended",
+      title: event.title,
+      subtitle: meeting
+        ? "Add the notes and action items while it's fresh."
+        : "Add notes or photos while it's fresh.",
+      ...(count > 0 ? { figure: String(count), figureLabel: "went" } : {}),
+      faces: input.going.get(event.id)?.faces ?? [],
+      facesTotal: count,
+      href: meeting ? `${base}/meetings/${event.id}` : `${base}/calendar/${event.id}`,
+    });
   }
 
   for (const poll of input.polls) {
@@ -266,6 +325,12 @@ function addDays(from: Date, days: number): Date {
  * An event that has finished, or a poll whose moment has passed, is.
  */
 function isPast(block: UpNextBlock, now: Date): boolean {
-  if (block.kind === "task") return false;
-  return block.at.getTime() <= now.getTime();
+  if (block.kind === "task" || block.ended) return false;
+  // A meeting or event stays until it ends; a poll until it closes.
+  return (block.until ?? block.at).getTime() <= now.getTime();
+}
+
+/** A meeting as the Overview lists them (getUpcomingEvents): a board meeting, or "... meeting". */
+function isMeeting(event: CalendarEventSummary): boolean {
+  return event.kind === "BOARD_MEETING" || /meeting/i.test(event.title);
 }

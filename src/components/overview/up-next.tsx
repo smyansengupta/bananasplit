@@ -22,7 +22,7 @@ function accentOf(kind: EventKind | null | undefined): string | null {
   // OTHER has no colour of its own, so its card stays the quiet near-black
   // rather than being painted in the neutral ink.
   if (!kind || kind === "OTHER") return null;
-  return `var(${KIND_META[kind].token})`;
+  return `var(${KIND_META[kind].fill})`;
 }
 
 /**
@@ -308,6 +308,7 @@ export function UpNext({
             >
               <BlockCard
                 tone={item.tone}
+                live={item.live}
                 accent={accentOf(item.eventKind)}
                 kicker={item.kicker}
                 title={item.title}

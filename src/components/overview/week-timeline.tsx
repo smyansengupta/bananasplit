@@ -49,7 +49,7 @@ export interface WeekDay {
 }
 
 function kindVars(kind: EventKind): CSSProperties {
-  return { ["--kind" as string]: `var(${KIND_META[kind].token})` };
+  return { ["--kind" as string]: `var(${KIND_META[kind].fill})` };
 }
 
 /** Beside a busy day's date: the outline's meaning in words. */

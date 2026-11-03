@@ -23,7 +23,11 @@ import { PollList, RecentList } from "@/components/overview/widget-bodies";
 import { WeekTimeline, type WeekDay } from "@/components/overview/week-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getUpcomingEvents, getViewerRsvps } from "@/app/app/[orgSlug]/calendar/queries";
+import {
+  getRecentlyEnded,
+  getUpcomingEvents,
+  getViewerRsvps,
+} from "@/app/app/[orgSlug]/calendar/queries";
 import { absoluteAppUrl } from "@/lib/app-url";
 import { can } from "@/lib/auth/permissions";
 import { spaceIncludes } from "@/lib/billing/space";
@@ -53,9 +57,10 @@ import {
   fromDateKey,
   localDateKey,
 } from "@/lib/tasks/dates";
-import { loadSavedBoard } from "@/server/boards";
+import { loadHomeMode, loadSavedBoard } from "@/server/boards";
 import { getOrgContextBySlug, withOrgTx } from "@/server/db/context";
 import { homeWidgetCards } from "@/components/overview/home-widget-cards";
+import { HereNowAlone } from "@/components/overview/here-now";
 import { HERE_NOW_RECENT } from "@/server/overview/here-now";
 import { loadMainWidgets, loadOwnTxWidgets, readHomeShared } from "@/server/overview/home-widgets";
 import { markHomeVisit } from "@/server/overview/since-you-were-here";
@@ -74,7 +79,7 @@ import {
   loadTaskExtras,
   type LinkedChip,
 } from "@/server/overview/queries";
-import { buildUpNext, type LastMeetingActions } from "@/server/overview/up-next";
+import { JUST_ENDED_MS, buildUpNext, type LastMeetingActions } from "@/server/overview/up-next";
 import { reportTier } from "@/server/reports/tier";
 import { hideUpNextCard, showHiddenUpNextCards, unhideUpNextCard } from "./up-next-actions";
 import { rsvpToEvent } from "./calendar/actions";
@@ -133,6 +138,23 @@ function minutesOfDay(at: Date, timeZone: string): number {
   return part("hour") * 60 + part("minute");
 }
 
+/** The part of the day Home's top light follows (.home-glow in globals.css). */
+function timeOfDay(now: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    hourCycle: "h23",
+    weekday: "short",
+    timeZone,
+  }).formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? 12);
+  const weekday = parts.find((p) => p.type === "weekday")?.value;
+  if (weekday === "Sat" || weekday === "Sun") return "weekend";
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 22) return "evening";
+  return "night";
+}
+
 function greeting(now: Date, timeZone: string): string {
   const hour = Number(
     new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone }).format(now),
@@ -181,6 +203,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   const websitePolls = await websiteSyncConnected(org.id, user.id).catch(() => false);
   const data = await withOrgTx(org.id, async ({ db }) => {
     const saved = await loadSavedBoard(db, org.id, user.id, "overview");
+    const homeMode = await loadHomeMode(db, org.id, user.id);
     const placed = new Set(resolveOverview(saved, isAdmin, settings?.addOns).map((w) => w.type));
     const me = await db.user.findUnique({
       where: { id: user.id },
@@ -193,6 +216,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     const events = await getUpcomingEvents(db, org.id, now, EVENTS_LIMIT, "events");
     const meetings = await getUpcomingEvents(db, org.id, now, EVENTS_LIMIT, "meetings");
     const weekEvents = await getUpcomingEvents(db, org.id, now, 100);
+    const ended = await getRecentlyEnded(db, org.id, now, JUST_ENDED_MS, 4);
     const myTasks = await getMyOpenTasks(db, org.id, user.id, { limit: MY_TASKS_LIMIT, today });
     // My deadlines up to four weeks out, late ones first: This week's dashed
     // boxes, the crowded-week warning and the Today strip's lines.
@@ -309,6 +333,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       events,
       meetings,
       weekEvents,
+      ended,
       details,
       lastInSeries,
       links,
@@ -319,7 +344,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
         listed.map((e) => e.id),
       ),
       going: await loadEventGoing(db, org.id, [
-        ...new Set([...listed.map((e) => e.id), ...weekIds]),
+        ...new Set([...listed.map((e) => e.id), ...weekIds, ...ended.map((e) => e.id)]),
       ]),
       pins,
       pinStates: await loadPinStates(db, org.id, org.slug, user.id, pins, tz),
@@ -343,6 +368,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
           : null,
       memberCount,
       saved,
+      homeMode,
       placed,
       shared,
       viewer,
@@ -553,6 +579,7 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     rsvps: data.rsvps,
     going: data.going,
     polls: data.polls,
+    ended: data.ended,
     hidden: new Set(data.hiddenUpNext),
     context: { links: data.links, details: data.details, lastActions, seats: turnout.seats },
   });
@@ -702,6 +729,24 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     data: { ...data.widgets, ...ownTx },
   });
 
+  // Ambient: widgets with nothing to show rest (their band neighbours take
+  // the space), and Here now with only you in needs one column. A widget
+  // whose read failed isn't resting: it says so in its card.
+  const w = { ...data.widgets, ...ownTx };
+  const resting = [
+    ...(w.since && w.since.rows.length === 0 ? ["since-you-were-here"] : []),
+    ...(w.votes && w.votes.total === 0 ? ["votes"] : []),
+    ...(w.deadlines && w.deadlines.total === 0 ? ["deadlines"] : []),
+    ...(w.waitingOnYou && w.waitingOnYou.rows.length === 0 ? ["waiting-on-you"] : []),
+    ...(w.waitingOnOthers && w.waitingOnOthers.rows.length === 0 ? ["waiting-on-others"] : []),
+    ...(data.openForms.length === 0 ? ["polls"] : []),
+    ...(data.meetings.length === 0 ? ["meetings"] : []),
+    ...(data.events.length === 0 ? ["events"] : []),
+    ...(data.recent.length === 0 ? ["recent"] : []),
+  ];
+  const alone = online !== null && online.count <= 1;
+  const compact = alone ? ["here-now"] : [];
+
   // Open forms' chips, by form id.
   const formLinks = new Map(
     data.openForms.map((f) => [f.id, chipsOf(data.links.get(`form:${f.id}`), 2)]),
@@ -772,6 +817,13 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
       />
     ),
     ...newer.bodies,
+    ...(alone && data.homeMode === "ambient"
+      ? {
+          "here-now": (
+            <HereNowAlone orgId={org.id} orgSlug={orgSlug} you={data.you} initial={online} />
+          ),
+        }
+      : {}),
   };
 
   // Shown until every step is done or checked off, then gone by itself.
@@ -851,6 +903,8 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
     ),
     pinned: <CardControls count={data.pins.length || undefined} />,
     ...newer.headers,
+    // A one-column Here now has room for its title only.
+    ...(alone && data.homeMode === "ambient" ? { "here-now": null } : {}),
   };
 
   const greetingBlock = (
@@ -861,12 +915,16 @@ export default async function OrgOverviewPage({ params }: PageProps<"/app/[orgSl
   );
 
   return (
-    <div className="space-y-6">
+    <div className="relative isolate space-y-6">
+      <div aria-hidden="true" className="home-glow" data-time={timeOfDay(now, timeZone)} />
       <OverviewBoard
         orgId={org.id}
         types={overviewWidgetsFor(isAdmin, settings?.addOns)}
         initialLayout={resolveOverview(data.saved, isAdmin, settings?.addOns)}
         customized={data.saved !== null}
+        mode={data.homeMode}
+        resting={resting}
+        compact={compact}
         bodies={bodies}
         headerActions={headerActions}
         intro={greetingBlock}

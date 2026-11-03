@@ -26,6 +26,7 @@ import {
   CheckSquare,
   ClipboardList,
   Clock,
+  Eye,
   Filter,
   FolderOpen,
   GripVertical,
@@ -46,6 +47,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  Sunrise,
   Table2,
   Target,
   Ticket,
@@ -95,6 +97,7 @@ import {
   type BoardWidget,
   type WidgetMeta,
 } from "@/lib/boards";
+import { ambientLayout, type AmbientItem, type AmbientRow } from "@/lib/overview/ambient";
 import { overlayOpen } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -144,6 +147,34 @@ const SPAN: Record<number, string> = {
   3: "col-span-1 sm:col-span-2 lg:col-span-3",
   4: "col-span-1 sm:col-span-2 lg:col-span-4",
 };
+
+/** Ambient bands are eight columns on a wide screen, two on a tablet, one on a phone. */
+const BAND_SPAN: Record<number, string> = {
+  1: "col-span-1 lg:col-span-1",
+  2: "col-span-1 lg:col-span-2",
+  3: "col-span-1 lg:col-span-3",
+  4: "col-span-1 sm:col-span-2 lg:col-span-4",
+  5: "col-span-1 sm:col-span-2 lg:col-span-5",
+  6: "col-span-1 sm:col-span-2 lg:col-span-6",
+  7: "col-span-1 sm:col-span-2 lg:col-span-7",
+  8: "col-span-1 sm:col-span-2 lg:col-span-8",
+};
+/** One band: widgets in it share its height, so their bottoms line up. --board-row as GRID has it. */
+const BAND_GRID =
+  "grid grid-cols-1 items-stretch gap-4.5 sm:grid-cols-2 lg:grid-cols-8 sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
+
+/** Home's two layouts: Ambient arranges itself, Custom is the member's own. */
+export type BoardMode = "ambient" | "custom";
+
+/** What a board needs to offer Ambient (Home only). */
+export interface AmbientProps {
+  mode: BoardMode;
+  /** Widget types with nothing to show right now. */
+  resting: readonly string[];
+  /** Widget types that need only one column right now (Here now with just you). */
+  compact: readonly string[];
+  onMode: (mode: BoardMode) => Promise<{ ok: boolean; error?: string }>;
+}
 
 /**
  * A row is as tall as a column is wide, so 1 by 1 is a square: the board is
@@ -265,6 +296,7 @@ export function WidgetBoard({
   refreshOnSave = true,
   noun = "your board",
   fillGaps = false,
+  ambient,
 }: {
   types: readonly WidgetMeta[];
   initialLayout: BoardWidget[];
@@ -314,6 +346,12 @@ export function WidgetBoard({
   noun?: string;
   /** Close up the rows when a widget is added or removed (a saved report). */
   fillGaps?: boolean;
+  /**
+   * Offers Ambient beside Custom (Home). In Ambient the board is laid out in
+   * bands by src/lib/overview/ambient.ts, resting widgets step aside, and
+   * there's nothing to drag; Custom is the board as the member arranged it.
+   */
+  ambient?: AmbientProps;
 }) {
   const router = useRouter();
   const [layout, setLayout] = useState(initialLayout);
@@ -323,6 +361,7 @@ export function WidgetBoard({
   const [error, setError] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
+  const [mode, setMode] = useState<BoardMode>(ambient?.mode ?? "custom");
   const grid = useRef<HTMLDivElement>(null);
   const beforeDrag = useRef<BoardWidget[] | null>(null);
   const lastSwap = useRef<string | null>(null);
@@ -514,6 +553,37 @@ export function WidgetBoard({
     setFresh(id);
   };
 
+  /** Ambient or Custom. Custom opens ready to arrange; choosing it again while on rearranges. */
+  function switchMode(next: BoardMode) {
+    if (!ambient) return;
+    if (next === mode) {
+      if (next === "custom") setEditing(true);
+      return;
+    }
+    const was = mode;
+    setMode(next);
+    setEditing(next === "custom");
+    setError(null);
+    start(async () => {
+      const result = await ambient.onMode(next);
+      if (result.ok) {
+        // Some widgets draw differently in Ambient (Here now with only you in).
+        router.refresh();
+        return;
+      }
+      setMode(was);
+      setEditing(false);
+      setError(result.error ?? "Couldn't switch the layout. Try again.");
+    });
+  }
+  const bands =
+    ambient && mode === "ambient"
+      ? ambientLayout(layout, {
+          resting: new Set(ambient.resting),
+          compact: new Set(ambient.compact),
+        })
+      : null;
+
   const body = (w: BoardWidget) =>
     (bodies ? (bodies[w.id] ?? bodies[w.type]) : renderBody?.(w.type)) ?? null;
   const dragged = dragId ? layout.find((w) => w.id === dragId) : undefined;
@@ -561,12 +631,13 @@ export function WidgetBoard({
                     <Check className="size-4" aria-hidden="true" />
                   </Button>
                 </>
-              ) : (
+              ) : ambient ? null : (
                 <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                   <SlidersHorizontal className="size-4" aria-hidden="true" />
                   Customize
                 </Button>
               )}
+              {ambient && <ModeSwitch mode={mode} disabled={pending} onChange={switchMode} />}
             </div>
           </InBar>
         </div>
@@ -624,32 +695,80 @@ export function WidgetBoard({
         >
           <SortableContext items={layout.map((w) => w.id)} strategy={() => null}>
             <div className="@container">
-              <div ref={grid} className={cn(GRID, "relative")}>
-                {layout.map((w) => {
-                  const known = meta.get(w.type);
-                  if (!known) return null;
-                  const m = titles?.[w.id] ? { ...known, title: titles[w.id] } : known;
-                  return (
-                    <BoardItem
-                      key={w.id}
-                      widget={w}
-                      meta={m}
-                      readOnly={readOnly}
-                      editing={editing}
-                      dragging={dragId === w.id}
-                      fresh={fresh === w.id}
-                      hiddenOnPhone={hiddenOnPhone.includes(w.type)}
-                      actions={!editing ? (headerActions?.[w.id] ?? headerActions?.[w.type]) : null}
-                      measure={measure}
-                      onShape={(nw, nh) => patch(w.id, { w: nw, h: nh })}
-                      onNudge={(by) => nudge(w.id, by)}
-                      onRemove={() => remove(w.id)}
-                    >
-                      {body(w)}
-                    </BoardItem>
-                  );
-                })}
-              </div>
+              {bands ? (
+                <div ref={grid} className="relative flex flex-col gap-4.5">
+                  {bands.rows.map((row, i) => (
+                    <AmbientBand
+                      key={`${row.band}-${i}`}
+                      row={row}
+                      render={(item) => {
+                        const m = meta.get(item.widget.type);
+                        if (!m) return null;
+                        return (
+                          <BoardItem
+                            key={item.widget.id}
+                            widget={item.widget}
+                            meta={m}
+                            readOnly={readOnly}
+                            editing={false}
+                            dragging={false}
+                            fresh={fresh === item.widget.id}
+                            hiddenOnPhone={hiddenOnPhone.includes(item.widget.type)}
+                            actions={
+                              headerActions?.[item.widget.id] ?? headerActions?.[item.widget.type]
+                            }
+                            measure={measure}
+                            onShape={() => {}}
+                            onNudge={() => {}}
+                            onRemove={() => remove(item.widget.id)}
+                            band={{
+                              span: item.span,
+                              square: row.band === "now",
+                              compact: item.compact,
+                            }}
+                          >
+                            {body(item.widget)}
+                          </BoardItem>
+                        );
+                      }}
+                    />
+                  ))}
+                  {bands.resting.length > 0 && (
+                    <RestingLine
+                      titles={bands.resting.map((w) => meta.get(w.type)?.title ?? w.type)}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div ref={grid} className={cn(GRID, "relative")}>
+                  {layout.map((w) => {
+                    const known = meta.get(w.type);
+                    if (!known) return null;
+                    const m = titles?.[w.id] ? { ...known, title: titles[w.id] } : known;
+                    return (
+                      <BoardItem
+                        key={w.id}
+                        widget={w}
+                        meta={m}
+                        readOnly={readOnly}
+                        editing={editing}
+                        dragging={dragId === w.id}
+                        fresh={fresh === w.id}
+                        hiddenOnPhone={hiddenOnPhone.includes(w.type)}
+                        actions={
+                          !editing ? (headerActions?.[w.id] ?? headerActions?.[w.type]) : null
+                        }
+                        measure={measure}
+                        onShape={(nw, nh) => patch(w.id, { w: nw, h: nh })}
+                        onNudge={(by) => nudge(w.id, by)}
+                        onRemove={() => remove(w.id)}
+                      >
+                        {body(w)}
+                      </BoardItem>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </SortableContext>
           {/* On the body: the page's own transforms would put a fixed overlay off. */}
@@ -751,6 +870,7 @@ function BoardItem({
   onShape,
   onNudge,
   onRemove,
+  band,
   children,
 }: {
   widget: BoardWidget;
@@ -765,6 +885,8 @@ function BoardItem({
   onShape: (w: number, h: number | null) => void;
   onNudge: (by: number) => void;
   onRemove: () => void;
+  /** Laid out by Ambient: its columns of the band, and whether the band is at least a square tall. */
+  band?: { span: number; square: boolean; compact: boolean };
   children: ReactNode;
 }) {
   const { setNodeRef, listeners } = useSortable({ id: w.id, disabled: !editing });
@@ -834,15 +956,16 @@ function BoardItem({
       data-widget-id={w.id}
       data-frame={bare ? "bare" : "card"}
       onPointerDown={coarse ? undefined : drag}
-      style={w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
+      style={!band && w.h ? ({ "--rows": w.h } as React.CSSProperties) : undefined}
       className={cn(
-        SPAN[w.w] ?? SPAN[1],
+        band ? (BAND_SPAN[band.span] ?? BAND_SPAN[2]) : (SPAN[w.w] ?? SPAN[1]),
+        band?.square && "sm:min-h-[var(--board-row)]",
         hiddenOnPhone && "max-md:hidden",
         "group/widget relative flex min-w-0 flex-col transition-[opacity,outline-color,box-shadow]",
         bare
           ? "rounded-block"
           : "bg-card text-card-foreground ring-foreground/6 edge rounded-card ring-1",
-        w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
+        band ? null : w.h ? ROWS_TALL : !bare && w.w < BOARD_COLUMNS && "lg:max-h-[30rem]",
         editing &&
           "outline-border cursor-grab outline-[1.5px] outline-offset-[3px] outline-dashed select-none active:cursor-grabbing",
         editing && !coarse && "touch-none",
@@ -961,5 +1084,87 @@ function BoardItem({
         </span>
       )}
     </section>
+  );
+}
+
+/** One Ambient band: a row of widgets that share its height. */
+function AmbientBand({
+  row,
+  render,
+}: {
+  row: AmbientRow;
+  render: (item: AmbientItem) => ReactNode;
+}) {
+  return (
+    <div data-band={row.band} className={BAND_GRID}>
+      {row.items.map(render)}
+    </div>
+  );
+}
+
+/** The widgets resting in Ambient, named in one quiet line so they read as resting, not lost. */
+function RestingLine({ titles }: { titles: string[] }) {
+  const list =
+    titles.length === 1
+      ? titles[0]
+      : `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+  return (
+    <p className="text-muted-foreground rounded-tile ring-border flex items-center gap-2.5 px-4 py-3 text-[13px] ring-1 ring-inset">
+      <Eye className="size-4 shrink-0" aria-hidden="true" />
+      <span>
+        {list} {titles.length === 1 ? "is" : "are"} resting until there&apos;s something new to
+        show.
+      </span>
+    </p>
+  );
+}
+
+/** Ambient or Custom, as one two-way switch. */
+function ModeSwitch({
+  mode,
+  disabled,
+  onChange,
+}: {
+  mode: BoardMode;
+  disabled: boolean;
+  onChange: (mode: BoardMode) => void;
+}) {
+  const options = [
+    { value: "ambient" as const, label: "Ambient", Icon: Sunrise, hint: "Home arranges itself" },
+    {
+      value: "custom" as const,
+      label: "Custom",
+      Icon: SlidersHorizontal,
+      hint: "Arrange it yourself",
+    },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Layout"
+      className="bg-card ring-border inline-flex h-9 items-center rounded-full p-[3px] ring-1 ring-inset"
+    >
+      {options.map(({ value, label, Icon, hint }) => {
+        const on = mode === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            title={on && value === "custom" ? "Rearrange" : hint}
+            disabled={disabled}
+            onClick={() => onChange(value)}
+            className={cn(
+              "focus-glow inline-flex h-full items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-colors outline-none",
+              on ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

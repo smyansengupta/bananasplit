@@ -84,7 +84,7 @@ describe("what Up next shows", () => {
     expect(ids(build({ polls: [poll("soon", { closesAt: soon })] }))).toEqual(["soon"]);
   });
 
-  it("drops an event that has already started, and keeps the one coming", () => {
+  it("drops an event that has already ended, and keeps the one coming", () => {
     const slots = build({ events: [event("gone", ago(2)), event("coming", ahead(2))] });
     expect(ids(slots)).toEqual(["coming"]);
   });
@@ -169,5 +169,43 @@ describe("what Up next shows", () => {
     );
     expect(card("sync").chips?.map((c) => c.label)).toEqual(["Exec notes", "2 open actions"]);
     expect(card("social").subtitle).toBe("58 of 120 seats taken.");
+  });
+});
+
+describe("an event's life on Up next", () => {
+  const min = (m: number) => new Date(NOW.getTime() + m * 60_000);
+  const only = (over: Partial<Parameters<typeof buildUpNext>[0]>) => build(over)[0]?.item;
+
+  it("counts down in its last hour, without going live yet", () => {
+    const card = only({ events: [event("w8", min(45))] });
+    expect(card?.kicker).toBe("In 45 min");
+    expect(card?.live).toBeUndefined();
+  });
+
+  it("goes live a quarter of an hour before it starts", () => {
+    const card = only({ events: [event("w8", min(10))] });
+    expect(card?.kicker).toBe("In 10 min");
+    expect(card?.live).toBe("soon");
+  });
+
+  it("stays while it's happening, live", () => {
+    const card = only({ events: [{ ...event("w8", min(-20)), location: "Richards Hall 300" }] });
+    expect(card?.kicker).toBe("Happening now, Richards Hall 300");
+    expect(card?.live).toBe("now");
+  });
+
+  it("says it just ended for two hours after, with what to add while it's fresh", () => {
+    const ended = { ...event("sync", min(-90)), title: "Weekly exec sync meeting" };
+    const card = only({ ended: [ended] });
+    expect(card?.kicker).toBe("Just ended");
+    expect(card?.ended).toBe(true);
+    expect(card?.href).toBe("/app/cbc/meetings/sync");
+    expect(card?.subtitle).toMatch(/notes and action items/);
+  });
+
+  it("keeps an all-day event plain: no countdown and never live", () => {
+    const card = only({ events: [{ ...event("fair", min(30)), allDay: true }] });
+    expect(card?.live).toBeUndefined();
+    expect(card?.kicker).not.toMatch(/^In /);
   });
 });

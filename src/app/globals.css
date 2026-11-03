@@ -220,6 +220,17 @@
   --tag-ochre:#7f5900;
   --tag-forest:#1c6340;
   --tag-teal:#00616f;
+  /*
+   * Kind fills: an event kind's colour as a solid block (Up next, This week).
+   * In light mode they are the kind's tag colour; dark mode has its own set
+   * (the Home colour set), lifted to sit on a dark page. Text on them is
+   * black or white by lightness (KIND_INK).
+   */
+  --fill-workshop:var(--tag-navy);
+  --fill-info:var(--tag-rust);
+  --fill-hackathon:var(--tag-forest);
+  --fill-social:var(--tag-ochre);
+  --fill-board:var(--tag-plum);
   --radius: 0.875rem;
   --radius-scale: 1;
   /* The glow as light: the corona behind the page top, halos, focus. */
@@ -329,6 +340,12 @@
   --tag-ochre:#c79a23;
   --tag-forest:#3cb87f;
   --tag-teal:#35a9b8;
+  /* The dark-mode colour set: blue, teal, pink, orange and plum (with green, brick and banana for status). */
+  --fill-workshop:#3987e5;
+  --fill-info:#267c8b;
+  --fill-hackathon:#d55181;
+  --fill-social:#d95926;
+  --fill-board:#8748a9;
   --glow-strength: 16%;
   --haze-strength: 5%;
   --elevation-1: 0 18px 40px -24px rgb(0 0 0 / 0.8);
@@ -513,6 +530,60 @@
       animation: none;
     }
   }
+}
+
+/*
+ * Something live right now (a meeting under way, a call people are in): a
+ * small dot that breathes. Only on things that are truly live, and still
+ * with reduced motion.
+ */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: currentColor;
+  animation: live-breathe 2.4s ease-in-out infinite;
+}
+@keyframes live-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+
+/*
+ * Home's light at the top follows the day: warm in the morning, plain in
+ * the afternoon, plum in the evening, navy at night and on the weekend.
+ * Faint, behind the greeting only.
+ */
+.home-glow {
+  position: absolute;
+  inset: -3rem -2rem auto;
+  height: 24rem;
+  z-index: -1;
+  pointer-events: none;
+}
+.home-glow[data-time="morning"] {
+  background: radial-gradient(60% 70% at 18% 0%, color-mix(in oklab, #f2c230 14%, transparent), transparent 70%);
+}
+.home-glow[data-time="afternoon"] {
+  background: radial-gradient(60% 70% at 50% 0%, color-mix(in oklab, currentColor 5%, transparent), transparent 70%);
+}
+.home-glow[data-time="evening"] {
+  background: radial-gradient(60% 70% at 82% 0%, color-mix(in oklab, #8748a9 18%, transparent), transparent 70%);
+}
+.home-glow[data-time="night"],
+.home-glow[data-time="weekend"] {
+  background: radial-gradient(60% 70% at 50% 0%, color-mix(in oklab, #5369a9 14%, transparent), transparent 70%);
 }
 
 @keyframes corona {
