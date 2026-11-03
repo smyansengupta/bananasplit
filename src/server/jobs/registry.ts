@@ -506,6 +506,7 @@ export const JOB_KINDS = {
           "form.submitted",
           "sequence.finished",
           "call.logged",
+          "activity.logged",
         ]),
         targetKind: z.enum(["person", "company", "deal"]),
         targetId: id,
@@ -524,6 +525,56 @@ export const JOB_KINDS = {
     handler: () => import("@/server/crm/events").then((m) => m.crmEventJob),
     description:
       "A CRM event (a record changed, an email replied to, a meeting booked, a form answered) for the organization's workflows; enqueued only while a workflow is on (src/server/crm/events.ts).",
+  }),
+
+  // ---- CRM phone, quotes and API (Phase 5; src/server/crm/phone, src/server/crm/webhooks) ----
+  "crm-text-send": kind({
+    payload: z.object({ textId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    maxAttempts: 4,
+    handler: () => import("@/server/crm/phone/jobs").then((m) => m.crmTextSendJob),
+    description:
+      "Sends one CRM text on the organization's own Telnyx or Twilio number (runAt holds it past quiet hours); key crm-text-send:{textId}.",
+  }),
+  "crm-call-audio": kind({
+    payload: z.object({ callId: id, recordingId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 60_000,
+    leaseSeconds: 120,
+    tier: "fast",
+    afterEligible: false,
+    maxAttempts: 5,
+    handler: () => import("@/server/crm/phone/jobs").then((m) => m.crmCallAudioJob),
+    description:
+      "Fetches a consented call recording from the provider into crm-audio, then queues crm-transcribe; key crm-call-audio:{callId}.",
+  }),
+  "crm-transcribe": kind({
+    payload: z.object({ callId: id.optional(), activityId: id.optional() }).strict(),
+    scope: "org",
+    maxRuntimeMs: 240_000,
+    leaseSeconds: 330,
+    tier: "heavy",
+    afterEligible: false,
+    maxAttempts: 3,
+    handler: () => import("@/server/crm/phone/jobs").then((m) => m.crmTranscribeJob),
+    description:
+      "Writes out a recorded call or a voice note on the organization's Deepgram key and sums it up on its AI; key crm-transcribe:call:{callId} or crm-transcribe:note:{activityId}.",
+  }),
+  "crm-webhook": kind({
+    payload: z.object({ deliveryId: id }).strict(),
+    scope: "org",
+    maxRuntimeMs: 20_000,
+    leaseSeconds: 60,
+    tier: "fast",
+    afterEligible: true,
+    maxAttempts: 8,
+    handler: () => import("@/server/crm/webhooks").then((m) => m.crmWebhookJob),
+    description:
+      "POSTs one signed CRM webhook delivery (CrmWebhookDelivery), retried with backoff; key crm-webhook:{deliveryId}.",
   }),
 
   // ---- Platform maintenance (this module) ----

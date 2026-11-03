@@ -2,6 +2,8 @@ import type { TxClient } from "@/server/db/context";
 import { enqueueJob } from "@/server/jobs/enqueue";
 import { PermanentJobError, type JobHandler } from "@/server/jobs/types";
 
+import { webhookEventsFor } from "./webhooks/events";
+
 /**
  * CRM events: what automations (workflows, docs/features/crm.md module 6)
  * react to. Every change to a person, company or item already passes through
@@ -20,7 +22,8 @@ export type CrmEventType =
   | "meeting.booked"
   | "form.submitted"
   | "sequence.finished"
-  | "call.logged";
+  | "call.logged"
+  | "activity.logged";
 
 export interface CrmEvent {
   type: CrmEventType;
@@ -42,7 +45,9 @@ const QUIET_SOURCES = new Set(["import", "merge"]);
 export async function emitCrmEvent(db: TxClient, organizationId: string, event: CrmEvent): Promise<void> {
   if (event.source && QUIET_SOURCES.has(event.source)) return;
   const on = await db.crmWorkflow.count({ where: { organizationId, status: "ON" } });
-  if (on === 0) return;
+  // Also when an active outgoing webhook listens for what this could be
+  // (CrmSettings.webhookEvents, kept by the webhook settings; Phase 5).
+  if (on === 0 && !(await webhookWants(db, organizationId, event))) return;
   const stamp = Date.now().toString(36);
   await enqueueJob(db, {
     orgId: organizationId,
@@ -58,6 +63,13 @@ export async function emitCrmEvent(db: TxClient, organizationId: string, event: 
       source: event.source ?? null,
     },
   });
+}
+
+async function webhookWants(db: TxClient, organizationId: string, event: CrmEvent): Promise<boolean> {
+  const names = webhookEventsFor({ type: event.type, targetKind: event.targetKind, fields: event.fields ?? [] });
+  if (names.length === 0) return false;
+  const s = await db.crmSettings.findUnique({ where: { organizationId }, select: { webhookEvents: true } });
+  return Boolean(s?.webhookEvents.some((e) => (names as string[]).includes(e)));
 }
 
 export type CrmEventPayload = {
@@ -78,6 +90,9 @@ const listeners: (() => Promise<Listener>)[] = [];
 export function onCrmEvent(load: () => Promise<Listener>): void {
   listeners.push(load);
 }
+
+// Outgoing webhooks (Phase 5, src/server/crm/webhooks).
+onCrmEvent(() => import("./webhooks").then((m) => m.webhookListener));
 
 export const crmEventJob: JobHandler<CrmEventPayload> = async (run) => {
   const orgId = run.organizationId;

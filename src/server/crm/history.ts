@@ -13,7 +13,7 @@ import { emitCrmEvent } from "./events";
 
 export type HistoryTarget = "person" | "company" | "deal";
 
-export type HistorySource = "user" | "ai" | "automation" | "import" | "merge" | "connector" | "system" | "finance";
+export type HistorySource = "user" | "ai" | "automation" | "import" | "merge" | "connector" | "system" | "finance" | "api";
 
 export interface FieldChange {
   field: string;

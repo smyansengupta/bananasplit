@@ -3408,6 +3408,10 @@ model CrmSettings {
   /// notice, quietStart, quietEnd, callStart, callEnd, voicemailKey}.
   /// Owners and admins set it (src/server/crm/phone/settings.ts).
   phone             Json      @default("{}")
+  /// The events at least one active webhook listens for, kept by the
+  /// webhook settings, so a member's change knows to queue an event
+  /// without reading CrmWebhook (owners' and admins' only).
+  webhookEvents     String[]  @default([])
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

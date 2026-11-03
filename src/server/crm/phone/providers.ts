@@ -129,6 +129,38 @@ export async function telnyxCallAction(
   });
 }
 
+/** A fresh download link for a call recording (Telnyx's links expire, so ask when fetching). */
+export async function telnyxRecordingUrl(apiKey: string, recordingId: string, signal?: AbortSignal): Promise<string> {
+  const res = await call("Telnyx", `${TELNYX}/recordings/${encodeURIComponent(recordingId)}`, {
+    headers: telnyxHeaders(apiKey),
+    signal,
+  });
+  const j = (await res.json()) as { data?: { download_urls?: { mp3?: string; wav?: string } } };
+  const url = j.data?.download_urls?.mp3 ?? j.data?.download_urls?.wav;
+  if (!url) throw new ProviderError("Telnyx", 404, "no recording link");
+  return url;
+}
+
+export function twilioRecordingUrl(accountSid: string, recordingSid: string): string {
+  return `${TWILIO}/Accounts/${encodeURIComponent(accountSid)}/Recordings/${encodeURIComponent(recordingSid)}.mp3`;
+}
+
+/** The callee's leg of a call the softphone placed (the voicemail drop plays there). */
+export async function twilioChildCall(
+  accountSid: string,
+  authToken: string,
+  parentSid: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const res = await call(
+    "Twilio",
+    `${TWILIO}/Accounts/${encodeURIComponent(accountSid)}/Calls.json?ParentCallSid=${encodeURIComponent(parentSid)}&PageSize=5`,
+    { headers: { Authorization: twilioAuth(accountSid, authToken) }, signal },
+  );
+  const j = (await res.json()) as { calls?: { sid?: string; status?: string }[] };
+  return j.calls?.find((c) => c.status === "in-progress")?.sid ?? j.calls?.[0]?.sid ?? null;
+}
+
 export async function telnyxSendText(
   apiKey: string,
   input: { from: string; to: string; body: string; webhookUrl?: string },
