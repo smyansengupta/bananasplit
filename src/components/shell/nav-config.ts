@@ -212,7 +212,17 @@ export function isExactPage(href: string, pathname: string, search: string = "")
 }
 
 export type CreateActionId =
-  "task" | "event" | "meeting" | "note" | "poll" | "form" | "expense" | "find-a-time";
+  | "task"
+  | "event"
+  | "meeting"
+  | "note"
+  | "poll"
+  | "form"
+  | "expense"
+  | "crm-person"
+  | "crm-company"
+  | "crm-item"
+  | "find-a-time";
 
 export interface CreateAction {
   id: CreateActionId;
@@ -294,6 +304,27 @@ export function createActions(
       label: "New expense",
       icon: "Receipt",
       href: `${path("finance")}/my-reimbursements?new=1`,
+    });
+  }
+  if (links.has("crm")) {
+    // The CRM's three ways in (docs/features/crm.md): each list opens its form with ?new=1.
+    actions.push({
+      id: "crm-person",
+      label: "New person",
+      icon: "UserPlus",
+      href: `${path("crm")}/people?new=1`,
+    });
+    actions.push({
+      id: "crm-company",
+      label: "New company",
+      icon: "Building2",
+      href: `${path("crm")}/companies?new=1`,
+    });
+    actions.push({
+      id: "crm-item",
+      label: "New item",
+      icon: "Columns3",
+      href: `${path("crm")}/items/new`,
     });
   }
   if (links.has("meetings")) {

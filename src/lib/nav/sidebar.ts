@@ -23,6 +23,7 @@ export const SECTION_IDS = [
   "notes",
   "integrations",
   "finance",
+  "crm",
 ] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
@@ -65,7 +66,7 @@ export interface SectionDef {
 // Home, Inbox and People first (yours and who's here); then planning
 // (Tasks, Calendar, Meetings); then the organization's data (Files, then
 // Databases); then Integrations and apps: Integrations itself, then each add-on
-// the organization has added (Forms, Finance; src/lib/addons.ts).
+// the organization has added (Forms, Finance, CRM; src/lib/addons.ts).
 export const SECTIONS: readonly SectionDef[] = [
   {
     id: "overview",
@@ -162,6 +163,14 @@ export const SECTIONS: readonly SectionDef[] = [
     group: "workspace",
     description: "Budget, transactions and reimbursements.",
   },
+  {
+    id: "crm",
+    label: "CRM",
+    icon: "Handshake",
+    path: "/crm",
+    group: "workspace",
+    description: "People, companies and pipelines you reach out to.",
+  },
 ];
 
 /** The plan feature behind each section (src/lib/billing/features.ts). */
@@ -177,6 +186,7 @@ export const SECTION_FEATURES: Record<SectionId, PlanFeature> = {
   notes: "files",
   integrations: "integrations",
   finance: "finance",
+  crm: "crm",
 };
 
 /**
@@ -202,7 +212,13 @@ const RENAMED_FROM: Partial<Record<SectionId, (typeof RETIRED_SECTION_IDS)[numbe
  * older saved sidebar says: Files heads Data, and Integrations and apps is
  * Integrations first with each added add-on below it.
  */
-export const PINNED_PLACE: readonly SectionId[] = ["notes", "integrations", "forms", "finance"];
+export const PINNED_PLACE: readonly SectionId[] = [
+  "notes",
+  "integrations",
+  "forms",
+  "finance",
+  "crm",
+];
 
 /** Groups have no names any more; kept so saved configs and callers still line up. */
 export const DEFAULT_GROUP_LABELS: Record<GroupId, string | null> = {

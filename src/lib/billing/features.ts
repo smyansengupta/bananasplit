@@ -108,6 +108,8 @@ export const PLAN_FEATURES = {
   ai: "SOCIETY",
   /** Sponsorship tracking and runway. */
   sponsorships: "SOCIETY",
+  /** The CRM add-on: people, companies, pipelines and their timeline (docs/features/crm.md). */
+  crm: "SOCIETY",
   /** Website sync for events and sign-ups (the build hook). */
   websiteSync: "SOCIETY",
   /** Every settings change: who made it and when. */
@@ -307,6 +309,7 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
   themes: "Custom themes",
   ai: "AI",
   sponsorships: "Sponsorship tracking",
+  crm: "The CRM",
   websiteSync: "Website sync",
   auditLog: "The audit log",
 };
@@ -347,6 +350,7 @@ export const FEATURE_PITCH: Record<PlanFeature, string> = {
   themes: "Your colors and logo across the app.",
   ai: "Turn notes into tasks and events, and let AI sort your data.",
   sponsorships: "Track sponsors, what they promised and your runway.",
+  crm: "Everyone you reach out to, your pipelines, and a timeline that fills itself from your workspace.",
   websiteSync: "Publish events and sign-ups to your website.",
   auditLog: "Every settings change: who made it and when.",
 };

@@ -9,7 +9,7 @@ import type { PlanFeature } from "@/lib/billing/features";
  * added again. It's tidying, not a permission.
  */
 
-export const ADD_ONS = ["forms", "finance"] as const;
+export const ADD_ONS = ["forms", "finance", "crm"] as const;
 export type AddOnId = (typeof ADD_ONS)[number];
 
 export function isAddOn(id: string): id is AddOnId {
@@ -53,5 +53,14 @@ export const ADD_ON_INFO: Record<AddOnId, AddOnInfo> = {
       "Budgets by quarter or year, expenses with receipts, and reimbursements that need an approval.",
     who: "Owners, admins and treasurers keep the books; members submit expenses",
     path: "/finance",
+  },
+  crm: {
+    id: "crm",
+    feature: "crm",
+    name: "CRM",
+    summary:
+      "The people and companies you reach out to: members, donors, sponsors, speakers and clients, with pipelines and a timeline that fills itself.",
+    who: "Every member works the CRM; owners, admins and CRM managers set it up",
+    path: "/crm",
   },
 };
