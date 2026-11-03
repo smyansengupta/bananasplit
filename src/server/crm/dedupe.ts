@@ -1,12 +1,18 @@
 import {
   companyBlocks,
   findPairs,
+  normalizeCompanyName,
+  normalizeDomain,
+  normalizeEmail,
+  normalizeName,
   personBlocks,
   scoreCompanies,
   scorePeople,
+  SUGGEST_AT,
   type DedupeCompany,
   type DedupePerson,
 } from "@/lib/crm/dedupe";
+import { likeliest } from "@/lib/crm/people-view";
 import type { TxClient } from "@/server/db/context";
 
 import { CrmError, requireCrm, type CrmActor } from "./access";
@@ -206,4 +212,77 @@ export async function resolveDuplicate(
     data: { status: "ACCEPTED", reviewedById: userId, reviewedAt: new Date() },
   });
   return result;
+}
+
+/**
+ * The New card's "already here" line: the person or company a draft most
+ * looks like, scored the way the scan scores pairs, among the few that
+ * share an address, a number, a last name or a domain with it.
+ */
+export async function likelyExisting(
+  db: TxClient,
+  organizationId: string,
+  draft:
+    | { kind: "person"; name: string; email?: string | null; phone?: string | null }
+    | { kind: "company"; name: string; domain?: string | null },
+): Promise<{ id: string; name: string; sub: string | null; reason: string | null } | null> {
+  const name = draft.name.trim();
+  if (draft.kind === "company") {
+    const domain = normalizeDomain(draft.domain);
+    const word = normalizeCompanyName(name).split(" ")[0] ?? "";
+    if (!domain && word.length < 3) return null;
+    const rows = await db.crmCompany.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        OR: [
+          ...(domain ? [{ domain }] : []),
+          ...(word.length >= 3 ? [{ name: { contains: word, mode: "insensitive" as const } }] : []),
+        ],
+      },
+      take: 40,
+      select: { id: true, name: true, domain: true, website: true },
+    });
+    const hit = likeliest({ id: "", name, domain }, rows, scoreCompanies, SUGGEST_AT);
+    return hit ? { id: hit.record.id, name: hit.record.name, sub: hit.record.domain ?? null, reason: hit.reason } : null;
+  }
+  const email = normalizeEmail(draft.email);
+  const digits = (draft.phone ?? "").replace(/\D/g, "");
+  const last = normalizeName(name).split(" ").filter(Boolean).pop() ?? "";
+  if (!email && digits.length < 7 && last.length < 2) return null;
+  const rows = await db.crmPerson.findMany({
+    where: {
+      organizationId,
+      deletedAt: null,
+      OR: [
+        ...(email ? [{ emails: { some: { email } } }] : []),
+        ...(digits.length >= 7 ? [{ phone: { contains: digits.slice(-7) } }] : []),
+        ...(last.length >= 2 ? [{ name: { contains: last, mode: "insensitive" as const } }] : []),
+      ],
+    },
+    take: 40,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      companyId: true,
+      title: true,
+      company: { select: { name: true } },
+      emails: { select: { email: true } },
+    },
+  });
+  const hit = likeliest<DedupePerson & { sub?: string | null }>(
+    { id: "", name, emails: email ? [email] : [], phone: draft.phone ?? null },
+    rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      phone: r.phone,
+      companyId: r.companyId,
+      emails: r.emails.map((e) => e.email),
+      sub: r.company?.name ?? r.title,
+    })),
+    scorePeople,
+    SUGGEST_AT,
+  );
+  return hit ? { id: hit.record.id, name: hit.record.name, sub: hit.record.sub ?? null, reason: hit.reason } : null;
 }

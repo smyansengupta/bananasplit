@@ -882,3 +882,45 @@ export async function scanCard(who: AiWho, input: { image: AiImage; metAt?: stri
     return { reading, existing: null, suggestionId: id };
   });
 }
+
+/**
+ * A pasted email signature or a card photo, read to fill the New card
+ * (src/components/crm/cards/new-card.tsx): the same reading as scanCard,
+ * on the organization's own AI, but nothing is proposed or written. The
+ * member checks the fields and presses Create.
+ */
+export async function readContact(
+  who: AiWho,
+  input: { text?: string | null; image?: AiImage | null },
+): Promise<CardData> {
+  await who.tx(async () => null);
+  const text = (input.text ?? "").slice(0, 4000).trim();
+  if (!text && !input.image) throw new CrmError("Paste a signature or pick a photo first.");
+  const r = await runCrmAi({
+    organizationId: who.organizationId,
+    userId: who.userId,
+    feature: "crm.card",
+    request: {
+      system: `${cardSystemPrompt()}\n\nIt may be the text of an email signature instead of a photo: read it the same way. ${dataRule("<signature>")}`,
+      text: text
+        ? `Read this signature.\n\n<signature>\n${fenced(text, "signature")}\n</signature>`
+        : "Read this card or badge.",
+      ...(input.image ? { image: input.image } : {}),
+      schema: CardOutput,
+      name: "crm_card",
+      standin: () => ({
+        name: null,
+        title: null,
+        company: null,
+        email: null,
+        phone: null,
+        website: null,
+        linkedin: null,
+        address: null,
+        other: null,
+        notes: ["Read by the local stand-in (no AI)."],
+      }),
+    },
+  });
+  return r.data;
+}

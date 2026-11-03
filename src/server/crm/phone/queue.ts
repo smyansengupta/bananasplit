@@ -3,6 +3,7 @@ import { inWindow, type PhoneSettings } from "@/lib/crm/phone";
 import type { TxClient } from "@/server/db/context";
 
 import type { RoleOwner } from "../owners";
+import { viewIds } from "../outreach/lists";
 import { parseListQuery, peopleWhere } from "../queries";
 
 /**
@@ -77,7 +78,12 @@ export async function dialQueue(
 ): Promise<QueuePerson[]> {
   const sp = list.kind === "due" ? { due: "due" } : viewQuery(list.filters);
   const steps = await openCallSteps(db, organizationId, viewerId);
-  const listed = peopleWhere(organizationId, parseListQuery(sp), viewerId, roles);
+  const listed = peopleWhere(
+    organizationId,
+    { ...parseListQuery(sp), ids: list.kind === "view" ? viewIds(list.filters) : undefined },
+    viewerId,
+    roles,
+  );
   const where: Prisma.CrmPersonWhereInput = {
     AND: [
       list.kind === "due" && steps.size > 0 ? { OR: [listed, { organizationId, deletedAt: null, id: { in: [...steps.keys()] } }] } : listed,

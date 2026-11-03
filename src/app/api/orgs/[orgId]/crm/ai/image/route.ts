@@ -8,13 +8,14 @@ import { isCrossSite } from "@/lib/http/cross-site";
 import { AiImportError } from "@/server/ai/generate";
 import { CrmError } from "@/server/crm/access";
 import { memberWho } from "@/server/crm/ai-tx";
-import { readConversation, scanCard } from "@/server/crm/assist";
+import { readContact, readConversation, scanCard } from "@/server/crm/assist";
 import { AppError } from "@/server/db/errors";
 import { readUpload, uploadErrorResponse } from "@/server/storage/upload";
 
 /**
  * POST /api/orgs/{orgId}/crm/ai/image  multipart `file`, `purpose`
- * ("conversation" or "card"), and `personId` or `metAt`.
+ * ("conversation", "card", or "fill" for the New card, which only reads
+ * the card back), and `personId` or `metAt`.
  *
  * A member's screenshot of a conversation (WhatsApp, LinkedIn, Instagram,
  * texts) or a photo of a business card or badge, read once by the
@@ -50,6 +51,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
   const image = { mediaType: type as ShotImageType, base64: upload.file.bytes.toString("base64") };
   const who = memberWho(orgId, session.user.id);
   try {
+    if (upload.fields.purpose === "fill") {
+      // The New card: read the card to fill its fields; nothing is proposed or kept.
+      const r = await readContact(who, { image });
+      return json(200, {
+        kind: "fill",
+        name: r.name,
+        title: r.title,
+        company: r.company,
+        email: r.email,
+        phone: r.phone,
+        website: r.website,
+        notes: r.notes,
+      });
+    }
     if (upload.fields.purpose === "card") {
       const r = await scanCard(who, { image, metAt: upload.fields.metAt?.slice(0, 200) ?? null });
       return json(200, {

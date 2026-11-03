@@ -43,14 +43,16 @@ export async function exportCsv(
   db: TxClient,
   organizationId: string,
   kind: ExportKind,
-  options: { pipelineId?: string | null } = {},
+  options: { pipelineId?: string | null; ids?: readonly string[] | null } = {},
 ): Promise<{ csv: string; rows: number; fileName: string }> {
+  // Only the picked ones (People's selection), when given.
+  const only = options.ids?.length ? { id: { in: [...options.ids] } } : {};
   const names = await memberNames(db, organizationId);
   const roles = await rolePositions(organizationId);
   if (kind === "people") {
     const fields = await customFieldsFor(db, organizationId, "person");
     const rows = await db.crmPerson.findMany({
-      where: { organizationId, deletedAt: null },
+      where: { organizationId, deletedAt: null, ...only },
       orderBy: { name: "asc" },
       take: MAX_ROWS,
       include: { company: { select: { name: true } }, emails: { select: { email: true, isPrimary: true } } },
@@ -108,7 +110,7 @@ export async function exportCsv(
   if (kind === "companies") {
     const fields = await customFieldsFor(db, organizationId, "company");
     const rows = await db.crmCompany.findMany({
-      where: { organizationId, deletedAt: null },
+      where: { organizationId, deletedAt: null, ...only },
       orderBy: { name: "asc" },
       take: MAX_ROWS,
     });
