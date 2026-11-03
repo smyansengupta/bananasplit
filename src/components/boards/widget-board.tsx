@@ -228,14 +228,18 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
       const placed: { item: HTMLElement; col: number; span: number; top: number; rows: number }[] =
         [];
       const tops = Array<number>(cols).fill(0);
-      for (const item of list) {
-        const h = item.getBoundingClientRect().height;
-        if (h === 0) continue;
-        const span = Math.min(
-          cols,
-          Number(/span (\d+)/.exec(getComputedStyle(item).gridColumnEnd)?.[1] ?? 1),
-        );
-        // The start column where it sits highest; the leftmost on a tie.
+      const queue = list
+        .map((item) => ({
+          item,
+          h: item.getBoundingClientRect().height,
+          span: Math.min(
+            cols,
+            Number(/span (\d+)/.exec(getComputedStyle(item).gridColumnEnd)?.[1] ?? 1),
+          ),
+        }))
+        .filter((q) => q.h > 0);
+      // Where a widget sits highest: its start column and top (leftmost on a tie).
+      const spot = (span: number) => {
         let col = 0;
         let top = Infinity;
         for (let c = 0; c + span <= cols; c++) {
@@ -245,9 +249,34 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
             col = c;
           }
         }
-        const rows = Math.ceil((h + PACK_GAP) / PACK_ROW);
-        placed.push({ item, col, span, top, rows });
-        for (let c = col; c < col + span; c++) tops[c] = top + rows;
+        return { col, top };
+      };
+      while (queue.length > 0) {
+        // Look a few ahead, never past a full-width widget: whichever sits
+        // highest goes next, the wider one when they tie, so small widgets
+        // fill in after the big ones instead of leaving them no room.
+        const window: typeof queue = [];
+        for (const q of queue) {
+          if (window.length === 3) break;
+          if (q.span === cols && window.length > 0) break;
+          window.push(q);
+          if (q.span === cols) break;
+        }
+        let pick = 0;
+        let best = spot(window[0]!.span);
+        window.forEach((q, i) => {
+          if (i === 0) return;
+          const at = spot(q.span);
+          if (at.top < best.top || (at.top === best.top && q.span > window[pick]!.span)) {
+            pick = i;
+            best = at;
+          }
+        });
+        const q = window[pick]!;
+        queue.splice(queue.indexOf(q), 1);
+        const rows = Math.ceil((q.h + PACK_GAP) / PACK_ROW);
+        placed.push({ item: q.item, col: best.col, span: q.span, top: best.top, rows });
+        for (let c = best.col; c < best.col + q.span; c++) tops[c] = best.top + rows;
       }
       const end = Math.max(0, ...tops);
       for (const p of placed) {
