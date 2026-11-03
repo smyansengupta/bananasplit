@@ -85,6 +85,12 @@ export interface AmbientState {
   scores?: ReadonlyMap<string, WidgetScore>;
   /** Late at night: what scores under NIGHT_MIN rests. */
   night?: boolean;
+  /**
+   * Widen widgets so each band's rows fill all eight columns (the default).
+   * A packed grid turns it off: each keeps its own width, and the smaller
+   * ones slot in under shorter neighbours instead.
+   */
+  fill?: boolean;
 }
 
 export interface AmbientItem {
@@ -112,13 +118,18 @@ function spotOf(type: string, promoted?: ReadonlySet<string>): number {
 const FULL_LEAD = new Set(["since-you-were-here", "weekly-pulse"]);
 
 /** Packs one band's widgets into rows of eight; the spare columns go round the full-size ones. */
-function packBand(band: Band, widgets: readonly BoardWidget[], compact: AmbientState["compact"]) {
+function packBand(
+  band: Band,
+  widgets: readonly BoardWidget[],
+  compact: AmbientState["compact"],
+  fill: boolean,
+) {
   const rows: AmbientRow[] = [];
   let row: AmbientItem[] = [];
   let used = 0;
   const flush = () => {
     if (row.length === 0) return;
-    const growable = row.filter((i) => !i.compact);
+    const growable = fill ? row.filter((i) => !i.compact) : [];
     for (let k = 0; used < BAND_COLUMNS && growable.length > 0; k++) {
       growable[k % growable.length].span += 1;
       used += 1;
@@ -199,6 +210,7 @@ export function ambientLayout(
             spotOf(a.type, state.promoted) - spotOf(b.type, state.promoted),
         ),
       state.compact,
+      state.fill ?? true,
     ),
   );
   return { rows: lead.length > 0 ? [{ band: "lead", items: lead }, ...rows] : rows, resting };

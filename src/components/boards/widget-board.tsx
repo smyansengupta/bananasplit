@@ -196,7 +196,13 @@ const PACK_GAP = 18;
 const PACKED_GRID =
   "grid grid-cols-1 items-start gap-x-4.5 gap-y-4.5 [grid-auto-flow:row_dense] sm:grid-cols-2 lg:grid-cols-8 data-[packed]:gap-y-0 data-[packed]:[grid-auto-rows:2px] sm:[--board-row:clamp(14rem,calc((100cqw_-_1.125rem)/2),22rem)] lg:[--board-row:clamp(15rem,calc((100cqw_-_3.375rem)/4),22rem)]";
 
-/** Sizes each packed widget's rows to its height, and again whenever it changes. */
+/**
+ * Sizes each packed widget's rows to its height, and again whenever it
+ * changes. Then any hole left (a short widget beside a tall one, above a
+ * full-width one or the end of the board) is filled by the widget above it
+ * growing down to meet what's below: no gap anywhere, and only the widget
+ * that has room grows.
+ */
 function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
   useEffect(() => {
     const el = grid.current;
@@ -204,19 +210,57 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
     const items = () =>
       Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
     let frame = 0;
+    // Our own growing resizes the widgets too: the observer skips that round.
+    let ours = false;
     const fit = () => {
       frame = 0;
-      for (const item of items()) {
-        const h = item.getBoundingClientRect().height;
+      const list = items();
+      for (const item of list) {
+        item.style.removeProperty("align-self");
+        item.style.removeProperty("margin-bottom");
+      }
+      const heights = list.map((item) => item.getBoundingClientRect().height);
+      list.forEach((item, i) =>
         item.style.setProperty(
           "grid-row-end",
-          h > 0 ? `span ${Math.ceil((h + PACK_GAP) / PACK_ROW)}` : "auto",
-        );
-      }
+          heights[i] > 0 ? `span ${Math.ceil((heights[i] + PACK_GAP) / PACK_ROW)}` : "auto",
+        ),
+      );
       el.setAttribute("data-packed", "");
+      const rects = list.map((item) => item.getBoundingClientRect());
+      const end = Math.max(...rects.map((r) => r.bottom));
+      list.forEach((item, i) => {
+        const r = rects[i];
+        if (r.height === 0) return;
+        // The nearest widget below that shares a column, or the board's end.
+        const below = rects
+          .filter(
+            (o, j) =>
+              j !== i &&
+              o.height > 0 &&
+              o.top >= r.bottom - 1 &&
+              o.left < r.right - 2 &&
+              o.right > r.left + 2,
+          )
+          .map((o) => o.top - PACK_GAP);
+        const target = below.length > 0 ? Math.min(...below) : end;
+        const extra = target - r.bottom;
+        if (extra < PACK_ROW) return;
+        item.style.setProperty(
+          "grid-row-end",
+          `span ${Math.round((r.height + extra + PACK_GAP) / PACK_ROW)}`,
+        );
+        item.style.setProperty("align-self", "stretch");
+        item.style.setProperty("margin-bottom", `${PACK_GAP}px`);
+        ours = true;
+      });
     };
     fit();
     const watch = new ResizeObserver(() => {
+      if (ours) {
+        ours = false;
+        return;
+      }
       if (!frame) frame = requestAnimationFrame(fit);
     });
     for (const item of items()) watch.observe(item);
@@ -224,7 +268,11 @@ function usePacked(grid: RefObject<HTMLDivElement | null>, key: unknown) {
       if (frame) cancelAnimationFrame(frame);
       watch.disconnect();
       el.removeAttribute("data-packed");
-      for (const item of items()) item.style.removeProperty("grid-row-end");
+      for (const item of items()) {
+        item.style.removeProperty("grid-row-end");
+        item.style.removeProperty("align-self");
+        item.style.removeProperty("margin-bottom");
+      }
     };
   }, [grid, key]);
 }
@@ -675,6 +723,8 @@ export function WidgetBoard({
             resting: new Set(ambient.resting),
             compact: new Set(ambient.compact),
             promoted: new Set(ambient.promoted ?? []),
+            // Packed: widgets keep their own widths and slot in under each other.
+            fill: false,
             scores: new Map(Object.entries(scores ?? {})),
             night: ambient.night,
           },
